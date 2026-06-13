@@ -19,6 +19,20 @@ export const EVIDENCE_FLOOR = 2
 export const ANALYSIS_TEMPERATURE = 0
 
 /**
+ * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
+ * pre-approved fallback when string-match clustering fails, which the first real
+ * run confirmed it does: free-text slugs almost never collide exactly).
+ */
+export const EMBEDDING_MODEL = 'text-embedding-3-small'
+
+/**
+ * Cosine-similarity threshold for merging two insights into one theme cluster.
+ * Tuned against the first Ossur TikTok run; a one-line change. Higher = stricter
+ * (more, smaller clusters); lower = looser (fewer, broader clusters).
+ */
+export const CLUSTER_SIMILARITY_THRESHOLD = 0.55
+
+/**
  * USD per 1M tokens, per model. APPROXIMATE — verify against OpenAI's current
  * pricing page and your usage dashboard; used only to estimate ai_call_log.cost_usd
  * and the live burn log. Actual billing is the source of truth.
@@ -27,6 +41,7 @@ export const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: nu
   'gpt-4.1-mini': { inputPer1M: 0.4, outputPer1M: 1.6 },
   'gpt-4.1-nano': { inputPer1M: 0.1, outputPer1M: 0.4 },
   'gpt-4.1': { inputPer1M: 2.0, outputPer1M: 8.0 },
+  'text-embedding-3-small': { inputPer1M: 0.02, outputPer1M: 0 },
 }
 
 /** Estimate USD cost from token usage for a given model. Returns 0 if unknown. */

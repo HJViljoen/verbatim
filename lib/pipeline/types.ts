@@ -52,6 +52,41 @@ export interface PlatformSummary {
   avg_engagement_rate: number | null
 }
 
+/** A Pass A insight joined to its source video's entity flags, as Step A2 reads
+ *  it. The entity (client / competitor / industry-other) is derived here from
+ *  the video, never stored on the insight (invariant 7). */
+export interface InsightRow {
+  id: string
+  category: string
+  theme: string
+  description: string
+  strength_score: number
+  emotion: string
+  sentiment_impact: string
+  source_video_id: string
+  platform: string
+  is_client: boolean
+  is_competitor: boolean
+  competitor_name: string | null
+}
+
+/** One clustered theme produced by Step A2 and consumed (in memory) by Pass
+ *  C/D. `theme` is the canonical label = the highest-strength member's slug
+ *  (Pass B deferred to v5). `evidenceCount` = distinct supporting videos — the
+ *  value the evidence floor checks. */
+export interface AggregatedTheme {
+  bucket: string
+  category: string
+  theme: string
+  memberThemes: string[]
+  supportingVideoIds: string[]
+  supportingInsightIds: string[]
+  evidenceCount: number
+  strengthScore: number
+  dominantEmotion: string
+  dominantSentimentImpact: string
+}
+
 /** Output of Step 2a (metrics). Held in memory for Pass A / Step 2b. */
 export interface Step2aMetrics {
   total_videos: number
