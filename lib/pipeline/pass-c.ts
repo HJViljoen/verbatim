@@ -1,0 +1,236 @@
+import { zodResponseFormat } from 'openai/helpers/zod'
+import { createAdminClient } from '../supabase-admin'
+import { openai } from '../openai'
+import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
+import { PassCSchema, type PassCOutput } from './schemas'
+import { logAiCall } from './ai-log'
+import type { AggregatedTheme, SovEntry } from './types'
+
+// Pass C — competitive analysis (Architecture/Analysis-Passes §Pass C). Single
+// GPT call over Step A2's bucketed themes (never re-reads raw comments). Finds
+// what only emerges from cross-bucket comparison: topic ownership, content gaps,
+// competitive threats, sentiment differentials. Themes are presented as short
+// indices (T1, T2 …); the model references those, and code maps them back to
+// audience_insights UUIDs, rejecting unknown indices (invariant 8). On a
+// single-bucket corpus there is nothing to compare, so the model returns [].
+
+const PROMPT_VERSION = 'pass_c_v1'
+
+export interface TrackingConfig {
+  brand_keywords: string[] | null
+  competitor_names: string[] | null
+  industry_keywords: string[] | null
+}
+
+export interface RunPassCOptions {
+  clientId: string
+  runId: string
+  themes: AggregatedTheme[]
+  trackingConfig?: TrackingConfig
+  sov?: Record<string, SovEntry>
+  persist?: boolean
+  dryRun?: boolean
+}
+
+/** A persisted competitive insight, surfaced to Pass D for C# referencing. */
+export interface PersistedCompetitiveInsight {
+  id: string
+  category: string
+  competitor_name: string | null
+  title: string
+  finding: string
+  impact_level: string | null
+}
+
+export interface RunPassCResult {
+  competitiveInsights: PersistedCompetitiveInsight[]
+  themeIndex: { label: string; theme: AggregatedTheme }[]
+  inserted: number
+  rejectedRefs: number
+  promptTokens: number
+  completionTokens: number
+  costUsd: number
+  dryRun: boolean
+  skippedReason?: string
+}
+
+/** Stable T# index for each theme — the only handle the model gets. */
+export function indexThemes(themes: AggregatedTheme[]): { label: string; theme: AggregatedTheme }[] {
+  return themes.map((theme, i) => ({ label: `T${i + 1}`, theme }))
+}
+
+function buildSystemPrompt(tc: TrackingConfig | undefined): string {
+  const brand = (tc?.brand_keywords ?? []).join(', ') || '(none provided)'
+  const competitors = (tc?.competitor_names ?? []).join(', ') || '(none provided)'
+  return [
+    'You are a media-based competitive intelligence analyst working for a brand.',
+    '',
+    `Client brand: ${brand}`,
+    `Known competitors: ${competitors}`,
+    '',
+    'You are given audience themes already bucketed by who posted the source videos:',
+    '- client      = the brand itself',
+    '- competitor:X = a named competitor',
+    '- industry-other = everyone else in the category',
+    '',
+    'Find ONLY insights that emerge from comparing buckets against each other:',
+    '- topic_ownership: a theme strong in the client bucket and weak elsewhere.',
+    '- content_gap: a theme strong in competitor / industry buckets but missing from the client.',
+    '- competitive_threat: a theme positive for a competitor but negative (or absent) for the client.',
+    '- sentiment_differential: the same topic with a different emotional tone across buckets.',
+    '- notable_account: a high-signal industry account worth tracking.',
+    '- engagement_benchmark: a cross-bucket performance contrast.',
+    '',
+    'Rules:',
+    '- Reference every supporting theme by its bracket index (e.g. "T3"), using ONLY indices present in the input.',
+    '- Do NOT invent counts, percentages, or metrics — describe findings qualitatively.',
+    '- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or client data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.',
+    '- impact_level reflects how much the finding should affect the brand’s strategy.',
+  ].join('\n')
+}
+
+function buildUserPrompt(
+  themeIndex: { label: string; theme: AggregatedTheme }[],
+  sov: Record<string, SovEntry> | undefined,
+): string {
+  const lines: string[] = []
+  if (sov && Object.keys(sov).length) {
+    lines.push('SHARE OF VOICE (by bucket):')
+    for (const [bucket, e] of Object.entries(sov)) {
+      lines.push(`- ${bucket}: ${e.videos} videos (${e.pct_videos}% of corpus)`)
+    }
+    lines.push('')
+  }
+  lines.push(`THEMES (${themeIndex.length})`)
+  for (const { label, theme } of themeIndex) {
+    lines.push(
+      `[${label}] bucket=${theme.bucket} category=${theme.category} theme=${theme.theme} ` +
+        `· ${theme.evidenceCount} videos · strength ${theme.strengthScore} ` +
+        `· ${theme.dominantEmotion}/${theme.dominantSentimentImpact}`,
+    )
+  }
+  return lines.join('\n')
+}
+
+export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
+  const { clientId, runId, themes, trackingConfig, sov } = opts
+  const dryRun = opts.dryRun ?? false
+  const persist = opts.persist ?? !dryRun
+  const admin = createAdminClient()
+
+  const themeIndex = indexThemes(themes)
+  const byLabel = new Map(themeIndex.map((t) => [t.label.toLowerCase(), t.theme]))
+  const systemPrompt = buildSystemPrompt(trackingConfig)
+  const userPrompt = buildUserPrompt(themeIndex, sov)
+
+  const base: RunPassCResult = {
+    competitiveInsights: [],
+    themeIndex,
+    inserted: 0,
+    rejectedRefs: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    costUsd: 0,
+    dryRun,
+  }
+
+  // Idempotent per (client, run) — invariant 6. Clear BEFORE any early return so a
+  // run that has lost its competitor data doesn't leave stale competitive insights.
+  if (persist) {
+    await admin.from('competitive_insights').delete().eq('client_id', clientId).eq('run_id', runId)
+  }
+
+  // Distinct buckets present — with <2 there is nothing to compare; skip the call.
+  const buckets = new Set(themes.map((t) => t.bucket))
+  if (buckets.size < 2) {
+    return { ...base, skippedReason: `only ${buckets.size} bucket present — no cross-bucket comparison` }
+  }
+  if (dryRun) return base
+
+  const startedAt = Date.now()
+  let parsed: PassCOutput | null = null
+  let usage = { prompt_tokens: 0, completion_tokens: 0 }
+  try {
+    const completion = await openai.chat.completions.parse({
+      model: ANALYSIS_MODEL,
+      temperature: ANALYSIS_TEMPERATURE,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      response_format: zodResponseFormat(PassCSchema, 'pass_c'),
+    })
+    parsed = completion.choices[0]?.message?.parsed ?? null
+    if (completion.usage) {
+      usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }
+    }
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e)
+    if (persist) {
+      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: null, error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
+    }
+    throw new Error(`Pass C call failed: ${error}`)
+  }
+
+  const durationMs = Date.now() - startedAt
+  const costUsd = estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
+  base.promptTokens = usage.prompt_tokens
+  base.completionTokens = usage.completion_tokens
+  base.costUsd = costUsd
+
+  if (!parsed) {
+    if (persist) {
+      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: { refusal: true }, error: 'no parsed output', usage, durationMs, validationStatus: 'parse_error' })
+    }
+    return base
+  }
+
+  // Map T# refs to audience_insights UUIDs; count and drop unknown indices.
+  let rejectedRefs = 0
+  const rows = parsed.competitive_insights.map((ci) => {
+    const supportingIds: string[] = []
+    for (const ref of ci.supporting_themes) {
+      const theme = byLabel.get(ref.toLowerCase().trim())
+      if (!theme) {
+        rejectedRefs++
+        continue
+      }
+      supportingIds.push(...theme.supportingInsightIds)
+    }
+    return {
+      client_id: clientId,
+      run_id: runId,
+      category: ci.category,
+      competitor_name: ci.competitor_name,
+      title: ci.title,
+      finding: ci.finding,
+      evidence: { supporting_theme_ids: [...new Set(supportingIds)] },
+      impact_level: ci.impact_level,
+    }
+  })
+  base.rejectedRefs = rejectedRefs
+
+  if (persist) {
+    if (rows.length) {
+      const { data: inserted, error } = await admin
+        .from('competitive_insights')
+        .insert(rows)
+        .select('id, category, competitor_name, title, finding, impact_level')
+      if (error) throw new Error(`persist competitive_insights: ${error.message}`)
+      base.competitiveInsights = (inserted ?? []) as PersistedCompetitiveInsight[]
+      base.inserted = base.competitiveInsights.length
+    }
+    await logAiCall(admin, {
+      clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
+      response: { insights: rows.length, rejected_refs: rejectedRefs },
+      error: null, usage, durationMs,
+      validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
+    })
+  } else {
+    // No-persist: still surface the would-be insights (without ids) for inspection.
+    base.competitiveInsights = rows.map((r) => ({ id: '(unsaved)', category: r.category, competitor_name: r.competitor_name, title: r.title, finding: r.finding, impact_level: r.impact_level }))
+    base.inserted = rows.length
+  }
+
+  return base
+}

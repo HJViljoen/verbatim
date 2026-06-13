@@ -70,3 +70,67 @@ export const PassAVideoSchema = z.object({
 export type PassAVideoOutput = z.infer<typeof PassAVideoSchema>
 export type PassAClassification = z.infer<typeof classificationSchema>
 export type PassAInsight = z.infer<typeof insightSchema>
+
+// --- Pass C / Pass D (Architecture/Analysis-Passes §Pass C, §Pass D) ----------
+// DB-enforced enums are only impact_level / priority and the 1–10 score ranges;
+// category / insight_type / rec type have NO DB CHECK and are app-level vocab.
+// Scores (confidence/opportunity) are model JUDGMENT, allowed like strength_score
+// — raw counts/percentages are never model-emitted (invariant 5). Upstream record
+// references are short indices (T#/C#/M#) here, mapped to UUIDs in code (invariant 8).
+
+export const COMPETITIVE_CATEGORIES = [
+  'topic_ownership', 'content_gap', 'competitive_threat', 'sentiment_differential',
+  'notable_account', 'organic_vs_paid', 'engagement_benchmark',
+] as const
+
+export const IMPACT_LEVELS = ['high', 'medium', 'low'] as const
+
+const competitiveInsightSchema = z.object({
+  category: z.enum(COMPETITIVE_CATEGORIES),
+  competitor_name: z.string().nullable(),
+  title: z.string(),
+  finding: z.string(),
+  // Theme indices (e.g. "T1") from the prompt — mapped to audience_insights ids in code.
+  supporting_themes: z.array(z.string()),
+  impact_level: z.enum(IMPACT_LEVELS),
+})
+
+export const PassCSchema = z.object({ competitive_insights: z.array(competitiveInsightSchema) })
+export type PassCOutput = z.infer<typeof PassCSchema>
+export type CompetitiveInsightOut = z.infer<typeof competitiveInsightSchema>
+
+export const MARKET_INSIGHT_TYPES = [
+  'unmet_need', 'platform_pattern', 'industry_signal', 'cross_platform_synthesis', 'sentiment_trajectory',
+] as const
+
+export const RECOMMENDATION_TYPES = [
+  'content_idea', 'hook_strategy', 'urgent_topic', 'competitive_move', 'audience_target', 'platform_strategy',
+] as const
+
+export const PRIORITIES = ['high', 'medium', 'low'] as const
+
+const marketInsightSchema = z.object({
+  insight_type: z.enum(MARKET_INSIGHT_TYPES),
+  title: z.string(),
+  description: z.string(),
+  supporting_themes: z.array(z.string()),       // T# indices
+  supporting_competitive: z.array(z.string()),  // C# indices
+  confidence_score: z.number().int(),
+  opportunity_score: z.number().int(),
+})
+
+const recommendationSchema = z.object({
+  type: z.enum(RECOMMENDATION_TYPES),
+  title: z.string(),
+  reasoning: z.string(),
+  based_on: z.array(z.string()),  // M# (market insights in this output) / C# indices
+  priority: z.enum(PRIORITIES),
+})
+
+export const PassDSchema = z.object({
+  market_insights: z.array(marketInsightSchema),
+  recommendations: z.array(recommendationSchema),
+})
+export type PassDOutput = z.infer<typeof PassDSchema>
+export type MarketInsightOut = z.infer<typeof marketInsightSchema>
+export type RecommendationOut = z.infer<typeof recommendationSchema>
