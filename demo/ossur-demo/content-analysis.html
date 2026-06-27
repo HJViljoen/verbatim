@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Content Analysis · SocialLens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="page" id="page"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    mountSidebar("content");
+    mountTopbar(["Össur", "Content Analysis"]);
+    injectWatermark();
+
+    const maxHookEng = Math.max(...HOOK_PERFORMANCE.map(h => h.avg_engagement));
+    const maxFmtEng = Math.max(...FORMAT_PERFORMANCE.map(f => f.avg_engagement));
+
+    const hookRows = HOOK_PERFORMANCE.map((h, i) => `
+      <tr>
+        <td><span class="num-marker" style="display:inline-grid;width:22px;height:22px;background:${i === 0 ? 'var(--cta)' : 'var(--secondary-light)'};color:${i === 0 ? 'white' : 'var(--primary)'};border-radius:4px;place-items:center;font-family:'Fira Code',monospace;font-size:11.5px;font-weight:600;">${i + 1}</span></td>
+        <td><span class="mono" style="background:var(--bg-subtle);padding:3px 8px;border-radius:4px;font-size:12px;">${h.hook_style}</span></td>
+        <td>
+          <span class="hook-bar" style="width:${(h.avg_engagement / maxHookEng) * 120}px;"></span>
+          <span class="mono">${h.avg_engagement.toFixed(1)}%</span>
+        </td>
+        <td class="num-cell">${h.video_count}</td>
+        <td class="cell-secondary" style="max-width:340px;font-size:12px;">"${h.top_example}"</td>
+      </tr>
+    `).join("");
+
+    const formatRows = FORMAT_PERFORMANCE.map(f => `
+      <tr>
+        <td><span class="mono" style="background:var(--bg-subtle);padding:3px 8px;border-radius:4px;font-size:12px;">${f.classified_type}</span></td>
+        <td>
+          <span class="hook-bar" style="width:${(f.avg_engagement / maxFmtEng) * 120}px;"></span>
+          <span class="mono">${f.avg_engagement.toFixed(1)}%</span>
+        </td>
+        <td class="num-cell">${f.video_count}</td>
+      </tr>
+    `).join("");
+
+    const gapRows = COMPETITOR_GAPS.map(g => {
+      const total = g.competitor_count + g.ossur_count;
+      const compPct = total > 0 ? (g.competitor_count / total) * 100 : 0;
+      return `
+        <tr>
+          <td>${g.topic}</td>
+          <td>
+            <div style="display:flex;height:18px;border-radius:3px;overflow:hidden;border:1px solid var(--border);">
+              <div style="background:var(--negative);flex:${g.competitor_count};"></div>
+              <div style="background:var(--primary);flex:${g.ossur_count};"></div>
+            </div>
+          </td>
+          <td class="num-cell" style="color:var(--negative);font-weight:600;">${g.competitor_count}</td>
+          <td class="num-cell" style="color:var(--primary);font-weight:600;">${g.ossur_count}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const recommendedHooks = RECOMMENDED_HOOKS.map((h, i) => `
+      <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;gap:14px;align-items:flex-start;">
+        <span class="num-marker">${i + 1}</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px;">"${h.title}"</div>
+          <div class="muted" style="font-size:12.5px;">${h.reason}</div>
+        </div>
+      </div>
+    `).join("");
+
+    function entityCell(v) {
+      if (v.is_client) return '<span class="badge badge-entity-client">Össur</span>';
+      if (v.is_competitor) return `<span class="badge badge-entity-competitor">${v.competitor_name}</span>`;
+      return '<span class="badge badge-entity-industry">Industry</span>';
+    }
+
+    const videoRows = VIDEOS.map(v => `
+      <tr>
+        <td><span class="mono" style="font-size:11px;">${platformIcon(v.platform)} ${platformLabel(v.platform).slice(0,2).toUpperCase()}</span></td>
+        <td>${entityCell(v)}</td>
+        <td><div style="font-weight:500;">${v.account_name}</div><div class="muted" style="font-size:11px;">${fmt(v.account_followers)} followers</div></td>
+        <td style="max-width:280px;font-size:12px;line-height:1.4;">${v.caption}</td>
+        <td><span class="mono" style="background:var(--bg-subtle);padding:2px 6px;border-radius:3px;font-size:11px;">${v.hook_style}</span></td>
+        <td><span class="mono" style="background:var(--bg-subtle);padding:2px 6px;border-radius:3px;font-size:11px;">${v.classified_type}</span></td>
+        <td><span class="pill-sent ${v.sentiment}">${v.sentiment}</span></td>
+        <td class="num-cell">${fmt(v.views)}</td>
+        <td class="num-cell">${fmt(v.likes)}</td>
+        <td class="num-cell">${fmt(v.comments_count)}</td>
+        <td class="num-cell" style="font-weight:600;color:var(--primary);">${v.engagement_rate.toFixed(1)}%</td>
+        <td class="num-cell">${v.comment_quality_score ?? '—'}</td>
+      </tr>
+    `).join("");
+
+    document.getElementById("page").innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Content Analysis</h1>
+          <div class="subtitle">What's working and what isn't, broken down by hook style and format. The catalog underneath is the per-video breakdown — sortable, drillable, exportable.</div>
+        </div>
+      </div>
+
+      <!-- Top section: Content Insights cards -->
+      <div class="col-2">
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Top performing hook styles</h2>
+            <span class="meta">last 30 days · avg engagement</span>
+          </div>
+          <div class="table-wrap" style="border:none;">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Hook style</th><th>Avg engagement</th><th>Volume</th><th>Top example</th></tr>
+              </thead>
+              <tbody>${hookRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Top performing video formats</h2>
+            <span class="meta">classified_type · avg engagement</span>
+          </div>
+          <div class="table-wrap" style="border:none;">
+            <table>
+              <thead>
+                <tr><th>Format</th><th>Avg engagement</th><th>Volume</th></tr>
+              </thead>
+              <tbody>${formatRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-2">
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>What competitors do that you don't</h2>
+            <span class="meta">video count by topic · this week</span>
+          </div>
+          <div class="table-wrap" style="border:none;">
+            <table>
+              <thead>
+                <tr><th>Topic</th><th>Distribution</th><th class="num-cell">Comp.</th><th class="num-cell">Össur</th></tr>
+              </thead>
+              <tbody>${gapRows}</tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:14px;font-size:11.5px;color:var(--text-muted);margin-top:10px;">
+            <span><span style="display:inline-block;width:10px;height:10px;background:var(--negative);border-radius:2px;vertical-align:middle;"></span> Competitors</span>
+            <span><span style="display:inline-block;width:10px;height:10px;background:var(--primary);border-radius:2px;vertical-align:middle;"></span> Össur</span>
+          </div>
+        </div>
+
+        <div class="card card-lg" style="background:linear-gradient(180deg, #FEF3C7 0%, #FFFFFF 50%);border-color:#FDE68A;">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Recommended hooks to test this month</h2>
+            <span class="meta">based on top performers + content gaps</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;">
+            ${recommendedHooks}
+          </div>
+          <div class="muted" style="font-size:12px;margin-top:14px;border-top:1px solid var(--border);padding-top:10px;">
+            Tied to recommendation: <a href="market-intelligence.html"><span class="mono">rec_002</span> · Lead with personal-story hooks on TikTok</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Video catalog -->
+      <div class="section-head">
+        <h2>Video catalog <span class="muted" style="font-weight:400;">(${VIDEOS.length} of 247)</span></h2>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" placeholder="Search caption / account…" class="login-field" style="margin:0;padding:6px 10px;font-size:12.5px;width:220px;">
+          <button class="btn">Filter</button>
+          <button class="btn">Sort: views ↓</button>
+          <button class="btn">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Plat.</th>
+              <th>Entity</th>
+              <th>Account</th>
+              <th>Caption</th>
+              <th>Hook style</th>
+              <th>Format</th>
+              <th>Sentiment</th>
+              <th class="num-cell">Views</th>
+              <th class="num-cell">Likes</th>
+              <th class="num-cell">Comments</th>
+              <th class="num-cell">Eng.</th>
+              <th class="num-cell">Quality</th>
+            </tr>
+          </thead>
+          <tbody>${videoRows}</tbody>
+        </table>
+      </div>
+    `;
+  </script>
+</body>
+</html>

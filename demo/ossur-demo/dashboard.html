@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard · SocialLens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="page" id="page"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    mountSidebar("dashboard");
+    mountTopbar(["Össur", "Dashboard"]);
+    injectWatermark();
+
+    const s = RUN_SUMMARY;
+    const fr = getFeaturedRec();
+    const topVideo = getVideoById(s.top_video_id);
+
+    document.getElementById("page").innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <div class="subtitle">Week of Apr 22–28, 2026 · Single run, baseline established. Week-over-week trends will populate from your second run onwards.</div>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="kpi-grid">
+        <div class="card">
+          <div class="card-title">Total videos analysed</div>
+          <div class="card-value">${fmt(s.total_videos)}</div>
+          <div class="card-sub">${s.client_videos} Össur · ${s.competitor_videos} Ottobock · ${s.total_videos - s.client_videos - s.competitor_videos} industry</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Total comments analysed</div>
+          <div class="card-value">${fmt(s.total_comments)}</div>
+          <div class="card-sub">filtered for signal · low-signal comments preserved for drill-down</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Avg engagement rate</div>
+          <div class="card-value">${s.avg_engagement_rate.toFixed(2)}%</div>
+          <div class="card-sub">across all platforms · weighted by views</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Top video views</div>
+          <div class="card-value">${fmt(s.top_video_views)}</div>
+          <div class="card-sub"><a href="content-analysis.html">${topVideo.account_name}</a> · ${platformLabel(s.top_video_platform)}</div>
+        </div>
+        <div class="card">
+          <div class="card-title">Platforms covered</div>
+          <div class="platforms">${platformChipsRow(s.platforms_covered)}</div>
+          <div class="card-sub" style="margin-top:10px;">all 3 active sources</div>
+        </div>
+      </div>
+
+      <!-- Sentiment + SOV -->
+      <div class="col-2">
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Sentiment overview</h2>
+            <span class="meta">weighted by comment volume per video</span>
+          </div>
+          <div class="sentiment-block">
+            ${sentimentDonut(s.overall_sentiment_positive, s.overall_sentiment_neutral, s.overall_sentiment_negative)}
+            ${sentimentLegend(s.overall_sentiment_positive, s.overall_sentiment_neutral, s.overall_sentiment_negative)}
+          </div>
+          <div class="card-sub" style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+            ${s.sentiment_drivers.text}
+          </div>
+        </div>
+
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Share of voice</h2>
+            <span class="meta">% of analysed video volume</span>
+          </div>
+          ${sovBar(s.share_of_voice)}
+          <div class="card-sub" style="margin-top:18px;border-top:1px solid var(--border);padding-top:12px;">
+            ${s.share_of_voice_caption}
+          </div>
+          <div style="margin-top:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+            ${Object.entries(s.platforms_summary).map(([p, m]) => `
+              <div style="background:var(--bg-subtle);border-radius:var(--radius-sm);padding:10px;">
+                <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;">${platformLabel(p)}</div>
+                <div class="mono" style="font-size:15px;font-weight:600;margin-top:2px;">${m.avg_engagement.toFixed(1)}% eng</div>
+                <div style="font-size:11.5px;color:var(--text-muted);">${m.videos} videos · ${fmt(m.comments)} comments</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      </div>
+
+      <!-- Featured recommendation -->
+      <div class="featured-rec" style="margin-bottom:20px;">
+        <div class="meta">
+          <span class="label">Featured recommendation</span>
+          <span class="badge badge-priority-high">priority: high</span>
+          <span class="badge badge-type">${REC_TYPES[fr.type]}</span>
+          <span class="badge badge-status-new">${fr.status}</span>
+        </div>
+        <div class="title">${fr.title}</div>
+        <div class="reasoning">${fr.reasoning}</div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn btn-cta" style="background:white;color:var(--primary);border-color:white;">Accept</button>
+          <button class="btn" style="background:transparent;color:white;border-color:rgba(255,255,255,0.4);">Acknowledge</button>
+          <button class="btn btn-ghost" style="color:white;">Dismiss</button>
+        </div>
+      </div>
+
+      <!-- Top insights preview -->
+      <div class="card card-lg">
+        <div class="section-head" style="margin-top:0;">
+          <h2>Top 3 insights this week</h2>
+          <a href="market-intelligence.html" style="font-size:12.5px;">View all on Market Intelligence →</a>
+        </div>
+        <ul class="list-bullet">
+          ${s.top_insights.map((it, i) => `
+            <li>
+              <span class="num-marker">${i + 1}</span>
+              <div class="text">
+                <a href="market-intelligence.html" style="color:var(--text-primary);font-weight:500;">${it.title}</a>
+                <div class="muted" style="font-size:12px;margin-top:2px;">Click to see evidence and supporting themes</div>
+              </div>
+            </li>
+          `).join("")}
+        </ul>
+      </div>
+    `;
+  </script>
+</body>
+</html>

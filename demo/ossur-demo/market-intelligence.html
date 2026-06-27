@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Market Intelligence · SocialLens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="page" id="page"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    mountSidebar("market");
+    mountTopbar(["Össur", "Market Intelligence"]);
+    injectWatermark();
+
+    const insightTypeFilters = ["all", ...Object.keys(INSIGHT_TYPES)];
+    const recTypeFilters = ["all", ...Object.keys(REC_TYPES)];
+
+    const insightCards = MARKET_INSIGHTS.map(mi => `
+      <div class="insight-card">
+        <div class="row">
+          <span class="badge badge-type">${INSIGHT_TYPES[mi.insight_type]}</span>
+        </div>
+        <div class="title">${mi.title}</div>
+        <div class="desc">${mi.description}</div>
+        <div class="row" style="margin-top:6px;">
+          <a href="voice-of-customer.html" style="font-size:12.5px;">View ${mi.evidence.supporting_theme_ids.length} supporting theme${mi.evidence.supporting_theme_ids.length === 1 ? '' : 's'} →</a>
+        </div>
+        <div class="scores">
+          ${scoreBlock("Confidence", mi.confidence_score)}
+          ${scoreBlock("Opportunity", mi.opportunity_score)}
+        </div>
+      </div>
+    `).join("");
+
+    const recCards = RECOMMENDATIONS.map(r => `
+      <div class="insight-card">
+        <div class="row">
+          <span class="badge badge-type">${REC_TYPES[r.type]}</span>
+          <span class="badge badge-priority-${r.priority}">priority: ${r.priority}</span>
+          ${r.is_featured ? '<span class="badge badge-status-new">featured</span>' : ''}
+        </div>
+        <div class="title">${r.title}</div>
+        <div class="desc">${r.reasoning}</div>
+        <div class="row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:10px;">
+          <span class="muted" style="font-size:12px;">Based on: ${r.based_on.map(id => `<span class="mono">${id}</span>`).join(", ")}</span>
+          <div style="margin-left:auto;display:flex;gap:6px;">
+            <button class="btn btn-primary" style="padding:4px 10px;font-size:12px;">Accept</button>
+            <button class="btn" style="padding:4px 10px;font-size:12px;">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    `).join("");
+
+    document.getElementById("page").innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Market Intelligence</h1>
+          <div class="subtitle">Strategic insights synthesised across Össur, Ottobock, and 247 industry videos this week. Each insight links to the audience themes that produced it.</div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>Market Insights <span class="muted" style="font-weight:400;">(${MARKET_INSIGHTS.length})</span></h2>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span class="muted" style="font-size:11.5px;">Filter:</span>
+          ${insightTypeFilters.map(f => `<button class="btn ${f === 'all' ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11.5px;">${f === 'all' ? 'All' : INSIGHT_TYPES[f]}</button>`).join("")}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px;">
+        ${insightCards}
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-head">
+        <h2>Recommendations <span class="muted" style="font-weight:400;">(${RECOMMENDATIONS.length})</span></h2>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span class="muted" style="font-size:11.5px;">Filter:</span>
+          ${recTypeFilters.map(f => `<button class="btn ${f === 'all' ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11.5px;">${f === 'all' ? 'All' : REC_TYPES[f]}</button>`).join("")}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        ${recCards}
+      </div>
+    `;
+  </script>
+</body>
+</html>

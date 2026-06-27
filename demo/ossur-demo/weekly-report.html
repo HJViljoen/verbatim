@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Össur weekly · Apr 22–28, 2026</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1E40AF;
+      --secondary: #3B82F6;
+      --secondary-light: #DBEAFE;
+      --cta: #F59E0B;
+      --bg: #F8FAFC;
+      --card: #FFFFFF;
+      --text: #0F172A;
+      --text-2: #475569;
+      --muted: #94A3B8;
+      --border: #E2E8F0;
+      --positive: #10B981;
+      --neutral: #64748B;
+      --negative: #EF4444;
+      --high-bg: #FEE2E2;
+      --high: #DC2626;
+      --med-bg: #FEF3C7;
+      --med: #D97706;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: 'Fira Sans', -apple-system, sans-serif;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .mono, .num { font-family: 'Fira Code', monospace; font-variant-numeric: tabular-nums; }
+
+    .controls {
+      max-width: 720px; margin: 16px auto 0; padding: 0 16px;
+      display: flex; gap: 8px; justify-content: flex-end;
+    }
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 6px;
+      font-size: 13px; font-weight: 500;
+      border: 1px solid var(--border); background: white; color: var(--text);
+      cursor: pointer; font-family: inherit;
+    }
+    .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+
+    .email-wrap {
+      max-width: 720px;
+      margin: 16px auto 60px;
+      background: var(--card);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+      border: 1px solid var(--border);
+    }
+    .email-header {
+      background: linear-gradient(135deg, #0F172A 0%, #1E40AF 100%);
+      color: white;
+      padding: 28px 32px 22px;
+      position: relative;
+    }
+    .email-header::after {
+      content: ''; position: absolute; right: -50px; top: -50px;
+      width: 200px; height: 200px; border-radius: 50%;
+      background: rgba(245, 158, 11, 0.15);
+    }
+    .brand-row { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+    .brand-mark {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--secondary), var(--primary));
+      border-radius: 8px;
+      display: grid; place-items: center;
+      font-weight: 700; color: white; font-size: 15px;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .brand-name { font-weight: 600; font-size: 18px; }
+    .brand-tag { font-size: 11px; color: rgba(255,255,255,0.7); letter-spacing: 0.04em; text-transform: uppercase; }
+    .header-meta {
+      margin-top: 18px;
+      font-size: 12px; color: rgba(255,255,255,0.7);
+      letter-spacing: 0.04em; text-transform: uppercase;
+      position: relative; z-index: 1;
+    }
+    .header-title {
+      margin-top: 6px;
+      font-size: 22px; font-weight: 600; line-height: 1.3;
+      position: relative; z-index: 1;
+    }
+    .header-sub { margin-top: 4px; font-size: 13.5px; color: rgba(255,255,255,0.8); position: relative; z-index: 1; }
+
+    .section { padding: 24px 32px; border-bottom: 1px solid var(--border); }
+    .section:last-of-type { border-bottom: none; }
+    h2 { margin: 0 0 12px; font-size: 13px; color: var(--text-2); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+    h3 { margin: 0 0 4px; font-size: 16px; font-weight: 600; line-height: 1.35; }
+
+    .metrics {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    }
+    .metric {
+      background: var(--bg); border-radius: 8px; padding: 12px;
+    }
+    .metric-label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-value { font-family: 'Fira Code', monospace; font-size: 22px; font-weight: 600; margin-top: 2px; letter-spacing: -0.01em; }
+    .metric-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .sentiment-row {
+      display: grid; grid-template-columns: 140px 1fr; gap: 18px; align-items: center;
+    }
+    .sent-bar {
+      display: flex; height: 14px; border-radius: 7px; overflow: hidden; border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .sent-bar > div { display: flex; align-items: center; justify-content: center; color: white; font-size: 10px; font-weight: 600; font-family: 'Fira Code', monospace; }
+    .sent-legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--text-2); }
+    .sent-legend span { display: inline-flex; align-items: center; gap: 4px; }
+    .swatch { width: 9px; height: 9px; border-radius: 2px; }
+    .donut-mini {
+      width: 130px; height: 130px;
+      background: conic-gradient(
+        var(--positive) 0% 64%,
+        var(--neutral) 64% 87%,
+        var(--negative) 87% 100%
+      );
+      border-radius: 50%;
+      display: grid; place-items: center;
+      position: relative;
+      mask: radial-gradient(circle, transparent 35px, black 36px);
+      -webkit-mask: radial-gradient(circle, transparent 35px, black 36px);
+    }
+    .donut-wrap { position: relative; width: 130px; height: 130px; }
+    .donut-num {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      font-family: 'Fira Code', monospace; font-size: 22px; font-weight: 600;
+    }
+
+    .insight {
+      padding: 14px 16px;
+      border-left: 3px solid var(--secondary);
+      background: var(--bg);
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 10px;
+    }
+    .insight-meta { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 500;
+      font-family: 'Fira Code', monospace;
+      background: var(--secondary-light); color: var(--primary);
+      border: 1px solid #BFDBFE;
+    }
+    .badge-priority-high { background: var(--high-bg); color: var(--high); border-color: #FECACA; }
+    .badge-priority-medium { background: var(--med-bg); color: var(--med); border-color: #FDE68A; }
+    .insight p { margin: 0; font-size: 13px; color: var(--text-2); }
+
+    .featured-rec {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      color: white;
+      padding: 22px;
+      border-radius: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+    .featured-rec::before {
+      content: ''; position: absolute; right: -30px; top: -30px;
+      width: 140px; height: 140px; border-radius: 50%;
+      background: rgba(245, 158, 11, 0.18);
+    }
+    .featured-rec .label { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.8; position: relative; z-index: 1; }
+    .featured-rec h3 { color: white; margin-top: 6px; font-size: 17px; line-height: 1.35; position: relative; z-index: 1; max-width: 90%; }
+    .featured-rec p { color: rgba(255,255,255,0.92); margin-top: 8px; font-size: 13px; line-height: 1.6; position: relative; z-index: 1; }
+
+    .hooks-list { display: flex; flex-direction: column; gap: 8px; }
+    .hook-row {
+      display: grid; grid-template-columns: 24px 1.4fr 70px 60px;
+      gap: 10px; align-items: center; padding: 10px;
+      background: var(--bg); border-radius: 8px;
+    }
+    .hook-rank {
+      font-family: 'Fira Code', monospace; font-weight: 600;
+      background: var(--primary); color: white;
+      width: 22px; height: 22px; border-radius: 4px;
+      display: grid; place-items: center; font-size: 11px;
+    }
+    .hook-style { font-family: 'Fira Code', monospace; font-size: 12px; }
+    .hook-bar-wrap { background: white; border-radius: 4px; height: 8px; overflow: hidden; border: 1px solid var(--border); }
+    .hook-bar-fill { background: var(--secondary); height: 100%; }
+    .hook-eng { font-family: 'Fira Code', monospace; font-weight: 600; text-align: right; font-size: 12px; }
+
+    .sov-row {
+      display: flex; height: 28px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+    .sov-seg { display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 600; font-family: 'Fira Code', monospace; }
+
+    .cta-block {
+      text-align: center;
+      padding: 28px 32px;
+      background: var(--bg);
+    }
+    .cta-button {
+      display: inline-block;
+      background: var(--cta);
+      color: white !important;
+      text-decoration: none;
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .email-footer {
+      padding: 20px 32px;
+      background: #F1F5F9;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .email-footer a { color: var(--secondary); text-decoration: none; }
+
+    .watermark {
+      position: fixed; bottom: 16px; right: 20px;
+      background: rgba(15, 23, 42, 0.85); color: white;
+      padding: 6px 12px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase;
+      z-index: 1000;
+      font-family: 'Fira Code', monospace;
+      pointer-events: none;
+    }
+    .watermark::before { content: '●'; color: var(--cta); margin-right: 6px; }
+
+    @media print {
+      body { background: white; }
+      .controls, .watermark { display: none !important; }
+      .email-wrap { box-shadow: none; border: none; max-width: 100%; margin: 0; border-radius: 0; }
+      .section { padding: 18px 24px; }
+      .email-header { padding: 22px 24px 18px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <button class="btn" onclick="window.history.back()">← Back</button>
+    <button class="btn btn-primary" onclick="window.print()">Print to PDF</button>
+  </div>
+
+  <div class="email-wrap">
+    <!-- Header -->
+    <div class="email-header">
+      <div class="brand-row">
+        <div class="brand-mark">SL</div>
+        <div>
+          <div class="brand-name">SocialLens</div>
+          <div class="brand-tag">Consumer intelligence · Össur</div>
+        </div>
+      </div>
+      <div class="header-meta">Weekly Report · Week of Apr 22–28, 2026</div>
+      <div class="header-title">1.4M views, 8.4K comments, 5 strategic insights this week</div>
+      <div class="header-sub">Sentiment up against your industry-other baseline. Insurance-navigation content remains the single biggest opportunity gap.</div>
+    </div>
+
+    <!-- Metrics strip -->
+    <div class="section">
+      <h2>The numbers</h2>
+      <div class="metrics">
+        <div class="metric">
+          <div class="metric-label">Videos</div>
+          <div class="metric-value">247</div>
+          <div class="metric-sub">94 Össur · 102 Ottobock · 51 industry</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Comments</div>
+          <div class="metric-value">8,431</div>
+          <div class="metric-sub">filtered for signal</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Avg engagement</div>
+          <div class="metric-value">6.82%</div>
+          <div class="metric-sub">weighted by views</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Top video</div>
+          <div class="metric-value">1.4M</div>
+          <div class="metric-sub">@aliciaonwheels · TikTok</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sentiment -->
+    <div class="section">
+      <h2>Sentiment</h2>
+      <div class="sentiment-row">
+        <div class="donut-wrap">
+          <div class="donut-mini"></div>
+          <div class="donut-num">64%</div>
+        </div>
+        <div>
+          <div class="sent-bar">
+            <div style="background: var(--positive); flex: 64;">64%</div>
+            <div style="background: var(--neutral); flex: 23;">23%</div>
+            <div style="background: var(--negative); flex: 13;">13%</div>
+          </div>
+          <div class="sent-legend">
+            <span><span class="swatch" style="background: var(--positive);"></span> Positive 64%</span>
+            <span><span class="swatch" style="background: var(--neutral);"></span> Neutral 23%</span>
+            <span><span class="swatch" style="background: var(--negative);"></span> Negative 13%</span>
+          </div>
+          <p style="margin-top: 12px; font-size: 13px; color: var(--text-2);">
+            Sentiment driven by personal-story content and milestone reveals. Negativity concentrated in cost / insurance threads — a recurring weekly pattern with no current brand response.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Headline insights -->
+    <div class="section">
+      <h2>This week's strategic insights</h2>
+
+      <div class="insight">
+        <div class="insight-meta">
+          <span class="badge">Industry signal</span>
+          <span class="badge badge-priority-high">priority: high</span>
+        </div>
+        <h3>Insurance-denial content drives 3x the engagement of product features</h3>
+        <p>Posts about insurance battles, denial reasons, and appeals averaged 12.4% engagement vs. 4.1% for product-led content across 247 videos. No tracked brand currently produces content here. <a href="dashboard.html">View evidence →</a></p>
+      </div>
+
+      <div class="insight">
+        <div class="insight-meta">
+          <span class="badge">Unmet need</span>
+          <span class="badge badge-priority-high">priority: high</span>
+        </div>
+        <h3>Strong unmet demand for affordable cosmetic covers</h3>
+        <p>Cosmetic skin and cover content surfaces 47 times across the corpus with strong purchase-intent language. Most existing content is third-party DIY. <a href="dashboard.html">View evidence →</a></p>
+      </div>
+
+      <div class="insight">
+        <div class="insight-meta">
+          <span class="badge">Cross-platform</span>
+          <span class="badge badge-priority-medium">priority: medium</span>
+        </div>
+        <h3>Pediatric content gap: Ottobock dominates, Össur near-silent</h3>
+        <p>Ottobock posts pediatric milestone content 3.5x more frequently than Össur. Parent audience researches 12+ months out — long sales cycle, high intent. <a href="dashboard.html">View evidence →</a></p>
+      </div>
+    </div>
+
+    <!-- Featured recommendation -->
+    <div class="section">
+      <h2>Featured recommendation</h2>
+      <div class="featured-rec">
+        <div class="label">For action this month</div>
+        <h3>Launch an insurance-navigation content series</h3>
+        <p>Insurance-denial and pre-auth content generated 12.4% average engagement — 3x product-led content. Uncontested category. Recommended lane: short explainer videos on denial reasons, appeal templates, prosthetist letters of medical necessity. Compounds across ZA / IN / BR because the friction is universal.</p>
+      </div>
+    </div>
+
+    <!-- Hooks of the week -->
+    <div class="section">
+      <h2>Hooks of the week</h2>
+      <div class="hooks-list">
+        <div class="hook-row">
+          <span class="hook-rank">1</span>
+          <span class="hook-style">personal-story</span>
+          <div class="hook-bar-wrap"><div class="hook-bar-fill" style="width: 100%;"></div></div>
+          <span class="hook-eng">8.4%</span>
+        </div>
+        <div class="hook-row">
+          <span class="hook-rank">2</span>
+          <span class="hook-style">before-after</span>
+          <div class="hook-bar-wrap"><div class="hook-bar-fill" style="width: 84%;"></div></div>
+          <span class="hook-eng">7.1%</span>
+        </div>
+        <div class="hook-row">
+          <span class="hook-rank">3</span>
+          <span class="hook-style">demonstration</span>
+          <div class="hook-bar-wrap"><div class="hook-bar-fill" style="width: 70%;"></div></div>
+          <span class="hook-eng">5.9%</span>
+        </div>
+      </div>
+      <p style="margin-top: 14px; font-size: 13px; color: var(--text-2);">
+        Test recommendation: lead with personal-story hooks on TikTok this month. Össur's TikTok output is currently 38% product-led — switching the mix could lift engagement without new production budget.
+      </p>
+    </div>
+
+    <!-- Competitive snapshot -->
+    <div class="section">
+      <h2>Competitive snapshot</h2>
+      <div class="sov-row">
+        <div class="sov-seg" style="background: var(--primary); flex: 38;">Össur 38%</div>
+        <div class="sov-seg" style="background: var(--negative); flex: 41;">Ottobock 41%</div>
+        <div class="sov-seg" style="background: #7C3AED; flex: 21;">Industry 21%</div>
+      </div>
+      <p style="font-size: 13px; color: var(--text-2);">
+        Ottobock leads on YouTube long-form and pediatric content. Össur leads on TikTok personal-story content and adaptive-sports coverage.
+      </p>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-block">
+      <p style="margin: 0 0 16px; color: var(--text-2); font-size: 13px;">
+        Drill into evidence, filter by platform, and explore the full video catalog on the dashboard.
+      </p>
+      <a class="cta-button" href="dashboard.html">View full dashboard →</a>
+    </div>
+
+    <!-- Footer -->
+    <div class="email-footer">
+      Sent to marketing@ossur.com, social@ossur.com on 28 Apr 2026 · Run ID <span class="mono" style="color: var(--text-2);">a1b2c3d4</span><br>
+      <a href="#" onclick="event.preventDefault();">Manage report settings</a> · <a href="#" onclick="event.preventDefault();">Unsubscribe</a><br>
+      <span style="margin-top: 8px; display: inline-block;">SocialLens · consumer intelligence for D2C brands</span>
+    </div>
+  </div>
+
+  <div class="watermark">Demo · Illustrative data</div>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Voice of Customer · SocialLens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="page" id="page"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    mountSidebar("voc");
+    mountTopbar(["Össur", "Voice of Customer"]);
+    injectWatermark();
+
+    let activeCategory = "pain_point";
+
+    function tabHtml() {
+      return CATEGORIES.map(c => {
+        const count = getInsightsByCategory(c.id).length;
+        return `<div class="tab ${c.id === activeCategory ? 'active' : ''}" data-cat="${c.id}">${c.label}<span class="count">${count}</span></div>`;
+      }).join("");
+    }
+
+    function themeCardHtml(theme) {
+      const evidenceHtml = theme.evidence.map(e => `
+        <div class="evidence">
+          ${e.quote}
+          <div class="evidence-meta">${e.comment_id}</div>
+        </div>
+      `).join("");
+      const platformsHtml = theme.platforms.map(p => `<span class="badge badge-platform">${platformIcon(p)} ${platformLabel(p)}</span>`).join(" ");
+      return `
+        <div class="theme-card">
+          <div class="header">
+            <div style="flex:1;">
+              <div class="title">${theme.theme}</div>
+              <div class="desc" style="margin-top:6px;">${theme.description}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;">
+              ${entityBadge(theme.derived_entity)}
+              <span class="pill-sent ${theme.sentiment_impact}">${theme.sentiment_impact}</span>
+            </div>
+          </div>
+          <div style="margin-top:6px;">
+            <div style="font-size:11.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">
+              Evidence (${theme.evidence.length} verbatim quote${theme.evidence.length === 1 ? '' : 's'})
+            </div>
+            ${evidenceHtml}
+          </div>
+          <div class="meta-row">
+            ${strengthBar(theme.strength_score)}
+            ${emotionPill(theme.emotion)}
+            ${platformsHtml}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderThemes() {
+      const themes = getInsightsByCategory(activeCategory);
+      const html = themes.length === 0
+        ? `<div class="card" style="text-align:center;color:var(--text-muted);padding:40px;">No themes in this category for the current run.</div>`
+        : themes.map(themeCardHtml).join("");
+      document.getElementById("themes").innerHTML = html;
+      document.getElementById("themes-count").textContent = `${themes.length} theme${themes.length === 1 ? '' : 's'}`;
+    }
+
+    function setupTabs() {
+      document.querySelectorAll(".tab").forEach(t => {
+        t.addEventListener("click", () => {
+          activeCategory = t.dataset.cat;
+          document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+          t.classList.add("active");
+          renderThemes();
+        });
+      });
+    }
+
+    document.getElementById("page").innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Voice of Customer</h1>
+          <div class="subtitle">What your audience actually says, grouped by intent. Every theme is FK-grounded — the verbatim quotes link to the original comments.</div>
+        </div>
+      </div>
+
+      <div class="voc-layout">
+        <aside class="filter-sidebar">
+          <div class="filter-group">
+            <h4>Platform</h4>
+            <label><input type="checkbox" checked> TikTok <span class="muted" style="margin-left:auto;font-size:11px;">112</span></label>
+            <label><input type="checkbox" checked> YouTube <span class="muted" style="margin-left:auto;font-size:11px;">59</span></label>
+            <label><input type="checkbox" checked> Instagram <span class="muted" style="margin-left:auto;font-size:11px;">76</span></label>
+          </div>
+          <div class="filter-group">
+            <h4>Entity</h4>
+            <label><input type="checkbox" checked> Össur</label>
+            <label><input type="checkbox" checked> Ottobock</label>
+            <label><input type="checkbox" checked> Industry &amp; other</label>
+          </div>
+          <div class="filter-group">
+            <h4>Sentiment impact</h4>
+            <label><input type="checkbox" checked> Positive</label>
+            <label><input type="checkbox" checked> Neutral</label>
+            <label><input type="checkbox" checked> Negative</label>
+          </div>
+          <div class="filter-group">
+            <h4>Min strength score</h4>
+            <input type="range" min="1" max="10" value="5" style="width:100%;accent-color:var(--secondary);">
+            <div class="muted" style="font-size:11px;text-align:right;">≥ 5/10</div>
+          </div>
+        </aside>
+
+        <div>
+          <div class="tabs">${tabHtml()}</div>
+          <div class="section-head" style="margin-top:0;">
+            <h2 id="themes-count">— themes</h2>
+            <span class="meta">sorted by strength score · DESC</span>
+          </div>
+          <div id="themes"></div>
+        </div>
+      </div>
+    `;
+
+    setupTabs();
+    renderThemes();
+  </script>
+</body>
+</html>

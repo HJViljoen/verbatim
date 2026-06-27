@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reports · SocialLens</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar"></aside>
+    <main class="main">
+      <div class="topbar" id="topbar"></div>
+      <div class="page" id="page"></div>
+    </main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    mountSidebar("reports");
+    mountTopbar(["Össur", "Reports"]);
+    injectWatermark();
+
+    function fmtDate(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+    }
+    function fmtDateShort(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    }
+
+    const reportRows = WEEKLY_REPORTS.map(r => `
+      <tr style="${r.is_current ? 'background: var(--secondary-light);' : ''}">
+        <td>
+          <div style="font-weight:500;">${r.subject}</div>
+          ${r.is_current ? '<span class="badge badge-status-new" style="margin-top:4px;">latest</span>' : ''}
+        </td>
+        <td class="cell-secondary">${fmtDateShort(r.week_start)} – ${fmtDateShort(r.week_end)}</td>
+        <td class="cell-secondary">${fmtDate(r.sent_at)}</td>
+        <td class="cell-secondary" style="font-size:11.5px;">${r.sent_to.join(", ")}</td>
+        <td>
+          <a href="weekly-report.html" target="_blank" class="btn" style="padding:4px 10px;font-size:12px;">View</a>
+        </td>
+      </tr>
+    `).join("");
+
+    document.getElementById("page").innerHTML = `
+      <div class="page-header">
+        <div>
+          <h1>Reports</h1>
+          <div class="subtitle">Weekly email archive. The report sent to your team contains the full insight summary, recommendations, and competitive snapshot — designed to be valuable even if no one logs into the dashboard.</div>
+        </div>
+      </div>
+
+      <div class="col-2" style="grid-template-columns: 1.5fr 1fr;">
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Past reports</h2>
+            <span class="meta">sorted by sent date · DESC</span>
+          </div>
+          <div class="table-wrap" style="border:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Subject</th>
+                  <th>Week</th>
+                  <th>Sent</th>
+                  <th>Recipients</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>${reportRows}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card card-lg">
+          <div class="section-head" style="margin-top:0;">
+            <h2>Report settings</h2>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px;font-size:13px;">
+            <div>
+              <div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Frequency</div>
+              <div>Weekly · Monday 09:00 SAST</div>
+            </div>
+            <div>
+              <div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Recipients</div>
+              <div>marketing@ossur.com<br>social@ossur.com</div>
+            </div>
+            <div>
+              <div class="muted" style="font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:4px;">Format</div>
+              <div>HTML email · printable · PDF export</div>
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px;width:fit-content;" onclick="window.open('weekly-report.html', '_blank')">Preview latest report</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card card-lg" style="margin-top:20px;">
+        <div class="section-head" style="margin-top:0;">
+          <h2>Latest report — preview</h2>
+          <div>
+            <a href="weekly-report.html" target="_blank" class="btn">Open in new tab</a>
+            <button class="btn btn-primary" onclick="document.getElementById('inline-report').contentWindow.print()">Print to PDF</button>
+          </div>
+        </div>
+        <iframe id="inline-report" src="weekly-report.html" style="width:100%;height:720px;border:1px solid var(--border);border-radius:var(--radius);"></iframe>
+      </div>
+    `;
+  </script>
+</body>
+</html>
