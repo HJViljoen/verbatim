@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { createAdminClient } from '../lib/supabase-admin'
 import { runGather, type PlatformResult } from '../lib/gather/gather'
+import type { RelevanceMethod } from '../lib/gather/relevance'
 import type { Platform } from '../lib/gather/types'
 
 // CLI runner for gather. Run with env loaded:
@@ -15,6 +16,7 @@ import type { Platform } from '../lib/gather/types'
 //   --max-videos <n>     override tracking_configs.max_videos
 //   --video-limit <n>    cap videos comment-scraped per platform (cost control)
 //   --period <name>      override scrape window (daily|weekly|monthly)
+//   --relevance <mode>   relevance gate before comment-scrape: gpt (default) | heuristic | off
 //   --dry-run            run Apify + normalise, write nothing, no run row
 
 const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
@@ -26,6 +28,7 @@ interface Args {
   maxVideos?: number
   videoLimit?: number
   period?: string
+  relevance?: RelevanceMethod
   dryRun: boolean
 }
 
@@ -41,6 +44,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--max-videos') args.maxVideos = Number(next())
     else if (a === '--video-limit') args.videoLimit = Number(next())
     else if (a === '--period') args.period = next()
+    else if (a === '--relevance') args.relevance = next() as RelevanceMethod
     else if (a === '--dry-run') args.dryRun = true
     else throw new Error(`unknown flag: ${a}`)
   }
@@ -74,6 +78,7 @@ async function main() {
     maxVideos: args.maxVideos,
     videoLimit: args.videoLimit,
     period: args.period,
+    relevance: args.relevance,
     dryRun: args.dryRun,
   })
 

@@ -2,6 +2,7 @@ import { createAdminClient } from '../supabase-admin'
 import { runActor } from './apify'
 import { adapters } from './platforms'
 import { dedupeBy } from './util'
+import { classifyRelevance, type RelevanceMethod } from './relevance'
 import type {
   GatherConfig,
   Platform,
@@ -34,6 +35,8 @@ export interface GatherOptions {
   videoLimit?: number
   /** Override the client's configured report_period (scrape window), e.g. 'monthly'. */
   period?: string
+  /** Relevance gate before comment-scraping: 'gpt' (default), 'heuristic', or 'off'. */
+  relevance?: RelevanceMethod
   /** Run Apify + normalise but write nothing. */
   dryRun?: boolean
 }
@@ -119,16 +122,31 @@ async function gatherPlatform(
     (v) => v.video_id,
   )
 
-  // 3. Upsert videos (merge on natural key — preserves Pass A columns).
-  if (!opts.dryRun && videos.length) {
+  // 2b. Relevance gate (BEFORE the expensive comment scrape). Judge market
+  // relevance from cheap metadata so off-market noise (SFX/movie "prosthetics",
+  // viral human-interest, news) never enters the corpus or burns a comment
+  // scrape. Fails open — kept videos are everything not explicitly dropped.
+  const method = opts.relevance ?? 'gpt'
+  const { verdicts } = await classifyRelevance(videos, { method, config: ctx.config })
+  const kept = videos.filter((v) => verdicts.get(v.video_id)?.relevant !== false)
+  const dropped = videos.length - kept.length
+  if (dropped > 0) {
+    const reasons = videos
+      .filter((v) => verdicts.get(v.video_id)?.relevant === false)
+      .map((v) => `    - ${v.account_name}: ${verdicts.get(v.video_id)?.reason}`)
+    console.log(`[${adapter.platform}] relevance gate (${method}) dropped ${dropped}/${videos.length}:\n${reasons.join('\n')}`)
+  }
+
+  // 3. Upsert kept videos (merge on natural key — preserves Pass A columns).
+  if (!opts.dryRun && kept.length) {
     const { error } = await admin
       .from('videos')
-      .upsert(videos, { onConflict: 'client_id,platform,video_id' })
+      .upsert(kept, { onConflict: 'client_id,platform,video_id' })
     if (error) errors.push(`videos upsert: ${error.message}`)
   }
 
   // 4. Eligible-for-comments + optional cost cap.
-  const eligible = videos.filter(
+  const eligible = kept.filter(
     (v) => adapter.commentThreshold == null || v.comments_count >= adapter.commentThreshold,
   )
   const toScrape = opts.videoLimit ? eligible.slice(0, opts.videoLimit) : eligible
@@ -158,5 +176,5 @@ async function gatherPlatform(
     }
   }
 
-  return { platform: adapter.platform, videos: videos.length, comments: commentCount, errors }
+  return { platform: adapter.platform, videos: kept.length, comments: commentCount, errors }
 }
