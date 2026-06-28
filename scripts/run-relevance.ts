@@ -16,10 +16,10 @@ import type { GatherConfig } from '../lib/gather/types'
 
 const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
-interface Args { clientId: string; platform?: string; method: RelevanceMethod; minComments: number }
+interface Args { clientId: string; platform?: string; method: RelevanceMethod; minComments: number; prune: boolean }
 
 function parseArgs(argv: string[]): Args {
-  const a: Args = { clientId: OSSUR, method: 'gpt', minComments: COMMENT_THRESHOLD }
+  const a: Args = { clientId: OSSUR, method: 'gpt', minComments: COMMENT_THRESHOLD, prune: false }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const next = () => argv[++i]
@@ -27,6 +27,7 @@ function parseArgs(argv: string[]): Args {
     else if (flag === '--platform') a.platform = next()
     else if (flag === '--method') a.method = next() as RelevanceMethod
     else if (flag === '--min-comments') a.minComments = Number(next())
+    else if (flag === '--prune') a.prune = true
     else throw new Error(`unknown flag: ${flag}`)
   }
   return a
@@ -38,14 +39,14 @@ async function main() {
 
   let q = admin
     .from('videos')
-    .select('video_id, platform, account_name, caption, hashtags, comments_count')
+    .select('id, video_id, platform, account_name, caption, hashtags, comments_count')
     .eq('client_id', args.clientId)
     .gte('comments_count', args.minComments)
   if (args.platform) q = q.eq('platform', args.platform)
   const { data, error } = await q
   if (error) throw new Error(`load videos: ${error.message}`)
 
-  const rows = (data ?? []) as (RelevanceCandidate & { platform: string; comments_count: number })[]
+  const rows = (data ?? []) as (RelevanceCandidate & { id: string; platform: string; comments_count: number })[]
   console.log(`Relevance gate — method=${args.method} · ${rows.length} videos with >= ${args.minComments} comments (comment-scrape candidates)\n`)
 
   const { data: tc } = await admin
@@ -87,6 +88,44 @@ async function main() {
   console.log(`kept (signal):        ${kept.length}`)
   console.log(`comment-scrapes saved: ${dropped.length} Apify actor runs`)
   console.log(`gate cost:            $${costUsd.toFixed(5)} (one batched call)`)
+
+  if (!args.prune) {
+    console.log('\n(no --prune; nothing deleted. Re-run with --prune to remove the dropped videos + their comments.)')
+    return
+  }
+  if (dropped.length === 0) {
+    console.log('\nnothing to prune.')
+    return
+  }
+
+  // Destructive: remove gate-dropped (off-category) videos, their comments, and
+  // any insights from them. Scoped per-video; the kept (signal) corpus is untouched.
+  console.log(`\nPruning ${dropped.length} off-category videos + their comments…`)
+  let delVideos = 0
+  let delComments = 0
+  let delInsights = 0
+  const errs: string[] = []
+  for (const r of dropped) {
+    const { count: c } = await admin
+      .from('comments')
+      .delete({ count: 'exact' })
+      .eq('client_id', args.clientId)
+      .eq('platform', r.platform)
+      .eq('video_id', r.video_id)
+    delComments += c ?? 0
+    const { count: ic } = await admin
+      .from('audience_insights')
+      .delete({ count: 'exact' })
+      .eq('source_video_id', r.id)
+    delInsights += ic ?? 0
+    const { error: vErr, count: vc } = await admin.from('videos').delete({ count: 'exact' }).eq('id', r.id)
+    if (vErr) errs.push(`${r.video_id}: ${vErr.message}`)
+    else delVideos += vc ?? 0
+  }
+  console.log(
+    `deleted: ${delVideos} videos · ${delComments} comments · ${delInsights} insights` +
+      (errs.length ? `; ${errs.length} errors:\n  ${errs.slice(0, 10).join('\n  ')}` : ''),
+  )
 }
 
 main().catch((e) => {
