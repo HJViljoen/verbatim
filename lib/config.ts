@@ -27,10 +27,14 @@ export const EMBEDDING_MODEL = 'text-embedding-3-small'
 
 /**
  * Cosine-similarity threshold for merging two insights into one theme cluster.
- * Tuned against the first Ossur TikTok run; a one-line change. Higher = stricter
- * (more, smaller clusters); lower = looser (fewer, broader clusters).
+ * Higher = stricter (more, smaller clusters); lower = looser (fewer, broader).
+ * Retuned 2026-06-28 on the full 3-platform Ossur run (84 insights): 0.55 fused
+ * unrelated questions into one incoherent "cost" mega-cluster (22 slugs incl.
+ * socket_comfort/amputation_cause), so drill-downs showed off-topic quotes. 0.62
+ * splits that into a genuine cost theme + a functionality theme while preserving
+ * the strong creative_design theme; 0.68+ starts dissolving creative_design.
  */
-export const CLUSTER_SIMILARITY_THRESHOLD = 0.55
+export const CLUSTER_SIMILARITY_THRESHOLD = 0.62
 
 /**
  * USD per 1M tokens, per model. APPROXIMATE — verify against OpenAI's current

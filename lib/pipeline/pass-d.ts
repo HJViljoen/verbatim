@@ -15,7 +15,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // insights they generate in THIS call by M# (their 1-based position) and/or C#.
 // Code maps every index back to a UUID and rejects unknowns (invariant 8).
 
-const PROMPT_VERSION = 'pass_d_v1'
+const PROMPT_VERSION = 'pass_d_v2'
 
 const clampScore = (n: number) => Math.max(1, Math.min(10, Math.round(n)))
 
@@ -54,9 +54,11 @@ function buildSystemPrompt(): string {
     '',
     'Rules:',
     '- Reference supporting themes by their bracket index (e.g. "T2") and competitive insights by theirs (e.g. "C1"). Use ONLY indices present in the input.',
+    '- supporting_themes must list ONLY the themes a market insight is directly distilled from — the specific themes whose comments are the evidence for the claim. Cite the few that genuinely apply (usually 1–4), never a broad list. Do NOT add a theme just to satisfy a grounding requirement: the product shows the user the actual comments behind each cited theme as proof, so an unrelated theme there is a visible defect.',
+    '- Some insights are NOT distilled from comment themes at all — insights about share of voice, content volume, posting presence, or platform coverage are derived from the SHARE OF VOICE data above, not from comments. For these, return an EMPTY supporting_themes array and rely on the share-of-voice figures. Never back-fill them with comment themes.',
     '- Each recommendation’s "based_on" lists the market insights it follows from, referenced as "M1", "M2" … by their 1-based position in YOUR market_insights array, and/or competitive insights as "C1" …',
     '- Do NOT invent counts or percentages. confidence_score and opportunity_score are 1–10 judgments, not measured quantities.',
-    '- Ground every insight and recommendation in the provided themes. If the data is thin, produce fewer, honest insights rather than padding.',
+    '- If the data is thin, produce fewer, honest insights rather than padding. Fewer, tightly-grounded insights beat many loosely-grounded ones.',
   ].join('\n')
 }
 

@@ -14,7 +14,7 @@ import type { VideoRow, CommentRow } from '../lib/pipeline/types'
 // Flags:
 //   --run <uuid>      Pass A run id to aggregate + synthesise (required)
 //   --client <uuid>   client_id (default: Ossur)
-//   --platform <name> platform for the metrics corpus (default: tiktok)
+//   --platform <name> platform for the metrics corpus, or "all" for market-wide SOV (default: tiktok)
 //   --method <name>   embedding | string (A2 clustering; default: embedding)
 //   --threshold <n>   A2 cosine merge threshold (default: config)
 //   --floor <n>       A2 evidence floor (default: config; use 1 on thin/bucketed data)
@@ -62,8 +62,12 @@ async function main() {
   const admin = createAdminClient()
   console.log(`A2→C→D — run=${args.runId} client=${args.clientId} method=${method} threshold=${threshold} floor=${floor} persist=${persist}`)
 
-  // Metrics corpus: client videos on the platform + their comments.
-  const { data: vData, error: vErr } = await admin.from('videos').select('*').eq('client_id', args.clientId).eq('platform', args.platform)
+  // Metrics corpus: client videos + their comments. `--platform all` spans every
+  // platform so Share of Voice is market-wide (correct for a multi-platform run);
+  // a named platform scopes the SOV/engagement metrics to that platform only.
+  const videoQuery = admin.from('videos').select('*').eq('client_id', args.clientId)
+  if (args.platform !== 'all') videoQuery.eq('platform', args.platform)
+  const { data: vData, error: vErr } = await videoQuery
   if (vErr) throw new Error(`load videos: ${vErr.message}`)
   const videos = (vData ?? []) as VideoRow[]
   const { data: cData, error: cErr } = await admin
@@ -126,6 +130,17 @@ async function main() {
     console.log(`  [${r.type} · ${r.priority}] ${r.title}`)
   }
   if (d.rejectedRefs) console.log(`  (rejected refs: ${d.rejectedRefs})`)
+
+  // Close the run lifecycle. Pass A opens analysis runs as 'analyzing' and never
+  // flips them; run-cd is the terminal analysis stage, so it marks completion.
+  // (Phase 3 / Inngest will own this end-to-end.) Skipped on dry/no-persist runs.
+  if (persist) {
+    const { error: statusErr } = await admin.from('pipeline_runs')
+      .update({ status: 'completed', completed_at: new Date().toISOString() })
+      .eq('id', args.runId!)
+    if (statusErr) console.warn(`! could not mark run completed: ${statusErr.message}`)
+    else console.log(`\nRun ${args.runId!.slice(0, 8)} marked completed.`)
+  }
 
   const totalCost = c.costUsd + d.costUsd
   console.log('\n=== SUMMARY ===')

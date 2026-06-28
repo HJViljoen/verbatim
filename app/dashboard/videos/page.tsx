@@ -85,7 +85,12 @@ export default async function ContentAnalysisPage() {
       {/* Hook + type performance */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-sm">Hook Style Performance</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-sm">Hook Style Performance</CardTitle>
+            <p className="text-[11px] text-muted-foreground italic mt-1">
+              Inferred from caption &amp; comments only — the model never sees the video, so hook style is a weak signal. Reliable hook detection needs transcription/vision (v5).
+            </p>
+          </CardHeader>
           <CardContent className="space-y-2">
             {hookPerf.length === 0 ? <Empty>No classified videos — hook_style is set by Pass A.</Empty>
               : hookPerf.map(({ k, count, avgEng }) => (
