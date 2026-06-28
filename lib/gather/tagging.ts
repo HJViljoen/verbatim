@@ -1,5 +1,5 @@
 import type { GatherConfig } from './types'
-import { str } from './util'
+import { str, fold } from './util'
 
 /**
  * Resolve entity tags for a video from its account name.
@@ -13,15 +13,18 @@ export function tagAccount(
   accountName: string,
   config: GatherConfig,
 ): { is_client: boolean; is_competitor: boolean; competitor_name: string | null } {
-  const acct = str(accountName).toLowerCase()
+  const acct = fold(accountName)
 
-  const is_client = (config.brand_keywords ?? []).some((k) => acct.includes(str(k).toLowerCase()))
+  const is_client = (config.brand_keywords ?? []).some((k) => {
+    const kw = fold(k)
+    return kw !== '' && acct.includes(kw)
+  })
 
   let is_competitor = false
   let competitor_name: string | null = null
   for (const cn of config.competitor_names ?? []) {
     const name = str(cn)
-    if (name && acct.includes(name.toLowerCase())) {
+    if (name && acct.includes(fold(name))) {
       is_competitor = true
       competitor_name = name
       break

@@ -14,6 +14,17 @@ export const num = (x: unknown): number => {
 /** Coerce to a trimmed string; '' for null/undefined. */
 export const str = (x: unknown): string => (x == null ? '' : String(x)).trim()
 
+/**
+ * Lowercase + strip diacritics for accent-insensitive matching, e.g.
+ * 'Össur' → 'ossur'. Used for brand/competitor account tagging so accented
+ * account names (the client's own, 'Össur') still match plain keywords.
+ */
+export const fold = (x: unknown): string =>
+  str(x)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // strip combining diacritical marks
+
 /** First defined, non-null, non-empty value. */
 export const first = <T>(...vals: T[]): T | undefined =>
   vals.find((v) => v !== undefined && v !== null && v !== '')

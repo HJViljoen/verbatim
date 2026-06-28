@@ -48,7 +48,7 @@ export const tiktok: PlatformAdapter = {
     const views = num(first(v.playCount, v.views, getPath(v, ['stats', 'playCount'])))
     const likes = num(first(v.diggCount, v.likes, getPath(v, ['stats', 'diggCount'])))
     const shares = num(first(v.shareCount, v.shares, getPath(v, ['stats', 'shareCount'])))
-    const comments_count = num(first(v.commentCount, getPath(v, ['stats', 'commentCount'])))
+    const comments_count = num(first(v.comments, v.commentCount, getPath(v, ['stats', 'commentCount'])))
 
     const rawTags = Array.isArray(v.hashtags) ? v.hashtags : Array.isArray(v.tags) ? v.tags : []
     const hashtags = rawTags
@@ -108,7 +108,7 @@ export const tiktok: PlatformAdapter = {
       likes: num(first(c.diggCount, c.likeCount, c.likes)),
       reply_count: num(first(c.replyCommentTotal, c.replyCount)),
       is_reply: Boolean(first(c.replyId, c.isReply, false)),
-      comment_date: toDateOnly(c.createTimeISO, c.createTime),
+      comment_date: toDateOnly(c.createdAt, c.createTimeISO, c.createTime),
     }
   },
 
