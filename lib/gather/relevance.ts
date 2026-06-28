@@ -67,23 +67,29 @@ const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
 
 function buildSystemPrompt(config: GatherConfig): string {
   const brand = config.brand_keywords?.[0] ?? 'the brand'
+  const competitors = (config.competitor_names ?? []).join(', ') || '(none given)'
   const industry = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
   return [
     'You screen social videos for a consumer-intelligence report about a brand’s market.',
-    'KEEP a video only if its COMMENTS would plausibly carry market signal for the category:',
-    'real users / buyers / patients, category or product discussion, questions, opinions,',
-    'complaints, purchase interest, or genuine brand/competitor/creator content.',
+    'KEEP a video if its COMMENTS would plausibly carry signal about the brand’s PRODUCT CATEGORY:',
+    'real users / buyers, product or category discussion, questions, opinions, complaints,',
+    'purchase interest, and ANY content about the brand or a competitor.',
     '',
-    'DROP a video when it is off-market noise:',
-    '- a DIFFERENT industry the search keyword happens to match — e.g. special-effects /',
-    '  movie / cosplay "prosthetics" makeup is NOT medical prosthetics;',
-    '- pure human-interest virality or news with no product/category angle — an inspirational',
-    '  or shock clip whose comments are just "amazing" / "god bless" / reactions to the story;',
+    'Judge by the BROAD product category, not the brand’s niche angle. The industry keywords',
+    'describe how this brand frames itself (e.g. "sustainable") — do NOT require that angle:',
+    'a competitor’s product or general category content is relevant even if it never mentions',
+    'the brand’s differentiator. Competitor content is always relevant.',
+    '',
+    'DROP only genuine off-market noise:',
+    '- a DIFFERENT industry the keyword happens to match — e.g. SFX/movie/cosplay makeup when',
+    '  the category is medical prosthetics, or "seal"/"gear" hardware when the brand makes bags;',
+    '- pure human-interest virality or news with no product/category angle (comments just',
+    '  "amazing" / "god bless" / reacting to a story);',
     '- spam, reposts, or content unrelated to the category.',
     '',
-    'Keep genuine category content even when the account is small. When unsure, KEEP.',
+    'When unsure, KEEP.',
     '',
-    `Brand: ${brand}. Category: ${industry}.`,
+    `Brand: ${brand}. Competitors: ${competitors}. Category (brand’s framing): ${industry}.`,
   ].join('\n')
 }
 

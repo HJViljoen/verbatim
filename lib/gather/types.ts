@@ -87,8 +87,13 @@ export interface VideoRef {
  */
 export interface PlatformAdapter {
   platform: Platform
-  /** Apify actor slug + input for the video search. */
-  videoSearch(config: GatherConfig): { actor: string; input: RawItem }
+  /**
+   * Apify actor slug + input for ONE video search over the given `terms`, capped
+   * at `limit` results. The orchestrator calls this once per search group (brand,
+   * each competitor, industry) so valuable keywords get a guaranteed quota instead
+   * of sharing one combined-search budget with broad noisy terms.
+   */
+  videoSearch(config: GatherConfig, terms: string[], limit: number): { actor: string; input: RawItem }
   /** Raw actor item → VideoInsert. null = skip (unparseable / no url). */
   normaliseVideo(raw: RawItem, ctx: NormaliseCtx): VideoInsert | null
   /** Apify actor slug + input for scraping one video's comments. */

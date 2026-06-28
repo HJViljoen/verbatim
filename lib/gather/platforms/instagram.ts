@@ -1,6 +1,6 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS } from '../../config'
-import { num, str, first, getPath, toDateOnly, searchTerms, cleanHashtag } from '../util'
+import { num, str, first, getPath, toDateOnly, cleanHashtag } from '../util'
 import { tagAccount } from '../tagging'
 
 // Instagram adapter. Quirks from Technical.md: the search input uses `hashtags`
@@ -15,12 +15,16 @@ import { tagAccount } from '../tagging'
 export const instagram: PlatformAdapter = {
   platform: 'instagram',
 
-  videoSearch(config) {
+  videoSearch(config, terms, limit) {
+    // This actor applies resultsLimit PER hashtag, so the orchestrator already
+    // hands us one search group at a time; resultsLimit is the per-hashtag quota
+    // for THIS group. (cleanHashtag strips '#'/spaces/punctuation — required.)
+    const hashtags = terms.map(cleanHashtag).filter(Boolean)
     return {
       actor: APIFY_ACTORS.instagram.video,
       input: {
-        hashtags: searchTerms(config).map(cleanHashtag).filter(Boolean),
-        resultsLimit: config.max_videos,
+        hashtags,
+        resultsLimit: limit,
         // Reels (not photo posts) for V1: positioning is "media-based" (we analyse
         // the comments, not the video), so this is a comment-signal/consistency
         // call — reels are comment-dense and keep IG consistent with the other two

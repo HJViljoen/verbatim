@@ -5,7 +5,7 @@ import { runPassA, type RunPassAOptions } from '../lib/pipeline/pass-a'
 //
 // Flags:
 //   --client <uuid>      client_id (default: Ossur)
-//   --platform <name>    platform filter (default: tiktok)
+//   --platform <name>    platform filter (default: all platforms)
 //   --run <uuid>         reuse an existing analysis run id (idempotent re-runs)
 //   --limit <n>          cap videos processed (most-commented first)
 //   --video <id>         process only this videos.id (repeatable)
@@ -18,7 +18,8 @@ const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 function parseArgs(argv: string[]): RunPassAOptions & { dryRun: boolean } {
   const opts: RunPassAOptions & { dryRun: boolean } = {
     clientId: OSSUR,
-    platform: 'tiktok',
+    // No platform default → analyse all platforms (IG + TT + YT). Pass --platform
+    // only to scope to one.
     dryRun: false,
   }
   const videoIds: string[] = []

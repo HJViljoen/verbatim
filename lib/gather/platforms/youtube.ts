@@ -1,6 +1,6 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, periodToYouTubeUploadDate } from '../../config'
-import { num, str, first, getPath, toDateOnly, engagementRate, searchTerms } from '../util'
+import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagAccount } from '../tagging'
 
 // YouTube adapter. Quirks baked in from Technical.md: subscriberCount is a string
@@ -11,13 +11,13 @@ import { tagAccount } from '../tagging'
 export const youtube: PlatformAdapter = {
   platform: 'youtube',
 
-  videoSearch(config) {
+  videoSearch(config, terms, limit) {
     return {
       actor: APIFY_ACTORS.youtube.video,
       input: {
-        keywords: searchTerms(config),
+        keywords: terms,
         uploadDate: periodToYouTubeUploadDate(config.report_period),
-        maxItems: config.max_videos,
+        maxItems: limit,
         includeShorts: true,
         duration: 'all',
         features: 'all',

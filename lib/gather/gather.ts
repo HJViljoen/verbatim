@@ -11,6 +11,7 @@ import type {
   VideoInsert,
   CommentInsert,
   VideoRef,
+  RawItem,
 } from './types'
 
 // Gather orchestrator. For each platform: search → normalise → upsert videos →
@@ -23,6 +24,28 @@ import type {
 // re-gather refreshes metrics without clobbering existing analysis.
 
 type Admin = ReturnType<typeof createAdminClient>
+
+interface SearchGroup { label: string; terms: string[]; limit: number }
+
+// Per-keyword search plan: each VALUABLE keyword group gets its own guaranteed
+// quota so brand + competitor terms aren't crowded out of one combined search by
+// broad, high-volume industry terms — the crowding that starved the competitive
+// pass (verified on Sealand: a combined search yielded 0 brand + 4 competitor of
+// 101 videos). Brand variants are one entity → one search; each competitor is a
+// distinct entity → its own search; industry terms are the broad net → combined.
+function buildSearchPlan(config: GatherConfig): SearchGroup[] {
+  const clean = (xs: string[] | undefined) => (xs ?? []).map((s) => `${s}`.trim()).filter(Boolean)
+  const brand = clean(config.brand_keywords)
+  const competitors = clean(config.competitor_keywords)
+  const industry = clean(config.industry_keywords)
+  const max = config.max_videos
+  const plan: SearchGroup[] = []
+  if (brand.length) plan.push({ label: 'brand', terms: brand, limit: max })
+  const perCompetitor = competitors.length ? Math.max(5, Math.ceil(max / competitors.length)) : 0
+  for (const c of competitors) plan.push({ label: `competitor:${c}`, terms: [c], limit: perCompetitor })
+  if (industry.length) plan.push({ label: 'industry', terms: industry, limit: max })
+  return plan
+}
 
 export interface GatherOptions {
   clientId: string
@@ -112,9 +135,17 @@ async function gatherPlatform(
 ): Promise<PlatformResult> {
   const errors: string[] = []
 
-  // 1. Search + 2. Normalise videos.
-  const { actor, input } = adapter.videoSearch(ctx.config)
-  const rawVideos = await runActor(actor, input)
+  // 1. Search per group (brand / each competitor / industry) + 2. Normalise.
+  // One search group failing must not stop the others.
+  const rawVideos: RawItem[] = []
+  for (const group of buildSearchPlan(ctx.config)) {
+    const { actor, input } = adapter.videoSearch(ctx.config, group.terms, group.limit)
+    try {
+      rawVideos.push(...(await runActor(actor, input)))
+    } catch (e) {
+      errors.push(`search ${group.label}: ${(e as Error).message}`)
+    }
+  }
   const videos = dedupeBy(
     rawVideos
       .map((r) => adapter.normaliseVideo(r, ctx))

@@ -1,6 +1,6 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, periodToTikTokRange } from '../../config'
-import { num, str, first, getPath, toDateOnly, engagementRate, searchTerms } from '../util'
+import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagAccount } from '../tagging'
 
 // TikTok adapter. Field paths reflect what the real actor returns (confirmed
@@ -18,13 +18,13 @@ function detectFormat(caption: string): string {
 export const tiktok: PlatformAdapter = {
   platform: 'tiktok',
 
-  videoSearch(config) {
+  videoSearch(config, terms, limit) {
     return {
       actor: APIFY_ACTORS.tiktok.video,
       input: {
-        keywords: searchTerms(config),
+        keywords: terms,
         dateRange: periodToTikTokRange(config.report_period),
-        maxItems: config.max_videos,
+        maxItems: limit,
         sortType: 'RELEVANCE',
         includeSearchKeywords: false,
         customMapFunction: '(object) => { return {...object} }',

@@ -3,8 +3,6 @@
 // same `first(...)`-with-fallbacks pattern the original n8n code used, kept here
 // as typed utilities rather than copy-pasted into every node.
 
-import type { GatherConfig } from './types'
-
 /** Coerce anything to a finite number; 0 otherwise (handles "12", "35.3K …" → 0). */
 export const num = (x: unknown): number => {
   const n = typeof x === 'number' ? x : Number(x)
@@ -63,16 +61,6 @@ export const engagementRate = (
   shares: number,
   comments: number,
 ): number | null => (views && views > 0 ? round2(((likes + shares + comments) / views) * 100) : null)
-
-/** Combined Apify search terms: brand + competitor + industry keywords. */
-export const searchTerms = (config: GatherConfig): string[] =>
-  [
-    ...(config.brand_keywords ?? []),
-    ...(config.competitor_keywords ?? []),
-    ...(config.industry_keywords ?? []),
-  ]
-    .map((s) => str(s))
-    .filter(Boolean)
 
 /** Instagram hashtags must be alphanumeric — strip '#', spaces, punctuation. */
 export const cleanHashtag = (s: string): string => s.replace(/[^a-z0-9]/gi, '')
