@@ -60,7 +60,7 @@ export const instagram: PlatformAdapter = {
       caption: str(first(v.caption, v.text)),
       hashtags,
       content_format: str(first(v.type, v.productType)) || 'Reel',
-      views: null, // IG doesn't expose view counts
+      views: 0, // IG doesn't expose view counts; 0 per the schema's count convention (engagement_rate stays null)
       likes,
       shares: 0,
       comments_count,

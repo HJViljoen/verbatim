@@ -32,6 +32,8 @@ export interface GatherOptions {
   maxVideos?: number
   /** Cap how many eligible videos get comment-scraped per platform (cost control). */
   videoLimit?: number
+  /** Override the client's configured report_period (scrape window), e.g. 'monthly'. */
+  period?: string
   /** Run Apify + normalise but write nothing. */
   dryRun?: boolean
 }
@@ -77,6 +79,7 @@ export async function runGather(opts: GatherOptions): Promise<PlatformResult[]> 
   const admin = createAdminClient()
   const config = await loadConfig(admin, opts.clientId)
   if (opts.maxVideos) config.max_videos = opts.maxVideos
+  if (opts.period) config.report_period = opts.period
 
   const platforms = opts.platforms ?? (config.platforms as Platform[])
   const ctx: NormaliseCtx = { clientId: opts.clientId, runId: opts.runId, config }

@@ -14,6 +14,7 @@ import type { Platform } from '../lib/gather/types'
 //   --run <uuid>         reuse an existing run id (idempotent re-gather)
 //   --max-videos <n>     override tracking_configs.max_videos
 //   --video-limit <n>    cap videos comment-scraped per platform (cost control)
+//   --period <name>      override scrape window (daily|weekly|monthly)
 //   --dry-run            run Apify + normalise, write nothing, no run row
 
 const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
@@ -24,6 +25,7 @@ interface Args {
   runId?: string
   maxVideos?: number
   videoLimit?: number
+  period?: string
   dryRun: boolean
 }
 
@@ -38,6 +40,7 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--run') args.runId = next()
     else if (a === '--max-videos') args.maxVideos = Number(next())
     else if (a === '--video-limit') args.videoLimit = Number(next())
+    else if (a === '--period') args.period = next()
     else if (a === '--dry-run') args.dryRun = true
     else throw new Error(`unknown flag: ${a}`)
   }
@@ -70,6 +73,7 @@ async function main() {
     platforms: args.platforms,
     maxVideos: args.maxVideos,
     videoLimit: args.videoLimit,
+    period: args.period,
     dryRun: args.dryRun,
   })
 
