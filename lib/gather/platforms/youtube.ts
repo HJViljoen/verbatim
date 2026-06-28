@@ -1,7 +1,7 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, periodToYouTubeUploadDate } from '../../config'
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
-import { tagAccount } from '../tagging'
+import { tagVideo } from '../tagging'
 
 // YouTube adapter. Quirks baked in from Technical.md: subscriberCount is a string
 // like "35.3K subscribers" (unparseable → 0), the actor often omits a comment
@@ -69,7 +69,7 @@ export const youtube: PlatformAdapter = {
       audio_name: '',
       is_sponsored: false,
       duration_seconds: Math.round(duration),
-      ...tagAccount(account_name, ctx.config),
+      ...tagVideo({ account_name, caption, hashtags }, ctx.config),
     }
   },
 

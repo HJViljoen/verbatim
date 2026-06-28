@@ -3,6 +3,7 @@ import { runActor } from './apify'
 import { adapters } from './platforms'
 import { dedupeBy } from './util'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
+import { attributeVideos, type AttributionMethod } from './attribution'
 import type {
   GatherConfig,
   Platform,
@@ -60,6 +61,8 @@ export interface GatherOptions {
   period?: string
   /** Relevance gate before comment-scraping: 'gpt' (default), 'heuristic', or 'off'. */
   relevance?: RelevanceMethod
+  /** Content attribution of brand/competitor tags: 'gpt' (default) or 'substring'. */
+  attribution?: AttributionMethod
   /** Run Apify + normalise but write nothing. */
   dryRun?: boolean
 }
@@ -166,6 +169,21 @@ async function gatherPlatform(
       .filter((v) => verdicts.get(v.video_id)?.relevant === false)
       .map((v) => `    - ${v.account_name}: ${verdicts.get(v.video_id)?.reason}`)
     console.log(`[${adapter.platform}] relevance gate (${method}) dropped ${dropped}/${videos.length}:\n${reasons.join('\n')}`)
+  }
+
+  // 2c. Attribute brand/competitor tags by CONTENT. Adapters set naive substring
+  // tags during normalise; this overwrites them with the GPT-confirmed entity so
+  // homonym hits ("Freitag"=Friday, "Patagonia"=a region) don't pollute the
+  // competitor buckets. Industry videos skip GPT internally, so the call is small.
+  const attribution = opts.attribution ?? 'gpt'
+  const { tags: entityTags } = await attributeVideos(kept, { method: attribution, config: ctx.config })
+  for (const v of kept) {
+    const t = entityTags.get(v.video_id)
+    if (t) {
+      v.is_client = t.is_client
+      v.is_competitor = t.is_competitor
+      v.competitor_name = t.competitor_name
+    }
   }
 
   // 3. Upsert kept videos (merge on natural key — preserves Pass A columns).

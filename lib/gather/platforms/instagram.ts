@@ -1,7 +1,7 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS } from '../../config'
 import { num, str, first, getPath, toDateOnly, cleanHashtag } from '../util'
-import { tagAccount } from '../tagging'
+import { tagVideo } from '../tagging'
 
 // Instagram adapter. Quirks from Technical.md: the search input uses `hashtags`
 // (alphanumeric only) / `resultsLimit` / `resultsType`, not the TikTok shape;
@@ -52,6 +52,7 @@ export const instagram: PlatformAdapter = {
 
     const rawTags = Array.isArray(v.hashtags) ? v.hashtags : []
     const hashtags = rawTags.map((t: unknown) => str(t)).filter(Boolean)
+    const caption = str(first(v.caption, v.text))
 
     return {
       client_id: ctx.clientId,
@@ -61,7 +62,7 @@ export const instagram: PlatformAdapter = {
       video_url: video_url || `https://www.instagram.com/p/${shortCode}/`,
       account_name,
       account_followers: num(first(v.ownerFollowers, getPath(v, ['owner', 'followers']))),
-      caption: str(first(v.caption, v.text)),
+      caption,
       hashtags,
       content_format: str(first(v.type, v.productType)) || 'Reel',
       views: 0, // IG doesn't expose view counts; 0 per the schema's count convention (engagement_rate stays null)
@@ -73,7 +74,7 @@ export const instagram: PlatformAdapter = {
       audio_name: str(first(getPath(v, ['musicInfo', 'song_name']), v.musicName)),
       is_sponsored: Boolean(first(v.isSponsored, v.isPaidPartnership, false)),
       duration_seconds: Math.round(num(first(v.videoDuration, v.duration))),
-      ...tagAccount(account_name, ctx.config),
+      ...tagVideo({ account_name, caption, hashtags }, ctx.config),
     }
   },
 

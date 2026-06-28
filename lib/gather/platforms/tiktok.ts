@@ -1,7 +1,7 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, periodToTikTokRange } from '../../config'
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
-import { tagAccount } from '../tagging'
+import { tagVideo } from '../tagging'
 
 // TikTok adapter. Field paths reflect what the real actor returns (confirmed
 // against the n8n normalise code + live DB rows): the video id is regex-pulled
@@ -75,7 +75,7 @@ export const tiktok: PlatformAdapter = {
       audio_name: str(first(getPath(v, ['song', 'title']), getPath(v, ['musicMeta', 'musicName']))),
       is_sponsored: Boolean(first(v.isAd, v.isSponsored, false)),
       duration_seconds: Math.round(num(first(getPath(v, ['video', 'duration']), v.duration))),
-      ...tagAccount(account_name, ctx.config),
+      ...tagVideo({ account_name, caption, hashtags }, ctx.config),
     }
   },
 
