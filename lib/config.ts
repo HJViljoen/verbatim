@@ -50,3 +50,37 @@ export function estimateCost(model: string, promptTokens: number, completionToke
   if (!p) return 0
   return (promptTokens / 1e6) * p.inputPer1M + (completionTokens / 1e6) * p.outputPer1M
 }
+
+// --- Gather (Apify) configuration -------------------------------------------
+// The n8n gather called Apify *tasks* (actor + input saved in the console). In
+// code we call the underlying store actors directly by their Apify actor id (the
+// API accepts the id form as well as the username~name slug). These ids were
+// confirmed from Heinrich's Apify account on 2026-06-28; env-overridable per
+// deployment. Set APIFY_TOKEN before the first live run.
+export const APIFY_ACTORS = {
+  tiktok: {
+    video: process.env.APIFY_TT_VIDEO_ACTOR ?? '5K30i8aFccKNF5ICs',
+    comment: process.env.APIFY_TT_COMMENT_ACTOR ?? 'XomSRf7d0qf3mVj1y',
+  },
+  youtube: {
+    video: process.env.APIFY_YT_VIDEO_ACTOR ?? '1p1aa7gcSydPkAE0d',
+    comment: process.env.APIFY_YT_COMMENT_ACTOR ?? 'mExYO4A2k9976zMfA',
+  },
+  instagram: {
+    video: process.env.APIFY_IG_VIDEO_ACTOR ?? 'reGe1ST3OBgYZSsZJ',
+    comment: process.env.APIFY_IG_COMMENT_ACTOR ?? 'SbK00X0JYCPblD2wp',
+  },
+} as const
+
+/** Default min comments before a video is worth a comment scrape (TikTok/Instagram). */
+export const COMMENT_THRESHOLD = 5
+
+/** report_period → TikTok actor `dateRange` (Technical.md scrape-window mapping). */
+export function periodToTikTokRange(period: string): string {
+  return period === 'daily' ? 'TODAY' : period === 'monthly' ? 'THIS_MONTH' : 'THIS_WEEK'
+}
+
+/** report_period → YouTube actor `uploadDate`. */
+export function periodToYouTubeUploadDate(period: string): string {
+  return period === 'daily' ? 'd' : period === 'monthly' ? 'm' : 'w'
+}
