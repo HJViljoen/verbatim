@@ -1,6 +1,7 @@
 import { selectAll } from '@/lib/supabase-admin'
-import { getSessionContext } from '@/lib/auth'
+import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { RunNowButton } from '@/components/run-now-button'
 
 // Dashboard — corpus + pipeline readout for the latest data. Rewired onto the
 // v4.1 schema: per-video sentiment is now the text column `videos.sentiment`
@@ -54,12 +55,13 @@ export default async function DashboardPage() {
   // Auth + tenant + role via the RLS-enforced session client (the
   // .eq('client_id', …) filters below are now redundant but kept explicit).
   // Service-role is reserved for the pipeline + provisioning. See lib/auth.ts.
-  const { supabase, clientId } = await getSessionContext()
+  const { supabase, clientId, role } = await getSessionContext()
+  const canRun = canManageTenant(role)
 
   // Latest run — scopes the audience insights (videos carry their latest
   // classification in-place, so they're read corpus-wide, not run-scoped).
   const { data: latestRun } = await supabase
-    .from('pipeline_runs').select('id, started_at')
+    .from('pipeline_runs').select('id, started_at, status')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
   const runId = latestRun?.id as string | undefined
 
@@ -129,12 +131,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {all.length} videos scraped · {analysed.length} analysed
-          {latestRun && <> · latest run {String(runId).slice(0, 8)}</>}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            {all.length} videos scraped · {analysed.length} analysed
+            {latestRun && <> · latest run {String(runId).slice(0, 8)} · {latestRun.status}</>}
+          </p>
+        </div>
+        {canRun && <RunNowButton />}
       </div>
 
       {/* Stats row */}
