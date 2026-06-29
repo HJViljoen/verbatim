@@ -1,6 +1,5 @@
 import { selectAll } from '@/lib/supabase-admin'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Content Analysis — the full video catalog with Pass A classification
@@ -55,17 +54,12 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export default async function ContentAnalysisPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Reads run through the user's session client → RLS enforces tenant scoping.
-  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
-  if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
+  // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
+  const { supabase, clientId } = await getSessionContext()
 
   const all = await selectAll<VideoRow>(() => supabase.from('videos')
     .select('id, platform, account_name, video_url, views, engagement_rate, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, content_format, topics')
-    .eq('client_id', profile.client_id).order('views', { ascending: false }).order('id', { ascending: true }))
+    .eq('client_id', clientId).order('views', { ascending: false }).order('id', { ascending: true }))
   const analysed = all.filter(v => v.classified_type != null)
   const hookPerf = perfBy(analysed, 'hook_style')
   const typePerf = perfBy(analysed, 'classified_type')

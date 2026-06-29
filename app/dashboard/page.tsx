@@ -1,6 +1,5 @@
 import { selectAll } from '@/lib/supabase-admin'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Dashboard — corpus + pipeline readout for the latest data. Rewired onto the
@@ -52,17 +51,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 export default async function DashboardPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Reads run through the user's session client, so RLS enforces tenant scoping
-  // at the database (the .eq('client_id', …) filters below are now redundant but
-  // kept explicit). Service-role is reserved for the pipeline + provisioning.
-  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
-  if (!profile) return <div className="p-4 text-muted-foreground">No client profile found. Please contact support.</div>
-
-  const clientId = profile.client_id
+  // Auth + tenant + role via the RLS-enforced session client (the
+  // .eq('client_id', …) filters below are now redundant but kept explicit).
+  // Service-role is reserved for the pipeline + provisioning. See lib/auth.ts.
+  const { supabase, clientId } = await getSessionContext()
 
   // Latest run — scopes the audience insights (videos carry their latest
   // classification in-place, so they're read corpus-wide, not run-scoped).

@@ -1,5 +1,4 @@
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { redirect } from 'next/navigation'
+import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 // Trends — longitudinal view across runs. Real trend lines need persistent theme
@@ -16,17 +15,12 @@ interface RunRow {
 }
 
 export default async function TrendsPage() {
-  const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Reads run through the user's session client → RLS enforces tenant scoping.
-  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
-  if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
+  // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
+  const { supabase, clientId } = await getSessionContext()
 
   const { data } = await supabase.from('pipeline_runs')
     .select('id, status, started_at, completed_at, videos_scraped')
-    .eq('client_id', profile.client_id).order('started_at', { ascending: false })
+    .eq('client_id', clientId).order('started_at', { ascending: false })
 
   const runs = (data ?? []) as RunRow[]
 
