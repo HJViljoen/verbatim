@@ -1,4 +1,4 @@
-import { createAdminClient, selectAll } from '@/lib/supabase-admin'
+import { selectAll } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -56,26 +56,28 @@ export default async function DashboardPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client, so RLS enforces tenant scoping
+  // at the database (the .eq('client_id', …) filters below are now redundant but
+  // kept explicit). Service-role is reserved for the pipeline + provisioning.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found. Please contact support.</div>
 
   const clientId = profile.client_id
 
   // Latest run — scopes the audience insights (videos carry their latest
   // classification in-place, so they're read corpus-wide, not run-scoped).
-  const { data: latestRun } = await admin
+  const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
   const runId = latestRun?.id as string | undefined
 
   const [all, { data: aiData }] = await Promise.all([
     selectAll<VideoRow>(() =>
-      admin.from('videos')
+      supabase.from('videos')
         .select('id, platform, account_name, video_url, views, likes, engagement_rate, is_competitor, is_client, sentiment, classified_type, topics')
         .eq('client_id', clientId).order('views', { ascending: false }).order('id', { ascending: true })),
     runId
-      ? admin.from('audience_insights')
+      ? supabase.from('audience_insights')
           .select('id, category, theme, description, strength_score')
           .eq('client_id', clientId).eq('run_id', runId)
       : Promise.resolve({ data: [] as AudienceInsight[] }),

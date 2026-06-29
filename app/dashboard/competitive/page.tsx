@@ -1,4 +1,4 @@
-import { createAdminClient, selectAll } from '@/lib/supabase-admin'
+import { selectAll } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,12 +54,12 @@ export default async function CompetitiveIntelligencePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client → RLS enforces tenant scoping.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
   const clientId = profile.client_id
 
-  const { data: latestRun } = await admin
+  const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
   if (!latestRun) return <Shell><EmptyRun /></Shell>
@@ -68,10 +68,10 @@ export default async function CompetitiveIntelligencePage() {
   // Insights + grounding themes for this run; corpus buckets for Share of Tracked
   // Conversation (whole-corpus, market-wide — matches the run-cd metrics).
   const [{ data: ciData }, { data: aiData }, videoRows] = await Promise.all([
-    admin.from('competitive_insights').select('*').eq('client_id', clientId).eq('run_id', runId),
-    admin.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('competitive_insights').select('*').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
     selectAll<VideoBucketRow>(() =>
-      admin.from('videos').select('is_client, is_competitor, competitor_name').eq('client_id', clientId).order('id', { ascending: true }),
+      supabase.from('videos').select('is_client, is_competitor, competitor_name').eq('client_id', clientId).order('id', { ascending: true }),
     ),
   ])
 
@@ -83,7 +83,7 @@ export default async function CompetitiveIntelligencePage() {
   const supportingIds = [...new Set(insights.flatMap((c) => c.evidence?.supporting_theme_ids ?? []))]
   const quotesByInsight = new Map<string, string>()
   if (supportingIds.length) {
-    const { data: evData } = await admin
+    const { data: evData } = await supabase
       .from('insight_evidence').select('audience_insight_id, quote, relevance_rank')
       .in('audience_insight_id', supportingIds).order('relevance_rank', { ascending: true })
     for (const ev of (evData ?? []) as { audience_insight_id: string; quote: string }[]) {

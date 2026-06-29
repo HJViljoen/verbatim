@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -38,19 +37,19 @@ export default async function VoiceOfCustomerPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client → RLS enforces tenant scoping.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
   const clientId = profile.client_id
 
-  const { data: latestRun } = await admin
+  const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
 
   if (!latestRun) return <EmptyState>No pipeline run yet. Run the analysis to extract audience insights.</EmptyState>
   const runId = latestRun.id as string
 
-  const { data: aiData } = await admin
+  const { data: aiData } = await supabase
     .from('audience_insights')
     .select('id, category, theme, description, strength_score, emotion, sentiment_impact')
     .eq('client_id', clientId).eq('run_id', runId)
@@ -61,7 +60,7 @@ export default async function VoiceOfCustomerPage() {
   // Verbatim quotes per insight.
   const quotesByInsight = new Map<string, string[]>()
   if (insights.length) {
-    const { data: evData } = await admin
+    const { data: evData } = await supabase
       .from('insight_evidence').select('audience_insight_id, quote, relevance_rank')
       .in('audience_insight_id', insights.map((i) => i.id))
       .order('relevance_rank', { ascending: true })

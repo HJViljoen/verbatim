@@ -1,4 +1,4 @@
-import { createAdminClient, selectAll } from '@/lib/supabase-admin'
+import { selectAll } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,11 +59,11 @@ export default async function ContentAnalysisPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client → RLS enforces tenant scoping.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
 
-  const all = await selectAll<VideoRow>(() => admin.from('videos')
+  const all = await selectAll<VideoRow>(() => supabase.from('videos')
     .select('id, platform, account_name, video_url, views, engagement_rate, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, content_format, topics')
     .eq('client_id', profile.client_id).order('views', { ascending: false }).order('id', { ascending: true }))
   const analysed = all.filter(v => v.classified_type != null)

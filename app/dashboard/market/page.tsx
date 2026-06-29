@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -63,14 +62,14 @@ export default async function MarketIntelligencePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client → RLS enforces tenant scoping.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
 
   const clientId = profile.client_id
 
   // Latest run for this client.
-  const { data: latestRun } = await admin
+  const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
 
@@ -80,9 +79,9 @@ export default async function MarketIntelligencePage() {
   const runId = latestRun.id as string
 
   const [{ data: miData }, { data: recData }, { data: aiData }] = await Promise.all([
-    admin.from('market_insights').select('*').eq('client_id', clientId).eq('run_id', runId).order('opportunity_score', { ascending: false }),
-    admin.from('recommendations').select('*').eq('client_id', clientId).eq('run_id', runId),
-    admin.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('market_insights').select('*').eq('client_id', clientId).eq('run_id', runId).order('opportunity_score', { ascending: false }),
+    supabase.from('recommendations').select('*').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
   ])
 
   const marketInsights = (miData ?? []) as MarketInsight[]
@@ -94,7 +93,7 @@ export default async function MarketIntelligencePage() {
   const supportingIds = [...new Set(marketInsights.flatMap((m) => m.evidence?.supporting_theme_ids ?? []))]
   const quotesByInsight = new Map<string, string[]>()
   if (supportingIds.length) {
-    const { data: evData } = await admin
+    const { data: evData } = await supabase
       .from('insight_evidence').select('audience_insight_id, quote, relevance_rank')
       .in('audience_insight_id', supportingIds).order('relevance_rank', { ascending: true })
     for (const ev of (evData ?? []) as { audience_insight_id: string; quote: string }[]) {

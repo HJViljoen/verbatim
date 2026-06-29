@@ -1,4 +1,3 @@
-import { createAdminClient } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -45,14 +44,14 @@ export default async function SettingsPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const admin = createAdminClient()
-  const { data: profile } = await admin.from('users').select('client_id').eq('id', user.id).single()
+  // Reads run through the user's session client → RLS enforces tenant scoping.
+  const { data: profile } = await supabase.from('users').select('client_id').eq('id', user.id).single()
   if (!profile) return <div className="p-4 text-muted-foreground">No client profile found.</div>
   const clientId = profile.client_id
 
   const [{ data: client }, { data: cfg }] = await Promise.all([
-    admin.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
-    admin.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle(),
+    supabase.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
+    supabase.from('tracking_configs').select('*').eq('client_id', clientId).maybeSingle(),
   ])
   const c = cfg as TrackingConfig | null
 
