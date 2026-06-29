@@ -4,7 +4,7 @@ import {
   Sidebar, SidebarContent, SidebarFooter,
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, TrendingUp, FileText, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, Target, MessageCircle, Swords, Play, TrendingUp, FileText, Users, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
@@ -17,6 +17,7 @@ const navItems = [
   { href: "/dashboard/videos",    label: "Content",            icon: Play },
   { href: "/dashboard/trends",    label: "Trends",             icon: TrendingUp },
   { href: "/dashboard/reports",   label: "Reports",            icon: FileText },
+  { href: "/dashboard/team",      label: "Team",               icon: Users },
   { href: "/dashboard/settings",  label: "Settings",           icon: Settings },
 ]
 

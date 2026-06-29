@@ -1,0 +1,121 @@
+import { getSessionContext, canManageTenant } from '@/lib/auth'
+import { getBaseUrl } from '@/lib/site'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { InviteForm, RevokeButton, MemberControls, CopyLinkButton } from './team-ui'
+
+// Team management — list members + pending invites, invite teammates, manage
+// roles. Owners/admins can invite + revoke; only owners change roles or remove
+// members. Members see a read-only roster. Authorization is enforced in the
+// server actions and by RLS — the UI gating below is only UX.
+
+interface MemberRow { id: string; full_name: string | null; email: string; role: 'owner' | 'admin' | 'member' }
+interface InviteRow { id: string; email: string; role: 'owner' | 'admin' | 'member'; expires_at: string; token: string }
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+function RoleBadge({ role }: { role: string }) {
+  return (
+    <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+      {cap(role)}
+    </span>
+  )
+}
+
+export default async function TeamPage() {
+  const { supabase, clientId, role, userId } = await getSessionContext()
+  const canManage = canManageTenant(role)
+  const isOwner = role === 'owner'
+
+  const [{ data: client }, { data: members }] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    supabase.from('users').select('id, full_name, email, role').eq('client_id', clientId).order('created_at'),
+  ])
+
+  // Pending invites + their shareable links are only fetched/built for managers.
+  let invites: InviteRow[] = []
+  let baseUrl = ''
+  if (canManage) {
+    const { data } = await supabase
+      .from('invitations')
+      .select('id, email, role, expires_at, token')
+      .eq('client_id', clientId).eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    invites = (data as InviteRow[] | null) ?? []
+    baseUrl = await getBaseUrl()
+  }
+
+  const memberRows = (members as MemberRow[] | null) ?? []
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <h1 className="text-2xl font-bold">Team</h1>
+        <p className="text-sm text-muted-foreground">
+          {client?.company_name ?? 'Workspace'}
+          {!canManage && ' · read-only'}
+        </p>
+      </div>
+
+      {canManage && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Invite a teammate</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <InviteForm inviterRole={role} />
+            <p className="text-[11px] text-muted-foreground/70">
+              No email is sent yet — copy the generated link and share it. The link signs the person in
+              and adds them to {client?.company_name ?? 'your workspace'}.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader><CardTitle className="text-sm">Members ({memberRows.length})</CardTitle></CardHeader>
+        <CardContent className="divide-y">
+          {memberRows.map((m) => {
+            const isSelf = m.id === userId
+            return (
+              <div key={m.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">
+                    {m.full_name || m.email}
+                    {isSelf && <span className="ml-2 text-[11px] text-muted-foreground">(you)</span>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{m.email}</p>
+                </div>
+                {isOwner && !isSelf
+                  ? <MemberControls userId={m.id} currentRole={m.role} />
+                  : <RoleBadge role={m.role} />}
+              </div>
+            )
+          })}
+        </CardContent>
+      </Card>
+
+      {canManage && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Pending invites ({invites.length})</CardTitle></CardHeader>
+          <CardContent className="divide-y">
+            {invites.length === 0 ? (
+              <p className="py-3 text-sm text-muted-foreground first:pt-0">No pending invites.</p>
+            ) : invites.map((inv) => (
+              <div key={inv.id} className="flex flex-wrap items-center gap-3 py-3 first:pt-0 last:pb-0">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{inv.email}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {cap(inv.role)} · expires {new Date(inv.expires_at).toLocaleDateString()}
+                  </p>
+                  <code className="mt-1 block truncate text-[11px] text-muted-foreground/70">
+                    {baseUrl}/invite/{inv.token}
+                  </code>
+                </div>
+                <CopyLinkButton url={`${baseUrl}/invite/${inv.token}`} />
+                <RevokeButton id={inv.id} />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
