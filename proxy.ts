@@ -45,7 +45,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Exclude /api/inngest: Inngest Cloud calls it with its own signing-key auth
-  // and no Supabase session, so it must skip the auth redirect below.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/inngest).*)'],
+  // Exclude /api/inngest and /api/stripe: both are called by external services
+  // (Inngest Cloud, Stripe webhooks) with their own signing-key auth and no
+  // Supabase session, so they must skip the auth redirect below.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/inngest|api/stripe).*)'],
 }
