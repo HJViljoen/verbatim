@@ -1,4 +1,4 @@
-import { createAdminClient } from '../supabase-admin'
+import { createAdminClient, selectAll } from '../supabase-admin'
 import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import { clusterInsights, type ClusterMethod } from './cluster'
 import type { InsightRow, AggregatedTheme } from './types'
@@ -85,26 +85,33 @@ function aggregate(cluster: InsightRow[], bucket: string, category: string): Agg
 export async function loadGroupedInsights(clientId: string, runId: string): Promise<InsightGroup[]> {
   const admin = createAdminClient()
 
-  // 1. Pull this run's insights.
-  const { data: rawInsights, error: iErr } = await admin
-    .from('audience_insights')
-    .select('id, category, theme, description, strength_score, emotion, sentiment_impact, source_video_id, platform')
-    .eq('client_id', clientId)
-    .eq('run_id', runId)
-  if (iErr) throw new Error(`load insights: ${iErr.message}`)
-  const insightsBase = rawInsights ?? []
+  // 1. Pull this run's insights (paginated past the 1000-row cap).
+  const insightsBase = await selectAll<{
+    id: string; category: string; theme: string; description: string
+    strength_score: number; emotion: string | null; sentiment_impact: string | null
+    source_video_id: string; platform: string
+  }>(() =>
+    admin
+      .from('audience_insights')
+      .select('id, category, theme, description, strength_score, emotion, sentiment_impact, source_video_id, platform')
+      .eq('client_id', clientId)
+      .eq('run_id', runId)
+      .order('id', { ascending: true }),
+  )
 
   // 2. Fetch the referenced videos for entity flags; join in code (avoids
   //    PostgREST FK-name ambiguity on source_video_id).
   const videoIds = [...new Set(insightsBase.map((i) => i.source_video_id).filter(Boolean))]
   const videoEntity = new Map<string, { is_client: boolean; is_competitor: boolean; competitor_name: string | null }>()
   if (videoIds.length) {
-    const { data: videos, error: vErr } = await admin
-      .from('videos')
-      .select('id, is_client, is_competitor, competitor_name')
-      .in('id', videoIds)
-    if (vErr) throw new Error(`load videos: ${vErr.message}`)
-    for (const v of videos ?? []) {
+    const videos = await selectAll<{ id: string; is_client: boolean; is_competitor: boolean; competitor_name: string | null }>(() =>
+      admin
+        .from('videos')
+        .select('id, is_client, is_competitor, competitor_name')
+        .in('id', videoIds)
+        .order('id', { ascending: true }),
+    )
+    for (const v of videos) {
       videoEntity.set(v.id, { is_client: v.is_client, is_competitor: v.is_competitor, competitor_name: v.competitor_name })
     }
   }

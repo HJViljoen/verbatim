@@ -1,4 +1,4 @@
-import { createAdminClient } from '../lib/supabase-admin'
+import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { tagVideo, matchEntities, type VideoTags } from '../lib/gather/tagging'
 import { attributeVideos, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
 import { COMMENT_THRESHOLD } from '../lib/config'
@@ -99,14 +99,14 @@ async function main() {
   console.log(`  competitor_names:  ${JSON.stringify(config.competitor_names)}`)
   console.log('')
 
-  let q = admin
-    .from('videos')
-    .select('id, video_id, platform, account_name, caption, hashtags, comments_count, is_client, is_competitor, competitor_name')
-    .eq('client_id', args.clientId)
-  if (args.platform) q = q.eq('platform', args.platform)
-  const { data, error } = await q
-  if (error) throw new Error(`load videos: ${error.message}`)
-  const rows = (data ?? []) as VideoRow[]
+  const rows = await selectAll<VideoRow>(() => {
+    let q = admin
+      .from('videos')
+      .select('id, video_id, platform, account_name, caption, hashtags, comments_count, is_client, is_competitor, competitor_name')
+      .eq('client_id', args.clientId)
+    if (args.platform) q = q.eq('platform', args.platform)
+    return q.order('id', { ascending: true })
+  })
 
   // GPT attribution over all rows (industry videos skip GPT internally).
   const candidates: AttrCandidate[] = rows.map((r) => ({

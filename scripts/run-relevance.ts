@@ -1,4 +1,4 @@
-import { createAdminClient } from '../lib/supabase-admin'
+import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { classifyRelevance, type RelevanceMethod, type RelevanceCandidate } from '../lib/gather/relevance'
 import { COMMENT_THRESHOLD } from '../lib/config'
 import type { GatherConfig } from '../lib/gather/types'
@@ -37,16 +37,15 @@ async function main() {
   const args = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
 
-  let q = admin
-    .from('videos')
-    .select('id, video_id, platform, account_name, caption, hashtags, comments_count')
-    .eq('client_id', args.clientId)
-    .gte('comments_count', args.minComments)
-  if (args.platform) q = q.eq('platform', args.platform)
-  const { data, error } = await q
-  if (error) throw new Error(`load videos: ${error.message}`)
-
-  const rows = (data ?? []) as (RelevanceCandidate & { id: string; platform: string; comments_count: number })[]
+  const rows = await selectAll<RelevanceCandidate & { id: string; platform: string; comments_count: number }>(() => {
+    let q = admin
+      .from('videos')
+      .select('id, video_id, platform, account_name, caption, hashtags, comments_count')
+      .eq('client_id', args.clientId)
+      .gte('comments_count', args.minComments)
+    if (args.platform) q = q.eq('platform', args.platform)
+    return q.order('id', { ascending: true })
+  })
   console.log(`Relevance gate — method=${args.method} · ${rows.length} videos with >= ${args.minComments} comments (comment-scrape candidates)\n`)
 
   const { data: tc } = await admin

@@ -1,4 +1,4 @@
-import { createAdminClient } from '../lib/supabase-admin'
+import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { computeMetrics } from '../lib/pipeline/metrics'
 import { runStepA2 } from '../lib/pipeline/step-a2'
 import { runPassC } from '../lib/pipeline/pass-c'
@@ -65,18 +65,19 @@ async function main() {
   // Metrics corpus: client videos + their comments. `--platform all` spans every
   // platform so Share of Voice is market-wide (correct for a multi-platform run);
   // a named platform scopes the SOV/engagement metrics to that platform only.
-  const videoQuery = admin.from('videos').select('*').eq('client_id', args.clientId)
-  if (args.platform !== 'all') videoQuery.eq('platform', args.platform)
-  const { data: vData, error: vErr } = await videoQuery
-  if (vErr) throw new Error(`load videos: ${vErr.message}`)
-  const videos = (vData ?? []) as VideoRow[]
-  const { data: cData, error: cErr } = await admin
-    .from('comments')
-    .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
-    .eq('client_id', args.clientId)
-    .in('video_id', videos.map((v) => v.video_id))
-  if (cErr) throw new Error(`load comments: ${cErr.message}`)
-  const comments = (cData ?? []) as CommentRow[]
+  const videos = await selectAll<VideoRow>(() => {
+    let q = admin.from('videos').select('*').eq('client_id', args.clientId)
+    if (args.platform !== 'all') q = q.eq('platform', args.platform)
+    return q.order('id', { ascending: true })
+  })
+  const comments = await selectAll<CommentRow>(() =>
+    admin
+      .from('comments')
+      .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
+      .eq('client_id', args.clientId)
+      .in('video_id', videos.map((v) => v.video_id))
+      .order('id', { ascending: true }),
+  )
   const metrics = computeMetrics(videos, comments)
 
   const { data: tc } = await admin

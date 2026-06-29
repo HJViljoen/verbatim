@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase-admin'
+import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -69,10 +69,11 @@ export default async function DashboardPage() {
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
   const runId = latestRun?.id as string | undefined
 
-  const [{ data: vData }, { data: aiData }] = await Promise.all([
-    admin.from('videos')
-      .select('id, platform, account_name, video_url, views, likes, engagement_rate, is_competitor, is_client, sentiment, classified_type, topics')
-      .eq('client_id', clientId).order('views', { ascending: false }),
+  const [all, { data: aiData }] = await Promise.all([
+    selectAll<VideoRow>(() =>
+      admin.from('videos')
+        .select('id, platform, account_name, video_url, views, likes, engagement_rate, is_competitor, is_client, sentiment, classified_type, topics')
+        .eq('client_id', clientId).order('views', { ascending: false }).order('id', { ascending: true })),
     runId
       ? admin.from('audience_insights')
           .select('id, category, theme, description, strength_score')
@@ -80,7 +81,6 @@ export default async function DashboardPage() {
       : Promise.resolve({ data: [] as AudienceInsight[] }),
   ])
 
-  const all = (vData ?? []) as VideoRow[]
   const audienceInsights = (aiData ?? []) as AudienceInsight[]
 
   // ---- Stats ----

@@ -1,5 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
-import { createAdminClient } from '../supabase-admin'
+import { createAdminClient, selectAll } from '../supabase-admin'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { PassAVideoSchema, type PassAVideoOutput, type PassAInsight } from './schemas'
@@ -231,26 +231,39 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
   const systemPrompt = buildSystemPrompt(trackingConfig)
 
   // 2. Videos (most-commented first so samples hit the richest content).
-  let vq = admin.from('videos').select('*').eq('client_id', clientId)
-  if (platform) vq = vq.eq('platform', platform)
-  if (videoIds && videoIds.length) vq = vq.in('id', videoIds)
-  vq = vq.order('comments_count', { ascending: false, nullsFirst: false })
-  if (limit) vq = vq.limit(limit)
-  const { data: videos, error: vErr } = await vq
-  if (vErr) throw new Error(`load videos: ${vErr.message}`)
-  const videoRows = (videos ?? []) as VideoRow[]
+  //    Paginated past the 1000-row cap unless an explicit --limit caps the run.
+  const buildVideos = () => {
+    let q = admin.from('videos').select('*').eq('client_id', clientId)
+    if (platform) q = q.eq('platform', platform)
+    if (videoIds && videoIds.length) q = q.in('id', videoIds)
+    return q
+      .order('comments_count', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })
+  }
+  let videoRows: VideoRow[]
+  if (limit) {
+    const { data, error: vErr } = await buildVideos().limit(limit)
+    if (vErr) throw new Error(`load videos: ${vErr.message}`)
+    videoRows = (data ?? []) as VideoRow[]
+  } else {
+    videoRows = await selectAll<VideoRow>(buildVideos)
+  }
 
-  // 3. Comments for those videos, grouped by (platform, video_id).
+  // 3. Comments for those videos, grouped by (platform, video_id). Paginated —
+  //    a busy client easily has >1000 comments, and a silent truncation here
+  //    starves the per-video comment counts (the analysable-corpus bug).
   const platformVideoIds = videoRows.map((v) => v.video_id)
   const commentsByVideo = new Map<string, CommentRow[]>()
   if (platformVideoIds.length) {
-    const { data: comments, error: cErr } = await admin
-      .from('comments')
-      .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
-      .eq('client_id', clientId)
-      .in('video_id', platformVideoIds)
-    if (cErr) throw new Error(`load comments: ${cErr.message}`)
-    for (const c of (comments ?? []) as CommentRow[]) {
+    const comments = await selectAll<CommentRow>(() =>
+      admin
+        .from('comments')
+        .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
+        .eq('client_id', clientId)
+        .in('video_id', platformVideoIds)
+        .order('id', { ascending: true }),
+    )
+    for (const c of comments) {
       const key = `${c.platform}::${c.video_id}`
       const arr = commentsByVideo.get(key)
       if (arr) arr.push(c)
