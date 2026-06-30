@@ -51,7 +51,11 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
     if (dueClientIds.length > 0) {
       await step.sendEvent(
         'dispatch-due-runs',
-        dueClientIds.map((clientId) => ({ name: 'pipeline/run.requested', data: { clientId } })),
+        dueClientIds.map((clientId) => ({
+          name: 'pipeline/run.requested',
+          // sendReport: emit the periodic report once this scheduled run completes.
+          data: { clientId, options: { sendReport: true } },
+        })),
       )
     }
 

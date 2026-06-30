@@ -58,6 +58,44 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<{ sent: bool
   }
 }
 
+export interface ReportEmail {
+  to: string[]
+  subject: string
+  html: string
+  text: string
+}
+
+// Sends a periodic (weekly/monthly) report to the configured recipients. Like
+// invites, this no-ops (returns sent:false) when Resend isn't configured or there
+// are no recipients — so report generation + persistence still succeed without an
+// email provider, and the report is simply stored for in-app viewing instead.
+export async function sendReportEmail(report: ReportEmail): Promise<{ sent: boolean }> {
+  if (!resend || !from || report.to.length === 0) {
+    console.log(
+      `[email:stub] report "${report.subject}" -> ${report.to.join(', ') || '(no recipients)'}`,
+    )
+    return { sent: false }
+  }
+
+  try {
+    const { error } = await resend.emails.send({
+      from,
+      to: report.to,
+      subject: report.subject,
+      text: report.text,
+      html: report.html,
+    })
+    if (error) {
+      console.error('[email] report send failed:', error)
+      return { sent: false }
+    }
+    return { sent: true }
+  } catch (err) {
+    console.error('[email] report send threw:', err)
+    return { sent: false }
+  }
+}
+
 function inviteText(invite: InviteEmail, workspace: string | undefined, inviter: string): string {
   const where = workspace ? `the ${workspace} workspace` : 'a workspace'
   return [

@@ -30,6 +30,9 @@ export interface PipelineRunOptions {
   maxVideos?: number
   videoLimit?: number
   period?: string
+  // When set, emit a `report/send.requested` after the run completes so the
+  // periodic report goes out. The scheduler sets this; manual "Run now" doesn't.
+  sendReport?: boolean
 }
 
 export const runPipeline = inngest.createFunction(
@@ -111,6 +114,15 @@ export const runPipeline = inngest.createFunction(
         completed_at: new Date().toISOString(),
       }).eq('id', runId)
     })
+
+    // 7. Periodic report — only when requested (the scheduler sets this), so a
+    //    manual "Run now" refreshes data without emailing the client.
+    if (options.sendReport) {
+      await step.sendEvent('request-report', {
+        name: 'report/send.requested',
+        data: { clientId, runId },
+      })
+    }
 
     return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, ...synth }
   },
