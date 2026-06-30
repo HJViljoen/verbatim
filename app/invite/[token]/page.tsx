@@ -12,7 +12,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-md rounded-xl border bg-background p-8 shadow-sm">
-        <h1 className="text-xl font-bold tracking-tight">SocialLens</h1>
+        <h1 className="text-xl font-bold tracking-tight">Verbatim</h1>
         <h2 className="mt-4 mb-1 text-lg font-semibold">{title}</h2>
         {children}
       </div>
@@ -57,7 +57,7 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
   return (
     <Shell title={`Join ${company}`}>
       <p className="mb-5 text-sm text-muted-foreground">
-        You’ve been invited to join <strong>{company}</strong> on SocialLens as a{' '}
+        You’ve been invited to join <strong>{company}</strong> on Verbatim as a{' '}
         <strong>{invite.role}</strong>.
       </p>
       {user

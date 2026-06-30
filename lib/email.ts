@@ -6,7 +6,7 @@
 // two env vars exist (plus a verified sending domain on the Resend side).
 //
 //   RESEND_API_KEY=re_...                     # https://resend.com/api-keys
-//   EMAIL_FROM="SocialLens <invites@yourdomain.com>"   # must be a verified domain
+//   EMAIL_FROM="Verbatim <invites@verbatimintel.com>"   # must be a verified domain
 
 import { Resend } from 'resend'
 
@@ -36,8 +36,8 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<{ sent: bool
   const workspace = invite.companyName?.trim()
   const inviter = invite.invitedByEmail ? `${invite.invitedByEmail} ` : ''
   const subject = workspace
-    ? `You're invited to ${workspace} on SocialLens`
-    : `You're invited to a SocialLens workspace`
+    ? `You're invited to ${workspace} on Verbatim`
+    : `You're invited to a Verbatim workspace`
 
   try {
     const { error } = await resend.emails.send({
@@ -99,7 +99,7 @@ export async function sendReportEmail(report: ReportEmail): Promise<{ sent: bool
 function inviteText(invite: InviteEmail, workspace: string | undefined, inviter: string): string {
   const where = workspace ? `the ${workspace} workspace` : 'a workspace'
   return [
-    `${inviter}invited you to join ${where} on SocialLens.`,
+    `${inviter}invited you to join ${where} on Verbatim.`,
     ``,
     `Accept your invite:`,
     invite.inviteUrl,
@@ -120,10 +120,10 @@ function inviteHtml(invite: InviteEmail, workspace: string | undefined, inviter:
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border-radius:12px;padding:32px">
           <tr><td>
             <p style="margin:0 0 16px;font-size:16px;line-height:1.5">
-              ${escapeHtml(inviter)}invited you to join ${where} on <strong>SocialLens</strong>.
+              ${escapeHtml(inviter)}invited you to join ${where} on <strong>Verbatim</strong>.
             </p>
             <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#475569">
-              SocialLens is a consumer-intelligence platform — sign in to see your team's dashboards.
+              Verbatim is a consumer-intelligence platform — sign in to see your team's dashboards.
             </p>
             <a href="${invite.inviteUrl}"
                style="display:inline-block;background:#1E40AF;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">

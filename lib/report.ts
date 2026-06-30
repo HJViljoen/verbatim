@@ -14,7 +14,7 @@ import { sendReportEmail } from './email'
 // not used (it isn't populated by the pipeline); KPIs are derived from source tables.
 
 const BRAND = '#1E40AF'
-const DEFAULT_APP_URL = 'https://sociallens-beta.vercel.app'
+const DEFAULT_APP_URL = 'https://verbatimintel.com'
 
 const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 }
 
@@ -360,7 +360,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e2e8f0">
           <tr><td style="background:${BRAND};padding:24px 28px">
-            <div style="color:#ffffff;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.85">SocialLens</div>
+            <div style="color:#ffffff;font-size:13px;font-weight:600;letter-spacing:1px;text-transform:uppercase;opacity:.85">Verbatim</div>
             <div style="color:#ffffff;font-size:20px;font-weight:700;margin-top:6px">${escapeHtml(d.companyName)} — ${d.period} consumer intelligence</div>
             <div style="color:#dbeafe;font-size:13px;margin-top:4px">${escapeHtml(d.weekStart)} – ${escapeHtml(d.weekEnd)}</div>
           </td></tr>
@@ -376,7 +376,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
             </table>
           </td></tr>
           <tr><td style="padding:16px 28px;border-top:1px solid #e2e8f0">
-            <div style="font-size:12px;color:#94a3b8">SocialLens — media-based consumer intelligence. You're receiving this because your team is set to get ${d.period} reports.</div>
+            <div style="font-size:12px;color:#94a3b8">Verbatim — media-based consumer intelligence. You're receiving this because your team is set to get ${d.period} reports.</div>
           </td></tr>
         </table>
       </td></tr>

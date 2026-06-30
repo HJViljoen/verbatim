@@ -14,7 +14,7 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <div className="w-full max-w-md rounded-xl border bg-background p-8 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight">SocialLens</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Verbatim</h1>
         <p className="mb-6 text-sm text-muted-foreground">Create your account</p>
 
         <form action={formAction} className="space-y-4">

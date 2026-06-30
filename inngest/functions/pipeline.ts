@@ -11,7 +11,7 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 
-// The full SocialLens pipeline as one durable Inngest function — the port of the
+// The full Verbatim pipeline as one durable Inngest function — the port of the
 // scripts/run-*.ts CLI sequence the orchestrator was always meant to own
 // (see the notes in run-gather.ts / run-cd.ts). One run_id flows through every
 // stage; each stage is a retryable step decoupled via the DB, so a failure

@@ -19,7 +19,7 @@ export default async function OnboardingPage() {
       <div className="w-full max-w-lg rounded-xl border bg-background p-8 shadow-sm">
         <h1 className="text-2xl font-bold tracking-tight">Set up your workspace</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          A few details so SocialLens knows what to track. You can change all of this later in Settings.
+          A few details so Verbatim knows what to track. You can change all of this later in Settings.
         </p>
         <OnboardingForm />
       </div>

@@ -36,7 +36,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="px-4 py-4">
-          <span className="text-xl font-bold tracking-tight">SocialLens</span>
+          <span className="text-xl font-bold tracking-tight">Verbatim</span>
         </div>
       </SidebarHeader>
 

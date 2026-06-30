@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SocialLens — Consumer Intelligence Platform",
+  title: "Verbatim — Consumer Intelligence",
   description:
     "Media-based consumer intelligence for D2C brands — market research-grade insights from real audience conversations.",
 };
