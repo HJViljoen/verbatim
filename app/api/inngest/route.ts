@@ -7,10 +7,11 @@ import { scheduledPipelineDispatcher } from '@/inngest/functions/scheduler'
 // register, POST to invoke) using its own signing-key auth — it carries no
 // Supabase session, so `proxy.ts` excludes this path from the auth redirect.
 
-// The pipeline runs gather + several GPT passes; give a single function
-// invocation room to finish a stage. (Vercel caps this per plan; Fluid Compute
-// allows the longer end.)
-export const maxDuration = 800
+// The pipeline runs gather + several GPT passes, but Inngest invokes this route
+// once per step (each step returns quickly), so a single invocation never needs
+// long. Capped at 300s for the Hobby plan; raise toward 800 on Pro if a single
+// step ever needs it.
+export const maxDuration = 300
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
