@@ -6,7 +6,7 @@
 
 ---
 
-**Project:** SocialLens
+**Project:** Verbatim
 **Generated:** 2026-04-01 14:28:14
 **Category:** Analytics Dashboard
 
