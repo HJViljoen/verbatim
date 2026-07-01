@@ -2,6 +2,7 @@ import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RunNowButton } from '@/components/run-now-button'
+import { accentTint, categoryTint, SENTIMENT_BADGE, greenForPct } from '@/lib/ui-colors'
 
 // Dashboard — corpus + pipeline readout for the latest data. Rewired onto the
 // v4.1 schema: per-video sentiment is now the text column `videos.sentiment`
@@ -39,13 +40,6 @@ const fmt = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
   : n >= 1_000   ? `${(n / 1_000).toFixed(0)}K`
   : String(n)
-
-const sentimentTone: Record<string, string> = {
-  positive: 'text-[#1B6144]',
-  neutral: 'text-muted-foreground',
-  mixed: 'text-yellow-500',
-  negative: 'text-red-500',
-}
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-muted-foreground italic">{children}</p>
@@ -142,24 +136,39 @@ export default async function DashboardPage() {
         {canRun && <RunNowButton />}
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — first card is the filled hero, the rest carry a colour dot */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         {[
-          { label: 'Videos Scraped',    value: String(all.length),     sub: `${analysed.length} analysed` },
-          { label: 'Total Views',       value: fmt(totalViews),        sub: 'TikTok + YouTube' },
-          { label: 'Avg Engagement',    value: `${avgEngagement}%`,    sub: `${withEng.length} videos` },
-          { label: 'Overall Sentiment', value: analysed.length ? `${positiveShare}%` : '—', sub: analysed.length ? `positive · ${analysed.length} analysed` : 'no analysed videos', green: true },
-        ].map(({ label, value, sub, green }) => (
-          <Card key={label}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className={`text-3xl font-bold ${green ? 'text-[#1B6144]' : ''}`}>{value}</div>
-              {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-            </CardContent>
-          </Card>
-        ))}
+          { label: 'Videos Scraped',    value: String(all.length),     sub: `${analysed.length} analysed`, hero: true },
+          { label: 'Total Views',       value: fmt(totalViews),        sub: 'TikTok + YouTube', dot: 'bg-pine' },
+          { label: 'Avg Engagement',    value: `${avgEngagement}%`,    sub: `${withEng.length} videos`, dot: 'bg-ochre' },
+          { label: 'Overall Sentiment', value: analysed.length ? `${positiveShare}%` : '—', sub: analysed.length ? `positive · ${analysed.length} analysed` : 'no analysed videos', dot: 'bg-positive', accentValue: true },
+        ].map(({ label, value, sub, hero, dot, accentValue }) =>
+          hero ? (
+            <Card key={label} className="stat-hero ring-0 border-0">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-[#CFE3D6]">{label}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-white">{value}</div>
+                {sub && <p className="text-xs text-[#CFE3D6] mt-1">{sub}</p>}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card key={label}>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                  <span className={`size-2 rounded-full ${dot}`} aria-hidden />
+                  {label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-3xl font-bold ${accentValue ? 'text-positive' : ''}`}>{value}</div>
+                {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+              </CardContent>
+            </Card>
+          ),
+        )}
       </div>
 
       {/* Main grid */}
@@ -191,12 +200,12 @@ export default async function DashboardPage() {
                       <td className="py-2.5 text-right">{v.engagement_rate != null ? `${v.engagement_rate}%` : '—'}</td>
                       <td className="py-2.5 text-right">
                         {v.sentiment
-                          ? <span className={`font-medium capitalize ${sentimentTone[v.sentiment] ?? ''}`}>{v.sentiment}</span>
+                          ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-muted text-muted-foreground'}`}>{v.sentiment}</span>
                           : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="py-2.5 text-right">
                         {v.classified_type
-                          ? <span className="px-2 py-0.5 bg-muted rounded text-xs capitalize">{v.classified_type}</span>
+                          ? <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${categoryTint(v.classified_type)}`}>{v.classified_type}</span>
                           : <span className="text-muted-foreground text-xs">—</span>}
                       </td>
                     </tr>
@@ -218,10 +227,10 @@ export default async function DashboardPage() {
                   <div key={label}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted-foreground">{label} <span className="opacity-60">· {count}</span></span>
-                      <span className="font-medium text-[#1B6144]">{pos}% pos</span>
+                      <span className="font-medium text-positive">{pos}% pos</span>
                     </div>
                     <div className="bg-muted rounded-full h-1.5">
-                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${pos ?? 0}%` }} />
+                      <div className="h-1.5 rounded-full" style={{ width: `${pos ?? 0}%`, backgroundColor: greenForPct(pos ?? 0) }} />
                     </div>
                   </div>
                 ))}
@@ -250,7 +259,7 @@ export default async function DashboardPage() {
               {topTopics.length > 0
                 ? <div className="flex flex-wrap gap-1.5">
                     {topTopics.map((t, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-muted rounded-full text-xs capitalize">{t}</span>
+                      <span key={i} className={`px-2 py-0.5 rounded-full text-xs capitalize ${accentTint(i)}`}>{t}</span>
                     ))}
                   </div>
                 : <Empty>No topics classified yet — videos.topics is empty until Pass A runs.</Empty>}
@@ -265,10 +274,10 @@ export default async function DashboardPage() {
         <CardContent>
           {contentTypes.length === 0 ? <Empty>No classified videos yet — content type is set by Pass A.</Empty> : (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {contentTypes.map(({ type, count, avgEng }) => (
-                <div key={type} className="bg-muted/50 rounded-lg p-4 text-center">
+              {contentTypes.map(({ type, count, avgEng }, i) => (
+                <div key={type} className={`rounded-xl p-4 text-center ${accentTint(i)}`}>
                   <div className="text-2xl font-bold">{avgEng}%</div>
-                  <div className="text-sm font-medium capitalize mt-1">{type}</div>
+                  <div className="text-sm font-medium capitalize mt-1 text-foreground">{type}</div>
                   <div className="text-xs text-muted-foreground mt-0.5">avg engagement · {count} videos</div>
                 </div>
               ))}

@@ -1,6 +1,7 @@
 import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
 
 // Competitive Intelligence — renders Pass C's competitive_insights for the latest
 // run: qualitative cross-bucket intelligence drawn from competitors' customers'
@@ -38,15 +39,7 @@ const CATEGORY_META: Record<string, { label: string; blurb: string }> = {
 }
 const prettyType = (s: string) => s.replace(/_/g, ' ')
 
-function Badge({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'high' | 'medium' | 'blue' }) {
-  const tones: Record<string, string> = {
-    muted: 'bg-muted text-muted-foreground',
-    high: 'bg-amber-100 text-amber-700',
-    medium: 'bg-muted text-muted-foreground',
-    blue: 'bg-blue-100 text-blue-700',
-  }
-  return <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${tones[tone]}`}>{children}</span>
-}
+const chipBase = 'px-2 py-0.5 rounded-full text-xs font-medium capitalize'
 
 export default async function CompetitiveIntelligencePage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
@@ -72,29 +65,14 @@ export default async function CompetitiveIntelligencePage() {
   const audienceInsights = (aiData ?? []) as AudienceInsight[]
   const aiById = new Map(audienceInsights.map((a) => [a.id, a]))
 
-  // Verbatim quotes for the supporting themes (same grounding as Market Intel).
-  const supportingIds = [...new Set(insights.flatMap((c) => c.evidence?.supporting_theme_ids ?? []))]
-  const quotesByInsight = new Map<string, string>()
-  if (supportingIds.length) {
-    const { data: evData } = await supabase
-      .from('insight_evidence').select('audience_insight_id, quote, relevance_rank')
-      .in('audience_insight_id', supportingIds).order('relevance_rank', { ascending: true })
-    for (const ev of (evData ?? []) as { audience_insight_id: string; quote: string }[]) {
-      if (!quotesByInsight.has(ev.audience_insight_id)) quotesByInsight.set(ev.audience_insight_id, ev.quote)
-    }
-  }
-
-  function supportFor(ci: CompetitiveInsight): { theme: string; quote: string | null }[] {
-    const ids = ci.evidence?.supporting_theme_ids ?? []
-    const seen = new Set<string>()
-    const out: { theme: string; quote: string | null }[] = []
-    for (const id of ids) {
+  // Supporting themes (deduped) per competitive insight — grounding shown as chips.
+  function supportFor(ci: CompetitiveInsight): string[] {
+    const themes = new Set<string>()
+    for (const id of ci.evidence?.supporting_theme_ids ?? []) {
       const ai = aiById.get(id)
-      if (!ai || seen.has(ai.theme)) continue
-      seen.add(ai.theme)
-      out.push({ theme: ai.theme, quote: quotesByInsight.get(id) ?? null })
+      if (ai) themes.add(ai.theme)
     }
-    return out.slice(0, 4)
+    return [...themes].slice(0, 4)
   }
 
   // Share of Tracked Conversation — per-bucket video share.
@@ -135,22 +113,20 @@ export default async function CompetitiveIntelligencePage() {
   )
 }
 
-function InsightCard({ ci, support }: { ci: CompetitiveInsight; support: { theme: string; quote: string | null }[] }) {
+function InsightCard({ ci, support }: { ci: CompetitiveInsight; support: string[] }) {
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              {ci.competitor_name && <Badge tone="blue">vs {ci.competitor_name}</Badge>}
-              <Badge>{prettyType(ci.category)}</Badge>
+              {ci.competitor_name && <span className={`${chipBase} ${categoryTint(ci.competitor_name)}`}>vs {ci.competitor_name}</span>}
+              <span className={`${chipBase} ${categoryTint(ci.category)}`}>{prettyType(ci.category)}</span>
             </div>
             <CardTitle className="text-base">{ci.title}</CardTitle>
           </div>
           {ci.impact_level && (
-            <span className="shrink-0">
-              <Badge tone={ci.impact_level === 'high' ? 'high' : 'muted'}>{ci.impact_level} impact</Badge>
-            </span>
+            <span className={`${chipBase} shrink-0 ${levelBadge(ci.impact_level)}`}>{ci.impact_level} impact</span>
           )}
         </div>
       </CardHeader>
@@ -159,12 +135,11 @@ function InsightCard({ ci, support }: { ci: CompetitiveInsight; support: { theme
         {support.length > 0 && (
           <div className="border-t pt-3 space-y-2">
             <div className="text-xs font-medium text-muted-foreground">Grounded in</div>
-            {support.map((s, i) => (
-              <div key={i} className="text-xs">
-                <span className="px-1.5 py-0.5 bg-muted rounded capitalize mr-2">{s.theme.replace(/_/g, ' ')}</span>
-                {s.quote && <span className="text-muted-foreground italic">&ldquo;{s.quote}&rdquo;</span>}
-              </div>
-            ))}
+            <div className="flex flex-wrap gap-1.5">
+              {support.map((theme, i) => (
+                <span key={i} className={`px-2 py-0.5 rounded-full text-xs capitalize ${categoryTint(theme)}`}>{theme.replace(/_/g, ' ')}</span>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>
@@ -197,8 +172,8 @@ function computeShare(rows: VideoBucketRow[]): Share {
 function ShareOfVoice({ sov }: { sov: Share }) {
   const pct = (n: number) => (sov.total ? Math.round((n / sov.total) * 1000) / 10 : 0)
   const segments = [
-    { label: 'Your brand', count: sov.client, color: 'bg-blue-600' },
-    ...sov.competitors.map((c, i) => ({ label: c.name, count: c.count, color: COMP_COLORS[i % COMP_COLORS.length] })),
+    { label: 'Your brand', count: sov.client, color: 'bg-primary' },
+    ...sov.competitors.map((c, i) => ({ label: c.name, count: c.count, color: accentSolid(i) })),
     { label: 'Industry', count: sov.industry, color: 'bg-muted-foreground/40' },
   ].filter((s) => s.count > 0)
 
@@ -229,8 +204,6 @@ function ShareOfVoice({ sov }: { sov: Share }) {
     </Card>
   )
 }
-
-const COMP_COLORS = ['bg-amber-500', 'bg-emerald-500', 'bg-violet-500', 'bg-rose-500', 'bg-cyan-500']
 
 // --- Shell + empty states ---------------------------------------------------
 

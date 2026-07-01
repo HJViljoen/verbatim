@@ -1,6 +1,7 @@
 import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { SENTIMENT_BADGE } from '@/lib/ui-colors'
 
 // Content Analysis — the full video catalog with Pass A classification
 // (classified_type, hook_style, sentiment, topics) plus hook-style and
@@ -30,9 +31,6 @@ const fmt = (n: number) =>
   : n >= 1_000   ? `${(n / 1_000).toFixed(0)}K`
   : String(n)
 
-const sentimentTone: Record<string, string> = {
-  positive: 'text-green-600', neutral: 'text-muted-foreground', mixed: 'text-yellow-500', negative: 'text-red-500',
-}
 
 // Aggregate avg engagement + count by a classification field.
 function perfBy(videos: VideoRow[], key: 'hook_style' | 'classified_type') {
@@ -137,7 +135,7 @@ export default async function ContentAnalysisPage() {
                       <td className="py-2 capitalize text-xs text-muted-foreground">{roleOf(v)}</td>
                       <td className="py-2 text-right">{v.views != null ? fmt(Number(v.views)) : '—'}</td>
                       <td className="py-2 text-right">{v.engagement_rate != null ? `${v.engagement_rate}%` : '—'}</td>
-                      <td className="py-2">{v.sentiment ? <span className={`capitalize ${sentimentTone[v.sentiment] ?? ''}`}>{v.sentiment}</span> : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="py-2">{v.sentiment ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-muted text-muted-foreground'}`}>{v.sentiment}</span> : <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2 capitalize text-xs">{v.classified_type ?? <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2 capitalize text-xs">{v.hook_style?.replace(/-/g, ' ') ?? <span className="text-muted-foreground">—</span>}</td>
                       <td className="py-2 text-xs text-muted-foreground">{(v.topics ?? []).slice(0, 3).join(', ') || '—'}</td>

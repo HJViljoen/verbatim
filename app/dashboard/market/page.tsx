@@ -1,5 +1,7 @@
+import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { categoryTint, levelBadge } from '@/lib/ui-colors'
 
 // Market Intelligence — the core value page. Renders Pass D's market_insights +
 // recommendations for the latest run, each grounded in its supporting themes
@@ -36,21 +38,23 @@ interface AudienceInsight {
 
 const prettyType = (s: string) => s.replace(/_/g, ' ')
 
-function Badge({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'high' | 'medium' | 'blue' }) {
-  const tones: Record<string, string> = {
-    muted: 'bg-muted text-muted-foreground',
-    high: 'bg-amber-100 text-amber-700',
-    medium: 'bg-muted text-muted-foreground',
-    blue: 'bg-blue-100 text-blue-700',
-  }
-  return <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${tones[tone]}`}>{children}</span>
+const chipBase = 'px-2 py-0.5 rounded-full text-xs font-medium capitalize'
+
+/** A stable coloured category chip (insight type, rec type). */
+function CategoryChip({ children }: { children: string }) {
+  return <span className={`${chipBase} ${categoryTint(children)}`}>{prettyType(children)}</span>
+}
+
+/** A priority/level chip — high stands out (amber), the rest sit back. */
+function LevelChip({ children }: { children: string }) {
+  return <span className={`${chipBase} ${levelBadge(children)}`}>{children}</span>
 }
 
 function Score({ label, value }: { label: string; value: number | null }) {
   if (value == null) return null
   return (
     <div className="text-center">
-      <div className="text-lg font-bold leading-none">{value}<span className="text-xs text-muted-foreground">/10</span></div>
+      <div className="text-lg font-bold leading-none text-primary">{value}<span className="text-xs text-muted-foreground font-normal">/10</span></div>
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">{label}</div>
     </div>
   )
@@ -81,32 +85,14 @@ export default async function MarketIntelligencePage() {
   const audienceInsights = (aiData ?? []) as AudienceInsight[]
   const aiById = new Map(audienceInsights.map((a) => [a.id, a]))
 
-  // Evidence quotes for the supporting audience_insights.
-  const supportingIds = [...new Set(marketInsights.flatMap((m) => m.evidence?.supporting_theme_ids ?? []))]
-  const quotesByInsight = new Map<string, string[]>()
-  if (supportingIds.length) {
-    const { data: evData } = await supabase
-      .from('insight_evidence').select('audience_insight_id, quote, relevance_rank')
-      .in('audience_insight_id', supportingIds).order('relevance_rank', { ascending: true })
-    for (const ev of (evData ?? []) as { audience_insight_id: string; quote: string }[]) {
-      const arr = quotesByInsight.get(ev.audience_insight_id)
-      if (arr) arr.push(ev.quote)
-      else quotesByInsight.set(ev.audience_insight_id, [ev.quote])
-    }
-  }
-
-  // For one market insight, resolve its supporting themes (deduped by theme) + a quote each.
-  function supportFor(mi: MarketInsight): { theme: string; category: string; quote: string | null }[] {
-    const ids = mi.evidence?.supporting_theme_ids ?? []
-    const seen = new Set<string>()
-    const out: { theme: string; category: string; quote: string | null }[] = []
-    for (const id of ids) {
+  // Supporting themes (deduped) per market insight — the grounding shown as chips.
+  function supportFor(mi: MarketInsight): string[] {
+    const themes = new Set<string>()
+    for (const id of mi.evidence?.supporting_theme_ids ?? []) {
       const ai = aiById.get(id)
-      if (!ai || seen.has(ai.theme)) continue
-      seen.add(ai.theme)
-      out.push({ theme: ai.theme, category: ai.category, quote: quotesByInsight.get(id)?.[0] ?? null })
+      if (ai) themes.add(ai.theme)
     }
-    return out.slice(0, 4)
+    return [...themes].slice(0, 4)
   }
 
   const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
@@ -133,7 +119,7 @@ export default async function MarketIntelligencePage() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1.5">
-                      <Badge tone="blue">{prettyType(mi.insight_type)}</Badge>
+                      <CategoryChip>{mi.insight_type}</CategoryChip>
                       <CardTitle className="text-base">{mi.title}</CardTitle>
                     </div>
                     <div className="flex gap-4 shrink-0">
@@ -146,13 +132,20 @@ export default async function MarketIntelligencePage() {
                   <p className="text-sm text-muted-foreground">{mi.description}</p>
                   {support.length > 0 && (
                     <div className="border-t pt-3 space-y-2">
-                      <div className="text-xs font-medium text-muted-foreground">Grounded in</div>
-                      {support.map((s, i) => (
-                        <div key={i} className="text-xs">
-                          <span className="px-1.5 py-0.5 bg-muted rounded capitalize mr-2">{s.theme.replace(/_/g, ' ')}</span>
-                          {s.quote && <span className="text-muted-foreground italic">&ldquo;{s.quote}&rdquo;</span>}
-                        </div>
-                      ))}
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-medium text-muted-foreground">Grounded in</div>
+                        <Link
+                          href={`/dashboard/voice?themes=${encodeURIComponent(support.join(','))}#grounding`}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/5"
+                        >
+                          See supporting voices <span aria-hidden>→</span>
+                        </Link>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {support.map((theme, i) => (
+                          <span key={i} className={`px-2 py-0.5 rounded-full text-xs capitalize ${categoryTint(theme)}`}>{theme.replace(/_/g, ' ')}</span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -170,8 +163,8 @@ export default async function MarketIntelligencePage() {
               <Card key={rec.id}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
-                    <Badge tone={rec.priority === 'high' ? 'high' : 'muted'}>{rec.priority ?? 'low'}</Badge>
-                    <Badge>{prettyType(rec.type)}</Badge>
+                    <LevelChip>{rec.priority ?? 'low'}</LevelChip>
+                    <CategoryChip>{rec.type}</CategoryChip>
                   </div>
                   <CardTitle className="text-sm mt-1.5">{rec.title}</CardTitle>
                 </CardHeader>
