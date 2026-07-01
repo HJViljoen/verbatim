@@ -1,7 +1,6 @@
 import { selectAll } from '@/lib/supabase-admin'
-import { getSessionContext, canManageTenant } from '@/lib/auth'
+import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { RunNowButton } from '@/components/run-now-button'
 import { accentTint, categoryTint, SENTIMENT_BADGE, greenForPct } from '@/lib/ui-colors'
 
 // Dashboard — corpus + pipeline readout for the latest data. Rewired onto the
@@ -49,8 +48,7 @@ export default async function DashboardPage() {
   // Auth + tenant + role via the RLS-enforced session client (the
   // .eq('client_id', …) filters below are now redundant but kept explicit).
   // Service-role is reserved for the pipeline + provisioning. See lib/auth.ts.
-  const { supabase, clientId, role } = await getSessionContext()
-  const canRun = canManageTenant(role)
+  const { supabase, clientId } = await getSessionContext()
 
   // Latest run — scopes the audience insights (videos carry their latest
   // classification in-place, so they're read corpus-wide, not run-scoped).
@@ -125,15 +123,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
-            {all.length} videos scraped · {analysed.length} analysed
-            {latestRun && <> · latest run {String(runId).slice(0, 8)} · {latestRun.status}</>}
-          </p>
-        </div>
-        {canRun && <RunNowButton />}
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-sm text-muted-foreground">
+          {all.length} videos scraped · {analysed.length} analysed
+          {latestRun && <> · latest run {String(runId).slice(0, 8)} · {latestRun.status}</>}
+        </p>
       </div>
 
       {/* Stats row — first card is the filled hero, the rest carry a colour dot */}
