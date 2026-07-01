@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import {
   inviteMember, revokeInvitation, changeMemberRole, removeMember,
-  type ActionState, type Role,
+  type ActionState,
 } from './actions'
+import type { Role } from '@/lib/auth'
 
 const idleState: ActionState = { ok: false, message: '' }
 

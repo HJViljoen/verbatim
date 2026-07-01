@@ -3,7 +3,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
-import { getSessionContext, canManageTenant, ROLES, type Role } from '@/lib/auth'
+import { getSessionContext, canManageTenant, ROLES } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { sendInviteEmail } from '@/lib/email'
@@ -194,5 +194,3 @@ export async function removeMember(_prev: ActionState, formData: FormData): Prom
   revalidatePath('/dashboard/team')
   return { ok: true, message: 'Member removed.' }
 }
-
-export type { Role }
