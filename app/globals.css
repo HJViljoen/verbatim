@@ -145,6 +145,13 @@
   }
 }
 
+/* Give the floating sidebar the same elevation as the cards */
+[data-slot="sidebar"][data-variant="floating"] [data-slot="sidebar-inner"] {
+  box-shadow:
+    0 2px 6px -2px rgba(18, 42, 31, 0.10),
+    0 18px 40px -16px rgba(18, 42, 31, 0.32);
+}
+
 /* Ambient crowd layer — the voices behind the data. Fixed, faint, fades up. */
 .crowd-bg {
   position: fixed;
