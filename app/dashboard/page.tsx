@@ -41,7 +41,7 @@ const fmt = (n: number) =>
   : String(n)
 
 const sentimentTone: Record<string, string> = {
-  positive: 'text-green-600',
+  positive: 'text-[#1B6144]',
   neutral: 'text-muted-foreground',
   mixed: 'text-yellow-500',
   negative: 'text-red-500',
@@ -130,7 +130,7 @@ export default async function DashboardPage() {
     .sort((a, b) => Number(b.avgEng) - Number(a.avgEng))
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
@@ -143,7 +143,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         {[
           { label: 'Videos Scraped',    value: String(all.length),     sub: `${analysed.length} analysed` },
           { label: 'Total Views',       value: fmt(totalViews),        sub: 'TikTok + YouTube' },
@@ -155,7 +155,7 @@ export default async function DashboardPage() {
               <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-3xl font-bold ${green ? 'text-green-600' : ''}`}>{value}</div>
+              <div className={`text-3xl font-bold ${green ? 'text-[#1B6144]' : ''}`}>{value}</div>
               {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
             </CardContent>
           </Card>
@@ -163,7 +163,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Top videos table */}
         <Card className="lg:col-span-2">
@@ -183,7 +183,7 @@ export default async function DashboardPage() {
                     <tr key={v.id} className="border-b last:border-0">
                       <td className="py-2.5 capitalize">{v.platform}</td>
                       <td className="py-2.5">
-                        <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                        <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                           @{v.account_name}
                         </a>
                       </td>
@@ -208,7 +208,7 @@ export default async function DashboardPage() {
         </Card>
 
         {/* Right panel */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           <Card>
             <CardHeader><CardTitle className="text-sm">Sentiment Overview</CardTitle></CardHeader>
             <CardContent className="space-y-3">
@@ -218,10 +218,10 @@ export default async function DashboardPage() {
                   <div key={label}>
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-muted-foreground">{label} <span className="opacity-60">· {count}</span></span>
-                      <span className="font-medium text-green-600">{pos}% pos</span>
+                      <span className="font-medium text-[#1B6144]">{pos}% pos</span>
                     </div>
                     <div className="bg-muted rounded-full h-1.5">
-                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${pos ?? 0}%` }} />
+                      <div className="bg-primary h-1.5 rounded-full" style={{ width: `${pos ?? 0}%` }} />
                     </div>
                   </div>
                 ))}

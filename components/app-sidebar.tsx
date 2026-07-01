@@ -33,18 +33,23 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar>
+    <Sidebar variant="floating">
       <SidebarHeader>
-        <div className="px-4 py-4">
-          <span className="text-xl font-bold tracking-tight">Verbatim</span>
+        <div className="flex items-center gap-2.5 px-3 pt-4 pb-2">
+          <span className="h-7 w-7 rounded-lg bg-primary" aria-hidden />
+          <span className="text-lg font-bold tracking-tight text-[#14291F]">Verbatim</span>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
-        <SidebarMenu>
+      <SidebarContent className="px-2">
+        <SidebarMenu className="gap-1.5">
           {navItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={pathname === item.href}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                className="h-11 gap-3 rounded-xl px-3 font-medium"
+              >
                 <Link href={item.href}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>
@@ -55,10 +60,10 @@ export function AppSidebar() {
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter>
+      <SidebarFooter className="px-2">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout}>
+            <SidebarMenuButton onClick={handleLogout} className="h-11 gap-3 rounded-xl px-3 font-medium">
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
             </SidebarMenuButton>
