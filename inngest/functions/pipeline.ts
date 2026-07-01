@@ -148,6 +148,9 @@ async function runBackHalf(clientId: string, runId: string) {
   const { data: tc } = await admin.from('tracking_configs')
     .select('brand_keywords, competitor_names, industry_keywords')
     .eq('client_id', clientId).maybeSingle()
+  const { data: client } = await admin.from('clients')
+    .select('company_name').eq('id', clientId).maybeSingle()
+  const brandName = client?.company_name ?? undefined
 
   const a2 = await runStepA2({
     clientId, runId, method: 'embedding',
@@ -155,11 +158,11 @@ async function runBackHalf(clientId: string, runId: string) {
   })
   const c = await runPassC({
     clientId, runId, themes: a2.themes,
-    trackingConfig: tc ?? undefined, sov: metrics.share_of_voice, persist: true,
+    trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice, persist: true,
   })
   const d = await runPassD({
     clientId, runId, themes: a2.themes,
-    competitiveInsights: c.competitiveInsights, sov: metrics.share_of_voice, persist: true,
+    competitiveInsights: c.competitiveInsights, brandName, sov: metrics.share_of_voice, persist: true,
   })
 
   return {

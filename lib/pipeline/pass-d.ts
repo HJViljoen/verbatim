@@ -15,7 +15,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // insights they generate in THIS call by M# (their 1-based position) and/or C#.
 // Code maps every index back to a UUID and rejects unknowns (invariant 8).
 
-const PROMPT_VERSION = 'pass_d_v2'
+const PROMPT_VERSION = 'pass_d_v3'
 
 const clampScore = (n: number) => Math.max(1, Math.min(10, Math.round(n)))
 
@@ -24,6 +24,8 @@ export interface RunPassDOptions {
   runId: string
   themes: AggregatedTheme[]
   competitiveInsights?: PersistedCompetitiveInsight[]
+  /** The client's display name (clients.company_name) — insights name it directly. */
+  brandName?: string
   sov?: Record<string, SovEntry>
   persist?: boolean
   dryRun?: boolean
@@ -39,9 +41,10 @@ export interface RunPassDResult {
   dryRun: boolean
 }
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(brandName?: string): string {
+  const name = brandName?.trim() || 'the brand'
   return [
-    'You are a media-based consumer intelligence analyst producing the strategic output a brand pays for.',
+    `You are a media-based consumer intelligence analyst producing the strategic output that ${name} pays for.`,
     '',
     'You are given audience themes (distilled from real comments) and, if present, competitive insights.',
     'Synthesise across the whole conversation — not one theme at a time.',
@@ -53,6 +56,7 @@ function buildSystemPrompt(): string {
     '   urgent topics, competitive moves, audience targets, platform strategies.',
     '',
     'Rules:',
+    `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
     '- Reference supporting themes by their bracket index (e.g. "T2") and competitive insights by theirs (e.g. "C1"). Use ONLY indices present in the input.',
     '- supporting_themes must list ONLY the themes a market insight is directly distilled from — the specific themes whose comments are the evidence for the claim. Cite the few that genuinely apply (usually 1–4), never a broad list. Do NOT add a theme just to satisfy a grounding requirement: the product shows the user the actual comments behind each cited theme as proof, so an unrelated theme there is a visible defect.',
     '- Some insights are NOT distilled from comment themes at all — insights about share of voice, content volume, posting presence, or platform coverage are derived from the SHARE OF VOICE data above, not from comments. For these, return an EMPTY supporting_themes array and rely on the share-of-voice figures. Never back-fill them with comment themes.',
@@ -105,7 +109,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   const ciIndex = new Map<string, PersistedCompetitiveInsight>()
   competitive.forEach((ci, i) => ciIndex.set(`c${i + 1}`, ci))
 
-  const systemPrompt = buildSystemPrompt()
+  const systemPrompt = buildSystemPrompt(opts.brandName)
   const userPrompt = buildUserPrompt(themeIndex, competitive, ciIndex, sov)
 
   const result: RunPassDResult = {

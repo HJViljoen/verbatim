@@ -14,7 +14,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // audience_insights UUIDs, rejecting unknown indices (invariant 8). On a
 // single-bucket corpus there is nothing to compare, so the model returns [].
 
-const PROMPT_VERSION = 'pass_c_v1'
+const PROMPT_VERSION = 'pass_c_v2'
 
 export interface TrackingConfig {
   brand_keywords: string[] | null
@@ -27,6 +27,8 @@ export interface RunPassCOptions {
   runId: string
   themes: AggregatedTheme[]
   trackingConfig?: TrackingConfig
+  /** The client's display name (clients.company_name) — findings name it directly. */
+  brandName?: string
   sov?: Record<string, SovEntry>
   persist?: boolean
   dryRun?: boolean
@@ -59,32 +61,34 @@ export function indexThemes(themes: AggregatedTheme[]): { label: string; theme: 
   return themes.map((theme, i) => ({ label: `T${i + 1}`, theme }))
 }
 
-function buildSystemPrompt(tc: TrackingConfig | undefined): string {
-  const brand = (tc?.brand_keywords ?? []).join(', ') || '(none provided)'
+function buildSystemPrompt(tc: TrackingConfig | undefined, brandName?: string): string {
+  const name = brandName?.trim() || 'the client brand'
+  const aliases = (tc?.brand_keywords ?? []).join(', ')
   const competitors = (tc?.competitor_names ?? []).join(', ') || '(none provided)'
   return [
     'You are a media-based competitive intelligence analyst working for a brand.',
     '',
-    `Client brand: ${brand}`,
+    `The brand you work for is ${name}${aliases ? ` (also referred to as: ${aliases})` : ''}.`,
     `Known competitors: ${competitors}`,
     '',
     'You are given audience themes already bucketed by who posted the source videos:',
-    '- client      = the brand itself',
+    `- client      = ${name} itself`,
     '- competitor:X = a named competitor',
     '- industry-other = everyone else in the category',
     '',
     'Find ONLY insights that emerge from comparing buckets against each other:',
-    '- topic_ownership: a theme strong in the client bucket and weak elsewhere.',
-    '- content_gap: a theme strong in competitor / industry buckets but missing from the client.',
-    '- competitive_threat: a theme positive for a competitor but negative (or absent) for the client.',
+    `- topic_ownership: a theme strong in the ${name} bucket and weak elsewhere.`,
+    `- content_gap: a theme strong in competitor / industry buckets but missing from ${name}.`,
+    `- competitive_threat: a theme positive for a competitor but negative (or absent) for ${name}.`,
     '- sentiment_differential: the same topic with a different emotional tone across buckets.',
     '- notable_account: a high-signal industry account worth tracking.',
     '- engagement_benchmark: a cross-bucket performance contrast.',
     '',
     'Rules:',
+    `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
     '- Reference every supporting theme by its bracket index (e.g. "T3"), using ONLY indices present in the input.',
     '- Do NOT invent counts, percentages, or metrics — describe findings qualitatively.',
-    '- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or client data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.',
+    `- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or ${name} data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.`,
     '- impact_level reflects how much the finding should affect the brand’s strategy.',
   ].join('\n')
 }
@@ -120,7 +124,7 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
 
   const themeIndex = indexThemes(themes)
   const byLabel = new Map(themeIndex.map((t) => [t.label.toLowerCase(), t.theme]))
-  const systemPrompt = buildSystemPrompt(trackingConfig)
+  const systemPrompt = buildSystemPrompt(trackingConfig, opts.brandName)
   const userPrompt = buildUserPrompt(themeIndex, sov)
 
   const base: RunPassCResult = {

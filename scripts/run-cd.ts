@@ -85,6 +85,12 @@ async function main() {
     .select('brand_keywords, competitor_names, industry_keywords')
     .eq('client_id', args.clientId)
     .maybeSingle()
+  const { data: client } = await admin
+    .from('clients')
+    .select('company_name')
+    .eq('id', args.clientId)
+    .maybeSingle()
+  const brandName = client?.company_name ?? undefined
 
   console.log('\nShare of voice:')
   for (const [bucket, e] of Object.entries(metrics.share_of_voice)) console.log(`  ${bucket}: ${e.videos} videos (${e.pct_videos}%)`)
@@ -100,6 +106,7 @@ async function main() {
     runId: args.runId!,
     themes: a2.themes,
     trackingConfig: tc ?? undefined,
+    brandName,
     sov: metrics.share_of_voice,
     persist,
     dryRun: args.dryRun,
@@ -118,6 +125,7 @@ async function main() {
     runId: args.runId!,
     themes: a2.themes,
     competitiveInsights: c.competitiveInsights,
+    brandName,
     sov: metrics.share_of_voice,
     persist,
     dryRun: args.dryRun,
