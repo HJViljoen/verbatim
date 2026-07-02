@@ -70,14 +70,20 @@ async function main() {
     if (args.platform !== 'all') q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
   })
-  const comments = await selectAll<CommentRow>(() =>
-    admin
+  // Load the client's comments in one paginated scan and filter to the corpus
+  // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
+  // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors pass-a.ts.
+  const wantedVideos = new Set(videos.map((v) => `${v.platform}::${v.video_id}`))
+  const allComments = await selectAll<CommentRow>(() => {
+    let q = admin
       .from('comments')
       .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
       .eq('client_id', args.clientId)
-      .in('video_id', videos.map((v) => v.video_id))
-      .order('id', { ascending: true }),
-  )
+      .order('id', { ascending: true })
+    if (args.platform !== 'all') q = q.eq('platform', args.platform)
+    return q
+  })
+  const comments = allComments.filter((c) => wantedVideos.has(`${c.platform}::${c.video_id}`))
   const metrics = computeMetrics(videos, comments)
 
   const { data: tc } = await admin

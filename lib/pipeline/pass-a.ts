@@ -252,19 +252,25 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
   // 3. Comments for those videos, grouped by (platform, video_id). Paginated —
   //    a busy client easily has >1000 comments, and a silent truncation here
   //    starves the per-video comment counts (the analysable-corpus bug).
-  const platformVideoIds = videoRows.map((v) => v.video_id)
+  //    Load the client's comments in one scan (optionally platform-scoped) and
+  //    filter to the wanted videos IN MEMORY — a `.in('video_id', [all ids])`
+  //    filter blows the URL length limit once the corpus grows to ~1k+ videos
+  //    ("fetch failed"), so we never send the giant IN clause.
+  const wanted = new Set(videoRows.map((v) => `${v.platform}::${v.video_id}`))
   const commentsByVideo = new Map<string, CommentRow[]>()
-  if (platformVideoIds.length) {
-    const comments = await selectAll<CommentRow>(() =>
-      admin
+  if (wanted.size) {
+    const comments = await selectAll<CommentRow>(() => {
+      let q = admin
         .from('comments')
         .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
         .eq('client_id', clientId)
-        .in('video_id', platformVideoIds)
-        .order('id', { ascending: true }),
-    )
+        .order('id', { ascending: true })
+      if (platform) q = q.eq('platform', platform)
+      return q
+    })
     for (const c of comments) {
       const key = `${c.platform}::${c.video_id}`
+      if (!wanted.has(key)) continue
       const arr = commentsByVideo.get(key)
       if (arr) arr.push(c)
       else commentsByVideo.set(key, [c])
