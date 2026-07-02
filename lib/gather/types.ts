@@ -43,6 +43,9 @@ export interface VideoInsert {
   is_client: boolean
   is_competitor: boolean
   competitor_name: string | null
+  /** Keyword(s) whose search surfaced this video. Set by the gather orchestrator
+   *  (unioned across a run's per-keyword searches), not by the normalisers. */
+  source_keywords?: string[]
 }
 
 /** A row ready to upsert into `comments`. `video_id` is the platform id (text),
@@ -89,9 +92,11 @@ export interface PlatformAdapter {
   platform: Platform
   /**
    * Apify actor slug + input for ONE video search over the given `terms`, capped
-   * at `limit` results. The orchestrator calls this once per search group (brand,
-   * each competitor, industry) so valuable keywords get a guaranteed quota instead
-   * of sharing one combined-search budget with broad noisy terms.
+   * at `limit` results. The orchestrator calls this once per KEYWORD (so `terms`
+   * is normally a single-element array) — every keyword gets its own equal-quota
+   * search. This (a) levels the cross-platform volume skew (the IG actor applies
+   * its limit per-hashtag while TT/YT applied it per combined group) and (b) makes
+   * every video attributable to the keyword that found it, for keyword value scoring.
    */
   videoSearch(config: GatherConfig, terms: string[], limit: number): { actor: string; input: RawItem }
   /** Raw actor item → VideoInsert. null = skip (unparseable / no url). */

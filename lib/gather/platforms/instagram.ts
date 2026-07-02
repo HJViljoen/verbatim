@@ -16,9 +16,10 @@ export const instagram: PlatformAdapter = {
   platform: 'instagram',
 
   videoSearch(config, terms, limit) {
-    // This actor applies resultsLimit PER hashtag, so the orchestrator already
-    // hands us one search group at a time; resultsLimit is the per-hashtag quota
-    // for THIS group. (cleanHashtag strips '#'/spaces/punctuation — required.)
+    // This actor applies resultsLimit PER hashtag. The orchestrator now searches
+    // one keyword at a time (terms is a single hashtag), so resultsLimit is that
+    // keyword's quota — matching TT/YT and removing the old per-hashtag volume skew.
+    // (cleanHashtag strips '#'/spaces/punctuation — required.)
     const hashtags = terms.map(cleanHashtag).filter(Boolean)
     return {
       actor: APIFY_ACTORS.instagram.video,

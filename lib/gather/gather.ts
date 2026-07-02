@@ -1,7 +1,7 @@
 import { createAdminClient } from '../supabase-admin'
 import { runActor } from './apify'
 import { adapters } from './platforms'
-import { dedupeBy } from './util'
+import { dedupeBy, round2 } from './util'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
 import { attributeVideos, type AttributionMethod } from './attribution'
 import type {
@@ -26,26 +26,45 @@ import type {
 
 type Admin = ReturnType<typeof createAdminClient>
 
-interface SearchGroup { label: string; terms: string[]; limit: number }
+type KeywordBucket = 'brand' | 'competitor' | 'industry'
+interface SearchGroup { label: string; bucket: KeywordBucket; keyword: string; terms: string[]; limit: number }
 
-// Per-keyword search plan: each VALUABLE keyword group gets its own guaranteed
-// quota so brand + competitor terms aren't crowded out of one combined search by
-// broad, high-volume industry terms — the crowding that starved the competitive
-// pass (verified on Sealand: a combined search yielded 0 brand + 4 competitor of
-// 101 videos). Brand variants are one entity → one search; each competitor is a
-// distinct entity → its own search; industry terms are the broad net → combined.
+// Per-KEYWORD search plan: every keyword gets its own search with an equal quota
+// (max_videos). Two reasons:
+//   (1) Removes the cross-platform volume skew. The IG actor applies its limit
+//       per-hashtag, but TT/YT applied `maxItems` to a whole combined group, so
+//       combined brand/industry searches returned ~Nx more IG videos than TT/YT
+//       (live corpus: 496 IG vs 138 TT / 103 YT). One keyword per search levels
+//       TT/YT up to the same per-keyword multiplier IG always had.
+//   (2) Makes every video attributable to the keyword(s) that surfaced it, so each
+//       keyword's value can be scored and low-value terms pruned (v5-Ideas: Keyword
+//       Value Tracking). Equal quotas keep the scores comparable across keywords.
+// (Supersedes the 2026-06-28 per-bucket plan — brand/industry were still combined.)
 function buildSearchPlan(config: GatherConfig): SearchGroup[] {
   const clean = (xs: string[] | undefined) => (xs ?? []).map((s) => `${s}`.trim()).filter(Boolean)
-  const brand = clean(config.brand_keywords)
-  const competitors = clean(config.competitor_keywords)
-  const industry = clean(config.industry_keywords)
-  const max = config.max_videos
+  const buckets: [KeywordBucket, string[]][] = [
+    ['brand', clean(config.brand_keywords)],
+    ['competitor', clean(config.competitor_keywords)],
+    ['industry', clean(config.industry_keywords)],
+  ]
   const plan: SearchGroup[] = []
-  if (brand.length) plan.push({ label: 'brand', terms: brand, limit: max })
-  const perCompetitor = competitors.length ? Math.max(5, Math.ceil(max / competitors.length)) : 0
-  for (const c of competitors) plan.push({ label: `competitor:${c}`, terms: [c], limit: perCompetitor })
-  if (industry.length) plan.push({ label: 'industry', terms: industry, limit: max })
+  const seen = new Set<string>()
+  for (const [bucket, keywords] of buckets) {
+    for (const kw of keywords) {
+      if (seen.has(kw)) continue // a keyword listed in two buckets searches only once
+      seen.add(kw)
+      plan.push({ label: `${bucket}:${kw}`, bucket, keyword: kw, terms: [kw], limit: config.max_videos })
+    }
+  }
   return plan
+}
+
+// Provisional keyword value: reward keywords that find RELEVANT, comment-rich
+// videos, not just high raw volume (broad terms inflate volume but get gate-dropped).
+// value = gate-survival rate × eligible videos. Refined later with insights_contributed.
+function keywordValueScore(found: number, survived: number, eligible: number): number {
+  const rate = found > 0 ? survived / found : 0
+  return round2(rate * eligible)
 }
 
 export interface GatherOptions {
@@ -138,23 +157,41 @@ async function gatherPlatform(
 ): Promise<PlatformResult> {
   const errors: string[] = []
 
-  // 1. Search per group (brand / each competitor / industry) + 2. Normalise.
-  // One search group failing must not stop the others.
-  const rawVideos: RawItem[] = []
+  // Per-keyword value tracking: for each keyword accumulate the videos it found
+  // (pre-gate), then credit gate-survival + comment-eligibility below.
+  const stats = new Map<string, { bucket: KeywordBucket; found: Set<string>; survived: number; eligible: number }>()
+
+  // 1. Search once per KEYWORD + 2. Normalise. One search failing must not stop the
+  // others. Each returned video is tagged with the keyword that surfaced it; a video
+  // found by several keywords is kept once with the keywords unioned.
+  const byId = new Map<string, VideoInsert>()
   for (const group of buildSearchPlan(ctx.config)) {
+    const s = stats.get(group.keyword) ?? { bucket: group.bucket, found: new Set<string>(), survived: 0, eligible: 0 }
+    stats.set(group.keyword, s)
     const { actor, input } = adapter.videoSearch(ctx.config, group.terms, group.limit)
+    let raw: RawItem[]
     try {
-      rawVideos.push(...(await runActor(actor, input)))
+      raw = await runActor(actor, input)
     } catch (e) {
       errors.push(`search ${group.label}: ${(e as Error).message}`)
+      continue
+    }
+    const found = dedupeBy(
+      raw.map((r) => adapter.normaliseVideo(r, ctx)).filter((v): v is VideoInsert => v !== null),
+      (v) => v.video_id,
+    )
+    for (const v of found) {
+      s.found.add(v.video_id)
+      const existing = byId.get(v.video_id)
+      if (existing) {
+        if (!existing.source_keywords?.includes(group.keyword)) existing.source_keywords?.push(group.keyword)
+      } else {
+        v.source_keywords = [group.keyword]
+        byId.set(v.video_id, v)
+      }
     }
   }
-  const videos = dedupeBy(
-    rawVideos
-      .map((r) => adapter.normaliseVideo(r, ctx))
-      .filter((v): v is VideoInsert => v !== null),
-    (v) => v.video_id,
-  )
+  const videos = [...byId.values()]
 
   // 2b. Relevance gate (BEFORE the expensive comment scrape). Judge market
   // relevance from cheap metadata so off-market noise (SFX/movie "prosthetics",
@@ -170,6 +207,8 @@ async function gatherPlatform(
       .map((v) => `    - ${v.account_name}: ${verdicts.get(v.video_id)?.reason}`)
     console.log(`[${adapter.platform}] relevance gate (${method}) dropped ${dropped}/${videos.length}:\n${reasons.join('\n')}`)
   }
+  // Credit each surfacing keyword with the videos it found that survived the gate.
+  for (const v of kept) for (const kw of v.source_keywords ?? []) { const s = stats.get(kw); if (s) s.survived++ }
 
   // 2c. Attribute brand/competitor tags by CONTENT. Adapters set naive substring
   // tags during normalise; this overwrites them with the GPT-confirmed entity so
@@ -198,6 +237,7 @@ async function gatherPlatform(
   const eligible = kept.filter(
     (v) => adapter.commentThreshold == null || v.comments_count >= adapter.commentThreshold,
   )
+  for (const v of eligible) for (const kw of v.source_keywords ?? []) { const s = stats.get(kw); if (s) s.eligible++ }
   const toScrape = opts.videoLimit ? eligible.slice(0, opts.videoLimit) : eligible
 
   // 5. Per-video comment scrape + upsert. One video failing keeps the loop going.
@@ -223,6 +263,26 @@ async function gatherPlatform(
     } catch (e) {
       errors.push(`comment scrape (${v.video_id}): ${(e as Error).message}`)
     }
+  }
+
+  // Persist per-keyword performance for this run — the raw signal for keyword value
+  // scoring + add/remove suggestions (v5-Ideas). Service-role write, bypasses RLS.
+  if (!opts.dryRun && stats.size) {
+    const kpRows = [...stats.entries()].map(([keyword, s]) => ({
+      client_id: ctx.clientId,
+      run_id: ctx.runId,
+      platform: adapter.platform,
+      keyword,
+      bucket: s.bucket,
+      videos_found: s.found.size,
+      gate_survived: s.survived,
+      eligible_videos: s.eligible,
+      value_score: keywordValueScore(s.found.size, s.survived, s.eligible),
+    }))
+    const { error } = await admin
+      .from('keyword_performance')
+      .upsert(kpRows, { onConflict: 'client_id,run_id,platform,keyword' })
+    if (error) errors.push(`keyword_performance upsert: ${error.message}`)
   }
 
   return { platform: adapter.platform, videos: kept.length, comments: commentCount, errors }
