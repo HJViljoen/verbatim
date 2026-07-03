@@ -24,13 +24,17 @@ import {
 // Sending goes through lib/email.ts (Resend, optional): with no provider the
 // report is still built + stored to weekly_reports for the in-app Reports page.
 
+// Matches the site's warm green-refresh tokens (app/globals.css :root) — the
+// email must read as the same product: cream canvas, green-black ink, sage
+// muted text, warm sand borders. No cool grays next to the green.
 const GREEN = '#14503A'
-const CREAM = '#F7F3EA'
-const INK = '#292524'
-const MUTED = '#78716C'
-const BORDER = '#E7E5E4'
-const UP = '#3E9E72'
-const DOWN = '#B45309'
+const CREAM = '#F6F1E7'
+const CARD = '#FDFAF3'
+const INK = '#14291F'
+const MUTED = '#5F6B5E'
+const BORDER = '#E4DCCC'
+const UP = '#2E8B5E'
+const DOWN = '#B4472F'
 
 // The app lives on the app. subdomain — the apex is the marketing site.
 const DEFAULT_APP_URL = 'https://app.verbatimintel.com'
@@ -298,11 +302,11 @@ function escapeHtml(s: string): string {
 
 function changeChip(delta: number, unit: string): string {
   if (Math.abs(delta) < 0.05) {
-    return `<span style="display:inline-block;background:#F5F5F4;color:${MUTED};font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap">no change</span>`
+    return `<span style="display:inline-block;background:#ECE7DA;color:${MUTED};font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap">no change</span>`
   }
   const up = delta > 0
   const color = up ? UP : DOWN
-  const bg = up ? '#E8F0EB' : '#FBEEDD'
+  const bg = up ? '#E1E8DA' : '#F2DFD8'
   return `<span style="display:inline-block;background:${bg};color:${color};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;white-space:nowrap">${up ? '▲' : '▼'} ${Math.abs(delta)}${unit}</span>`
 }
 
@@ -430,7 +434,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
       ? `${d.appUrl}/dashboard/voice?themes=${encodeURIComponent(t.slug)}`
       : `${d.appUrl}/dashboard/voice`
     const badge = showNewBadges && t.firstSeen
-      ? ` <span style="display:inline-block;background:#E8F0EB;color:${GREEN};font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;vertical-align:2px">NEW</span>`
+      ? ` <span style="display:inline-block;background:#E1E8DA;color:${GREEN};font-size:10px;font-weight:700;padding:1px 7px;border-radius:9px;vertical-align:2px">NEW</span>`
       : ''
     return `
       <div style="padding:11px 0;border-bottom:1px solid ${BORDER}">
@@ -448,7 +452,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
     ${sectionTitle('The one thing to act on')}
     <div style="background:${GREEN};border-radius:12px;padding:16px 18px;margin-top:8px">
       <div style="font-size:15px;font-weight:700;color:#FFFFFF;line-height:1.4">${escapeHtml(d.rec.title)}</div>
-      ${d.rec.reasoning ? `<div style="font-size:13px;color:#D8E5DC;line-height:1.55;margin-top:6px">${escapeHtml(d.rec.reasoning)}</div>` : ''}
+      ${d.rec.reasoning ? `<div style="font-size:13px;color:#CBDCD1;line-height:1.55;margin-top:6px">${escapeHtml(d.rec.reasoning)}</div>` : ''}
       <div style="margin-top:10px">
         <a href="${d.appUrl}/dashboard/market" style="color:#FFFFFF;font-size:12px;font-weight:700;text-decoration:none">Why this, why now →</a>
       </div>
@@ -472,7 +476,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
     <span style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(subject)}</span>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px">
       <tr><td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#FFFFFF;border-radius:14px;overflow:hidden;border:1px solid ${BORDER}">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:${CARD};border-radius:14px;overflow:hidden;border:1px solid ${BORDER}">
           <tr><td style="background:${GREEN};padding:24px 28px">
             <div style="color:${CREAM};font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;opacity:.9">Verbatim · Consumer Intelligence</div>
             <div style="color:#FFFFFF;font-size:20px;font-weight:700;margin-top:8px">${escapeHtml(d.companyName)} — ${escapeHtml(lead.title.toLowerCase())}</div>
