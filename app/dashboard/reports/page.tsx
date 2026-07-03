@@ -1,9 +1,10 @@
+import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 
-// Reports — past weekly reports from weekly_reports. The weekly-email generator
-// isn't built yet (deferred post-v1), so this list is empty until reports are
-// produced; the page surfaces them once they exist.
+// Reports — "what changed, week by week" (Redesign Spec §7). The archive of
+// every periodic report, viewable in-browser: the email is the delta surface,
+// this page is its permanent record. List here, full report at reports/[id].
 
 interface WeeklyReport {
   id: string
@@ -14,13 +15,16 @@ interface WeeklyReport {
   sent_at: string | null
 }
 
+const fmtDate = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null
+
 export default async function ReportsPage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
   const { data } = await supabase.from('weekly_reports')
     .select('id, subject, week_start, week_end, sent_to, sent_at')
-    .eq('client_id', clientId).order('sent_at', { ascending: false })
+    .eq('client_id', clientId).order('week_end', { ascending: false })
 
   const reports = (data ?? []) as WeeklyReport[]
 
@@ -28,26 +32,34 @@ export default async function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Reports</h1>
-        <p className="text-sm text-muted-foreground">{reports.length} weekly reports</p>
+        <p className="text-sm text-muted-foreground italic">&ldquo;What changed, week by week?&rdquo;</p>
       </div>
 
       {reports.length === 0 ? (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-          No weekly reports yet. The weekly email report generator is deferred (post-v1) — this list fills once reports are produced.
+          Your reports will appear here after each update — the first lands with your next one.
         </CardContent></Card>
       ) : (
         <div className="space-y-3">
           {reports.map((r) => (
-            <Card key={r.id}>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">{r.subject ?? 'Weekly report'}</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{r.week_start} – {r.week_end}</span>
-                  <span>{r.sent_at ? new Date(r.sent_at).toLocaleDateString() : 'not sent'}</span>
-                </div>
-                {r.sent_to?.length ? <p className="text-xs text-muted-foreground mt-1">to {r.sent_to.join(', ')}</p> : null}
-              </CardContent>
-            </Card>
+            <Link key={r.id} href={`/dashboard/reports/${r.id}`} className="block group">
+              <Card className="transition-colors group-hover:border-primary/40">
+                <CardContent className="py-4">
+                  <div className="flex items-baseline justify-between gap-4">
+                    <span className="text-sm font-semibold group-hover:text-primary">
+                      {r.subject ?? 'Report'}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {fmtDate(r.week_end) ?? '—'}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                    <span>{fmtDate(r.week_start)} – {fmtDate(r.week_end)}</span>
+                    <span>{r.sent_at ? `emailed ${fmtDate(r.sent_at)}` : 'viewable here'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}
