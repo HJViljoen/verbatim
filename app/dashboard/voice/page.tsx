@@ -1,13 +1,15 @@
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { categoryTint, categorySolid, SENTIMENT_BADGE } from '@/lib/ui-colors'
+import { categoryTint, SENTIMENT_BADGE } from '@/lib/ui-colors'
 import { VoiceFilters } from '@/components/voice-filters'
 
-// Voice of Customer — every audience_insight (Pass A → Step A2) grouped by
-// category, each theme grounded in its verbatim comment quotes (insight_evidence).
-// Read-only server component; same auth/run-selection pattern as Market
-// Intelligence. Categories with no insights are shown explicitly so the page
-// doubles as a readout of what Pass A is actually extracting.
+// Voice of Customer — every audience_insight (Pass A → Step A2), each grounded
+// in its verbatim comment quotes (insight_evidence). Read-only server component;
+// same auth/run-selection pattern as Market Intelligence. Like Market, the page
+// is one evidence-weighted stream: signal-strength tiers, strongest first, with
+// the category as a chip on each card. Nothing is hidden — weak one-off signals
+// stay on display at the bottom so synthesized insights can be validated against
+// the full extraction.
 
 interface AudienceInsight {
   id: string
@@ -19,10 +21,20 @@ interface AudienceInsight {
   sentiment_impact: string | null
 }
 
-// All eight Pass A categories (schemas.ts INSIGHT_CATEGORIES), most actionable first.
+// All Pass A categories (schemas.ts INSIGHT_CATEGORIES), most actionable first.
+// Used for the "nothing found for" readout of what Pass A is extracting.
 const CATEGORY_ORDER = [
   'pain_point', 'question', 'feature_request', 'purchase_intent',
-  'objection', 'praise', 'misinformation', 'demographic_signal',
+  'buying_trigger', 'switching_signal', 'objection', 'praise',
+  'misinformation', 'demographic_signal',
+] as const
+
+// Signal tiers mirror the Pass A strength rubric (pass-a.ts prompt): 7–10 =
+// recurring across many comments, 4–6 = clear from a few, 1–3 = incidental.
+const TIERS = [
+  { name: 'Strong signals', hint: 'recurring across many comments', min: 7 },
+  { name: 'Clear signals', hint: 'supported by a few comments', min: 4 },
+  { name: 'Faint signals', hint: 'one-off mentions, shown in full so nothing is hidden', min: 1 },
 ] as const
 
 const prettyType = (s: string) => s.replace(/_/g, ' ')
@@ -82,19 +94,20 @@ export default async function VoiceOfCustomerPage({
     }
   }
 
-  // Group the shown insights by category.
-  const byCategory = new Map<string, AudienceInsight[]>()
-  for (const i of shown) {
-    const arr = byCategory.get(i.category)
-    if (arr) arr.push(i)
-    else byCategory.set(i.category, [i])
-  }
-  const presentExtras = [...byCategory.keys()].filter((c) => !CATEGORY_ORDER.includes(c as never))
-  // Default view lists every category (empty ones as a readout of what Pass A
-  // extracts); once any filter is active, only show categories that have matches.
-  const categories = anyFilter
-    ? [...CATEGORY_ORDER, ...presentExtras].filter((c) => (byCategory.get(c)?.length ?? 0) > 0)
-    : [...CATEGORY_ORDER, ...presentExtras]
+  // Tier the shown insights by strength (already sorted desc by the query, so
+  // order within a tier is preserved). Every insight lands in exactly one tier.
+  const tiered = TIERS.map((t, n) => {
+    const max = n === 0 ? Infinity : TIERS[n - 1].min - 1
+    return { ...t, items: shown.filter((i) => { const s = Number(i.strength_score ?? 0); return s >= t.min && s <= max }) }
+  })
+  // Anything below TIERS' floor (score 0/null) still shows — bottom tier.
+  tiered[tiered.length - 1].items.push(...shown.filter((i) => Number(i.strength_score ?? 0) < 1))
+
+  // One-line readout of what Pass A found nothing for this run (unfiltered view
+  // only) — the old empty-category sections, compressed.
+  const emptyCategories = anyFilter
+    ? []
+    : CATEGORY_ORDER.filter((c) => !insights.some((i) => i.category === c))
 
   return (
     <div className="space-y-6">
@@ -102,7 +115,7 @@ export default async function VoiceOfCustomerPage({
         <div>
           <h1 className="text-2xl font-bold">Voice of Customer</h1>
           <p className="text-sm text-muted-foreground">
-            {shown.length}{shown.length !== insights.length ? ` of ${insights.length}` : ''} audience insights · {byCategory.size} categories · run {runId.slice(0, 8)}
+            {shown.length}{shown.length !== insights.length ? ` of ${insights.length}` : ''} audience insights · strongest first · run {runId.slice(0, 8)}
           </p>
         </div>
         <VoiceFilters type={typeFilter} min={String(minScore)} deepLinked={deepLinked} />
@@ -116,57 +129,59 @@ export default async function VoiceOfCustomerPage({
         </EmptyState>
       )}
 
-      {shown.length > 0 && categories.map((cat) => {
-        const items = byCategory.get(cat) ?? []
-        return (
-          <section key={cat} className="space-y-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-              <span className={`size-2 rounded-full ${categorySolid(cat)}`} aria-hidden />
-              {prettyType(cat)} <span className="opacity-60">· {items.length}</span>
-            </h2>
-            {items.length === 0
-              ? <p className="text-xs text-muted-foreground italic">No {prettyType(cat)} insights in this run.</p>
-              : <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {items.map((i) => {
-                    const quotes = quotesByInsight.get(i.id) ?? []
-                    return (
-                      <Card key={i.id}>
-                        <CardHeader className="pb-2">
-                          <div className="flex items-start justify-between gap-3">
-                            <CardTitle className="text-sm capitalize">{i.theme.replace(/_/g, ' ')}</CardTitle>
-                            {i.strength_score != null && (
-                              <span className="text-xs text-muted-foreground shrink-0">
-                                {i.strength_score}<span className="opacity-60">/10</span>
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-2 text-[10px] mt-1">
-                            {i.emotion && <span className={`px-1.5 py-0.5 rounded-full capitalize ${categoryTint(i.emotion)}`}>{i.emotion}</span>}
-                            {i.sentiment_impact && (
-                              <span className={`px-1.5 py-0.5 rounded-full capitalize ${SENTIMENT_BADGE[i.sentiment_impact] ?? 'bg-muted text-muted-foreground'}`}>
-                                {i.sentiment_impact}
-                              </span>
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{i.description}</p>
-                          {quotes.length > 0
-                            ? <div className="border-t pt-2 space-y-1">
-                                {quotes.slice(0, 3).map((q, n) => (
-                                  <p key={n} className="text-xs text-muted-foreground italic">&ldquo;{q}&rdquo;</p>
-                                ))}
-                                {quotes.length > 3 && <p className="text-[10px] text-muted-foreground">+{quotes.length - 3} more quotes</p>}
-                              </div>
-                            : <p className="text-[10px] text-muted-foreground italic">No verbatim evidence linked.</p>}
-                        </CardContent>
-                      </Card>
-                    )
-                  })}
-                </div>}
-          </section>
-        )
-      })}
+      {tiered.filter((t) => t.items.length > 0).map((tier) => (
+        <section key={tier.name} className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {tier.name} <span className="opacity-60">· {tier.items.length}</span>
+            <span className="ml-2 normal-case font-normal tracking-normal text-xs opacity-70">{tier.hint}</span>
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {tier.items.map((i) => {
+              const quotes = quotesByInsight.get(i.id) ?? []
+              return (
+                <Card key={i.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <CardTitle className="text-sm capitalize">{i.theme.replace(/_/g, ' ')}</CardTitle>
+                      {i.strength_score != null && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {i.strength_score}<span className="opacity-60">/10</span>
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[10px] mt-1">
+                      <span className={`px-1.5 py-0.5 rounded-full capitalize ${categoryTint(i.category)}`}>{prettyType(i.category)}</span>
+                      {i.emotion && <span className={`px-1.5 py-0.5 rounded-full capitalize ${categoryTint(i.emotion)}`}>{i.emotion}</span>}
+                      {i.sentiment_impact && (
+                        <span className={`px-1.5 py-0.5 rounded-full capitalize ${SENTIMENT_BADGE[i.sentiment_impact] ?? 'bg-muted text-muted-foreground'}`}>
+                          {i.sentiment_impact}
+                        </span>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-xs text-muted-foreground">{i.description}</p>
+                    {quotes.length > 0
+                      ? <div className="border-t pt-2 space-y-1">
+                          {quotes.slice(0, 3).map((q, n) => (
+                            <p key={n} className="text-xs text-muted-foreground italic">&ldquo;{q}&rdquo;</p>
+                          ))}
+                          {quotes.length > 3 && <p className="text-[10px] text-muted-foreground">+{quotes.length - 3} more quotes</p>}
+                        </div>
+                      : <p className="text-[10px] text-muted-foreground italic">No verbatim evidence linked.</p>}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </section>
+      ))}
+
+      {emptyCategories.length > 0 && shown.length > 0 && (
+        <p className="text-xs text-muted-foreground italic">
+          Nothing found this run for: {emptyCategories.map(prettyType).join(', ')}.
+        </p>
+      )}
     </div>
   )
 }

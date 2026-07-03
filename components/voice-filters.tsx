@@ -11,6 +11,8 @@ const TYPES = [
   { value: 'question', label: 'Question' },
   { value: 'feature_request', label: 'Feature request' },
   { value: 'purchase_intent', label: 'Purchase intent' },
+  { value: 'buying_trigger', label: 'Buying trigger' },
+  { value: 'switching_signal', label: 'Switching signal' },
   { value: 'objection', label: 'Objection' },
   { value: 'praise', label: 'Praise' },
   { value: 'misinformation', label: 'Misinformation' },
