@@ -180,16 +180,26 @@ export const runPipeline = inngest.createFunction(
     //    skips) and chunks richest-first, mirroring runPassA's own ordering.
     const batches = await step.run('plan-pass-a', () => planPassABatches(clientId))
     const passA = { analyzed: 0, skipped: 0, insights: 0, languageSamples: 0, cost: 0 }
-    for (let b = 0; b < batches.length; b++) {
-      const r = await step.run(`pass-a:${b + 1}-of-${batches.length}`, async () => {
-        const s = await runPassA({ clientId, runId, videoIds: batches[b], persist: true })
-        return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd }
-      })
-      passA.analyzed += r.analyzed
-      passA.skipped += r.skipped
-      passA.insights += r.insights
-      passA.languageSamples += r.languageSamples
-      passA.cost += r.cost
+    // Batches dispatch in parallel waves — batches are disjoint video sets, so
+    // ordering is irrelevant to output; this is purely wall-time (a serial
+    // pass over a depth-100 corpus measured ~3 videos/min). Wave size stays
+    // modest for OpenAI/Inngest concurrency headroom.
+    for (let w = 0; w < batches.length; w += PASS_A_PARALLEL) {
+      const wave = await Promise.all(
+        batches.slice(w, w + PASS_A_PARALLEL).map((videoIds, j) =>
+          step.run(`pass-a:${w + j + 1}-of-${batches.length}`, async () => {
+            const s = await runPassA({ clientId, runId, videoIds, persist: true })
+            return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd }
+          }),
+        ),
+      )
+      for (const r of wave) {
+        passA.analyzed += r.analyzed
+        passA.skipped += r.skipped
+        passA.insights += r.insights
+        passA.languageSamples += r.languageSamples
+        passA.cost += r.cost
+      }
     }
 
     // 5. Cross-reference detection — client-brand mentions under competitor /
@@ -233,6 +243,11 @@ const PASS_A_BATCH = 12
  *  (~20-90s incl. actor startup — slower since comment_depth went 25→100), so
  *  3 stays inside the 300s Hobby cap even when every actor runs slow. */
 const COMMENT_BATCH = 3
+
+/** Pass A batches dispatched concurrently per wave. Step IDs are unchanged by
+ *  this (still pass-a:N-of-M over the same memoized plan), so a mid-run deploy
+ *  replays completed batches instantly and fans out only the remainder. */
+const PASS_A_PARALLEL = 5
 
 // Eligible video ids (raw comment count >= 5, richest first), chunked into
 // batches. Comments are scanned once and joined in memory — same URL-overflow
