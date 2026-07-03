@@ -117,7 +117,7 @@ export default async function DashboardPage() {
   if (!runId || !videoRunId) {
     return (
       <div className="space-y-8">
-        <HeroBand brand={brand} line={null} />
+        <HeroBand line={null} />
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Your first analysis {nextUpdate ? `lands with the ${nextUpdate.replace('next update ', '')} update` : 'is on its way'} — check back then.
@@ -275,7 +275,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <HeroBand brand={brand} line={lineParts.length ? lineParts.join(' · ') : null} />
+      <HeroBand line={lineParts.length ? lineParts.join(' · ') : null} />
 
       {/* Where you stand */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -409,10 +409,10 @@ export default async function DashboardPage() {
 }
 
 /** The deep-green welcome hero — the page's single stat-hero element. */
-function HeroBand({ brand, line }: { brand: string; line: string | null }) {
+function HeroBand({ line }: { line: string | null }) {
   return (
     <div className="stat-hero rounded-2xl px-6 py-8 sm:px-10 sm:py-12">
-      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{brand} — what your market is saying</h1>
+      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">What your market is saying</h1>
       {line && <p className="mt-3 text-sm text-[#CFE3D6]">{line}</p>}
     </div>
   )
