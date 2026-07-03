@@ -8,7 +8,7 @@ import { runPassB } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
 import { runPassD } from '@/lib/pipeline/pass-d'
 import { runCrossReference } from '@/lib/pipeline/cross-reference'
-import { persistThemes } from '@/lib/pipeline/themes'
+import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics } from '@/lib/pipeline/metrics'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '@/lib/config'
@@ -24,10 +24,11 @@ import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 // Trigger: `pipeline/run.requested` { clientId, options? }. The cron dispatcher
 // (scheduler.ts) and the "Run now" button both emit this event.
 //
-// Timeout note: gather is split per-platform so no single step scrapes all three
-// at once. Pass A is one step; on a very large corpus it could approach the
-// function time limit — if that happens, fan it out per-video batch (runPassA
-// accepts videoIds). Ossur-sized runs (with the configured caps) fit comfortably.
+// Timeout note: every stage is sized to fit the 300s Hobby cap. Gather is split
+// per-platform; Pass A is fanned out in batches of PASS_A_BATCH videos (the
+// whole corpus in one step was ~264 eligible videos ≈ 15-20 min of GPT calls —
+// found before it could sink the 2026-07-06 run); the back half is two steps
+// (themes, then synthesis) decoupled via the persisted themes table.
 
 export interface PipelineRunOptions {
   platforms?: Platform[]
@@ -100,18 +101,32 @@ export const runPipeline = inngest.createFunction(
       return { runId, status: 'failed', totalVideos: 0 }
     }
 
-    // 4. Pass A — per-video GPT analysis (sentiment/topics + audience_insights + evidence).
-    const passA = await step.run('pass-a', async () => {
-      const s = await runPassA({ clientId, runId, persist: true })
-      return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd }
-    })
+    // 4. Pass A — per-video GPT analysis, fanned out so no batch outlives the
+    //    step cap. The plan step pre-filters on RAW comment count (the spam
+    //    filter only shrinks a video's count, so raw < min are guaranteed
+    //    skips) and chunks richest-first, mirroring runPassA's own ordering.
+    const batches = await step.run('plan-pass-a', () => planPassABatches(clientId))
+    const passA = { analyzed: 0, skipped: 0, insights: 0, languageSamples: 0, cost: 0 }
+    for (let b = 0; b < batches.length; b++) {
+      const r = await step.run(`pass-a:${b + 1}-of-${batches.length}`, async () => {
+        const s = await runPassA({ clientId, runId, videoIds: batches[b], persist: true })
+        return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd }
+      })
+      passA.analyzed += r.analyzed
+      passA.skipped += r.skipped
+      passA.insights += r.insights
+      passA.languageSamples += r.languageSamples
+      passA.cost += r.cost
+    }
 
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
     const crossRef = await step.run('cross-reference', () => runCrossReference(clientId))
 
-    // 6. Back half — Step A2 → Pass B → themes → Pass C → Pass D (a+b) → run_summary.
-    const synth = await step.run('analyze-cd', () => runBackHalf(clientId, runId))
+    // 6. Back half, two steps decoupled via the themes table: Step A2 → Pass B
+    //    → persist themes, then Pass C → Pass D (a+b) → run_summary.
+    const themed = await step.run('themes', () => runThemesHalf(clientId, runId))
+    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId))
 
     // 7. Close the run.
     await step.run('close-run', async () => {
@@ -132,14 +147,70 @@ export const runPipeline = inngest.createFunction(
       })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, brandMentions: crossRef.mentionsFlagged, ...synth }
+    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, brandMentions: crossRef.mentionsFlagged, ...themed, ...synth }
   },
 )
 
-// Step A2 → Pass B → persist themes → Pass C → Pass D (a+b) → run_summary,
-// over an existing Pass A run, market-wide (all platforms). Mirrors
-// scripts/run-cd.ts with persist on.
-async function runBackHalf(clientId: string, runId: string) {
+/** Batch size for the Pass A fan-out: ~3-5s per GPT call keeps a batch around
+ *  2-3 min — comfortable inside the 300s route cap. */
+const PASS_A_BATCH = 40
+
+// Eligible video ids (raw comment count >= 5, richest first), chunked into
+// batches. Comments are scanned once and joined in memory — same URL-overflow
+// avoidance as everywhere else.
+async function planPassABatches(clientId: string): Promise<string[][]> {
+  const admin = createAdminClient()
+  const videos = await selectAll<{ id: string; platform: string; video_id: string }>(() =>
+    admin.from('videos').select('id, platform, video_id').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const counts = new Map<string, number>()
+  const comments = await selectAll<{ platform: string; video_id: string }>(() =>
+    admin.from('comments').select('platform, video_id').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  for (const c of comments) {
+    const key = `${c.platform}::${c.video_id}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const eligible = videos
+    .map((v) => ({ id: v.id, n: counts.get(`${v.platform}::${v.video_id}`) ?? 0 }))
+    .filter((v) => v.n >= 5)
+    .sort((a, b) => b.n - a.n)
+  const batches: string[][] = []
+  for (let i = 0; i < eligible.length; i += PASS_A_BATCH) {
+    batches.push(eligible.slice(i, i + PASS_A_BATCH).map((v) => v.id))
+  }
+  return batches
+}
+
+// Back half, first step: Step A2 → Pass B labels → persist themes (with
+// first_seen matching). Output lands in the themes table, which the synthesis
+// step reads back — the step boundary sits exactly on the DB persistence.
+async function runThemesHalf(clientId: string, runId: string) {
+  const admin = createAdminClient()
+  const { data: client } = await admin.from('clients')
+    .select('company_name').eq('id', clientId).maybeSingle()
+
+  const a2 = await runStepA2({
+    clientId, runId, method: 'embedding',
+    threshold: CLUSTER_SIMILARITY_THRESHOLD, evidenceFloor: EVIDENCE_FLOOR,
+  })
+  // Pass B labels BOTH tiers (early signals surface on the pages too), then the
+  // labelled set is persisted with first_seen from mini theme-matching.
+  const allThemes = [...a2.themes, ...a2.earlySignals]
+  const b = await runPassB({ clientId, runId, themes: allThemes, brandName: client?.company_name ?? undefined, persist: true })
+  const persisted = await persistThemes(clientId, runId, allThemes)
+
+  return {
+    themes: a2.themes.length,
+    earlySignals: a2.earlySignals.length,
+    newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
+    labelCost: b.costUsd,
+  }
+}
+
+// Back half, second step: metrics → Pass C → Pass D (a+b) → run_summary, over
+// the themes persisted by runThemesHalf. Mirrors scripts/run-cd.ts.
+async function runSynthesisHalf(clientId: string, runId: string) {
   const admin = createAdminClient()
 
   const videos = await selectAll<VideoRow>(() =>
@@ -165,22 +236,15 @@ async function runBackHalf(clientId: string, runId: string) {
     .select('company_name').eq('id', clientId).maybeSingle()
   const brandName = client?.company_name ?? undefined
 
-  const a2 = await runStepA2({
-    clientId, runId, method: 'embedding',
-    threshold: CLUSTER_SIMILARITY_THRESHOLD, evidenceFloor: EVIDENCE_FLOOR,
-  })
-  // Pass B labels BOTH tiers (early signals surface on the pages too), then the
-  // labelled set is persisted with first_seen from mini theme-matching.
-  const allThemes = [...a2.themes, ...a2.earlySignals]
-  const b = await runPassB({ clientId, runId, themes: allThemes, brandName, persist: true })
-  const persisted = await persistThemes(clientId, runId, allThemes)
+  // Floor-passing themes only — early signals surface on pages, not in C/D.
+  const themes = (await loadThemes(clientId, runId)).filter((t) => !t.singleSource)
 
   const c = await runPassC({
-    clientId, runId, themes: a2.themes,
+    clientId, runId, themes,
     trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice, persist: true,
   })
   const d = await runPassD({
-    clientId, runId, themes: a2.themes,
+    clientId, runId, themes,
     competitiveInsights: c.competitiveInsights, brandName, sov: metrics.share_of_voice, persist: true,
   })
 
@@ -190,12 +254,9 @@ async function runBackHalf(clientId: string, runId: string) {
   })
 
   return {
-    themes: a2.themes.length,
-    earlySignals: a2.earlySignals.length,
-    newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
     competitiveInsights: c.inserted,
     marketInsights: d.marketInsights.length,
     recommendations: d.recommendations.length,
-    synthesisCost: b.costUsd + c.costUsd + d.costUsd,
+    synthesisCost: c.costUsd + d.costUsd,
   }
 }

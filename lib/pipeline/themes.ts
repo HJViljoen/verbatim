@@ -19,6 +19,42 @@ export interface PersistThemesResult {
   hadPreviousRun: boolean
 }
 
+/** Read a run's persisted themes back into the in-memory shape Pass C/D
+ *  consume. Lets the synthesis half run in its own Inngest step, decoupled
+ *  from Step A2/Pass B via the DB. sampleDescriptions aren't persisted (they
+ *  only feed Pass B, which has already run by the time rows exist). */
+export async function loadThemes(clientId: string, runId: string): Promise<AggregatedTheme[]> {
+  const admin = createAdminClient()
+  const rows = await selectAll<{
+    label: string; description: string | null; bucket: string; category: string
+    member_themes: string[]; supporting_insight_ids: string[]; supporting_video_ids: string[]
+    evidence_count: number; strength_score: number | null
+    dominant_emotion: string | null; dominant_sentiment_impact: string | null; single_source: boolean
+  }>(() =>
+    admin
+      .from('themes')
+      .select('label, description, bucket, category, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, dominant_emotion, dominant_sentiment_impact, single_source')
+      .eq('client_id', clientId).eq('run_id', runId)
+      .order('strength_score', { ascending: false }).order('id', { ascending: true }),
+  )
+  return rows.map((r) => ({
+    bucket: r.bucket,
+    category: r.category,
+    theme: r.member_themes[0] ?? r.label,
+    memberThemes: r.member_themes,
+    supportingVideoIds: r.supporting_video_ids,
+    supportingInsightIds: r.supporting_insight_ids,
+    evidenceCount: r.evidence_count,
+    strengthScore: r.strength_score ?? 0,
+    dominantEmotion: r.dominant_emotion ?? 'neutral',
+    dominantSentimentImpact: r.dominant_sentiment_impact ?? 'neutral',
+    singleSource: r.single_source,
+    sampleDescriptions: [],
+    label: r.label,
+    description: r.description ?? undefined,
+  }))
+}
+
 /** Text embedded for cross-run matching — the client-facing identity of the theme. */
 function matchText(t: AggregatedTheme): string {
   return `${t.label ?? t.theme}. ${t.description ?? ''}`.trim()
