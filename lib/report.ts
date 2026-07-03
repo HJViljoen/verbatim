@@ -32,7 +32,8 @@ const BORDER = '#E7E5E4'
 const UP = '#3E9E72'
 const DOWN = '#B45309'
 
-const DEFAULT_APP_URL = 'https://verbatimintel.com'
+// The app lives on the app. subdomain — the apex is the marketing site.
+const DEFAULT_APP_URL = 'https://app.verbatimintel.com'
 const PRIORITY_RANK: Record<string, number> = { high: 3, medium: 2, low: 1 }
 
 interface ThemeItem {
