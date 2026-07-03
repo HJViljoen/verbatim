@@ -355,7 +355,53 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
 
   if (insightsForB.length === 0 && ciIndex.size === 0) return result
 
-  const systemPromptB = buildSystemPromptB(opts.brandName)
+  const db = await runDbCall({
+    admin, clientId, runId, brandName: opts.brandName, sov,
+    insightsForB, miById, ciIndex, persist,
+    initialRejectedRefs: rejectedRefs,
+  })
+  result.recommendations = db.recommendations
+  result.promptTokens += db.promptTokens
+  result.completionTokens += db.completionTokens
+  result.costUsd += db.costUsd
+  result.rejectedRefs = db.rejectedRefs
+  return result
+}
+
+// ---- D-b call proper — shared by runPassD and rerunPassDb --------------------
+
+interface RunDbCallArgs {
+  admin: ReturnType<typeof createAdminClient>
+  clientId: string
+  runId: string
+  brandName?: string
+  sov?: Record<string, SovEntry>
+  insightsForB: MarketInsightForB[]
+  /** market_insights UUIDs in M# order (M1 → index 0). */
+  miById: string[]
+  ciIndex: Map<string, PersistedCompetitiveInsight>
+  persist: boolean
+  /** Rerun path: clear the run's existing recommendations before inserting
+   * (runPassD already cleared them alongside market_insights). */
+  replaceExisting?: boolean
+  /** Carried over from D-a's reference resolution so the D-b log stays cumulative. */
+  initialRejectedRefs?: number
+}
+
+interface RunDbCallResult {
+  recommendations: RunPassDResult['recommendations']
+  rejectedRefs: number
+  promptTokens: number
+  completionTokens: number
+  costUsd: number
+}
+
+async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
+  const { admin, clientId, runId, sov, insightsForB, miById, ciIndex, persist } = args
+  let rejectedRefs = args.initialRejectedRefs ?? 0
+  const out: RunDbCallResult = { recommendations: [], rejectedRefs, promptTokens: 0, completionTokens: 0, costUsd: 0 }
+
+  const systemPromptB = buildSystemPromptB(args.brandName)
   const userPromptB = buildUserPromptB(insightsForB, ciIndex, sov)
 
   let b: ParsedCall<PassDbOutput>
@@ -368,16 +414,15 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     }
     throw new Error(`Pass D-b call failed: ${error}`)
   }
-  result.promptTokens += b.usage.prompt_tokens
-  result.completionTokens += b.usage.completion_tokens
-  result.costUsd += estimateCost(SYNTHESIS_MODEL, b.usage.prompt_tokens, b.usage.completion_tokens)
+  out.promptTokens = b.usage.prompt_tokens
+  out.completionTokens = b.usage.completion_tokens
+  out.costUsd = estimateCost(SYNTHESIS_MODEL, b.usage.prompt_tokens, b.usage.completion_tokens)
 
   if (!b.parsed) {
     if (persist) {
       await logAiCall(admin, { clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB, response: { refusal: true }, error: 'no parsed output', usage: b.usage, durationMs: b.durationMs, validationStatus: 'parse_error' })
     }
-    result.rejectedRefs = rejectedRefs
-    return result
+    return out
   }
 
   // Recommendations: based_on references M# (D-a's output) and/or C#.
@@ -409,13 +454,18 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   })
 
   if (persist) {
+    // Replace only after a successful parse — a failed call leaves the old rows.
+    if (args.replaceExisting) {
+      const { error } = await admin.from('recommendations').delete().eq('client_id', clientId).eq('run_id', runId)
+      if (error) throw new Error(`clear recommendations: ${error.message}`)
+    }
     if (recRows.length) {
       const { data: insertedRec, error } = await admin
         .from('recommendations')
         .insert(recRows)
         .select('id, type, title, priority')
       if (error) throw new Error(`persist recommendations: ${error.message}`)
-      result.recommendations = (insertedRec ?? []) as typeof result.recommendations
+      out.recommendations = (insertedRec ?? []) as RunDbCallResult['recommendations']
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB,
@@ -424,9 +474,64 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
   } else {
-    result.recommendations = recRows.map((r) => ({ id: '(unsaved)', type: r.type, title: r.title, priority: r.priority }))
+    out.recommendations = recRows.map((r) => ({ id: '(unsaved)', type: r.type, title: r.title, priority: r.priority }))
   }
 
-  result.rejectedRefs = rejectedRefs
-  return result
+  out.rejectedRefs = rejectedRefs
+  return out
+}
+
+/**
+ * Re-run ONLY D-b for a run whose market/competitive insights are already
+ * persisted: regenerate the recommendations in place without re-rolling the
+ * rest of the synthesis. The operator tool for recommendation prompt
+ * iteration (first use: purging embedded verbatim quotes, pass_d_b_v2).
+ */
+export async function rerunPassDb(opts: { clientId: string; runId: string; persist?: boolean }): Promise<RunDbCallResult> {
+  const { clientId, runId } = opts
+  const persist = opts.persist ?? true
+  const admin = createAdminClient()
+
+  const [clientRes, miRes, ciRes, rsRes] = await Promise.all([
+    admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    admin.from('market_insights').select('id, title, description, evidence')
+      .eq('client_id', clientId).eq('run_id', runId)
+      .order('opportunity_score', { ascending: false }),
+    admin.from('competitive_insights').select('id, category, competitor_name, title, finding, impact_level')
+      .eq('client_id', clientId).eq('run_id', runId)
+      .order('id', { ascending: true }),
+    admin.from('run_summary').select('share_of_voice')
+      .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
+  ])
+  if (miRes.error) throw new Error(`load market_insights: ${miRes.error.message}`)
+  if (ciRes.error) throw new Error(`load competitive_insights: ${ciRes.error.message}`)
+
+  const mi = (miRes.data ?? []) as { id: string; title: string; description: string; evidence: { supporting_theme_ids?: string[] } | null }[]
+  const competitive = (ciRes.data ?? []) as PersistedCompetitiveInsight[]
+  const sov = (rsRes.data?.share_of_voice ?? undefined) as Record<string, SovEntry> | undefined
+
+  const insightsForB: MarketInsightForB[] = []
+  const miById: string[] = []
+  for (let i = 0; i < mi.length; i++) {
+    const row = mi[i]
+    miById.push(row.id)
+    insightsForB.push({
+      index: `M${i + 1}`,
+      title: row.title,
+      description: row.description,
+      quotes: await retrieveQuotes(admin, row.evidence?.supporting_theme_ids ?? [], QUOTES_PER_INSIGHT),
+    })
+  }
+  const ciIndex = new Map<string, PersistedCompetitiveInsight>()
+  competitive.forEach((ci, i) => ciIndex.set(`c${i + 1}`, ci))
+
+  if (insightsForB.length === 0 && ciIndex.size === 0) {
+    return { recommendations: [], rejectedRefs: 0, promptTokens: 0, completionTokens: 0, costUsd: 0 }
+  }
+
+  return runDbCall({
+    admin, clientId, runId,
+    brandName: clientRes.data?.company_name ?? undefined, sov,
+    insightsForB, miById, ciIndex, persist, replaceExisting: true,
+  })
 }
