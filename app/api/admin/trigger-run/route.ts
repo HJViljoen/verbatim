@@ -23,12 +23,16 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const body = (await req.json().catch(() => null)) as { clientId?: unknown } | null
+  const body = (await req.json().catch(() => null)) as { clientId?: unknown; options?: unknown } | null
   const clientId = body?.clientId
   if (typeof clientId !== 'string' || !clientId) {
     return Response.json({ error: 'clientId required' }, { status: 400 })
   }
+  // PipelineRunOptions passthrough (e.g. { skipGather, runId } for an
+  // analysis-only resume). The caller holds the service-role key, so no
+  // per-field validation beyond shape.
+  const options = body?.options && typeof body.options === 'object' ? body.options : undefined
 
-  const res = await inngest.send({ name: 'pipeline/run.requested', data: { clientId } })
+  const res = await inngest.send({ name: 'pipeline/run.requested', data: { clientId, options } })
   return Response.json({ ok: true, ids: res.ids })
 }

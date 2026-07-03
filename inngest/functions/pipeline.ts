@@ -39,6 +39,12 @@ export interface PipelineRunOptions {
   // When set, emit a `report/send.requested` after the run completes so the
   // periodic report goes out. The scheduler sets this; manual "Run now" doesn't.
   sendReport?: boolean
+  // Analysis-only resume: reuse an existing run row (reset to 'running') and
+  // skip the gather fan-out entirely — the corpus is already in the DB. The
+  // operator lever for finishing a run whose analysis half died, without
+  // re-paying a 1-2h Apify gather.
+  runId?: string
+  skipGather?: boolean
 }
 
 export const runPipeline = inngest.createFunction(
@@ -69,8 +75,17 @@ export const runPipeline = inngest.createFunction(
     const options = ((event.data as { options?: PipelineRunOptions }).options) ?? {}
 
     // 1. Open the run row (the orchestrator owns the lifecycle the CLI used to).
+    //    An analysis-only resume reuses the existing row instead.
     const runId = await step.run('open-run', async () => {
       const admin = createAdminClient()
+      if (options.runId) {
+        const { error } = await admin
+          .from('pipeline_runs')
+          .update({ status: 'running', error_message: null, completed_at: null })
+          .eq('id', options.runId).eq('client_id', clientId)
+        if (error) throw new Error(`reopen run: ${error.message}`)
+        return options.runId
+      }
       const id = randomUUID()
       const { error } = await admin
         .from('pipeline_runs')
@@ -79,10 +94,13 @@ export const runPipeline = inngest.createFunction(
       return id
     })
 
-    // 2. Plan the gather fan-out: one task per platform × keyword.
-    const plan = await step.run('plan-gather', () =>
-      planGatherSearches(clientId, options.platforms?.length ? options.platforms : undefined),
-    )
+    // 2. Plan the gather fan-out: one task per platform × keyword. An
+    //    analysis-only resume skips gather — the corpus is already in the DB.
+    const plan = options.skipGather
+      ? []
+      : await step.run('plan-gather', () =>
+          planGatherSearches(clientId, options.platforms?.length ? options.platforms : undefined),
+        )
     const gatherPlatforms = [...new Set(plan.map((t) => t.platform))]
 
     // 3. Gather, fanned out: per-keyword search steps → one gate step per
@@ -131,6 +149,17 @@ export const runPipeline = inngest.createFunction(
       } catch {
         totalErrors++
       }
+    }
+
+    // Analysis-only resume: the corpus check runs against what's already in the DB.
+    if (options.skipGather) {
+      totalVideos = await step.run('count-corpus', async () => {
+        const admin = createAdminClient()
+        const { count } = await admin
+          .from('videos').select('id', { head: true, count: 'exact' })
+          .eq('client_id', clientId)
+        return count ?? 0
+      })
     }
 
     // No corpus → close as failed, stop (nothing for the analysis passes to chew on).
@@ -195,14 +224,15 @@ export const runPipeline = inngest.createFunction(
   },
 )
 
-/** Batch size for the Pass A fan-out: ~3-5s per GPT call keeps a batch around
- *  2-3 min — comfortable inside the route's duration cap. */
-const PASS_A_BATCH = 40
+/** Batch size for the Pass A fan-out. Sized from the 2026-07-03 live failure:
+ *  at comment_depth 100 a call runs ~10-20s (batches of 40 timed out at ~15-29
+ *  calls, three attempts straight), so 12 ≈ 2-4 min under the 300s cap. */
+const PASS_A_BATCH = 12
 
 /** Videos per comment-scrape step. Each video is its own Apify actor run
- *  (~20-60s incl. actor startup), so 4 stays inside the 300s Hobby cap even
- *  when every actor runs slow. More steps, same total wall time. */
-const COMMENT_BATCH = 4
+ *  (~20-90s incl. actor startup — slower since comment_depth went 25→100), so
+ *  3 stays inside the 300s Hobby cap even when every actor runs slow. */
+const COMMENT_BATCH = 3
 
 // Eligible video ids (raw comment count >= 5, richest first), chunked into
 // batches. Comments are scanned once and joined in memory — same URL-overflow
