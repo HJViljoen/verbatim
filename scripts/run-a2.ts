@@ -47,11 +47,11 @@ async function debugMatrix(clientId: string, runId: string, threshold: number) {
   console.log(`\nSimilarity matrix — threshold ${threshold} (pairs >= it merge)\n`)
   for (const g of groups) {
     if (g.insights.length < 2) {
-      console.log(`[${g.bucket} / ${g.category}] 1 insight: ${g.insights[0].theme} — (singleton)`)
+      console.log(`[${g.bucket}] 1 insight: ${g.insights[0].theme} — (singleton)`)
       continue
     }
-    console.log(`[${g.bucket} / ${g.category}] ${g.insights.length} insights:`)
-    g.insights.forEach((ins, i) => console.log(`  ${i + 1}. ${ins.theme}`))
+    console.log(`[${g.bucket}] ${g.insights.length} insights:`)
+    g.insights.forEach((ins, i) => console.log(`  ${i + 1}. ${ins.theme} (${ins.category})`))
     const m = await similarityMatrix(g.insights)
     for (let i = 0; i < g.insights.length; i++) {
       for (let j = i + 1; j < g.insights.length; j++) {
@@ -93,8 +93,8 @@ async function main() {
     if (t.memberThemes.length > 1) console.log(`    merged: ${members}`)
   }
 
-  console.log(`\n=== DROPPED BELOW FLOOR — ${result.droppedBelowFloor.length} ===`)
-  for (const t of result.droppedBelowFloor) {
+  console.log(`\n=== EARLY SIGNALS (below floor, kept + badged) — ${result.earlySignals.length} ===`)
+  for (const t of result.earlySignals) {
     console.log(`[${t.bucket} / ${t.category}] ${t.theme}  ·  ${t.evidenceCount} video(s) · strength ${t.strengthScore}`)
   }
 
@@ -102,7 +102,7 @@ async function main() {
   console.log(`insights in:       ${result.totalInsights}`)
   console.log(`clusters formed:   ${result.totalClusters}`)
   console.log(`survived floor:    ${result.themes.length}`)
-  console.log(`dropped:           ${result.droppedBelowFloor.length}`)
+  console.log(`early signals:     ${result.earlySignals.length}`)
 }
 
 main().catch((e) => {

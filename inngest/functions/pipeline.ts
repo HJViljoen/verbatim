@@ -4,8 +4,12 @@ import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { runGather } from '@/lib/gather/gather'
 import { runPassA } from '@/lib/pipeline/pass-a'
 import { runStepA2 } from '@/lib/pipeline/step-a2'
+import { runPassB } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
 import { runPassD } from '@/lib/pipeline/pass-d'
+import { runCrossReference } from '@/lib/pipeline/cross-reference'
+import { persistThemes } from '@/lib/pipeline/themes'
+import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics } from '@/lib/pipeline/metrics'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
@@ -99,13 +103,17 @@ export const runPipeline = inngest.createFunction(
     // 4. Pass A — per-video GPT analysis (sentiment/topics + audience_insights + evidence).
     const passA = await step.run('pass-a', async () => {
       const s = await runPassA({ clientId, runId, persist: true })
-      return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, cost: s.costUsd }
+      return { analyzed: s.videosAnalyzed, skipped: s.videosSkipped, insights: s.insightsKept, languageSamples: s.languageSamples, cost: s.costUsd }
     })
 
-    // 5. Back half — Step A2 → Pass C → Pass D (market + competitive synthesis).
+    // 5. Cross-reference detection — client-brand mentions under competitor /
+    //    industry videos (deterministic regex, no GPT).
+    const crossRef = await step.run('cross-reference', () => runCrossReference(clientId))
+
+    // 6. Back half — Step A2 → Pass B → themes → Pass C → Pass D (a+b) → run_summary.
     const synth = await step.run('analyze-cd', () => runBackHalf(clientId, runId))
 
-    // 6. Close the run.
+    // 7. Close the run.
     await step.run('close-run', async () => {
       const admin = createAdminClient()
       await admin.from('pipeline_runs').update({
@@ -115,7 +123,7 @@ export const runPipeline = inngest.createFunction(
       }).eq('id', runId)
     })
 
-    // 7. Periodic report — only when requested (the scheduler sets this), so a
+    // 8. Periodic report — only when requested (the scheduler sets this), so a
     //    manual "Run now" refreshes data without emailing the client.
     if (options.sendReport) {
       await step.sendEvent('request-report', {
@@ -124,12 +132,13 @@ export const runPipeline = inngest.createFunction(
       })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, ...synth }
+    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, brandMentions: crossRef.mentionsFlagged, ...synth }
   },
 )
 
-// Step A2 → Pass C → Pass D over an existing Pass A run, market-wide (all
-// platforms). Mirrors scripts/run-cd.ts with persist on.
+// Step A2 → Pass B → persist themes → Pass C → Pass D (a+b) → run_summary,
+// over an existing Pass A run, market-wide (all platforms). Mirrors
+// scripts/run-cd.ts with persist on.
 async function runBackHalf(clientId: string, runId: string) {
   const admin = createAdminClient()
 
@@ -150,7 +159,7 @@ async function runBackHalf(clientId: string, runId: string) {
   const metrics = computeMetrics(videos, comments)
 
   const { data: tc } = await admin.from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period')
     .eq('client_id', clientId).maybeSingle()
   const { data: client } = await admin.from('clients')
     .select('company_name').eq('id', clientId).maybeSingle()
@@ -160,6 +169,12 @@ async function runBackHalf(clientId: string, runId: string) {
     clientId, runId, method: 'embedding',
     threshold: CLUSTER_SIMILARITY_THRESHOLD, evidenceFloor: EVIDENCE_FLOOR,
   })
+  // Pass B labels BOTH tiers (early signals surface on the pages too), then the
+  // labelled set is persisted with first_seen from mini theme-matching.
+  const allThemes = [...a2.themes, ...a2.earlySignals]
+  const b = await runPassB({ clientId, runId, themes: allThemes, brandName, persist: true })
+  const persisted = await persistThemes(clientId, runId, allThemes)
+
   const c = await runPassC({
     clientId, runId, themes: a2.themes,
     trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice, persist: true,
@@ -169,11 +184,18 @@ async function runBackHalf(clientId: string, runId: string) {
     competitiveInsights: c.competitiveInsights, brandName, sov: metrics.share_of_voice, persist: true,
   })
 
+  await writeRunSummary({
+    clientId, runId, metrics, videos,
+    ciSummary: d.ciSummary, period: tc?.report_period ?? null,
+  })
+
   return {
     themes: a2.themes.length,
+    earlySignals: a2.earlySignals.length,
+    newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
     competitiveInsights: c.inserted,
     marketInsights: d.marketInsights.length,
     recommendations: d.recommendations.length,
-    synthesisCost: c.costUsd + d.costUsd,
+    synthesisCost: b.costUsd + c.costUsd + d.costUsd,
   }
 }

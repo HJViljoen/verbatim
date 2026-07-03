@@ -2,11 +2,29 @@
 // are a one-line change — see Analysis-Passes invariants 8–9 and Step A2.
 
 /**
- * OpenAI model for all analysis passes. v4.1 chose gpt-4.1-mini (2026-04);
- * invariant 9 says re-evaluate the cheap-model landscape at build time before
- * the first Pass A run. Swapping is a one-line change here.
+ * OpenAI model for Pass A (per-video extraction — the bulk of call volume).
+ * v4.1 chose gpt-4.1-mini (2026-04); still current (no shutdown announced as
+ * of 2026-07-03, though the 4.1 family is sunsetting — nano dies 2026-10-23).
+ * Extraction doesn't need a reasoning model, and the verbatim-quote validation
+ * catches hallucination; re-evaluate alongside the next prompt change.
  */
 export const ANALYSIS_MODEL = 'gpt-4.1-mini'
+
+/**
+ * OpenAI model for the synthesis passes (B labels, C competitive, D-a insights
+ * + CI summary, D-b recommendations) — 4 calls/run that ARE the product the
+ * client reads. Upgraded 2026-07-03 from gpt-4.1-mini to gpt-5.4 (reasoning
+ * model) to attack the generic-recommendations problem; adds well under $1/run.
+ * Downgrade path if quality doesn't earn the cost: 'gpt-5.4-mini'.
+ */
+export const SYNTHESIS_MODEL = 'gpt-5.4'
+
+/**
+ * Reasoning effort for SYNTHESIS_MODEL calls (gpt-5.x rejects `temperature`;
+ * this replaces it). 'medium' = quality-first for the strategic output; drop to
+ * 'low' if cost/latency ever matters more than depth.
+ */
+export const SYNTHESIS_REASONING_EFFORT = 'medium' as const
 
 /**
  * Minimum distinct source videos for a theme to survive Step A2 aggregation.
@@ -37,6 +55,16 @@ export const EMBEDDING_MODEL = 'text-embedding-3-small'
 export const CLUSTER_SIMILARITY_THRESHOLD = 0.62
 
 /**
+ * Cosine threshold for mini theme-matching (Redesign Spec §8): a latest-run
+ * theme whose label+description embedding matches any previous-run theme at or
+ * above this is the SAME theme (first_seen = false); below it, it's new ("New"
+ * badge + email delta). Deliberately looser than the intra-run merge threshold —
+ * Pass B rephrases labels run to run. PROVISIONAL until tuned on the first real
+ * consecutive-run pair.
+ */
+export const THEME_MATCH_THRESHOLD = 0.7
+
+/**
  * USD per 1M tokens, per model. APPROXIMATE — verify against OpenAI's current
  * pricing page and your usage dashboard; used only to estimate ai_call_log.cost_usd
  * and the live burn log. Actual billing is the source of truth.
@@ -45,6 +73,11 @@ export const MODEL_PRICING: Record<string, { inputPer1M: number; outputPer1M: nu
   'gpt-4.1-mini': { inputPer1M: 0.4, outputPer1M: 1.6 },
   'gpt-4.1-nano': { inputPer1M: 0.1, outputPer1M: 0.4 },
   'gpt-4.1': { inputPer1M: 2.0, outputPer1M: 8.0 },
+  // gpt-5.4 family (verified against the OpenAI pricing page 2026-07-03).
+  // Reasoning tokens bill as output tokens.
+  'gpt-5.4': { inputPer1M: 2.5, outputPer1M: 15.0 },
+  'gpt-5.4-mini': { inputPer1M: 0.75, outputPer1M: 4.5 },
+  'gpt-5.4-nano': { inputPer1M: 0.2, outputPer1M: 1.25 },
   'text-embedding-3-small': { inputPer1M: 0.02, outputPer1M: 0 },
 }
 

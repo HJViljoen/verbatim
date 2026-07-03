@@ -27,6 +27,12 @@ export const VIDEO_SENTIMENTS = ['positive', 'negative', 'neutral', 'mixed'] as 
 export const INSIGHT_CATEGORIES = [
   'pain_point', 'question', 'purchase_intent', 'feature_request', 'praise',
   'objection', 'misinformation', 'demographic_signal',
+  // v5 pull-forwards (Redesign Spec 2026-07-03 §8, Pass A v3):
+  'switching_signal', 'buying_trigger',
+] as const
+
+export const JOURNEY_STAGES = [
+  'awareness', 'consideration', 'purchase', 'ownership', 'advocacy',
 ] as const
 
 export const EMOTIONS = [
@@ -49,6 +55,15 @@ const insightSchema = z.object({
   strength_score: z.number().int(),
   emotion: z.enum(EMOTIONS),
   sentiment_impact: z.enum(SENTIMENT_IMPACTS),
+  // null when the comments don't reveal where the audience sits in the journey.
+  journey_stage: z.enum(JOURNEY_STAGES).nullable(),
+})
+
+// Verbatim customer phrasing worth reusing in marketing copy — validated
+// post-parse against the referenced comment exactly like insight evidence.
+const languageSampleSchema = z.object({
+  phrase: z.string(),
+  comment_id: z.string(),
 })
 
 const classificationSchema = z.object({
@@ -65,11 +80,13 @@ const classificationSchema = z.object({
 export const PassAVideoSchema = z.object({
   classification: classificationSchema,
   insights: z.array(insightSchema),
+  language_samples: z.array(languageSampleSchema),
 })
 
 export type PassAVideoOutput = z.infer<typeof PassAVideoSchema>
 export type PassAClassification = z.infer<typeof classificationSchema>
 export type PassAInsight = z.infer<typeof insightSchema>
+export type PassALanguageSample = z.infer<typeof languageSampleSchema>
 
 // --- Pass C / Pass D (Architecture/Analysis-Passes §Pass C, §Pass D) ----------
 // DB-enforced enums are only impact_level / priority and the 1–10 score ranges;
@@ -127,10 +144,44 @@ const recommendationSchema = z.object({
   priority: z.enum(PRIORITIES),
 })
 
-export const PassDSchema = z.object({
+// The "someone already read everything for you" block leading Market
+// Intelligence (Spec §3). Item counts (top 3) are prompt-enforced — strict
+// structured outputs don't support maxItems.
+const ciSummarySchema = z.object({
+  top_unmet_needs: z.array(z.string()),
+  top_buying_triggers: z.array(z.string()),
+  top_differentiators: z.array(z.string()),
+  emotional_snapshot: z.string(),
+  threats: z.array(z.string()),
+})
+
+/** Pass D-a — market insights + consumer-intelligence summary. */
+export const PassDaSchema = z.object({
   market_insights: z.array(marketInsightSchema),
+  consumer_intelligence_summary: ciSummarySchema,
+})
+export type PassDaOutput = z.infer<typeof PassDaSchema>
+export type CiSummary = z.infer<typeof ciSummarySchema>
+
+/** Pass D-b — recommendations, grounded via retrieved verbatim evidence. */
+export const PassDbSchema = z.object({
   recommendations: z.array(recommendationSchema),
 })
-export type PassDOutput = z.infer<typeof PassDSchema>
+export type PassDbOutput = z.infer<typeof PassDbSchema>
 export type MarketInsightOut = z.infer<typeof marketInsightSchema>
 export type RecommendationOut = z.infer<typeof recommendationSchema>
+
+// --- Pass B (Redesign Spec §8) — canonical theme labels ----------------------
+// One call over Step A2's clustered themes: each T# gets a clean, human,
+// client-facing label + one-sentence description. Labels become page headlines.
+
+const themeLabelSchema = z.object({
+  // The T# index of the theme being labelled — must exist in the input.
+  index: z.string(),
+  label: z.string(),
+  description: z.string(),
+})
+
+export const PassBSchema = z.object({ theme_labels: z.array(themeLabelSchema) })
+export type PassBOutput = z.infer<typeof PassBSchema>
+export type ThemeLabelOut = z.infer<typeof themeLabelSchema>

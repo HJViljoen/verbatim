@@ -16,7 +16,7 @@ import type { VideoRow, CommentRow } from './types'
 // Budget note: $2.40 OpenAI ceiling — iterate with `dryRun` (free) and small
 // `limit`/`videoIds` samples; only run the full corpus once the prompt is dialed.
 
-const PROMPT_VERSION = 'pass_a_v2'
+const PROMPT_VERSION = 'pass_a_v3'
 const DEFAULT_MIN_COMMENTS = 5
 
 export interface RunPassAOptions {
@@ -62,6 +62,7 @@ export interface RunPassASummary {
   insightsKept: number
   insightsDropped: number
   evidenceDropped: number
+  languageSamples: number
   promptTokens: number
   completionTokens: number
   costUsd: number
@@ -109,9 +110,21 @@ function buildSystemPrompt(tc: TrackingConfig): string {
     '- objection: a concern, criticism, or reason not to buy.',
     '- misinformation: a false or misleading claim worth flagging.',
     '- demographic_signal: who the audience is — age, condition, use-case, or location revealed in the comments.',
+    '- switching_signal: someone weighing, comparing, or moving between brands/providers — "I switched from X", "is Y better than Z", dissatisfaction paired with an alternative.',
+    '- buying_trigger: the concrete event or circumstance that pushes someone toward a purchase — something broke, a life change, a recommendation, insurance approval. The WHY-NOW, distinct from purchase_intent (the wanting itself).',
+    '',
+    'For each insight also set journey_stage — where these commenters sit in the customer journey:',
+    '- awareness: discovering the category/product exists.',
+    '- consideration: actively researching, comparing, asking pre-purchase questions.',
+    '- purchase: at the point of buying — price, availability, where-to-get.',
+    '- ownership: already using the product; experiences, problems, praise from use.',
+    '- advocacy: recommending or defending a brand to others.',
+    'Use null when the comments do not reveal a stage. Do not guess.',
+    '',
+    'Also return language_samples: verbatim customer phrasings from the comments worth reusing in marketing copy — vivid, specific ways real people describe the problem, the product, or the result (e.g. how they phrase the pain, the moment it mattered, what they call things). Short phrases or one sentence, quoted VERBATIM, at most 3 per video and only if genuinely quotable. Generic reactions ("love this", "so cool") are not language samples. Return an empty array when nothing qualifies.',
     '',
     'Rules:',
-    '- Quote every piece of evidence VERBATIM from a comment. Never paraphrase.',
+    '- Quote every piece of evidence AND every language sample VERBATIM from a comment. Never paraphrase.',
     '- For each quote, set comment_id to the bracket label of the source comment (e.g. "c3"), exactly as shown in the input. Use ONLY labels present in the input.',
     '- If a claim cannot be supported by a verbatim quote, do not make it.',
     '- Only extract insights with genuine consumer-intelligence value. IGNORE generic emotional reactions (sympathy, prayers, "so beautiful"), jokes, off-topic chatter, and subject-identity corrections. If the comments contain no such signal, return an empty "insights" array — do NOT manufacture insights.',
@@ -169,11 +182,14 @@ interface ValidationResult {
   kept: ValidatedInsight[]
   insightsDropped: number
   evidenceDropped: number
+  samples: { realId: string; phrase: string }[]
+  samplesDropped: number
 }
 
 /** Map evidence refs -> real comment ids, drop unknown refs and quotes that
  *  don't appear (normalisation-tolerant) in the referenced comment. Drop any
- *  insight left with no valid evidence (invariant 3). */
+ *  insight left with no valid evidence (invariant 3). Language samples get the
+ *  same verbatim check — a sample that isn't really in its comment is dropped. */
 function validateInsights(parsed: PassAVideoOutput, refs: CommentRef[]): ValidationResult {
   const byLabel = new Map(refs.map((r) => [r.label.toLowerCase(), r]))
   const kept: ValidatedInsight[] = []
@@ -202,7 +218,22 @@ function validateInsights(parsed: PassAVideoOutput, refs: CommentRef[]): Validat
     }
     kept.push({ insight, evidence: validEvidence })
   }
-  return { kept, insightsDropped, evidenceDropped }
+
+  const samples: { realId: string; phrase: string }[] = []
+  let samplesDropped = 0
+  const seenPhrases = new Set<string>()
+  for (const s of parsed.language_samples ?? []) {
+    const ref = byLabel.get((s.comment_id ?? '').toLowerCase().trim())
+    const phraseNorm = normForMatch(s.phrase)
+    if (!ref || phraseNorm.length === 0 || !normForMatch(ref.text).includes(phraseNorm) || seenPhrases.has(phraseNorm)) {
+      samplesDropped++
+      continue
+    }
+    seenPhrases.add(phraseNorm)
+    samples.push({ realId: ref.realId, phrase: s.phrase })
+  }
+
+  return { kept, insightsDropped, evidenceDropped, samples, samplesDropped }
 }
 
 const clampScore = (n: number) => Math.max(1, Math.min(10, Math.round(n)))
@@ -300,6 +331,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     insightsKept: 0,
     insightsDropped: 0,
     evidenceDropped: 0,
+    languageSamples: 0,
     promptTokens: 0,
     completionTokens: 0,
     costUsd: 0,
@@ -402,6 +434,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     summary.insightsKept += validation.kept.length
     summary.insightsDropped += validation.insightsDropped
     summary.evidenceDropped += validation.evidenceDropped
+    summary.languageSamples += validation.samples.length
     res.status = 'analyzed'
     res.insightsKept = validation.kept.length
     res.insightsDropped = validation.insightsDropped
@@ -414,6 +447,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
         runId,
         parsed,
         validated: validation.kept,
+        samples: validation.samples,
         qualityScore: computeQualityScore(all),
       })
       await logCall(admin, {
@@ -450,15 +484,17 @@ interface PersistArgs {
   runId: string
   parsed: PassAVideoOutput
   validated: ValidatedInsight[]
+  samples: { realId: string; phrase: string }[]
   qualityScore: number | null
 }
 
 async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: PersistArgs): Promise<void> {
-  const { video, runId, parsed, validated, qualityScore } = args
+  const { video, runId, parsed, validated, samples, qualityScore } = args
   const c = parsed.classification
 
   // Idempotent at the step level (invariant 6): clear this video's prior insights for the run.
   await admin.from('audience_insights').delete().eq('client_id', video.client_id).eq('run_id', runId).eq('source_video_id', video.id)
+  await admin.from('language_samples').delete().eq('client_id', video.client_id).eq('run_id', runId).eq('source_video_id', video.id)
 
   // Classification onto the video row.
   await admin
@@ -488,6 +524,7 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
         strength_score: clampScore(insight.strength_score),
         emotion: insight.emotion,
         sentiment_impact: insight.sentiment_impact,
+        journey_stage: insight.journey_stage,
       })
       .select('id')
       .single()
@@ -499,6 +536,19 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
         comment_id: e.realId,
         quote: e.quote,
         relevance_rank: i + 1,
+      })),
+    )
+  }
+
+  if (samples.length) {
+    await admin.from('language_samples').insert(
+      samples.map((s) => ({
+        client_id: video.client_id,
+        run_id: runId,
+        platform: video.platform,
+        source_video_id: video.id,
+        comment_id: s.realId,
+        phrase: s.phrase,
       })),
     )
   }

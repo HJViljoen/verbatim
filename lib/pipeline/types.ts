@@ -22,6 +22,8 @@ export interface VideoRow {
   comments_count: number | null
   engagement_rate: number | null
   account_followers: number | null
+  /** Pass A's comment-derived video sentiment; null until analysed. */
+  sentiment: string | null
 }
 
 export interface CommentRow {
@@ -70,10 +72,11 @@ export interface InsightRow {
   competitor_name: string | null
 }
 
-/** One clustered theme produced by Step A2 and consumed (in memory) by Pass
- *  C/D. `theme` is the canonical label = the highest-strength member's slug
- *  (Pass B deferred to v5). `evidenceCount` = distinct supporting videos — the
- *  value the evidence floor checks. */
+/** One clustered theme produced by Step A2, labelled by Pass B, persisted via
+ *  lib/pipeline/themes.ts, and consumed by Pass C/D. `theme` is the working
+ *  slug (highest-strength member's); `label`/`description` are the client-facing
+ *  Pass B output. `evidenceCount` = distinct supporting videos — the value the
+ *  evidence floor tiers on (`singleSource` = below floor, "Early signal"). */
 export interface AggregatedTheme {
   bucket: string
   category: string
@@ -85,6 +88,11 @@ export interface AggregatedTheme {
   strengthScore: number
   dominantEmotion: string
   dominantSentimentImpact: string
+  singleSource: boolean
+  /** Strongest members' insight descriptions — raw material for Pass B labelling. Not persisted. */
+  sampleDescriptions: string[]
+  label?: string
+  description?: string
 }
 
 /** Output of Step 2a (metrics). Held in memory for Pass A / Step 2b. */

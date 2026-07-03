@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient } from '../supabase-admin'
-import { openai } from '../openai'
-import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
+import { openai, samplingParams } from '../openai'
+import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
 import type { AggregatedTheme, SovEntry } from './types'
@@ -14,7 +14,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // audience_insights UUIDs, rejecting unknown indices (invariant 8). On a
 // single-bucket corpus there is nothing to compare, so the model returns [].
 
-const PROMPT_VERSION = 'pass_c_v2'
+const PROMPT_VERSION = 'pass_c_v3'
 
 export interface TrackingConfig {
   brand_keywords: string[] | null
@@ -108,7 +108,7 @@ function buildUserPrompt(
   lines.push(`THEMES (${themeIndex.length})`)
   for (const { label, theme } of themeIndex) {
     lines.push(
-      `[${label}] bucket=${theme.bucket} category=${theme.category} theme=${theme.theme} ` +
+      `[${label}] bucket=${theme.bucket} category=${theme.category} "${theme.label ?? theme.theme}" ` +
         `· ${theme.evidenceCount} videos · strength ${theme.strengthScore} ` +
         `· ${theme.dominantEmotion}/${theme.dominantSentimentImpact}`,
     )
@@ -156,8 +156,8 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
   let usage = { prompt_tokens: 0, completion_tokens: 0 }
   try {
     const completion = await openai.chat.completions.parse({
-      model: ANALYSIS_MODEL,
-      temperature: ANALYSIS_TEMPERATURE,
+      model: SYNTHESIS_MODEL,
+      ...samplingParams(SYNTHESIS_MODEL),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -171,20 +171,20 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)
     if (persist) {
-      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: null, error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
+      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: null, error, usage, durationMs: Date.now() - startedAt, validationStatus: 'parse_error' })
     }
     throw new Error(`Pass C call failed: ${error}`)
   }
 
   const durationMs = Date.now() - startedAt
-  const costUsd = estimateCost(ANALYSIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
+  const costUsd = estimateCost(SYNTHESIS_MODEL, usage.prompt_tokens, usage.completion_tokens)
   base.promptTokens = usage.prompt_tokens
   base.completionTokens = usage.completion_tokens
   base.costUsd = costUsd
 
   if (!parsed) {
     if (persist) {
-      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: { refusal: true }, error: 'no parsed output', usage, durationMs, validationStatus: 'parse_error' })
+      await logAiCall(admin, { clientId, runId, pass: 'pass_c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt, response: { refusal: true }, error: 'no parsed output', usage, durationMs, validationStatus: 'parse_error' })
     }
     return base
   }
@@ -225,7 +225,7 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
       base.inserted = base.competitiveInsights.length
     }
     await logAiCall(admin, {
-      clientId, runId, pass: 'pass_c', callIndex: 1, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
+      clientId, runId, pass: 'pass_c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
       response: { insights: rows.length, rejected_refs: rejectedRefs },
       error: null, usage, durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',

@@ -5,11 +5,18 @@ import type { InsightRow, AggregatedTheme } from './types'
 
 // Step A2 — theme aggregation (Architecture/Analysis-Passes §Step A2). No new
 // GPT call (one cheap embeddings call inside the clustering seam). Buckets Pass A
-// insights by entity, clusters within (bucket, category), rolls each cluster up
-// into an AggregatedTheme, then drops themes below the evidence floor. Output is
-// held in memory for Pass C/D — aggregated themes are not separately persisted
-// (the audience_insights rows already exist from Pass A; cluster identity is
-// implicit via theme + bucket).
+// insights by entity, clusters within the bucket, and rolls each cluster up into
+// an AggregatedTheme. Two Redesign-Spec §8 fixes (2026-07-03):
+//   (a) clustering is bucket-level, not (bucket, category) — one concern that
+//       Pass A split across categories (e.g. a cost pain_point and a cost
+//       question) re-stitches into one theme; the theme's category is the mode
+//       of its members'.
+//   (b) themes below the evidence floor are KEPT and flagged singleSource
+//       ("Early signals" on the pages) instead of silently dropped. Pass C/D
+//       still consume only floor-passing themes.
+// Themes are persisted per run via lib/pipeline/themes.ts (labels from Pass B,
+// first_seen from mini theme-matching); the in-memory result stays the working
+// currency for Pass C/D.
 
 export interface RunStepA2Options {
   clientId: string
@@ -24,16 +31,17 @@ export interface StepA2Result {
   runId: string
   totalInsights: number
   totalClusters: number
+  /** Floor-passing themes — the Pass C/D input. */
   themes: AggregatedTheme[]
-  droppedBelowFloor: AggregatedTheme[]
+  /** Below-floor themes, kept + flagged singleSource ("Early signals"). */
+  earlySignals: AggregatedTheme[]
 }
 
-/** A homogeneous (one bucket, one category) group of insights — the unit
- *  clustering operates on. Exported so the debug inspector can reuse the exact
- *  same grouping the pipeline uses. */
+/** A homogeneous (one bucket) group of insights — the unit clustering operates
+ *  on. Exported so the debug inspector can reuse the exact same grouping the
+ *  pipeline uses. */
 export interface InsightGroup {
   bucket: string
-  category: string
   insights: InsightRow[]
 }
 
@@ -59,13 +67,16 @@ function mode(values: string[]): string {
   return best
 }
 
-function aggregate(cluster: InsightRow[], bucket: string, category: string): AggregatedTheme {
-  // Canonical label = highest-strength member's slug (Pass B deferred to v5).
+function aggregate(cluster: InsightRow[], bucket: string): AggregatedTheme {
+  // Working slug = highest-strength member's; the client-facing label comes
+  // from Pass B. Category = mode of the members' (bucket-level clustering can
+  // legitimately merge across categories).
   const canonical = cluster.reduce((a, b) => (b.strength_score > a.strength_score ? b : a))
   const supportingVideoIds = [...new Set(cluster.map((i) => i.source_video_id))]
+  const byStrength = [...cluster].sort((a, b) => b.strength_score - a.strength_score)
   return {
     bucket,
-    category,
+    category: mode(cluster.map((i) => i.category)),
     theme: canonical.theme,
     memberThemes: [...new Set(cluster.map((i) => i.theme))],
     supportingVideoIds,
@@ -74,6 +85,8 @@ function aggregate(cluster: InsightRow[], bucket: string, category: string): Agg
     strengthScore: canonical.strength_score,
     dominantEmotion: mode(cluster.map((i) => i.emotion)),
     dominantSentimentImpact: mode(cluster.map((i) => i.sentiment_impact)),
+    singleSource: false,
+    sampleDescriptions: byStrength.slice(0, 2).map((i) => i.description),
   }
 }
 
@@ -121,15 +134,13 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
     return { ...i, ...ent } as InsightRow
   })
 
-  // 3. Group by (bucket, category) — bucket/category kept on the group value so
-  //    the map key is never parsed back (competitor names can contain spaces).
+  // 3. Group by bucket (Spec §8: bucket-level clustering, categories merge).
   const groups = new Map<string, InsightGroup>()
   for (const ins of insights) {
     const bucket = bucketOf(ins)
-    const key = [bucket, ins.category].join('|')
-    const g = groups.get(key)
+    const g = groups.get(bucket)
     if (g) g.insights.push(ins)
-    else groups.set(key, { bucket, category: ins.category, insights: [ins] })
+    else groups.set(bucket, { bucket, insights: [ins] })
   }
   return [...groups.values()]
 }
@@ -145,20 +156,23 @@ export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
   const all: AggregatedTheme[] = []
   for (const grp of groups) {
     const clusters = await clusterInsights(grp.insights, { method, threshold })
-    for (const cluster of clusters) all.push(aggregate(cluster, grp.bucket, grp.category))
+    for (const cluster of clusters) all.push(aggregate(cluster, grp.bucket))
   }
 
-  // 5. Apply evidence floor. Sort by strength desc for readable output.
+  // 5. Apply the evidence floor as a TIER, not a cut (Spec §8): below-floor
+  //    themes are flagged singleSource and surface as "Early signals"; only
+  //    floor-passing themes feed Pass C/D. Sort by strength desc.
   all.sort((a, b) => b.strengthScore - a.strengthScore)
-  const themes = all.filter((t) => t.evidenceCount >= floor)
-  const droppedBelowFloor = all.filter((t) => t.evidenceCount < floor)
+  for (const t of all) t.singleSource = t.evidenceCount < floor
+  const themes = all.filter((t) => !t.singleSource)
+  const earlySignals = all.filter((t) => t.singleSource)
 
   return {
     runId,
     totalInsights,
     totalClusters: all.length,
     themes,
-    droppedBelowFloor,
+    earlySignals,
   }
 }
 

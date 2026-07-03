@@ -1,14 +1,19 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { computeMetrics } from '../lib/pipeline/metrics'
 import { runStepA2 } from '../lib/pipeline/step-a2'
+import { runPassB } from '../lib/pipeline/pass-b'
 import { runPassC } from '../lib/pipeline/pass-c'
 import { runPassD } from '../lib/pipeline/pass-d'
+import { runCrossReference } from '../lib/pipeline/cross-reference'
+import { persistThemes } from '../lib/pipeline/themes'
+import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
 import type { VideoRow, CommentRow } from '../lib/pipeline/types'
 
-// CLI orchestrator for the back half of the analysis chain: Step A2 → Pass C →
-// Pass D, over an existing Pass A run. Run with env loaded:
+// CLI orchestrator for the back half of the analysis chain: cross-reference →
+// Step A2 → Pass B → themes → Pass C → Pass D (a+b) → run_summary, over an
+// existing Pass A run. Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/run-cd.ts --run <id> [flags]
 //
 // Flags:
@@ -88,7 +93,7 @@ async function main() {
 
   const { data: tc } = await admin
     .from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period')
     .eq('client_id', args.clientId)
     .maybeSingle()
   const { data: client } = await admin
@@ -101,10 +106,27 @@ async function main() {
   console.log('\nShare of voice:')
   for (const [bucket, e] of Object.entries(metrics.share_of_voice)) console.log(`  ${bucket}: ${e.videos} videos (${e.pct_videos}%)`)
 
+  // Cross-reference detection (deterministic, corpus-wide; skipped on dry runs).
+  if (persist) {
+    const xr = await runCrossReference(args.clientId)
+    console.log(`\nCross-reference: ${xr.commentsScanned} comments on non-client videos scanned → ${xr.mentionsFlagged} brand mentions flagged (${xr.flagsCleared} stale flags cleared)`)
+  }
+
   // Step A2.
   const a2 = await runStepA2({ clientId: args.clientId, runId: args.runId!, method, threshold, evidenceFloor: floor })
-  console.log(`\nStep A2: ${a2.totalInsights} insights → ${a2.totalClusters} clusters → ${a2.themes.length} survive floor ${floor}`)
+  console.log(`\nStep A2: ${a2.totalInsights} insights → ${a2.totalClusters} clusters → ${a2.themes.length} survive floor ${floor} + ${a2.earlySignals.length} early signals`)
   for (const t of a2.themes) console.log(`  [${t.bucket} / ${t.category}] ${t.theme} · ${t.evidenceCount} videos · str ${t.strengthScore}`)
+  for (const t of a2.earlySignals) console.log(`  (early) [${t.bucket} / ${t.category}] ${t.theme} · ${t.evidenceCount} video(s) · str ${t.strengthScore}`)
+
+  // Pass B — label both tiers, then persist themes with first_seen matching.
+  const allThemes = [...a2.themes, ...a2.earlySignals]
+  const b = await runPassB({ clientId: args.clientId, runId: args.runId!, themes: allThemes, brandName, persist, dryRun: args.dryRun })
+  console.log(`\n=== PASS B — theme labels (${b.labelled} labelled, ${b.fallbacks} fallbacks) ===`)
+  for (const t of allThemes) console.log(`  ${t.label}${t.singleSource ? ' (early signal)' : ''} — ${t.description ?? ''}`)
+  if (persist) {
+    const pt = await persistThemes(args.clientId, args.runId!, allThemes)
+    console.log(`Themes persisted: ${pt.inserted} (${pt.hadPreviousRun ? `${pt.firstSeen} new vs previous run` : 'first themed run — no "New" baseline yet'})`)
+  }
 
   // Pass C.
   const c = await runPassC({
@@ -136,15 +158,32 @@ async function main() {
     persist,
     dryRun: args.dryRun,
   })
-  console.log(`\n=== PASS D — market insights (${d.marketInsights.length}) ===`)
+  console.log(`\n=== PASS D-a — market insights (${d.marketInsights.length}) ===`)
   for (const mi of d.marketInsights) {
     console.log(`  [${mi.insight_type}] ${mi.title} · conf ${mi.confidence_score} / opp ${mi.opportunity_score}`)
   }
-  console.log(`\n=== PASS D — recommendations (${d.recommendations.length}) ===`)
+  if (d.ciSummary) {
+    console.log('\n=== PASS D-a — consumer intelligence summary ===')
+    console.log(`  unmet needs:     ${d.ciSummary.top_unmet_needs.join(' | ') || '(none)'}`)
+    console.log(`  buying triggers: ${d.ciSummary.top_buying_triggers.join(' | ') || '(none)'}`)
+    console.log(`  differentiators: ${d.ciSummary.top_differentiators.join(' | ') || '(none)'}`)
+    console.log(`  mood:            ${d.ciSummary.emotional_snapshot}`)
+    console.log(`  threats:         ${d.ciSummary.threats.join(' | ') || '(none)'}`)
+  }
+  console.log(`\n=== PASS D-b — recommendations (${d.recommendations.length}) ===`)
   for (const r of d.recommendations) {
     console.log(`  [${r.type} · ${r.priority}] ${r.title}`)
   }
   if (d.rejectedRefs) console.log(`  (rejected refs: ${d.rejectedRefs})`)
+
+  // run_summary — metrics + sentiment + CI summary; the email-delta baseline.
+  if (persist) {
+    await writeRunSummary({
+      clientId: args.clientId, runId: args.runId!, metrics, videos,
+      ciSummary: d.ciSummary, period: tc?.report_period ?? null,
+    })
+    console.log('\nrun_summary written.')
+  }
 
   // Close the run lifecycle. Pass A opens analysis runs as 'analyzing' and never
   // flips them; run-cd is the terminal analysis stage, so it marks completion.
@@ -157,10 +196,11 @@ async function main() {
     else console.log(`\nRun ${args.runId!.slice(0, 8)} marked completed.`)
   }
 
-  const totalCost = c.costUsd + d.costUsd
+  const totalCost = b.costUsd + c.costUsd + d.costUsd
   console.log('\n=== SUMMARY ===')
+  console.log(`pass B cost: $${b.costUsd.toFixed(5)} (${b.promptTokens}+${b.completionTokens} tok)`)
   console.log(`pass C cost: $${c.costUsd.toFixed(5)} (${c.promptTokens}+${c.completionTokens} tok)`)
-  console.log(`pass D cost: $${d.costUsd.toFixed(5)} (${d.promptTokens}+${d.completionTokens} tok)`)
+  console.log(`pass D cost: $${d.costUsd.toFixed(5)} (${d.promptTokens}+${d.completionTokens} tok, a+b)`)
   console.log(`total:       $${totalCost.toFixed(5)}`)
 }
 
