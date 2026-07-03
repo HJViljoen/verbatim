@@ -136,13 +136,17 @@ async function runBackHalf(clientId: string, runId: string) {
   const videos = await selectAll<VideoRow>(() =>
     admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const comments = await selectAll<CommentRow>(() =>
+  // Load the client's comments in one paginated scan and filter to the corpus
+  // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
+  // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors run-cd.ts.
+  const wantedVideos = new Set(videos.map((v) => `${v.platform}::${v.video_id}`))
+  const allComments = await selectAll<CommentRow>(() =>
     admin.from('comments')
       .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
       .eq('client_id', clientId)
-      .in('video_id', videos.map((v) => v.video_id))
       .order('id', { ascending: true }),
   )
+  const comments = allComments.filter((c) => wantedVideos.has(`${c.platform}::${c.video_id}`))
   const metrics = computeMetrics(videos, comments)
 
   const { data: tc } = await admin.from('tracking_configs')
