@@ -69,6 +69,8 @@ function buildSystemPromptA(brandName?: string): string {
     '   - emotional_snapshot: 1–2 sentences on the dominant feelings in the audience.',
     '   - threats: up to 3 findings that should worry ' + name + ' (empty array if none are genuine).',
     '   Every summary item must trace back to the themes/competitive insights below — nothing invented, no numbers.',
+    '   The summary is client-facing prose: NEVER include bracket indices (T1, C2, …) or any internal references',
+    '   in its text — plain sentences only. Indices belong ONLY in the market_insights supporting fields.',
     '',
     'Rules:',
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
