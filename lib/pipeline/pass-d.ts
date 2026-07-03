@@ -19,7 +19,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // and rejects unknowns (invariant 8).
 
 const PROMPT_VERSION_A = 'pass_d_a_v1'
-const PROMPT_VERSION_B = 'pass_d_b_v2'
+const PROMPT_VERSION_B = 'pass_d_b_v3'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
@@ -116,21 +116,36 @@ function buildUserPromptA(
 
 // ---- D-b: grounded recommendations ------------------------------------------
 
+// v3 (2026-07-03): open-world generation, categories tag afterwards. v2's frame
+// ("content ideas, hook strategies, …") made the taxonomy the blinders — every
+// action came out social-content-shaped, which reads as a content planner, not
+// consumer intelligence (trigger: buyer-persona feedback, see vault Strategy
+// §Retention risk). The category list must never appear as the menu of what to
+// produce; it exists only for the tag-after step.
 function buildSystemPromptB(brandName?: string): string {
   const name = brandName?.trim() || 'the brand'
   return [
-    `You are a media-based consumer intelligence analyst turning findings into actions for ${name}.`,
+    `You advise ${name}'s leadership on what the business should do — not just its social media team.`,
     '',
     'You are given market insights (M#) — each with the VERBATIM customer quotes behind it — plus',
     'competitive insights (C#) and share-of-voice context.',
     '',
-    'Produce recommendations: concrete, specific actions grounded in what customers actually said —',
-    'content ideas, hook strategies, urgent topics, competitive moves, audience targets, platform strategies.',
+    'Produce recommendations: the highest-value actions this evidence supports, across ANY part of the',
+    'business — product and service, positioning and messaging, customer experience, pricing and access,',
+    'partnerships and distribution, competitive response, audience targeting, content and communication,',
+    'or anything else the evidence justifies. Never force a content answer when the evidence points at a',
+    'product, service, positioning, or experience move. Mix horizons: quick wins alongside bigger moves',
+    'that take a quarter — a recommendation is never too big to state if the evidence carries it.',
+    '',
+    'Only after deciding a recommendation, tag it with the closest type from the schema. If none genuinely',
+    'fits, use type "other" and put a short snake_case category of your own in custom_category',
+    '(set custom_category to null for every named type).',
     '',
     'Rules:',
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
-    '- Each recommendation must be specific enough to act on this week. "Post more educational content" is a failure;',
-    '  a concrete angle, hook, topic, or audience drawn from the quotes is the standard.',
+    '- Each recommendation must be concrete enough to start acting on: name the move, the angle, the audience,',
+    '  or the change. "Post more educational content" and "improve customer experience" are failures;',
+    '  a specific action drawn from the quotes is the standard.',
     '- Ground reasoning in the evidence, but NEVER copy customer quotes verbatim into the title or reasoning:',
     '  raw comments are often fragments and in many languages, so out of context they read as noise. Paraphrase',
     '  what customers are saying in plain English instead (translating where needed). The product shows the real',
@@ -425,6 +440,12 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     return out
   }
 
+  // 'other' persists as the model's own label so novel categories surface as
+  // themselves (CategoryChip renders any string); recurring labels are the
+  // promote-into-the-enum signal. Falls back to 'other' on an unusable label.
+  const slugify = (s: string) =>
+    s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
+
   // Recommendations: based_on references M# (D-a's output) and/or C#.
   const recRows = b.parsed.recommendations.map((rec) => {
     const ids: string[] = []
@@ -445,7 +466,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     return {
       client_id: clientId,
       run_id: runId,
-      type: rec.type,
+      type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
       title: rec.title,
       reasoning: rec.reasoning,
       priority: rec.priority,

@@ -120,8 +120,14 @@ export const MARKET_INSIGHT_TYPES = [
   'unmet_need', 'platform_pattern', 'industry_signal', 'cross_platform_synthesis', 'sentiment_trajectory',
 ] as const
 
+// Decision-grade taxonomy (2026-07-03): tags applied AFTER open-world
+// generation, never the generative frame — the D-b prompt recommends whatever
+// the evidence supports and then labels it with the closest type. 'other' +
+// custom_category is the escape hatch for categories we didn't think to name;
+// a recurring custom label is the signal to promote it into this list.
 export const RECOMMENDATION_TYPES = [
-  'content_idea', 'hook_strategy', 'urgent_topic', 'competitive_move', 'audience_target', 'platform_strategy',
+  'product', 'positioning_messaging', 'customer_experience', 'competitive_response',
+  'audience_targeting', 'content_communication', 'other',
 ] as const
 
 export const PRIORITIES = ['high', 'medium', 'low'] as const
@@ -138,6 +144,8 @@ const marketInsightSchema = z.object({
 
 const recommendationSchema = z.object({
   type: z.enum(RECOMMENDATION_TYPES),
+  // The model's own short snake_case label when type is 'other'; null otherwise.
+  custom_category: z.string().nullable(),
   title: z.string(),
   reasoning: z.string(),
   based_on: z.array(z.string()),  // M# (market insights in this output) / C# indices
