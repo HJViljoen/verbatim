@@ -1,30 +1,26 @@
+import Link from 'next/link'
 import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { accentTint, categoryTint, SENTIMENT_BADGE, greenForPct } from '@/lib/ui-colors'
+import { categoryTint } from '@/lib/ui-colors'
 
-// Dashboard — corpus + pipeline readout for the latest data. Rewired onto the
-// v4.1 schema: per-video sentiment is now the text column `videos.sentiment`
-// (positive|negative|neutral|mixed, null until a video is analysed), topics live
-// in `videos.topics` (text[]), and audience questions come from `audience_insights`
-// (category = 'question') rather than the dropped pre-v4.1 columns
-// (positive_pct / common_questions / common_topics). Each section states *why*
-// it's empty so the page works as a backend-health check. Same auth/data pattern
-// as Market Intelligence.
+// Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
+// this week's news (that's the report's job) and no longer the pipeline readout
+// it used to be. Four bands: welcome + human coverage line · three
+// where-you-stand stat cards · "what your market is talking about" (top-3
+// themes, each routing to Voice) · the single best-grounded recommendation as
+// the hero. Themes prefer the persisted `themes` table (Pass B labels +
+// first_seen "New" badges, populated from the 2026-07-06 run onward) and
+// degrade gracefully to slug-level grouping of audience_insights on older
+// runs. Client-facing rules apply: no run ids, no scraped/analysed KPIs, no
+// pipeline jargon — including empty states.
 
 interface VideoRow {
   id: string
-  platform: string
-  account_name: string
-  video_url: string
-  views: number | null
-  likes: number | null
-  engagement_rate: number | null
-  is_competitor: boolean
   is_client: boolean
+  is_competitor: boolean
+  competitor_name: string | null
   sentiment: string | null
-  classified_type: string | null
-  topics: string[] | null
 }
 
 interface AudienceInsight {
@@ -33,265 +29,306 @@ interface AudienceInsight {
   theme: string
   description: string
   strength_score: number | null
+  emotion: string | null
 }
 
-const fmt = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M`
-  : n >= 1_000   ? `${(n / 1_000).toFixed(0)}K`
-  : String(n)
-
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs text-muted-foreground italic">{children}</p>
+interface ThemeRow {
+  label: string
+  description: string | null
+  category: string
+  member_themes: string[]
+  evidence_count: number
+  strength_score: number | null
+  first_seen: boolean
 }
+
+/** A dashboard-ready theme, from either the themes table or the slug fallback. */
+interface TopTheme {
+  label: string
+  description: string
+  category: string
+  memberThemes: string[]
+  evidenceLabel: string
+  isNew: boolean
+}
+
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+const PLATFORM_NAMES: Record<string, string> = { tiktok: 'TikTok', youtube: 'YouTube', instagram: 'Instagram' }
+
+/** "TikTok, YouTube & Instagram" */
+function listNames(platforms: string[]): string {
+  const names = platforms.map((p) => PLATFORM_NAMES[p] ?? cap(p))
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`
+}
+
+const shortDate = (iso: string) =>
+  new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(iso))
 
 export default async function DashboardPage() {
-  // Auth + tenant + role via the RLS-enforced session client (the
-  // .eq('client_id', …) filters below are now redundant but kept explicit).
-  // Service-role is reserved for the pipeline + provisioning. See lib/auth.ts.
+  // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
-  // Latest run — for the header + audience insights (an analysis run).
-  const { data: latestRun } = await supabase
-    .from('pipeline_runs').select('id, started_at, status')
-    .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
-  const runId = latestRun?.id as string | undefined
-
-  // The dashboard shows the LATEST run's videos only, not the all-time corpus.
-  // Anchor on the run_id of the most recently scraped video: in the production
-  // pipeline gather + analysis share one run_id, but manual CLI runs split them,
-  // so the newest videos carry the latest GATHER run_id (the analysis run inserts
-  // no videos, so we can't use latestRun.id here).
-  const { data: latestVid } = await supabase
-    .from('videos').select('run_id')
-    .eq('client_id', clientId).order('scraped_at', { ascending: false }).limit(1).maybeSingle()
-  const videoRunId = latestVid?.run_id as string | undefined
-
-  const [all, { data: aiData }] = await Promise.all([
-    selectAll<VideoRow>(() => {
-      let q = supabase.from('videos')
-        .select('id, platform, account_name, video_url, views, likes, engagement_rate, is_competitor, is_client, sentiment, classified_type, topics')
-        .eq('client_id', clientId)
-      if (videoRunId) q = q.eq('run_id', videoRunId)
-      return q.order('views', { ascending: false }).order('id', { ascending: true })
-    }),
-    runId
-      ? supabase.from('audience_insights')
-          .select('id, category, theme, description, strength_score')
-          .eq('client_id', clientId).eq('run_id', runId)
-      : Promise.resolve({ data: [] as AudienceInsight[] }),
+  const [{ data: client }, { data: tc }, { data: latestRun }, { data: latestVid }] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    supabase.from('tracking_configs')
+      .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_day, report_period')
+      .eq('client_id', clientId).maybeSingle(),
+    supabase.from('pipeline_runs').select('id, started_at')
+      .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('videos').select('run_id, scraped_at')
+      .eq('client_id', clientId).order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
-  const audienceInsights = (aiData ?? []) as AudienceInsight[]
+  const brand = client?.company_name ?? 'Your brand'
+  const keywordCount =
+    (tc?.brand_keywords?.length ?? 0) + (tc?.competitor_keywords?.length ?? 0) + (tc?.industry_keywords?.length ?? 0)
+  const nextUpdate =
+    tc?.report_period === 'weekly' && tc?.report_day ? `next update ${cap(tc.report_day)}`
+    : tc?.report_period === 'monthly' ? 'updates monthly'
+    : null
 
-  // ---- Stats ----
-  const totalViews = all.reduce((s, v) => s + (Number(v.views) || 0), 0)
-  // Avg Engagement KPI removed: no view/follower denominator exists on all three
-  // platforms (Instagram scrapes neither views nor followers, YouTube has no usable
-  // follower count), so an engagement RATE can't be computed consistently across
-  // TikTok + YouTube + Instagram. Bring it back once the IG scraper captures Reel
-  // play counts (Migration-to-Code / gather fix), then a view-based rate spans all 3.
-  // Analysed = videos that have been through Pass A (sentiment is set). The gap
-  // between all.length and analysed.length is the "scraped but not analysed" set.
-  const analysed = all.filter(v => v.sentiment != null)
-  const positiveShare = analysed.length > 0
-    ? Math.round(analysed.filter(v => v.sentiment === 'positive').length / analysed.length * 100)
-    : 0
+  const runId = latestRun?.id as string | undefined
+  const videoRunId = latestVid?.run_id as string | undefined
 
-  // ---- Sentiment by brand/competitor × platform (positive share) ----
-  const sentimentGroups = [
-    { label: 'Brand (TikTok)',       f: (v: VideoRow) => !v.is_competitor && v.platform === 'tiktok' },
-    { label: 'Brand (YouTube)',      f: (v: VideoRow) => !v.is_competitor && v.platform === 'youtube' },
-    { label: 'Competitor (TikTok)',  f: (v: VideoRow) => v.is_competitor  && v.platform === 'tiktok' },
-    { label: 'Competitor (YouTube)', f: (v: VideoRow) => v.is_competitor  && v.platform === 'youtube' },
-  ].map(({ label, f }) => {
-    const group = all.filter(f).filter(v => v.sentiment != null)
-    const pos = group.length > 0
-      ? Math.round(group.filter(v => v.sentiment === 'positive').length / group.length * 100)
-      : null
-    return { label, pos, count: group.length }
-  }).filter(g => g.count > 0)
-
-  // ---- Audience questions (category = 'question') ----
-  const questions = audienceInsights
-    .filter(a => a.category === 'question')
-    .sort((a, b) => (Number(b.strength_score) || 0) - (Number(a.strength_score) || 0))
-    .slice(0, 5)
-
-  // ---- Trending topics (videos.topics) ----
-  const topicCounts: Record<string, number> = {}
-  for (const v of all) for (const t of v.topics ?? []) topicCounts[t] = (topicCounts[t] ?? 0) + 1
-  const topTopics = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]).slice(0, 12).map(([t]) => t)
-
-  // ---- Content type performance (classified_type + engagement_rate) ----
-  const typeMap: Record<string, { count: number; totalEng: number }> = {}
-  for (const v of all) {
-    if (!v.classified_type) continue
-    typeMap[v.classified_type] ??= { count: 0, totalEng: 0 }
-    typeMap[v.classified_type].count++
-    typeMap[v.classified_type].totalEng += Number(v.engagement_rate) || 0
+  if (!runId || !videoRunId) {
+    return (
+      <div className="space-y-6">
+        <WelcomeBand brand={brand} line={null} />
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            Your first analysis {nextUpdate ? `lands with the ${nextUpdate.replace('next update ', '')} update` : 'is on its way'} — check back then.
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
-  const contentTypes = Object.entries(typeMap)
-    .map(([type, { count, totalEng }]) => ({ type, count, avgEng: (totalEng / count).toFixed(1) }))
-    .sort((a, b) => Number(b.avgEng) - Number(a.avgEng))
+
+  // Corpus + insight reads for the latest run, in parallel.
+  const [videos, commentsRes, aiRes, recRes, latestThemedRes] = await Promise.all([
+    selectAll<VideoRow>(() =>
+      supabase.from('videos')
+        .select('id, is_client, is_competitor, competitor_name, sentiment')
+        .eq('client_id', clientId).eq('run_id', videoRunId)
+        .order('id', { ascending: true }),
+    ),
+    supabase.from('comments').select('id', { head: true, count: 'exact' })
+      .eq('client_id', clientId).eq('run_id', videoRunId),
+    supabase.from('audience_insights')
+      .select('id, category, theme, description, strength_score, emotion')
+      .eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('recommendations')
+      .select('id, type, title, reasoning, priority, based_on')
+      .eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('themes').select('run_id')
+      .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+
+  const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
+  const commentCount = commentsRes.count ?? 0
+
+  // ---- Welcome band coverage line (human terms, per spec) ----
+  const lineParts = [
+    keywordCount > 0 && tc?.platforms?.length
+      ? `Tracking ${keywordCount} search terms across ${listNames(tc.platforms)}`
+      : null,
+    commentCount > 0 ? `${commentCount.toLocaleString('en-US')} conversations analysed` : null,
+    latestVid?.scraped_at ? `data through ${shortDate(latestVid.scraped_at as string)}` : null,
+    nextUpdate,
+  ].filter(Boolean) as string[]
+
+  // ---- Where you stand: sentiment · share of conversation · audience mood ----
+  const analysed = videos.filter((v) => v.sentiment != null)
+  const positiveShare = analysed.length > 0
+    ? Math.round((analysed.filter((v) => v.sentiment === 'positive').length / analysed.length) * 100)
+    : null
+
+  const clientShare = videos.length > 0
+    ? Math.round((videos.filter((v) => v.is_client).length / videos.length) * 100)
+    : null
+  const competitorCounts = new Map<string, number>()
+  for (const v of videos) {
+    if (!v.is_competitor) continue
+    const name = v.competitor_name ?? 'competitors'
+    competitorCounts.set(name, (competitorCounts.get(name) ?? 0) + 1)
+  }
+  const competitorShares = [...competitorCounts.entries()]
+    .map(([name, n]) => `${name} ${Math.round((n / videos.length) * 100)}%`)
+    .join(' · ')
+
+  const emotionCounts = new Map<string, number>()
+  for (const i of audienceInsights) {
+    if (i.emotion) emotionCounts.set(i.emotion, (emotionCounts.get(i.emotion) ?? 0) + 1)
+  }
+  const topEmotions = [...emotionCounts.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e)
+
+  // ---- What your market is talking about: top 3 themes ----
+  // Prefer the persisted themes table (Pass B labels + first_seen); fall back to
+  // slug-level grouping of audience_insights for runs before it existed. "New"
+  // badges only when an earlier themed run exists to compare against.
+  let topThemes: TopTheme[] = []
+  const themedRunId = latestThemedRes.data?.run_id as string | undefined
+  if (themedRunId) {
+    const [{ data: themeRows }, { data: earlier }] = await Promise.all([
+      supabase.from('themes')
+        .select('label, description, category, member_themes, evidence_count, strength_score, first_seen')
+        .eq('client_id', clientId).eq('run_id', themedRunId),
+      supabase.from('themes').select('id')
+        .eq('client_id', clientId).neq('run_id', themedRunId).limit(1),
+    ])
+    const showNew = (earlier?.length ?? 0) > 0
+    topThemes = ((themeRows ?? []) as ThemeRow[])
+      .sort((a, b) => b.evidence_count * (b.strength_score ?? 0) - a.evidence_count * (a.strength_score ?? 0))
+      .slice(0, 3)
+      .map((t) => ({
+        label: t.label,
+        description: t.description ?? '',
+        category: t.category,
+        memberThemes: t.member_themes,
+        evidenceLabel: `across ${t.evidence_count} video${t.evidence_count === 1 ? '' : 's'}`,
+        isNew: showNew && t.first_seen,
+      }))
+  } else {
+    const bySlug = new Map<string, AudienceInsight[]>()
+    for (const i of audienceInsights) {
+      const arr = bySlug.get(i.theme)
+      if (arr) arr.push(i)
+      else bySlug.set(i.theme, [i])
+    }
+    topThemes = [...bySlug.values()]
+      .map((group) => {
+        const strongest = group.reduce((a, b) => (Number(b.strength_score ?? 0) > Number(a.strength_score ?? 0) ? b : a))
+        return { group, strongest, score: group.length * Number(strongest.strength_score ?? 0) }
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3)
+      .map(({ group, strongest }) => ({
+        label: cap(strongest.theme.replace(/_/g, ' ')),
+        description: strongest.description,
+        category: strongest.category,
+        memberThemes: [strongest.theme],
+        evidenceLabel: `${group.length} mention${group.length === 1 ? '' : 's'}`,
+        isNew: false,
+      }))
+  }
+
+  // ---- The one thing: top-priority, best-grounded recommendation ----
+  const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
+  const recs = (recRes.data ?? []) as {
+    id: string; type: string; title: string; reasoning: string
+    priority: string | null; based_on: { insight_ids?: string[] } | null
+  }[]
+  const oneThing = [...recs].sort(
+    (a, b) =>
+      (priorityRank[a.priority ?? 'low'] ?? 3) - (priorityRank[b.priority ?? 'low'] ?? 3) ||
+      (b.based_on?.insight_ids?.length ?? 0) - (a.based_on?.insight_ids?.length ?? 0),
+  )[0]
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          {all.length} videos scraped · {analysed.length} analysed
-          {latestRun && <> · latest run {String(runId).slice(0, 8)} · {latestRun.status}</>}
-        </p>
+      <WelcomeBand brand={brand} line={lineParts.length ? lineParts.join(' · ') : null} />
+
+      {/* Where you stand */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <StatCard
+          dot="bg-positive"
+          label="Sentiment"
+          value={positiveShare != null ? `${positiveShare}%` : '—'}
+          sub={positiveShare != null ? 'positive across analysed conversations' : 'lands with the next update'}
+          accent
+        />
+        <StatCard
+          dot="bg-pine"
+          label="Share of tracked conversation"
+          value={clientShare != null ? `${clientShare}%` : '—'}
+          sub={competitorShares ? `vs ${competitorShares}` : 'no competitors tracked yet'}
+        />
+        <StatCard
+          dot="bg-plum"
+          label="Audience mood"
+          value={topEmotions[0] ? cap(topEmotions[0]) : '—'}
+          sub={topEmotions.length > 1 ? `then ${topEmotions.slice(1, 3).join(' and ')}` : 'lands with the next update'}
+        />
       </div>
 
-      {/* Stats row — first card is the filled hero, the rest carry a colour dot */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        {[
-          { label: 'Videos Scraped',    value: String(all.length),     sub: `${analysed.length} analysed`, hero: true },
-          { label: 'Total Views',       value: fmt(totalViews),        sub: 'TikTok + YouTube', dot: 'bg-pine' },
-          { label: 'Overall Sentiment', value: analysed.length ? `${positiveShare}%` : '—', sub: analysed.length ? `positive · ${analysed.length} analysed` : 'no analysed videos', dot: 'bg-positive', accentValue: true },
-        ].map(({ label, value, sub, hero, dot, accentValue }) =>
-          hero ? (
-            <Card key={label} className="stat-hero ring-0 border-0">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-[#CFE3D6]">{label}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-white">{value}</div>
-                {sub && <p className="text-xs text-[#CFE3D6] mt-1">{sub}</p>}
-              </CardContent>
-            </Card>
-          ) : (
-            <Card key={label}>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <span className={`size-2 rounded-full ${dot}`} aria-hidden />
-                  {label}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className={`text-3xl font-bold ${accentValue ? 'text-positive' : ''}`}>{value}</div>
-                {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
-              </CardContent>
-            </Card>
-          ),
-        )}
-      </div>
+      {/* What your market is talking about */}
+      {topThemes.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            What your market is talking about
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {topThemes.map((t) => (
+              <Link key={t.label} href={`/dashboard/voice?themes=${encodeURIComponent(t.memberThemes.join(','))}`} className="group">
+                <Card className="h-full transition-colors group-hover:bg-muted/30">
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${categoryTint(t.category)}`}>
+                        {t.category.replace(/_/g, ' ')}
+                      </span>
+                      {t.isNew && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
+                      )}
+                    </div>
+                    <CardTitle className="text-sm mt-1.5">{t.label}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <p className="text-xs text-muted-foreground">{t.description}</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {t.evidenceLabel} · <span className="text-primary">hear these voices →</span>
+                    </p>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Top videos table */}
-        <Card className="lg:col-span-2">
-          <CardHeader><CardTitle>Top Videos by Views</CardTitle></CardHeader>
-          <CardContent>
-            {all.length === 0 ? <Empty>No videos scraped for this client yet — gather has not run.</Empty> : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-xs uppercase border-b">
-                    {['Platform','Account','Views','Eng.','Sentiment','Type'].map(h => (
-                      <th key={h} className={`pb-2 font-medium ${h === 'Platform' || h === 'Account' ? 'text-left' : 'text-right'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {all.slice(0, 8).map(v => (
-                    <tr key={v.id} className="border-b last:border-0">
-                      <td className="py-2.5 capitalize">{v.platform}</td>
-                      <td className="py-2.5">
-                        <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                          @{v.account_name}
-                        </a>
-                      </td>
-                      <td className="py-2.5 text-right font-medium">{fmt(Number(v.views) || 0)}</td>
-                      <td className="py-2.5 text-right">{v.engagement_rate != null ? `${v.engagement_rate}%` : '—'}</td>
-                      <td className="py-2.5 text-right">
-                        {v.sentiment
-                          ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-muted text-muted-foreground'}`}>{v.sentiment}</span>
-                          : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-2.5 text-right">
-                        {v.classified_type
-                          ? <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${categoryTint(v.classified_type)}`}>{v.classified_type}</span>
-                          : <span className="text-muted-foreground text-xs">—</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+      {/* The one thing */}
+      {oneThing && (
+        <Card className="stat-hero ring-0 border-0">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-[#CFE3D6]">The one thing to act on</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xl font-bold text-white">{oneThing.title}</p>
+            <p className="text-sm text-[#CFE3D6]">{oneThing.reasoning}</p>
+            <Link
+              href="/dashboard/market"
+              className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20"
+            >
+              See the full picture <span aria-hidden>→</span>
+            </Link>
           </CardContent>
         </Card>
-
-        {/* Right panel */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Sentiment Overview</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              {sentimentGroups.length === 0
-                ? <Empty>No analysed videos yet. Sentiment needs ≥5 comments per video — Pass A skips the rest.</Empty>
-                : sentimentGroups.map(({ label, pos, count }) => (
-                  <div key={label}>
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">{label} <span className="opacity-60">· {count}</span></span>
-                      <span className="font-medium text-positive">{pos}% pos</span>
-                    </div>
-                    <div className="bg-muted rounded-full h-1.5">
-                      <div className="h-1.5 rounded-full" style={{ width: `${pos ?? 0}%`, backgroundColor: greenForPct(pos ?? 0) }} />
-                    </div>
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Top Audience Questions</CardTitle></CardHeader>
-            <CardContent>
-              {questions.length > 0
-                ? <ol className="space-y-2">
-                    {questions.map((q) => (
-                      <li key={q.id} className="text-xs text-muted-foreground">
-                        <span className="text-foreground capitalize">{q.theme.replace(/_/g, ' ')}</span>
-                        {q.description && <> — {q.description}</>}
-                      </li>
-                    ))}
-                  </ol>
-                : <Empty>No question-category insights in the latest run.</Empty>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-sm">Topics</CardTitle></CardHeader>
-            <CardContent>
-              {topTopics.length > 0
-                ? <div className="flex flex-wrap gap-1.5">
-                    {topTopics.map((t, i) => (
-                      <span key={i} className={`px-2 py-0.5 rounded-full text-xs capitalize ${accentTint(i)}`}>{t}</span>
-                    ))}
-                  </div>
-                : <Empty>No topics classified yet — videos.topics is empty until Pass A runs.</Empty>}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* Content type performance */}
-      <Card>
-        <CardHeader><CardTitle>Content Type Performance</CardTitle></CardHeader>
-        <CardContent>
-          {contentTypes.length === 0 ? <Empty>No classified videos yet — content type is set by Pass A.</Empty> : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {contentTypes.map(({ type, count, avgEng }, i) => (
-                <div key={type} className={`rounded-xl p-4 text-center ${accentTint(i)}`}>
-                  <div className="text-2xl font-bold">{avgEng}%</div>
-                  <div className="text-sm font-medium capitalize mt-1 text-foreground">{type}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">avg engagement · {count} videos</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      )}
     </div>
+  )
+}
+
+function WelcomeBand({ brand, line }: { brand: string; line: string | null }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold">{brand} — what your market is saying</h1>
+      {line && <p className="text-sm text-muted-foreground mt-1">{line}</p>}
+    </div>
+  )
+}
+
+function StatCard({ dot, label, value, sub, accent }: { dot: string; label: string; value: string; sub: string; accent?: boolean }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+          <span className={`size-2 rounded-full ${dot}`} aria-hidden />
+          {label}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className={`text-3xl font-bold capitalize ${accent ? 'text-positive' : ''}`}>{value}</div>
+        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
+      </CardContent>
+    </Card>
   )
 }
