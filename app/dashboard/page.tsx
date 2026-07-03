@@ -6,14 +6,18 @@ import { categoryTint } from '@/lib/ui-colors'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
 // this week's news (that's the report's job) and no longer the pipeline readout
-// it used to be. Four bands: welcome + human coverage line · three
-// where-you-stand stat cards · "what your market is talking about" (top-3
-// themes, each routing to Voice) · the single best-grounded recommendation as
-// the hero. Themes prefer the persisted `themes` table (Pass B labels +
-// first_seen "New" badges, populated from the 2026-07-06 run onward) and
-// degrade gracefully to slug-level grouping of audience_insights on older
-// runs. Client-facing rules apply: no run ids, no scraped/analysed KPIs, no
-// pipeline jargon — including empty states.
+// it used to be. Four bands: deep-green welcome hero + human coverage line ·
+// three where-you-stand stat cards, each with a small server-rendered chart
+// (sentiment split · share of conversation · audience mood) · "what your market
+// is talking about" (top-3 themes, editorial numerals, each routing to Voice) ·
+// the single best-grounded recommendation. Themes prefer the persisted `themes`
+// table (Pass B labels + first_seen "New" badges, populated from the 2026-07-06
+// run onward) and degrade gracefully to slug-level grouping of audience_insights
+// on older runs. Desktop-first. Chart hues validated (dataviz six checks):
+// green #2E8B5E (bg-chart-2) · amber (warning) · terracotta (negative) · clay,
+// with recessive sand (bg-input) for neutral/rest — legends + tooltips supply
+// the required secondary encoding. Client-facing rules apply: no run ids, no
+// scraped/analysed KPIs, no pipeline jargon — including empty states.
 
 interface VideoRow {
   id: string
@@ -50,6 +54,14 @@ interface TopTheme {
   memberThemes: string[]
   evidenceLabel: string
   isNew: boolean
+}
+
+/** One segment of a proportional bar. Colour classes written in full for Tailwind. */
+interface Segment {
+  label: string
+  count: number
+  pct: number
+  color: string
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -104,8 +116,8 @@ export default async function DashboardPage() {
 
   if (!runId || !videoRunId) {
     return (
-      <div className="space-y-6">
-        <WelcomeBand brand={brand} line={null} />
+      <div className="space-y-8">
+        <HeroBand brand={brand} line={null} />
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             Your first analysis {nextUpdate ? `lands with the ${nextUpdate.replace('next update ', '')} update` : 'is on its way'} — check back then.
@@ -139,7 +151,7 @@ export default async function DashboardPage() {
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
   const commentCount = commentsRes.count ?? 0
 
-  // ---- Welcome band coverage line (human terms, per spec) ----
+  // ---- Welcome hero coverage line (human terms, per spec) ----
   const lineParts = [
     keywordCount > 0 && tc?.platforms?.length
       ? `Tracking ${keywordCount} search terms across ${listNames(tc.platforms)}`
@@ -149,30 +161,55 @@ export default async function DashboardPage() {
     nextUpdate,
   ].filter(Boolean) as string[]
 
-  // ---- Where you stand: sentiment · share of conversation · audience mood ----
+  // ---- Where you stand: sentiment split · share of conversation · mood ----
   const analysed = videos.filter((v) => v.sentiment != null)
-  const positiveShare = analysed.length > 0
-    ? Math.round((analysed.filter((v) => v.sentiment === 'positive').length / analysed.length) * 100)
-    : null
+  const sentimentCounts = { positive: 0, neutral: 0, mixed: 0, negative: 0 }
+  for (const v of analysed) {
+    if (v.sentiment && v.sentiment in sentimentCounts) sentimentCounts[v.sentiment as keyof typeof sentimentCounts]++
+  }
+  const pctOf = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
+  const positiveShare = analysed.length > 0 ? pctOf(sentimentCounts.positive, analysed.length) : null
+  const sentimentSegments: Segment[] = (
+    [
+      { label: 'Positive', count: sentimentCounts.positive, color: 'bg-chart-2' },
+      { label: 'Neutral', count: sentimentCounts.neutral, color: 'bg-input' },
+      { label: 'Mixed', count: sentimentCounts.mixed, color: 'bg-warning' },
+      { label: 'Negative', count: sentimentCounts.negative, color: 'bg-negative' },
+    ] as const
+  )
+    .filter((s) => s.count > 0)
+    .map((s) => ({ ...s, pct: pctOf(s.count, analysed.length) }))
 
-  const clientShare = videos.length > 0
-    ? Math.round((videos.filter((v) => v.is_client).length / videos.length) * 100)
-    : null
+  const clientCount = videos.filter((v) => v.is_client).length
+  const clientShare = videos.length > 0 ? pctOf(clientCount, videos.length) : null
   const competitorCounts = new Map<string, number>()
   for (const v of videos) {
     if (!v.is_competitor) continue
-    const name = v.competitor_name ?? 'competitors'
+    const name = v.competitor_name ?? 'Competitors'
     competitorCounts.set(name, (competitorCounts.get(name) ?? 0) + 1)
   }
-  const competitorShares = [...competitorCounts.entries()]
-    .map(([name, n]) => `${name} ${Math.round((n / videos.length) * 100)}%`)
-    .join(' · ')
+  // Colour follows the entity: the brand is always green, competitors take the
+  // earthy accents in volume order, the rest of the category stays recessive.
+  const COMPETITOR_COLORS = ['bg-clay', 'bg-ochre', 'bg-plum', 'bg-slate'] as const
+  const competitorSegs = [...competitorCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, n], i) => ({
+      label: name, count: n, pct: pctOf(n, videos.length),
+      color: COMPETITOR_COLORS[Math.min(i, COMPETITOR_COLORS.length - 1)],
+    }))
+  const restCount = videos.length - clientCount - [...competitorCounts.values()].reduce((a, b) => a + b, 0)
+  const shareSegments: Segment[] = [
+    { label: brand, count: clientCount, pct: pctOf(clientCount, videos.length), color: 'bg-chart-2' },
+    ...competitorSegs,
+    { label: 'Rest of category', count: restCount, pct: pctOf(restCount, videos.length), color: 'bg-input' },
+  ].filter((s) => s.count > 0)
 
   const emotionCounts = new Map<string, number>()
   for (const i of audienceInsights) {
     if (i.emotion) emotionCounts.set(i.emotion, (emotionCounts.get(i.emotion) ?? 0) + 1)
   }
-  const topEmotions = [...emotionCounts.entries()].sort((a, b) => b[1] - a[1]).map(([e]) => e)
+  const topEmotions = [...emotionCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+  const maxEmotion = topEmotions[0]?.[1] ?? 0
 
   // ---- What your market is talking about: top 3 themes ----
   // Prefer the persisted themes table (Pass B labels + first_seen); fall back to
@@ -238,29 +275,76 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <WelcomeBand brand={brand} line={lineParts.length ? lineParts.join(' · ') : null} />
+      <HeroBand brand={brand} line={lineParts.length ? lineParts.join(' · ') : null} />
 
       {/* Where you stand */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <StatCard
-          dot="bg-positive"
-          label="Sentiment"
-          value={positiveShare != null ? `${positiveShare}%` : '—'}
-          sub={positiveShare != null ? 'positive across analysed conversations' : 'lands with the next update'}
-          accent
-        />
-        <StatCard
-          dot="bg-pine"
-          label="Share of tracked conversation"
-          value={clientShare != null ? `${clientShare}%` : '—'}
-          sub={competitorShares ? `vs ${competitorShares}` : 'no competitors tracked yet'}
-        />
-        <StatCard
-          dot="bg-plum"
-          label="Audience mood"
-          value={topEmotions[0] ? cap(topEmotions[0]) : '—'}
-          sub={topEmotions.length > 1 ? `then ${topEmotions.slice(1, 3).join(' and ')}` : 'lands with the next update'}
-        />
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <span className="size-2 rounded-full bg-chart-2" aria-hidden />
+              Sentiment
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-3xl font-bold text-positive">{positiveShare != null ? `${positiveShare}%` : '—'}</div>
+            {sentimentSegments.length > 0 ? (
+              <>
+                <ProportionBar segments={sentimentSegments} of="conversations" />
+                <BarLegend segments={sentimentSegments} />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">lands with the next update</p>
+            )}
+            {positiveShare != null && <p className="text-xs text-muted-foreground">positive across analysed conversations</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <span className="size-2 rounded-full bg-clay" aria-hidden />
+              Share of tracked conversation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-3xl font-bold">{clientShare != null ? `${clientShare}%` : '—'}</div>
+            {shareSegments.length > 0 ? (
+              <>
+                <ProportionBar segments={shareSegments} of="videos" />
+                <BarLegend segments={shareSegments} />
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">no competitors tracked yet</p>
+            )}
+            {clientShare != null && <p className="text-xs text-muted-foreground">of the conversation you track is about {brand}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <span className="size-2 rounded-full bg-plum" aria-hidden />
+              Audience mood
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-3xl font-bold capitalize">{topEmotions[0] ? topEmotions[0][0] : '—'}</div>
+            {topEmotions.length > 0 ? (
+              <div className="space-y-1.5">
+                {topEmotions.map(([emotion, n]) => (
+                  <div key={emotion} className="flex items-center gap-2" title={`${cap(emotion)} · ${n} insight${n === 1 ? '' : 's'}`}>
+                    <span className="w-20 shrink-0 text-xs capitalize text-muted-foreground">{emotion}</span>
+                    <span className="h-2 rounded-full bg-chart-2" style={{ width: `${Math.max(8, (n / maxEmotion) * 100)}%` }} aria-hidden />
+                    <span className="text-[11px] text-muted-foreground">{n}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">lands with the next update</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* What your market is talking about */}
@@ -270,19 +354,24 @@ export default async function DashboardPage() {
             What your market is talking about
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {topThemes.map((t) => (
+            {topThemes.map((t, i) => (
               <Link key={t.label} href={`/dashboard/voice?themes=${encodeURIComponent(t.memberThemes.join(','))}`} className="group">
                 <Card className="h-full transition-colors group-hover:bg-muted/30">
                   <CardHeader className="pb-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${categoryTint(t.category)}`}>
-                        {t.category.replace(/_/g, ' ')}
-                      </span>
-                      {t.isNew && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
-                      )}
+                    <div className="flex items-start gap-3">
+                      <span className="text-3xl font-bold leading-none text-primary/25" aria-hidden>{i + 1}</span>
+                      <div className="space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${categoryTint(t.category)}`}>
+                            {t.category.replace(/_/g, ' ')}
+                          </span>
+                          {t.isNew && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
+                          )}
+                        </div>
+                        <CardTitle className="text-sm">{t.label}</CardTitle>
+                      </div>
                     </div>
-                    <CardTitle className="text-sm mt-1.5">{t.label}</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <p className="text-xs text-muted-foreground">{t.description}</p>
@@ -299,16 +388,16 @@ export default async function DashboardPage() {
 
       {/* The one thing */}
       {oneThing && (
-        <Card className="stat-hero ring-0 border-0">
+        <Card className="ring-2 ring-primary/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-[#CFE3D6]">The one thing to act on</CardTitle>
+            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing to act on</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xl font-bold text-white">{oneThing.title}</p>
-            <p className="text-sm text-[#CFE3D6]">{oneThing.reasoning}</p>
+            <p className="text-xl font-bold">{oneThing.title}</p>
+            <p className="text-sm text-muted-foreground">{oneThing.reasoning}</p>
             <Link
               href="/dashboard/market"
-              className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white/20"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
             >
               See the full picture <span aria-hidden>→</span>
             </Link>
@@ -319,28 +408,42 @@ export default async function DashboardPage() {
   )
 }
 
-function WelcomeBand({ brand, line }: { brand: string; line: string | null }) {
+/** The deep-green welcome hero — the page's single stat-hero element. */
+function HeroBand({ brand, line }: { brand: string; line: string | null }) {
   return (
-    <div>
-      <h1 className="text-2xl font-bold">{brand} — what your market is saying</h1>
-      {line && <p className="text-sm text-muted-foreground mt-1">{line}</p>}
+    <div className="stat-hero rounded-2xl px-6 py-8 sm:px-10 sm:py-12">
+      <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{brand} — what your market is saying</h1>
+      {line && <p className="mt-3 text-sm text-[#CFE3D6]">{line}</p>}
     </div>
   )
 }
 
-function StatCard({ dot, label, value, sub, accent }: { dot: string; label: string; value: string; sub: string; accent?: boolean }) {
+/** Proportional segmented bar with 2px surface gaps + per-segment tooltips. */
+function ProportionBar({ segments, of }: { segments: Segment[]; of: string }) {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <span className={`size-2 rounded-full ${dot}`} aria-hidden />
-          {label}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className={`text-3xl font-bold capitalize ${accent ? 'text-positive' : ''}`}>{value}</div>
-        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-      </CardContent>
-    </Card>
+    <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full">
+      {segments.map((s) => (
+        <span
+          key={s.label}
+          className={`${s.color} first:rounded-l-full last:rounded-r-full`}
+          style={{ width: `${Math.max(2, s.pct)}%` }}
+          title={`${s.label} · ${s.count} ${of} (${s.pct}%)`}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** Dot legend for a proportional bar — identity is never colour-alone. */
+function BarLegend({ segments }: { segments: Segment[] }) {
+  return (
+    <div className="flex flex-wrap gap-x-3 gap-y-1">
+      {segments.map((s) => (
+        <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <span className={`size-2 rounded-full ${s.color}`} aria-hidden />
+          {s.label} {s.pct}%
+        </span>
+      ))}
+    </div>
   )
 }

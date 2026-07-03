@@ -1,203 +1,94 @@
 # Design System Master File
 
-> **LOGIC:** When building a specific page, first check `design-system/pages/[page-name].md`.
+> **LOGIC:** When building a specific page, first check `design-system/verbatim/pages/[page-name].md`.
 > If that file exists, its rules **override** this Master file.
 > If not, strictly follow the rules below.
 
 ---
 
 **Project:** Verbatim
-**Generated:** 2026-04-01 14:28:14
-**Category:** Analytics Dashboard
+**System:** the "green refresh" (live since June 2026)
+**Updated:** 2026-07-03 — replaces the stale April blue/amber system, which was never what shipped.
+**Source of truth:** `app/globals.css` (tokens) + `lib/ui-colors.ts` (accent/status helpers). This file describes them; if they disagree, the code wins.
 
 ---
 
-## Global Rules
+## Character
 
-### Color Palette
+Warm editorial intelligence, not SaaS-dashboard chrome. Cream paper canvas, deep-green ink,
+glass cards floating over a faint crowd illustration (the voices behind the data). No neon,
+no pure white, no pure black. The product expresses judgment — chips and prose, never raw
+scores (Redesign Spec §1).
 
-| Role | Hex | CSS Variable |
-|------|-----|--------------|
-| Primary | `#1E40AF` | `--color-primary` |
-| Secondary | `#3B82F6` | `--color-secondary` |
-| CTA/Accent | `#F59E0B` | `--color-cta` |
-| Background | `#F8FAFC` | `--color-background` |
-| Text | `#1E3A8A` | `--color-text` |
+**Primary viewport: laptop/desktop.** Clients read this on laptops; design desktop-first.
+Mobile must work but is the secondary pass.
 
-**Color Notes:** Blue data + amber highlights
+## Color Palette
 
-### Typography
+All tokens are CSS variables in `app/globals.css`, mapped to Tailwind utilities via `@theme inline`
+(e.g. `--accent-pine` → `bg-pine`, `text-pine`). Light theme:
 
-- **Heading Font:** Fira Code
-- **Body Font:** Fira Sans
-- **Mood:** dashboard, data, analytics, code, technical, precise
-- **Google Fonts:** [Fira Code + Fira Sans](https://fonts.google.com/share?selection.family=Fira+Code:wght@400;500;600;700|Fira+Sans:wght@300;400;500;600;700)
+| Role | Hex | Token / utility |
+|------|-----|-----------------|
+| Canvas | `#F6F1E7` warm cream | `--background` |
+| Ink | `#14291F` deep green-black | `--foreground` |
+| Card | `rgba(253,250,244,0.78)` glass | `--card` + `backdrop-blur-xl` |
+| Primary | `#14503A` pine | `--primary`, links/CTAs |
+| Primary text on green | `#F7F3EA` cream | `--primary-foreground` |
+| Muted surface | `#ECE7DA` | `--muted` |
+| Border | `#E4DCCC` warm sand | `--border` |
 
-**CSS Import:**
-```css
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
-```
+**Semantic status** (warm, no neon): positive `#1B6144` · warning/amber `#B9822B` · negative/destructive `#B4472F`.
 
-### Spacing Variables
+**Category accents** — muted & earthy, for category identity only (chips, dots), cycled/hashed via
+`lib/ui-colors.ts` (`categoryTint`, `categorySolid`): pine `#2E7D6F` · clay `#C4633F` · ochre `#C99A3B`
+· plum `#8A5A7A` · slate `#4E6E9E`.
 
-| Token | Value | Usage |
-|-------|-------|-------|
-| `--space-xs` | `4px` / `0.25rem` | Tight gaps |
-| `--space-sm` | `8px` / `0.5rem` | Icon gaps, inline spacing |
-| `--space-md` | `16px` / `1rem` | Standard padding |
-| `--space-lg` | `24px` / `1.5rem` | Section padding |
-| `--space-xl` | `32px` / `2rem` | Large gaps |
-| `--space-2xl` | `48px` / `3rem` | Section margins |
-| `--space-3xl` | `64px` / `4rem` | Hero padding |
+**Chart greens** — deep → pale, for data viz: `#0F3B2B` · `#2E8B5E` · `#7C9A6B` · `#A8B98C` · `#4B6B4A`
+(`--chart-1…5`; `greenForPct()` maps 0–100 values onto them).
 
-### Shadow Depths
+A full dark theme exists (`.dark` block); every new surface must read in both.
 
-| Level | Value | Usage |
-|-------|-------|-------|
-| `--shadow-sm` | `0 1px 2px rgba(0,0,0,0.05)` | Subtle lift |
-| `--shadow-md` | `0 4px 6px rgba(0,0,0,0.1)` | Cards, buttons |
-| `--shadow-lg` | `0 10px 15px rgba(0,0,0,0.1)` | Modals, dropdowns |
-| `--shadow-xl` | `0 20px 25px rgba(0,0,0,0.15)` | Hero images, featured cards |
+## Typography
 
----
+- **Sans + headings:** Plus Jakarta Sans (`--font-jakarta`, loaded via next/font)
+- **Mono:** JetBrains Mono (`--font-jetbrains`) — data/ids only
+- Page title: `text-2xl font-bold`. Section headings: `text-sm font-semibold uppercase tracking-wide text-muted-foreground`, optionally with a normal-case hint suffix.
 
-## Component Specs
+## Shape & Elevation
 
-### Buttons
+- Radius base `--radius: 1rem`; cards are `rounded-2xl`, chips/pills `rounded-full`.
+- Card shadow (shared with the floating sidebar): `0 2px 6px -2px rgba(18,42,31,0.10), 0 18px 40px -16px rgba(18,42,31,0.32)` + `ring-1 ring-border/70`.
 
-```css
-/* Primary Button */
-.btn-primary {
-  background: #F59E0B;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
+## Signature components
 
-.btn-primary:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
+- **`.stat-hero`** — filled deep-green hero card: diagonal gradient `#1A5C43 → #113E2C` with a soft
+  top-right radial sheen, cream text `#F5F1E6`. The page's single strongest element — use sparingly.
+- **`.crowd-bg`** — ambient crowd illustration behind the app shell, opacity 0.16, masked to fade up.
+  Position `absolute` inside the shell, never `fixed` (mobile toolbar drift).
+- **Chips** — `px-2 py-0.5 rounded-full text-xs font-medium`; category chips use `categoryTint(key)`,
+  levels use `levelBadge()` (high = amber, rest muted), sentiment uses `SENTIMENT_BADGE`,
+  evidence tiers show "Strong evidence" (positive tint) / "Early signal" (warning tint) — never numeric scores.
+- **Voice links** — pill outline in primary: `text-primary ring-1 ring-primary/25 hover:bg-primary/5`.
 
-/* Secondary Button */
-.btn-secondary {
-  background: transparent;
-  color: #1E40AF;
-  border: 2px solid #1E40AF;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-weight: 600;
-  transition: all 200ms ease;
-  cursor: pointer;
-}
-```
+## Rules
 
-### Cards
+1. Write Tailwind class strings out in full — never interpolated — so v4 detects them (see `lib/ui-colors.ts` header).
+2. Client-facing language ban list applies to all UI copy (Redesign Spec §1): no *run, pass, gather, scraped, pipeline, corpus, run id*.
+3. Charts are server-rendered (divs/SVG) with the chart-green range or category accents — no chart libraries, no client JS for static data.
+4. shadcn/ui components in `components/ui/` are the base layer; extend, don't fork.
 
-```css
-.card {
-  background: #F8FAFC;
-  border-radius: 12px;
-  padding: 24px;
-  box-shadow: var(--shadow-md);
-  transition: all 200ms ease;
-  cursor: pointer;
-}
+## Anti-patterns
 
-.card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
-}
-```
+- ❌ Emojis as icons (use Lucide SVGs)
+- ❌ Raw confidence/opportunity scores in client-facing UI
+- ❌ Layout-shifting hovers; instant state changes (use 150–300ms transitions)
+- ❌ Low-contrast text (4.5:1 minimum) or invisible focus states
+- ❌ Cool grays, pure white surfaces, neon accents — everything stays warm
 
-### Inputs
+## Pre-delivery checklist
 
-```css
-.input {
-  padding: 12px 16px;
-  border: 1px solid #E2E8F0;
-  border-radius: 8px;
-  font-size: 16px;
-  transition: border-color 200ms ease;
-}
-
-.input:focus {
-  border-color: #1E40AF;
-  outline: none;
-  box-shadow: 0 0 0 3px #1E40AF20;
-}
-```
-
-### Modals
-
-```css
-.modal-overlay {
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-}
-
-.modal {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
-  max-width: 500px;
-  width: 90%;
-}
-```
-
----
-
-## Style Guidelines
-
-**Style:** Data-Dense Dashboard
-
-**Keywords:** Multiple charts/widgets, data tables, KPI cards, minimal padding, grid layout, space-efficient, maximum data visibility
-
-**Best For:** Business intelligence dashboards, financial analytics, enterprise reporting, operational dashboards, data warehousing
-
-**Key Effects:** Hover tooltips, chart zoom on click, row highlighting on hover, smooth filter animations, data loading spinners
-
-### Page Pattern
-
-**Pattern Name:** Video-First Hero
-
-- **Conversion Strategy:** 86% higher engagement with video. Add captions for accessibility. Compress video for performance.
-- **CTA Placement:** Overlay on video (center/bottom) + Bottom section
-- **Section Order:** 1. Hero with video background, 2. Key features overlay, 3. Benefits section, 4. CTA
-
----
-
-## Anti-Patterns (Do NOT Use)
-
-- ❌ Ornate design
-- ❌ No filtering
-
-### Additional Forbidden Patterns
-
-- ❌ **Emojis as icons** — Use SVG icons (Heroicons, Lucide, Simple Icons)
-- ❌ **Missing cursor:pointer** — All clickable elements must have cursor:pointer
-- ❌ **Layout-shifting hovers** — Avoid scale transforms that shift layout
-- ❌ **Low contrast text** — Maintain 4.5:1 minimum contrast ratio
-- ❌ **Instant state changes** — Always use transitions (150-300ms)
-- ❌ **Invisible focus states** — Focus states must be visible for a11y
-
----
-
-## Pre-Delivery Checklist
-
-Before delivering any UI code, verify:
-
-- [ ] No emojis used as icons (use SVG instead)
-- [ ] All icons from consistent icon set (Heroicons/Lucide)
-- [ ] `cursor-pointer` on all clickable elements
-- [ ] Hover states with smooth transitions (150-300ms)
-- [ ] Light mode: text contrast 4.5:1 minimum
-- [ ] Focus states visible for keyboard navigation
-- [ ] `prefers-reduced-motion` respected
-- [ ] Responsive: 375px, 768px, 1024px, 1440px
-- [ ] No content hidden behind fixed navbars
-- [ ] No horizontal scroll on mobile
+- [ ] Reads correctly in light AND dark themes
+- [ ] Desktop-first layout verified at 1280–1440px, then mobile at 375px (no horizontal scroll)
+- [ ] Empty states in client language, no pipeline jargon
+- [ ] `cursor-pointer` + visible focus states on interactive elements
