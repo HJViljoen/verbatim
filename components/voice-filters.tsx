@@ -4,28 +4,30 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 
 // Filter bar for Voice of Customer. URL-driven so the server component does the
 // actual filtering (shareable links, no client data duplication); this only
-// updates the query string and preserves any other params (e.g. ?themes).
-const TYPES = [
-  { value: 'all', label: 'All types' },
-  { value: 'pain_point', label: 'Pain point' },
-  { value: 'question', label: 'Question' },
-  { value: 'feature_request', label: 'Feature request' },
-  { value: 'purchase_intent', label: 'Purchase intent' },
-  { value: 'buying_trigger', label: 'Buying trigger' },
-  { value: 'switching_signal', label: 'Switching signal' },
-  { value: 'objection', label: 'Objection' },
-  { value: 'praise', label: 'Praise' },
-  { value: 'misinformation', label: 'Misinformation' },
-  { value: 'demographic_signal', label: 'Demographic signal' },
+// updates the query string and preserves any other params (e.g. ?themes, ?type).
+// Category filtering moved to the tab row on the page; strength options are
+// worded, never numeric (Redesign Spec §1 — scores are not displayed).
+const STAGES = [
+  { value: 'all', label: 'Any journey stage' },
+  { value: 'awareness', label: 'Awareness' },
+  { value: 'consideration', label: 'Consideration' },
+  { value: 'purchase', label: 'Purchase' },
+  { value: 'ownership', label: 'Ownership' },
+  { value: 'advocacy', label: 'Advocacy' },
 ]
-const SCORES = [
-  { value: '0', label: 'Any score' },
-  { value: '5', label: 'Score 5+' },
-  { value: '7', label: 'Score 7+' },
-  { value: '9', label: 'Score 9+' },
+const STRENGTH = [
+  { value: '0', label: 'Any strength' },
+  { value: '4', label: 'Clear or stronger' },
+  { value: '7', label: 'Strong only' },
 ]
 
-export function VoiceFilters({ type, min, deepLinked }: { type: string; min: string; deepLinked?: boolean }) {
+export function VoiceFilters({ stage, min, deepLinked, showStage }: {
+  stage: string
+  min: string
+  deepLinked?: boolean
+  /** Hide the journey filter on runs whose insights predate the journey tag. */
+  showStage?: boolean
+}) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
@@ -55,13 +57,15 @@ export function VoiceFilters({ type, min, deepLinked }: { type: string; min: str
           <span aria-hidden>✕</span>
         </button>
       )}
-      <select className={selectCls} value={type} onChange={(e) => setParam('type', e.target.value, 'all')} aria-label="Filter by type">
-        {TYPES.map((t) => (
-          <option key={t.value} value={t.value}>{t.label}</option>
-        ))}
-      </select>
-      <select className={selectCls} value={min} onChange={(e) => setParam('min', e.target.value, '0')} aria-label="Filter by minimum score">
-        {SCORES.map((s) => (
+      {showStage && (
+        <select className={selectCls} value={stage} onChange={(e) => setParam('stage', e.target.value, 'all')} aria-label="Filter by journey stage">
+          {STAGES.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
+        </select>
+      )}
+      <select className={selectCls} value={min} onChange={(e) => setParam('min', e.target.value, '0')} aria-label="Filter by signal strength">
+        {STRENGTH.map((s) => (
           <option key={s.value} value={s.value}>{s.label}</option>
         ))}
       </select>
