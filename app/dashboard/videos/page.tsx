@@ -3,16 +3,21 @@ import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SENTIMENT_BADGE } from '@/lib/ui-colors'
 
-// Content Analysis — the full video catalog with Pass A classification
-// (classified_type, hook_style, sentiment, topics) plus hook-style and
-// content-type performance aggregated from the catalog. Read-only server
-// component. Competitor content-gap / recommended-hook analysis is not produced
-// by the pipeline yet — flagged inline rather than faked.
+// Content — "What content works in this niche?" (Redesign Spec §6). Four
+// layers over the latest update's videos: hook intelligence (hook_style ranked
+// by engagement with real hook_text examples), content-type performance, top
+// voices (the accounts driving the category conversation — strategy content
+// pillar #5), and the full catalog as the evidence layer at the bottom.
+// Demo-layout ranked tables with inline single-hue bars (magnitude, not
+// identity — dataviz rules; values always labelled). Anchored on the newest
+// gather with data, excluding in-flight runs, like the dashboard. Honesty
+// rule (positioning): hooks are read from captions + comments, never footage.
 
 interface VideoRow {
   id: string
   platform: string
   account_name: string
+  account_followers: number | null
   video_url: string
   views: number | null
   engagement_rate: number | null
@@ -22,7 +27,7 @@ interface VideoRow {
   sentiment: string | null
   classified_type: string | null
   hook_style: string | null
-  content_format: string | null
+  hook_text: string | null
   topics: string[] | null
 }
 
@@ -31,134 +36,303 @@ const fmt = (n: number) =>
   : n >= 1_000   ? `${(n / 1_000).toFixed(0)}K`
   : String(n)
 
+const pretty = (s: string) => s.replace(/[-_]/g, ' ')
 
-// Aggregate avg engagement + count by a classification field.
-function perfBy(videos: VideoRow[], key: 'hook_style' | 'classified_type') {
-  const map: Record<string, { count: number; eng: number; engN: number }> = {}
+/** Max catalog rows rendered (the query stays run-scoped but uncapped — the
+ *  aggregates above the table need the full update). */
+const CATALOG_CAP = 100
+/** Accounts shown in Top voices. */
+const VOICES_SHOWN = 10
+
+interface PerfRow {
+  k: string
+  count: number
+  avgEng: number | null
+  topExample: string | null
+}
+
+// Aggregate avg engagement + count by a classification field; the example is
+// the hook_text of the group's highest-engagement video.
+function perfBy(videos: VideoRow[], key: 'hook_style' | 'classified_type'): PerfRow[] {
+  const map = new Map<string, { count: number; eng: number; engN: number; best: VideoRow | null }>()
   for (const v of videos) {
     const k = v[key]
     if (!k) continue
-    map[k] ??= { count: 0, eng: 0, engN: 0 }
-    map[k].count++
-    if (Number(v.engagement_rate) > 0) { map[k].eng += Number(v.engagement_rate); map[k].engN++ }
+    const g = map.get(k) ?? { count: 0, eng: 0, engN: 0, best: null }
+    g.count++
+    if (Number(v.engagement_rate) > 0) {
+      g.eng += Number(v.engagement_rate)
+      g.engN++
+      if (!g.best || Number(v.engagement_rate) > Number(g.best.engagement_rate)) g.best = v
+    }
+    map.set(k, g)
   }
-  return Object.entries(map)
-    .map(([k, { count, eng, engN }]) => ({ k, count, avgEng: engN > 0 ? (eng / engN).toFixed(1) : null }))
-    .sort((a, b) => Number(b.avgEng ?? -1) - Number(a.avgEng ?? -1))
+  return [...map.entries()]
+    .map(([k, { count, eng, engN, best }]) => ({
+      k, count,
+      avgEng: engN > 0 ? eng / engN : null,
+      topExample: best?.hook_text ?? null,
+    }))
+    .sort((a, b) => (b.avgEng ?? -1) - (a.avgEng ?? -1))
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs text-muted-foreground italic">{children}</p>
-}
-
-/** Max catalog rows rendered (the query stays uncapped — the hook/type
- *  aggregates above the table need the full corpus). */
-const CATALOG_CAP = 100
-
-export default async function ContentAnalysisPage() {
+export default async function ContentPage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
+  // Anchor on the newest gather WITH data, excluding in-flight runs (the
+  // dashboard's videoRunId pattern) — the page keeps serving the previous
+  // update while a new one is collecting.
+  const { data: runningRuns } = await supabase.from('pipeline_runs').select('id')
+    .eq('client_id', clientId).eq('status', 'running')
+  const runningIds = ((runningRuns ?? []) as { id: string }[]).map((r) => r.id)
+  let vidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
+  if (runningIds.length) vidQ = vidQ.not('run_id', 'in', `(${runningIds.join(',')})`)
+  const { data: latestVid } = await vidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle()
+
+  if (!latestVid) {
+    return (
+      <div className="space-y-6">
+        <PageHeader sub={null} />
+        <EmptyState>Your content intelligence lands with your first update — check back then.</EmptyState>
+      </div>
+    )
+  }
+  const videoRunId = latestVid.run_id as string
+
   const all = await selectAll<VideoRow>(() => supabase.from('videos')
-    .select('id, platform, account_name, video_url, views, engagement_rate, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, content_format, topics')
-    .eq('client_id', clientId).order('views', { ascending: false }).order('id', { ascending: true }))
-  const analysed = all.filter(v => v.classified_type != null)
+    .select('id, platform, account_name, account_followers, video_url, views, engagement_rate, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
+    .eq('client_id', clientId).eq('run_id', videoRunId)
+    .order('views', { ascending: false }).order('id', { ascending: true }))
+
+  const analysed = all.filter((v) => v.classified_type != null)
   const hookPerf = perfBy(analysed, 'hook_style')
   const typePerf = perfBy(analysed, 'classified_type')
+  const maxHookEng = Math.max(...hookPerf.map((h) => h.avgEng ?? 0), 0)
+  const maxTypeEng = Math.max(...typePerf.map((t) => t.avgEng ?? 0), 0)
+
+  // ---- Top voices: the accounts driving the category conversation ----
+  const byAccount = new Map<string, { videos: number; views: number; eng: number; engN: number; followers: number; entity: string }>()
+  for (const v of all) {
+    const g = byAccount.get(v.account_name) ?? { videos: 0, views: 0, eng: 0, engN: 0, followers: 0, entity: 'industry' }
+    g.videos++
+    g.views += Number(v.views ?? 0)
+    if (Number(v.engagement_rate) > 0) { g.eng += Number(v.engagement_rate); g.engN++ }
+    g.followers = Math.max(g.followers, Number(v.account_followers ?? 0))
+    if (v.is_client) g.entity = 'brand'
+    else if (v.is_competitor && g.entity === 'industry') g.entity = v.competitor_name ?? 'competitor'
+    byAccount.set(v.account_name, g)
+  }
+  const voices = [...byAccount.entries()]
+    .map(([name, g]) => ({ name, ...g, avgEng: g.engN > 0 ? g.eng / g.engN : null }))
+    .sort((a, b) => b.views - a.views)
+    .slice(0, VOICES_SHOWN)
+
+  const roleChip = (entity: string) =>
+    entity === 'brand' ? 'bg-positive/12 text-positive'
+    : entity === 'industry' ? 'bg-muted text-muted-foreground'
+    : 'bg-clay/10 text-clay'
 
   const roleOf = (v: VideoRow) =>
     v.is_client ? 'brand' : v.is_competitor ? (v.competitor_name ?? 'competitor') : 'industry'
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Content Analysis</h1>
-        <p className="text-sm text-muted-foreground">{all.length} videos · {analysed.length} classified by Pass A</p>
-      </div>
+      <PageHeader
+        sub={`${all.length} videos in this update · ${analysed.length} analysed for hooks & format`}
+      />
 
-      {/* Hook + type performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {all.length === 0 && <EmptyState>No videos in this update yet — the next one lands soon.</EmptyState>}
+
+      {/* Hook intelligence + content-type performance */}
+      {(hookPerf.length > 0 || typePerf.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {hookPerf.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">What hooks are working</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Opening styles ranked by the engagement they earn — read from each video&rsquo;s caption and the conversation it sparked, not the footage.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground text-xs uppercase border-b">
+                      <th className="pb-2 pr-2 text-left font-medium w-8">#</th>
+                      <th className="pb-2 pr-3 text-left font-medium">Hook</th>
+                      <th className="pb-2 pr-3 text-left font-medium">Engagement</th>
+                      <th className="pb-2 text-right font-medium">Videos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hookPerf.map((h, i) => (
+                      <tr key={h.k} className="border-b last:border-0 align-top">
+                        <td className="py-2.5 pr-2">
+                          <span className={`inline-grid size-5 place-items-center rounded text-[11px] font-semibold ${
+                            i === 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                          }`}>{i + 1}</span>
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <div className="capitalize font-medium">{pretty(h.k)}</div>
+                          {h.topExample && (
+                            <div className="mt-0.5 max-w-64 truncate text-xs italic text-muted-foreground" title={h.topExample}>
+                              &ldquo;{h.topExample}&rdquo;
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <EngBar value={h.avgEng} max={maxHookEng} />
+                        </td>
+                        <td className="py-2.5 text-right text-muted-foreground">{h.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
+          {typePerf.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">What formats are working</CardTitle>
+                <p className="text-xs text-muted-foreground">Video formats ranked by average engagement across this update.</p>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground text-xs uppercase border-b">
+                      <th className="pb-2 pr-3 text-left font-medium">Format</th>
+                      <th className="pb-2 pr-3 text-left font-medium">Engagement</th>
+                      <th className="pb-2 text-right font-medium">Videos</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {typePerf.map((t) => (
+                      <tr key={t.k} className="border-b last:border-0">
+                        <td className="py-2.5 pr-3 capitalize font-medium">{pretty(t.k)}</td>
+                        <td className="py-2.5 pr-3"><EngBar value={t.avgEng} max={maxTypeEng} /></td>
+                        <td className="py-2.5 text-right text-muted-foreground">{t.count}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Top voices */}
+      {voices.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Top voices</CardTitle>
+            <p className="text-xs text-muted-foreground">The accounts driving the category conversation this update, by reach.</p>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground text-xs uppercase border-b">
+                  <th className="pb-2 pr-3 text-left font-medium">Account</th>
+                  <th className="pb-2 pr-3 text-left font-medium">Who</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Videos</th>
+                  <th className="pb-2 pr-3 text-right font-medium">Views</th>
+                  <th className="pb-2 text-right font-medium">Avg engagement</th>
+                </tr>
+              </thead>
+              <tbody>
+                {voices.map((a) => (
+                  <tr key={a.name} className="border-b last:border-0">
+                    <td className="py-2.5 pr-3">
+                      <div className="font-medium">@{a.name}</div>
+                      {a.followers > 0 && <div className="text-xs text-muted-foreground">{fmt(a.followers)} followers</div>}
+                    </td>
+                    <td className="py-2.5 pr-3">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${roleChip(a.entity)}`}>{a.entity}</span>
+                    </td>
+                    <td className="py-2.5 pr-3 text-right text-muted-foreground">{a.videos}</td>
+                    <td className="py-2.5 pr-3 text-right font-medium">{fmt(a.views)}</td>
+                    <td className="py-2.5 text-right text-muted-foreground">{a.avgEng != null ? `${a.avgEng.toFixed(1)}%` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* All videos — the evidence layer */}
+      {all.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Hook Style Performance</CardTitle>
-            <p className="text-[11px] text-muted-foreground italic mt-1">
-              Inferred from caption &amp; comments only — the model never sees the video, so hook style is a weak signal. Reliable hook detection needs transcription/vision (v5).
-            </p>
+            <CardTitle className="text-base">All videos</CardTitle>
+            {all.length > CATALOG_CAP && (
+              <p className="text-xs text-muted-foreground mt-1">Top {CATALOG_CAP} of {all.length} by views.</p>
+            )}
           </CardHeader>
-          <CardContent className="space-y-2">
-            {hookPerf.length === 0 ? <Empty>No classified videos — hook_style is set by Pass A.</Empty>
-              : hookPerf.map(({ k, count, avgEng }) => (
-                <div key={k} className="flex justify-between text-xs">
-                  <span className="capitalize">{k.replace(/-/g, ' ')} <span className="text-muted-foreground">· {count}</span></span>
-                  <span className="font-medium">{avgEng != null ? `${avgEng}%` : '—'}</span>
-                </div>
-              ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-sm">Content Type Performance</CardTitle></CardHeader>
-          <CardContent className="space-y-2">
-            {typePerf.length === 0 ? <Empty>No classified videos — classified_type is set by Pass A.</Empty>
-              : typePerf.map(({ k, count, avgEng }) => (
-                <div key={k} className="flex justify-between text-xs">
-                  <span className="capitalize">{k.replace(/-/g, ' ')} <span className="text-muted-foreground">· {count}</span></span>
-                  <span className="font-medium">{avgEng != null ? `${avgEng}%` : '—'}</span>
-                </div>
-              ))}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="bg-muted/30">
-        <CardContent className="py-3">
-          <Empty>Competitor content-gap analysis &amp; recommended hooks are not produced by the pipeline yet (no dedicated pass) — they fill once gather scrapes brand/competitor accounts.</Empty>
-        </CardContent>
-      </Card>
-
-      {/* Video catalog — rendered capped: the corpus is 1k+ rows and grows
-          weekly; an uncapped table made this the heaviest page in the app
-          (slow enough to break the mobile nav transition). Proper filtering/
-          pagination arrives with the Content page build (Spec §6). */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Video Catalog</CardTitle>
-          {all.length > CATALOG_CAP && (
-            <p className="text-[11px] text-muted-foreground mt-1">Top {CATALOG_CAP} of {all.length} by views.</p>
-          )}
-        </CardHeader>
-        <CardContent>
-          {all.length === 0 ? <Empty>No videos scraped for this client yet.</Empty> : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-xs uppercase border-b">
-                    {['Platform','Account','Role','Views','Eng.','Sentiment','Type','Hook','Topics'].map(h => (
-                      <th key={h} className={`pb-2 font-medium ${['Views','Eng.'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {all.slice(0, CATALOG_CAP).map(v => (
-                    <tr key={v.id} className="border-b last:border-0 align-top">
-                      <td className="py-2 capitalize">{v.platform}</td>
-                      <td className="py-2">
-                        <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">@{v.account_name}</a>
-                      </td>
-                      <td className="py-2 capitalize text-xs text-muted-foreground">{roleOf(v)}</td>
-                      <td className="py-2 text-right">{v.views != null ? fmt(Number(v.views)) : '—'}</td>
-                      <td className="py-2 text-right">{v.engagement_rate != null ? `${v.engagement_rate}%` : '—'}</td>
-                      <td className="py-2">{v.sentiment ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-muted text-muted-foreground'}`}>{v.sentiment}</span> : <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-2 capitalize text-xs">{v.classified_type ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-2 capitalize text-xs">{v.hook_style?.replace(/-/g, ' ') ?? <span className="text-muted-foreground">—</span>}</td>
-                      <td className="py-2 text-xs text-muted-foreground">{(v.topics ?? []).slice(0, 3).join(', ') || '—'}</td>
-                    </tr>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground text-xs uppercase border-b">
+                  {['Platform', 'Account', 'Who', 'Views', 'Eng.', 'Sentiment', 'Format', 'Hook', 'Topics'].map((h) => (
+                    <th key={h} className={`pb-2 font-medium ${['Views', 'Eng.'].includes(h) ? 'text-right' : 'text-left'}`}>{h}</th>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                </tr>
+              </thead>
+              <tbody>
+                {all.slice(0, CATALOG_CAP).map((v) => (
+                  <tr key={v.id} className="border-b last:border-0 align-top">
+                    <td className="py-2 capitalize">{v.platform}</td>
+                    <td className="py-2">
+                      <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@{v.account_name}</a>
+                    </td>
+                    <td className="py-2">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${roleChip(roleOf(v))}`}>{roleOf(v)}</span>
+                    </td>
+                    <td className="py-2 text-right">{v.views != null ? fmt(Number(v.views)) : '—'}</td>
+                    <td className="py-2 text-right">{v.engagement_rate != null ? `${v.engagement_rate}%` : '—'}</td>
+                    <td className="py-2">{v.sentiment ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium capitalize ${SENTIMENT_BADGE[v.sentiment] ?? 'bg-muted text-muted-foreground'}`}>{v.sentiment}</span> : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-2 capitalize text-xs">{v.classified_type ? pretty(v.classified_type) : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-2 capitalize text-xs">{v.hook_style ? pretty(v.hook_style) : <span className="text-muted-foreground">—</span>}</td>
+                    <td className="py-2 text-xs text-muted-foreground">{(v.topics ?? []).slice(0, 3).join(', ') || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
     </div>
+  )
+}
+
+function PageHeader({ sub }: { sub: string | null }) {
+  return (
+    <div>
+      <h1 className="text-2xl font-bold">Content</h1>
+      <p className="text-sm text-muted-foreground italic">&ldquo;What content works in this niche?&rdquo;</p>
+      {sub && <p className="text-sm text-muted-foreground mt-1">{sub}</p>}
+    </div>
+  )
+}
+
+/** Thin single-hue engagement bar with the value always labelled. */
+function EngBar({ value, max }: { value: number | null; max: number }) {
+  if (value == null || max <= 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <span className="flex items-center gap-2" title={`${value.toFixed(1)}% average engagement`}>
+      <span className="h-1.5 max-w-28 rounded-full bg-chart-2" style={{ width: `${Math.max(4, (value / max) * 100)}%` }} aria-hidden />
+      <span className="text-xs font-medium">{value.toFixed(1)}%</span>
+    </span>
+  )
+}
+
+function EmptyState({ children }: { children: React.ReactNode }) {
+  return (
+    <Card>
+      <CardContent className="py-10 text-center text-sm text-muted-foreground">{children}</CardContent>
+    </Card>
   )
 }
