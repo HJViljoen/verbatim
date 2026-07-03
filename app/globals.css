@@ -183,18 +183,15 @@
   color: #F5F1E6;
 }
 
-/* Ambient crowd layer — the voices behind the data. Fixed, faint, fades up.
-   Height uses the LARGE viewport unit (lvh): on mobile, `inset: 0` tracked the
-   visual viewport, so the browser toolbar collapsing on scroll resized the
-   layer and — with cover sizing anchored bottom — visibly rescaled/shifted
-   the artwork while scrolling. lvh is stable across toolbar show/hide. */
+/* Ambient crowd layer — the voices behind the data. Faint, fades up.
+   Absolute inside the app shell (which is h-dvh and scrolls in <main>, not the
+   document) — deliberately NOT position:fixed: mobile browsers shift
+   window-fixed layers while the toolbar animates, which made the artwork
+   visibly drift on scroll. With the document never scrolling, the toolbar
+   never moves and neither does this layer. */
 .crowd-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
-  height: 100lvh;
+  position: absolute;
+  inset: 0;
   z-index: 0;
   pointer-events: none;
   background: url("/crowd.svg") center bottom / cover no-repeat;
