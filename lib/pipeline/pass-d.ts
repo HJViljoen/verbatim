@@ -19,7 +19,7 @@ import type { AggregatedTheme, SovEntry } from './types'
 // and rejects unknowns (invariant 8).
 
 const PROMPT_VERSION_A = 'pass_d_a_v1'
-const PROMPT_VERSION_B = 'pass_d_b_v1'
+const PROMPT_VERSION_B = 'pass_d_b_v2'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
@@ -131,7 +131,11 @@ function buildSystemPromptB(brandName?: string): string {
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
     '- Each recommendation must be specific enough to act on this week. "Post more educational content" is a failure;',
     '  a concrete angle, hook, topic, or audience drawn from the quotes is the standard.',
-    '- Ground reasoning in the evidence: reference what customers say (echo their actual language where it strengthens the case).',
+    '- Ground reasoning in the evidence, but NEVER copy customer quotes verbatim into the title or reasoning:',
+    '  raw comments are often fragments and in many languages, so out of context they read as noise. Paraphrase',
+    '  what customers are saying in plain English instead (translating where needed). The product shows the real',
+    '  quotes behind every recommendation via its evidence link, so your prose never needs to reproduce them.',
+    '  (Hooks, titles, or example questions you AUTHOR yourself may of course be quoted.)',
     '- based_on lists the market insights a recommendation follows from as "M1", "M2" … and/or competitive insights as "C1" …',
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
