@@ -50,18 +50,30 @@ export default async function DashboardPage() {
   // Service-role is reserved for the pipeline + provisioning. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
-  // Latest run — scopes the audience insights (videos carry their latest
-  // classification in-place, so they're read corpus-wide, not run-scoped).
+  // Latest run — for the header + audience insights (an analysis run).
   const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at, status')
     .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
   const runId = latestRun?.id as string | undefined
 
+  // The dashboard shows the LATEST run's videos only, not the all-time corpus.
+  // Anchor on the run_id of the most recently scraped video: in the production
+  // pipeline gather + analysis share one run_id, but manual CLI runs split them,
+  // so the newest videos carry the latest GATHER run_id (the analysis run inserts
+  // no videos, so we can't use latestRun.id here).
+  const { data: latestVid } = await supabase
+    .from('videos').select('run_id')
+    .eq('client_id', clientId).order('scraped_at', { ascending: false }).limit(1).maybeSingle()
+  const videoRunId = latestVid?.run_id as string | undefined
+
   const [all, { data: aiData }] = await Promise.all([
-    selectAll<VideoRow>(() =>
-      supabase.from('videos')
+    selectAll<VideoRow>(() => {
+      let q = supabase.from('videos')
         .select('id, platform, account_name, video_url, views, likes, engagement_rate, is_competitor, is_client, sentiment, classified_type, topics')
-        .eq('client_id', clientId).order('views', { ascending: false }).order('id', { ascending: true })),
+        .eq('client_id', clientId)
+      if (videoRunId) q = q.eq('run_id', videoRunId)
+      return q.order('views', { ascending: false }).order('id', { ascending: true })
+    }),
     runId
       ? supabase.from('audience_insights')
           .select('id, category, theme, description, strength_score')
@@ -73,10 +85,11 @@ export default async function DashboardPage() {
 
   // ---- Stats ----
   const totalViews = all.reduce((s, v) => s + (Number(v.views) || 0), 0)
-  const withEng = all.filter(v => Number(v.engagement_rate) > 0)
-  const avgEngagement = withEng.length > 0
-    ? (withEng.reduce((s, v) => s + Number(v.engagement_rate), 0) / withEng.length).toFixed(1)
-    : '0'
+  // Avg Engagement KPI removed: no view/follower denominator exists on all three
+  // platforms (Instagram scrapes neither views nor followers, YouTube has no usable
+  // follower count), so an engagement RATE can't be computed consistently across
+  // TikTok + YouTube + Instagram. Bring it back once the IG scraper captures Reel
+  // play counts (Migration-to-Code / gather fix), then a view-based rate spans all 3.
   // Analysed = videos that have been through Pass A (sentiment is set). The gap
   // between all.length and analysed.length is the "scraped but not analysed" set.
   const analysed = all.filter(v => v.sentiment != null)
@@ -136,7 +149,6 @@ export default async function DashboardPage() {
         {[
           { label: 'Videos Scraped',    value: String(all.length),     sub: `${analysed.length} analysed`, hero: true },
           { label: 'Total Views',       value: fmt(totalViews),        sub: 'TikTok + YouTube', dot: 'bg-pine' },
-          { label: 'Avg Engagement',    value: `${avgEngagement}%`,    sub: `${withEng.length} videos`, dot: 'bg-ochre' },
           { label: 'Overall Sentiment', value: analysed.length ? `${positiveShare}%` : '—', sub: analysed.length ? `positive · ${analysed.length} analysed` : 'no analysed videos', dot: 'bg-positive', accentValue: true },
         ].map(({ label, value, sub, hero, dot, accentValue }) =>
           hero ? (
