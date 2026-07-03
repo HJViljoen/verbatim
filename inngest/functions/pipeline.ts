@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
-import { runGather } from '@/lib/gather/gather'
+import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, type SearchResult } from '@/lib/gather/gather'
 import { runPassA } from '@/lib/pipeline/pass-a'
 import { runStepA2 } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
@@ -24,11 +24,12 @@ import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 // Trigger: `pipeline/run.requested` { clientId, options? }. The cron dispatcher
 // (scheduler.ts) and the "Run now" button both emit this event.
 //
-// Timeout note: every stage is sized to fit the 300s Hobby cap. Gather is split
-// per-platform; Pass A is fanned out in batches of PASS_A_BATCH videos (the
-// whole corpus in one step was ~264 eligible videos ≈ 15-20 min of GPT calls —
-// found before it could sink the 2026-07-06 run); the back half is two steps
-// (themes, then synthesis) decoupled via the persisted themes table.
+// Timeout note: every stage is sized to fit the route's duration cap. Gather is
+// fanned out per keyword search + per comment batch (a whole platform in one
+// step timed out at 300s on the first cloud run — the per-video Apify comment
+// scrape dominates); Pass A runs in batches of PASS_A_BATCH videos (the whole
+// corpus in one step was ~264 eligible videos ≈ 15-20 min of GPT calls); the
+// back half is two steps (themes, then synthesis) decoupled via the themes table.
 
 export interface PipelineRunOptions {
   platforms?: Platform[]
@@ -48,6 +49,19 @@ export const runPipeline = inngest.createFunction(
     // in-flight run on the same corpus.
     concurrency: { limit: 1, key: 'event.data.clientId' },
     retries: 2,
+    // A function-level failure (a step out of retries) would otherwise strand
+    // the run row at 'running' forever — pages and monitors need a terminal
+    // state (found live: the first cloud run's gather timeouts did exactly this).
+    onFailure: async ({ event }) => {
+      const original = (event.data as { event?: { data?: { clientId?: string } } }).event
+      const clientId = original?.data?.clientId
+      if (!clientId) return
+      const message = (event.data as { error?: { message?: string } }).error?.message ?? 'pipeline function failed'
+      const admin = createAdminClient()
+      await admin.from('pipeline_runs')
+        .update({ status: 'failed', error_message: message, completed_at: new Date().toISOString() })
+        .eq('client_id', clientId).eq('status', 'running')
+    },
   },
   async ({ event, step }) => {
     const clientId = (event.data as { clientId?: string }).clientId
@@ -65,28 +79,58 @@ export const runPipeline = inngest.createFunction(
       return id
     })
 
-    // 2. Resolve the platforms to gather (event override or the client config).
-    const platforms = await step.run('plan-platforms', async () => {
-      if (options.platforms?.length) return options.platforms
-      const admin = createAdminClient()
-      const { data } = await admin
-        .from('tracking_configs').select('platforms').eq('client_id', clientId).maybeSingle()
-      return (data?.platforms?.length ? data.platforms : ['tiktok', 'youtube', 'instagram']) as Platform[]
-    })
+    // 2. Plan the gather fan-out: one task per platform × keyword.
+    const plan = await step.run('plan-gather', () =>
+      planGatherSearches(clientId, options.platforms?.length ? options.platforms : undefined),
+    )
+    const gatherPlatforms = [...new Set(plan.map((t) => t.platform))]
 
-    // 3. Gather — one step per platform so a single step never scrapes all three.
+    // 3. Gather, fanned out: per-keyword search steps → one gate step per
+    //    platform (merge + relevance/attribution + video upsert) → comment
+    //    scrapes in batches of COMMENT_BATCH (each video is its own Apify actor
+    //    run — the single-step-per-platform version timed out at 300s on the
+    //    first attempt, 2026-07-03). One platform failing must not stop the
+    //    others; one search failing must not stop its platform.
     let totalVideos = 0
     let totalErrors = 0
-    for (const platform of platforms) {
-      const r = await step.run(`gather:${platform}`, async () => {
-        const [res] = await runGather({
-          clientId, runId, platforms: [platform],
-          maxVideos: options.maxVideos, videoLimit: options.videoLimit, period: options.period,
-        })
-        return res ?? { platform, videos: 0, comments: 0, errors: [] as string[] }
-      })
-      totalVideos += r.videos
-      totalErrors += r.errors.length
+    for (const platform of gatherPlatforms) {
+      try {
+        const searches: SearchResult[] = []
+        for (const task of plan.filter((t) => t.platform === platform)) {
+          try {
+            searches.push(
+              await step.run(`search:${platform}:${task.keyword}`, () =>
+                searchOne({
+                  clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
+                  maxVideos: options.maxVideos, period: options.period,
+                }),
+              ),
+            )
+          } catch {
+            totalErrors++
+            searches.push({ keyword: task.keyword, bucket: task.bucket, videos: [] })
+          }
+        }
+        const gate = await step.run(`gate:${platform}`, () =>
+          gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit }),
+        )
+        totalVideos += gate.videosKept
+        totalErrors += gate.errors.length
+        for (let i = 0; i < gate.eligible.length; i += COMMENT_BATCH) {
+          const refs = gate.eligible.slice(i, i + COMMENT_BATCH)
+          const batchNo = i / COMMENT_BATCH + 1
+          try {
+            const r = await step.run(`comments:${platform}:${batchNo}`, () =>
+              scrapeCommentsBatch({ clientId, runId, platform, refs }),
+            )
+            totalErrors += r.errors.length
+          } catch {
+            totalErrors++
+          }
+        }
+      } catch {
+        totalErrors++
+      }
     }
 
     // No corpus → close as failed, stop (nothing for the analysis passes to chew on).
@@ -152,8 +196,13 @@ export const runPipeline = inngest.createFunction(
 )
 
 /** Batch size for the Pass A fan-out: ~3-5s per GPT call keeps a batch around
- *  2-3 min — comfortable inside the 300s route cap. */
+ *  2-3 min — comfortable inside the route's duration cap. */
 const PASS_A_BATCH = 40
+
+/** Videos per comment-scrape step. Each video is its own Apify actor run
+ *  (~20-60s incl. actor startup), so 4 stays inside the 300s Hobby cap even
+ *  when every actor runs slow. More steps, same total wall time. */
+const COMMENT_BATCH = 4
 
 // Eligible video ids (raw comment count >= 5, richest first), chunked into
 // batches. Comments are scanned once and joined in memory — same URL-overflow
