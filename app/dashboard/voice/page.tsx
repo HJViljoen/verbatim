@@ -56,9 +56,12 @@ export default async function VoiceOfCustomerPage({
   const typeFilter = sp.type ?? 'all'
   const minScore = Number(sp.min ?? '0') || 0
 
+  // Latest COMPLETED run — an in-flight run has no insights yet, so the page
+  // keeps serving the previous run's voices until the new one closes.
   const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
-    .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
+    .eq('client_id', clientId).in('status', ['completed', 'partial'])
+    .order('started_at', { ascending: false }).limit(1).maybeSingle()
 
   if (!latestRun) return <EmptyState>No pipeline run yet. Run the analysis to extract audience insights.</EmptyState>
   const runId = latestRun.id as string

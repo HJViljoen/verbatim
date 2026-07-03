@@ -69,16 +69,27 @@ export default async function DashboardPage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
-  const [{ data: client }, { data: tc }, { data: latestRun }, { data: latestVid }] = await Promise.all([
+  // Anchor on the newest run WITH DATA: an in-flight run has no analysis rows
+  // yet, so anchoring on it blanks the site for the duration of every run. The
+  // page keeps serving the previous completed run until the new one closes;
+  // the same guard keeps a mid-gather partial corpus out of the stats.
+  const [{ data: client }, { data: tc }, { data: latestRun }, runningRes] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs')
       .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_day, report_period')
       .eq('client_id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
-      .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('videos').select('run_id, scraped_at')
-      .eq('client_id', clientId).order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
+      .eq('client_id', clientId).in('status', ['completed', 'partial'])
+      .order('started_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('pipeline_runs').select('id')
+      .eq('client_id', clientId).eq('status', 'running'),
   ])
+  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
+  const notRunning = runningIds.length ? `(${runningIds.join(',')})` : null
+
+  let vidQ = supabase.from('videos').select('run_id, scraped_at').eq('client_id', clientId)
+  if (notRunning) vidQ = vidQ.not('run_id', 'in', notRunning)
+  const { data: latestVid } = await vidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle()
 
   const brand = client?.company_name ?? 'Your brand'
   const keywordCount =
@@ -105,6 +116,8 @@ export default async function DashboardPage() {
   }
 
   // Corpus + insight reads for the latest run, in parallel.
+  let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
+  if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   const [videos, commentsRes, aiRes, recRes, latestThemedRes] = await Promise.all([
     selectAll<VideoRow>(() =>
       supabase.from('videos')
@@ -120,8 +133,7 @@ export default async function DashboardPage() {
     supabase.from('recommendations')
       .select('id, type, title, reasoning, priority, based_on')
       .eq('client_id', clientId).eq('run_id', runId),
-    supabase.from('themes').select('run_id')
-      .eq('client_id', clientId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    themedQ.order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]

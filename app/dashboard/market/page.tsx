@@ -64,10 +64,12 @@ export default async function MarketIntelligencePage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
-  // Latest run for this client.
+  // Latest COMPLETED run — an in-flight run has no synthesis rows yet, so the
+  // page keeps serving the previous run's insights until the new one closes.
   const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
-    .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
+    .eq('client_id', clientId).in('status', ['completed', 'partial'])
+    .order('started_at', { ascending: false }).limit(1).maybeSingle()
 
   if (!latestRun) {
     return <EmptyState />

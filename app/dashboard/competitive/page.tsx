@@ -45,9 +45,12 @@ export default async function CompetitiveIntelligencePage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
+  // Latest COMPLETED run — an in-flight run has no competitive rows yet, so the
+  // page keeps serving the previous run's findings until the new one closes.
   const { data: latestRun } = await supabase
     .from('pipeline_runs').select('id, started_at')
-    .eq('client_id', clientId).order('started_at', { ascending: false }).limit(1).maybeSingle()
+    .eq('client_id', clientId).in('status', ['completed', 'partial'])
+    .order('started_at', { ascending: false }).limit(1).maybeSingle()
   if (!latestRun) return <Shell><EmptyRun /></Shell>
   const runId = latestRun.id as string
 
