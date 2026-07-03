@@ -183,10 +183,18 @@
   color: #F5F1E6;
 }
 
-/* Ambient crowd layer — the voices behind the data. Fixed, faint, fades up. */
+/* Ambient crowd layer — the voices behind the data. Fixed, faint, fades up.
+   Height uses the LARGE viewport unit (lvh): on mobile, `inset: 0` tracked the
+   visual viewport, so the browser toolbar collapsing on scroll resized the
+   layer and — with cover sizing anchored bottom — visibly rescaled/shifted
+   the artwork while scrolling. lvh is stable across toolbar show/hide. */
 .crowd-bg {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100lvh;
   z-index: 0;
   pointer-events: none;
   background: url("/crowd.svg") center bottom / cover no-repeat;
