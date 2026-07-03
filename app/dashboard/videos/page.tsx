@@ -51,6 +51,10 @@ function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-xs text-muted-foreground italic">{children}</p>
 }
 
+/** Max catalog rows rendered (the query stays uncapped — the hook/type
+ *  aggregates above the table need the full corpus). */
+const CATALOG_CAP = 100
+
 export default async function ContentAnalysisPage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
@@ -111,9 +115,17 @@ export default async function ContentAnalysisPage() {
         </CardContent>
       </Card>
 
-      {/* Video catalog */}
+      {/* Video catalog — rendered capped: the corpus is 1k+ rows and grows
+          weekly; an uncapped table made this the heaviest page in the app
+          (slow enough to break the mobile nav transition). Proper filtering/
+          pagination arrives with the Content page build (Spec §6). */}
       <Card>
-        <CardHeader><CardTitle>Video Catalog</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Video Catalog</CardTitle>
+          {all.length > CATALOG_CAP && (
+            <p className="text-[11px] text-muted-foreground mt-1">Top {CATALOG_CAP} of {all.length} by views.</p>
+          )}
+        </CardHeader>
         <CardContent>
           {all.length === 0 ? <Empty>No videos scraped for this client yet.</Empty> : (
             <div className="overflow-x-auto">
@@ -126,7 +138,7 @@ export default async function ContentAnalysisPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {all.map(v => (
+                  {all.slice(0, CATALOG_CAP).map(v => (
                     <tr key={v.id} className="border-b last:border-0 align-top">
                       <td className="py-2 capitalize">{v.platform}</td>
                       <td className="py-2">

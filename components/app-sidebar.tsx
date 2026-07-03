@@ -3,19 +3,21 @@
 import {
   Sidebar, SidebarContent, SidebarFooter,
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, TrendingUp, FileText, Users, CreditCard, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Users, CreditCard, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
 
+// Trends is deliberately absent (Redesign Spec §9: stays hidden) — the page is
+// a run-history readout and still reachable by URL for operators.
 const navItems = [
   { href: "/dashboard",           label: "Dashboard",          icon: LayoutDashboard },
   { href: "/dashboard/market",    label: "Market Intelligence",icon: Target },
   { href: "/dashboard/voice",     label: "Voice of Customer",  icon: MessageCircle },
   { href: "/dashboard/competitive",label: "Competitive Intel", icon: Swords },
   { href: "/dashboard/videos",    label: "Content",            icon: Play },
-  { href: "/dashboard/trends",    label: "Trends",             icon: TrendingUp },
   { href: "/dashboard/reports",   label: "Reports",            icon: FileText },
   { href: "/dashboard/team",      label: "Team",               icon: Users },
   { href: "/dashboard/billing",   label: "Billing",            icon: CreditCard },
@@ -26,6 +28,9 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  // Close the mobile drawer when a nav item is tapped — otherwise it stays
+  // open over the new page until the backdrop is tapped.
+  const { setOpenMobile } = useSidebar()
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -50,7 +55,7 @@ export function AppSidebar() {
                 isActive={pathname === item.href}
                 className="h-11 gap-3 rounded-xl px-3 font-medium"
               >
-                <Link href={item.href}>
+                <Link href={item.href} onClick={() => setOpenMobile(false)}>
                   <item.icon className="h-4 w-4" />
                   <span>{item.label}</span>
                 </Link>
