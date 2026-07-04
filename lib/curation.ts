@@ -11,7 +11,11 @@ export const CURATION_GATE = {
   confirmedMinScore: 7,
   /** Confirmed: minimum distinct supporting references (themes, insights). */
   confirmedMinSources: 2,
-  /** Early signal: below the confirmed gate but scored at least this. */
+  /** Early signal: below the confirmed gate but scored at least this. Also the
+   *  bar a single-source THEME must clear to be badged "Early signal" on the
+   *  pages — without it the term diluted to nothing (2026-07-04: 127 of 140
+   *  themes were single-source; 105 scored ≤5). Sub-bar singles live in a
+   *  collapsed "also heard once" archive. */
   earlySignalMinScore: 6,
 } as const
 

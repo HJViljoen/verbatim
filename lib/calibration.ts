@@ -95,7 +95,7 @@ export const GLOSSARY = {
   dominant: ['Dominant', "at least 40% of the group's analysed conversations (minimum 10)"],
   widespread: ['Widespread', "at least 15% of the group's analysed conversations (minimum 5)"],
   recurring: ['Recurring', 'heard in more than one conversation, below Widespread'],
-  early_signal: ['Early signal', 'heard in a single conversation so far — worth watching, not yet confirmed'],
+  early_signal: ['Early signal', 'heard in a single conversation so far but scored strong — worth watching, not yet confirmed'],
   strong_evidence: ['Strong evidence', 'high-confidence finding backed by two or more sources'],
   act_now: ['Act now', 'the single top-ranked action this update — never more than one'],
   plan_next: ['Plan next', 'ranked second or third this update'],

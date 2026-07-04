@@ -116,9 +116,13 @@ export default async function MarketIntelligencePage() {
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('run_summary').select('consumer_intelligence_summary')
       .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
+    // Single-source pills must clear the same strength bar as early-signal
+    // insights — "Early signal" is a calibrated term, not a catch-all for
+    // everything heard once (127 of 140 themes were single-source).
     supabase.from('themes')
       .select('label, description', { count: 'exact' })
       .eq('client_id', clientId).eq('run_id', runId).eq('single_source', true)
+      .gte('strength_score', CURATION_GATE.earlySignalMinScore)
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
   ])
 
@@ -266,7 +270,7 @@ export default async function MarketIntelligencePage() {
           {singleSourceThemes.length > 0 && (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Each of these surfaced under a single video so far:
+                Each of these was heard in a single conversation so far:
               </p>
               <div className="flex flex-wrap items-center gap-1.5">
                 {singleSourceThemes.map((t, i) => (

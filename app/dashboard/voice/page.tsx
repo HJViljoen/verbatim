@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_BADGE, PREVALENCE_BADGE } from '@/lib/ui-colors'
-import { gateTier } from '@/lib/curation'
+import { gateTier, CURATION_GATE } from '@/lib/curation'
 import { prevalenceTier, PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { VoiceFilters } from '@/components/voice-filters'
 import { CalibrationLegend } from '@/components/calibration-legend'
@@ -132,7 +132,12 @@ export default async function VoiceOfCustomerPage({
     Number(t.strength_score ?? 0) >= minScore,
   )
   const confirmed = shown.filter((t) => !t.single_source)
-  const early = shown.filter((t) => t.single_source)
+  // "Early signal" is a calibrated term — a single-source theme must also clear
+  // the strength bar to carry it (same knob as the insight gate). The rest are
+  // kept honest but demoted to a collapsed "also heard once" archive.
+  const singles = shown.filter((t) => t.single_source)
+  const early = singles.filter((t) => Number(t.strength_score ?? 0) >= CURATION_GATE.earlySignalMinScore)
+  const heardOnce = singles.filter((t) => Number(t.strength_score ?? 0) < CURATION_GATE.earlySignalMinScore)
 
   // Category tabs with counts — over the whole run, so the row is stable while
   // a tab is active. Ordered by theme volume.
@@ -316,6 +321,24 @@ export default async function VoiceOfCustomerPage({
             <p className="text-xs text-muted-foreground">+{early.length - EARLY_SHOWN} more early signals in this update</p>
           )}
         </section>
+      )}
+
+      {/* Also heard once — single mentions below the signal bar, kept for the record */}
+      {heardOnce.length > 0 && (
+        <details className="group">
+          <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground [&::-webkit-details-marker]:hidden">
+            <span className="text-[10px] transition-transform group-open:rotate-90" aria-hidden>▶</span>
+            Also heard once <span className="opacity-60">· {heardOnce.length}</span>
+            <span className="normal-case font-normal tracking-normal text-xs opacity-70">single mentions that didn&rsquo;t clear the signal bar</span>
+          </summary>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {heardOnce.map((t) => (
+              <span key={t.id} title={t.description ?? undefined} className="px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground">
+                {t.label}
+              </span>
+            ))}
+          </div>
+        </details>
       )}
     </div>
   )
