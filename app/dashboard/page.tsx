@@ -335,8 +335,12 @@ export default async function DashboardPage() {
                 {topEmotions.map(([emotion, n]) => (
                   <div key={emotion} className="flex items-center gap-2" title={`${cap(emotion)} · ${n} insight${n === 1 ? '' : 's'}`}>
                     <span className="w-20 shrink-0 text-xs capitalize text-muted-foreground">{emotion}</span>
-                    <span className="h-2 rounded-full bg-chart-2" style={{ width: `${Math.max(8, (n / maxEmotion) * 100)}%` }} aria-hidden />
-                    <span className="text-[11px] text-muted-foreground">{n}</span>
+                    {/* bar needs its own track: a % width on the row itself gets flex-shrunk
+                        to the same leftover space for every row on narrow screens */}
+                    <span className="min-w-0 flex-1" aria-hidden>
+                      <span className="block h-2 rounded-full bg-chart-2" style={{ width: `${Math.max(8, (n / maxEmotion) * 100)}%` }} />
+                    </span>
+                    <span className="shrink-0 text-[11px] text-muted-foreground">{n}</span>
                   </div>
                 ))}
               </div>
