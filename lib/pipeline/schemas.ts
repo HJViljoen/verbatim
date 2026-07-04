@@ -130,6 +130,11 @@ export const RECOMMENDATION_TYPES = [
   'audience_targeting', 'content_communication', 'other',
 ] as const
 
+// DB/UI priority vocabulary. NOT model-emitted since pass_d_b_v4: absolute
+// priority judgment inflates (3 Jul run: 4 of 4 recs "high"), so the model
+// RANKS its recommendations (output order) and code assigns the priority by
+// position — lib/calibration.ts priorityForRank. Forced scarcity is what makes
+// "Act now" mean something.
 export const PRIORITIES = ['high', 'medium', 'low'] as const
 
 const marketInsightSchema = z.object({
@@ -142,6 +147,8 @@ const marketInsightSchema = z.object({
   opportunity_score: z.number().int(),
 })
 
+// Ranked output: array order IS the priority (strictest first) — see the
+// PRIORITIES note above. No priority field for the model to inflate.
 const recommendationSchema = z.object({
   type: z.enum(RECOMMENDATION_TYPES),
   // The model's own short snake_case label when type is 'other'; null otherwise.
@@ -149,7 +156,6 @@ const recommendationSchema = z.object({
   title: z.string(),
   reasoning: z.string(),
   based_on: z.array(z.string()),  // M# (market insights in this output) / C# indices
-  priority: z.enum(PRIORITIES),
 })
 
 // The "someone already read everything for you" block leading Market

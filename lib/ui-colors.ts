@@ -45,6 +45,24 @@ export const SENTIMENT_BADGE: Record<string, string> = {
 export const levelBadge = (level?: string | null) =>
   level === 'high' ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'
 
+/** Prevalence tier → soft badge (tier assigned by lib/calibration.ts, never the model). */
+export const PREVALENCE_BADGE: Record<string, string> = {
+  dominant: 'bg-primary/12 text-primary',
+  widespread: 'bg-pine/10 text-pine',
+  recurring: 'bg-muted text-muted-foreground',
+  early_signal: 'bg-warning/15 text-warning',
+}
+
+/** Calibrated sentiment tier → soft badge, coloured by valence. */
+export const SENTIMENT_TIER_BADGE: Record<string, string> = {
+  strongly_positive: 'bg-positive/12 text-positive',
+  leaning_positive: 'bg-positive/12 text-positive',
+  balanced: 'bg-muted text-muted-foreground',
+  polarized: 'bg-warning/15 text-warning',
+  leaning_negative: 'bg-negative/12 text-negative',
+  strongly_negative: 'bg-negative/12 text-negative',
+}
+
 /** Deep→pale green for a 0–100 data value (bars, meters). */
 export function greenForPct(pct: number): string {
   if (pct >= 80) return 'var(--chart-1)'

@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { categoryTint, levelBadge } from '@/lib/ui-colors'
+import { categoryTint } from '@/lib/ui-colors'
 import { CURATION_GATE, gateTier, type GateTier } from '@/lib/curation'
+import { priorityWord } from '@/lib/calibration'
+import { CalibrationLegend } from '@/components/calibration-legend'
 import type { CiSummary } from '@/lib/pipeline/schemas'
 
 // Market Intelligence — "What should we do?" (Redesign Spec §3). The editorial
@@ -56,9 +58,14 @@ function CategoryChip({ children }: { children: string }) {
   return <span className={`${chipBase} capitalize ${categoryTint(children)}`}>{prettyType(children)}</span>
 }
 
-/** A priority/level chip — high stands out (amber), the rest sit back. */
-function LevelChip({ children }: { children: string }) {
-  return <span className={`${chipBase} capitalize ${levelBadge(children)}`}>{children}</span>
+/** Calibrated priority word — positional, never the model's own rating
+ *  (lib/calibration.ts): "Act now" appears exactly once per update. */
+function PriorityChip({ word }: { word: string }) {
+  return (
+    <span className={`${chipBase} ${word === 'Act now' ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
+      {word}
+    </span>
+  )
 }
 
 /** The score replacement (spec §1): judgment as a chip, never a number. */
@@ -97,7 +104,7 @@ export default async function MarketIntelligencePage() {
     supabase.from('recommendations')
       .select('id, type, title, reasoning, priority, based_on')
       .eq('client_id', clientId).eq('run_id', runId),
-    supabase.from('audience_insights').select('id, theme')
+    supabase.from('audience_insights').select('id, theme, source_video_id')
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('competitive_insights').select('id, evidence, impact_level')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -118,9 +125,19 @@ export default async function MarketIntelligencePage() {
 
   const miById = new Map(insights.map((mi) => [mi.id, mi]))
   const competitiveById = new Map(competitive.map((c) => [c.id, c]))
-  const themeSlugById = new Map(
-    ((aiRes.data ?? []) as { id: string; theme: string }[]).map((a) => [a.id, a.theme]),
-  )
+  const audienceRows = (aiRes.data ?? []) as { id: string; theme: string; source_video_id: string | null }[]
+  const themeSlugById = new Map(audienceRows.map((a) => [a.id, a.theme]))
+  const videoByInsight = new Map(audienceRows.map((a) => [a.id, a.source_video_id]))
+
+  /** Measured grounding: distinct conversations behind an insight's evidence. */
+  const conversationCount = (mi: MarketInsight): number => {
+    const vids = new Set<string>()
+    for (const id of mi.evidence?.supporting_theme_ids ?? []) {
+      const v = videoByInsight.get(id)
+      if (v) vids.add(v)
+    }
+    return vids.size
+  }
 
   // ---- Curation gate over the insights (already in opportunity order) ----
   const sourceCount = (mi: MarketInsight) =>
@@ -198,8 +215,8 @@ export default async function MarketIntelligencePage() {
           <SectionHeading label="Top recommendations" />
           {topRecs.length > 0 ? (
             <div className="space-y-4">
-              {topRecs.map((rec) => (
-                <RecCard key={rec.id} rec={rec} voices={recThemes(rec)} gatePassed />
+              {topRecs.map((rec, i) => (
+                <RecCard key={rec.id} rec={rec} word={priorityWord(i)} voices={recThemes(rec)} gatePassed />
               ))}
             </div>
           ) : (
@@ -211,7 +228,7 @@ export default async function MarketIntelligencePage() {
             <CollapsedSection label="All recommendations" count={restRecs.length}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {restRecs.map((rec) => (
-                  <RecCard key={rec.id} rec={rec} voices={recThemes(rec)} compact />
+                  <RecCard key={rec.id} rec={rec} word="Worth considering" voices={recThemes(rec)} compact />
                 ))}
               </div>
             </CollapsedSection>
@@ -224,7 +241,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Key insights" />
           {keyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} />
+            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} conversations={conversationCount(mi)} />
           ))}
         </section>
       )}
@@ -234,7 +251,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Early signals" hint="worth watching, not yet confirmed" />
           {earlyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} />
+            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} />
           ))}
           {singleSourceThemes.length > 0 && (
             <div className="space-y-2">
@@ -263,10 +280,14 @@ export default async function MarketIntelligencePage() {
         <CollapsedSection label="All findings" count={insights.length}>
           <div className="space-y-4">
             {insights.map((mi) => (
-              <InsightCard key={mi.id} mi={mi} tier={tierOf.get(mi.id) ?? 'archive'} themes={insightThemes(mi)} />
+              <InsightCard key={mi.id} mi={mi} tier={tierOf.get(mi.id) ?? 'archive'} themes={insightThemes(mi)} conversations={conversationCount(mi)} />
             ))}
           </div>
         </CollapsedSection>
+      )}
+
+      {!nothingYet && (
+        <CalibrationLegend items={['act_now', 'plan_next', 'strong_evidence', 'early_signal']} />
       )}
     </div>
   )
@@ -363,8 +384,10 @@ function ShortRead({ s }: { s: CiSummary }) {
   )
 }
 
-function RecCard({ rec, voices, gatePassed, compact }: {
+function RecCard({ rec, word, voices, gatePassed, compact }: {
   rec: Recommendation
+  /** Calibrated priority word — positional (Act now / Plan next / Worth considering). */
+  word: string
   voices: string[]
   gatePassed?: boolean
   compact?: boolean
@@ -373,7 +396,7 @@ function RecCard({ rec, voices, gatePassed, compact }: {
     <Card>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
-          <LevelChip>{rec.priority ?? 'low'}</LevelChip>
+          <PriorityChip word={word} />
           <CategoryChip>{rec.type}</CategoryChip>
           {gatePassed && <EvidenceChip tier="confirmed" />}
         </div>
@@ -394,7 +417,13 @@ function RecCard({ rec, voices, gatePassed, compact }: {
   )
 }
 
-function InsightCard({ mi, tier, themes }: { mi: MarketInsight; tier: GateTier; themes: string[] }) {
+function InsightCard({ mi, tier, themes, conversations }: {
+  mi: MarketInsight
+  tier: GateTier
+  themes: string[]
+  /** Measured: distinct conversations behind this insight's evidence. */
+  conversations: number
+}) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -411,7 +440,9 @@ function InsightCard({ mi, tier, themes }: { mi: MarketInsight; tier: GateTier; 
         {themes.length > 0 && (
           <div className="border-t pt-3 space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-muted-foreground">Grounded in</div>
+              <div className="text-xs font-medium text-muted-foreground">
+                Grounded in{conversations > 0 ? ` · ${conversations} conversation${conversations === 1 ? '' : 's'}` : ''}
+              </div>
               <Link
                 href={`/dashboard/voice?themes=${encodeURIComponent(themes.join(','))}#grounding`}
                 className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/5"

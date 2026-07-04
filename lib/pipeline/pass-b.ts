@@ -5,6 +5,7 @@ import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassBSchema, type PassBOutput } from './schemas'
 import { logAiCall } from './ai-log'
 import { indexThemes } from './pass-c'
+import { CALIBRATED_PROSE_RULE } from './prose-rules'
 import type { AggregatedTheme } from './types'
 
 // Pass B — canonical theme labels + descriptions (Redesign Spec 2026-07-03 §8).
@@ -14,7 +15,9 @@ import type { AggregatedTheme } from './types'
 // A theme the model skips (or references wrongly) falls back to its humanised
 // slug — the pipeline never stalls on labelling.
 
-const PROMPT_VERSION = 'pass_b_v1'
+// v2 (2026-07-04): calibrated-language prose rule — descriptions must not carry
+// intensity/frequency words; prevalence badges next to the label say how much.
+const PROMPT_VERSION = 'pass_b_v2'
 
 export interface RunPassBOptions {
   clientId: string
@@ -56,6 +59,7 @@ function buildSystemPrompt(brandName?: string): string {
     'Rules:',
     '- Cover EVERY index in the input exactly once, using only indices present in the input.',
     '- No counts, percentages, or scores. No slugs, snake_case, or internal jargon.',
+    CALIBRATED_PROSE_RULE,
     `- When the brand matters to the theme, call it "${name}" — never "the client".`,
     '- Labels must be distinct from each other — if two themes are close, sharpen the difference.',
   ].join('\n')

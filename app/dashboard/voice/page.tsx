@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { categoryTint, SENTIMENT_BADGE } from '@/lib/ui-colors'
+import { categoryTint, SENTIMENT_BADGE, PREVALENCE_BADGE } from '@/lib/ui-colors'
 import { gateTier } from '@/lib/curation'
+import { prevalenceTier, PREVALENCE_LABEL } from '@/lib/calibration'
 import { VoiceFilters } from '@/components/voice-filters'
+import { CalibrationLegend } from '@/components/calibration-legend'
 
 // Voice of Customer — "What are they actually saying?" (Redesign Spec §4).
 // Themes are the organizing unit, not the raw insight list: each card is a
@@ -24,6 +26,7 @@ interface ThemeRow {
   description: string | null
   member_themes: string[]
   supporting_insight_ids: string[]
+  supporting_video_ids: string[]
   evidence_count: number
   strength_score: number | null
   dominant_emotion: string | null
@@ -80,9 +83,9 @@ export default async function VoiceOfCustomerPage({
   }
   const runId = latestRun.id as string
 
-  const [themesRes, earlierRes, insightsRes, samplesRes] = await Promise.all([
+  const [themesRes, earlierRes, insightsRes, samplesRes, clientRes] = await Promise.all([
     supabase.from('themes')
-      .select('id, bucket, category, label, description, member_themes, supporting_insight_ids, evidence_count, strength_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
+      .select('id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
       .eq('client_id', clientId).eq('run_id', runId)
       .order('strength_score', { ascending: false }).order('evidence_count', { ascending: false }),
     supabase.from('themes').select('id')
@@ -93,10 +96,26 @@ export default async function VoiceOfCustomerPage({
       .select('phrase, platform', { count: 'exact' })
       .eq('client_id', clientId).eq('run_id', runId)
       .limit(PHRASES_SHOWN),
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
 
   const themes = (themesRes.data ?? []) as ThemeRow[]
   const showNew = ((earlierRes.data ?? []).length) > 0
+  const brand = clientRes.data?.company_name ?? 'your brand'
+
+  // ---- Prevalence denominators (calibrated language) ----
+  // A theme's reach is measured against its own entity group: the group's
+  // distinct insight-bearing conversations = union of its themes' evidence
+  // (clustering partitions every insight, so the union covers the group).
+  const groupConversations = new Map<string, Set<string>>()
+  for (const t of themes) {
+    let set = groupConversations.get(t.bucket)
+    if (!set) groupConversations.set(t.bucket, (set = new Set()))
+    for (const id of t.supporting_video_ids ?? []) set.add(id)
+  }
+  const groupSize = (bucket: string) => groupConversations.get(bucket)?.size ?? 0
+  const groupName = (bucket: string) =>
+    bucket === 'client' ? brand : bucket === 'industry-other' ? 'industry' : bucket.replace(/^competitor:/, '')
   const stageByInsight = new Map(
     ((insightsRes.data ?? []) as { id: string; journey_stage: string | null }[]).map((i) => [i.id, i.journey_stage]),
   )
@@ -184,10 +203,14 @@ export default async function VoiceOfCustomerPage({
             {confirmed.map((t) => {
               const quotes = quotesFor(t)
               const tier = gateTier(t.strength_score, t.evidence_count)
+              // Calibrated prevalence: word by rule, count next to it (never the model's wording).
+              const denom = groupSize(t.bucket)
+              const prevalence = prevalenceTier(t.evidence_count, denom)
               return (
                 <Card key={t.id}>
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-center gap-2">
+                      <span className={`${chipBase} ${PREVALENCE_BADGE[prevalence]}`}>{PREVALENCE_LABEL[prevalence]}</span>
                       <span className={`${chipBase} capitalize ${categoryTint(t.category)}`}>{prettyType(t.category)}</span>
                       {t.bucket !== 'client' && (
                         <span className={`${chipBase} capitalize bg-muted text-muted-foreground`}>{t.bucket}</span>
@@ -209,11 +232,14 @@ export default async function VoiceOfCustomerPage({
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {t.description && <p className="text-sm text-muted-foreground">{t.description}</p>}
-                    {quotes.length > 0 ? (
-                      <details className="group border-t pt-2">
+                    <p className="border-t pt-2 text-[10px] text-muted-foreground">
+                      heard in {t.evidence_count} of {denom} {groupName(t.bucket)} conversations
+                    </p>
+                    {quotes.length > 0 && (
+                      <details className="group">
                         <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-medium text-primary [&::-webkit-details-marker]:hidden">
                           <span className="text-[9px] transition-transform group-open:rotate-90" aria-hidden>▶</span>
-                          Hear these voices · across {t.evidence_count} video{t.evidence_count === 1 ? '' : 's'}
+                          Hear these voices
                         </summary>
                         <div className="mt-2 space-y-1.5">
                           {quotes.map((q, n) => (
@@ -222,10 +248,6 @@ export default async function VoiceOfCustomerPage({
                           <p className="text-[10px] text-muted-foreground">a sample of the conversations behind this theme</p>
                         </div>
                       </details>
-                    ) : (
-                      <p className="border-t pt-2 text-[10px] text-muted-foreground">
-                        heard across {t.evidence_count} video{t.evidence_count === 1 ? '' : 's'}
-                      </p>
                     )}
                   </CardContent>
                 </Card>
@@ -268,7 +290,7 @@ export default async function VoiceOfCustomerPage({
         <section className="space-y-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Early signals <span className="opacity-60">· {early.length}</span>
-            <span className="ml-2 normal-case font-normal tracking-normal text-xs opacity-70">heard under a single video so far — worth watching, not yet confirmed</span>
+            <span className="ml-2 normal-case font-normal tracking-normal text-xs opacity-70">heard in a single conversation so far — worth watching, not yet confirmed</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {early.slice(0, EARLY_SHOWN).map((t) => (
@@ -288,6 +310,10 @@ export default async function VoiceOfCustomerPage({
             <p className="text-xs text-muted-foreground">+{early.length - EARLY_SHOWN} more early signals in this update</p>
           )}
         </section>
+      )}
+
+      {themes.length > 0 && (
+        <CalibrationLegend items={['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
       )}
     </div>
   )

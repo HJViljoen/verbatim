@@ -4,6 +4,7 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
+import { CALIBRATED_PROSE_RULE } from './prose-rules'
 import type { AggregatedTheme, SovEntry } from './types'
 
 // Pass C — competitive analysis (Architecture/Analysis-Passes §Pass C). Single
@@ -14,7 +15,10 @@ import type { AggregatedTheme, SovEntry } from './types'
 // audience_insights UUIDs, rejecting unknown indices (invariant 8). On a
 // single-bucket corpus there is nothing to compare, so the model returns [].
 
-const PROMPT_VERSION = 'pass_c_v3'
+// v4 (2026-07-04): calibrated language — prose rule (no intensity/frequency
+// words; cross-bucket comparisons stay allowed, they're this pass's job) + an
+// anti-inflation guard on impact_level (the 3 Jul run rated 3 of 5 "high").
+const PROMPT_VERSION = 'pass_c_v4'
 
 export interface TrackingConfig {
   brand_keywords: string[] | null
@@ -87,9 +91,10 @@ function buildSystemPrompt(tc: TrackingConfig | undefined, brandName?: string): 
     'Rules:',
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
     '- Reference every supporting theme by its bracket index (e.g. "T3"), using ONLY indices present in the input.',
-    '- Do NOT invent counts, percentages, or metrics — describe findings qualitatively.',
+    '- Do NOT invent counts, percentages, or metrics.',
+    CALIBRATED_PROSE_RULE,
     `- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or ${name} data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.`,
-    '- impact_level reflects how much the finding should affect the brand’s strategy.',
+    '- impact_level reflects how much the finding should affect the brand’s strategy. "high" is scarce: at most one or two findings per run genuinely demand a strategy response — when in doubt, medium.',
   ].join('\n')
 }
 

@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { categoryTint } from '@/lib/ui-colors'
+import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
+import { sentimentTier, SENTIMENT_TIER_LABEL } from '@/lib/calibration'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
 // this week's news (that's the report's job) and no longer the pipeline readout
@@ -169,6 +170,10 @@ export default async function DashboardPage() {
   }
   const pctOf = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
   const positiveShare = analysed.length > 0 ? pctOf(sentimentCounts.positive, analysed.length) : null
+  // Calibrated sentiment word — fixed cutoffs on the measured split, never worded by the model.
+  const sentTier = positiveShare != null
+    ? sentimentTier(positiveShare, pctOf(sentimentCounts.negative, analysed.length))
+    : null
   const sentimentSegments: Segment[] = (
     [
       { label: 'Positive', count: sentimentCounts.positive, color: 'bg-chart-2' },
@@ -234,7 +239,7 @@ export default async function DashboardPage() {
         description: t.description ?? '',
         category: t.category,
         memberThemes: t.member_themes,
-        evidenceLabel: `across ${t.evidence_count} video${t.evidence_count === 1 ? '' : 's'}`,
+        evidenceLabel: `in ${t.evidence_count} conversation${t.evidence_count === 1 ? '' : 's'}`,
         isNew: showNew && t.first_seen,
       }))
   } else {
@@ -287,7 +292,14 @@ export default async function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-3xl font-bold text-positive">{positiveShare != null ? `${positiveShare}%` : '—'}</div>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <div className="text-3xl font-bold text-positive">{positiveShare != null ? `${positiveShare}%` : '—'}</div>
+              {sentTier && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SENTIMENT_TIER_BADGE[sentTier]}`}>
+                  {SENTIMENT_TIER_LABEL[sentTier]}
+                </span>
+              )}
+            </div>
             {sentimentSegments.length > 0 ? (
               <>
                 <ProportionBar segments={sentimentSegments} of="conversations" />
@@ -296,7 +308,9 @@ export default async function DashboardPage() {
             ) : (
               <p className="text-xs text-muted-foreground">lands with the next update</p>
             )}
-            {positiveShare != null && <p className="text-xs text-muted-foreground">positive across analysed conversations</p>}
+            {positiveShare != null && (
+              <p className="text-xs text-muted-foreground">positive across {analysed.length} rated conversations</p>
+            )}
           </CardContent>
         </Card>
 

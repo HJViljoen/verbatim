@@ -3,6 +3,8 @@ import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassDaSchema, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary } from './schemas'
+import { priorityForRank } from '../calibration'
+import { CALIBRATED_PROSE_RULE } from './prose-rules'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { AggregatedTheme, SovEntry } from './types'
@@ -18,8 +20,12 @@ import type { AggregatedTheme, SovEntry } from './types'
 // references D-a's market insights by M#. Code maps every index back to a UUID
 // and rejects unknowns (invariant 8).
 
-const PROMPT_VERSION_A = 'pass_d_a_v1'
-const PROMPT_VERSION_B = 'pass_d_b_v3'
+// v2/v4 (2026-07-04): calibrated language — both prompts get the shared prose
+// rule (no model-chosen intensity words; measured badges say how much), and D-b
+// switches from a model-set priority field to RANKED output: array order is the
+// priority, code assigns high/medium/low by position (priorityForRank).
+const PROMPT_VERSION_A = 'pass_d_a_v2'
+const PROMPT_VERSION_B = 'pass_d_b_v4'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
@@ -78,6 +84,7 @@ function buildSystemPromptA(brandName?: string): string {
     '- supporting_themes must list ONLY the themes a market insight is directly distilled from — the specific themes whose comments are the evidence for the claim. Cite the few that genuinely apply (usually 1–4), never a broad list. Do NOT add a theme just to satisfy a grounding requirement: the product shows the user the actual comments behind each cited theme as proof, so an unrelated theme there is a visible defect.',
     '- Some insights are NOT distilled from comment themes at all — insights about share of voice, content volume, posting presence, or platform coverage are derived from the SHARE OF VOICE data above, not from comments. For these, return an EMPTY supporting_themes array and rely on the share-of-voice figures. Never back-fill them with comment themes.',
     '- Do NOT invent counts or percentages. confidence_score and opportunity_score are 1–10 judgments, not measured quantities.',
+    CALIBRATED_PROSE_RULE,
     '- If the data is thin, produce fewer, honest insights rather than padding. Fewer, tightly-grounded insights beat many loosely-grounded ones.',
   ].join('\n')
 }
@@ -154,6 +161,9 @@ function buildSystemPromptB(brandName?: string): string {
     '- based_on lists the market insights a recommendation follows from as "M1", "M2" … and/or competitive insights as "C1" …',
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
+    CALIBRATED_PROSE_RULE,
+    '- ORDER IS PRIORITY: return recommendations ranked, most important first. There is no priority field —',
+    '  the product labels your first recommendation "Act now" and the next two "Plan next", so rank deliberately.',
     '- Fewer, sharper recommendations beat a padded list. Every one must be worth the client\'s time.',
   ].join('\n')
 }
@@ -447,7 +457,8 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40)
 
   // Recommendations: based_on references M# (D-a's output) and/or C#.
-  const recRows = b.parsed.recommendations.map((rec) => {
+  // priority is positional (calibrated language): output rank → high/medium/low.
+  const recRows = b.parsed.recommendations.map((rec, rank) => {
     const ids: string[] = []
     for (const ref of rec.based_on) {
       const key = ref.toLowerCase().trim()
@@ -469,7 +480,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
       title: rec.title,
       reasoning: rec.reasoning,
-      priority: rec.priority,
+      priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
     }
   })
