@@ -3,7 +3,7 @@ import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint } from '@/lib/ui-colors'
 import { CURATION_GATE, gateTier, type GateTier } from '@/lib/curation'
-import { priorityWord } from '@/lib/calibration'
+import { priorityWord, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
 import type { CiSummary } from '@/lib/pipeline/schemas'
 
@@ -60,9 +60,15 @@ function CategoryChip({ children }: { children: string }) {
 
 /** Calibrated priority word — positional, never the model's own rating
  *  (lib/calibration.ts): "Act now" appears exactly once per update. */
+const PRIORITY_TIP: Record<string, string> = {
+  'Act now': glossaryRule('act_now'),
+  'Plan next': glossaryRule('plan_next'),
+  'Worth considering': glossaryRule('worth_considering'),
+}
+
 function PriorityChip({ word }: { word: string }) {
   return (
-    <span className={`${chipBase} ${word === 'Act now' ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
+    <span title={PRIORITY_TIP[word]} className={`${chipBase} ${word === 'Act now' ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
       {word}
     </span>
   )
@@ -70,8 +76,8 @@ function PriorityChip({ word }: { word: string }) {
 
 /** The score replacement (spec §1): judgment as a chip, never a number. */
 function EvidenceChip({ tier }: { tier: GateTier }) {
-  if (tier === 'confirmed') return <span className={`${chipBase} bg-positive/12 text-positive`}>Strong evidence</span>
-  if (tier === 'early_signal') return <span className={`${chipBase} bg-warning/15 text-warning`}>Early signal</span>
+  if (tier === 'confirmed') return <span title={glossaryRule('strong_evidence')} className={`${chipBase} bg-positive/12 text-positive`}>Strong evidence</span>
+  if (tier === 'early_signal') return <span title={glossaryRule('early_signal')} className={`${chipBase} bg-warning/15 text-warning`}>Early signal</span>
   return null
 }
 
@@ -206,6 +212,10 @@ export default async function MarketIntelligencePage() {
 
       {nothingYet && <EmptyState />}
 
+      {!nothingYet && (
+        <CalibrationLegend items={['act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']} />
+      )}
+
       {/* The short read — consumer-intelligence summary (spec §3.1) */}
       {ciSummary && <ShortRead s={ciSummary} />}
 
@@ -284,10 +294,6 @@ export default async function MarketIntelligencePage() {
             ))}
           </div>
         </CollapsedSection>
-      )}
-
-      {!nothingYet && (
-        <CalibrationLegend items={['act_now', 'plan_next', 'strong_evidence', 'early_signal']} />
       )}
     </div>
   )

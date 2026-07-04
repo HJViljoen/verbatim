@@ -3,7 +3,8 @@ import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
-import { sentimentTier, SENTIMENT_TIER_LABEL } from '@/lib/calibration'
+import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, glossaryRule } from '@/lib/calibration'
+import { CalibrationLegend } from '@/components/calibration-legend'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
 // this week's news (that's the report's job) and no longer the pipeline readout
@@ -282,6 +283,10 @@ export default async function DashboardPage() {
     <div className="space-y-8">
       <HeroBand line={lineParts.length ? lineParts.join(' · ') : null} />
 
+      {sentTier && (
+        <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['sentiment', 'new'] : ['sentiment']} />
+      )}
+
       {/* Where you stand */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <Card>
@@ -295,7 +300,7 @@ export default async function DashboardPage() {
             <div className="flex flex-wrap items-baseline gap-2">
               <div className="text-3xl font-bold text-positive">{positiveShare != null ? `${positiveShare}%` : '—'}</div>
               {sentTier && (
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SENTIMENT_TIER_BADGE[sentTier]}`}>
+                <span title={SENTIMENT_TIER_RULE[sentTier]} className={`px-2 py-0.5 rounded-full text-xs font-medium ${SENTIMENT_TIER_BADGE[sentTier]}`}>
                   {SENTIMENT_TIER_LABEL[sentTier]}
                 </span>
               )}
@@ -384,7 +389,7 @@ export default async function DashboardPage() {
                             {t.category.replace(/_/g, ' ')}
                           </span>
                           {t.isNew && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
+                            <span title={glossaryRule('new')} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
                           )}
                         </div>
                         <CardTitle className="text-sm">{t.label}</CardTitle>

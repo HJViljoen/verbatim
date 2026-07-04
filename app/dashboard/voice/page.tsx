@@ -3,7 +3,7 @@ import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_BADGE, PREVALENCE_BADGE } from '@/lib/ui-colors'
 import { gateTier } from '@/lib/curation'
-import { prevalenceTier, PREVALENCE_LABEL } from '@/lib/calibration'
+import { prevalenceTier, PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { VoiceFilters } from '@/components/voice-filters'
 import { CalibrationLegend } from '@/components/calibration-legend'
 
@@ -175,6 +175,12 @@ export default async function VoiceOfCustomerPage({
         <VoiceFilters stage={stageFilter} min={String(minScore)} deepLinked={deepLinked} showStage={stagesPresent.size > 0} />
       </div>
 
+      {themes.length > 0 && (
+        <CalibrationLegend items={showNew
+          ? ['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence', 'new']
+          : ['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
+      )}
+
       {/* Category tabs (demo layout) — URL-driven, shareable */}
       {tabs.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -210,7 +216,7 @@ export default async function VoiceOfCustomerPage({
                 <Card key={t.id}>
                   <CardHeader className="pb-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`${chipBase} ${PREVALENCE_BADGE[prevalence]}`}>{PREVALENCE_LABEL[prevalence]}</span>
+                      <span title={glossaryRule(prevalence)} className={`${chipBase} ${PREVALENCE_BADGE[prevalence]}`}>{PREVALENCE_LABEL[prevalence]}</span>
                       <span className={`${chipBase} capitalize ${categoryTint(t.category)}`}>{prettyType(t.category)}</span>
                       {t.bucket !== 'client' && (
                         <span className={`${chipBase} capitalize bg-muted text-muted-foreground`}>{t.bucket}</span>
@@ -223,9 +229,9 @@ export default async function VoiceOfCustomerPage({
                           {t.dominant_sentiment_impact}
                         </span>
                       )}
-                      {tier === 'confirmed' && <span className={`${chipBase} bg-positive/12 text-positive`}>Strong evidence</span>}
+                      {tier === 'confirmed' && <span title={glossaryRule('strong_evidence')} className={`${chipBase} bg-positive/12 text-positive`}>Strong evidence</span>}
                       {showNew && t.first_seen && (
-                        <span className={`${chipBase} font-semibold bg-warning/15 text-warning`}>New</span>
+                        <span title={glossaryRule('new')} className={`${chipBase} font-semibold bg-warning/15 text-warning`}>New</span>
                       )}
                     </div>
                     <CardTitle className="text-base mt-1.5">{t.label}</CardTitle>
@@ -298,7 +304,7 @@ export default async function VoiceOfCustomerPage({
                 <CardContent className="space-y-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`${chipBase} capitalize ${categoryTint(t.category)}`}>{prettyType(t.category)}</span>
-                    <span className={`${chipBase} bg-warning/15 text-warning`}>Early signal</span>
+                    <span title={glossaryRule('early_signal')} className={`${chipBase} bg-warning/15 text-warning`}>Early signal</span>
                   </div>
                   <p className="text-sm font-medium">{t.label}</p>
                   {t.description && <p className="text-xs text-muted-foreground line-clamp-2">{t.description}</p>}
@@ -310,10 +316,6 @@ export default async function VoiceOfCustomerPage({
             <p className="text-xs text-muted-foreground">+{early.length - EARLY_SHOWN} more early signals in this update</p>
           )}
         </section>
-      )}
-
-      {themes.length > 0 && (
-        <CalibrationLegend items={['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
       )}
     </div>
   )
