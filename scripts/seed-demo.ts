@@ -1,0 +1,718 @@
+import { randomUUID } from 'crypto'
+import { createAdminClient, selectAll } from '../lib/supabase-admin'
+
+// Idempotent demo-tenant seeder (DATA ONLY — no UI). Creates "Össur — Demo":
+// a comped tenant with a login, six weekly pipeline_runs, the latest run (W6)
+// cloned from the real Ossur analysis + corpus so every live page renders full,
+// and W1–W5 as lightweight aggregate history for the time-series / week-over-week
+// deltas. Re-running deletes all demo rows + the auth user, then recreates.
+//
+// Run:  set -a; . ./.env.local; set +a
+//       npx --no-install tsx scripts/seed-demo.ts
+//
+// Safety: the real Ossur client_id is READ-ONLY here — it is only ever the
+// source of SELECTs. Every INSERT/DELETE is scoped to DEMO_CLIENT_ID.
+
+// ---- constants --------------------------------------------------------------
+
+const OSSUR_CLIENT_ID = 'e52cac94-30e1-426a-9a36-31b11e0b30b6' // read-only source
+const SOURCE_RUN_ID = 'f9548a97-ded0-44ea-b727-2ffee709f09e'   // the full completed Ossur run
+
+const DEMO_CLIENT_ID = 'de300055-0000-4000-8000-000000000001'
+const DEMO_EMAIL = 'demo@verbatimintel.com'
+
+// Fixed run ids (W1 oldest → W6 newest) so re-runs are stable.
+const RUN_ID = {
+  W1: 'de300055-0000-4000-8000-0000000000a1',
+  W2: 'de300055-0000-4000-8000-0000000000a2',
+  W3: 'de300055-0000-4000-8000-0000000000a3',
+  W4: 'de300055-0000-4000-8000-0000000000a4',
+  W5: 'de300055-0000-4000-8000-0000000000a5',
+  W6: 'de300055-0000-4000-8000-0000000000a6',
+} as const
+
+type Week = keyof typeof RUN_ID
+
+type Row = Record<string, unknown>
+
+// The admin client is untyped (no Database generic), so `.select('*')` widens to
+// PostgREST's GenericStringError[] shape. This is the structural type selectAll
+// actually needs; we cast range-able builders to it to page whole tables.
+type Rangeable = { range: (from: number, to: number) => PromiseLike<{ data: Row[] | null; error: unknown }> }
+const rangeable = (b: unknown) => b as unknown as Rangeable
+
+const admin = createAdminClient()
+
+// ---- small helpers ----------------------------------------------------------
+
+const iso = (s: string) => new Date(s).toISOString()
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
+
+// Fixed demo password — this is a throwaway showcase/dev tenant holding only
+// synthetic data, so a memorable password is deliberate (Supabase enforces a
+// 6-char minimum, so it can't be shorter than this).
+const DEMO_PASSWORD = '123456'
+
+async function insertRows(table: string, rows: Row[], chunk = 500): Promise<number> {
+  let n = 0
+  for (let i = 0; i < rows.length; i += chunk) {
+    const batch = rows.slice(i, i + chunk)
+    const { error } = await admin.from(table).insert(batch)
+    if (error) throw new Error(`insert ${table} [${i}..${i + batch.length}]: ${error.message}`)
+    n += batch.length
+  }
+  return n
+}
+
+async function chunkDelete(table: string, column: string, ids: string[], chunk = 200): Promise<void> {
+  for (let i = 0; i < ids.length; i += chunk) {
+    const { error } = await admin.from(table).delete().in(column, ids.slice(i, i + chunk))
+    if (error) throw new Error(`delete ${table} by ${column}: ${error.message}`)
+  }
+}
+
+// ---- 1. idempotent teardown -------------------------------------------------
+
+async function deleteDemo(): Promise<void> {
+  // insight_evidence has no client_id — clear it via our audience_insights + comments first.
+  const demoInsights = await selectAll<{ id: string }>(() =>
+    admin.from('audience_insights').select('id').eq('client_id', DEMO_CLIENT_ID).order('id', { ascending: true }),
+  )
+  if (demoInsights.length) await chunkDelete('insight_evidence', 'audience_insight_id', demoInsights.map((r) => r.id))
+  const demoComments = await selectAll<{ id: string }>(() =>
+    admin.from('comments').select('id').eq('client_id', DEMO_CLIENT_ID).order('id', { ascending: true }),
+  )
+  if (demoComments.length) await chunkDelete('insight_evidence', 'comment_id', demoComments.map((r) => r.id))
+
+  // Child tables that carry client_id, in FK-safe order.
+  const byClient = [
+    'language_samples',
+    'audience_insights',
+    'themes',
+    'market_insights',
+    'competitive_insights',
+    'recommendations',
+    'keyword_performance',
+    'run_summary',
+    'comments',
+    'videos',
+    'weekly_reports',
+    'ai_call_log',
+    'invitations',
+    'tracking_configs',
+    'pipeline_runs',
+    'users',
+  ]
+  for (const table of byClient) {
+    const { error } = await admin.from(table).delete().eq('client_id', DEMO_CLIENT_ID)
+    if (error) throw new Error(`delete ${table}: ${error.message}`)
+  }
+  const { error: cErr } = await admin.from('clients').delete().eq('id', DEMO_CLIENT_ID)
+  if (cErr) throw new Error(`delete clients: ${cErr.message}`)
+
+  // Auth user by email (paged).
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 })
+    if (error) throw new Error(`listUsers: ${error.message}`)
+    const users = data?.users ?? []
+    const match = users.find((u) => u.email?.toLowerCase() === DEMO_EMAIL)
+    if (match) {
+      const { error: delErr } = await admin.auth.admin.deleteUser(match.id)
+      if (delErr) throw new Error(`deleteUser: ${delErr.message}`)
+    }
+    if (users.length < 200) break
+  }
+}
+
+// ---- 2. tenant, config, login ----------------------------------------------
+
+async function createTenant(): Promise<{ password: string; authUserId: string }> {
+  const { error: cErr } = await admin.from('clients').insert({
+    id: DEMO_CLIENT_ID,
+    company_name: 'Össur — Demo',
+    plan: 'demo',
+    is_active: true,
+    is_comped: true,
+    created_at: iso('2026-05-20T09:00:00Z'),
+  })
+  if (cErr) throw new Error(`create client: ${cErr.message}`)
+
+  // Copy the real Ossur tracking_configs values (report_emails → demo inbox).
+  const { data: srcCfg, error: cfgReadErr } = await admin
+    .from('tracking_configs').select('*').eq('client_id', OSSUR_CLIENT_ID).maybeSingle()
+  if (cfgReadErr) throw new Error(`read tracking_configs: ${cfgReadErr.message}`)
+  const src = (srcCfg ?? {}) as Row
+  const { error: cfgErr } = await admin.from('tracking_configs').insert({
+    client_id: DEMO_CLIENT_ID,
+    brand_keywords: src.brand_keywords ?? ['ossur'],
+    competitor_keywords: src.competitor_keywords ?? ['ottobock'],
+    competitor_names: src.competitor_names ?? ['Ottobock'],
+    industry_keywords: src.industry_keywords ?? [],
+    platforms: src.platforms ?? ['tiktok', 'youtube', 'instagram'],
+    report_emails: [DEMO_EMAIL],
+    report_day: src.report_day ?? 'sunday',
+    report_period: 'weekly',
+    max_videos: src.max_videos ?? 50,
+    max_comments: src.max_comments ?? 5,
+    comment_depth: src.comment_depth ?? 100,
+  })
+  if (cfgErr) throw new Error(`create tracking_configs: ${cfgErr.message}`)
+
+  const password = DEMO_PASSWORD
+  const { data: created, error: authErr } = await admin.auth.admin.createUser({
+    email: DEMO_EMAIL,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: 'Demo (Össur)' },
+  })
+  if (authErr || !created?.user) throw new Error(`createUser: ${authErr?.message ?? 'no user'}`)
+  const authUserId = created.user.id
+
+  const { error: uErr } = await admin.from('users').insert({
+    id: authUserId,
+    client_id: DEMO_CLIENT_ID,
+    email: DEMO_EMAIL,
+    full_name: 'Demo (Össur)',
+    role: 'owner',
+  })
+  if (uErr) throw new Error(`create users row: ${uErr.message}`)
+
+  return { password, authUserId }
+}
+
+// ---- trajectory (W1 → W6). W6 anchored to the real Ossur values. ------------
+
+interface WeekSpec {
+  week: Week
+  runId: string
+  runDate: string       // ISO
+  startedAt: string
+  completedAt: string
+  totalComments: number
+  totalVideos: number
+  pos: number
+  neu: number
+  neg: number
+  sovOssur: number
+  sovOttobock: number
+  avgEng: number
+}
+
+const WEEKS: WeekSpec[] = [
+  { week: 'W1', runId: RUN_ID.W1, runDate: '2026-05-30T09:00:00Z', startedAt: '2026-05-30T05:10:00Z', completedAt: '2026-05-30T08:40:00Z', totalComments: 4800, totalVideos: 620,  pos: 90.6, neu: 8.7, neg: 0.7, sovOssur: 8.9, sovOttobock: 10.4, avgEng: 5.1 },
+  { week: 'W2', runId: RUN_ID.W2, runDate: '2026-06-06T09:00:00Z', startedAt: '2026-06-06T05:10:00Z', completedAt: '2026-06-06T08:45:00Z', totalComments: 5300, totalVideos: 700,  pos: 90.2, neu: 9.0, neg: 0.8, sovOssur: 8.6, sovOttobock: 10.7, avgEng: 5.2 },
+  { week: 'W3', runId: RUN_ID.W3, runDate: '2026-06-13T09:00:00Z', startedAt: '2026-06-13T05:10:00Z', completedAt: '2026-06-13T08:55:00Z', totalComments: 5900, totalVideos: 820,  pos: 89.9, neu: 9.2, neg: 0.9, sovOssur: 8.2, sovOttobock: 11.0, avgEng: 5.4 },
+  { week: 'W4', runId: RUN_ID.W4, runDate: '2026-06-20T09:00:00Z', startedAt: '2026-06-20T05:10:00Z', completedAt: '2026-06-20T09:05:00Z', totalComments: 6500, totalVideos: 1050, pos: 89.6, neu: 9.4, neg: 1.0, sovOssur: 7.9, sovOttobock: 11.3, avgEng: 5.5 },
+  { week: 'W5', runId: RUN_ID.W5, runDate: '2026-06-27T09:00:00Z', startedAt: '2026-06-27T05:10:00Z', completedAt: '2026-06-27T09:10:00Z', totalComments: 6900, totalVideos: 1200, pos: 89.4, neu: 9.5, neg: 1.1, sovOssur: 7.6, sovOttobock: 11.5, avgEng: 5.6 },
+  { week: 'W6', runId: RUN_ID.W6, runDate: '2026-07-04T09:26:00Z', startedAt: '2026-07-04T05:01:00Z', completedAt: '2026-07-04T09:26:00Z', totalComments: 7500, totalVideos: 1457, pos: 89.2, neu: 9.6, neg: 1.2, sovOssur: 7.4, sovOttobock: 11.7, avgEng: 5.7 },
+]
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+function shareOfVoice(w: WeekSpec) {
+  const clientVideos = Math.round((w.totalVideos * w.sovOssur) / 100)
+  const compVideos = Math.round((w.totalVideos * w.sovOttobock) / 100)
+  const industryVideos = w.totalVideos - clientVideos - compVideos
+  const industryPct = round1(100 - w.sovOssur - w.sovOttobock)
+  const sov = {
+    client: { videos: clientVideos, views: clientVideos * 3000, pct_videos: w.sovOssur },
+    'competitor:Ottobock': { videos: compVideos, views: compVideos * 8000, pct_videos: w.sovOttobock },
+    'industry-other': { videos: industryVideos, views: industryVideos * 110000, pct_videos: industryPct },
+  }
+  return { sov, clientVideos, compVideos, industryVideos }
+}
+
+function platformsSummary(w: WeekSpec) {
+  const ttV = Math.round(w.totalVideos * 0.37)
+  const ytV = Math.round(w.totalVideos * 0.25)
+  const igV = w.totalVideos - ttV - ytV
+  const ttC = Math.round(w.totalComments * 0.4)
+  const igC = Math.round(w.totalComments * 0.45)
+  const ytC = w.totalComments - ttC - igC
+  return {
+    tiktok: { videos: ttV, comments: ttC, views: ttV * 260000, avg_engagement_rate: round1(w.avgEng + 0.05) },
+    youtube: { videos: ytV, comments: ytC, views: ytV * 3000, avg_engagement_rate: 1.1 },
+    instagram: { videos: igV, comments: igC, views: 0, avg_engagement_rate: null },
+  }
+}
+
+// ---- 3. pipeline_runs -------------------------------------------------------
+
+async function insertRuns(): Promise<void> {
+  const rows = WEEKS.map((w) => ({
+    id: w.runId,
+    client_id: DEMO_CLIENT_ID,
+    status: 'completed',
+    videos_scraped: w.totalVideos,
+    started_at: iso(w.startedAt),
+    completed_at: iso(w.completedAt),
+    errors: [],
+    steps_completed: ['gather', 'pass_a', 'cross_reference', 'themes', 'synthesize', 'run_summary'],
+  }))
+  await insertRows('pipeline_runs', rows)
+}
+
+// ---- 4. W6 clone of the real Ossur run --------------------------------------
+
+interface CloneMaps {
+  video: Map<string, string>
+  comment: Map<string, string>
+  insight: Map<string, string>
+  market: Map<string, string>
+  competitive: Map<string, string>
+  bucketVideos: Record<string, string[]> // new video ids by entity bucket
+  topVideoId: string | null
+  evidenceInserted: number
+}
+
+function bucketOf(v: Row): string {
+  if (v.is_client) return 'client'
+  if (v.is_competitor) return `competitor:${(v.competitor_name as string) ?? 'Ottobock'}`
+  return 'industry-other'
+}
+
+function mapIds(ids: unknown, m: Map<string, string>): string[] {
+  return (Array.isArray(ids) ? ids : [])
+    .map((id) => m.get(id as string))
+    .filter((x): x is string => Boolean(x))
+}
+
+async function cloneW6(): Promise<CloneMaps> {
+  const runId = RUN_ID.W6
+  const w6 = WEEKS.find((w) => w.week === 'W6')!
+  const stamp = iso(w6.completedAt)
+
+  const eq = (t: string) =>
+    rangeable(admin.from(t).select('*').eq('client_id', OSSUR_CLIENT_ID).eq('run_id', SOURCE_RUN_ID).order('id', { ascending: true }))
+
+  const [videos, comments, insights, markets, competitives, recs, themes, kperf, samples] = await Promise.all([
+    selectAll<Row>(() => eq('videos')),
+    selectAll<Row>(() => eq('comments')),
+    selectAll<Row>(() => eq('audience_insights')),
+    selectAll<Row>(() => eq('market_insights')),
+    selectAll<Row>(() => eq('competitive_insights')),
+    selectAll<Row>(() => eq('recommendations')),
+    selectAll<Row>(() => eq('themes')),
+    selectAll<Row>(() => eq('keyword_performance')),
+    selectAll<Row>(() => eq('language_samples')),
+  ])
+
+  // id maps
+  const maps: CloneMaps = {
+    video: new Map(), comment: new Map(), insight: new Map(), market: new Map(), competitive: new Map(),
+    bucketVideos: { client: [], 'competitor:Ottobock': [], 'industry-other': [] },
+    topVideoId: null, evidenceInserted: 0,
+  }
+  for (const v of videos) maps.video.set(v.id as string, randomUUID())
+  for (const c of comments) maps.comment.set(c.id as string, randomUUID())
+  for (const a of insights) maps.insight.set(a.id as string, randomUUID())
+  for (const m of markets) maps.market.set(m.id as string, randomUUID())
+  for (const ci of competitives) maps.competitive.set(ci.id as string, randomUUID())
+
+  // videos
+  const videoRows = videos.map((v) => {
+    const id = maps.video.get(v.id as string)!
+    const bucket = bucketOf(v)
+    ;(maps.bucketVideos[bucket] ??= []).push(id)
+    return { ...v, id, client_id: DEMO_CLIENT_ID, run_id: runId, scraped_at: stamp }
+  })
+  await insertRows('videos', videoRows)
+  maps.topVideoId = maps.video.get('40e45359-9ef8-449f-855f-02349741d712') ?? null // real top video
+
+  // insight_evidence (fetch first — its FKs decide which comments we must clone).
+  const realInsightIds = insights.map((a) => a.id as string)
+  const rawEvidence: Row[] = []
+  for (let i = 0; i < realInsightIds.length; i += 100) {
+    const { data, error } = await admin
+      .from('insight_evidence').select('*').in('audience_insight_id', realInsightIds.slice(i, i + 100))
+    if (error) throw new Error(`read insight_evidence: ${error.message}`)
+    rawEvidence.push(...((data ?? []) as Row[]))
+  }
+
+  // Some evidence / language-sample comments live under an earlier run_id (a
+  // video's comments are scraped once and reused), so they're missing from the
+  // run-scoped comment pull. Fetch those referenced rows by id and clone them
+  // too, so no FK is dropped. All belong to the same (read-only) Ossur client.
+  const referenced = new Set<string>()
+  for (const e of rawEvidence) if (e.comment_id) referenced.add(e.comment_id as string)
+  for (const l of samples) if (l.comment_id) referenced.add(l.comment_id as string)
+  const missing = [...referenced].filter((id) => !maps.comment.has(id))
+  const extraComments: Row[] = []
+  for (let i = 0; i < missing.length; i += 100) {
+    const { data, error } = await admin.from('comments').select('*').in('id', missing.slice(i, i + 100))
+    if (error) throw new Error(`read referenced comments: ${error.message}`)
+    extraComments.push(...((data ?? []) as Row[]))
+  }
+  for (const c of extraComments) maps.comment.set(c.id as string, randomUUID())
+
+  // comments (run-scoped + the referenced stragglers, all reparented to W6)
+  const commentRows = [...comments, ...extraComments].map((c) => ({
+    ...c, id: maps.comment.get(c.id as string)!, client_id: DEMO_CLIENT_ID, run_id: runId, created_at: stamp,
+  }))
+  await insertRows('comments', commentRows)
+
+  // audience_insights (source_video_id → mapped, nullable)
+  const insightRows = insights.map((a) => ({
+    ...a,
+    id: maps.insight.get(a.id as string)!,
+    client_id: DEMO_CLIENT_ID,
+    run_id: runId,
+    source_video_id: a.source_video_id ? maps.video.get(a.source_video_id as string) ?? null : null,
+    created_at: stamp,
+  }))
+  await insertRows('audience_insights', insightRows)
+
+  // insight_evidence (remap both FKs; a row is still dropped only if its comment
+  // genuinely no longer exists — never dangled).
+  const evidenceRows: Row[] = []
+  for (const e of rawEvidence) {
+    const ai = maps.insight.get(e.audience_insight_id as string)
+    const cm = maps.comment.get(e.comment_id as string)
+    if (!ai || !cm) continue
+    evidenceRows.push({ id: randomUUID(), audience_insight_id: ai, comment_id: cm, quote: e.quote, relevance_rank: e.relevance_rank, created_at: stamp })
+  }
+  maps.evidenceInserted = await insertRows('insight_evidence', evidenceRows)
+
+  // language_samples (source_video_id + comment_id → mapped, nullable)
+  const sampleRows = samples.map((l) => ({
+    ...l,
+    id: randomUUID(),
+    client_id: DEMO_CLIENT_ID,
+    run_id: runId,
+    source_video_id: l.source_video_id ? maps.video.get(l.source_video_id as string) ?? null : null,
+    comment_id: l.comment_id ? maps.comment.get(l.comment_id as string) ?? null : null,
+    created_at: stamp,
+  }))
+  await insertRows('language_samples', sampleRows)
+
+  // themes (remap supporting arrays; first_seen=false — the tenant has prior weeks)
+  const themeRows = themes.map((t) => ({
+    ...t,
+    id: randomUUID(),
+    client_id: DEMO_CLIENT_ID,
+    run_id: runId,
+    supporting_video_ids: mapIds(t.supporting_video_ids, maps.video),
+    supporting_insight_ids: mapIds(t.supporting_insight_ids, maps.insight),
+    first_seen: false,
+    created_at: stamp,
+  }))
+  await insertRows('themes', themeRows)
+
+  // market_insights (remap evidence: supporting_theme_ids → audience_insights, competitive → competitive_insights)
+  const marketRows = markets.map((m) => {
+    const ev = (m.evidence ?? {}) as Row
+    return {
+      ...m,
+      id: maps.market.get(m.id as string)!,
+      client_id: DEMO_CLIENT_ID,
+      run_id: runId,
+      evidence: {
+        supporting_theme_ids: mapIds(ev.supporting_theme_ids, maps.insight),
+        supporting_competitive_insight_ids: mapIds(ev.supporting_competitive_insight_ids, maps.competitive),
+      },
+      created_at: stamp,
+    }
+  })
+  await insertRows('market_insights', marketRows)
+
+  // competitive_insights (remap evidence.supporting_theme_ids → audience_insights)
+  const competitiveRows = competitives.map((ci) => {
+    const ev = (ci.evidence ?? {}) as Row
+    return {
+      ...ci,
+      id: maps.competitive.get(ci.id as string)!,
+      client_id: DEMO_CLIENT_ID,
+      run_id: runId,
+      evidence: { supporting_theme_ids: mapIds(ev.supporting_theme_ids, maps.insight) },
+      created_at: stamp,
+    }
+  })
+  await insertRows('competitive_insights', competitiveRows)
+
+  // recommendations (remap based_on.insight_ids → market/competitive; realistic W6 statuses)
+  const W6_REC_STATUS = ['new', 'acknowledged', 'acted_on', 'new'] // by real-run rec order
+  const recRows = recs.map((r, i) => {
+    const bo = (r.based_on ?? {}) as Row
+    const ids = (Array.isArray(bo.insight_ids) ? bo.insight_ids : []) as string[]
+    const remapped = ids.map((id) => maps.market.get(id) ?? maps.competitive.get(id)).filter((x): x is string => Boolean(x))
+    return {
+      ...r,
+      id: randomUUID(),
+      client_id: DEMO_CLIENT_ID,
+      run_id: runId,
+      based_on: { insight_ids: remapped },
+      status: W6_REC_STATUS[i] ?? 'new',
+      created_at: stamp,
+      updated_at: stamp,
+    }
+  })
+  await insertRows('recommendations', recRows)
+
+  // keyword_performance (no FKs to remap)
+  const kperfRows = kperf.map((k) => ({ ...k, id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: runId, created_at: stamp }))
+  await insertRows('keyword_performance', kperfRows)
+
+  // run_summary W6 — trajectory values + real consumer_intelligence_summary
+  const { data: srcSummary } = await admin
+    .from('run_summary').select('consumer_intelligence_summary')
+    .eq('client_id', OSSUR_CLIENT_ID).eq('run_id', SOURCE_RUN_ID).maybeSingle()
+  const ciSummary = (srcSummary?.consumer_intelligence_summary ?? null) as unknown
+  await insertRunSummary(w6, { ciSummary, topVideoId: maps.topVideoId })
+
+  return maps
+}
+
+// ---- 5. run_summary writer (all weeks) --------------------------------------
+
+async function insertRunSummary(
+  w: WeekSpec,
+  opts: { ciSummary?: unknown; topVideoId?: string | null } = {},
+): Promise<void> {
+  const idx = WEEKS.findIndex((x) => x.week === w.week)
+  const prev = idx > 0 ? WEEKS[idx - 1] : null
+  const { sov, clientVideos, compVideos } = shareOfVoice(w)
+  const isW6 = w.week === 'W6'
+
+  const row = {
+    id: randomUUID(),
+    client_id: DEMO_CLIENT_ID,
+    run_id: w.runId,
+    total_videos: w.totalVideos,
+    total_comments: w.totalComments,
+    client_videos: clientVideos,
+    competitor_videos: compVideos,
+    platforms_covered: ['instagram', 'tiktok', 'youtube'],
+    avg_engagement_rate: w.avgEng,
+    top_video_id: isW6 ? opts.topVideoId ?? null : null,
+    top_video_views: isW6 ? 31280556 : null,
+    top_video_platform: isW6 ? 'tiktok' : null,
+    share_of_voice: sov,
+    platforms_summary: platformsSummary(w),
+    overall_sentiment_positive: w.pos,
+    overall_sentiment_neutral: w.neu,
+    overall_sentiment_negative: w.neg,
+    sentiment_drivers: {
+      video_sentiment_counts: {
+        positive: Math.round((w.totalVideos * w.pos) / 100),
+        neutral: Math.round((w.totalVideos * w.neu) / 100),
+        negative: Math.round((w.totalVideos * w.neg) / 100),
+      },
+    },
+    consumer_intelligence_summary: opts.ciSummary ?? null,
+    wow_sentiment_change: prev ? round1(w.pos - prev.pos) : null,
+    wow_engagement_change: prev ? round1(w.avgEng - prev.avgEng) : null,
+    period: 'weekly',
+    run_date: iso(w.runDate),
+  }
+  const { error } = await admin.from('run_summary').insert(row)
+  if (error) throw new Error(`run_summary ${w.week}: ${error.message}`)
+}
+
+// ---- 6. W1–W5 lightweight aggregate history ---------------------------------
+
+// Carried theme trajectory (label → per-week [strength, evidence]); W1..W5.
+interface CarriedTheme {
+  label: string; bucket: string; category: string; description: string
+  emotion: string; impact: string
+  series: Partial<Record<Week, { s: number; e: number }>>
+  debut: Week
+}
+const CARRIED_THEMES: CarriedTheme[] = [
+  {
+    label: "Ottobock's innovation halo", bucket: 'competitor:Ottobock', category: 'praise',
+    description: 'Audiences praise Ottobock for advanced prosthetic technology, comfort, and design — admiration that can shape brand preference before people weigh price or access.',
+    emotion: 'joyful', impact: 'positive', debut: 'W1',
+    series: { W1: { s: 5, e: 40 }, W2: { s: 5, e: 51 }, W3: { s: 6, e: 62 }, W4: { s: 6, e: 73 }, W5: { s: 7, e: 84 } },
+  },
+  {
+    label: 'Questions about prosthetic options', bucket: 'industry-other', category: 'question',
+    description: 'People ask practical questions about prosthetic fit, features, cost, and how to access options — curiosity mixed with resilience across the category.',
+    emotion: 'curious', impact: 'positive', debut: 'W1',
+    series: { W1: { s: 6, e: 150 }, W2: { s: 6, e: 157 }, W3: { s: 6, e: 164 }, W4: { s: 6, e: 171 }, W5: { s: 6, e: 178 } },
+  },
+  {
+    label: 'Praise for Ossur products', bucket: 'client', category: 'praise',
+    description: 'Viewers commend Ossur products and team for quality, performance, and the movement and confidence they enable.',
+    emotion: 'joyful', impact: 'positive', debut: 'W1',
+    series: { W1: { s: 5, e: 60 }, W2: { s: 5, e: 64 }, W3: { s: 5, e: 68 }, W4: { s: 5, e: 72 }, W5: { s: 5, e: 76 } },
+  },
+  {
+    label: 'Cost & access barriers', bucket: 'industry-other', category: 'pain_point',
+    description: 'Frustration surfaces around insurance coverage, cost clarity, and the steps required to actually obtain a prosthesis.',
+    emotion: 'frustrated', impact: 'negative', debut: 'W5',
+    series: { W5: { s: 3, e: 15 } },
+  },
+]
+
+// Competitive-insight text reused from the real run (impact escalates for the halo).
+const HALO_IMPACT: Record<Week, string> = { W1: 'low', W2: 'low', W3: 'medium', W4: 'medium', W5: 'high', W6: 'high' }
+
+// Recommendation lifecycle for W1–W5. 1 high + 2 medium per week.
+interface HistRec { key: string; title: string; type: string; priority: string; reasoning: string }
+const REC: Record<string, HistRec> = {
+  HIGH: {
+    key: 'HIGH', priority: 'high', type: 'content_communication',
+    title: "Launch a 'Before you choose a prosthesis' education series",
+    reasoning: 'New amputees and caregivers are learning about prosthetic life in the wider category conversation, not from Ossur. A structured education series covering recovery, comfort, daily use, and what to ask before choosing a prosthesis lets Ossur build trust before a brand decision is made.',
+  },
+  INSURANCE: {
+    key: 'INSURANCE', priority: 'medium', type: 'customer_experience',
+    title: 'Publish an insurance & reimbursement guide for new amputees',
+    reasoning: 'Coverage and cost clarity are where hopeful conversations turn to friction. A plain-language guide to insurance, reimbursement, and the steps to access Ossur would reduce drop-off at the decision point.',
+  },
+  FAQ: {
+    key: 'FAQ', priority: 'medium', type: 'content_communication',
+    title: 'Create a product-details FAQ answering pricing and buying questions',
+    reasoning: 'The most common Ossur questions are about materials, price, compatibility, and how to buy. A concise FAQ that answers them directly would move interested people from evaluation to next step.',
+  },
+  ATHLETE: {
+    key: 'ATHLETE', priority: 'medium', type: 'positioning_messaging',
+    title: 'Highlight Ossur athlete outcomes to reinforce fitness inspiration',
+    reasoning: 'Ossur already owns inspiration tied to fitness and active living. Amplifying real athlete outcomes strengthens that ownership while Ottobock leans on technical storytelling.',
+  },
+  COUNTER: {
+    key: 'COUNTER', priority: 'medium', type: 'competitive_response',
+    title: "Counter Ottobock's innovation narrative",
+    reasoning: 'Ottobock is accumulating admiration for advanced prosthetics, shaping preference on engineering before buyers compare access or service. Ossur should make its own innovation story — what its knees and feet actually do — as visible as its inspiration story.',
+  },
+}
+// [recKey, status] triples per week.
+const REC_WEEK: Record<Week, Array<[string, string]>> = {
+  W1: [['HIGH', 'new'], ['INSURANCE', 'new'], ['FAQ', 'new']],
+  W2: [['HIGH', 'new'], ['INSURANCE', 'acknowledged'], ['FAQ', 'new']],
+  W3: [['HIGH', 'acknowledged'], ['INSURANCE', 'acknowledged'], ['FAQ', 'dismissed']],
+  W4: [['HIGH', 'acknowledged'], ['INSURANCE', 'acted_on'], ['ATHLETE', 'new']],
+  W5: [['HIGH', 'acknowledged'], ['ATHLETE', 'acknowledged'], ['COUNTER', 'new']],
+  W6: [],
+}
+
+const HIST_MARKET = [
+  { insight_type: 'unmet_need', title: 'Access answers are part of the product experience', description: 'People turn to Ossur when they are trying to move from interest to action, asking for product details, pricing, buying steps, and where Ossur is located. When reimbursement and purchase steps feel unclear, intent can stall.', confidence_score: 9, opportunity_score: 9 },
+  { insight_type: 'industry_signal', title: 'Technology admiration is shaping competitive perception', description: 'Ottobock is the name attached to admiration for advanced prosthetics, while Ossur praise is framed around inspiration and fitness. Innovation storytelling is helping define preference before buyers reach price, insurance, or purchase-path questions.', confidence_score: 8, opportunity_score: 8 },
+]
+const HIST_COMPETITIVE = (week: Week) => [
+  { category: 'competitive_threat', competitor_name: 'Ottobock', title: 'Ottobock is associated with advanced-prosthetics admiration', finding: 'Ottobock draws joyful praise for advanced prosthetics, while Ossur praise is framed around inspiration and fitness rather than technical leadership. Admiration for innovation can shape preference before people compare price or access.', impact_level: HALO_IMPACT[week] },
+  { category: 'content_gap', competitor_name: null, title: 'Daily-life education is more visible outside Ossur', finding: 'Industry conversation features everyday prosthetic questions and phantom-pain relief, but Ossur themes stay close to brand-specific information and access — leaving room to build trust earlier with education that is not tied to a purchase question.', impact_level: 'medium' },
+]
+
+async function insertHistoryWeek(w: WeekSpec): Promise<void> {
+  const stamp = iso(w.runDate)
+
+  // run_summary
+  await insertRunSummary(w)
+
+  // themes carried this week
+  const themeRows = CARRIED_THEMES.flatMap((t) => {
+    const pt = t.series[w.week]
+    if (!pt) return []
+    return [{
+      id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId,
+      bucket: t.bucket, category: t.category, label: t.label, description: t.description,
+      member_themes: [slug(t.label)], supporting_insight_ids: [], supporting_video_ids: [],
+      evidence_count: pt.e, strength_score: pt.s, dominant_emotion: t.emotion, dominant_sentiment_impact: t.impact,
+      single_source: false, first_seen: t.debut === w.week, embedding: null, created_at: stamp,
+    }]
+  })
+  await insertRows('themes', themeRows)
+
+  // market_insights (reused text, no FKs)
+  await insertRows('market_insights', HIST_MARKET.map((m) => ({
+    id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId, ...m, evidence: {}, created_at: stamp,
+  })))
+
+  // competitive_insights (halo escalation + content gap, no FKs)
+  await insertRows('competitive_insights', HIST_COMPETITIVE(w.week).map((c) => ({
+    id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId, ...c, evidence: {}, created_at: stamp,
+  })))
+
+  // recommendations (lifecycle)
+  await insertRows('recommendations', REC_WEEK[w.week].map(([key, status]) => {
+    const r = REC[key]
+    return {
+      id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId,
+      type: r.type, title: r.title, reasoning: r.reasoning, priority: r.priority,
+      based_on: { insight_ids: [] }, status, created_at: stamp, updated_at: stamp,
+    }
+  }))
+}
+
+// ---- 7. verification --------------------------------------------------------
+
+const RUN_TABLES = [
+  'videos', 'comments', 'audience_insights', 'themes', 'market_insights',
+  'competitive_insights', 'recommendations', 'keyword_performance', 'language_samples', 'run_summary',
+] as const
+
+async function countRun(table: string, runId: string): Promise<number> {
+  const { count, error } = await admin
+    .from(table).select('id', { head: true, count: 'exact' })
+    .eq('client_id', DEMO_CLIENT_ID).eq('run_id', runId)
+  if (error) throw new Error(`count ${table}: ${error.message}`)
+  return count ?? 0
+}
+
+async function verify(maps: CloneMaps, password: string): Promise<void> {
+  console.log('\n=================  VERIFICATION  =================')
+  console.log(`DEMO_CLIENT_ID : ${DEMO_CLIENT_ID}`)
+  console.log(`login email    : ${DEMO_EMAIL}`)
+  console.log(`login password : ${password}`)
+  console.log(`insight_evidence rows (W6): ${maps.evidenceInserted}`)
+
+  // Row counts per table per run.
+  console.log('\nRow counts per table per run:')
+  const header = ['table', ...WEEKS.map((w) => w.week)].join('\t')
+  console.log(header)
+  for (const table of RUN_TABLES) {
+    const cells: string[] = [table.padEnd(21)]
+    for (const w of WEEKS) cells.push(String(await countRun(table, w.runId)))
+    console.log(cells.join('\t'))
+  }
+
+  // run_summary arc.
+  console.log('\nrun_summary arc (pos/neu/neg · SoV Ossur/Ottobock · wowSent/wowEng):')
+  const rs = await selectAll<Row>(() =>
+    rangeable(admin.from('run_summary').select('*').eq('client_id', DEMO_CLIENT_ID).order('run_date', { ascending: true })),
+  )
+  for (const r of rs) {
+    const sov = (r.share_of_voice ?? {}) as Record<string, { pct_videos?: number }>
+    const w = WEEKS.find((x) => x.runId === r.run_id)?.week ?? '??'
+    console.log(
+      `${w}  ${String(r.run_date).slice(0, 10)}  ` +
+      `pos ${r.overall_sentiment_positive} / neu ${r.overall_sentiment_neutral} / neg ${r.overall_sentiment_negative}  ·  ` +
+      `Ossur ${sov.client?.pct_videos ?? '—'}% / Ottobock ${sov['competitor:Ottobock']?.pct_videos ?? '—'}%  ·  ` +
+      `wowSent ${r.wow_sentiment_change ?? '—'} / wowEng ${r.wow_engagement_change ?? '—'}  ·  ` +
+      `videos ${r.total_videos} comments ${r.total_comments}`,
+    )
+  }
+  console.log('=================================================\n')
+}
+
+// ---- main -------------------------------------------------------------------
+
+async function main() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY (source .env.local first)')
+  }
+  console.log('› Tearing down any existing demo data…')
+  await deleteDemo()
+
+  console.log('› Creating demo tenant + login…')
+  const { password } = await createTenant()
+
+  console.log('› Inserting 6 pipeline_runs…')
+  await insertRuns()
+
+  console.log('› Cloning the real Ossur run into W6 (this copies the full corpus)…')
+  const maps = await cloneW6()
+
+  console.log('› Building W1–W5 aggregate history…')
+  for (const w of WEEKS.filter((x) => x.week !== 'W6')) await insertHistoryWeek(w)
+
+  await verify(maps, password)
+  console.log('✓ Demo seed complete.')
+}
+
+main().catch((e) => {
+  console.error('\n✗ seed-demo failed:', e instanceof Error ? e.message : e)
+  process.exit(1)
+})
