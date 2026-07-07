@@ -156,6 +156,11 @@ const recommendationSchema = z.object({
   title: z.string(),
   reasoning: z.string(),
   based_on: z.array(z.string()),  // M# (market insights in this output) / C# indices
+  // The one place a raw verbatim belongs: the single most representative real
+  // customer quote behind this recommendation, copied EXACTLY from the quotes
+  // shown to the model. Validated in code against those quotes — a value that
+  // doesn't match one is dropped (never show a quote the customer didn't say).
+  hero_quote: z.string(),
 })
 
 // The "someone already read everything for you" block leading Market
@@ -180,6 +185,10 @@ export type CiSummary = z.infer<typeof ciSummarySchema>
 /** Pass D-b — recommendations, grounded via retrieved verbatim evidence. */
 export const PassDbSchema = z.object({
   recommendations: z.array(recommendationSchema),
+  // Per market insight (by its M# index): the single most representative real
+  // customer quote, copied EXACTLY from the quotes shown for that insight. Code
+  // validates each against the shown quotes and writes it to market_insights.hero_quote.
+  insight_hero_quotes: z.array(z.object({ index: z.string(), quote: z.string() })),
 })
 export type PassDbOutput = z.infer<typeof PassDbSchema>
 export type MarketInsightOut = z.infer<typeof marketInsightSchema>

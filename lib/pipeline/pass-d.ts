@@ -25,7 +25,10 @@ import type { AggregatedTheme, SovEntry } from './types'
 // switches from a model-set priority field to RANKED output: array order is the
 // priority, code assigns high/medium/low by position (priorityForRank).
 const PROMPT_VERSION_A = 'pass_d_a_v2'
-const PROMPT_VERSION_B = 'pass_d_b_v4'
+// v5 (2026-07-07): also select a hero_quote per recommendation AND per market
+// insight (evidence-led cards, Redesign Spec §1) — the one place a raw verbatim
+// belongs. Code validates each against the shown quotes and drops non-matches.
+const PROMPT_VERSION_B = 'pass_d_b_v5'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
@@ -158,6 +161,13 @@ function buildSystemPromptB(brandName?: string): string {
     '  what customers are saying in plain English instead (translating where needed). The product shows the real',
     '  quotes behind every recommendation via its evidence link, so your prose never needs to reproduce them.',
     '  (Hooks, titles, or example questions you AUTHOR yourself may of course be quoted.)',
+    '- EXCEPTION — the hero_quote fields are the ONE place a raw verbatim belongs, because the card leads with it.',
+    '  For EACH recommendation, set hero_quote to the single most representative real customer quote behind it,',
+    '  copied EXACTLY (word for word) from the quotes shown under the market insights it follows from. Choose the',
+    '  line that best makes a reader FEEL why this matters; prefer one that reads clearly in English. Do not edit,',
+    '  translate, or trim it — it must be one of the quotes shown, or it is discarded.',
+    '- Also return insight_hero_quotes: exactly one entry per market insight (by its index, e.g. "M1"), each the',
+    '  single most representative real customer quote for THAT insight, copied EXACTLY from the quotes shown for it.',
     '- based_on lists the market insights a recommendation follows from as "M1", "M2" … and/or competitive insights as "C1" …',
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
@@ -450,6 +460,23 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     return out
   }
 
+  // hero_quote validation: the model must copy back a quote we actually showed
+  // it — never surface a line the customer didn't say. Match on normalised text,
+  // store the canonical original. A non-match is dropped (null).
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+  const shownByNorm = new Map<string, string>()
+  for (const mi of insightsForB) for (const q of mi.quotes) shownByNorm.set(norm(q), q)
+  const validateQuote = (q: string | null | undefined): string | null => (q ? shownByNorm.get(norm(q)) ?? null : null)
+
+  // Market-insight hero quotes → written onto the already-inserted rows (M# → id).
+  const insightHeroUpdates: { id: string; quote: string }[] = []
+  for (const h of b.parsed.insight_hero_quotes ?? []) {
+    const canonical = validateQuote(h.quote)
+    if (!canonical) continue
+    const idx = Number(String(h.index).replace(/[^0-9]/g, '')) - 1
+    if (Number.isInteger(idx) && idx >= 0 && idx < miById.length) insightHeroUpdates.push({ id: miById[idx], quote: canonical })
+  }
+
   // 'other' persists as the model's own label so novel categories surface as
   // themselves (CategoryChip renders any string); recurring labels are the
   // promote-into-the-enum signal. Falls back to 'other' on an unusable label.
@@ -482,6 +509,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       reasoning: rec.reasoning,
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
+      hero_quote: validateQuote(rec.hero_quote),
     }
   })
 
@@ -498,6 +526,11 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
         .select('id, type, title, priority')
       if (error) throw new Error(`persist recommendations: ${error.message}`)
       out.recommendations = (insertedRec ?? []) as RunDbCallResult['recommendations']
+    }
+    // Hero quote per market insight (the row was inserted by the D-a caller / already exists on rerun).
+    for (const u of insightHeroUpdates) {
+      const { error } = await admin.from('market_insights').update({ hero_quote: u.quote }).eq('id', u.id)
+      if (error) throw new Error(`persist insight hero_quote: ${error.message}`)
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB,
