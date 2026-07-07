@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
 import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
+import { Quotes } from '@/components/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
 // this week's news (that's the report's job) and no longer the pipeline readout
@@ -132,7 +134,7 @@ export default async function DashboardPage() {
   // Corpus + insight reads for the latest run, in parallel.
   let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
-  const [videos, commentsRes, aiRes, recRes, latestThemedRes] = await Promise.all([
+  const [videos, commentsRes, aiRes, recRes, latestThemedRes, miRes] = await Promise.all([
     selectAll<VideoRow>(() =>
       supabase.from('videos')
         .select('id, is_client, is_competitor, competitor_name, sentiment')
@@ -145,9 +147,11 @@ export default async function DashboardPage() {
       .select('id, category, theme, description, strength_score, emotion')
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('recommendations')
-      .select('id, type, title, reasoning, priority, based_on')
+      .select('id, type, title, reasoning, priority, based_on, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId),
     themedQ.order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    supabase.from('market_insights').select('id, evidence')
+      .eq('client_id', clientId).eq('run_id', runId),
   ])
 
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
@@ -271,13 +275,29 @@ export default async function DashboardPage() {
   const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
   const recs = (recRes.data ?? []) as {
     id: string; type: string; title: string; reasoning: string
-    priority: string | null; based_on: { insight_ids?: string[] } | null
+    priority: string | null; based_on: { insight_ids?: string[] } | null; hero_quote: string | null
   }[]
   const oneThing = [...recs].sort(
     (a, b) =>
       (priorityRank[a.priority ?? 'low'] ?? 3) - (priorityRank[b.priority ?? 'low'] ?? 3) ||
       (b.based_on?.insight_ids?.length ?? 0) - (a.based_on?.insight_ids?.length ?? 0),
   )[0]
+
+  // Evidence-led: lead the recommendation with the real voices behind it (shared
+  // lib/quotes) — the pipeline's hero_quote where present, heuristic otherwise.
+  let oneThingQuotes: string[] = []
+  if (oneThing) {
+    const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
+    const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
+    const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
+    const supportIds: string[] = []
+    for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
+    const claim = `${oneThing.title} ${oneThing.reasoning}`
+    const pool = rankByTheme(supportIds, claim, themeSlugById).slice(0, 120)
+    const quotesByAudience = await fetchQuotesByAudience(supabase, pool)
+    const pick = createQuotePicker(quotesByAudience, themeSlugById)
+    oneThingQuotes = pick(supportIds, 2, claim, oneThing.hero_quote)
+  }
 
   return (
     <div className="space-y-8">
@@ -416,6 +436,7 @@ export default async function DashboardPage() {
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing to act on</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <Quotes items={oneThingQuotes} />
             <p className="text-xl font-bold">{oneThing.title}</p>
             <p className="text-sm text-muted-foreground">{oneThing.reasoning}</p>
             <Link

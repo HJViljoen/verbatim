@@ -5,6 +5,8 @@ import { categoryTint } from '@/lib/ui-colors'
 import { CURATION_GATE, gateTier, type GateTier } from '@/lib/curation'
 import { priorityWord, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
+import { Quotes } from '@/components/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
 import type { CiSummary } from '@/lib/pipeline/schemas'
 
 // Market Intelligence — "What should we do?" (Redesign Spec §3). The editorial
@@ -24,6 +26,7 @@ interface MarketInsight {
   evidence: { supporting_theme_ids?: string[]; supporting_competitive_insight_ids?: string[] } | null
   confidence_score: number | null
   opportunity_score: number | null
+  hero_quote: string | null
 }
 
 interface Recommendation {
@@ -33,6 +36,7 @@ interface Recommendation {
   reasoning: string
   priority: string | null
   based_on: { insight_ids?: string[] } | null
+  hero_quote: string | null
 }
 
 interface CompetitiveRef {
@@ -104,11 +108,11 @@ export default async function MarketIntelligencePage() {
 
   const [miRes, recRes, aiRes, ciRes, summaryRes, ssRes] = await Promise.all([
     supabase.from('market_insights')
-      .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score')
+      .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId)
       .order('opportunity_score', { ascending: false }),
     supabase.from('recommendations')
-      .select('id, type, title, reasoning, priority, based_on')
+      .select('id, type, title, reasoning, priority, based_on, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('audience_insights').select('id, theme, source_video_id')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -208,6 +212,32 @@ export default async function MarketIntelligencePage() {
     return [...slugs].slice(0, 4)
   }
 
+  // ---- verbatim quotes for the evidence-led cards (shared lib/quotes) ----
+  // Pull the audience insights most on-topic for each card into the quote pool
+  // (theme-ranked so the specific voices beat the generic, high-volume ones),
+  // fetch once, and build a page-scoped picker. Cards lead with the pipeline's
+  // hero_quote where present and fall back to the heuristic otherwise.
+  function recSupportAudienceIds(rec: Recommendation): string[] {
+    const ids: string[] = []
+    for (const id of rec.based_on?.insight_ids ?? []) {
+      ids.push(...(miById.get(id)?.evidence?.supporting_theme_ids ?? []))
+      ids.push(...(competitiveById.get(id)?.evidence?.supporting_theme_ids ?? []))
+    }
+    return ids
+  }
+  const cardSpecs: { ids: string[]; claim: string }[] = [
+    ...[...keyInsights, ...earlyInsights].map((mi) => ({ ids: mi.evidence?.supporting_theme_ids ?? [], claim: `${mi.title} ${mi.description}` })),
+    ...topRecs.map((rec) => ({ ids: recSupportAudienceIds(rec), claim: `${rec.title} ${rec.reasoning}` })),
+  ]
+  const poolIds = new Set<string>()
+  for (const spec of cardSpecs) {
+    for (const id of rankByTheme(spec.ids, spec.claim, themeSlugById).slice(0, 80)) {
+      if (poolIds.size < 600) poolIds.add(id)
+    }
+  }
+  const quotesByAudience = await fetchQuotesByAudience(supabase, [...poolIds])
+  const pick = createQuotePicker(quotesByAudience, themeSlugById)
+
   const nothingYet = !ciSummary && insights.length === 0 && recommendations.length === 0
 
   return (
@@ -230,7 +260,7 @@ export default async function MarketIntelligencePage() {
           {topRecs.length > 0 ? (
             <div className="space-y-4">
               {topRecs.map((rec, i) => (
-                <RecCard key={rec.id} rec={rec} word={priorityWord(i)} voices={recThemes(rec)} gatePassed />
+                <RecCard key={rec.id} rec={rec} word={priorityWord(i)} voices={recThemes(rec)} quotes={pick(recSupportAudienceIds(rec), 3, `${rec.title} ${rec.reasoning}`, rec.hero_quote)} gatePassed />
               ))}
             </div>
           ) : (
@@ -255,7 +285,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Key insights" />
           {keyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} conversations={conversationCount(mi)} />
+            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(mi.evidence?.supporting_theme_ids ?? [], 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
           ))}
         </section>
       )}
@@ -265,7 +295,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Early signals" hint="worth watching, not yet confirmed" />
           {earlyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} />
+            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(mi.evidence?.supporting_theme_ids ?? [], 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
           ))}
           {singleSourceThemes.length > 0 && (
             <div className="space-y-2">
@@ -394,13 +424,15 @@ function ShortRead({ s }: { s: CiSummary }) {
   )
 }
 
-function RecCard({ rec, word, voices, gatePassed, compact }: {
+function RecCard({ rec, word, voices, gatePassed, compact, quotes = [] }: {
   rec: Recommendation
   /** Calibrated priority word — positional (Act now / Plan next / Worth considering). */
   word: string
   voices: string[]
   gatePassed?: boolean
   compact?: boolean
+  /** Verbatim voices that lead the card (evidence-led); empty on compact/archive. */
+  quotes?: string[]
 }) {
   return (
     <Card>
@@ -410,10 +442,13 @@ function RecCard({ rec, word, voices, gatePassed, compact }: {
           <CategoryChip>{rec.type}</CategoryChip>
           {gatePassed && <EvidenceChip tier="confirmed" />}
         </div>
-        <CardTitle className={`mt-1.5 ${compact ? 'text-sm' : 'text-base'}`}>{rec.title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{rec.reasoning}</p>
+        {!compact && <Quotes items={quotes} />}
+        <div className="space-y-1">
+          <h3 className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`}>{rec.title}</h3>
+          <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{rec.reasoning}</p>
+        </div>
         {voices.length > 0 && (
           <Link
             href={`/dashboard/voice?themes=${encodeURIComponent(voices.join(','))}#grounding`}
@@ -427,26 +462,29 @@ function RecCard({ rec, word, voices, gatePassed, compact }: {
   )
 }
 
-function InsightCard({ mi, tier, themes, conversations }: {
+function InsightCard({ mi, tier, themes, conversations, quotes = [] }: {
   mi: MarketInsight
   tier: GateTier
   themes: string[]
   /** Measured: distinct conversations behind this insight's evidence. */
   conversations: number
+  /** Verbatim voices that lead the card (evidence-led); empty in the archive. */
+  quotes?: string[]
 }) {
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <CategoryChip>{mi.insight_type}</CategoryChip>
-            <EvidenceChip tier={tier} />
-          </div>
-          <CardTitle className="text-base">{mi.title}</CardTitle>
+      <CardHeader className="pb-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <CategoryChip>{mi.insight_type}</CategoryChip>
+          <EvidenceChip tier={tier} />
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">{mi.description}</p>
+        <Quotes items={quotes} />
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold">{mi.title}</h3>
+          <p className="text-sm text-muted-foreground">{mi.description}</p>
+        </div>
         {themes.length > 0 && (
           <div className="border-t pt-3 space-y-2">
             <div className="flex items-center justify-between gap-3">

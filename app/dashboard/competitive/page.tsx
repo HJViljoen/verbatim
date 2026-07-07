@@ -2,6 +2,8 @@ import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
+import { Quotes } from '@/components/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
 
 // Competitive Intelligence — renders Pass C's competitive_insights for the latest
 // run: qualitative cross-bucket intelligence drawn from competitors' customers'
@@ -23,6 +25,7 @@ interface CompetitiveInsight {
   finding: string
   evidence: { supporting_theme_ids?: string[] } | null
   impact_level: string | null
+  hero_quote: string | null
 }
 
 interface AudienceInsight { id: string; category: string; theme: string; description: string }
@@ -81,6 +84,19 @@ export default async function CompetitiveIntelligencePage() {
   // Share of Tracked Conversation — per-bucket video share.
   const sov = computeShare(videoRows)
 
+  // ---- verbatim quotes for the evidence-led cards (shared lib/quotes) ----
+  const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
+  const claimOf = (ci: CompetitiveInsight) => `${ci.title} ${ci.finding}`
+  const poolIds = new Set<string>()
+  for (const ci of insights) {
+    for (const id of rankByTheme(ci.evidence?.supporting_theme_ids ?? [], claimOf(ci), themeSlugById).slice(0, 80)) {
+      if (poolIds.size < 600) poolIds.add(id)
+    }
+  }
+  const quotesByAudience = await fetchQuotesByAudience(supabase, [...poolIds])
+  const pick = createQuotePicker(quotesByAudience, themeSlugById)
+  const quotesFor = (ci: CompetitiveInsight) => pick(ci.evidence?.supporting_theme_ids ?? [], 2, claimOf(ci), ci.hero_quote)
+
   const byCategory = CATEGORY_ORDER
     .map((cat) => ({ cat, items: insights.filter((c) => c.category === cat) }))
     .filter((g) => g.items.length > 0)
@@ -101,13 +117,13 @@ export default async function CompetitiveIntelligencePage() {
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{CATEGORY_META[cat].label}</h2>
                 <p className="text-xs text-muted-foreground">{CATEGORY_META[cat].blurb}</p>
               </div>
-              {items.map((ci) => <InsightCard key={ci.id} ci={ci} support={supportFor(ci)} />)}
+              {items.map((ci) => <InsightCard key={ci.id} ci={ci} support={supportFor(ci)} quotes={quotesFor(ci)} />)}
             </section>
           ))}
           {otherItems.length > 0 && (
             <section className="space-y-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Other</h2>
-              {otherItems.map((ci) => <InsightCard key={ci.id} ci={ci} support={supportFor(ci)} />)}
+              {otherItems.map((ci) => <InsightCard key={ci.id} ci={ci} support={supportFor(ci)} quotes={quotesFor(ci)} />)}
             </section>
           )}
         </>
@@ -116,17 +132,14 @@ export default async function CompetitiveIntelligencePage() {
   )
 }
 
-function InsightCard({ ci, support }: { ci: CompetitiveInsight; support: string[] }) {
+function InsightCard({ ci, support, quotes }: { ci: CompetitiveInsight; support: string[]; quotes: string[] }) {
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              {ci.competitor_name && <span className={`${chipBase} ${categoryTint(ci.competitor_name)}`}>vs {ci.competitor_name}</span>}
-              <span className={`${chipBase} ${categoryTint(ci.category)}`}>{prettyType(ci.category)}</span>
-            </div>
-            <CardTitle className="text-base">{ci.title}</CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            {ci.competitor_name && <span className={`${chipBase} ${categoryTint(ci.competitor_name)}`}>vs {ci.competitor_name}</span>}
+            <span className={`${chipBase} ${categoryTint(ci.category)}`}>{prettyType(ci.category)}</span>
           </div>
           {ci.impact_level && (
             <span className={`${chipBase} shrink-0 ${levelBadge(ci.impact_level)}`}>{ci.impact_level} impact</span>
@@ -134,7 +147,11 @@ function InsightCard({ ci, support }: { ci: CompetitiveInsight; support: string[
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">{ci.finding}</p>
+        <Quotes items={quotes} />
+        <div className="space-y-1">
+          <h3 className="text-base font-semibold">{ci.title}</h3>
+          <p className="text-sm text-muted-foreground">{ci.finding}</p>
+        </div>
         {support.length > 0 && (
           <div className="border-t pt-3 space-y-2">
             <div className="text-xs font-medium text-muted-foreground">Grounded in</div>
