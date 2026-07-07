@@ -522,25 +522,25 @@ const CARRIED_THEMES: CarriedTheme[] = [
     label: "Ottobock's innovation halo", bucket: 'competitor:Ottobock', category: 'praise',
     description: 'Audiences praise Ottobock for advanced prosthetic technology, comfort, and design — admiration that can shape brand preference before people weigh price or access.',
     emotion: 'joyful', impact: 'positive', debut: 'W1',
-    series: { W1: { s: 5, e: 40 }, W2: { s: 5, e: 51 }, W3: { s: 6, e: 62 }, W4: { s: 6, e: 73 }, W5: { s: 7, e: 84 } },
+    series: { W1: { s: 5, e: 40 }, W2: { s: 5, e: 51 }, W3: { s: 6, e: 62 }, W4: { s: 6, e: 73 }, W5: { s: 7, e: 84 }, W6: { s: 8, e: 95 } },
   },
   {
     label: 'Questions about prosthetic options', bucket: 'industry-other', category: 'question',
     description: 'People ask practical questions about prosthetic fit, features, cost, and how to access options — curiosity mixed with resilience across the category.',
     emotion: 'curious', impact: 'positive', debut: 'W1',
-    series: { W1: { s: 6, e: 150 }, W2: { s: 6, e: 157 }, W3: { s: 6, e: 164 }, W4: { s: 6, e: 171 }, W5: { s: 6, e: 178 } },
+    series: { W1: { s: 6, e: 150 }, W2: { s: 6, e: 157 }, W3: { s: 6, e: 164 }, W4: { s: 6, e: 171 }, W5: { s: 6, e: 178 }, W6: { s: 6, e: 185 } },
   },
   {
     label: 'Praise for Ossur products', bucket: 'client', category: 'praise',
     description: 'Viewers commend Ossur products and team for quality, performance, and the movement and confidence they enable.',
     emotion: 'joyful', impact: 'positive', debut: 'W1',
-    series: { W1: { s: 5, e: 60 }, W2: { s: 5, e: 64 }, W3: { s: 5, e: 68 }, W4: { s: 5, e: 72 }, W5: { s: 5, e: 76 } },
+    series: { W1: { s: 5, e: 60 }, W2: { s: 5, e: 64 }, W3: { s: 5, e: 68 }, W4: { s: 5, e: 72 }, W5: { s: 5, e: 76 }, W6: { s: 5, e: 80 } },
   },
   {
     label: 'Cost & access barriers', bucket: 'industry-other', category: 'pain_point',
     description: 'Frustration surfaces around insurance coverage, cost clarity, and the steps required to actually obtain a prosthesis.',
     emotion: 'frustrated', impact: 'negative', debut: 'W5',
-    series: { W5: { s: 3, e: 15 } },
+    series: { W5: { s: 3, e: 15 }, W6: { s: 4, e: 28 } },
   },
 ]
 
@@ -595,13 +595,13 @@ const HIST_COMPETITIVE = (week: Week) => [
   { category: 'content_gap', competitor_name: null, title: 'Daily-life education is more visible outside Ossur', finding: 'Industry conversation features everyday prosthetic questions and phantom-pain relief, but Ossur themes stay close to brand-specific information and access — leaving room to build trust earlier with education that is not tied to a purchase question.', impact_level: 'medium' },
 ]
 
-async function insertHistoryWeek(w: WeekSpec): Promise<void> {
+// The tracked-theme trajectory rows for a single week. Inserted for W1–W5 as the
+// week's whole theme set, and ALSO appended to W6 (on top of the real-run clone)
+// so every tracked theme's strength line runs cleanly across all six weeks — the
+// Trends page joins themes by label, and the real W6 clone uses different, more
+// granular labels that wouldn't extend these lines.
+async function insertCarriedThemes(w: WeekSpec): Promise<void> {
   const stamp = iso(w.runDate)
-
-  // run_summary
-  await insertRunSummary(w)
-
-  // themes carried this week
   const themeRows = CARRIED_THEMES.flatMap((t) => {
     const pt = t.series[w.week]
     if (!pt) return []
@@ -613,7 +613,17 @@ async function insertHistoryWeek(w: WeekSpec): Promise<void> {
       single_source: false, first_seen: t.debut === w.week, embedding: null, created_at: stamp,
     }]
   })
-  await insertRows('themes', themeRows)
+  if (themeRows.length) await insertRows('themes', themeRows)
+}
+
+async function insertHistoryWeek(w: WeekSpec): Promise<void> {
+  const stamp = iso(w.runDate)
+
+  // run_summary
+  await insertRunSummary(w)
+
+  // themes carried this week
+  await insertCarriedThemes(w)
 
   // market_insights (reused text, no FKs)
   await insertRows('market_insights', HIST_MARKET.map((m) => ({
@@ -704,6 +714,9 @@ async function main() {
 
   console.log('› Cloning the real Ossur run into W6 (this copies the full corpus)…')
   const maps = await cloneW6()
+
+  console.log('› Appending the tracked-theme trajectory to W6…')
+  await insertCarriedThemes(WEEKS.find((x) => x.week === 'W6')!)
 
   console.log('› Building W1–W5 aggregate history…')
   for (const w of WEEKS.filter((x) => x.week !== 'W6')) await insertHistoryWeek(w)
