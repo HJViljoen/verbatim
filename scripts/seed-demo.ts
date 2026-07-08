@@ -1,11 +1,27 @@
 import { randomUUID } from 'crypto'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
+import { computeMetrics } from '../lib/pipeline/metrics'
+import type { VideoRow, CommentRow, Step2aMetrics } from '../lib/pipeline/types'
+import { runStep2c } from '../lib/pipeline/owned-events'
+import { generateWeeklyReport } from '../lib/report'
 
 // Idempotent demo-tenant seeder (DATA ONLY — no UI). Creates "Össur — Demo":
 // a comped tenant with a login, six weekly pipeline_runs, the latest run (W6)
 // cloned from the real Ossur analysis + corpus so every live page renders full,
 // and W1–W5 as lightweight aggregate history for the time-series / week-over-week
 // deltas. Re-running deletes all demo rows + the auth user, then recreates.
+//
+// Numbers invariant (fixed 2026-07-08): W6's run_summary is COMPUTED from the
+// cloned corpus with the pipeline's own computeMetrics — never hand-set — and
+// the W1–W5 narrative arc is re-anchored to that endpoint, so every page that
+// follows the "numbers come from run_summary" rule agrees with the corpus.
+//
+// Owned layer (Owned-Data-Plan Phase 0): synthetic account_snapshots + owned
+// posts/comments (source='owned') across the six weeks — an IG follower jump at
+// W5 driven by an athlete-story reel (explainable) and a small TikTok dip at W6
+// (honestly unexplainable). After the data, Step 2c runs per week (detection is
+// code; explanations need OPENAI_API_KEY) and the six weekly reports are stored
+// so the Reports page renders.
 //
 // Run:  set -a; . ./.env.local; set +a
 //       npx --no-install tsx scripts/seed-demo.ts
@@ -86,6 +102,8 @@ async function deleteDemo(): Promise<void> {
 
   // Child tables that carry client_id, in FK-safe order.
   const byClient = [
+    'account_events',
+    'account_snapshots',
     'language_samples',
     'audience_insights',
     'themes',
@@ -180,7 +198,11 @@ async function createTenant(): Promise<{ password: string; authUserId: string }>
   return { password, authUserId }
 }
 
-// ---- trajectory (W1 → W6). W6 anchored to the real Ossur values. ------------
+// ---- trajectory (W1 → W6) ----------------------------------------------------
+// The numeric values below are the NARRATIVE ARC (erosion story), not the final
+// numbers: after cloning, anchorWeeks() rebuilds the table so W6 carries the
+// corpus-computed values and W1–W5 keep the arc's shape (offsets for rates,
+// proportions for counts) relative to that endpoint. Timing fields are literal.
 
 interface WeekSpec {
   week: Week
@@ -208,6 +230,45 @@ const WEEKS: WeekSpec[] = [
 ]
 
 const round1 = (n: number) => Math.round(n * 10) / 10
+
+/** What the cloned W6 corpus actually computes to — the anchor for the arc. */
+interface W6Actual {
+  metrics: Step2aMetrics
+  pos: number | null
+  neu: number | null
+  neg: number | null
+  sentimentCounts: { positive: number; neutral: number; negative: number; mixed: number }
+  videosJudged: number
+  ciSummary: unknown
+}
+
+/** Rebuild the week table around the corpus-computed W6: rates keep the arc's
+ *  week-to-week offsets, counts keep its proportions. */
+function anchorWeeks(actual: W6Actual): WeekSpec[] {
+  const s6 = WEEKS[WEEKS.length - 1]
+  const m = actual.metrics
+  const sovClient = m.share_of_voice.client?.pct_videos ?? s6.sovOssur
+  const sovComp = m.share_of_voice['competitor:Ottobock']?.pct_videos ?? s6.sovOttobock
+  const pos = actual.pos ?? s6.pos
+  const neu = actual.neu ?? s6.neu
+  const neg = actual.neg ?? s6.neg
+  return WEEKS.map((w) => {
+    if (w.week === 'W6') {
+      return { ...w, totalVideos: m.total_videos, totalComments: m.total_comments, pos, neu, neg, sovOssur: sovClient, sovOttobock: sovComp, avgEng: m.avg_engagement_rate }
+    }
+    return {
+      ...w,
+      totalVideos: Math.round((m.total_videos * w.totalVideos) / s6.totalVideos),
+      totalComments: Math.round((m.total_comments * w.totalComments) / s6.totalComments / 50) * 50,
+      pos: round1(pos + (w.pos - s6.pos)),
+      neu: round1(Math.max(0, neu + (w.neu - s6.neu))),
+      neg: round1(Math.max(0, neg + (w.neg - s6.neg))),
+      sovOssur: round1(Math.max(0, sovClient + (w.sovOssur - s6.sovOssur))),
+      sovOttobock: round1(Math.max(0, sovComp + (w.sovOttobock - s6.sovOttobock))),
+      avgEng: round1(Math.max(0, m.avg_engagement_rate + (w.avgEng - s6.avgEng))),
+    }
+  })
+}
 
 function shareOfVoice(w: WeekSpec) {
   const clientVideos = Math.round((w.totalVideos * w.sovOssur) / 100)
@@ -277,7 +338,7 @@ function mapIds(ids: unknown, m: Map<string, string>): string[] {
     .filter((x): x is string => Boolean(x))
 }
 
-async function cloneW6(): Promise<CloneMaps> {
+async function cloneW6(): Promise<{ maps: CloneMaps; actual: W6Actual }> {
   const runId = RUN_ID.W6
   const w6 = WEEKS.find((w) => w.week === 'W6')!
   const stamp = iso(w6.completedAt)
@@ -452,26 +513,48 @@ async function cloneW6(): Promise<CloneMaps> {
   const kperfRows = kperf.map((k) => ({ ...k, id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: runId, created_at: stamp }))
   await insertRows('keyword_performance', kperfRows)
 
-  // run_summary W6 — trajectory values + real consumer_intelligence_summary
+  // W6 truth: run the pipeline's own Step 2a metrics over the cloned corpus
+  // (discovered rows only — the owned layer is inserted separately and the SoV
+  // guard keeps it out of these numbers), plus the video-sentiment shares the
+  // pipeline's run_summary writer would compute. This is what run_summary W6
+  // carries, so pages and corpus can never disagree.
+  const metrics = computeMetrics(
+    videoRows as unknown as VideoRow[],
+    commentRows as unknown as CommentRow[],
+  )
+  const sentimentCounts = { positive: 0, neutral: 0, negative: 0, mixed: 0 }
+  let videosJudged = 0
+  for (const v of videoRows) {
+    const s = (v as Row).sentiment as string | null
+    if (s && s in sentimentCounts) {
+      sentimentCounts[s as keyof typeof sentimentCounts]++
+      videosJudged++
+    }
+  }
+  const share = (n: number) => (videosJudged > 0 ? round1((n / videosJudged) * 100) : null)
+
   const { data: srcSummary } = await admin
     .from('run_summary').select('consumer_intelligence_summary')
     .eq('client_id', OSSUR_CLIENT_ID).eq('run_id', SOURCE_RUN_ID).maybeSingle()
   const ciSummary = (srcSummary?.consumer_intelligence_summary ?? null) as unknown
-  await insertRunSummary(w6, { ciSummary, topVideoId: maps.topVideoId })
 
-  return maps
+  const actual: W6Actual = {
+    metrics,
+    pos: share(sentimentCounts.positive),
+    neu: share(sentimentCounts.neutral),
+    neg: share(sentimentCounts.negative),
+    sentimentCounts,
+    videosJudged,
+    ciSummary,
+  }
+  return { maps, actual }
 }
 
-// ---- 5. run_summary writer (all weeks) --------------------------------------
+// ---- 5. run_summary writers ---------------------------------------------------
 
-async function insertRunSummary(
-  w: WeekSpec,
-  opts: { ciSummary?: unknown; topVideoId?: string | null } = {},
-): Promise<void> {
-  const idx = WEEKS.findIndex((x) => x.week === w.week)
-  const prev = idx > 0 ? WEEKS[idx - 1] : null
+/** W1–W5: synthetic aggregates built from the (anchored) week spec. */
+async function insertRunSummary(w: WeekSpec, prev: WeekSpec | null): Promise<void> {
   const { sov, clientVideos, compVideos } = shareOfVoice(w)
-  const isW6 = w.week === 'W6'
 
   const row = {
     id: randomUUID(),
@@ -483,9 +566,9 @@ async function insertRunSummary(
     competitor_videos: compVideos,
     platforms_covered: ['instagram', 'tiktok', 'youtube'],
     avg_engagement_rate: w.avgEng,
-    top_video_id: isW6 ? opts.topVideoId ?? null : null,
-    top_video_views: isW6 ? 31280556 : null,
-    top_video_platform: isW6 ? 'tiktok' : null,
+    top_video_id: null,
+    top_video_views: null,
+    top_video_platform: null,
     share_of_voice: sov,
     platforms_summary: platformsSummary(w),
     overall_sentiment_positive: w.pos,
@@ -498,7 +581,7 @@ async function insertRunSummary(
         negative: Math.round((w.totalVideos * w.neg) / 100),
       },
     },
-    consumer_intelligence_summary: opts.ciSummary ?? null,
+    consumer_intelligence_summary: null,
     wow_sentiment_change: prev ? round1(w.pos - prev.pos) : null,
     wow_engagement_change: prev ? round1(w.avgEng - prev.avgEng) : null,
     period: 'weekly',
@@ -506,6 +589,38 @@ async function insertRunSummary(
   }
   const { error } = await admin.from('run_summary').insert(row)
   if (error) throw new Error(`run_summary ${w.week}: ${error.message}`)
+}
+
+/** W6: the corpus-computed truth, written the way the pipeline itself would. */
+async function insertRunSummaryW6(w: WeekSpec, prev: WeekSpec, actual: W6Actual): Promise<void> {
+  const m = actual.metrics
+  const row = {
+    id: randomUUID(),
+    client_id: DEMO_CLIENT_ID,
+    run_id: w.runId,
+    total_videos: m.total_videos,
+    total_comments: m.total_comments,
+    client_videos: m.client_videos,
+    competitor_videos: m.competitor_videos,
+    platforms_covered: m.platforms_covered,
+    avg_engagement_rate: m.avg_engagement_rate,
+    top_video_id: m.top_video_id,
+    top_video_views: m.top_video_views,
+    top_video_platform: m.top_video_platform,
+    share_of_voice: m.share_of_voice,
+    platforms_summary: m.platforms_summary,
+    overall_sentiment_positive: actual.pos,
+    overall_sentiment_neutral: actual.neu,
+    overall_sentiment_negative: actual.neg,
+    sentiment_drivers: { video_sentiment_counts: actual.sentimentCounts, videos_judged: actual.videosJudged },
+    consumer_intelligence_summary: actual.ciSummary ?? null,
+    wow_sentiment_change: actual.pos != null ? round1(actual.pos - prev.pos) : null,
+    wow_engagement_change: round1(m.avg_engagement_rate - prev.avgEng),
+    period: 'weekly',
+    run_date: iso(w.runDate),
+  }
+  const { error } = await admin.from('run_summary').insert(row)
+  if (error) throw new Error(`run_summary W6: ${error.message}`)
 }
 
 // ---- 6. W1–W5 lightweight aggregate history ---------------------------------
@@ -616,11 +731,11 @@ async function insertCarriedThemes(w: WeekSpec): Promise<void> {
   if (themeRows.length) await insertRows('themes', themeRows)
 }
 
-async function insertHistoryWeek(w: WeekSpec): Promise<void> {
+async function insertHistoryWeek(w: WeekSpec, prev: WeekSpec | null): Promise<void> {
   const stamp = iso(w.runDate)
 
   // run_summary
-  await insertRunSummary(w)
+  await insertRunSummary(w, prev)
 
   // themes carried this week
   await insertCarriedThemes(w)
@@ -646,7 +761,182 @@ async function insertHistoryWeek(w: WeekSpec): Promise<void> {
   }))
 }
 
-// ---- 7. verification --------------------------------------------------------
+// ---- 7. owned layer (Owned-Data-Plan Phase 0) --------------------------------
+// The client's own accounts as a data source, seeded dark: weekly follower
+// snapshots per platform, own-post rows and own-post comments (source='owned',
+// excluded from every discovered-corpus metric). The arc plants exactly the
+// stories Step 2c must handle: a W5 Instagram follower jump (+6.2%) alongside
+// an athlete-story reel that far outran the account's typical engagement —
+// explainable from the praise themes + own-post comments — and a small W6
+// TikTok dip that nothing in the tracked conversation accounts for, exercising
+// the first-class "unexplained" outcome.
+
+interface OwnedPost {
+  week: Week
+  platform: 'instagram' | 'tiktok'
+  key: string        // stable platform-native id → videos.video_id
+  caption: string
+  views: number | null // IG exposes no view counts in this corpus — null there
+  likes: number
+  comments_count: number
+}
+
+const OWNED_FOLLOWERS: Record<'instagram' | 'tiktok', { handle: string; series: Record<Week, number> }> = {
+  instagram: { handle: 'ossur', series: { W1: 41200, W2: 41420, W3: 41650, W4: 41890, W5: 44480, W6: 44720 } },
+  tiktok:    { handle: 'ossur', series: { W1: 28400, W2: 28510, W3: 28650, W4: 28740, W5: 28820, W6: 28190 } },
+}
+
+const OWNED_POSTS: OwnedPost[] = [
+  // Steady weekly cadence — the baseline Step 2c judges the standout against.
+  { week: 'W1', platform: 'instagram', key: 'ossur-own-ig-w1a', caption: 'Fitting week at the Reykjavik clinic — every socket starts with a conversation.', views: null, likes: 340, comments_count: 18 },
+  { week: 'W1', platform: 'instagram', key: 'ossur-own-ig-w1b', caption: 'POWER KNEE™ in daily life: stairs, slopes, long days.', views: null, likes: 410, comments_count: 22 },
+  { week: 'W1', platform: 'tiktok',    key: 'ossur-own-tt-w1a', caption: 'How a running blade is made #prosthetics', views: 41200, likes: 1180, comments_count: 44 },
+  { week: 'W2', platform: 'instagram', key: 'ossur-own-ig-w2a', caption: 'Clinician Q&A: what to ask before your first prosthesis.', views: null, likes: 385, comments_count: 26 },
+  { week: 'W2', platform: 'instagram', key: 'ossur-own-ig-w2b', caption: 'Behind the scenes with our R&D team in Iceland.', views: null, likes: 448, comments_count: 19 },
+  { week: 'W2', platform: 'tiktok',    key: 'ossur-own-tt-w2a', caption: 'Cheetah blade vs everyday foot — what changes? #amputee', views: 38800, likes: 1040, comments_count: 39 },
+  { week: 'W3', platform: 'instagram', key: 'ossur-own-ig-w3a', caption: 'Proprio Foot® on uneven ground — see the difference.', views: null, likes: 402, comments_count: 21 },
+  { week: 'W3', platform: 'instagram', key: 'ossur-own-ig-w3b', caption: 'Your questions on liners and sleeves, answered.', views: null, likes: 356, comments_count: 24 },
+  { week: 'W3', platform: 'tiktok',    key: 'ossur-own-tt-w3a', caption: 'A day at our mobility clinic — first steps count twice #prosthetics', views: 44100, likes: 1290, comments_count: 51 },
+  { week: 'W4', platform: 'instagram', key: 'ossur-own-ig-w4a', caption: 'Team Össur at the track — training week.', views: null, likes: 471, comments_count: 25 },
+  { week: 'W4', platform: 'instagram', key: 'ossur-own-ig-w4b', caption: 'Which knee is right for you? Our clinicians explain the options.', views: null, likes: 389, comments_count: 20 },
+  { week: 'W4', platform: 'tiktok',    key: 'ossur-own-tt-w4a', caption: 'Water, sand, trails — where can a prosthetic foot go?', views: 40300, likes: 1120, comments_count: 42 },
+  // W5 standout — the athlete-story reel behind the follower jump.
+  { week: 'W5', platform: 'instagram', key: 'ossur-own-ig-w5a', caption: "Sara's first 5K on her new running blade — eight months after her accident. Watch to the finish line. 🏁", views: null, likes: 6200, comments_count: 148 },
+  { week: 'W5', platform: 'instagram', key: 'ossur-own-ig-w5b', caption: 'Sara answers your questions — live this Friday.', views: null, likes: 512, comments_count: 31 },
+  { week: 'W5', platform: 'tiktok',    key: 'ossur-own-tt-w5a', caption: "Sara's finish line — the full story is on our Instagram.", views: 47600, likes: 1350, comments_count: 48 },
+  { week: 'W6', platform: 'instagram', key: 'ossur-own-ig-w6a', caption: "Thank you for the love on Sara's story — more athlete journeys coming.", views: null, likes: 545, comments_count: 29 },
+  { week: 'W6', platform: 'instagram', key: 'ossur-own-ig-w6b', caption: 'Maintenance 101: caring for your prosthesis in summer.', views: null, likes: 398, comments_count: 17 },
+  { week: 'W6', platform: 'tiktok',    key: 'ossur-own-tt-w6a', caption: 'Clinic myths, busted by our prosthetists.', views: 39900, likes: 1080, comments_count: 41 },
+]
+
+// Comments on the standout reel — the explanation material + hero-quote pool.
+// Short, first-person, quotable: exactly what the evidence-led cards lead with.
+const OWNED_COMMENTS_W5: Array<{ author: string; text: string; likes: number }> = [
+  { author: 'runwithmaya', text: 'I cried watching this. My daughter lost her leg last year and this is the first thing that made her excited about running again.', likes: 462 },
+  { author: 'coach_dre_pt', text: "I'm a physical therapist and I'm showing this to every one of my amputee patients this week.", likes: 318 },
+  { author: 'stefan.k.runs', text: 'Eight months?! It took me two years to get back on the road. Sara is unreal.', likes: 254 },
+  { author: 'annika_lifts', text: 'This is why I chose an Össur blade after my amputation. Watching Sara felt like watching my own first 5K.', likes: 231 },
+  { author: 'tommy_tri', text: 'Followed instantly. More stories like this please.', likes: 187 },
+  { author: 'gracefulstride', text: 'The moment she sees the finish line 😭😭', likes: 164 },
+  { author: 'mrs_ortiz_teaches', text: 'Showed this to my class today. Half of them want to be prosthetists now.', likes: 142 },
+  { author: 'davidpaddles', text: 'My brother just had his fitting appointment. Sending him this for motivation.', likes: 119 },
+  { author: 'kensington_pt', text: 'The gait work behind this recovery is elite. Credit to her whole care team.', likes: 96 },
+  { author: 'lena.morgan.art', text: 'I have watched this eleven times and it gets better every time.', likes: 88 },
+  { author: 'firstresponder_jax', text: 'I was there when Sara was hurt. Seeing this today — no words. Go Sara.', likes: 415 },
+  { author: 'quietmilesclub', text: 'Never commented on a brand post before but this one earned it.', likes: 73 },
+  { author: 'hopeafterlimbloss', text: 'Posts like this are why our support group keeps recommending you to new members.', likes: 67 },
+  { author: 'nordicnurse', text: 'From a rehab nurse: this is what realistic recovery representation looks like. Thank you.', likes: 59 },
+]
+
+// A little ordinary chatter elsewhere, so the owned pool isn't only the reel —
+// and so the W6 TikTok dip has honest material that does NOT explain it.
+const OWNED_COMMENTS_MISC: Array<{ week: Week; platform: 'instagram' | 'tiktok'; key: string; author: string; text: string; likes: number }> = [
+  { week: 'W5', platform: 'tiktok', key: 'ossur-own-tt-w5a', author: 'blade_curious', text: 'Went straight to the IG video. Incredible.', likes: 41 },
+  { week: 'W5', platform: 'tiktok', key: 'ossur-own-tt-w5a', author: 'physio_finn', text: 'The cadence control in that last stretch is so clean.', likes: 28 },
+  { week: 'W6', platform: 'tiktok', key: 'ossur-own-tt-w6a', author: 'gadgetgrandad', text: 'Myth 3 got me. I genuinely believed that for years.', likes: 22 },
+  { week: 'W6', platform: 'tiktok', key: 'ossur-own-tt-w6a', author: 'sockliner_sam', text: 'Can you do one on liners next?', likes: 17 },
+  { week: 'W6', platform: 'instagram', key: 'ossur-own-ig-w6b', author: 'summer_strider', text: 'The talc tip is a lifesaver in this heat.', likes: 12 },
+]
+
+async function insertOwnedLayer(weeks: WeekSpec[]): Promise<void> {
+  const byWeek = new Map(weeks.map((w) => [w.week, w]))
+
+  // account_snapshots — one per platform per week, dated with the run.
+  const snapshotRows: Row[] = []
+  for (const [platform, acct] of Object.entries(OWNED_FOLLOWERS)) {
+    for (const w of weeks) {
+      snapshotRows.push({
+        id: randomUUID(),
+        client_id: DEMO_CLIENT_ID,
+        run_id: w.runId,
+        platform,
+        handle: acct.handle,
+        snapshot_date: w.runDate.slice(0, 10),
+        followers: acct.series[w.week],
+        posts_count: OWNED_POSTS.filter((p) => p.platform === platform && byWeek.get(p.week)!.runDate <= w.runDate).length,
+        metrics: null,
+      })
+    }
+  }
+  await insertRows('account_snapshots', snapshotRows)
+
+  // Own posts → videos (source='owned'; is_client so entity attribution holds).
+  const videoRows: Row[] = OWNED_POSTS.map((p) => {
+    const w = byWeek.get(p.week)!
+    return {
+      id: randomUUID(),
+      client_id: DEMO_CLIENT_ID,
+      run_id: w.runId,
+      platform: p.platform,
+      video_id: p.key,
+      video_url: p.platform === 'instagram' ? `https://www.instagram.com/p/${p.key}/` : `https://www.tiktok.com/@ossur/video/${p.key}`,
+      account_name: 'ossur',
+      is_client: true,
+      is_competitor: false,
+      competitor_name: null,
+      caption: p.caption,
+      hashtags: [],
+      views: p.views,
+      likes: p.likes,
+      shares: null,
+      comments_count: p.comments_count,
+      account_followers: OWNED_FOLLOWERS[p.platform].series[p.week],
+      sentiment: null,
+      source: 'owned',
+      scraped_at: iso(w.runDate),
+    }
+  })
+  await insertRows('videos', videoRows)
+
+  // Own-post comments (source='owned') — the "what your audience says" segment.
+  const commentRows: Row[] = []
+  const w5 = byWeek.get('W5')!
+  for (const c of OWNED_COMMENTS_W5) {
+    commentRows.push({
+      id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w5.runId,
+      platform: 'instagram', video_id: 'ossur-own-ig-w5a',
+      author: c.author, text: c.text, likes: c.likes,
+      source: 'owned', created_at: iso(w5.runDate),
+    })
+  }
+  for (const c of OWNED_COMMENTS_MISC) {
+    const w = byWeek.get(c.week)!
+    commentRows.push({
+      id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId,
+      platform: c.platform, video_id: c.key,
+      author: c.author, text: c.text, likes: c.likes,
+      source: 'owned', created_at: iso(w.runDate),
+    })
+  }
+  await insertRows('comments', commentRows)
+}
+
+// ---- 8. Step 2c + stored reports ----------------------------------------------
+
+/** Detect + explain owned-account events per week, oldest first. Detection is
+ *  code-only; explanations need OPENAI_API_KEY (skipped honestly without it). */
+async function runOwnedEvents(weeks: WeekSpec[]): Promise<void> {
+  for (const w of weeks) {
+    const res = await runStep2c({ clientId: DEMO_CLIENT_ID, runId: w.runId })
+    const explained = res.events.filter((e) => e.explained).length
+    console.log(
+      `  ${w.week}: ${res.events.length} event(s)` +
+      (res.events.length ? ` (${explained} explained)` : '') +
+      (res.skippedReason ? ` — ${res.skippedReason}` : ''),
+    )
+  }
+}
+
+/** Store the six weekly reports (no email) so the Reports page has its archive.
+ *  Runs AFTER Step 2c so the "on your account" block lands in the reports. */
+async function storeReports(weeks: WeekSpec[]): Promise<void> {
+  for (const w of weeks) {
+    const res = await generateWeeklyReport({ clientId: DEMO_CLIENT_ID, runId: w.runId, send: false })
+    console.log(`  ${w.week}: ${res.reportId ? `stored — "${res.subject}"` : `NOT stored (${res.reason ?? 'unknown'})`}`)
+  }
+}
+
+// ---- 9. verification --------------------------------------------------------
 
 const RUN_TABLES = [
   'videos', 'comments', 'audience_insights', 'themes', 'market_insights',
@@ -661,7 +951,7 @@ async function countRun(table: string, runId: string): Promise<number> {
   return count ?? 0
 }
 
-async function verify(maps: CloneMaps, password: string): Promise<void> {
+async function verify(maps: CloneMaps, password: string, weeks: WeekSpec[]): Promise<void> {
   console.log('\n=================  VERIFICATION  =================')
   console.log(`DEMO_CLIENT_ID : ${DEMO_CLIENT_ID}`)
   console.log(`login email    : ${DEMO_EMAIL}`)
@@ -670,11 +960,11 @@ async function verify(maps: CloneMaps, password: string): Promise<void> {
 
   // Row counts per table per run.
   console.log('\nRow counts per table per run:')
-  const header = ['table', ...WEEKS.map((w) => w.week)].join('\t')
+  const header = ['table', ...weeks.map((w) => w.week)].join('\t')
   console.log(header)
   for (const table of RUN_TABLES) {
     const cells: string[] = [table.padEnd(21)]
-    for (const w of WEEKS) cells.push(String(await countRun(table, w.runId)))
+    for (const w of weeks) cells.push(String(await countRun(table, w.runId)))
     console.log(cells.join('\t'))
   }
 
@@ -685,7 +975,7 @@ async function verify(maps: CloneMaps, password: string): Promise<void> {
   )
   for (const r of rs) {
     const sov = (r.share_of_voice ?? {}) as Record<string, { pct_videos?: number }>
-    const w = WEEKS.find((x) => x.runId === r.run_id)?.week ?? '??'
+    const w = weeks.find((x) => x.runId === r.run_id)?.week ?? '??'
     console.log(
       `${w}  ${String(r.run_date).slice(0, 10)}  ` +
       `pos ${r.overall_sentiment_positive} / neu ${r.overall_sentiment_neutral} / neg ${r.overall_sentiment_negative}  ·  ` +
@@ -693,6 +983,41 @@ async function verify(maps: CloneMaps, password: string): Promise<void> {
       `wowSent ${r.wow_sentiment_change ?? '—'} / wowEng ${r.wow_engagement_change ?? '—'}  ·  ` +
       `videos ${r.total_videos} comments ${r.total_comments}`,
     )
+  }
+
+  // Numbers invariant: W6 run_summary must equal the corpus it was computed from.
+  const w6 = weeks[weeks.length - 1]
+  const [vids, cmts] = await Promise.all([
+    admin.from('videos').select('id', { head: true, count: 'exact' })
+      .eq('client_id', DEMO_CLIENT_ID).eq('run_id', w6.runId).eq('source', 'discovered'),
+    admin.from('comments').select('id', { head: true, count: 'exact' })
+      .eq('client_id', DEMO_CLIENT_ID).eq('run_id', w6.runId).eq('source', 'discovered'),
+  ])
+  const w6Summary = rs.find((r) => r.run_id === w6.runId)
+  const match = w6Summary && w6Summary.total_videos === (vids.count ?? -1) && w6Summary.total_comments === (cmts.count ?? -1)
+  console.log(`\nW6 corpus consistency: run_summary ${w6Summary?.total_videos}/${w6Summary?.total_comments} vs discovered corpus ${vids.count}/${cmts.count} → ${match ? 'OK' : 'MISMATCH'}`)
+
+  // Owned layer + reports.
+  const ownedCounts = async (table: string, extra?: (q: unknown) => unknown) => {
+    let q = admin.from(table).select('id', { head: true, count: 'exact' }).eq('client_id', DEMO_CLIENT_ID)
+    if (extra) q = extra(q) as typeof q
+    const { count } = await q
+    return count ?? 0
+  }
+  console.log('\nOwned layer:')
+  console.log(`  account_snapshots : ${await ownedCounts('account_snapshots')}`)
+  console.log(`  owned videos      : ${await ownedCounts('videos', (q) => (q as { eq: (c: string, v: string) => unknown }).eq('source', 'owned'))}`)
+  console.log(`  owned comments    : ${await ownedCounts('comments', (q) => (q as { eq: (c: string, v: string) => unknown }).eq('source', 'owned'))}`)
+  console.log(`  account_events    : ${await ownedCounts('account_events')}`)
+  console.log(`  weekly_reports    : ${await ownedCounts('weekly_reports')}`)
+
+  const { data: events } = await admin
+    .from('account_events')
+    .select('run_id, platform, metric, severity, explained, magnitude_label')
+    .eq('client_id', DEMO_CLIENT_ID)
+  for (const e of (events ?? []) as Row[]) {
+    const w = weeks.find((x) => x.runId === e.run_id)?.week ?? '??'
+    console.log(`    ${w} [sev ${e.severity}] ${e.magnitude_label} — ${e.explained ? 'explained' : 'unexplained'}`)
   }
   console.log('=================================================\n')
 }
@@ -713,15 +1038,34 @@ async function main() {
   await insertRuns()
 
   console.log('› Cloning the real Ossur run into W6 (this copies the full corpus)…')
-  const maps = await cloneW6()
+  const { maps, actual } = await cloneW6()
+
+  console.log('› Anchoring the W1–W6 arc to the corpus-computed W6…')
+  const weeks = anchorWeeks(actual)
+  for (const w of weeks) {
+    const { error } = await admin.from('pipeline_runs').update({ videos_scraped: w.totalVideos }).eq('id', w.runId)
+    if (error) throw new Error(`update pipeline_runs ${w.week}: ${error.message}`)
+  }
+
+  console.log('› Writing the W6 run_summary from corpus metrics…')
+  await insertRunSummaryW6(weeks[weeks.length - 1], weeks[weeks.length - 2], actual)
 
   console.log('› Appending the tracked-theme trajectory to W6…')
-  await insertCarriedThemes(WEEKS.find((x) => x.week === 'W6')!)
+  await insertCarriedThemes(weeks[weeks.length - 1])
 
   console.log('› Building W1–W5 aggregate history…')
-  for (const w of WEEKS.filter((x) => x.week !== 'W6')) await insertHistoryWeek(w)
+  for (let i = 0; i < weeks.length - 1; i++) await insertHistoryWeek(weeks[i], i > 0 ? weeks[i - 1] : null)
 
-  await verify(maps, password)
+  console.log('› Seeding the owned layer (snapshots, own posts, own-post comments)…')
+  await insertOwnedLayer(weeks)
+
+  console.log('› Step 2c — detecting + explaining owned-account events…')
+  await runOwnedEvents(weeks)
+
+  console.log('› Storing the six weekly reports…')
+  await storeReports(weeks)
+
+  await verify(maps, password, weeks)
   console.log('✓ Demo seed complete.')
 }
 
