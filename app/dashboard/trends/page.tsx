@@ -2,6 +2,7 @@ import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint } from '@/lib/ui-colors'
+import { Quotes } from '@/components/quotes'
 
 // Trends — how the market has moved across recent updates (Redesign Spec §6/§9,
 // unlocked once a tenant has ≥2 comparable updates on record). The dashboard is
@@ -33,6 +34,27 @@ interface ThemeRow {
   strength_score: number | null
   evidence_count: number | null
   first_seen: boolean
+}
+
+/** A weekly follower snapshot of one of the client's own accounts. */
+interface SnapshotRow {
+  platform: string
+  snapshot_date: string
+  followers: number | null
+}
+
+/** A Step 2c event: code-measured movement, explained (or honestly not). */
+interface AccountEventRow {
+  platform: string
+  metric: string
+  event_date: string
+  direction: string
+  severity: number
+  magnitude_label: string
+  explained: boolean
+  explanation: string | null
+  supporting_theme_labels: string[] | null
+  hero_quote: string | null
 }
 
 /** A theme's trajectory across the updates it appeared in (chronological). */
@@ -67,7 +89,7 @@ export default async function TrendsPage() {
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
-  const [{ data: client }, summariesRaw, themesRaw] = await Promise.all([
+  const [{ data: client }, summariesRaw, themesRaw, { data: snapData }, { data: eventData }] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunSummary>(() =>
       supabase.from('run_summary')
@@ -79,6 +101,12 @@ export default async function TrendsPage() {
         .select('run_id, label, category, bucket, strength_score, evidence_count, first_seen')
         .eq('client_id', clientId).order('run_id', { ascending: true }),
     ),
+    supabase.from('account_snapshots')
+      .select('platform, snapshot_date, followers')
+      .eq('client_id', clientId).order('snapshot_date', { ascending: true }),
+    supabase.from('account_events')
+      .select('platform, metric, event_date, direction, severity, magnitude_label, explained, explanation, supporting_theme_labels, hero_quote')
+      .eq('client_id', clientId).order('event_date', { ascending: false }),
   ])
 
   const brand = client?.company_name ?? 'Your brand'
@@ -177,6 +205,38 @@ export default async function TrendsPage() {
     shareDelta < 0 && compDelta > 0 && leadCompetitor
       ? `${leadCompetitor} widened its lead in the tracked conversation while ${brandShort}'s share eased — ${brandShort} to ${fmtPct(clientSeries[clientSeries.length - 1])}, ${leadCompetitor} to ${fmtPct(compSeries[compSeries.length - 1])}.`
       : `Share of the tracked conversation for ${brandShort} and ${leadCompetitor ?? 'competitors'} across your recent updates.`
+
+  // ---- on your accounts: follower series + measured events (Owned-Data-Plan) ----
+  // Numbers come from account_snapshots; events from Step 2c (code measures,
+  // one AI pass explains — or honestly doesn't). The section self-gates on
+  // owned data existing, so tenants without connected accounts never see it.
+  const snapshots = ((snapData ?? []) as SnapshotRow[]).filter((s) => s.followers != null)
+  const accountEvents = (eventData ?? []) as AccountEventRow[]
+  const snapsByPlatform = new Map<string, SnapshotRow[]>()
+  for (const s of snapshots) {
+    const arr = snapsByPlatform.get(s.platform) ?? []
+    arr.push(s)
+    snapsByPlatform.set(s.platform, arr)
+  }
+  const ownedCharts = [...snapsByPlatform.entries()]
+    .filter(([, rows]) => rows.length >= 2)
+    .map(([platform, rows]) => {
+      const values = rows.map((r) => Number(r.followers))
+      return {
+        platform,
+        dates: rows.map((r) => r.snapshot_date),
+        values,
+        delta: values[values.length - 1] - values[0],
+        markers: accountEvents
+          .filter((e) => e.platform === platform && e.metric === 'followers')
+          .map((e) => ({ i: rows.findIndex((r) => r.snapshot_date === e.event_date), label: e.magnitude_label }))
+          .filter((m) => m.i >= 0),
+      }
+    })
+    .sort((a, b) => b.values[b.values.length - 1] - a.values[a.values.length - 1])
+  const eventCards = [...accountEvents].sort(
+    (a, b) => b.event_date.localeCompare(a.event_date) || b.severity - a.severity,
+  )
 
   const sentAvg = Math.round(sentSeries.reduce((a, b) => a + b, 0) / sentSeries.length)
 
@@ -302,8 +362,87 @@ export default async function TrendsPage() {
           </p>
         </section>
       )}
+
+      {/* On your accounts — owned metric series with measured, explained events */}
+      {ownedCharts.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            On your accounts
+          </h2>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            {ownedCharts.map((c) => {
+              const fMin = Math.floor(Math.min(...c.values) * 0.995 / 100) * 100
+              const fMax = Math.ceil(Math.max(...c.values) * 1.005 / 100) * 100
+              return (
+                <Card key={c.platform}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                      <span className="size-2 rounded-full bg-chart-2" aria-hidden />
+                      {platformName(c.platform)} followers
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <TrendChart
+                      dates={c.dates} yMin={fMin} yMax={fMax} format={fmtInt}
+                      series={[{ label: `${platformName(c.platform)} followers`, color: 'var(--chart-2)', values: c.values }]}
+                      markers={c.markers}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {fmtInt(c.values[c.values.length - 1])} now · {c.delta >= 0 ? '+' : '−'}{fmtInt(Math.abs(c.delta))} since {shortDate(c.dates[0])}
+                      {c.markers.length > 0 ? ' · the ringed point marks a measured event, explained below' : ''}
+                    </p>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+
+          {eventCards.length > 0 && (
+            <div className="space-y-3">
+              {eventCards.map((e, i) => (
+                <Card key={i}>
+                  <CardContent className="space-y-3 py-5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium">{platformName(e.platform)}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${e.explained ? 'bg-primary/12 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                        {e.explained ? 'Explained' : 'Unexplained'}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">{shortDate(e.event_date)}</span>
+                    </div>
+                    {e.hero_quote && <Quotes items={[e.hero_quote]} />}
+                    <p className="text-sm font-semibold">{e.magnitude_label}</p>
+                    {e.explained && e.explanation ? (
+                      <p className="text-sm text-muted-foreground">{e.explanation}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        The conversation we track doesn&rsquo;t account for this move, so we&rsquo;re not guessing at a cause — it stays flagged as unexplained.
+                      </p>
+                    )}
+                    {(e.supporting_theme_labels?.length ?? 0) > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {e.supporting_theme_labels!.map((label) => (
+                          <span key={label} className="rounded-full bg-primary/8 px-2 py-0.5 text-[11px] text-primary">{label}</span>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          <p className="text-[11px] text-muted-foreground">
+            Follower counts are measured on your own accounts. A movement is only flagged when it is well outside the account&rsquo;s typical week — and it is only given a cause when your audience&rsquo;s own words support one.
+          </p>
+        </section>
+      )}
     </div>
   )
+}
+
+const PLATFORM_LABELS: Record<string, string> = { tiktok: 'TikTok', youtube: 'YouTube', instagram: 'Instagram' }
+function platformName(p: string): string {
+  return PLATFORM_LABELS[p] ?? p.charAt(0).toUpperCase() + p.slice(1)
 }
 
 /** Who a theme is about, in plain terms. */
@@ -376,12 +515,14 @@ function StatTrend({
 
 interface ChartSeries { label: string; color: string; values: number[] }
 
-/** Multi-line trend chart with a labelled y-band and dated x-axis. */
+/** Multi-line trend chart with a labelled y-band and dated x-axis. Optional
+ *  markers ring a point on the FIRST series — a measured event at that date. */
 function TrendChart({
-  dates, series, yMin, yMax, format, area = false,
+  dates, series, yMin, yMax, format, area = false, markers = [],
 }: {
   dates: string[]; series: ChartSeries[]; yMin: number; yMax: number
   format: (n: number) => string; area?: boolean
+  markers?: { i: number; label: string }[]
 }) {
   const W = 720, H = 240, padL = 52, padR = 16, padT = 16, padB = 28
   const plotW = W - padL - padR, plotH = H - padT - padB
@@ -422,6 +563,11 @@ function TrendChart({
           </g>
         )
       })}
+      {markers.map((m, k) => (
+        <circle key={`marker-${k}`} cx={x(m.i)} cy={y(series[0].values[m.i])} r={8} fill="none" stroke="var(--warning)" strokeWidth={2.5}>
+          <title>{m.label}</title>
+        </circle>
+      ))}
     </svg>
   )
 }
