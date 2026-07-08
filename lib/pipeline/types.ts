@@ -24,6 +24,9 @@ export interface VideoRow {
   account_followers: number | null
   /** Pass A's comment-derived video sentiment; null until analysed. */
   sentiment: string | null
+  /** 'discovered' (keyword search) or 'owned' (the client's own accounts).
+   *  The SoV guard keeps owned rows out of discovered-corpus metrics. */
+  source?: string | null
 }
 
 export interface CommentRow {

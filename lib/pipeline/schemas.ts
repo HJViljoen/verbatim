@@ -208,3 +208,23 @@ const themeLabelSchema = z.object({
 export const PassBSchema = z.object({ theme_labels: z.array(themeLabelSchema) })
 export type PassBOutput = z.infer<typeof PassBSchema>
 export type ThemeLabelOut = z.infer<typeof themeLabelSchema>
+
+// --- Step 2c (Owned-Data-Plan 2026-07-08) — explaining owned-account events --
+// One call per run over code-detected metric events (E#) + the run's themes
+// (T#) + verbatim owned-post comments (the audience segment). The model either
+// explains an event from that material or declares it unexplained — never a
+// cause the data doesn't show. hero_quote is copied EXACTLY from the shown
+// comments and validated in code, like Pass D's.
+
+const accountEventExplanationSchema = z.object({
+  // The E# index of the event being explained — must exist in the input.
+  index: z.string(),
+  // false = the tracked conversation does not account for this movement.
+  explained: z.boolean(),
+  explanation: z.string().nullable(),
+  supporting_themes: z.array(z.string()),  // T# indices from the input
+  hero_quote: z.string().nullable(),
+})
+
+export const Step2cSchema = z.object({ events: z.array(accountEventExplanationSchema) })
+export type Step2cOutput = z.infer<typeof Step2cSchema>
