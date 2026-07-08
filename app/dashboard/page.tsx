@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
@@ -23,12 +22,28 @@ import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quo
 // the required secondary encoding. Client-facing rules apply: no run ids, no
 // scraped/analysed KPIs, no pipeline jargon — including empty states.
 
-interface VideoRow {
-  id: string
-  is_client: boolean
-  is_competitor: boolean
-  competitor_name: string | null
-  sentiment: string | null
+/** One entity bucket of run_summary.share_of_voice (Step 2a's output). */
+interface SovEntry {
+  videos: number
+  pct_videos: number
+}
+
+/** The state numbers, straight from run_summary — the numbers rule: displayed
+ *  values come from the pipeline's computed snapshot, never re-derived here. */
+interface RunSummaryRow {
+  total_videos: number | null
+  total_comments: number | null
+  share_of_voice: Record<string, SovEntry> | null
+  sentiment_drivers: { video_sentiment_counts?: Record<string, number>; videos_judged?: number } | null
+}
+
+/** A Step 2c owned-account event (Owned-Data-Plan) — candidate for the one-thing slot. */
+interface AccountEventRow {
+  severity: number
+  explained: boolean
+  magnitude_label: string
+  explanation: string | null
+  hero_quote: string | null
 }
 
 interface AudienceInsight {
@@ -131,18 +146,15 @@ export default async function DashboardPage() {
     )
   }
 
-  // Corpus + insight reads for the latest run, in parallel.
+  // State snapshot + insight reads for the latest run, in parallel. Numbers come
+  // from run_summary (the pipeline's corpus-computed snapshot) — never recounted
+  // from videos/comments here, so every page shows the same figures.
   let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
-  const [videos, commentsRes, aiRes, recRes, latestThemedRes, miRes] = await Promise.all([
-    selectAll<VideoRow>(() =>
-      supabase.from('videos')
-        .select('id, is_client, is_competitor, competitor_name, sentiment')
-        .eq('client_id', clientId).eq('run_id', videoRunId)
-        .order('id', { ascending: true }),
-    ),
-    supabase.from('comments').select('id', { head: true, count: 'exact' })
-      .eq('client_id', clientId).eq('run_id', videoRunId),
+  const [summaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
+    supabase.from('run_summary')
+      .select('total_videos, total_comments, share_of_voice, sentiment_drivers')
+      .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
     supabase.from('audience_insights')
       .select('id, category, theme, description, strength_score, emotion')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -152,10 +164,15 @@ export default async function DashboardPage() {
     themedQ.order('created_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('market_insights').select('id, evidence')
       .eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('account_events')
+      .select('severity, explained, magnitude_label, explanation, hero_quote')
+      .eq('client_id', clientId).eq('run_id', runId)
+      .order('severity', { ascending: false }),
   ])
 
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
-  const commentCount = commentsRes.count ?? 0
+  const summary = (summaryRes.data ?? null) as RunSummaryRow | null
+  const commentCount = Number(summary?.total_comments ?? 0)
 
   // ---- Welcome hero coverage line (human terms, per spec) ----
   const lineParts = [
@@ -168,16 +185,21 @@ export default async function DashboardPage() {
   ].filter(Boolean) as string[]
 
   // ---- Where you stand: sentiment split · share of conversation · mood ----
-  const analysed = videos.filter((v) => v.sentiment != null)
-  const sentimentCounts = { positive: 0, neutral: 0, mixed: 0, negative: 0 }
-  for (const v of analysed) {
-    if (v.sentiment && v.sentiment in sentimentCounts) sentimentCounts[v.sentiment as keyof typeof sentimentCounts]++
+  const vsCounts = summary?.sentiment_drivers?.video_sentiment_counts ?? {}
+  const sentimentCounts = {
+    positive: Number(vsCounts.positive ?? 0),
+    neutral: Number(vsCounts.neutral ?? 0),
+    mixed: Number(vsCounts.mixed ?? 0),
+    negative: Number(vsCounts.negative ?? 0),
   }
+  const analysedCount =
+    Number(summary?.sentiment_drivers?.videos_judged ?? 0) ||
+    sentimentCounts.positive + sentimentCounts.neutral + sentimentCounts.mixed + sentimentCounts.negative
   const pctOf = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 100) : 0)
-  const positiveShare = analysed.length > 0 ? pctOf(sentimentCounts.positive, analysed.length) : null
+  const positiveShare = analysedCount > 0 ? pctOf(sentimentCounts.positive, analysedCount) : null
   // Calibrated sentiment word — fixed cutoffs on the measured split, never worded by the model.
   const sentTier = positiveShare != null
-    ? sentimentTier(positiveShare, pctOf(sentimentCounts.negative, analysed.length))
+    ? sentimentTier(positiveShare, pctOf(sentimentCounts.negative, analysedCount))
     : null
   const sentimentSegments: Segment[] = (
     [
@@ -188,30 +210,27 @@ export default async function DashboardPage() {
     ] as const
   )
     .filter((s) => s.count > 0)
-    .map((s) => ({ ...s, pct: pctOf(s.count, analysed.length) }))
+    .map((s) => ({ ...s, pct: pctOf(s.count, analysedCount) }))
 
-  const clientCount = videos.filter((v) => v.is_client).length
-  const clientShare = videos.length > 0 ? pctOf(clientCount, videos.length) : null
-  const competitorCounts = new Map<string, number>()
-  for (const v of videos) {
-    if (!v.is_competitor) continue
-    const name = v.competitor_name ?? 'Competitors'
-    competitorCounts.set(name, (competitorCounts.get(name) ?? 0) + 1)
-  }
+  // Share of tracked conversation, straight from run_summary.share_of_voice.
+  const sov = summary?.share_of_voice ?? {}
+  const clientEntry = sov.client
+  const clientShare = clientEntry ? Math.round(Number(clientEntry.pct_videos)) : null
   // Colour follows the entity: the brand is always green, competitors take the
   // earthy accents in volume order, the rest of the category stays recessive.
   const COMPETITOR_COLORS = ['bg-clay', 'bg-ochre', 'bg-plum', 'bg-slate'] as const
-  const competitorSegs = [...competitorCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, n], i) => ({
-      label: name, count: n, pct: pctOf(n, videos.length),
+  const competitorSegs = Object.entries(sov)
+    .filter(([key]) => key.startsWith('competitor:'))
+    .sort((a, b) => b[1].videos - a[1].videos)
+    .map(([key, e], i) => ({
+      label: key.slice('competitor:'.length), count: e.videos, pct: Math.round(Number(e.pct_videos)),
       color: COMPETITOR_COLORS[Math.min(i, COMPETITOR_COLORS.length - 1)],
     }))
-  const restCount = videos.length - clientCount - [...competitorCounts.values()].reduce((a, b) => a + b, 0)
+  const restEntry = sov['industry-other']
   const shareSegments: Segment[] = [
-    { label: brand, count: clientCount, pct: pctOf(clientCount, videos.length), color: 'bg-chart-2' },
+    ...(clientEntry ? [{ label: brand, count: clientEntry.videos, pct: Math.round(Number(clientEntry.pct_videos)), color: 'bg-chart-2' }] : []),
     ...competitorSegs,
-    { label: 'Rest of category', count: restCount, pct: pctOf(restCount, videos.length), color: 'bg-input' },
+    ...(restEntry ? [{ label: 'Rest of category', count: restEntry.videos, pct: Math.round(Number(restEntry.pct_videos)), color: 'bg-input' }] : []),
   ].filter((s) => s.count > 0)
 
   const emotionCounts = new Map<string, number>()
@@ -271,7 +290,12 @@ export default async function DashboardPage() {
       }))
   }
 
-  // ---- The one thing: top-priority, best-grounded recommendation ----
+  // ---- The one thing: top-priority, best-grounded recommendation — unless a
+  // major explained event on the client's OWN account outranks it (code
+  // ranking: severity 3 + explained takes the slot; anything less defers).
+  const events = (eventsRes.data ?? []) as AccountEventRow[]
+  const topEvent = events.find((e) => e.explained && e.severity >= 3) ?? null
+
   const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 }
   const recs = (recRes.data ?? []) as {
     id: string; type: string; title: string; reasoning: string
@@ -286,7 +310,7 @@ export default async function DashboardPage() {
   // Evidence-led: lead the recommendation with the real voices behind it (shared
   // lib/quotes) — the pipeline's hero_quote where present, heuristic otherwise.
   let oneThingQuotes: string[] = []
-  if (oneThing) {
+  if (oneThing && !topEvent) {
     const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
     const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
     const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
@@ -334,7 +358,7 @@ export default async function DashboardPage() {
               <p className="text-xs text-muted-foreground">lands with the next update</p>
             )}
             {positiveShare != null && (
-              <p className="text-xs text-muted-foreground">positive across {analysed.length} rated conversations</p>
+              <p className="text-xs text-muted-foreground">positive across {analysedCount} rated conversations</p>
             )}
           </CardContent>
         </Card>
@@ -429,8 +453,26 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      {/* The one thing */}
-      {oneThing && (
+      {/* The one thing — a major explained event on the client's own account
+          wins the slot; otherwise the best-grounded recommendation. */}
+      {topEvent ? (
+        <Card className="ring-2 ring-primary/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing on your account</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {topEvent.hero_quote && <Quotes items={[topEvent.hero_quote]} />}
+            <p className="text-xl font-bold">{topEvent.magnitude_label}</p>
+            {topEvent.explanation && <p className="text-sm text-muted-foreground">{topEvent.explanation}</p>}
+            <Link
+              href="/dashboard/trends"
+              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              See what moved <span aria-hidden>→</span>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : oneThing ? (
         <Card className="ring-2 ring-primary/30">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing to act on</CardTitle>
@@ -447,7 +489,7 @@ export default async function DashboardPage() {
             </Link>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   )
 }

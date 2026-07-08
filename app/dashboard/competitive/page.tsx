@@ -1,4 +1,3 @@
-import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
@@ -30,7 +29,11 @@ interface CompetitiveInsight {
 
 interface AudienceInsight { id: string; category: string; theme: string; description: string }
 
-interface VideoBucketRow { is_client: boolean; is_competitor: boolean; competitor_name: string | null }
+/** The share fields of run_summary — the page's only number source. */
+interface SummaryShareRow {
+  total_videos: number | null
+  share_of_voice: Record<string, { videos: number; pct_videos: number }> | null
+}
 
 // Category presentation. Order = the lead-with-strength reading order.
 const CATEGORY_ORDER = ['topic_ownership', 'content_gap', 'competitive_threat', 'sentiment_differential'] as const
@@ -57,14 +60,13 @@ export default async function CompetitiveIntelligencePage() {
   if (!latestRun) return <Shell><EmptyRun /></Shell>
   const runId = latestRun.id as string
 
-  // Insights + grounding themes for this run; corpus buckets for Share of Tracked
-  // Conversation (whole-corpus, market-wide — matches the run-cd metrics).
-  const [{ data: ciData }, { data: aiData }, videoRows] = await Promise.all([
+  // Insights + grounding themes for this run; Share of Tracked Conversation
+  // comes from run_summary (the pipeline's corpus-computed snapshot — the
+  // numbers rule: never recounted per page, and owned-account posts stay out).
+  const [{ data: ciData }, { data: aiData }, { data: summaryData }] = await Promise.all([
     supabase.from('competitive_insights').select('*').eq('client_id', clientId).eq('run_id', runId),
     supabase.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
-    selectAll<VideoBucketRow>(() =>
-      supabase.from('videos').select('is_client, is_competitor, competitor_name').eq('client_id', clientId).order('id', { ascending: true }),
-    ),
+    supabase.from('run_summary').select('total_videos, share_of_voice').eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
   ])
 
   const insights = (ciData ?? []) as CompetitiveInsight[]
@@ -81,8 +83,8 @@ export default async function CompetitiveIntelligencePage() {
     return [...themes].slice(0, 4)
   }
 
-  // Share of Tracked Conversation — per-bucket video share.
-  const sov = computeShare(videoRows)
+  // Share of Tracked Conversation — per-bucket video share from run_summary.
+  const sov = shareFromSummary((summaryData ?? null) as SummaryShareRow | null)
 
   // ---- verbatim quotes for the evidence-led cards (shared lib/quotes) ----
   const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
@@ -177,16 +179,21 @@ interface Share {
   competitorCount: number
 }
 
-function computeShare(rows: VideoBucketRow[]): Share {
-  let client = 0, industry = 0
-  const comp = new Map<string, number>()
-  for (const v of rows) {
-    if (v.is_client) client++
-    else if (v.is_competitor) comp.set(v.competitor_name ?? 'competitor', (comp.get(v.competitor_name ?? 'competitor') ?? 0) + 1)
-    else industry++
+function shareFromSummary(summary: SummaryShareRow | null): Share {
+  const sov = summary?.share_of_voice ?? {}
+  const client = sov.client?.videos ?? 0
+  const industry = sov['industry-other']?.videos ?? 0
+  const competitors = Object.entries(sov)
+    .filter(([key]) => key.startsWith('competitor:'))
+    .map(([key, e]) => ({ name: key.slice('competitor:'.length), count: e.videos }))
+    .sort((a, b) => b.count - a.count)
+  return {
+    total: Number(summary?.total_videos ?? 0),
+    client,
+    industry,
+    competitors,
+    competitorCount: competitors.length,
   }
-  const competitors = [...comp.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
-  return { total: rows.length, client, industry, competitors, competitorCount: competitors.length }
 }
 
 function ShareOfVoice({ sov }: { sov: Share }) {
