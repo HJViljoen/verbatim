@@ -70,11 +70,13 @@ async function main() {
   // Metrics corpus: client videos + their comments. `--platform all` spans every
   // platform so Share of Voice is market-wide (correct for a multi-platform run);
   // a named platform scopes the SOV/engagement metrics to that platform only.
-  const videos = await selectAll<VideoRow>(() => {
+  // SoV guard (Owned-Data-Plan): owned-account posts stay out of the
+  // discovered-corpus metrics; their comments drop out via wantedVideos below.
+  const videos = (await selectAll<VideoRow>(() => {
     let q = admin.from('videos').select('*').eq('client_id', args.clientId)
     if (args.platform !== 'all') q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
-  })
+  })).filter((v) => v.source !== 'owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors pass-a.ts.

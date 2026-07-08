@@ -56,6 +56,15 @@ interface CompetitiveItem {
   title: string
   finding: string | null
 }
+/** A Step 2c owned-account event (Owned-Data-Plan): explained movement on the
+ *  client's own accounts — the report carries the explanation, never metric rows. */
+interface OwnedEventItem {
+  platform: string
+  magnitudeLabel: string
+  explained: boolean
+  explanation: string | null
+  heroQuote: string | null
+}
 
 interface ReportData {
   companyName: string
@@ -71,6 +80,7 @@ interface ReportData {
   themes: ThemeItem[]
   rec: RecItem | null
   competitive: CompetitiveItem | null
+  ownedEvents: OwnedEventItem[]
 }
 
 export interface ReportResult {
@@ -199,7 +209,7 @@ async function buildReportData(
     loadRunSummary(admin, clientId, runId),
   ])
 
-  const [delta, recRes, themeRes, ciRes] = await Promise.all([
+  const [delta, recRes, themeRes, ciRes, eventsRes] = await Promise.all([
     summary ? computeRunDelta(admin, clientId, summary) : Promise.resolve(null),
     admin.from('recommendations')
       .select('title, reasoning, priority')
@@ -213,6 +223,11 @@ async function buildReportData(
     admin.from('competitive_insights')
       .select('competitor_name, title, finding, impact_level')
       .eq('client_id', clientId).eq('run_id', runId),
+    admin.from('account_events')
+      .select('platform, magnitude_label, explained, explanation, hero_quote, severity')
+      .eq('client_id', clientId).eq('run_id', runId)
+      .order('severity', { ascending: false })
+      .limit(3),
   ])
 
   const recs = (recRes.data ?? []) as (RecItem & { priority: string | null })[]
@@ -262,6 +277,16 @@ async function buildReportData(
     competitive: topComp
       ? { competitorName: topComp.competitor_name, title: topComp.title, finding: topComp.finding }
       : null,
+    ownedEvents: ((eventsRes.data ?? []) as {
+      platform: string; magnitude_label: string; explained: boolean
+      explanation: string | null; hero_quote: string | null
+    }[]).map((e) => ({
+      platform: e.platform,
+      magnitudeLabel: e.magnitude_label,
+      explained: e.explained,
+      explanation: e.explanation,
+      heroQuote: e.hero_quote,
+    })),
   }
 }
 
@@ -458,6 +483,31 @@ function renderReportHtml(d: ReportData, subject: string): string {
       </div>
     </div>` : ''
 
+  // "On your account" (Owned-Data-Plan): explained events only — the report
+  // carries the explanation, not metric rows. If every event is unexplained,
+  // one honest line for the strongest; silence would hide it, a guess would lie.
+  const PLATFORM_LABEL: Record<string, string> = { tiktok: 'TikTok', youtube: 'YouTube', instagram: 'Instagram' }
+  const platformLabel = (p: string) => PLATFORM_LABEL[p] ?? p.charAt(0).toUpperCase() + p.slice(1)
+  const explainedEvents = d.ownedEvents.filter((e) => e.explained && e.explanation)
+  const ownedItems = explainedEvents.length
+    ? explainedEvents.map((e) => `
+      <div style="padding:11px 0;border-bottom:1px solid ${BORDER}">
+        ${e.heroQuote ? `<div style="font-size:14px;font-style:italic;color:${INK};line-height:1.5;border-left:3px solid #BCD3C6;padding-left:10px">&ldquo;${escapeHtml(e.heroQuote)}&rdquo;</div>` : ''}
+        <div style="font-size:14px;font-weight:600;color:${INK};margin-top:${e.heroQuote ? '8px' : '0'}">${escapeHtml(e.magnitudeLabel)}</div>
+        <div style="font-size:13px;color:${MUTED};line-height:1.5;margin-top:2px">${escapeHtml(e.explanation ?? '')}</div>
+        <div style="margin-top:4px">
+          <a href="${d.appUrl}/dashboard/trends" style="color:${GREEN};font-size:12px;font-weight:600;text-decoration:none">See what moved →</a>
+        </div>
+      </div>`).join('')
+    : d.ownedEvents.length
+      ? `
+      <div style="padding:11px 0;border-bottom:1px solid ${BORDER}">
+        <div style="font-size:14px;font-weight:600;color:${INK}">${escapeHtml(d.ownedEvents[0].magnitudeLabel)}</div>
+        <div style="font-size:13px;color:${MUTED};line-height:1.5;margin-top:2px">The conversation we track doesn't account for this move — we flag it rather than guess at a cause. (${escapeHtml(platformLabel(d.ownedEvents[0].platform))})</div>
+      </div>`
+      : ''
+  const ownedHtml = ownedItems ? `${sectionTitle('On your account')}${ownedItems}` : ''
+
   const compHtml = d.competitive ? `
     ${sectionTitle('Competitive signal')}
     ${rowBlock({
@@ -485,6 +535,7 @@ function renderReportHtml(d: ReportData, subject: string): string {
           <tr><td style="padding:8px 24px 22px">
             ${sectionTitle(lead.title)}
             ${lead.rows.map(rowBlock).join('')}
+            ${ownedHtml}
             ${recHtml}
             ${d.themes.length ? `${sectionTitle(d.delta ? 'Themes worth a look' : 'What your market is talking about')}${themeItems}` : ''}
             ${compHtml}
@@ -512,6 +563,20 @@ function renderReportText(d: ReportData, subject: string): string {
   const lines: string[] = [subject, `Data through ${fmtDate(d.runDate)}`, '', lead.title.toUpperCase()]
   for (const r of lead.rows) lines.push(`- ${r.label}: ${strip(r.text)}`)
   lines.push('')
+  const explained = d.ownedEvents.filter((e) => e.explained && e.explanation)
+  if (explained.length || d.ownedEvents.length) {
+    lines.push('ON YOUR ACCOUNT')
+    if (explained.length) {
+      for (const e of explained) {
+        lines.push(`- ${e.magnitudeLabel}`)
+        if (e.explanation) lines.push(`  ${e.explanation}`)
+        if (e.heroQuote) lines.push(`  "${e.heroQuote}"`)
+      }
+    } else {
+      lines.push(`- ${d.ownedEvents[0].magnitudeLabel} — the conversation we track doesn't account for this move; flagged rather than guessed at.`)
+    }
+    lines.push('')
+  }
   if (d.rec) {
     lines.push('THE ONE THING TO ACT ON', `- ${d.rec.title}`)
     if (d.rec.reasoning) lines.push(`  ${d.rec.reasoning}`)

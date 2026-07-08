@@ -1,10 +1,19 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
+import { getSessionContext } from "@/lib/auth"
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  // Trends needs ≥2 comparable updates (run_summary snapshots) before it has
+  // anything to chart; only then does it earn a nav slot.
+  const { supabase, clientId } = await getSessionContext()
+  const { count } = await supabase.from("run_summary")
+    .select("id", { head: true, count: "exact" })
+    .eq("client_id", clientId)
+  const showTrends = (count ?? 0) >= 2
+
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar showTrends={showTrends} />
       {/* min-w-0: without it this flex item refuses to shrink below the
           intrinsic width of wide children (the Content page's 9-column table),
           so the whole page overflows the phone viewport instead of the table

@@ -307,9 +307,12 @@ async function runThemesHalf(clientId: string, runId: string) {
 async function runSynthesisHalf(clientId: string, runId: string) {
   const admin = createAdminClient()
 
-  const videos = await selectAll<VideoRow>(() =>
+  // SoV guard (Owned-Data-Plan): owned-account posts never count toward the
+  // discovered-corpus metrics — a client's own posting must not inflate their
+  // share of conversation. Filtering videos also drops their comments below.
+  const videos = (await selectAll<VideoRow>(() =>
     admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
-  )
+  )).filter((v) => v.source !== 'owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors run-cd.ts.

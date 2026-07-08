@@ -5,14 +5,15 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Users, CreditCard, Settings, LogOut } from "lucide-react"
+import { LayoutDashboard, Target, MessageCircle, Swords, Play, TrendingUp, FileText, Users, CreditCard, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase"
 
-// Trends is deliberately absent (Redesign Spec §9: stays hidden) — the page is
-// a run-history readout and still reachable by URL for operators.
-const navItems = [
+// Trends only appears once the tenant has ≥2 comparable updates on record (the
+// layout computes `showTrends`) — otherwise the page has nothing to chart and is
+// still reachable by URL. It's always the page's own /dashboard/trends fallback.
+const baseNav = [
   { href: "/dashboard",           label: "Dashboard",          icon: LayoutDashboard },
   { href: "/dashboard/market",    label: "Market Intelligence",icon: Target },
   { href: "/dashboard/voice",     label: "Voice of Customer",  icon: MessageCircle },
@@ -24,10 +25,16 @@ const navItems = [
   { href: "/dashboard/settings",  label: "Settings",           icon: Settings },
 ]
 
-export function AppSidebar() {
+const TRENDS_ITEM = { href: "/dashboard/trends", label: "Trends", icon: TrendingUp }
+
+export function AppSidebar({ showTrends = false }: { showTrends?: boolean }) {
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  // Slot Trends just above Reports when the tenant has history to show.
+  const navItems = showTrends
+    ? baseNav.flatMap((item) => (item.href === "/dashboard/reports" ? [TRENDS_ITEM, item] : [item]))
+    : baseNav
   // Close the mobile drawer when a nav item is tapped — otherwise it stays
   // open over the new page until the backdrop is tapped.
   const { setOpenMobile } = useSidebar()

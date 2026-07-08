@@ -156,6 +156,11 @@ const recommendationSchema = z.object({
   title: z.string(),
   reasoning: z.string(),
   based_on: z.array(z.string()),  // M# (market insights in this output) / C# indices
+  // The one place a raw verbatim belongs: the single most representative real
+  // customer quote behind this recommendation, copied EXACTLY from the quotes
+  // shown to the model. Validated in code against those quotes — a value that
+  // doesn't match one is dropped (never show a quote the customer didn't say).
+  hero_quote: z.string(),
 })
 
 // The "someone already read everything for you" block leading Market
@@ -180,6 +185,10 @@ export type CiSummary = z.infer<typeof ciSummarySchema>
 /** Pass D-b — recommendations, grounded via retrieved verbatim evidence. */
 export const PassDbSchema = z.object({
   recommendations: z.array(recommendationSchema),
+  // Per market insight (by its M# index): the single most representative real
+  // customer quote, copied EXACTLY from the quotes shown for that insight. Code
+  // validates each against the shown quotes and writes it to market_insights.hero_quote.
+  insight_hero_quotes: z.array(z.object({ index: z.string(), quote: z.string() })),
 })
 export type PassDbOutput = z.infer<typeof PassDbSchema>
 export type MarketInsightOut = z.infer<typeof marketInsightSchema>
@@ -199,3 +208,23 @@ const themeLabelSchema = z.object({
 export const PassBSchema = z.object({ theme_labels: z.array(themeLabelSchema) })
 export type PassBOutput = z.infer<typeof PassBSchema>
 export type ThemeLabelOut = z.infer<typeof themeLabelSchema>
+
+// --- Step 2c (Owned-Data-Plan 2026-07-08) — explaining owned-account events --
+// One call per run over code-detected metric events (E#) + the run's themes
+// (T#) + verbatim owned-post comments (the audience segment). The model either
+// explains an event from that material or declares it unexplained — never a
+// cause the data doesn't show. hero_quote is copied EXACTLY from the shown
+// comments and validated in code, like Pass D's.
+
+const accountEventExplanationSchema = z.object({
+  // The E# index of the event being explained — must exist in the input.
+  index: z.string(),
+  // false = the tracked conversation does not account for this movement.
+  explained: z.boolean(),
+  explanation: z.string().nullable(),
+  supporting_themes: z.array(z.string()),  // T# indices from the input
+  hero_quote: z.string().nullable(),
+})
+
+export const Step2cSchema = z.object({ events: z.array(accountEventExplanationSchema) })
+export type Step2cOutput = z.infer<typeof Step2cSchema>

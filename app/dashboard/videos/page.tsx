@@ -100,9 +100,12 @@ export default async function ContentPage() {
   }
   const videoRunId = latestVid.run_id as string
 
+  // Discovered corpus only — the client's own posts are a different segment
+  // (Owned-Data-Plan: "segment, never blend") and never mix into market content
+  // intelligence.
   const all = await selectAll<VideoRow>(() => supabase.from('videos')
     .select('id, platform, account_name, account_followers, video_url, views, engagement_rate, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
-    .eq('client_id', clientId).eq('run_id', videoRunId)
+    .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered')
     .order('views', { ascending: false }).order('id', { ascending: true }))
 
   const analysed = all.filter((v) => v.classified_type != null)
