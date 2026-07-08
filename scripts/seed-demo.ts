@@ -876,9 +876,9 @@ async function insertOwnedLayer(weeks: WeekSpec[]): Promise<void> {
       competitor_name: null,
       caption: p.caption,
       hashtags: [],
-      views: p.views,
+      views: p.views ?? 0, // IG exposes no views; 0 matches the discovered corpus convention
       likes: p.likes,
-      shares: null,
+      shares: 0,
       comments_count: p.comments_count,
       account_followers: OWNED_FOLLOWERS[p.platform].series[p.week],
       sentiment: null,
@@ -891,23 +891,23 @@ async function insertOwnedLayer(weeks: WeekSpec[]): Promise<void> {
   // Own-post comments (source='owned') — the "what your audience says" segment.
   const commentRows: Row[] = []
   const w5 = byWeek.get('W5')!
-  for (const c of OWNED_COMMENTS_W5) {
+  OWNED_COMMENTS_W5.forEach((c, i) => {
     commentRows.push({
       id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w5.runId,
-      platform: 'instagram', video_id: 'ossur-own-ig-w5a',
+      platform: 'instagram', video_id: 'ossur-own-ig-w5a', comment_id: `ossur-own-ig-w5a-c${i + 1}`,
       author: c.author, text: c.text, likes: c.likes,
       source: 'owned', created_at: iso(w5.runDate),
     })
-  }
-  for (const c of OWNED_COMMENTS_MISC) {
+  })
+  OWNED_COMMENTS_MISC.forEach((c, i) => {
     const w = byWeek.get(c.week)!
     commentRows.push({
       id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId,
-      platform: c.platform, video_id: c.key,
+      platform: c.platform, video_id: c.key, comment_id: `${c.key}-c${i + 1}`,
       author: c.author, text: c.text, likes: c.likes,
       source: 'owned', created_at: iso(w.runDate),
     })
-  }
+  })
   await insertRows('comments', commentRows)
 }
 

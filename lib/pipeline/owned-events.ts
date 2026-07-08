@@ -18,7 +18,10 @@ import { CALIBRATED_PROSE_RULE } from './prose-rules'
 // Detection thresholds are PROVISIONAL — calibrated on the demo tenant's arc,
 // flagged for review against the first real owned series (like lib/curation.ts).
 
-const PROMPT_VERSION = 'step_2c_v1'
+// v2: hero_quote is required on explained events (v1 left it optional and the
+// model skipped it), and the copy rule spells out "no surrounding quotation
+// marks"; validation strips wrapping quotes before matching either way.
+const PROMPT_VERSION = 'step_2c_v2'
 
 // ---- detection ---------------------------------------------------------------
 
@@ -211,8 +214,10 @@ function buildSystemPrompt(brandName: string): string {
     '- For each event, decide honestly: does the provided material actually account for it?',
     '- If it does: explained=true, a 1–2 sentence explanation grounded in the material,',
     '  supporting_themes listing the T# indices you drew on (only indices present in the input),',
-    '  and hero_quote set to the single most telling comment — copied EXACTLY, character for',
-    '  character, from the COMMENTS list. Never edit, trim, or merge quotes.',
+    '  and hero_quote — REQUIRED on every explained event — set to the single most telling',
+    '  comment, copied EXACTLY, character for character, from the COMMENTS list. Copy the',
+    '  comment text only: no surrounding quotation marks, no [Q#] tag. Never edit, trim, or',
+    '  merge quotes.',
     '- If it does NOT: explained=false, explanation=null, empty supporting_themes, hero_quote=null.',
     '  An honest "the tracked conversation doesn\'t account for this" is a valid, expected outcome.',
     '  NEVER invent a plausible-sounding cause the material does not show.',
@@ -370,7 +375,11 @@ export async function runStep2c(args: {
       // exact copy of a shown comment; an "explained" verdict with no surviving
       // grounding (no valid theme AND no valid quote) is downgraded to
       // unexplained — code guards confabulation, not the prompt.
-      const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+      // Normalise whitespace AND strip wrapping quote marks — the prompt shows
+      // each comment inside "…", and a copy that keeps them is still the same
+      // verbatim. The canonical original is what gets stored.
+      const norm = (s: string) =>
+        s.replace(/\s+/g, ' ').trim().replace(/^["'‘’“”]+|["'‘’“”]+$/g, '').trim().toLowerCase()
       const shownByNorm = new Map(commentPool.map((q) => [norm(q), q]))
       let rejectedRefs = 0
       const byIndex = new Map(parsed.events.map((ev) => [String(ev.index).replace(/[^0-9]/g, ''), ev]))
