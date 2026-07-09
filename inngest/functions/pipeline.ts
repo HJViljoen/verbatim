@@ -326,6 +326,14 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const comments = allComments.filter((c) => wantedVideos.has(`${c.platform}::${c.video_id}`))
   const metrics = computeMetrics(videos, comments)
 
+  // Period slice — only what THIS run gathered (new videos; new comments, which
+  // may sit on re-found older videos). Feeds run_summary's period_* columns:
+  // the honest week-over-week layer. The full-corpus metrics above stay the
+  // market-map state. (Teardown 2026-07-09 — cumulative-metrics fix.)
+  const periodVideos = videos.filter((v) => v.run_id === runId)
+  const periodComments = comments.filter((c) => c.run_id === runId)
+  const periodMetrics = computeMetrics(periodVideos, periodComments)
+
   const { data: tc } = await admin.from('tracking_configs')
     .select('brand_keywords, competitor_names, industry_keywords, report_period')
     .eq('client_id', clientId).maybeSingle()
@@ -347,6 +355,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
 
   await writeRunSummary({
     clientId, runId, metrics, videos,
+    periodMetrics, periodVideos,
     ciSummary: d.ciSummary, period: tc?.report_period ?? null,
   })
 

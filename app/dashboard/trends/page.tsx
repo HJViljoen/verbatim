@@ -23,6 +23,12 @@ interface RunSummary {
   share_of_voice: Record<string, { pct_videos?: number }> | null
   overall_sentiment_positive: number | null
   overall_sentiment_negative: number | null
+  /** This-run-only metrics (2026-07-09 split) — preferred for trend series:
+   *  the cumulative columns are all-time stocks whose deltas damp toward zero
+   *  as the corpus grows. Null on rows written before the split. */
+  period_comments: number | null
+  period_share_of_voice: Record<string, { pct_videos?: number }> | null
+  period_sentiment_positive: number | null
   period: string | null
 }
 
@@ -93,7 +99,7 @@ export default async function TrendsPage() {
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunSummary>(() =>
       supabase.from('run_summary')
-        .select('run_id, run_date, total_videos, total_comments, share_of_voice, overall_sentiment_positive, overall_sentiment_negative, period')
+        .select('run_id, run_date, total_videos, total_comments, share_of_voice, overall_sentiment_positive, overall_sentiment_negative, period_comments, period_share_of_voice, period_sentiment_positive, period')
         .eq('client_id', clientId).order('run_date', { ascending: true }),
     ),
     selectAll<ThemeRow>(() =>
@@ -133,10 +139,18 @@ export default async function TrendsPage() {
   const period = last.period === 'monthly' ? 'monthly' : 'weekly'
   const heroLine = `Tracking since ${shortDate(first.run_date)} · ${summaries.length} ${period} updates`
 
+  // Period-layer series when EVERY row has it (a whole series must come from one
+  // layer — mixing period rows with cumulative rows would fabricate movement).
+  // Pre-split rows (e.g. the seeded demo) fall back to the cumulative columns.
+  const allPeriod = summaries.every(
+    (s) => s.period_comments != null && s.period_share_of_voice != null && s.period_sentiment_positive != null,
+  )
+  const sovOf = (s: RunSummary) => (allPeriod ? s.period_share_of_voice : s.share_of_voice)
+
   // ---- share of conversation: brand vs the leading tracked competitor ----
-  const clientShareOf = (s: RunSummary) => Number(s.share_of_voice?.client?.pct_videos ?? 0)
+  const clientShareOf = (s: RunSummary) => Number(sovOf(s)?.client?.pct_videos ?? 0)
   const competitorEntries = (s: RunSummary) =>
-    Object.entries(s.share_of_voice ?? {})
+    Object.entries(sovOf(s) ?? {})
       .filter(([k]) => k.startsWith('competitor:'))
       .map(([k, v]) => ({ name: k.slice('competitor:'.length), pct: Number(v?.pct_videos ?? 0) }))
   // Lead competitor = highest share in the most recent update; tracked across all.
@@ -146,8 +160,10 @@ export default async function TrendsPage() {
 
   const clientSeries = summaries.map(clientShareOf)
   const compSeries = summaries.map(compShareOf)
-  const sentSeries = summaries.map((s) => Number(s.overall_sentiment_positive ?? 0))
-  const volSeries = summaries.map((s) => Number(s.total_comments ?? 0))
+  const sentSeries = summaries.map((s) =>
+    Number((allPeriod ? s.period_sentiment_positive : s.overall_sentiment_positive) ?? 0),
+  )
+  const volSeries = summaries.map((s) => Number((allPeriod ? s.period_comments : s.total_comments) ?? 0))
 
   const delta = (arr: number[]) => arr[arr.length - 1] - arr[0]
   const shareDelta = delta(clientSeries)

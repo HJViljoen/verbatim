@@ -14,6 +14,12 @@ export interface WriteRunSummaryArgs {
   metrics: Step2aMetrics
   /** The corpus videos — sentiment distribution comes from Pass A's per-video sentiment. */
   videos: VideoRow[]
+  /** Metrics over ONLY this run's gathered rows (period_* columns — the honest
+   *  week-over-week layer; Teardown 2026-07-09). Optional: CLI callers that
+   *  predate the split may omit it and period columns stay null. */
+  periodMetrics?: Step2aMetrics
+  /** This run's videos (run_id = current) — period sentiment distribution. */
+  periodVideos?: VideoRow[]
   ciSummary: CiSummary | null
   /** tracking_configs.report_period ('weekly' | 'monthly' | …), if known. */
   period?: string | null
@@ -21,14 +27,9 @@ export interface WriteRunSummaryArgs {
 
 const round1 = (n: number) => Math.round(n * 10) / 10
 
-export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> {
-  const { clientId, runId, metrics, videos, ciSummary, period } = args
-  const admin = createAdminClient()
-
-  // Sentiment distribution over videos Pass A gave a sentiment (comment-derived).
-  // 'mixed' counts toward the denominator but no single share — the three shares
-  // deliberately don't sum to 100 on a corpus with mixed-reception videos; raw
-  // counts live in sentiment_drivers for the honest breakdown.
+/** Pass-A video-sentiment distribution. 'mixed' counts toward the denominator
+ *  but gets no share — the three shares deliberately don't sum to 100. */
+function sentimentShares(videos: VideoRow[]) {
   const counts = { positive: 0, neutral: 0, negative: 0, mixed: 0 }
   let judged = 0
   for (const v of videos) {
@@ -38,6 +39,18 @@ export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> 
     }
   }
   const share = (n: number) => (judged > 0 ? round1((n / judged) * 100) : null)
+  return { counts, judged, share }
+}
+
+export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> {
+  const { clientId, runId, metrics, videos, periodMetrics, periodVideos, ciSummary, period } = args
+  const admin = createAdminClient()
+
+  // Corpus (all-time) distribution — the market-map state; raw counts live in
+  // sentiment_drivers for the honest breakdown.
+  const { counts, judged, share } = sentimentShares(videos)
+  // Period distribution — this run's videos only.
+  const p = periodVideos ? sentimentShares(periodVideos) : null
 
   const { error: delErr } = await admin.from('run_summary').delete().eq('client_id', clientId).eq('run_id', runId)
   if (delErr) throw new Error(`clear run_summary: ${delErr.message}`)
@@ -60,6 +73,16 @@ export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> 
     overall_sentiment_neutral: share(counts.neutral),
     overall_sentiment_negative: share(counts.negative),
     sentiment_drivers: { video_sentiment_counts: counts, videos_judged: judged },
+    period_videos: periodMetrics?.total_videos ?? null,
+    period_comments: periodMetrics?.total_comments ?? null,
+    period_client_videos: periodMetrics?.client_videos ?? null,
+    period_competitor_videos: periodMetrics?.competitor_videos ?? null,
+    period_avg_engagement_rate: periodMetrics?.avg_engagement_rate ?? null,
+    period_share_of_voice: periodMetrics?.share_of_voice ?? null,
+    period_sentiment_positive: p ? p.share(p.counts.positive) : null,
+    period_sentiment_neutral: p ? p.share(p.counts.neutral) : null,
+    period_sentiment_negative: p ? p.share(p.counts.negative) : null,
+    period_sentiment_drivers: p ? { video_sentiment_counts: p.counts, videos_judged: p.judged } : null,
     consumer_intelligence_summary: ciSummary,
     period: period ?? null,
     run_date: new Date().toISOString(),

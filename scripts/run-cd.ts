@@ -92,6 +92,10 @@ async function main() {
   })
   const comments = allComments.filter((c) => wantedVideos.has(`${c.platform}::${c.video_id}`))
   const metrics = computeMetrics(videos, comments)
+  // Period slice — this run's rows only (mirrors the Inngest synthesis half).
+  const periodVideos = videos.filter((v) => v.run_id === args.runId)
+  const periodComments = comments.filter((c) => c.run_id === args.runId)
+  const periodMetrics = computeMetrics(periodVideos, periodComments)
 
   const { data: tc } = await admin
     .from('tracking_configs')
@@ -182,6 +186,7 @@ async function main() {
   if (persist) {
     await writeRunSummary({
       clientId: args.clientId, runId: args.runId!, metrics, videos,
+      periodMetrics, periodVideos,
       ciSummary: d.ciSummary, period: tc?.report_period ?? null,
     })
     console.log('\nrun_summary written.')

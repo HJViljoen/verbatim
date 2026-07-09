@@ -33,6 +33,8 @@ interface SovEntry {
 interface RunSummaryRow {
   total_videos: number | null
   total_comments: number | null
+  /** Comments gathered by this run only (null on pre-2026-07-09 rows). */
+  period_comments: number | null
   share_of_voice: Record<string, SovEntry> | null
   sentiment_drivers: { video_sentiment_counts?: Record<string, number>; videos_judged?: number } | null
 }
@@ -153,7 +155,7 @@ export default async function DashboardPage() {
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   const [summaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
     supabase.from('run_summary')
-      .select('total_videos, total_comments, share_of_voice, sentiment_drivers')
+      .select('total_videos, total_comments, period_comments, share_of_voice, sentiment_drivers')
       .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
     supabase.from('audience_insights')
       .select('id, category, theme, description, strength_score, emotion')
@@ -173,13 +175,20 @@ export default async function DashboardPage() {
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
   const summary = (summaryRes.data ?? null) as RunSummaryRow | null
   const commentCount = Number(summary?.total_comments ?? 0)
+  // New conversations gathered by this update — distinct from the all-time
+  // corpus, so the coverage line never passes a cumulative total off as fresh.
+  const newCommentCount = Number(summary?.period_comments ?? 0)
 
   // ---- Welcome hero coverage line (human terms, per spec) ----
   const lineParts = [
     keywordCount > 0 && tc?.platforms?.length
       ? `Tracking ${keywordCount} search terms across ${listNames(tc.platforms)}`
       : null,
-    commentCount > 0 ? `${commentCount.toLocaleString('en-US')} conversations analysed` : null,
+    commentCount > 0
+      ? newCommentCount > 0 && newCommentCount !== commentCount
+        ? `${newCommentCount.toLocaleString('en-US')} new conversations this update · ${commentCount.toLocaleString('en-US')} analysed to date`
+        : `${commentCount.toLocaleString('en-US')} conversations analysed to date`
+      : null,
     latestVid?.scraped_at ? `data through ${shortDate(latestVid.scraped_at as string)}` : null,
     nextUpdate,
   ].filter(Boolean) as string[]

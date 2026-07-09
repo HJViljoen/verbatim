@@ -23,8 +23,17 @@ export interface RunSummaryRow {
   total_comments: number | null
   overall_sentiment_positive: string | number | null
   share_of_voice: Record<string, SovEntry> | null
+  /** Period (this-run-only) metrics — preferred for deltas since 2026-07-09:
+   *  diffing the cumulative columns compared all-time stocks, which damped
+   *  toward zero as the corpus grew. Null on rows written before the split. */
+  period_comments: number | null
+  period_sentiment_positive: string | number | null
+  period_share_of_voice: Record<string, SovEntry> | null
   consumer_intelligence_summary: CiSummary | null
 }
+
+const SUMMARY_COLS =
+  'run_id, run_date, period, total_videos, total_comments, overall_sentiment_positive, share_of_voice, period_comments, period_sentiment_positive, period_share_of_voice, consumer_intelligence_summary'
 
 export interface ShareSide {
   /** Client's share of tracked conversation, % of videos. */
@@ -57,7 +66,7 @@ export async function loadRunSummary(
 ): Promise<RunSummaryRow | null> {
   const { data } = await admin
     .from('run_summary')
-    .select('run_id, run_date, period, total_videos, total_comments, overall_sentiment_positive, share_of_voice, consumer_intelligence_summary')
+    .select(SUMMARY_COLS)
     .eq('client_id', clientId)
     .eq('run_id', runId)
     .maybeSingle()
@@ -85,7 +94,7 @@ export async function computeRunDelta(
 ): Promise<RunDelta | null> {
   const { data: prev } = await admin
     .from('run_summary')
-    .select('run_id, run_date, period, total_videos, total_comments, overall_sentiment_positive, share_of_voice, consumer_intelligence_summary')
+    .select(SUMMARY_COLS)
     .eq('client_id', clientId)
     .lt('run_date', current.run_date)
     .order('run_date', { ascending: false })
@@ -94,11 +103,16 @@ export async function computeRunDelta(
   if (!prev) return null
   const prevRow = prev as RunSummaryRow
 
-  const sentNow = num(current.overall_sentiment_positive)
-  const sentPrev = num(prevRow.overall_sentiment_positive)
+  // Prefer the period (this-run-only) layer, but only when BOTH sides have it —
+  // mixing a period value against a cumulative one would fabricate a delta.
+  // Cumulative fallback keeps deltas alive for rows written before the split.
+  const usePeriodSent = current.period_sentiment_positive != null && prevRow.period_sentiment_positive != null
+  const sentNow = num(usePeriodSent ? current.period_sentiment_positive : current.overall_sentiment_positive)
+  const sentPrev = num(usePeriodSent ? prevRow.period_sentiment_positive : prevRow.overall_sentiment_positive)
 
-  const shareNow = readShare(current.share_of_voice)
-  const sharePrev = readShare(prevRow.share_of_voice)
+  const usePeriodShare = current.period_share_of_voice != null && prevRow.period_share_of_voice != null
+  const shareNow = readShare(usePeriodShare ? current.period_share_of_voice : current.share_of_voice)
+  const sharePrev = readShare(usePeriodShare ? prevRow.period_share_of_voice : prevRow.share_of_voice)
 
   // "New themes" is only honest when the previous run has themes to have been
   // matched against — otherwise every theme carries first_seen trivially.
@@ -123,8 +137,9 @@ export async function computeRunDelta(
     newThemes = { count: rows.length, labels: rows.slice(0, 2).map((r) => r.label) }
   }
 
-  const convNow = num(current.total_comments)
-  const convPrev = num(prevRow.total_comments)
+  const usePeriodConv = current.period_comments != null && prevRow.period_comments != null
+  const convNow = num(usePeriodConv ? current.period_comments : current.total_comments)
+  const convPrev = num(usePeriodConv ? prevRow.period_comments : prevRow.total_comments)
 
   return {
     prevRunDate: prevRow.run_date,

@@ -376,7 +376,7 @@ function leadRows(d: ReportData): { title: string; rows: Row[] } {
     if (sentiment) {
       rows.push({
         label: 'Sentiment',
-        text: `<strong>${sentiment.now}%</strong> of conversations about you are positive`,
+        text: `<strong>${sentiment.now}%</strong> of the conversations we track in your market read positive`,
         chip: changeChip(sentiment.change, 'pts'),
         href: `${d.appUrl}/dashboard`,
         linkText: 'See where you stand',
@@ -425,7 +425,7 @@ function leadRows(d: ReportData): { title: string; rows: Row[] } {
   if (sent != null) {
     rows.push({
       label: 'Sentiment',
-      text: `<strong>${sent}%</strong> of conversations about you are positive`,
+      text: `<strong>${sent}%</strong> of the conversations we track in your market read positive`,
       href: `${d.appUrl}/dashboard`,
       linkText: 'See where you stand',
     })

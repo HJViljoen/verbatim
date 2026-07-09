@@ -252,7 +252,7 @@ function EmptyRun() {
   return (
     <Card>
       <CardContent className="py-10 text-center text-sm text-muted-foreground">
-        No analysis runs yet. Run the pipeline to populate competitive intelligence.
+        Your competitive intelligence lands with your first update.
       </CardContent>
     </Card>
   )

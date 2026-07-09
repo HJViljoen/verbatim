@@ -8,10 +8,4 @@ export const DAYS = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ] as const
 
-export const LIMITS = {
-  max_videos: { min: 1, max: 1000 },
-  max_comments: { min: 1, max: 2000 },
-  comment_depth: { min: 1, max: 2000 },
-} as const
-
 export type Platform = (typeof PLATFORMS)[number]
