@@ -7,10 +7,13 @@ import { tagVideo } from '../tagging'
 // (alphanumeric only) / `resultsLimit` / `resultsType`, not the TikTok shape;
 // IG exposes neither views nor shares; the id is the post shortcode.
 //
-// ⚠️ Known-broken: comment scraping currently returns 0 comments for every IG
-// video. This adapter is built faithfully but is NOT proven — the actual fix
-// (right actor / input, or actor swap) needs a live Phase-0 diagnosis once Apify
-// is back. Treat normaliseComment as provisional.
+// Comments (2026-07-05): moved off apify/instagram-comment-scraper (returned 0
+// for every video) to the flagship apify/instagram-scraper in `comments` mode —
+// far more used/maintained, same output field names. Root-cause suspect for the
+// 0s: that actor only accepts POST urls (/p/…), and the hashtag scraper hands us
+// /reel/… urls — so commentScrape now builds the canonical /p/{shortcode}/ form
+// from the shortcode. ⚠️ Not yet re-run live (Apify was over-quota) — smoke-test
+// one IG video's comments on the next paid run before trusting it.
 
 export const instagram: PlatformAdapter = {
   platform: 'instagram',
@@ -83,9 +86,12 @@ export const instagram: PlatformAdapter = {
     return {
       actor: APIFY_ACTORS.instagram.comment,
       input: {
-        directUrls: [video.video_url],
+        // Flagship apify/instagram-scraper, comments mode. It only accepts POST
+        // urls (/p/…), not /reel/… — build the canonical form from the shortcode
+        // (video_id) rather than passing the hashtag scraper's /reel/ url.
+        directUrls: [`https://www.instagram.com/p/${video.video_id}/`],
+        resultsType: 'comments',
         resultsLimit: config.comment_depth,
-        includeNestedComments: false,
       },
     }
   },
@@ -105,7 +111,7 @@ export const instagram: PlatformAdapter = {
       author: str(first(c.ownerUsername, getPath(c, ['owner', 'username']))),
       text,
       likes: num(first(c.likesCount, c.likeCount)),
-      reply_count: 0, // IG doesn't expose reply counts
+      reply_count: num(first(c.repliesCount, c.replyCount)), // flagship exposes repliesCount
       is_reply: false,
       comment_date: toDateOnly(c.timestamp, c.createdAt),
     }

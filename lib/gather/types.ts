@@ -97,12 +97,24 @@ export interface PlatformAdapter {
    * search. This (a) levels the cross-platform volume skew (the IG actor applies
    * its limit per-hashtag while TT/YT applied it per combined group) and (b) makes
    * every video attributable to the keyword that found it, for keyword value scoring.
+   *
+   * Apify-sourced platforms (TikTok, Instagram) implement this; a platform on a
+   * native API (YouTube) provides `fetchVideos` instead — see below.
    */
-  videoSearch(config: GatherConfig, terms: string[], limit: number): { actor: string; input: RawItem }
+  videoSearch?(config: GatherConfig, terms: string[], limit: number): { actor: string; input: RawItem }
+  /** Apify actor slug + input for scraping one video's comments. */
+  commentScrape?(video: VideoRef, config: GatherConfig): { actor: string; input: RawItem }
+  /**
+   * Native (non-Apify) source: fetch a keyword's raw video items directly. When
+   * present, the orchestrator uses this instead of `videoSearch` + Apify. YouTube
+   * uses it to call the official Data API; the returned items feed `normaliseVideo`
+   * exactly like Apify dataset items would.
+   */
+  fetchVideos?(config: GatherConfig, terms: string[], limit: number): Promise<RawItem[]>
+  /** Native (non-Apify) source: fetch one video's raw comment items directly. */
+  fetchComments?(video: VideoRef, config: GatherConfig): Promise<RawItem[]>
   /** Raw actor item → VideoInsert. null = skip (unparseable / no url). */
   normaliseVideo(raw: RawItem, ctx: NormaliseCtx): VideoInsert | null
-  /** Apify actor slug + input for scraping one video's comments. */
-  commentScrape(video: VideoRef, config: GatherConfig): { actor: string; input: RawItem }
   /** Raw actor item → CommentInsert. null = skip. */
   normaliseComment(raw: RawItem, video: VideoRef, ctx: NormaliseCtx): CommentInsert | null
   /**

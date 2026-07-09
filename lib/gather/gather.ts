@@ -11,6 +11,7 @@ import type {
   VideoInsert,
   CommentInsert,
   VideoRef,
+  RawItem,
 } from './types'
 
 // Gather orchestrator. For each platform: search → normalise → upsert videos →
@@ -187,8 +188,17 @@ export async function searchOne(opts: {
   if (!adapter) throw new Error(`no adapter for ${opts.platform}`)
   const ctx: NormaliseCtx = { clientId: opts.clientId, runId: opts.runId, config }
 
-  const { actor, input } = adapter.videoSearch(config, [opts.keyword], config.max_videos)
-  const raw = await runActor(actor, input)
+  // Native-API platforms (YouTube) fetch their own items; Apify platforms build
+  // an actor+input the orchestrator runs. Exactly one path exists per adapter.
+  let raw: RawItem[]
+  if (adapter.fetchVideos) {
+    raw = await adapter.fetchVideos(config, [opts.keyword], config.max_videos)
+  } else if (adapter.videoSearch) {
+    const { actor, input } = adapter.videoSearch(config, [opts.keyword], config.max_videos)
+    raw = await runActor(actor, input)
+  } else {
+    throw new Error(`adapter ${opts.platform} has no video source`)
+  }
   const videos = dedupeBy(
     raw.map((r) => adapter.normaliseVideo(r, ctx)).filter((v): v is VideoInsert => v !== null),
     (v) => v.video_id,
@@ -330,8 +340,15 @@ export async function scrapeCommentsBatch(opts: {
   let commentCount = 0
   for (const ref of opts.refs) {
     try {
-      const { actor: cActor, input: cInput } = adapter.commentScrape(ref, config)
-      const rawComments = await runActor(cActor, cInput)
+      let rawComments: RawItem[]
+      if (adapter.fetchComments) {
+        rawComments = await adapter.fetchComments(ref, config)
+      } else if (adapter.commentScrape) {
+        const { actor: cActor, input: cInput } = adapter.commentScrape(ref, config)
+        rawComments = await runActor(cActor, cInput)
+      } else {
+        throw new Error(`adapter ${opts.platform} has no comment source`)
+      }
       const comments = dedupeBy(
         rawComments
           .map((r) => adapter.normaliseComment(r, ref, ctx))

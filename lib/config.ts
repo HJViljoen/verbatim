@@ -99,13 +99,13 @@ export const APIFY_ACTORS = {
     video: process.env.APIFY_TT_VIDEO_ACTOR ?? '5K30i8aFccKNF5ICs',
     comment: process.env.APIFY_TT_COMMENT_ACTOR ?? 'XomSRf7d0qf3mVj1y',
   },
-  youtube: {
-    video: process.env.APIFY_YT_VIDEO_ACTOR ?? '1p1aa7gcSydPkAE0d',
-    comment: process.env.APIFY_YT_COMMENT_ACTOR ?? 'mExYO4A2k9976zMfA',
-  },
+  // YouTube moved to the official Data API v3 (2026-07-05) — see
+  // lib/gather/platforms/youtube.ts. It uses YOUTUBE_API_KEY, no Apify actor.
   instagram: {
-    video: process.env.APIFY_IG_VIDEO_ACTOR ?? 'reGe1ST3OBgYZSsZJ',
-    comment: process.env.APIFY_IG_COMMENT_ACTOR ?? 'SbK00X0JYCPblD2wp',
+    video: process.env.APIFY_IG_VIDEO_ACTOR ?? 'reGe1ST3OBgYZSsZJ', // apify/instagram-hashtag-scraper
+    // apify/instagram-scraper (flagship) in `comments` mode — replaced
+    // apify/instagram-comment-scraper (SbK00X0JYCPblD2wp), which returned 0.
+    comment: process.env.APIFY_IG_COMMENT_ACTOR ?? 'shu8hvrXbJbY3Eb9W',
   },
 } as const
 
@@ -117,7 +117,3 @@ export function periodToTikTokRange(period: string): string {
   return period === 'daily' ? 'TODAY' : period === 'monthly' ? 'THIS_MONTH' : 'THIS_WEEK'
 }
 
-/** report_period → YouTube actor `uploadDate`. */
-export function periodToYouTubeUploadDate(period: string): string {
-  return period === 'daily' ? 'd' : period === 'monthly' ? 'm' : 'w'
-}
