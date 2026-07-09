@@ -20,6 +20,10 @@ import type { GatherConfig, VideoInsert } from './types'
 
 export type RelevanceMethod = 'off' | 'heuristic' | 'gpt'
 
+/** Videos per GPT call — small enough that every candidate gets real judgment
+ *  and the verdict array can never hit the completion cap. */
+const GPT_BATCH = 60
+
 export interface RelevanceVerdict {
   relevant: boolean
   reason: string
@@ -78,11 +82,16 @@ function buildSystemPrompt(config: GatherConfig): string {
     'Judge by the BROAD product category, not the brand’s niche angle. The industry keywords',
     'describe how this brand frames itself (e.g. "sustainable") — do NOT require that angle:',
     'a competitor’s product or general category content is relevant even if it never mentions',
-    'the brand’s differentiator. Competitor content is always relevant.',
+    'the brand’s differentiator. Competitor content is always relevant when it is genuinely',
+    'about that company or its products.',
     '',
     'DROP only genuine off-market noise:',
     '- a DIFFERENT industry the keyword happens to match — e.g. SFX/movie/cosplay makeup when',
     '  the category is medical prosthetics, or "seal"/"gear" hardware when the brand makes bags;',
+    '- a NAME HOMONYM: brand or competitor names whose match is a different sense of the word —',
+    '  e.g. "Poler" (bag brand) matching pole-dancing or pole-fitness videos, "Patagonia" (brand)',
+    '  matching the Patagonia region, its marathons, or travel vlogs. The name appearing in a',
+    '  caption/hashtag is NOT enough — the video must be about the company or its products;',
     '- pure human-interest virality or news with no product/category angle (comments just',
     '  "amazing" / "god bless" / reacting to a story);',
     '- content about ANIMALS/PETS when the brand’s product is for humans — e.g. amputee-pet or',
@@ -141,29 +150,36 @@ export async function classifyRelevance(
     return result
   }
 
-  // One batched GPT call over the undecided.
-  try {
-    const completion = await openai.chat.completions.parse({
-      model: ANALYSIS_MODEL,
-      temperature: ANALYSIS_TEMPERATURE,
-      messages: [
-        { role: 'system', content: buildSystemPrompt(opts.config) },
-        { role: 'user', content: buildUserPrompt(undecided) },
-      ],
-      response_format: zodResponseFormat(batchSchema, 'relevance'),
-    })
-    const parsed = completion.choices[0]?.message?.parsed
-    if (completion.usage) {
-      result.promptTokens = completion.usage.prompt_tokens
-      result.completionTokens = completion.usage.completion_tokens
-      result.costUsd = estimateCost(ANALYSIS_MODEL, completion.usage.prompt_tokens, completion.usage.completion_tokens)
+  // Batched GPT calls over the undecided. Batching (mirrors attribution's
+  // GPT_BATCH) exists for correctness, not just latency: the 2026-07-09 Sealand
+  // run sent ~460 videos in ONE call — judgment quality degrades at that size,
+  // and if the structured output hits the completion cap the verdict array
+  // truncates, silently KEEPING every unjudged video via the fail-open default.
+  for (let i = 0; i < undecided.length; i += GPT_BATCH) {
+    const batch = undecided.slice(i, i + GPT_BATCH)
+    try {
+      const completion = await openai.chat.completions.parse({
+        model: ANALYSIS_MODEL,
+        temperature: ANALYSIS_TEMPERATURE,
+        messages: [
+          { role: 'system', content: buildSystemPrompt(opts.config) },
+          { role: 'user', content: buildUserPrompt(batch) },
+        ],
+        response_format: zodResponseFormat(batchSchema, 'relevance'),
+      })
+      const parsed = completion.choices[0]?.message?.parsed
+      if (completion.usage) {
+        result.promptTokens += completion.usage.prompt_tokens
+        result.completionTokens += completion.usage.completion_tokens
+        result.costUsd += estimateCost(ANALYSIS_MODEL, completion.usage.prompt_tokens, completion.usage.completion_tokens)
+      }
+      for (const v of parsed?.verdicts ?? []) {
+        const cand = batch[v.index]
+        if (cand) verdicts.set(cand.video_id, { relevant: v.relevant, reason: v.reason, source: 'gpt' })
+      }
+    } catch {
+      // On any failure, fail OPEN for this batch — keep rather than drop real signal.
     }
-    for (const v of parsed?.verdicts ?? []) {
-      const cand = undecided[v.index]
-      if (cand) verdicts.set(cand.video_id, { relevant: v.relevant, reason: v.reason, source: 'gpt' })
-    }
-  } catch {
-    // On any failure, fail OPEN — keep the undecided rather than drop real signal.
   }
   keepUndecided()
   return result

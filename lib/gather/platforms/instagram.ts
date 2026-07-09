@@ -1,5 +1,5 @@
 import type { PlatformAdapter } from '../types'
-import { APIFY_ACTORS } from '../../config'
+import { APIFY_ACTORS, COMMENT_THRESHOLD } from '../../config'
 import { num, str, first, getPath, toDateOnly, cleanHashtag } from '../util'
 import { tagVideo } from '../tagging'
 
@@ -118,8 +118,9 @@ export const instagram: PlatformAdapter = {
   },
 
   // null = scrape comments for every IG video found (don't gate on comments_count).
-  // IG comment counts are unreliable, and this is the broken-scraper we're
-  // explicitly re-validating — gating would risk silently skipping the test.
-  // Revisit to a threshold once IG comments are proven working.
-  commentThreshold: null,
+  // Proven working on the 2026-07-09 Sealand run (5,840 comments), so the
+  // no-gate re-validation stance is retired. Same bar as TikTok: on that run a
+  // ≥5 gate skips ~35% of IG comment scrapes (the cost driver — one paid actor
+  // run per video) while losing ~2.5% of comments.
+  commentThreshold: COMMENT_THRESHOLD,
 }
