@@ -4,7 +4,7 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassDaSchema, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary } from './schemas'
 import { priorityForRank } from '../calibration'
-import { CALIBRATED_PROSE_RULE } from './prose-rules'
+import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { AggregatedTheme, SovEntry } from './types'
@@ -339,8 +339,8 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     client_id: clientId,
     run_id: runId,
     insight_type: mi.insight_type,
-    title: mi.title,
-    description: mi.description,
+    title: stripThemeRefs(mi.title),
+    description: stripThemeRefs(mi.description),
     evidence: {
       supporting_theme_ids: resolveThemes(mi.supporting_themes),
       supporting_competitive_insight_ids: resolveCompetitive(mi.supporting_competitive),
@@ -505,8 +505,8 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       client_id: clientId,
       run_id: runId,
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
-      title: rec.title,
-      reasoning: rec.reasoning,
+      title: stripThemeRefs(rec.title),
+      reasoning: stripThemeRefs(rec.reasoning),
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
       hero_quote: validateQuote(rec.hero_quote),

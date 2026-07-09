@@ -4,7 +4,7 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
-import { CALIBRATED_PROSE_RULE } from './prose-rules'
+import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
 import type { AggregatedTheme, SovEntry } from './types'
 
 // Pass C — competitive analysis (Architecture/Analysis-Passes §Pass C). Single
@@ -211,8 +211,8 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
       run_id: runId,
       category: ci.category,
       competitor_name: ci.competitor_name,
-      title: ci.title,
-      finding: ci.finding,
+      title: stripThemeRefs(ci.title),
+      finding: stripThemeRefs(ci.finding),
       evidence: { supporting_theme_ids: [...new Set(supportingIds)] },
       impact_level: ci.impact_level,
     }

@@ -8,4 +8,18 @@ export const CALIBRATED_PROSE_RULE =
   'Do not use intensity or frequency words: "very", "extremely", "significant", "overwhelming", ' +
   '"huge", "strong", "most", "many", "widespread", "frequent", "consistently", "growing", "increasingly", ' +
   'or their synonyms. The product renders measured counts next to your text, so a magnitude claim in ' +
-  'prose is a defect. Comparisons ("X more than Y") are allowed only where the input data directly shows them.'
+  'prose is a defect. Comparisons ("X more than Y") are allowed only where the input data directly shows them.\n' +
+  '- Prose is client-facing. NEVER cite internal handles like [T4] or T12 inside titles, findings, or ' +
+  'descriptions — name the topic in plain words instead. T# belongs ONLY in the structured supporting_themes field.'
+
+/** Defensive strip for internal T# handles that leak into client-facing prose
+ *  despite the prompt rule (seen live: Pass C findings citing "[T18]", 2026-07-09).
+ *  Removes bracketed refs and tidies the whitespace/punctuation left behind. */
+export function stripThemeRefs(text: string): string {
+  return text
+    .replace(/\s*\[T\d+\](\[T\d+\])*/g, '')
+    .replace(/\s*\(T\d+(,\s*T\d+)*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.,;:])/g, '$1')
+    .trim()
+}
