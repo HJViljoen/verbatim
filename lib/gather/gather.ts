@@ -1,4 +1,5 @@
 import { createAdminClient } from '../supabase-admin'
+import { periodWindowDays } from '../config'
 import { runActor } from './apify'
 import { adapters } from './platforms'
 import { dedupeBy, round2 } from './util'
@@ -129,6 +130,46 @@ async function loadConfig(admin: Admin, clientId: string): Promise<GatherConfig>
   }
 }
 
+// ---- baseline vs flow (teardown 2026-07-09 §Run 1, defect 6) ------------------
+
+/** The run's gather window. `since` is inclusive, 'YYYY-MM-DD', UTC-day granular. */
+export interface GatherWindow {
+  /** True on a client's first data-producing run — deep, unwindowed. */
+  baseline: boolean
+  /** Flow runs: content older than this is out of the period. Null on baseline. */
+  since: string | null
+}
+
+const sinceDateFor = (period: string): string =>
+  new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
+
+/**
+ * Baseline-vs-flow: a client's first MAP-BUILDING run is the baseline — deep
+ * and unwindowed. Every later run is a flow run and only this period's content
+ * counts: TikTok/YouTube already window at the source, but Instagram's hashtag
+ * actor has no date input, so the window is enforced post-search (gatePlatform)
+ * — which also stops old-viral IG videos from burning a paid comment-scrape
+ * actor run each week. The same window drives the period-metrics slice in the
+ * synthesis half.
+ *
+ * "The map exists" = an earlier run produced a run_summary (synthesis closed),
+ * NOT merely an earlier completed pipeline_runs row — Sealand's June runs on
+ * the old pipeline are status 'completed' with zero analysis, and a failed or
+ * empty run must not cost the client their one deep baseline.
+ */
+export async function resolveGatherWindow(clientId: string, runId: string, period: string): Promise<GatherWindow> {
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('run_summary')
+    .select('run_id')
+    .eq('client_id', clientId)
+    .neq('run_id', runId)
+    .limit(1)
+    .maybeSingle()
+  if (error) throw new Error(`resolve gather window: ${error.message}`)
+  return data ? { baseline: false, since: sinceDateFor(period) } : { baseline: true, since: null }
+}
+
 // ---- step-sized pieces -------------------------------------------------------
 
 /** One planned keyword search — the unit of the Inngest search fan-out. */
@@ -216,6 +257,8 @@ export async function gatePlatform(opts: {
   platform: Platform
   searches: SearchResult[]
   videoLimit?: number
+  /** Override the client's configured report_period (matches searchOne). */
+  period?: string
   relevance?: RelevanceMethod
   attribution?: AttributionMethod
   dryRun?: boolean
@@ -244,7 +287,21 @@ export async function gatePlatform(opts: {
       }
     }
   }
-  const videos = [...byId.values()]
+  const merged = [...byId.values()]
+
+  // Flow-run window: drop content older than the report period BEFORE the
+  // relevance gate (saves its GPT call) and before the upsert (an old video not
+  // re-upserted keeps its original run_id, so run-scoped reads stay honest).
+  // Baseline runs pass everything — the first run builds the map. Only content
+  // KNOWN to be old is dropped: a null upload_date stays, so a platform with
+  // patchy dates can't be blanked by the window.
+  const window = await resolveGatherWindow(opts.clientId, opts.runId, opts.period ?? config.report_period)
+  const videos = window.since
+    ? merged.filter((v) => !v.upload_date || v.upload_date >= window.since!)
+    : merged
+  if (videos.length < merged.length) {
+    console.log(`[${adapter.platform}] flow window dropped ${merged.length - videos.length}/${merged.length} videos older than ${window.since}`)
+  }
 
   // Relevance gate (BEFORE the expensive comment scrape). Judge market
   // relevance from cheap metadata so off-market noise (SFX/movie "prosthetics",
@@ -402,7 +459,7 @@ export async function runGather(opts: GatherOptions): Promise<PlatformResult[]> 
       }
       const gate = await gatePlatform({
         clientId: opts.clientId, runId: opts.runId, platform, searches,
-        videoLimit: opts.videoLimit, relevance: opts.relevance,
+        videoLimit: opts.videoLimit, period: opts.period, relevance: opts.relevance,
         attribution: opts.attribution, dryRun: opts.dryRun,
       })
       errors.push(...gate.errors)

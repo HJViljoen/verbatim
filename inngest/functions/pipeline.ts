@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
-import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, type SearchResult } from '@/lib/gather/gather'
+import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, resolveGatherWindow, type SearchResult } from '@/lib/gather/gather'
 import { runPassA } from '@/lib/pipeline/pass-a'
 import { runStepA2 } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
@@ -130,7 +130,7 @@ export const runPipeline = inngest.createFunction(
           }
         }
         const gate = await step.run(`gate:${platform}`, () =>
-          gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit }),
+          gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: options.period }),
         )
         totalVideos += gate.videosKept
         totalErrors += gate.errors.length
@@ -319,24 +319,30 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const wantedVideos = new Set(videos.map((v) => `${v.platform}::${v.video_id}`))
   const allComments = await selectAll<CommentRow>(() =>
     admin.from('comments')
-      .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes')
+      .select('id, client_id, run_id, platform, video_id, comment_id, author, text, likes, comment_date')
       .eq('client_id', clientId)
       .order('id', { ascending: true }),
   )
   const comments = allComments.filter((c) => wantedVideos.has(`${c.platform}::${c.video_id}`))
   const metrics = computeMetrics(videos, comments)
 
-  // Period slice — only what THIS run gathered (new videos; new comments, which
-  // may sit on re-found older videos). Feeds run_summary's period_* columns:
-  // the honest week-over-week layer. The full-corpus metrics above stay the
-  // market-map state. (Teardown 2026-07-09 — cumulative-metrics fix.)
-  const periodVideos = videos.filter((v) => v.run_id === runId)
-  const periodComments = comments.filter((c) => c.run_id === runId)
-  const periodMetrics = computeMetrics(periodVideos, periodComments)
-
   const { data: tc } = await admin.from('tracking_configs')
     .select('brand_keywords, competitor_names, industry_keywords, report_period')
     .eq('client_id', clientId).maybeSingle()
+
+  // Period slice — only what THIS run gathered, minus rows KNOWN to be older
+  // than the report window (upserts re-stamp re-found videos/comments with the
+  // current run_id, so run_id alone lets an old-viral re-scrape pollute the
+  // week's numbers; comment_date/upload_date is the honest cut). Null dates
+  // stay — only content known old is dropped. Baseline runs (window.since =
+  // null) keep the full run slice: the first run IS the map, not a period.
+  // Feeds run_summary's period_* columns; the full-corpus metrics above stay
+  // the market-map state. (Teardown 2026-07-09 — cumulative-metrics fix.)
+  const window = await resolveGatherWindow(clientId, runId, tc?.report_period ?? 'weekly')
+  const inWindow = (date: string | null | undefined) => !window.since || !date || date >= window.since
+  const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date))
+  const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date))
+  const periodMetrics = computeMetrics(periodVideos, periodComments)
   const { data: client } = await admin.from('clients')
     .select('company_name').eq('id', clientId).maybeSingle()
   const brandName = client?.company_name ?? undefined

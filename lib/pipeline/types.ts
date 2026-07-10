@@ -22,6 +22,8 @@ export interface VideoRow {
   comments_count: number | null
   engagement_rate: number | null
   account_followers: number | null
+  /** 'YYYY-MM-DD' post date; null when the platform gave nothing parseable. */
+  upload_date: string | null
   /** Pass A's comment-derived video sentiment; null until analysed. */
   sentiment: string | null
   /** 'discovered' (keyword search) or 'owned' (the client's own accounts).
@@ -39,6 +41,9 @@ export interface CommentRow {
   author: string | null
   text: string | null
   likes: number | null
+  /** 'YYYY-MM-DD' posted date; null when the platform gave nothing parseable.
+   *  Optional: only the period-metrics readers select it. */
+  comment_date?: string | null
 }
 
 /** One bucket of the share-of-voice breakdown. */

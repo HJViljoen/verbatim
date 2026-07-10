@@ -130,3 +130,10 @@ export function periodToTikTokRange(period: string): string {
   return period === 'daily' ? 'TODAY' : period === 'monthly' ? 'THIS_MONTH' : 'THIS_WEEK'
 }
 
+/** report_period → window length in days. The shared mapping behind the flow-run
+ *  gather window and the period-metrics slice (YouTube's publishedAfter uses the
+ *  same numbers). */
+export function periodWindowDays(period: string): number {
+  return period === 'daily' ? 1 : period === 'monthly' ? 30 : 7
+}
+
