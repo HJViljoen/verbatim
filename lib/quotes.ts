@@ -25,6 +25,16 @@ const ENGLISH_WORDS = new Set([
 const wordsOf = (s: string) => s.toLowerCase().match(/[a-z']+/g) ?? []
 const englishHits = (q: string) => wordsOf(q).reduce((n, w) => n + (ENGLISH_WORDS.has(w) ? 1 : 0), 0)
 
+/** Whether a verbatim can carry a card as its lead quote — in card-length range
+ *  and reads as English (the corpus is heavily multilingual; "Yo quiero 🙌🙌"
+ *  led a run-1 card). Used by the pipeline to order the hero-quote pool —
+ *  a preference, not a hard gate: thin quotes still ground, they just stop
+ *  being offered first. */
+export const readsAsHeroQuote = (q: string): boolean => {
+  const c = cleanQuote(q)
+  return c.length >= 18 && c.length <= 170 && englishHits(c) >= 2
+}
+
 /** Content keywords of a claim, for scoring how on-topic a quote is. */
 export const keywordsOf = (text: string) =>
   new Set((text.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !ENGLISH_WORDS.has(w)))
@@ -59,6 +69,52 @@ function themeRelevance(id: string, kw: Set<string>, themeSlugById: Map<string, 
 export function rankByTheme(ids: string[], claimText: string, themeSlugById: Map<string, string>): string[] {
   const kw = keywordsOf(claimText)
   return [...ids].sort((a, b) => themeRelevance(b, kw, themeSlugById) - themeRelevance(a, kw, themeSlugById))
+}
+
+// ---- entity-bucket scoping (teardown 2026-07-09 §Run 1, defect 1) -----------
+// A quote's entity bucket is its source video's — 'client', 'competitor:<name>',
+// or 'industry-other' — derived in Step A2 and persisted per theme. Quote pools
+// used to fan out across buckets, so a claim about the client could lead with
+// another brand's customers. The rule: client-facing claims (Dashboard, Market)
+// quote client + category-audience voices; a competitive card quotes that
+// competitor's audience.
+
+export interface ThemeBucketRow {
+  bucket: string
+  supporting_insight_ids: string[] | null
+}
+
+/** audience_insight id → entity bucket, from the run's persisted themes. */
+export function bucketByAudienceId(themes: ThemeBucketRow[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const t of themes) for (const id of t.supporting_insight_ids ?? []) map.set(id, t.bucket)
+  return map
+}
+
+/** Keep the client's own + category-audience voices — never a competitor's
+ *  customers under a claim about the client. Unmapped ids pass through: the map
+ *  is built from the same themes the evidence came from, so a miss means legacy
+ *  data (or no themes rows at all), not a competitor voice. */
+export function scopeToClientVoices(ids: string[], bucketById: Map<string, string>): string[] {
+  if (bucketById.size === 0) return ids
+  return ids.filter((id) => !bucketById.get(id)?.startsWith('competitor:'))
+}
+
+/** Keep the named competitor's audience. Pass C's competitor_name is model
+ *  prose (unvalidated against video.competitor_name), so the bucket match is
+ *  case-insensitive; when nothing matches — or the card names no competitor —
+ *  fall back to every non-client bucket: a cross-bucket finding may quote the
+ *  category, but the client's own customers must never appear as a
+ *  competitor's. Unmapped ids are dropped here for the same reason. */
+export function scopeToCompetitor(ids: string[], bucketById: Map<string, string>, competitorName: string | null): string[] {
+  if (bucketById.size === 0) return ids
+  const want = competitorName ? `competitor:${competitorName.trim().toLowerCase()}` : null
+  const haveNamed = want != null && [...bucketById.values()].some((b) => b.toLowerCase() === want)
+  return ids.filter((id) => {
+    const b = bucketById.get(id)
+    if (!b) return false
+    return haveNamed ? b.toLowerCase() === want : b !== 'client'
+  })
 }
 
 /** Minimal shape of a Supabase-style client for the evidence read. Kept as a

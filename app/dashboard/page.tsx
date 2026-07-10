@@ -5,7 +5,7 @@ import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
 import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
 import { Quotes } from '@/components/quotes'
-import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToClientVoices, type ThemeBucketRow } from '@/lib/quotes'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
 // this week's news (that's the report's job) and no longer the pipeline readout
@@ -318,18 +318,25 @@ export default async function DashboardPage() {
 
   // Evidence-led: lead the recommendation with the real voices behind it (shared
   // lib/quotes) — the pipeline's hero_quote where present, heuristic otherwise.
+  // The "one thing" is a claim about the client, so the pool keeps client +
+  // category voices only (entity-bucket scoping, teardown §Run 1 defect 1).
   let oneThingQuotes: string[] = []
   if (oneThing && !topEvent) {
     const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
     const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
     const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
+    const { data: bucketData } = await supabase.from('themes')
+      .select('bucket, supporting_insight_ids')
+      .eq('client_id', clientId).eq('run_id', runId)
+    const bucketById = bucketByAudienceId((bucketData ?? []) as ThemeBucketRow[])
     const supportIds: string[] = []
     for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
+    const scopedIds = scopeToClientVoices(supportIds, bucketById)
     const claim = `${oneThing.title} ${oneThing.reasoning}`
-    const pool = rankByTheme(supportIds, claim, themeSlugById).slice(0, 120)
+    const pool = rankByTheme(scopedIds, claim, themeSlugById).slice(0, 120)
     const quotesByAudience = await fetchQuotesByAudience(supabase, pool)
     const pick = createQuotePicker(quotesByAudience, themeSlugById)
-    oneThingQuotes = pick(supportIds, 2, claim, oneThing.hero_quote)
+    oneThingQuotes = pick(scopedIds, 2, claim, oneThing.hero_quote)
   }
 
   return (

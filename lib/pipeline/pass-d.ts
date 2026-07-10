@@ -1,12 +1,15 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost } from '../config'
+import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
 import { PassDaSchema, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary } from './schemas'
 import { priorityForRank } from '../calibration'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
+import { readsAsHeroQuote } from '../quotes'
+import { embedTexts, cosine } from './cluster'
+import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
 // Pass D — market intelligence + recommendations, SPLIT per Redesign Spec
@@ -28,10 +31,17 @@ const PROMPT_VERSION_A = 'pass_d_a_v2'
 // v5 (2026-07-07): also select a hero_quote per recommendation AND per market
 // insight (evidence-led cards, Redesign Spec §1) — the one place a raw verbatim
 // belongs. Code validates each against the shown quotes and drops non-matches.
-const PROMPT_VERSION_B = 'pass_d_b_v5'
+// v6 (2026-07-10): entity-scoped hero pool (teardown §Run 1, defect 1 — a
+// competitor's customers were quoted on a client positioning rec). Competitor-
+// audience quotes now appear LABELLED, for competitive context only; the hero
+// validation map is built from client + category voices exclusively, so a
+// competitor voice can never lead a client-facing card.
+const PROMPT_VERSION_B = 'pass_d_b_v6'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
+/** Max labelled competitor-audience quotes per market insight (context only). */
+const COMPETITOR_QUOTES_PER_INSIGHT = 4
 
 const clampScore = (n: number) => Math.max(1, Math.min(10, Math.round(n)))
 
@@ -168,6 +178,10 @@ function buildSystemPromptB(brandName?: string): string {
     '  translate, or trim it — it must be one of the quotes shown, or it is discarded.',
     '- Also return insight_hero_quotes: exactly one entry per market insight (by its index, e.g. "M1"), each the',
     '  single most representative real customer quote for THAT insight, copied EXACTLY from the quotes shown for it.',
+    `- Quotes labelled "[…'s audience]" are OTHER brands' customers, shown for competitive context only. NEVER pick`,
+    `  a labelled quote as any hero_quote — putting a competitor's customer's words on a card about ${name}`,
+    '  misattributes the voice (the code rejects labelled picks). Heroes come from the unlabelled quotes only;',
+    '  if an insight has no unlabelled quotes, return no hero for it.',
     '- based_on lists the market insights a recommendation follows from as "M1", "M2" … and/or competitive insights as "C1" …',
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
@@ -182,7 +196,11 @@ interface MarketInsightForB {
   index: string
   title: string
   description: string
+  /** Hero-eligible voices: client + category audience. The hero validation map
+   *  is built from these ONLY. */
   quotes: string[]
+  /** Competitor-audience voices, shown labelled for context — never heroes. */
+  competitorQuotes: { audience: string; quote: string }[]
 }
 
 function buildUserPromptB(
@@ -200,6 +218,7 @@ function buildUserPromptB(
   for (const mi of insights) {
     lines.push(`[${mi.index}] ${mi.title} — ${mi.description}`)
     for (const q of mi.quotes) lines.push(`    · "${q}"`)
+    for (const cq of mi.competitorQuotes) lines.push(`    · [${cq.audience}'s audience] "${cq.quote}"`)
   }
   if (ciIndex.size) {
     lines.push('', `COMPETITIVE INSIGHTS (${ciIndex.size})`)
@@ -212,29 +231,77 @@ function buildUserPromptB(
   return lines.join('\n')
 }
 
-/** Verbatim quotes behind a set of audience_insights ids, best-ranked first. */
+/** Verbatim quotes behind a set of audience_insights ids, best-ranked first,
+ *  each with the audience insight it came from (for bucket attribution). */
 async function retrieveQuotes(
   admin: ReturnType<typeof createAdminClient>,
   insightIds: string[],
   cap: number,
-): Promise<string[]> {
+): Promise<{ quote: string; audienceId: string }[]> {
   if (insightIds.length === 0 || cap === 0) return []
-  const quotes: string[] = []
+  const quotes: { quote: string; audienceId: string }[] = []
   const CHUNK = 100
   for (let i = 0; i < insightIds.length && quotes.length < cap; i += CHUNK) {
     const { data, error } = await admin
       .from('insight_evidence')
-      .select('quote')
+      .select('quote, audience_insight_id')
       .in('audience_insight_id', insightIds.slice(i, i + CHUNK))
       .order('relevance_rank', { ascending: true })
       .limit(cap - quotes.length)
     if (error) throw new Error(`retrieve evidence: ${error.message}`)
     for (const row of data ?? []) {
       const q = (row.quote ?? '').trim()
-      if (q) quotes.push(q)
+      if (q) quotes.push({ quote: q, audienceId: row.audience_insight_id as string })
     }
   }
   return quotes
+}
+
+/** audience_insight id → entity bucket, from the run's themes (each theme
+ *  carries its bucket + the insight ids that support it). */
+function bucketByInsightId(themes: AggregatedTheme[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const t of themes) for (const id of t.supportingInsightIds) map.set(id, t.bucket)
+  return map
+}
+
+/** Assemble one market insight's D-b entry with the entity-scoped quote pools:
+ *  hero-eligible voices (client + industry buckets) and labelled competitor-
+ *  audience context. Unmapped ids stay hero-eligible — the map is built from
+ *  the same themes the evidence came from, so a miss means legacy data, not a
+ *  competitor voice. */
+async function buildInsightForB(
+  admin: ReturnType<typeof createAdminClient>,
+  index: string,
+  title: string,
+  description: string,
+  audienceIds: string[],
+  bucketById: Map<string, string>,
+): Promise<MarketInsightForB> {
+  const heroIds: string[] = []
+  const competitorIds: string[] = []
+  for (const id of audienceIds) {
+    if (bucketById.get(id)?.startsWith('competitor:')) competitorIds.push(id)
+    else heroIds.push(id)
+  }
+  // Over-fetch the hero pool and offer card-carrying quotes first (vault:
+  // hero-quote language/weight rules — "Yo quiero 🙌🙌" led a run-1 card).
+  // Thin/non-English quotes only fill whatever slots remain.
+  const [hero, competitor] = await Promise.all([
+    retrieveQuotes(admin, heroIds, QUOTES_PER_INSIGHT * 3),
+    retrieveQuotes(admin, competitorIds, COMPETITOR_QUOTES_PER_INSIGHT),
+  ])
+  const heroPool = [...hero.filter((r) => readsAsHeroQuote(r.quote)), ...hero.filter((r) => !readsAsHeroQuote(r.quote))]
+  return {
+    index,
+    title,
+    description,
+    quotes: heroPool.slice(0, QUOTES_PER_INSIGHT).map((r) => r.quote),
+    competitorQuotes: competitor.map((r) => ({
+      audience: (bucketById.get(r.audienceId) ?? 'competitor:another brand').slice('competitor:'.length),
+      quote: r.quote,
+    })),
+  }
 }
 
 // ---- orchestration -----------------------------------------------------------
@@ -314,6 +381,35 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   }
   result.ciSummary = a.parsed.consumer_intelligence_summary
 
+  // Citation-relevance floor (teardown §Run 1, defect 1): a T# ref must be
+  // semantically RELATED to the insight citing it, not merely exist — run 1 had
+  // travel themes grounding a sustainability insight, and "Grounded in N
+  // conversations" inherited the padding. Refs below the floor are dropped
+  // BEFORE evidence resolution, so grounding counts follow surviving refs only.
+  // One embedding call covers all insights + their cited themes; a failure
+  // throws (the Inngest step retries — never fail-open into unvalidated refs,
+  // the gather gate's original sin).
+  let relevanceRejected = 0
+  const themeText = (t: AggregatedTheme) => `${t.label ?? t.theme}. ${t.description ?? ''}`.trim()
+  const keptRefs: string[][] = a.parsed.market_insights.map((mi) => mi.supporting_themes)
+  {
+    const citedLabels = [...new Set(keptRefs.flat().map((r) => r.toLowerCase().trim()))].filter((l) => themeByLabel.has(l))
+    if (citedLabels.length) {
+      const miTexts = a.parsed.market_insights.map((mi) => `${mi.title}. ${mi.description}`)
+      const vecs = await embedTexts([...miTexts, ...citedLabels.map((l) => themeText(themeByLabel.get(l)!))])
+      const themeVec = new Map(citedLabels.map((l, i) => [l, vecs[miTexts.length + i]]))
+      keptRefs.forEach((refs, i) => {
+        keptRefs[i] = refs.filter((r) => {
+          const v = themeVec.get(r.toLowerCase().trim())
+          if (!v) return true // unknown ref — resolveThemes counts and drops it
+          if (cosine(vecs[i], v) >= CITATION_RELEVANCE_FLOOR) return true
+          relevanceRejected++
+          return false
+        })
+      })
+    }
+  }
+
   let rejectedRefs = 0
   const resolveThemes = (refs: string[]): string[] => {
     const ids: string[] = []
@@ -335,14 +431,14 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   }
 
   // Build market_insights rows (M# = 1-based array order).
-  const miRows = a.parsed.market_insights.map((mi) => ({
+  const miRows = a.parsed.market_insights.map((mi, i) => ({
     client_id: clientId,
     run_id: runId,
     insight_type: mi.insight_type,
     title: stripThemeRefs(mi.title),
     description: stripThemeRefs(mi.description),
     evidence: {
-      supporting_theme_ids: resolveThemes(mi.supporting_themes),
+      supporting_theme_ids: resolveThemes(keptRefs[i]),
       supporting_competitive_insight_ids: resolveCompetitive(mi.supporting_competitive),
     },
     confidence_score: clampScore(mi.confidence_score),
@@ -368,7 +464,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_a', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_A, systemPrompt: systemPromptA, userPrompt: userPromptA,
-      response: { market_insights: miRows.length, ci_summary: true, rejected_refs: rejectedRefs },
+      response: { market_insights: miRows.length, ci_summary: true, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected },
       error: null, usage: a.usage, durationMs: a.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
@@ -377,15 +473,11 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   }
 
   // ---- D-b: recommendations grounded in retrieved verbatim evidence ----
+  const bucketById = bucketByInsightId(themes)
   const insightsForB: MarketInsightForB[] = []
   for (let i = 0; i < miRows.length; i++) {
     const row = miRows[i]
-    insightsForB.push({
-      index: `M${i + 1}`,
-      title: row.title,
-      description: row.description,
-      quotes: await retrieveQuotes(admin, row.evidence.supporting_theme_ids, QUOTES_PER_INSIGHT),
-    })
+    insightsForB.push(await buildInsightForB(admin, `M${i + 1}`, row.title, row.description, row.evidence.supporting_theme_ids, bucketById))
   }
 
   if (insightsForB.length === 0 && ciIndex.size === 0) return result
@@ -575,17 +667,13 @@ export async function rerunPassDb(opts: { clientId: string; runId: string; persi
   const competitive = (ciRes.data ?? []) as PersistedCompetitiveInsight[]
   const sov = (rsRes.data?.share_of_voice ?? undefined) as Record<string, SovEntry> | undefined
 
+  const bucketById = bucketByInsightId(await loadThemes(clientId, runId))
   const insightsForB: MarketInsightForB[] = []
   const miById: string[] = []
   for (let i = 0; i < mi.length; i++) {
     const row = mi[i]
     miById.push(row.id)
-    insightsForB.push({
-      index: `M${i + 1}`,
-      title: row.title,
-      description: row.description,
-      quotes: await retrieveQuotes(admin, row.evidence?.supporting_theme_ids ?? [], QUOTES_PER_INSIGHT),
-    })
+    insightsForB.push(await buildInsightForB(admin, `M${i + 1}`, row.title, row.description, row.evidence?.supporting_theme_ids ?? [], bucketById))
   }
   const ciIndex = new Map<string, PersistedCompetitiveInsight>()
   competitive.forEach((ci, i) => ciIndex.set(`c${i + 1}`, ci))

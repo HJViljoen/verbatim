@@ -2,7 +2,7 @@ import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
 import { Quotes } from '@/components/quotes'
-import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToCompetitor, type ThemeBucketRow } from '@/lib/quotes'
 
 // Competitive Intelligence — renders Pass C's competitive_insights for the latest
 // run: qualitative cross-bucket intelligence drawn from competitors' customers'
@@ -63,10 +63,13 @@ export default async function CompetitiveIntelligencePage() {
   // Insights + grounding themes for this run; Share of Tracked Conversation
   // comes from run_summary (the pipeline's corpus-computed snapshot — the
   // numbers rule: never recounted per page, and owned-account posts stay out).
-  const [{ data: ciData }, { data: aiData }, { data: summaryData }] = await Promise.all([
+  const [{ data: ciData }, { data: aiData }, { data: summaryData }, { data: bucketData }] = await Promise.all([
     supabase.from('competitive_insights').select('*').eq('client_id', clientId).eq('run_id', runId),
     supabase.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
     supabase.from('run_summary').select('total_videos, share_of_voice').eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
+    // Entity buckets per audience insight — a card about a competitor quotes
+    // THAT competitor's audience, never the client's own customers.
+    supabase.from('themes').select('bucket, supporting_insight_ids').eq('client_id', clientId).eq('run_id', runId),
   ])
 
   const insights = (ciData ?? []) as CompetitiveInsight[]
@@ -87,17 +90,23 @@ export default async function CompetitiveIntelligencePage() {
   const sov = shareFromSummary((summaryData ?? null) as SummaryShareRow | null)
 
   // ---- verbatim quotes for the evidence-led cards (shared lib/quotes) ----
+  // Each card's pool is scoped to the competitor it names (falling back to
+  // non-client buckets for cross-bucket findings) — presenting one brand's
+  // audience as another's is the run-1 misattribution defect.
   const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
+  const bucketById = bucketByAudienceId((bucketData ?? []) as ThemeBucketRow[])
+  const cardAudienceIds = (ci: CompetitiveInsight) =>
+    scopeToCompetitor(ci.evidence?.supporting_theme_ids ?? [], bucketById, ci.competitor_name)
   const claimOf = (ci: CompetitiveInsight) => `${ci.title} ${ci.finding}`
   const poolIds = new Set<string>()
   for (const ci of insights) {
-    for (const id of rankByTheme(ci.evidence?.supporting_theme_ids ?? [], claimOf(ci), themeSlugById).slice(0, 80)) {
+    for (const id of rankByTheme(cardAudienceIds(ci), claimOf(ci), themeSlugById).slice(0, 80)) {
       if (poolIds.size < 600) poolIds.add(id)
     }
   }
   const quotesByAudience = await fetchQuotesByAudience(supabase, [...poolIds])
   const pick = createQuotePicker(quotesByAudience, themeSlugById)
-  const quotesFor = (ci: CompetitiveInsight) => pick(ci.evidence?.supporting_theme_ids ?? [], 2, claimOf(ci), ci.hero_quote)
+  const quotesFor = (ci: CompetitiveInsight) => pick(cardAudienceIds(ci), 2, claimOf(ci), ci.hero_quote)
 
   const byCategory = CATEGORY_ORDER
     .map((cat) => ({ cat, items: insights.filter((c) => c.category === cat) }))

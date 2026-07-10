@@ -65,6 +65,19 @@ export const CLUSTER_SIMILARITY_THRESHOLD = 0.62
 export const THEME_MATCH_THRESHOLD = 0.7
 
 /**
+ * Cosine floor a Pass D-a supporting_themes ref must clear against its market
+ * insight's text to survive (the existence-vs-relevance gap, teardown
+ * 2026-07-09 §Run 1: refs were checked to exist, never to relate, so padding
+ * inflated "Grounded in N conversations"). Calibrated on Sealand run 1 via
+ * scripts/citation-floor.ts: genuine citations sat at median 0.594 / min 0.364,
+ * uncited theme pairs at median 0.240 / p75 0.312 — 0.35 keeps every genuine
+ * run-1 citation while cutting the padding space. Deliberately a floor, not a
+ * classifier: a related-but-uncited theme surviving is fine; an unrelated
+ * cited one is the defect.
+ */
+export const CITATION_RELEVANCE_FLOOR = 0.35
+
+/**
  * USD per 1M tokens, per model. APPROXIMATE — verify against OpenAI's current
  * pricing page and your usage dashboard; used only to estimate ai_call_log.cost_usd
  * and the live burn log. Actual billing is the source of truth.

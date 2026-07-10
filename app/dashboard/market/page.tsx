@@ -6,7 +6,7 @@ import { CURATION_GATE, gateTier, type GateTier } from '@/lib/curation'
 import { priorityWord, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
 import { Quotes } from '@/components/quotes'
-import { rankByTheme, fetchQuotesByAudience, createQuotePicker } from '@/lib/quotes'
+import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToClientVoices, type ThemeBucketRow } from '@/lib/quotes'
 import type { CiSummary } from '@/lib/pipeline/schemas'
 
 // Market Intelligence — "What should we do?" (Redesign Spec §3). The editorial
@@ -106,7 +106,7 @@ export default async function MarketIntelligencePage() {
   }
   const runId = latestRun.id as string
 
-  const [miRes, recRes, aiRes, ciRes, summaryRes, ssRes] = await Promise.all([
+  const [miRes, recRes, aiRes, ciRes, summaryRes, ssRes, bucketRes] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId)
@@ -128,6 +128,11 @@ export default async function MarketIntelligencePage() {
       .eq('client_id', clientId).eq('run_id', runId).eq('single_source', true)
       .gte('strength_score', CURATION_GATE.earlySignalMinScore)
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
+    // Entity buckets per audience insight — quote pools on this page are
+    // client-facing claims, so competitor-audience voices are scoped out.
+    supabase.from('themes')
+      .select('bucket, supporting_insight_ids')
+      .eq('client_id', clientId).eq('run_id', runId),
   ])
 
   const insights = (miRes.data ?? []) as MarketInsight[]
@@ -216,17 +221,22 @@ export default async function MarketIntelligencePage() {
   // Pull the audience insights most on-topic for each card into the quote pool
   // (theme-ranked so the specific voices beat the generic, high-volume ones),
   // fetch once, and build a page-scoped picker. Cards lead with the pipeline's
-  // hero_quote where present and fall back to the heuristic otherwise.
+  // hero_quote where present and fall back to the heuristic otherwise. Every
+  // card here is a claim about the client, so pools keep client + category
+  // voices only — a competitor's customers never speak under a client claim.
+  const bucketById = bucketByAudienceId((bucketRes.data ?? []) as ThemeBucketRow[])
   function recSupportAudienceIds(rec: Recommendation): string[] {
     const ids: string[] = []
     for (const id of rec.based_on?.insight_ids ?? []) {
       ids.push(...(miById.get(id)?.evidence?.supporting_theme_ids ?? []))
       ids.push(...(competitiveById.get(id)?.evidence?.supporting_theme_ids ?? []))
     }
-    return ids
+    return scopeToClientVoices(ids, bucketById)
   }
+  const insightAudienceIds = (mi: MarketInsight): string[] =>
+    scopeToClientVoices(mi.evidence?.supporting_theme_ids ?? [], bucketById)
   const cardSpecs: { ids: string[]; claim: string }[] = [
-    ...[...keyInsights, ...earlyInsights].map((mi) => ({ ids: mi.evidence?.supporting_theme_ids ?? [], claim: `${mi.title} ${mi.description}` })),
+    ...[...keyInsights, ...earlyInsights].map((mi) => ({ ids: insightAudienceIds(mi), claim: `${mi.title} ${mi.description}` })),
     ...topRecs.map((rec) => ({ ids: recSupportAudienceIds(rec), claim: `${rec.title} ${rec.reasoning}` })),
   ]
   const poolIds = new Set<string>()
@@ -285,7 +295,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Key insights" />
           {keyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(mi.evidence?.supporting_theme_ids ?? [], 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
+            <InsightCard key={mi.id} mi={mi} tier="confirmed" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(insightAudienceIds(mi), 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
           ))}
         </section>
       )}
@@ -295,7 +305,7 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Early signals" hint="worth watching, not yet confirmed" />
           {earlyInsights.map((mi) => (
-            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(mi.evidence?.supporting_theme_ids ?? [], 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
+            <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(insightAudienceIds(mi), 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
           ))}
           {singleSourceThemes.length > 0 && (
             <div className="space-y-2">
