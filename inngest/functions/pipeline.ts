@@ -287,6 +287,7 @@ async function runThemesHalf(clientId: string, runId: string) {
   const a2 = await runStepA2({
     clientId, runId, method: 'embedding',
     threshold: CLUSTER_SIMILARITY_THRESHOLD, evidenceFloor: EVIDENCE_FLOOR,
+    logCalls: true,
   })
   // Pass B labels BOTH tiers (early signals surface on the pages too), then the
   // labelled set is persisted with first_seen from mini theme-matching.
@@ -297,8 +298,9 @@ async function runThemesHalf(clientId: string, runId: string) {
   return {
     themes: a2.themes.length,
     earlySignals: a2.earlySignals.length,
+    themeMerges: a2.mergesApplied.length,
     newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
-    labelCost: b.costUsd,
+    labelCost: b.costUsd + a2.mergeCostUsd,
   }
 }
 

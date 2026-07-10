@@ -1,6 +1,7 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import { clusterInsights, type ClusterMethod } from './cluster'
+import { mergeClusterLabels } from './theme-merge'
 import type { InsightRow, AggregatedTheme } from './types'
 
 // Step A2 — theme aggregation (Architecture/Analysis-Passes §Step A2). No new
@@ -25,6 +26,13 @@ export interface RunStepA2Options {
   threshold?: number
   /** Min distinct supporting videos for a theme to survive. Default EVIDENCE_FLOOR. */
   evidenceFloor?: number
+  /** LLM label-merge pass after clustering (theme-merge.ts). Default ON;
+   *  scripts disable it for A/B against raw clustering. */
+  merge?: boolean
+  /** Model override for the merge pass (offline A/B). */
+  mergeModel?: string
+  /** Write merge calls to ai_call_log — the pipeline path sets this. */
+  logCalls?: boolean
 }
 
 export interface StepA2Result {
@@ -35,6 +43,9 @@ export interface StepA2Result {
   themes: AggregatedTheme[]
   /** Below-floor themes, kept + flagged singleSource ("Early signals"). */
   earlySignals: AggregatedTheme[]
+  /** Label-merge pass outcome (empty/zero when the pass is off). */
+  mergesApplied: { bucket: string; members: string[]; reason: string }[]
+  mergeCostUsd: number
 }
 
 /** A homogeneous (one bucket) group of insights — the unit clustering operates
@@ -148,14 +159,31 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
 export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
   const { clientId, runId, method, threshold } = opts
   const floor = opts.evidenceFloor ?? EVIDENCE_FLOOR
+  const merge = opts.merge ?? true
 
   const groups = await loadGroupedInsights(clientId, runId)
   const totalInsights = groups.reduce((s, g) => s + g.insights.length, 0)
 
-  // Cluster within each group, roll up to aggregated themes.
+  // Cluster within each group, label-merge same-concern clusters (teardown
+  // defect 3 — embeddings alone leave the same finding fragmented), then roll
+  // up to aggregated themes. Merged singles clearing the evidence floor is the
+  // point: the finding was heard once per video, many times across the corpus.
   const all: AggregatedTheme[] = []
+  const mergesApplied: StepA2Result['mergesApplied'] = []
+  let mergeCostUsd = 0
+  let callIndex = 0
   for (const grp of groups) {
-    const clusters = await clusterInsights(grp.insights, { method, threshold })
+    let clusters = await clusterInsights(grp.insights, { method, threshold })
+    if (merge) {
+      callIndex++
+      const m = await mergeClusterLabels({
+        clientId, runId, bucket: grp.bucket, clusters,
+        model: opts.mergeModel, logCall: opts.logCalls, callIndex,
+      })
+      clusters = m.clusters
+      mergeCostUsd += m.costUsd
+      for (const a of m.applied) mergesApplied.push({ bucket: grp.bucket, ...a })
+    }
     for (const cluster of clusters) all.push(aggregate(cluster, grp.bucket))
   }
 
@@ -173,6 +201,8 @@ export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
     totalClusters: all.length,
     themes,
     earlySignals,
+    mergesApplied,
+    mergeCostUsd,
   }
 }
 

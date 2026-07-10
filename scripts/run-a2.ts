@@ -11,6 +11,8 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 //   --method <name>      embedding | string (default: embedding)
 //   --threshold <n>      cosine merge threshold for embedding (default: config)
 //   --floor <n>          min distinct supporting videos to survive (default: config)
+//   --no-merge           skip the LLM label-merge pass (A/B against raw clustering)
+//   --merge-model <m>    model for the merge pass (default: config SYNTHESIS_MODEL)
 //   --debug              print the per-group pairwise similarity matrix and exit
 //                        (use this to tune --threshold against real data)
 
@@ -22,11 +24,13 @@ interface Args {
   method?: ClusterMethod
   threshold?: number
   floor?: number
+  noMerge: boolean
+  mergeModel?: string
   debug: boolean
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: OSSUR, debug: false }
+  const args: Args = { clientId: OSSUR, noMerge: false, debug: false }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
     const next = () => argv[++i]
@@ -35,6 +39,8 @@ function parseArgs(argv: string[]): Args {
     else if (a === '--method') args.method = next() as ClusterMethod
     else if (a === '--threshold') args.threshold = Number(next())
     else if (a === '--floor') args.floor = Number(next())
+    else if (a === '--no-merge') args.noMerge = true
+    else if (a === '--merge-model') args.mergeModel = next()
     else if (a === '--debug') args.debug = true
     else throw new Error(`unknown flag: ${a}`)
   }
@@ -82,7 +88,17 @@ async function main() {
     method,
     threshold,
     evidenceFloor: floor,
+    merge: !args.noMerge,
+    mergeModel: args.mergeModel,
   })
+
+  if (result.mergesApplied.length) {
+    console.log(`\n=== LABEL MERGES APPLIED — ${result.mergesApplied.length} (cost $${result.mergeCostUsd.toFixed(4)}) ===`)
+    for (const m of result.mergesApplied) {
+      console.log(`[${m.bucket}] ${m.members.join('  +  ')}`)
+      console.log(`    ${m.reason}`)
+    }
+  }
 
   console.log(`\n=== SURVIVING THEMES (>= floor ${floor}) — ${result.themes.length} ===`)
   for (const t of result.themes) {
