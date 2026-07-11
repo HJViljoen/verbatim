@@ -7,7 +7,7 @@ import { runPassD } from '../lib/pipeline/pass-d'
 import { runCrossReference } from '../lib/pipeline/cross-reference'
 import { persistThemes } from '../lib/pipeline/themes'
 import { writeRunSummary } from '../lib/pipeline/run-summary'
-import { resolveGatherWindow } from '../lib/gather/gather'
+import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
 import type { VideoRow, CommentRow } from '../lib/pipeline/types'
@@ -103,9 +103,8 @@ async function main() {
   // Period slice — this run's rows, minus rows known older than the report
   // window (mirrors the Inngest synthesis half; null dates stay).
   const window = await resolveGatherWindow(args.clientId, args.runId!, tc?.report_period ?? 'weekly')
-  const inWindow = (date: string | null | undefined) => !window.since || !date || date >= window.since
-  const periodVideos = videos.filter((v) => v.run_id === args.runId && inWindow(v.upload_date))
-  const periodComments = comments.filter((c) => c.run_id === args.runId && inWindow(c.comment_date))
+  const periodVideos = videos.filter((v) => v.run_id === args.runId && inWindow(v.upload_date, window.since))
+  const periodComments = comments.filter((c) => c.run_id === args.runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments)
   const { data: client } = await admin
     .from('clients')

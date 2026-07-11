@@ -143,6 +143,13 @@ export interface GatherWindow {
 const sinceDateFor = (period: string): string =>
   new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
 
+/** True when a row belongs to the window. Null/unknown dates STAY — only
+ *  content KNOWN older than the window is excluded, so a platform with patchy
+ *  dates can never be blanked. Shared by the gather filter and the
+ *  period-metrics slice (one source of truth for "in this period"). */
+export const inWindow = (date: string | null | undefined, since: string | null): boolean =>
+  !since || !date || date >= since
+
 /**
  * Baseline-vs-flow: a client's first MAP-BUILDING run is the baseline — deep
  * and unwindowed. Every later run is a flow run and only this period's content
@@ -296,9 +303,7 @@ export async function gatePlatform(opts: {
   // KNOWN to be old is dropped: a null upload_date stays, so a platform with
   // patchy dates can't be blanked by the window.
   const window = await resolveGatherWindow(opts.clientId, opts.runId, opts.period ?? config.report_period)
-  const videos = window.since
-    ? merged.filter((v) => !v.upload_date || v.upload_date >= window.since!)
-    : merged
+  const videos = merged.filter((v) => inWindow(v.upload_date, window.since))
   if (videos.length < merged.length) {
     console.log(`[${adapter.platform}] flow window dropped ${merged.length - videos.length}/${merged.length} videos older than ${window.since}`)
   }

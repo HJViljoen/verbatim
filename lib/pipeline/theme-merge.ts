@@ -90,6 +90,64 @@ export interface ThemeMergeResult {
   costUsd: number
 }
 
+export interface ProposedMerge {
+  cluster_numbers: number[]
+  reason: string
+}
+
+/**
+ * Validate + apply the model's proposed merge groups — the pure core of the
+ * pass, split out so the invariants are unit-testable without an API call.
+ * Rules: 1-based numbers must be in range; deduped; a cluster may join at most
+ * one group (first group wins); a cleaned group must have 2..MAX_MERGE_GROUP
+ * members or it is rejected whole. A merged cluster takes its first member's
+ * position; later members drop out of the list.
+ */
+export function applyMergeGroups(
+  clusters: InsightRow[][],
+  proposed: ProposedMerge[],
+): Pick<ThemeMergeResult, 'clusters' | 'applied' | 'rejectedGroups'> {
+  const used = new Set<number>()
+  const validGroups: { idxs: number[]; reason: string }[] = []
+  let rejectedGroups = 0
+  for (const m of proposed) {
+    const idxs = [...new Set(m.cluster_numbers)]
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= clusters.length)
+      .map((n) => n - 1)
+      .filter((i) => !used.has(i))
+    if (idxs.length < 2 || idxs.length > MAX_MERGE_GROUP) {
+      rejectedGroups++
+      continue
+    }
+    for (const i of idxs) used.add(i)
+    validGroups.push({ idxs, reason: m.reason })
+  }
+
+  if (!validGroups.length) return { clusters, applied: [], rejectedGroups }
+
+  const mergedInto = new Map<number, number>() // member idx → group idx
+  validGroups.forEach((g, gi) => g.idxs.forEach((i) => mergedInto.set(i, gi)))
+  const emitted = new Set<number>()
+  const out: InsightRow[][] = []
+  clusters.forEach((cluster, i) => {
+    const gi = mergedInto.get(i)
+    if (gi === undefined) {
+      out.push(cluster)
+    } else if (!emitted.has(gi)) {
+      emitted.add(gi)
+      out.push(validGroups[gi].idxs.flatMap((idx) => clusters[idx]))
+    }
+  })
+  return {
+    clusters: out,
+    applied: validGroups.map((g) => ({
+      members: g.idxs.map((i) => clusters[i].reduce((a, b) => (b.strength_score > a.strength_score ? b : a)).theme),
+      reason: g.reason,
+    })),
+    rejectedGroups,
+  }
+}
+
 /**
  * Merge same-concern clusters within one bucket. An API failure throws (the
  * Inngest step retries); an unparseable response applies no merges — honest
@@ -145,44 +203,10 @@ export async function mergeClusterLabels(opts: ThemeMergeOptions): Promise<Theme
   base.completionTokens = usage.completion_tokens
   base.costUsd = estimateCost(model, usage.prompt_tokens, usage.completion_tokens)
 
-  // Validate the proposed groups: in-range, deduped, no cluster in two groups,
-  // size 2..MAX_MERGE_GROUP after cleaning. Anything else is dropped, counted.
-  const used = new Set<number>()
-  const validGroups: { idxs: number[]; reason: string }[] = []
-  for (const m of parsed?.merges ?? []) {
-    const idxs = [...new Set(m.cluster_numbers)]
-      .filter((n) => Number.isInteger(n) && n >= 1 && n <= clusters.length)
-      .map((n) => n - 1)
-      .filter((i) => !used.has(i))
-    if (idxs.length < 2 || idxs.length > MAX_MERGE_GROUP) {
-      base.rejectedGroups++
-      continue
-    }
-    for (const i of idxs) used.add(i)
-    validGroups.push({ idxs, reason: m.reason })
-  }
-
-  if (validGroups.length) {
-    // Merged group replaces its first member's slot; other members drop out.
-    const mergedInto = new Map<number, number>() // member idx → group idx
-    validGroups.forEach((g, gi) => g.idxs.forEach((i) => mergedInto.set(i, gi)))
-    const emitted = new Set<number>()
-    const out: InsightRow[][] = []
-    clusters.forEach((cluster, i) => {
-      const gi = mergedInto.get(i)
-      if (gi === undefined) {
-        out.push(cluster)
-      } else if (!emitted.has(gi)) {
-        emitted.add(gi)
-        out.push(validGroups[gi].idxs.flatMap((idx) => clusters[idx]))
-      }
-    })
-    base.clusters = out
-    base.applied = validGroups.map((g) => ({
-      members: g.idxs.map((i) => clusters[i].reduce((a, b) => (b.strength_score > a.strength_score ? b : a)).theme),
-      reason: g.reason,
-    }))
-  }
+  const outcome = applyMergeGroups(clusters, parsed?.merges ?? [])
+  base.clusters = outcome.clusters
+  base.applied = outcome.applied
+  base.rejectedGroups = outcome.rejectedGroups
 
   if (opts.logCall) {
     await logAiCall(createAdminClient(), {

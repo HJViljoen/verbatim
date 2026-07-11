@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
-import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, resolveGatherWindow, type SearchResult } from '@/lib/gather/gather'
+import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, resolveGatherWindow, inWindow, type SearchResult } from '@/lib/gather/gather'
 import { runPassA } from '@/lib/pipeline/pass-a'
 import { runStepA2 } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
@@ -341,9 +341,8 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   // Feeds run_summary's period_* columns; the full-corpus metrics above stay
   // the market-map state. (Teardown 2026-07-09 — cumulative-metrics fix.)
   const window = await resolveGatherWindow(clientId, runId, tc?.report_period ?? 'weekly')
-  const inWindow = (date: string | null | undefined) => !window.since || !date || date >= window.since
-  const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date))
-  const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date))
+  const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date, window.since))
+  const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments)
   const { data: client } = await admin.from('clients')
     .select('company_name').eq('id', clientId).maybeSingle()

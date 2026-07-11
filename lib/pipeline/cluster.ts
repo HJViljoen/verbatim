@@ -62,7 +62,7 @@ function embedInput(ins: InsightRow): string {
  *  size-weighted mean, so no pair is ever recomputed. O(n³) worst case —
  *  fine at Step A2's per-bucket sizes (≤ a few hundred insights).
  */
-function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
+export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
   const n = vecs.length
   const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
   // sim[a][b] = average cross-pair similarity between clusters a and b.
