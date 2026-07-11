@@ -1,10 +1,11 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost } from '../config'
+import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
+import { embedTexts, cosine } from './cluster'
 import type { AggregatedTheme, SovEntry } from './types'
 
 // Pass C — competitive analysis (Architecture/Analysis-Passes §Pass C). Single
@@ -194,11 +195,37 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
     return base
   }
 
+  // Citation-relevance floor, same treatment as Pass D-a (defect 1): a cited
+  // theme must be semantically related to the finding, not merely exist —
+  // the 2026-07-11 padding check found ~12% of Sealand's C refs below the
+  // floor. One embedding call covers all findings + cited themes; a failure
+  // throws (Inngest retries) — never fail-open into unvalidated refs.
+  let relevanceRejected = 0
+  const themeText = (t: AggregatedTheme) => `${t.label ?? t.theme}. ${t.description ?? ''}`.trim()
+  const keptRefs: string[][] = parsed.competitive_insights.map((ci) => ci.supporting_themes)
+  {
+    const citedLabels = [...new Set(keptRefs.flat().map((r) => r.toLowerCase().trim()))].filter((l) => byLabel.has(l))
+    if (citedLabels.length) {
+      const ciTexts = parsed.competitive_insights.map((ci) => `${ci.title}. ${ci.finding}`)
+      const vecs = await embedTexts([...ciTexts, ...citedLabels.map((l) => themeText(byLabel.get(l)!))])
+      const themeVec = new Map(citedLabels.map((l, i) => [l, vecs[ciTexts.length + i]]))
+      keptRefs.forEach((refs, i) => {
+        keptRefs[i] = refs.filter((r) => {
+          const v = themeVec.get(r.toLowerCase().trim())
+          if (!v) return true // unknown ref — counted and dropped below
+          if (cosine(vecs[i], v) >= CITATION_RELEVANCE_FLOOR) return true
+          relevanceRejected++
+          return false
+        })
+      })
+    }
+  }
+
   // Map T# refs to audience_insights UUIDs; count and drop unknown indices.
   let rejectedRefs = 0
-  const rows = parsed.competitive_insights.map((ci) => {
+  const rows = parsed.competitive_insights.map((ci, i) => {
     const supportingIds: string[] = []
-    for (const ref of ci.supporting_themes) {
+    for (const ref of keptRefs[i]) {
       const theme = byLabel.get(ref.toLowerCase().trim())
       if (!theme) {
         rejectedRefs++
@@ -231,7 +258,7 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
-      response: { insights: rows.length, rejected_refs: rejectedRefs },
+      response: { insights: rows.length, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected },
       error: null, usage, durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
