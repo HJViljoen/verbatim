@@ -184,7 +184,16 @@ export async function runStepA2(opts: RunStepA2Options): Promise<StepA2Result> {
       mergeCostUsd += m.costUsd
       for (const a of m.applied) mergesApplied.push({ bucket: grp.bucket, ...a })
     }
-    for (const cluster of clusters) all.push(aggregate(cluster, grp.bucket))
+    for (const cluster of clusters) {
+      const theme = aggregate(cluster, grp.bucket)
+      // Grab-bag tripwire: no genuine single consumer concern spans this many
+      // videos in a weekly corpus. A hit means the clustering is chaining
+      // again (the 119-video run-1 blob) — investigate, don't ship quietly.
+      if (theme.evidenceCount > 40) {
+        console.warn(`[a2] suspicious mega-cluster: [${grp.bucket}] "${theme.theme}" spans ${theme.evidenceCount} videos / ${theme.memberThemes.length} member slugs`)
+      }
+      all.push(theme)
+    }
   }
 
   // 5. Apply the evidence floor as a TIER, not a cut (Spec §8): below-floor

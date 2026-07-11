@@ -46,13 +46,19 @@ export const EMBEDDING_MODEL = 'text-embedding-3-small'
 /**
  * Cosine-similarity threshold for merging two insights into one theme cluster.
  * Higher = stricter (more, smaller clusters); lower = looser (fewer, broader).
- * Retuned 2026-06-28 on the full 3-platform Ossur run (84 insights): 0.55 fused
- * unrelated questions into one incoherent "cost" mega-cluster (22 slugs incl.
- * socket_comfort/amputation_cause), so drill-downs showed off-topic quotes. 0.62
- * splits that into a genuine cost theme + a functionality theme while preserving
- * the strong creative_design theme; 0.68+ starts dissolving creative_design.
+ *
+ * Retuned 2026-07-11 for AVERAGE-LINKAGE clustering (cluster.ts swapped off
+ * single-linkage union-find, whose transitive chaining built a 119-video
+ * grab-bag on the Sealand run-1 corpus). Under average linkage the threshold
+ * compares cluster-average similarity, so it sits lower than the old
+ * single-linkage 0.62. Calibrated on the regenerated Sealand run-1 insights
+ * (435): 0.50 re-grows 46–65-video grab-bags; 0.55 blurs seams (durability
+ * slugs in the gift cluster); 0.58 = coherent multi-video themes (price,
+ * design-praise, purchase-intent), no tripwire hits, residual duplicates left
+ * for the theme-merge pass; 0.62 over-fragments. (Historical single-linkage
+ * tuning 2026-06-28: 0.62 on the Ossur corpus — superseded with the linkage.)
  */
-export const CLUSTER_SIMILARITY_THRESHOLD = 0.62
+export const CLUSTER_SIMILARITY_THRESHOLD = 0.58
 
 /**
  * Cosine threshold for mini theme-matching (Redesign Spec §8): a latest-run

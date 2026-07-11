@@ -49,34 +49,52 @@ function embedInput(ins: InsightRow): string {
   return `${ins.theme.replace(/_/g, ' ')}. ${ins.description}`
 }
 
-/** Transitive single-linkage clustering via union-find: any pair at or above
- *  the threshold lands in the same cluster. Deterministic; fine for the small
- *  per-(bucket,category) group sizes Step A2 sees. */
-function unionFindClusters(n: number, linked: (i: number, j: number) => boolean): number[][] {
-  const parent = Array.from({ length: n }, (_, i) => i)
-  const find = (x: number): number => {
-    while (parent[x] !== x) {
-      parent[x] = parent[parent[x]]
-      x = parent[x]
+/** Average-linkage agglomerative clustering: two clusters merge only while the
+ *  AVERAGE similarity across all their cross-pairs clears the threshold.
+ *
+ *  Replaces the original union-find single-linkage (2026-07-11): single-linkage
+ *  merges transitively on any ONE qualifying pair, and in a large bucket the
+ *  generic bridge insights ("love this bag", "so beautiful") chain unrelated
+ *  themes into one grab-bag — the Sealand run-1 corpus produced a 119-video
+ *  "theme" that led the dashboard and inflated grounding counts. Average
+ *  linkage is the standard chaining fix: one bridge pair can no longer fuse
+ *  two unrelated groups. Cluster-cluster similarities update exactly via the
+ *  size-weighted mean, so no pair is ever recomputed. O(n³) worst case —
+ *  fine at Step A2's per-bucket sizes (≤ a few hundred insights).
+ */
+function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
+  const n = vecs.length
+  const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
+  // sim[a][b] = average cross-pair similarity between clusters a and b.
+  const sim: number[][] = vecs.map((vi) => vecs.map((vj) => cosine(vi, vj)))
+
+  for (;;) {
+    let bestA = -1
+    let bestB = -1
+    let bestSim = threshold
+    for (let a = 0; a < active.length; a++) {
+      for (let b = a + 1; b < active.length; b++) {
+        if (sim[a][b] >= bestSim) {
+          bestA = a
+          bestB = b
+          bestSim = sim[a][b]
+        }
+      }
     }
-    return x
-  }
-  const union = (a: number, b: number) => {
-    parent[find(a)] = find(b)
-  }
-  for (let i = 0; i < n; i++) {
-    for (let j = i + 1; j < n; j++) {
-      if (linked(i, j)) union(i, j)
+    if (bestA < 0) return active
+
+    // Merge B into A; update average similarity by size-weighted mean.
+    const sizeA = active[bestA].length
+    const sizeB = active[bestB].length
+    for (let c = 0; c < active.length; c++) {
+      if (c === bestA || c === bestB) continue
+      sim[bestA][c] = sim[c][bestA] = (sizeA * sim[bestA][c] + sizeB * sim[bestB][c]) / (sizeA + sizeB)
     }
+    active[bestA] = active[bestA].concat(active[bestB])
+    active.splice(bestB, 1)
+    sim.splice(bestB, 1)
+    for (const row of sim) row.splice(bestB, 1)
   }
-  const groups = new Map<number, number[]>()
-  for (let i = 0; i < n; i++) {
-    const root = find(i)
-    const g = groups.get(root)
-    if (g) g.push(i)
-    else groups.set(root, [i])
-  }
-  return [...groups.values()]
 }
 
 /** Pairwise similarity matrix for a homogeneous group (debug/threshold tuning). */
@@ -110,6 +128,6 @@ export async function clusterInsights(
   // embedding
   const threshold = opts.threshold ?? CLUSTER_SIMILARITY_THRESHOLD
   const vecs = await embedTexts(insights.map(embedInput))
-  const groups = unionFindClusters(insights.length, (i, j) => cosine(vecs[i], vecs[j]) >= threshold)
+  const groups = averageLinkageClusters(vecs, threshold)
   return groups.map((idxs) => idxs.map((i) => insights[i]))
 }
