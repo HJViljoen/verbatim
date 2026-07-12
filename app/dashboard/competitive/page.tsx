@@ -238,7 +238,7 @@ function ShareOfVoice({ sov, brand }: { sov: Share; brand: string }) {
           {segments.map((s, i) => (
             <div key={i} className="flex items-center gap-1.5 text-xs">
               <span className={`inline-block h-2.5 w-2.5 rounded-sm ${s.color}`} />
-              <span className="font-medium capitalize">{s.label}</span>
+              <span className="font-medium">{s.label}</span>
               <span className="text-muted-foreground">{pct(s.count)}% ({s.count})</span>
             </div>
           ))}
