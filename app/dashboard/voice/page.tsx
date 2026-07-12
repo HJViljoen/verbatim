@@ -164,6 +164,15 @@ export default async function VoiceOfCustomerPage({
   const early = singles.filter((t) => Number(t.strength_score ?? 0) >= CURATION_GATE.earlySignalMinScore)
   const heardOnce = singles.filter((t) => Number(t.strength_score ?? 0) < CURATION_GATE.earlySignalMinScore)
 
+  // ---- The shape of this update's corpus (unfiltered — describes the run) ----
+  // Most of what a market says is said once; the chart makes that honest and
+  // shows how much repetition sits behind the confirmed tier.
+  const confirmedAllCount = themes.filter((t) => !t.single_source).length
+  const earlyAllCount = themes.filter((t) => t.single_source && Number(t.strength_score ?? 0) >= CURATION_GATE.earlySignalMinScore).length
+  const onceAllCount = themes.length - confirmedAllCount - earlyAllCount
+  const shapeSorted = [...themes].sort((a, b) => b.evidence_count - a.evidence_count || Number(b.strength_score ?? 0) - Number(a.strength_score ?? 0))
+  const shapeMax = shapeSorted[0]?.evidence_count ?? 1
+
   // Category tabs with counts — over the whole run, so the row is stable while
   // a tab is active. Ordered by theme volume.
   const categoryCounts = new Map<string, number>()
@@ -224,6 +233,41 @@ export default async function VoiceOfCustomerPage({
         <CalibrationLegend items={showNew
           ? ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence', 'new']
           : ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
+      )}
+
+      {/* The shape of the conversation — every theme this update, by evidence */}
+      {!deepLinked && themes.length > 0 && (
+        <Card className="py-4">
+          <CardContent className="space-y-2">
+            <p className="text-sm">
+              <span className="font-bold tabular-nums">{themes.length}</span> themes heard this update
+              <span className="text-muted-foreground"> · </span>
+              <span className="font-semibold text-primary tabular-nums">{confirmedAllCount}</span> confirmed
+              <span className="text-muted-foreground"> · </span>
+              <span className="font-semibold text-warning tabular-nums">{earlyAllCount}</span> early signals
+              <span className="text-muted-foreground"> · </span>
+              <span className="font-semibold text-muted-foreground tabular-nums">{onceAllCount}</span> heard once
+            </p>
+            <div className="flex h-14 items-end gap-px">
+              {shapeSorted.map((t) => {
+                const tone = !t.single_source
+                  ? 'bg-primary/70'
+                  : Number(t.strength_score ?? 0) >= CURATION_GATE.earlySignalMinScore ? 'bg-warning/60' : 'bg-muted-foreground/25'
+                return (
+                  <div
+                    key={t.id}
+                    title={`${t.label} · ${t.evidence_count} conversation${t.evidence_count === 1 ? '' : 's'}`}
+                    className={`min-w-0 flex-1 rounded-t-sm ${tone}`}
+                    style={{ height: `${Math.max(7, Math.round((t.evidence_count / shapeMax) * 100))}%` }}
+                  />
+                )
+              })}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              every theme in this update, tallest first — most of what a market says is said once; what repeats is what matters
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Category tabs (demo layout) — URL-driven, shareable */}

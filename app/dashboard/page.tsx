@@ -160,10 +160,16 @@ export default async function DashboardPage({
   // from videos/comments here, so every page shows the same figures.
   let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
-  const [summaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
+  const [summaryRes, prevSummaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
     supabase.from('run_summary')
       .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
       .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
+    // The update before this one — every "since last update" delta self-gates
+    // on this row existing, so first runs simply show no comparison.
+    supabase.from('run_summary')
+      .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
+      .eq('client_id', clientId).neq('run_id', runId)
+      .order('run_date', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('audience_insights')
       .select('id, category, theme, description, strength_score, emotion')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -181,6 +187,7 @@ export default async function DashboardPage({
 
   const audienceInsights = (aiRes.data ?? []) as AudienceInsight[]
   const summary = (summaryRes.data ?? null) as RunSummaryRow | null
+  const prevSummary = (prevSummaryRes.data ?? null) as RunSummaryRow | null
   const commentCount = Number(summary?.total_comments ?? 0)
   // New conversations gathered by this update — distinct from the all-time
   // corpus, so the coverage line never passes a cumulative total off as fresh.
@@ -248,6 +255,21 @@ export default async function DashboardPage({
     ...competitorSegs,
     ...(restEntry ? [{ label: 'Rest of category', count: restEntry.videos, pct: Math.round(Number(restEntry.pct_videos)), color: 'bg-input' }] : []),
   ].filter((s) => s.count > 0)
+
+  // ---- "Since last update" deltas + competitor reference point ----
+  // Numbers rule: counted, denominated, comparable. The comparator is a real
+  // reference (top competitor now; the previous update once one exists).
+  const prevVs = prevSummary?.sentiment_drivers?.video_sentiment_counts ?? {}
+  const prevJudged =
+    Number(prevSummary?.sentiment_drivers?.videos_judged ?? 0) ||
+    Number(prevVs.positive ?? 0) + Number(prevVs.neutral ?? 0) + Number(prevVs.mixed ?? 0) + Number(prevVs.negative ?? 0)
+  const prevPositiveShare = prevSummary && prevJudged > 0 ? pctOf(Number(prevVs.positive ?? 0), prevJudged) : null
+  const prevClientShare = prevSummary?.share_of_voice?.client
+    ? Math.round(Number(prevSummary.share_of_voice.client.pct_videos))
+    : null
+  const sentimentDelta = positiveShare != null && prevPositiveShare != null ? positiveShare - prevPositiveShare : null
+  const shareDelta = clientShare != null && prevClientShare != null ? clientShare - prevClientShare : null
+  const topCompetitor = competitorSegs[0] ?? null
 
   const emotionCounts = new Map<string, number>()
   for (const i of audienceInsights) {
@@ -378,6 +400,20 @@ export default async function DashboardPage({
         detailHref={funnelSteps.length > 0 ? '/dashboard?detail=funnel' : null}
       />
 
+      {/* This update, in counted figures — deltas appear once a previous update exists */}
+      <StatBand
+        tiles={[
+          summary?.period_videos
+            ? { n: Number(summary.period_videos), label: 'conversations this update', delta: prevSummary?.period_videos ? Number(summary.period_videos) - Number(prevSummary.period_videos) : null }
+            : null,
+          newCommentCount > 0
+            ? { n: newCommentCount, label: 'new comments', delta: prevSummary?.period_comments ? newCommentCount - Number(prevSummary.period_comments) : null }
+            : null,
+          themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed themes', delta: null } : null,
+          (recRes.data ?? []).length > 0 ? { n: (recRes.data ?? []).length, label: 'recommendations', delta: null } : null,
+        ].filter(Boolean) as StatTile[]}
+      />
+
       {sentTier && (
         <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']} />
       )}
@@ -399,6 +435,7 @@ export default async function DashboardPage({
                   {SENTIMENT_TIER_LABEL[sentTier]}
                 </span>
               )}
+              <DeltaBadge delta={sentimentDelta} unit="pts" />
             </div>
             {sentimentSegments.length > 0 ? (
               <>
@@ -422,7 +459,10 @@ export default async function DashboardPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-3xl font-bold">{clientShare != null ? `${clientShare}%` : '—'}</div>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <div className="text-3xl font-bold">{clientShare != null ? `${clientShare}%` : '—'}</div>
+              <DeltaBadge delta={shareDelta} unit="pts" />
+            </div>
             {shareSegments.length > 0 ? (
               <>
                 <ProportionBar segments={shareSegments} of="conversations" />
@@ -432,6 +472,13 @@ export default async function DashboardPage({
               <p className="text-xs text-muted-foreground">no competitors tracked yet</p>
             )}
             {clientShare != null && <p className="text-xs text-muted-foreground">of the conversation you track is about {brand}</p>}
+            {clientShare != null && topCompetitor && (
+              <p className="text-xs text-muted-foreground">
+                {clientShare >= topCompetitor.pct
+                  ? `you lead the tracked brands — ${topCompetitor.label} follows at ${topCompetitor.pct}%`
+                  : `${topCompetitor.label} leads the tracked brands at ${topCompetitor.pct}%`}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -568,6 +615,45 @@ export default async function DashboardPage({
         </DetailOverlay>
       )}
     </div>
+  )
+}
+
+interface StatTile { n: number; label: string; delta: number | null }
+
+/** Bold counted figures for this update; each grows a delta once comparable. */
+function StatBand({ tiles }: { tiles: StatTile[] }) {
+  if (tiles.length < 2) return null
+  return (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      {tiles.map((t) => (
+        <Card key={t.label} className="py-4">
+          <CardContent className="space-y-0.5">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-2xl font-bold tabular-nums">{t.n.toLocaleString('en-US')}</span>
+              <DeltaBadge delta={t.delta} />
+            </div>
+            <p className="text-xs text-muted-foreground">{t.label}</p>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+/** "Since last update" movement — renders nothing until a previous update exists. */
+function DeltaBadge({ delta, unit }: { delta: number | null; unit?: string }) {
+  if (delta == null) return null
+  const suffix = unit ? ` ${unit}` : ''
+  if (delta === 0) {
+    return <span className="text-xs font-medium text-muted-foreground" title="no change since your last update">— unchanged</span>
+  }
+  return (
+    <span
+      title="movement since your last update"
+      className={`text-xs font-semibold ${delta > 0 ? 'text-positive' : 'text-negative'}`}
+    >
+      {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toLocaleString('en-US')}{suffix}
+    </span>
   )
 }
 
