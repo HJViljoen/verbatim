@@ -92,6 +92,7 @@ export const SENTIMENT_TIER_RULE: Record<SentimentTier, string> = {
 // renders the same lines, so tooltip and legend can never drift apart.
 
 export const GLOSSARY = {
+  conversations: ['Conversations', 'one video and the comments it sparked — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
   dominant: ['Dominant', "at least 40% of the group's analysed conversations (minimum 10)"],
   widespread: ['Widespread', "at least 15% of the group's analysed conversations (minimum 5)"],
   recurring: ['Recurring', 'heard in more than one conversation, below Widespread'],

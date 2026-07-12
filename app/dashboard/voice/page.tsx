@@ -115,7 +115,13 @@ export default async function VoiceOfCustomerPage({
   }
   const groupSize = (bucket: string) => groupConversations.get(bucket)?.size ?? 0
   const groupName = (bucket: string) =>
-    bucket === 'client' ? brand : bucket === 'industry-other' ? 'industry' : bucket.replace(/^competitor:/, '')
+    bucket === 'client' ? brand : bucket === 'industry-other' ? 'category' : bucket.replace(/^competitor:/, '')
+  // Human wording for the entity-bucket chip — raw bucket values ("industry-other",
+  // "competitor:X") are pipeline vocabulary and never client-facing.
+  const bucketChip = (bucket: string) =>
+    bucket === 'client' ? 'Your audience'
+      : bucket === 'industry-other' ? 'Wider category'
+        : `${bucket.replace(/^competitor:/, '')}’s audience`
   const stageByInsight = new Map(
     ((insightsRes.data ?? []) as { id: string; journey_stage: string | null }[]).map((i) => [i.id, i.journey_stage]),
   )
@@ -182,8 +188,8 @@ export default async function VoiceOfCustomerPage({
 
       {themes.length > 0 && (
         <CalibrationLegend items={showNew
-          ? ['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence', 'new']
-          : ['dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
+          ? ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence', 'new']
+          : ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal', 'strong_evidence']} />
       )}
 
       {/* Category tabs (demo layout) — URL-driven, shareable */}
@@ -223,9 +229,7 @@ export default async function VoiceOfCustomerPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <span title={glossaryRule(prevalence)} className={`${chipBase} ${PREVALENCE_BADGE[prevalence]}`}>{PREVALENCE_LABEL[prevalence]}</span>
                       <span className={`${chipBase} capitalize ${categoryTint(t.category)}`}>{prettyType(t.category)}</span>
-                      {t.bucket !== 'client' && (
-                        <span className={`${chipBase} capitalize bg-muted text-muted-foreground`}>{t.bucket}</span>
-                      )}
+                      <span className={`${chipBase} bg-muted text-muted-foreground`}>{bucketChip(t.bucket)}</span>
                       {t.dominant_emotion && (
                         <span className={`${chipBase} capitalize ${categoryTint(t.dominant_emotion)}`}>{t.dominant_emotion}</span>
                       )}

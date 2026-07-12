@@ -186,8 +186,8 @@ export default async function DashboardPage() {
       : null,
     commentCount > 0
       ? newCommentCount > 0 && newCommentCount !== commentCount
-        ? `${newCommentCount.toLocaleString('en-US')} new conversations this update · ${commentCount.toLocaleString('en-US')} analysed to date`
-        : `${commentCount.toLocaleString('en-US')} conversations analysed to date`
+        ? `${newCommentCount.toLocaleString('en-US')} new comments this update · ${commentCount.toLocaleString('en-US')} analysed to date`
+        : `${commentCount.toLocaleString('en-US')} comments analysed to date`
       : null,
     latestVid?.scraped_at ? `data through ${shortDate(latestVid.scraped_at as string)}` : null,
     nextUpdate,
@@ -344,7 +344,7 @@ export default async function DashboardPage() {
       <HeroBand line={lineParts.length ? lineParts.join(' · ') : null} />
 
       {sentTier && (
-        <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['sentiment', 'new'] : ['sentiment']} />
+        <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']} />
       )}
 
       {/* Where you stand */}
@@ -390,7 +390,7 @@ export default async function DashboardPage() {
             <div className="text-3xl font-bold">{clientShare != null ? `${clientShare}%` : '—'}</div>
             {shareSegments.length > 0 ? (
               <>
-                <ProportionBar segments={shareSegments} of="videos" />
+                <ProportionBar segments={shareSegments} of="conversations" />
                 <BarLegend segments={shareSegments} />
               </>
             ) : (
@@ -412,7 +412,7 @@ export default async function DashboardPage() {
             {topEmotions.length > 0 ? (
               <div className="space-y-1.5">
                 {topEmotions.map(([emotion, n]) => (
-                  <div key={emotion} className="flex items-center gap-2" title={`${cap(emotion)} · ${n} insight${n === 1 ? '' : 's'}`}>
+                  <div key={emotion} className="flex items-center gap-2" title={`${cap(emotion)} · ${n} mention${n === 1 ? '' : 's'} this update`}>
                     <span className="w-20 shrink-0 text-xs capitalize text-muted-foreground">{emotion}</span>
                     {/* bar needs its own track: a % width on the row itself gets flex-shrunk
                         to the same leftover space for every row on narrow screens */}
@@ -425,6 +425,9 @@ export default async function DashboardPage() {
               </div>
             ) : (
               <p className="text-xs text-muted-foreground">lands with the next update</p>
+            )}
+            {topEmotions.length > 0 && (
+              <p className="text-xs text-muted-foreground">how often each feeling is mentioned this update</p>
             )}
           </CardContent>
         </Card>

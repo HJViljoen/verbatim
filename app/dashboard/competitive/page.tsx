@@ -1,6 +1,7 @@
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
+import { CalibrationLegend } from '@/components/calibration-legend'
 import { Quotes } from '@/components/quotes'
 import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToCompetitor, type ThemeBucketRow } from '@/lib/quotes'
 
@@ -63,14 +64,16 @@ export default async function CompetitiveIntelligencePage() {
   // Insights + grounding themes for this run; Share of Tracked Conversation
   // comes from run_summary (the pipeline's corpus-computed snapshot — the
   // numbers rule: never recounted per page, and owned-account posts stay out).
-  const [{ data: ciData }, { data: aiData }, { data: summaryData }, { data: bucketData }] = await Promise.all([
+  const [{ data: ciData }, { data: aiData }, { data: summaryData }, { data: bucketData }, { data: clientRow }] = await Promise.all([
     supabase.from('competitive_insights').select('*').eq('client_id', clientId).eq('run_id', runId),
     supabase.from('audience_insights').select('id, category, theme, description').eq('client_id', clientId).eq('run_id', runId),
     supabase.from('run_summary').select('total_videos, share_of_voice').eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
     // Entity buckets per audience insight — a card about a competitor quotes
     // THAT competitor's audience, never the client's own customers.
     supabase.from('themes').select('bucket, supporting_insight_ids').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
+  const brand = (clientRow?.company_name as string | undefined) ?? 'Your brand'
 
   const insights = (ciData ?? []) as CompetitiveInsight[]
   const audienceInsights = (aiData ?? []) as AudienceInsight[]
@@ -115,8 +118,9 @@ export default async function CompetitiveIntelligencePage() {
   const otherItems = insights.filter((c) => !CATEGORY_ORDER.includes(c.category as typeof CATEGORY_ORDER[number]))
 
   return (
-    <Shell subtitle={`${insights.length} competitive insight${insights.length === 1 ? '' : 's'} · ${sov.competitorCount} tracked competitor${sov.competitorCount === 1 ? '' : 's'} · latest run`}>
-      <ShareOfVoice sov={sov} />
+    <Shell subtitle={`${insights.length} competitive insight${insights.length === 1 ? '' : 's'} · ${sov.competitorCount} tracked competitor${sov.competitorCount === 1 ? '' : 's'} · this update`}>
+      <CalibrationLegend items={['conversations']} />
+      <ShareOfVoice sov={sov} brand={brand} />
 
       {insights.length === 0 ? (
         <EmptyInsights sov={sov} />
@@ -153,7 +157,10 @@ function InsightCard({ ci, support, quotes }: { ci: CompetitiveInsight; support:
             <span className={`${chipBase} ${categoryTint(ci.category)}`}>{prettyType(ci.category)}</span>
           </div>
           {ci.impact_level && (
-            <span className={`${chipBase} shrink-0 ${levelBadge(ci.impact_level)}`}>{ci.impact_level} impact</span>
+            <span
+              title="The analysis's judgment of likely effect on your position — a read on the finding, not a counted measure."
+              className={`${chipBase} shrink-0 ${levelBadge(ci.impact_level)}`}
+            >{ci.impact_level} impact</span>
           )}
         </div>
       </CardHeader>
@@ -205,12 +212,12 @@ function shareFromSummary(summary: SummaryShareRow | null): Share {
   }
 }
 
-function ShareOfVoice({ sov }: { sov: Share }) {
+function ShareOfVoice({ sov, brand }: { sov: Share; brand: string }) {
   const pct = (n: number) => (sov.total ? Math.round((n / sov.total) * 1000) / 10 : 0)
   const segments = [
-    { label: 'Your brand', count: sov.client, color: 'bg-primary' },
+    { label: brand, count: sov.client, color: 'bg-primary' },
     ...sov.competitors.map((c, i) => ({ label: c.name, count: c.count, color: accentSolid(i) })),
-    { label: 'Industry', count: sov.industry, color: 'bg-muted-foreground/40' },
+    { label: 'Rest of category', count: sov.industry, color: 'bg-muted-foreground/40' },
   ].filter((s) => s.count > 0)
 
   return (
@@ -218,7 +225,7 @@ function ShareOfVoice({ sov }: { sov: Share }) {
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Share of Tracked Conversation</CardTitle>
         <p className="text-xs text-muted-foreground">
-          Share of {sov.total.toLocaleString()} tracked videos by brand. Scoped to your tracked keywords — not comprehensive web share of voice.
+          Share of {sov.total.toLocaleString()} tracked conversations by brand. Scoped to your tracked keywords — not comprehensive web share of voice.
         </p>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -269,15 +276,15 @@ function EmptyRun() {
 
 function EmptyInsights({ sov }: { sov: Share }) {
   const reason = sov.competitorCount === 0
-    ? 'No competitor-tagged content cleared analysis this run — competitor accounts are typically comment-deserts, so the consumer voice about them lives in creator/industry content that isn’t yet attributed to a competitor.'
-    : 'Competitor content was tracked, but not enough of it cleared the comment bar to form a comparable theme — so Pass C had a single effective bucket and skipped cross-brand analysis.'
+    ? 'No competitor-tagged content cleared analysis this update — competitor accounts typically attract few comments, so the consumer voice about them lives in creator and category content that isn’t yet attributed to a competitor.'
+    : 'Competitor content was tracked, but not enough of it drew comments to form a comparable theme — so there was only one brand group to read, and cross-brand analysis was skipped this update.'
   return (
     <Card>
       <CardContent className="py-8 space-y-2 text-sm text-muted-foreground">
-        <p className="font-medium text-foreground">No cross-brand insights for this run.</p>
+        <p className="font-medium text-foreground">No cross-brand insights this update.</p>
         <p>
           Competitive intelligence compares your brand against tracked competitors using their customers’ comments.
-          It needs at least two entity buckets with enough comment-bearing content.
+          It needs at least two brands’ audiences with enough comment-bearing content.
         </p>
         <p>{reason}</p>
         <p className="text-xs">The Share of Tracked Conversation above shows the current bucket balance.</p>

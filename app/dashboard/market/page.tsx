@@ -257,7 +257,7 @@ export default async function MarketIntelligencePage() {
       {nothingYet && <EmptyState />}
 
       {!nothingYet && (
-        <CalibrationLegend items={['act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']} />
+        <CalibrationLegend items={['conversations', 'act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']} />
       )}
 
       {/* The short read — consumer-intelligence summary (spec §3.1) */}
@@ -379,7 +379,9 @@ function ShortRead({ s }: { s: CiSummary }) {
   const cols = [
     { label: 'Unmet needs', items: s.top_unmet_needs, dot: 'bg-clay' },
     { label: 'Buying triggers', items: s.top_buying_triggers, dot: 'bg-pine' },
-    { label: 'Your differentiators', items: s.top_differentiators, dot: 'bg-plum' },
+    // "Who stands out" not "Your differentiators": Pass D's list includes
+    // competitor standouts, so a "your" heading would mislabel two-thirds of it.
+    { label: 'Who stands out', items: s.top_differentiators, dot: 'bg-plum' },
   ].filter((c) => (c.items?.length ?? 0) > 0)
   const threats = s.threats ?? []
   return (
