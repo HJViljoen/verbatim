@@ -210,6 +210,18 @@ export default async function VoiceOfCustomerPage({
     return out
   }
 
+  // Theme history for the overlay — same-label rows across earlier runs
+  // (labels are how Trends joins trajectories too). Self-gates: with one
+  // themed run there is no history and nothing renders.
+  let detailHistory: number[] = []
+  if (detailTheme) {
+    const { data: hist } = await supabase.from('themes')
+      .select('evidence_count, created_at')
+      .eq('client_id', clientId).eq('label', detailTheme.label)
+      .order('created_at', { ascending: true })
+    detailHistory = ((hist ?? []) as { evidence_count: number }[]).map((h) => h.evidence_count)
+  }
+
   // Hrefs that preserve the active filters; detail=… opens a theme's overlay.
   const voiceHref = (detail: string | null) => {
     const params = new URLSearchParams()
@@ -464,6 +476,14 @@ export default async function VoiceOfCustomerPage({
                     heard in {detailTheme.evidence_count} of {denom} {groupName(detailTheme.bucket)} conversations
                   </p>
                 </div>
+                {detailHistory.length >= 2 && (
+                  <div className="flex items-center gap-3 border-t pt-3">
+                    <span className="text-primary"><Sparkline values={detailHistory} /></span>
+                    <p className="text-[10px] text-muted-foreground">
+                      conversations per update, across the {detailHistory.length} updates this theme has appeared in
+                    </p>
+                  </div>
+                )}
                 {quotes.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium">The voices behind it</p>
@@ -508,6 +528,21 @@ function ThemeChips({ t, tier, prevalence, showNew, bucketLabel }: {
         <span title={glossaryRule('new')} className={`${chipBase} font-semibold bg-warning/15 text-warning`}>New</span>
       )}
     </div>
+  )
+}
+
+/** Tiny evidence-over-updates line for the overlay (Trends' sparkline shape). */
+function Sparkline({ values }: { values: number[] }) {
+  const W = 96, H = 32, p = 4
+  const min = Math.min(...values), max = Math.max(...values)
+  const x = (i: number) => p + (values.length === 1 ? 0 : (i / (values.length - 1)) * (W - 2 * p))
+  const y = (v: number) => p + (1 - (v - min) / ((max - min) || 1)) * (H - 2 * p)
+  const line = values.map((v, i) => `${x(i)},${y(v)}`).join(' ')
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-8 w-24" preserveAspectRatio="none" aria-hidden>
+      <polyline points={line} fill="none" stroke="currentColor" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={x(values.length - 1)} cy={y(values[values.length - 1])} r={2.5} fill="currentColor" />
+    </svg>
   )
 }
 

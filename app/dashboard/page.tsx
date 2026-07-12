@@ -393,6 +393,27 @@ export default async function DashboardPage({
   ].filter(Boolean) as { n: number; label: string }[]
   const showFunnel = sp.detail === 'funnel' && funnelSteps.length > 0
 
+  // Keyword coverage for the funnel overlay — fetched only when it's open.
+  // Keyword rows live on the run whose GATHER produced them, and analysis-only
+  // re-runs skip gather, so anchor on the newest run that has rows.
+  let keywordCoverage: { keyword: string; found: number; relevant: number }[] = []
+  if (showFunnel) {
+    const { data: kpRows } = await supabase.from('keyword_performance')
+      .select('run_id, keyword, videos_found, gate_survived, created_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false }).limit(400)
+    const rows = (kpRows ?? []) as { run_id: string; keyword: string; videos_found: number; gate_survived: number }[]
+    const latestKpRun = rows[0]?.run_id
+    const byKeyword = new Map<string, { keyword: string; found: number; relevant: number }>()
+    for (const r of rows.filter((r) => r.run_id === latestKpRun)) {
+      const agg = byKeyword.get(r.keyword) ?? { keyword: r.keyword, found: 0, relevant: 0 }
+      agg.found += r.videos_found
+      agg.relevant += r.gate_survived
+      byKeyword.set(r.keyword, agg)
+    }
+    keywordCoverage = [...byKeyword.values()].sort((a, b) => b.relevant - a.relevant)
+  }
+
   return (
     <div className="space-y-8">
       <HeroBand
@@ -608,6 +629,28 @@ export default async function DashboardPage({
                 </li>
               ))}
             </ol>
+            {keywordCoverage.length > 0 && (
+              <div className="space-y-1.5 border-t pt-3">
+                <p className="text-xs font-medium">What each search term brought in</p>
+                {keywordCoverage.map((k) => (
+                  <div key={k.keyword} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate">{k.keyword}</span>
+                    <span className="flex shrink-0 items-center gap-2 tabular-nums text-muted-foreground">
+                      <span className="inline-block h-1.5 w-14 overflow-hidden rounded-full bg-muted" aria-hidden>
+                        <span
+                          className="block h-full rounded-full bg-primary/60"
+                          style={{ width: `${k.found > 0 ? Math.max(4, Math.round((k.relevant / k.found) * 100)) : 0}%` }}
+                        />
+                      </span>
+                      <span>{k.found} found · {k.relevant} relevant{k.found > 0 ? ` (${Math.round((k.relevant / k.found) * 100)}%)` : ''}</span>
+                    </span>
+                  </div>
+                ))}
+                <p className="text-[10px] text-muted-foreground">
+                  counted when this update was gathered — relevance is the automated on-topic check every conversation must clear
+                </p>
+              </div>
+            )}
             <p className="text-[10px] text-muted-foreground">
               a conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation
             </p>
