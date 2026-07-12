@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
 import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, glossaryRule } from '@/lib/calibration'
 import { CalibrationLegend } from '@/components/calibration-legend'
+import { DetailOverlay } from '@/components/detail-overlay'
 import { Quotes } from '@/components/quotes'
 import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToClientVoices, type ThemeBucketRow } from '@/lib/quotes'
 
@@ -33,7 +34,8 @@ interface SovEntry {
 interface RunSummaryRow {
   total_videos: number | null
   total_comments: number | null
-  /** Comments gathered by this run only (null on pre-2026-07-09 rows). */
+  /** Videos/comments gathered by this run only (null on pre-2026-07-09 rows). */
+  period_videos: number | null
   period_comments: number | null
   share_of_voice: Record<string, SovEntry> | null
   sentiment_drivers: { video_sentiment_counts?: Record<string, number>; videos_judged?: number } | null
@@ -98,7 +100,12 @@ function listNames(platforms: string[]): string {
 const shortDate = (iso: string) =>
   new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(iso))
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ detail?: string }>
+}) {
+  const sp = (await searchParams) ?? {}
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
@@ -155,7 +162,7 @@ export default async function DashboardPage() {
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   const [summaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
     supabase.from('run_summary')
-      .select('total_videos, total_comments, period_comments, share_of_voice, sentiment_drivers')
+      .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
       .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
     supabase.from('audience_insights')
       .select('id, category, theme, description, strength_score, emotion')
@@ -254,6 +261,9 @@ export default async function DashboardPage() {
   // slug-level grouping of audience_insights for runs before it existed. "New"
   // badges only when an earlier themed run exists to compare against.
   let topThemes: TopTheme[] = []
+  // Counted for the "how this update was built" funnel overlay.
+  let themeTotal = 0
+  let themeMultiSource = 0
   const themedRunId = latestThemedRes.data?.run_id as string | undefined
   if (themedRunId) {
     const [{ data: themeRows }, { data: earlier }] = await Promise.all([
@@ -264,6 +274,8 @@ export default async function DashboardPage() {
         .eq('client_id', clientId).neq('run_id', themedRunId).limit(1),
     ])
     const showNew = (earlier?.length ?? 0) > 0
+    themeTotal = (themeRows ?? []).length
+    themeMultiSource = ((themeRows ?? []) as ThemeRow[]).filter((t) => t.evidence_count >= 2).length
     topThemes = ((themeRows ?? []) as ThemeRow[])
       .sort((a, b) => b.evidence_count * (b.strength_score ?? 0) - a.evidence_count * (a.strength_score ?? 0))
       .slice(0, 3)
@@ -339,9 +351,32 @@ export default async function DashboardPage() {
     oneThingQuotes = pick(scopedIds, 2, claim, oneThing.hero_quote)
   }
 
+  // ---- "How this update was built" — the counted evidence funnel ----
+  // Every row is a stored figure (tracking config, run_summary, themes) —
+  // the credibility answer to "where do these numbers come from?".
+  const funnelSteps = [
+    keywordCount > 0 && tc?.platforms?.length
+      ? { n: keywordCount, label: `search terms tracked across ${listNames(tc.platforms)}` }
+      : null,
+    summary?.total_videos
+      ? { n: Number(summary.total_videos), label: 'conversations gathered into your tracked corpus' }
+      : null,
+    commentCount > 0 ? { n: commentCount, label: 'comments analysed inside them' } : null,
+    summary?.period_videos
+      ? { n: Number(summary.period_videos), label: 'conversations from this update’s period' }
+      : null,
+    analysedCount > 0 ? { n: analysedCount, label: 'conversations rated for sentiment' } : null,
+    themeTotal > 0 ? { n: themeTotal, label: 'themes heard across the conversation' } : null,
+    themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed by more than one conversation' } : null,
+  ].filter(Boolean) as { n: number; label: string }[]
+  const showFunnel = sp.detail === 'funnel' && funnelSteps.length > 0
+
   return (
     <div className="space-y-8">
-      <HeroBand line={lineParts.length ? lineParts.join(' · ') : null} />
+      <HeroBand
+        line={lineParts.length ? lineParts.join(' · ') : null}
+        detailHref={funnelSteps.length > 0 ? '/dashboard?detail=funnel' : null}
+      />
 
       {sentTier && (
         <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']} />
@@ -509,16 +544,48 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      {/* "How this update was built" — counted provenance, one click off the hero */}
+      {showFunnel && (
+        <DetailOverlay closeHref="/dashboard">
+          <div className="space-y-4 pr-6">
+            <div>
+              <h3 className="text-lg font-semibold">How this update was built</h3>
+              <p className="text-xs text-muted-foreground">every figure below is counted from stored data — nothing is estimated</p>
+            </div>
+            <ol className="space-y-2.5 border-l-2 border-primary/20 pl-4">
+              {funnelSteps.map((s) => (
+                <li key={s.label} className="flex items-baseline gap-3">
+                  <span className="w-16 shrink-0 text-right text-xl font-bold tabular-nums">{s.n.toLocaleString('en-US')}</span>
+                  <span className="text-sm text-muted-foreground">{s.label}</span>
+                </li>
+              ))}
+            </ol>
+            <p className="text-[10px] text-muted-foreground">
+              a conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation
+            </p>
+          </div>
+        </DetailOverlay>
+      )}
     </div>
   )
 }
 
 /** The deep-green welcome hero — the page's single stat-hero element. */
-function HeroBand({ line }: { line: string | null }) {
+function HeroBand({ line, detailHref }: { line: string | null; detailHref?: string | null }) {
   return (
     <div className="stat-hero rounded-2xl px-6 py-8 sm:px-10 sm:py-12">
       <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">What your market is saying</h1>
       {line && <p className="mt-3 text-sm text-[#CFE3D6]">{line}</p>}
+      {detailHref && (
+        <Link
+          href={detailHref}
+          scroll={false}
+          className="mt-2 inline-block text-xs text-[#CFE3D6] underline decoration-[#CFE3D6]/50 underline-offset-4 hover:text-white"
+        >
+          How this update was built →
+        </Link>
+      )}
     </div>
   )
 }
