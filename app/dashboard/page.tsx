@@ -32,6 +32,7 @@ interface SovEntry {
 /** The state numbers, straight from run_summary — the numbers rule: displayed
  *  values come from the pipeline's computed snapshot, never re-derived here. */
 interface RunSummaryRow {
+  run_id?: string
   total_videos: number | null
   total_comments: number | null
   /** Videos/comments gathered by this run only (null on pre-2026-07-09 rows). */
@@ -167,7 +168,7 @@ export default async function DashboardPage({
     // The update before this one — every "since last update" delta self-gates
     // on this row existing, so first runs simply show no comparison.
     supabase.from('run_summary')
-      .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
+      .select('run_id, total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
       .eq('client_id', clientId).neq('run_id', runId)
       .order('run_date', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('audience_insights')
@@ -189,6 +190,22 @@ export default async function DashboardPage({
   const summary = (summaryRes.data ?? null) as RunSummaryRow | null
   const prevSummary = (prevSummaryRes.data ?? null) as RunSummaryRow | null
   const commentCount = Number(summary?.total_comments ?? 0)
+
+  // Previous-update counts for the themes/recommendations tiles — anchored on
+  // the same "last update" (prevSummary's run) as every other delta. A zero
+  // prev count means that run predates the themes pipeline: no comparison.
+  let prevThemeCount = 0
+  let prevRecCount = 0
+  if (prevSummary?.run_id) {
+    const [prevThemesRes, prevRecsRes] = await Promise.all([
+      supabase.from('themes').select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('run_id', prevSummary.run_id).gte('evidence_count', 2),
+      supabase.from('recommendations').select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('run_id', prevSummary.run_id),
+    ])
+    prevThemeCount = prevThemesRes.count ?? 0
+    prevRecCount = prevRecsRes.count ?? 0
+  }
   // New conversations gathered by this update — distinct from the all-time
   // corpus, so the coverage line never passes a cumulative total off as fresh.
   const newCommentCount = Number(summary?.period_comments ?? 0)
@@ -440,8 +457,12 @@ export default async function DashboardPage({
           newCommentCount > 0
             ? { n: newCommentCount, label: 'new comments', delta: prevSummary?.period_comments ? newCommentCount - Number(prevSummary.period_comments) : null }
             : null,
-          themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed themes', delta: null } : null,
-          (recRes.data ?? []).length > 0 ? { n: (recRes.data ?? []).length, label: 'recommendations', delta: null } : null,
+          themeMultiSource > 0
+            ? { n: themeMultiSource, label: 'confirmed themes', delta: prevThemeCount > 0 ? themeMultiSource - prevThemeCount : null }
+            : null,
+          (recRes.data ?? []).length > 0
+            ? { n: (recRes.data ?? []).length, label: 'recommendations', delta: prevRecCount > 0 ? (recRes.data ?? []).length - prevRecCount : null }
+            : null,
         ].filter(Boolean) as StatTile[]}
       />
 

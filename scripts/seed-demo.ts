@@ -571,6 +571,10 @@ async function insertRunSummary(w: WeekSpec, prev: WeekSpec | null): Promise<voi
     top_video_platform: null,
     share_of_voice: sov,
     platforms_summary: platformsSummary(w),
+    // Period slice: the baseline week gathers everything; later weeks add the
+    // week-over-week growth. Feeds the dashboard's volume tiles + their deltas.
+    period_videos: prev ? w.totalVideos - prev.totalVideos : w.totalVideos,
+    period_comments: prev ? w.totalComments - prev.totalComments : w.totalComments,
     overall_sentiment_positive: w.pos,
     overall_sentiment_neutral: w.neu,
     overall_sentiment_negative: w.neg,
@@ -609,6 +613,8 @@ async function insertRunSummaryW6(w: WeekSpec, prev: WeekSpec, actual: W6Actual)
     top_video_platform: m.top_video_platform,
     share_of_voice: m.share_of_voice,
     platforms_summary: m.platforms_summary,
+    period_videos: m.total_videos - prev.totalVideos,
+    period_comments: m.total_comments - prev.totalComments,
     overall_sentiment_positive: actual.pos,
     overall_sentiment_neutral: actual.neu,
     overall_sentiment_negative: actual.neg,
@@ -731,6 +737,36 @@ async function insertCarriedThemes(w: WeekSpec): Promise<void> {
   if (themeRows.length) await insertRows('themes', themeRows)
 }
 
+// W5-only background themes: the dashboard's "confirmed themes" tile diffs the
+// current run against the previous one, so the week before W6 needs a
+// realistic confirmed count (4 carried + these 11 = 15 vs W6's 17 → "▲ 2").
+// Labels are unique to W5 → one-point trajectories, invisible on Trends.
+const W5_BACKGROUND_THEMES: Array<[label: string, category: string, emotion: string, evidence: number]> = [
+  ['Insurance paperwork frustration', 'pain_point', 'frustrated', 6],
+  ['Praise for clinic support staff', 'praise', 'joyful', 5],
+  ['Questions about waterproof use', 'question', 'curious', 4],
+  ['Curiosity about running blades', 'question', 'curious', 4],
+  ['Sleeve comfort in hot weather', 'pain_point', 'frustrated', 3],
+  ['Asking where to get fitted', 'question', 'curious', 3],
+  ['Recovery timeline questions', 'question', 'hopeful', 3],
+  ['Praise for lightweight design', 'praise', 'joyful', 2],
+  ['Sharing rehab progress', 'demographic_signal', 'hopeful', 2],
+  ['Concerns about part replacements', 'question', 'curious', 2],
+  ['Interest in sports prosthetics', 'purchase_intent', 'excited', 2],
+]
+
+async function insertW5BackgroundThemes(w: WeekSpec): Promise<void> {
+  if (w.week !== 'W5') return
+  const stamp = iso(w.runDate)
+  await insertRows('themes', W5_BACKGROUND_THEMES.map(([label, category, emotion, evidence]) => ({
+    id: randomUUID(), client_id: DEMO_CLIENT_ID, run_id: w.runId,
+    bucket: 'industry-other', category, label,
+    description: null, member_themes: [slug(label)], supporting_insight_ids: [], supporting_video_ids: [],
+    evidence_count: evidence, strength_score: 5, dominant_emotion: emotion, dominant_sentiment_impact: null,
+    single_source: false, first_seen: true, embedding: null, created_at: stamp,
+  })))
+}
+
 async function insertHistoryWeek(w: WeekSpec, prev: WeekSpec | null): Promise<void> {
   const stamp = iso(w.runDate)
 
@@ -739,6 +775,7 @@ async function insertHistoryWeek(w: WeekSpec, prev: WeekSpec | null): Promise<vo
 
   // themes carried this week
   await insertCarriedThemes(w)
+  await insertW5BackgroundThemes(w)
 
   // market_insights (reused text, no FKs)
   await insertRows('market_insights', HIST_MARKET.map((m) => ({
