@@ -378,19 +378,29 @@ export default async function DashboardPage({
   // the credibility answer to "where do these numbers come from?".
   const funnelSteps = [
     keywordCount > 0 && tc?.platforms?.length
-      ? { n: keywordCount, label: `search terms tracked across ${listNames(tc.platforms)}` }
+      ? { n: keywordCount, label: `search terms tracked across ${listNames(tc.platforms)}`, delta: null }
       : null,
     summary?.total_videos
-      ? { n: Number(summary.total_videos), label: 'conversations gathered into your tracked corpus' }
+      ? {
+          n: Number(summary.total_videos), label: 'conversations gathered into your tracked corpus',
+          delta: prevSummary?.total_videos ? Number(summary.total_videos) - Number(prevSummary.total_videos) : null,
+        }
       : null,
-    commentCount > 0 ? { n: commentCount, label: 'comments analysed inside them' } : null,
+    commentCount > 0
+      ? { n: commentCount, label: 'comments analysed inside them', delta: prevSummary?.total_comments ? commentCount - Number(prevSummary.total_comments) : null }
+      : null,
     summary?.period_videos
-      ? { n: Number(summary.period_videos), label: 'conversations from this update’s period' }
+      ? {
+          n: Number(summary.period_videos), label: 'conversations from this update’s period',
+          delta: prevSummary?.period_videos ? Number(summary.period_videos) - Number(prevSummary.period_videos) : null,
+        }
       : null,
-    analysedCount > 0 ? { n: analysedCount, label: 'conversations rated for sentiment' } : null,
-    themeTotal > 0 ? { n: themeTotal, label: 'themes heard across the conversation' } : null,
-    themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed by more than one conversation' } : null,
-  ].filter(Boolean) as { n: number; label: string }[]
+    analysedCount > 0
+      ? { n: analysedCount, label: 'conversations rated for sentiment', delta: prevJudged > 0 ? analysedCount - prevJudged : null }
+      : null,
+    themeTotal > 0 ? { n: themeTotal, label: 'themes heard across the conversation', delta: null } : null,
+    themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed by more than one conversation', delta: null } : null,
+  ].filter(Boolean) as { n: number; label: string; delta: number | null }[]
   const showFunnel = sp.detail === 'funnel' && funnelSteps.length > 0
 
   // Keyword coverage for the funnel overlay — fetched only when it's open.
@@ -625,7 +635,9 @@ export default async function DashboardPage({
               {funnelSteps.map((s) => (
                 <li key={s.label} className="flex items-baseline gap-3">
                   <span className="w-16 shrink-0 text-right text-xl font-bold tabular-nums">{s.n.toLocaleString('en-US')}</span>
-                  <span className="text-sm text-muted-foreground">{s.label}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {s.label} {s.delta != null && <DeltaBadge delta={s.delta} />}
+                  </span>
                 </li>
               ))}
             </ol>
