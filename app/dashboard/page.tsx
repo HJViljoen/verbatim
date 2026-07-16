@@ -470,13 +470,12 @@ export default async function DashboardPage({
         <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']} />
       )}
 
-      {/* Where you stand */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <Card>
+      {/* Where you stand — subgrid syncs the header row across the three cards,
+          so the values stay aligned no matter how many lines a title wraps to */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="md:grid md:grid-rows-subgrid md:row-span-2 md:gap-6">
           <CardHeader className="pb-2">
-            {/* min-h-10 reserves two title lines so the value rows of all three
-                cards start at the same height even when a title wraps */}
-            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-start gap-2 text-sm font-medium text-muted-foreground">
               <span className="mt-1.5 size-2 shrink-0 rounded-full bg-chart-2" aria-hidden />
               Sentiment
             </CardTitle>
@@ -507,9 +506,9 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="md:grid md:grid-rows-subgrid md:row-span-2 md:gap-6">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-start gap-2 text-sm font-medium text-muted-foreground">
               <span className="mt-1.5 size-2 shrink-0 rounded-full bg-clay" aria-hidden />
               Share of tracked conversation
             </CardTitle>
@@ -538,9 +537,9 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="md:grid md:grid-rows-subgrid md:row-span-2 md:gap-6">
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+            <CardTitle className="flex items-start gap-2 text-sm font-medium text-muted-foreground">
               <span className="mt-1.5 size-2 shrink-0 rounded-full bg-plum" aria-hidden />
               Audience mood
             </CardTitle>
@@ -704,7 +703,8 @@ interface StatTile { n: number; label: string; delta: number | null }
 function StatBand({ tiles }: { tiles: StatTile[] }) {
   if (tiles.length < 2) return null
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    // 4-across only when tiles have room for their longest label; 2×2 below
+    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
       {tiles.map((t) => (
         <Card key={t.label} className="py-4">
           <CardContent className="space-y-0.5">
