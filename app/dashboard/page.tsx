@@ -474,21 +474,25 @@ export default async function DashboardPage({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <span className="size-2 rounded-full bg-chart-2" aria-hidden />
+            {/* min-h-10 reserves two title lines so the value rows of all three
+                cards start at the same height even when a title wraps */}
+            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-chart-2" aria-hidden />
               Sentiment
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-baseline gap-2">
+            <div className="flex items-baseline gap-2">
               <div className="text-3xl font-bold text-positive">{positiveShare != null ? `${positiveShare}%` : '—'}</div>
-              {sentTier && (
+              <DeltaBadge delta={sentimentDelta} unit="pts" />
+            </div>
+            {sentTier && (
+              <div>
                 <span title={SENTIMENT_TIER_RULE[sentTier]} className={`px-2 py-0.5 rounded-full text-xs font-medium ${SENTIMENT_TIER_BADGE[sentTier]}`}>
                   {SENTIMENT_TIER_LABEL[sentTier]}
                 </span>
-              )}
-              <DeltaBadge delta={sentimentDelta} unit="pts" />
-            </div>
+              </div>
+            )}
             {sentimentSegments.length > 0 ? (
               <>
                 <ProportionBar segments={sentimentSegments} of="conversations" />
@@ -505,13 +509,13 @@ export default async function DashboardPage({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <span className="size-2 rounded-full bg-clay" aria-hidden />
+            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-clay" aria-hidden />
               Share of tracked conversation
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex flex-wrap items-baseline gap-2">
+            <div className="flex items-baseline gap-2">
               <div className="text-3xl font-bold">{clientShare != null ? `${clientShare}%` : '—'}</div>
               <DeltaBadge delta={shareDelta} unit="pts" />
             </div>
@@ -536,8 +540,8 @@ export default async function DashboardPage({
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-              <span className="size-2 rounded-full bg-plum" aria-hidden />
+            <CardTitle className="flex items-start gap-2 min-h-10 text-sm font-medium text-muted-foreground">
+              <span className="mt-1.5 size-2 shrink-0 rounded-full bg-plum" aria-hidden />
               Audience mood
             </CardTitle>
           </CardHeader>
@@ -704,7 +708,7 @@ function StatBand({ tiles }: { tiles: StatTile[] }) {
       {tiles.map((t) => (
         <Card key={t.label} className="py-4">
           <CardContent className="space-y-0.5">
-            <div className="flex flex-wrap items-baseline gap-2">
+            <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold tabular-nums">{t.n.toLocaleString('en-US')}</span>
               <DeltaBadge delta={t.delta} />
             </div>
@@ -721,12 +725,12 @@ function DeltaBadge({ delta, unit }: { delta: number | null; unit?: string }) {
   if (delta == null) return null
   const suffix = unit ? ` ${unit}` : ''
   if (delta === 0) {
-    return <span className="text-xs font-medium text-muted-foreground" title="no change since your last update">— unchanged</span>
+    return <span className="whitespace-nowrap text-xs font-medium text-muted-foreground" title="no change since your last update">— unchanged</span>
   }
   return (
     <span
       title="movement since your last update"
-      className={`text-xs font-semibold ${delta > 0 ? 'text-positive' : 'text-negative'}`}
+      className={`whitespace-nowrap text-xs font-semibold ${delta > 0 ? 'text-positive' : 'text-negative'}`}
     >
       {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toLocaleString('en-US')}{suffix}
     </span>
