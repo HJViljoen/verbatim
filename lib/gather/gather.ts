@@ -1,10 +1,11 @@
-import { createAdminClient } from '../supabase-admin'
-import { periodWindowDays } from '../config'
+import { createAdminClient, selectAll } from '../supabase-admin'
+import { periodWindowDays, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS } from '../config'
 import { runActor } from './apify'
 import { adapters } from './platforms'
 import { dedupeBy, round2 } from './util'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
 import { attributeVideos, type AttributionMethod } from './attribution'
+import { splitDelta, pickRechecks, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type {
   GatherConfig,
   Platform,
@@ -30,6 +31,12 @@ import type {
 // (client_id, platform, comment_id), so a re-run merges rather than duplicates.
 // The videos upsert deliberately omits Pass A's classification columns, so a
 // re-gather refreshes metrics without clobbering existing analysis.
+//
+// Delta-scraping (2026-07-16, delta.ts): known videos skip the gate and only
+// re-scrape comments when their count grew — unchanged re-finds stop costing a
+// paid actor run, and still-active videos keep contributing their new comments
+// after they age out of the search window (~27% of lifetime comments arrive
+// after a video's first week, measured on the stored corpus).
 
 type Admin = ReturnType<typeof createAdminClient>
 
@@ -296,16 +303,34 @@ export async function gatePlatform(opts: {
   }
   const merged = [...byId.values()]
 
-  // Flow-run window: drop content older than the report period BEFORE the
-  // relevance gate (saves its GPT call) and before the upsert (an old video not
-  // re-upserted keeps its original run_id, so run-scoped reads stay honest).
-  // Baseline runs pass everything — the first run builds the map. Only content
-  // KNOWN to be old is dropped: a null upload_date stays, so a platform with
-  // patchy dates can't be blanked by the window.
+  // Delta layer (delta.ts): split this run's results against what's already
+  // stored. Fresh videos take the full path below; resurfaced ones skip the
+  // gate + attribution (they passed once — re-gated content gets deleted, so
+  // presence in the DB means kept) and instead feed the growth comparison that
+  // decides which comment scrapes are worth re-paying for. Whole-platform scan
+  // + in-memory map, same URL-overflow avoidance as everywhere else.
+  const knownRows = await selectAll<KnownVideoState>(() =>
+    admin
+      .from('videos')
+      .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
+      .eq('client_id', opts.clientId)
+      .eq('platform', adapter.platform)
+      .order('id', { ascending: true }),
+  )
+  const known = new Map(knownRows.map((r) => [r.video_id, r]))
+  const { fresh, resurfaced } = splitDelta(merged, known)
+
+  // Flow-run window: drop FRESH content older than the report period BEFORE the
+  // relevance gate (saves its GPT call) and before the upsert. Baseline runs
+  // pass everything — the first run builds the map. Only content KNOWN to be
+  // old is dropped: a null upload_date stays, so a platform with patchy dates
+  // can't be blanked by the window. (Resurfaced videos are windowed separately
+  // below — old-but-active ones stay out of the corpus refresh but may still
+  // earn a comment re-check.)
   const window = await resolveGatherWindow(opts.clientId, opts.runId, opts.period ?? config.report_period)
-  const videos = merged.filter((v) => inWindow(v.upload_date, window.since))
-  if (videos.length < merged.length) {
-    console.log(`[${adapter.platform}] flow window dropped ${merged.length - videos.length}/${merged.length} videos older than ${window.since}`)
+  const videos = fresh.filter((v) => inWindow(v.upload_date, window.since))
+  if (videos.length < fresh.length) {
+    console.log(`[${adapter.platform}] flow window dropped ${fresh.length - videos.length}/${fresh.length} fresh videos older than ${window.since}`)
   }
 
   // Relevance gate (BEFORE the expensive comment scrape). Judge market
@@ -339,20 +364,82 @@ export async function gatePlatform(opts: {
     }
   }
 
+  // Resurfaced-in-window videos re-upsert too (metrics refresh + run_id
+  // restamp, so the period slice still sees a video found by an earlier run in
+  // the same window — e.g. a manual midweek run before the scheduled one). The
+  // stored GPT entity tags are grafted over normalise's naive substring tags so
+  // the re-upsert can't clobber attribution. Survived-credit matches: they're
+  // proven corpus members, so keywords keep their ROI credit across re-runs.
+  const resurfacedInWindow = resurfaced.filter((r) => inWindow(r.video.upload_date, window.since))
+  for (const r of resurfacedInWindow) {
+    r.video.is_client = r.state.is_client
+    r.video.is_competitor = r.state.is_competitor
+    r.video.competitor_name = r.state.competitor_name
+    for (const kw of r.video.source_keywords ?? []) { const s = stats.get(kw); if (s) s.survived++ }
+  }
+  const toUpsert = [...kept, ...resurfacedInWindow.map((r) => r.video)]
+
   // Upsert kept videos (merge on natural key — preserves Pass A columns).
-  if (!opts.dryRun && kept.length) {
+  if (!opts.dryRun && toUpsert.length) {
     const { error } = await admin
       .from('videos')
-      .upsert(kept, { onConflict: 'client_id,platform,video_id' })
+      .upsert(toUpsert, { onConflict: 'client_id,platform,video_id' })
     if (error) errors.push(`videos upsert: ${error.message}`)
   }
 
-  // Eligible-for-comments + optional cost cap.
-  const eligibleVideos = kept.filter(
+  // Eligible-for-comments (stats credit spans fresh + resurfaced so keyword ROI
+  // stays comparable across re-runs) + optional cost cap. Only FRESH videos
+  // scrape unconditionally — known videos go through the growth rule below.
+  const eligibleVideos = toUpsert.filter(
     (v) => adapter.commentThreshold == null || v.comments_count >= adapter.commentThreshold,
   )
   for (const v of eligibleVideos) for (const kw of v.source_keywords ?? []) { const s = stats.get(kw); if (s) s.eligible++ }
-  const toScrape = opts.videoLimit ? eligibleVideos.slice(0, opts.videoLimit) : eligibleVideos
+  const freshEligible = kept.filter(
+    (v) => adapter.commentThreshold == null || v.comments_count >= adapter.commentThreshold,
+  )
+  const toScrape = opts.videoLimit ? freshEligible.slice(0, opts.videoLimit) : freshEligible
+
+  // Delta re-checks: known videos whose comment count grew earn a re-scrape —
+  // even outside the window (their NEW comments are this period's conversation;
+  // comment_date keeps the period slice honest). Candidates come free from the
+  // search results; platforms with a free count API (YouTube) also check stored
+  // recent videos the search didn't resurface. Unchanged videos are the Part-1
+  // saving: no growth → no paid scrape.
+  const candidates: RecheckCandidate[] = resurfaced.map((r) => ({
+    video_id: r.video.video_id,
+    video_url: r.video.video_url || r.state.video_url,
+    freshCount: r.video.comments_count,
+    baseline: scrapeBaseline(r.state),
+  }))
+  if (adapter.fetchCommentCounts) {
+    const resurfacedIds = new Set(resurfaced.map((r) => r.video.video_id))
+    const cutoff = new Date(Date.now() - RECHECK_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
+    const dormant = knownRows.filter(
+      (r) => !resurfacedIds.has(r.video_id) && r.upload_date != null && r.upload_date >= cutoff,
+    )
+    if (dormant.length) {
+      try {
+        const counts = await adapter.fetchCommentCounts(dormant.map((d) => d.video_id))
+        for (const d of dormant) {
+          const freshCount = counts.get(d.video_id)
+          if (freshCount != null) {
+            candidates.push({ video_id: d.video_id, video_url: d.video_url, freshCount, baseline: scrapeBaseline(d) })
+          }
+        }
+      } catch (e) {
+        // Best-effort: a count-API hiccup must never fail the gather.
+        errors.push(`recheck counts: ${(e as Error).message}`)
+      }
+    }
+  }
+  const rechecks = pickRechecks(candidates, {
+    minGrowth: RECHECK_MIN_GROWTH,
+    threshold: adapter.commentThreshold,
+    cap: RECHECK_CAP,
+  })
+  if (candidates.length) {
+    console.log(`[${adapter.platform}] delta: ${candidates.length} known videos checked → ${rechecks.length} re-scrapes, ${candidates.length - rechecks.length} skipped (no growth)`)
+  }
 
   // Persist per-keyword performance for this run — the raw signal for keyword value
   // scoring + add/remove suggestions (v5-Ideas). Service-role write, bypasses RLS.
@@ -376,8 +463,13 @@ export async function gatePlatform(opts: {
 
   return {
     platform: adapter.platform,
-    videosKept: kept.length,
-    eligible: toScrape.map((v) => ({ video_id: v.video_id, video_url: v.video_url, comments_count: v.comments_count })),
+    videosKept: toUpsert.length,
+    // Fresh first-time scrapes + growth re-checks. Disjoint by construction:
+    // toScrape is fresh-only, rechecks are known-only.
+    eligible: [
+      ...toScrape.map((v) => ({ video_id: v.video_id, video_url: v.video_url, comments_count: v.comments_count })),
+      ...rechecks,
+    ],
     errors,
   }
 }
@@ -422,6 +514,19 @@ export async function scrapeCommentsBatch(opts: {
           .from('comments')
           .upsert(comments, { onConflict: 'client_id,platform,comment_id' })
         if (error) errors.push(`comments upsert (${ref.video_id}): ${error.message}`)
+      }
+      // Stamp the delta-scraping baseline: this video's comments were captured
+      // at this observed count (even if the scrape returned few/none — checked
+      // is checked). Later runs compare their fresh count against it to decide
+      // whether a re-scrape is worth paying for (delta.ts).
+      if (!opts.dryRun) {
+        const { error } = await admin
+          .from('videos')
+          .update({ comments_count: ref.comments_count, comments_count_at_scrape: ref.comments_count })
+          .eq('client_id', opts.clientId)
+          .eq('platform', opts.platform)
+          .eq('video_id', ref.video_id)
+        if (error) errors.push(`scrape baseline stamp (${ref.video_id}): ${error.message}`)
       }
       commentCount += comments.length
     } catch (e) {

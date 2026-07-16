@@ -113,6 +113,13 @@ export interface PlatformAdapter {
   fetchVideos?(config: GatherConfig, terms: string[], limit: number): Promise<RawItem[]>
   /** Native (non-Apify) source: fetch one video's raw comment items directly. */
   fetchComments?(video: VideoRef, config: GatherConfig): Promise<RawItem[]>
+  /**
+   * Native (non-Apify) source: current comment counts for stored videos, for the
+   * delta-scraping re-check of videos a search didn't resurface (delta.ts). Only
+   * platforms with a FREE count lookup implement this (YouTube: videos.list) —
+   * on Apify platforms a count check costs as much as the scrape it would save.
+   */
+  fetchCommentCounts?(videoIds: string[]): Promise<Map<string, number>>
   /** Raw actor item → VideoInsert. null = skip (unparseable / no url). */
   normaliseVideo(raw: RawItem, ctx: NormaliseCtx): VideoInsert | null
   /** Raw actor item → CommentInsert. null = skip. */

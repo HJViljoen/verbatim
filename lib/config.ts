@@ -131,6 +131,26 @@ export const APIFY_ACTORS = {
 /** Default min comments before a video is worth a comment scrape (TikTok/Instagram). */
 export const COMMENT_THRESHOLD = 5
 
+// --- Delta-scraping (2026-07-16) ---------------------------------------------
+// Corpus measurement behind the re-check layer: ~73% of an IG video's lifetime
+// comments arrive within 7 days of upload, ~27% after — signal the one-shot
+// scrape design permanently missed. See lib/gather/delta.ts.
+
+/** Min NEW comments (fresh count − count at last scrape) before a known video
+ *  earns a paid re-scrape. A scrape is a whole actor run; 1-2 stragglers don't
+ *  cover it. */
+export const RECHECK_MIN_GROWTH = 3
+
+/** Max re-check scrapes per platform per run — cost guardrail so a viral spike
+ *  across many old videos can't blow up a weekly run's Apify bill. */
+export const RECHECK_CAP = 25
+
+/** How far back (days) the native-API re-check looks for still-active stored
+ *  videos (YouTube — free counts via videos.list). Days 8-30 hold ~11% of
+ *  lifetime comments; past 30 days the tail (~16%) is mostly old-viral noise
+ *  the weekly product shouldn't chase. */
+export const RECHECK_WINDOW_DAYS = 30
+
 /** report_period → TikTok actor `dateRange` (Technical.md scrape-window mapping). */
 export function periodToTikTokRange(period: string): string {
   return period === 'daily' ? 'TODAY' : period === 'monthly' ? 'THIS_MONTH' : 'THIS_WEEK'

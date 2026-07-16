@@ -152,6 +152,19 @@ export const youtube: PlatformAdapter = {
     }
   },
 
+  async fetchCommentCounts(videoIds: string[]): Promise<Map<string, number>> {
+    const key = apiKey()
+    const out = new Map<string, number>()
+    for (let i = 0; i < videoIds.length; i += 50) {
+      const params = new URLSearchParams({ part: 'statistics', id: videoIds.slice(i, i + 50).join(','), key })
+      for (const v of itemsOf(await ytGet('videos', params))) {
+        const id = str(getPath(v, ['id']))
+        if (id) out.set(id, num(getPath(v, ['statistics', 'commentCount'])))
+      }
+    }
+    return out
+  },
+
   async fetchComments(video: VideoRef, config: GatherConfig): Promise<RawItem[]> {
     const key = apiKey()
     const out: RawItem[] = []
