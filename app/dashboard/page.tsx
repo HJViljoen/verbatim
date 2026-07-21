@@ -1,11 +1,18 @@
 import Link from 'next/link'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { categoryTint, SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
-import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, glossaryRule } from '@/lib/calibration'
-import { CalibrationLegend } from '@/components/calibration-legend'
+import { SENTIMENT_TIER_BADGE } from '@/lib/ui-colors'
+import { sentimentTier, SENTIMENT_TIER_LABEL, SENTIMENT_TIER_RULE, type GlossaryKey } from '@/lib/calibration'
+import { HowToRead } from '@/components/how-to-read'
 import { DetailOverlay } from '@/components/detail-overlay'
 import { Quotes } from '@/components/quotes'
+import { StatBand, type StatTile } from '@/components/stat-band'
+import { DeltaBadge } from '@/components/delta-badge'
+import { ProportionBar, BarLegend, type Segment } from '@/components/proportion-bar'
+import { FindingTile } from '@/components/finding-tile'
+import { InsightNarrative, type Verdict } from '@/components/insight-narrative'
+import { composeDashboardNarrative, type NarrativeFigures } from '@/lib/dashboard-narrative'
+import type { ExecutiveBrief } from '@/lib/pipeline/schemas'
 import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToClientVoices, type ThemeBucketRow } from '@/lib/quotes'
 
 // Dashboard — the state snapshot ("Where do we stand?", Redesign Spec §2), NOT
@@ -40,6 +47,7 @@ interface RunSummaryRow {
   period_comments: number | null
   share_of_voice: Record<string, SovEntry> | null
   sentiment_drivers: { video_sentiment_counts?: Record<string, number>; videos_judged?: number } | null
+  executive_brief?: ExecutiveBrief | null
 }
 
 /** A Step 2c owned-account event (Owned-Data-Plan) — candidate for the one-thing slot. */
@@ -77,15 +85,9 @@ interface TopTheme {
   category: string
   memberThemes: string[]
   evidenceLabel: string
+  /** Distinct conversations behind the theme — the figure the brief substitutes. */
+  conversations: number
   isNew: boolean
-}
-
-/** One segment of a proportional bar. Colour classes written in full for Tailwind. */
-interface Segment {
-  label: string
-  count: number
-  pct: number
-  color: string
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
@@ -163,7 +165,7 @@ export default async function DashboardPage({
   if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   const [summaryRes, prevSummaryRes, aiRes, recRes, latestThemedRes, miRes, eventsRes] = await Promise.all([
     supabase.from('run_summary')
-      .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers')
+      .select('total_videos, total_comments, period_videos, period_comments, share_of_voice, sentiment_drivers, executive_brief')
       .eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
     // The update before this one — every "since last update" delta self-gates
     // on this row existing, so first runs simply show no comparison.
@@ -324,6 +326,7 @@ export default async function DashboardPage({
         category: t.category,
         memberThemes: t.member_themes,
         evidenceLabel: `in ${t.evidence_count} conversation${t.evidence_count === 1 ? '' : 's'}`,
+        conversations: t.evidence_count,
         isNew: showNew && t.first_seen,
       }))
   } else {
@@ -346,6 +349,7 @@ export default async function DashboardPage({
         category: strongest.category,
         memberThemes: [strongest.theme],
         evidenceLabel: `${group.length} mention${group.length === 1 ? '' : 's'}`,
+        conversations: group.length,
         isNew: false,
       }))
   }
@@ -371,8 +375,10 @@ export default async function DashboardPage({
   // lib/quotes) — the pipeline's hero_quote where present, heuristic otherwise.
   // The "one thing" is a claim about the client, so the pool keeps client +
   // category voices only (entity-bucket scoping, teardown §Run 1 defect 1).
+  // The brief leads with the recommendation's real voices whether or not an
+  // account event also claims a card below, so fetch whenever a rec exists.
   let oneThingQuotes: string[] = []
-  if (oneThing && !topEvent) {
+  if (oneThing) {
     const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
     const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
     const themeSlugById = new Map(audienceInsights.map((a) => [a.id, a.theme]))
@@ -389,6 +395,28 @@ export default async function DashboardPage({
     const pick = createQuotePicker(quotesByAudience, themeSlugById)
     oneThingQuotes = pick(scopedIds, 2, claim, oneThing.hero_quote)
   }
+
+  // ---- Executive brief — the woven hero narrative. The model authored the
+  // prose and left `[[n]]` tokens; every figure below is substituted HERE from
+  // run_summary (the numbers rule holds — the model never supplies a rendered
+  // number). A null/unusable brief falls back to a code-composed narrative.
+  const narrativeFigures: NarrativeFigures = {
+    brand,
+    topTheme: topThemes[0]
+      ? { label: topThemes[0].label, description: topThemes[0].description, conversations: topThemes[0].conversations }
+      : null,
+    sentiment: positiveShare != null ? { positivePct: positiveShare } : null,
+    shareOfVoice: clientShare != null ? { clientPct: clientShare, hasCompetitors: competitorSegs.length > 0 } : null,
+  }
+  const narrative = composeDashboardNarrative(summary?.executive_brief, narrativeFigures)
+  const priorityWordFor = (p: string | null | undefined) =>
+    p === 'high' ? 'Act now' : p === 'medium' ? 'Plan next' : 'Worth considering'
+  const verdict: Verdict | null = oneThing
+    ? { word: priorityWordFor(oneThing.priority), title: oneThing.title, href: '/dashboard/market', cta: 'See the full picture' }
+    : null
+  // Skip the hero entirely on a thin run with nothing to say (no beats, no
+  // action, no voice) — the counted strip + cards below still carry the page.
+  const showInsight = narrative.beats.length > 0 || !!verdict || oneThingQuotes.length > 0
 
   // ---- "How this update was built" — the counted evidence funnel ----
   // Every row is a stored figure (tracking config, run_summary, themes) —
@@ -419,6 +447,8 @@ export default async function DashboardPage({
     themeMultiSource > 0 ? { n: themeMultiSource, label: 'confirmed by more than one conversation', delta: null } : null,
   ].filter(Boolean) as { n: number; label: string; delta: number | null }[]
   const showFunnel = sp.detail === 'funnel' && funnelSteps.length > 0
+  const showLegend = sp.detail === 'legend'
+  const legendItems: GlossaryKey[] = topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']
 
   // Keyword coverage for the funnel overlay — fetched only when it's open.
   // Keyword rows live on the run whose GATHER produced them, and analysis-only
@@ -443,16 +473,24 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-8">
+      {sentTier && (
+        <div className="flex justify-end -mb-4">
+          <HowToRead items={legendItems} open={showLegend} basePath="/dashboard" />
+        </div>
+      )}
       <HeroBand
         line={lineParts.length ? lineParts.join(' · ') : null}
         detailHref={funnelSteps.length > 0 ? '/dashboard?detail=funnel' : null}
       />
 
+      {/* The executive brief — the woven read of this update, one big block leading the page */}
+      {showInsight && <InsightNarrative narrative={narrative} verdict={verdict} quotes={oneThingQuotes} />}
+
       {/* This update, in counted figures — deltas appear once a previous update exists */}
       <StatBand
         tiles={[
           summary?.period_videos
-            ? { n: Number(summary.period_videos), label: 'conversations this update', delta: prevSummary?.period_videos ? Number(summary.period_videos) - Number(prevSummary.period_videos) : null }
+            ? { n: Number(summary.period_videos), label: 'conversations', delta: prevSummary?.period_videos ? Number(summary.period_videos) - Number(prevSummary.period_videos) : null }
             : null,
           newCommentCount > 0
             ? { n: newCommentCount, label: 'new comments', delta: prevSummary?.period_comments ? newCommentCount - Number(prevSummary.period_comments) : null }
@@ -466,13 +504,10 @@ export default async function DashboardPage({
         ].filter(Boolean) as StatTile[]}
       />
 
-      {sentTier && (
-        <CalibrationLegend items={topThemes.some((t) => t.isNew) ? ['conversations', 'sentiment', 'new'] : ['conversations', 'sentiment']} />
-      )}
-
-      {/* Where you stand — subgrid syncs the header row across the three cards,
-          so the values stay aligned no matter how many lines a title wraps to */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Where you stand — the state snapshot, the secondary tier under the hero */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Where you stand</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="md:grid md:grid-rows-subgrid md:row-span-2 md:gap-6">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-start gap-2 text-sm font-medium text-muted-foreground">
@@ -568,7 +603,8 @@ export default async function DashboardPage({
             )}
           </CardContent>
         </Card>
-      </div>
+        </div>
+      </section>
 
       {/* What your market is talking about */}
       {topThemes.length > 0 && (
@@ -578,40 +614,27 @@ export default async function DashboardPage({
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {topThemes.map((t, i) => (
-              <Link key={t.label} href={`/dashboard/voice?themes=${encodeURIComponent(t.memberThemes.join(','))}`} className="group">
-                <Card className="h-full transition-colors group-hover:bg-muted/30">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start gap-3">
-                      <span className="text-3xl font-bold leading-none text-primary/25" aria-hidden>{i + 1}</span>
-                      <div className="space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${categoryTint(t.category)}`}>
-                            {t.category.replace(/_/g, ' ')}
-                          </span>
-                          {t.isNew && (
-                            <span title={glossaryRule('new')} className="px-2 py-0.5 rounded-full text-xs font-semibold bg-warning/15 text-warning">New</span>
-                          )}
-                        </div>
-                        <CardTitle className="text-sm">{t.label}</CardTitle>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="text-xs text-muted-foreground">{t.description}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      {t.evidenceLabel} · <span className="text-primary">hear these voices →</span>
-                    </p>
-                  </CardContent>
-                </Card>
-              </Link>
+              <FindingTile
+                key={t.label}
+                finding={{
+                  label: t.label,
+                  description: t.description,
+                  category: t.category,
+                  href: `/dashboard/voice?themes=${encodeURIComponent(t.memberThemes.join(','))}`,
+                  evidenceLabel: t.evidenceLabel,
+                  rank: i + 1,
+                  isNew: t.isNew,
+                }}
+              />
             ))}
           </div>
         </section>
       )}
 
-      {/* The one thing — a major explained event on the client's own account
-          wins the slot; otherwise the best-grounded recommendation. */}
-      {topEvent ? (
+      {/* A major explained movement on the client's OWN account — a distinct
+          alert from the corpus brief above; the recommendation now leads the
+          brief, so this slot is the account-event case only. */}
+      {topEvent && (
         <Card className="ring-2 ring-primary/30">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing on your account</CardTitle>
@@ -628,24 +651,7 @@ export default async function DashboardPage({
             </Link>
           </CardContent>
         </Card>
-      ) : oneThing ? (
-        <Card className="ring-2 ring-primary/30">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold uppercase tracking-wide text-primary">The one thing to act on</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Quotes items={oneThingQuotes} />
-            <p className="text-xl font-bold">{oneThing.title}</p>
-            <p className="text-sm text-muted-foreground">{oneThing.reasoning}</p>
-            <Link
-              href="/dashboard/market"
-              className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90"
-            >
-              See the full picture <span aria-hidden>→</span>
-            </Link>
-          </CardContent>
-        </Card>
-      ) : null}
+      )}
 
       {/* "How this update was built" — counted provenance, one click off the hero */}
       {showFunnel && (
@@ -697,46 +703,6 @@ export default async function DashboardPage({
   )
 }
 
-interface StatTile { n: number; label: string; delta: number | null }
-
-/** Bold counted figures for this update; each grows a delta once comparable. */
-function StatBand({ tiles }: { tiles: StatTile[] }) {
-  if (tiles.length < 2) return null
-  return (
-    // 4-across only when tiles have room for their longest label; 2×2 below
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-      {tiles.map((t) => (
-        <Card key={t.label} className="py-4">
-          <CardContent className="space-y-0.5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold tabular-nums">{t.n.toLocaleString('en-US')}</span>
-              <DeltaBadge delta={t.delta} />
-            </div>
-            <p className="text-xs text-muted-foreground">{t.label}</p>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
-  )
-}
-
-/** "Since last update" movement — renders nothing until a previous update exists. */
-function DeltaBadge({ delta, unit }: { delta: number | null; unit?: string }) {
-  if (delta == null) return null
-  const suffix = unit ? ` ${unit}` : ''
-  if (delta === 0) {
-    return <span className="whitespace-nowrap text-xs font-medium text-muted-foreground" title="no change since your last update">— unchanged</span>
-  }
-  return (
-    <span
-      title="movement since your last update"
-      className={`whitespace-nowrap text-xs font-semibold ${delta > 0 ? 'text-positive' : 'text-negative'}`}
-    >
-      {delta > 0 ? '▲' : '▼'} {Math.abs(delta).toLocaleString('en-US')}{suffix}
-    </span>
-  )
-}
-
 /** The deep-green welcome hero — the page's single stat-hero element. */
 function HeroBand({ line, detailHref }: { line: string | null; detailHref?: string | null }) {
   return (
@@ -752,36 +718,6 @@ function HeroBand({ line, detailHref }: { line: string | null; detailHref?: stri
           How this update was built →
         </Link>
       )}
-    </div>
-  )
-}
-
-/** Proportional segmented bar with 2px surface gaps + per-segment tooltips. */
-function ProportionBar({ segments, of }: { segments: Segment[]; of: string }) {
-  return (
-    <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full">
-      {segments.map((s) => (
-        <span
-          key={s.label}
-          className={`${s.color} first:rounded-l-full last:rounded-r-full`}
-          style={{ width: `${Math.max(2, s.pct)}%` }}
-          title={`${s.label} · ${s.count} ${of} (${s.pct}%)`}
-        />
-      ))}
-    </div>
-  )
-}
-
-/** Dot legend for a proportional bar — identity is never colour-alone. */
-function BarLegend({ segments }: { segments: Segment[] }) {
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1">
-      {segments.map((s) => (
-        <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span className={`size-2 rounded-full ${s.color}`} aria-hidden />
-          {s.label} {s.pct}%
-        </span>
-      ))}
     </div>
   )
 }

@@ -1,11 +1,13 @@
 import Link from 'next/link'
+import { Target, TrendingUp, Sparkles, Lightbulb, AlertTriangle } from 'lucide-react'
 import { getSessionContext } from '@/lib/auth'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { categoryTint } from '@/lib/ui-colors'
 import { CURATION_GATE, gateTier, type GateTier } from '@/lib/curation'
 import { priorityWord, glossaryRule } from '@/lib/calibration'
-import { CalibrationLegend } from '@/components/calibration-legend'
+import { HowToRead } from '@/components/how-to-read'
 import { Quotes } from '@/components/quotes'
+import type { GlossaryKey } from '@/lib/calibration'
 import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToClientVoices, type ThemeBucketRow } from '@/lib/quotes'
 import type { CiSummary } from '@/lib/pipeline/schemas'
 
@@ -85,7 +87,14 @@ function EvidenceChip({ tier }: { tier: GateTier }) {
   return null
 }
 
-export default async function MarketIntelligencePage() {
+const LEGEND_ITEMS: GlossaryKey[] = ['conversations', 'act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']
+
+export default async function MarketIntelligencePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ detail?: string }>
+}) {
+  const showLegend = ((await searchParams) ?? {}).detail === 'legend'
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
@@ -99,7 +108,7 @@ export default async function MarketIntelligencePage() {
   if (!latestRun) {
     return (
       <div className="space-y-8">
-        <PageHeader />
+        <PageHeader showLegend={showLegend} />
         <EmptyState />
       </div>
     )
@@ -252,15 +261,11 @@ export default async function MarketIntelligencePage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader />
+      <PageHeader showLegend={showLegend} />
 
       {nothingYet && <EmptyState />}
 
-      {!nothingYet && (
-        <CalibrationLegend items={['conversations', 'act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']} />
-      )}
-
-      {/* The short read — consumer-intelligence summary (spec §3.1) */}
+      {/* The short read — a tight at-a-glance digest (spec §3.1) */}
       {ciSummary && <ShortRead s={ciSummary} />}
 
       {/* Top recommendations (spec §3.2) — the outcome, promoted above insights */}
@@ -268,10 +273,23 @@ export default async function MarketIntelligencePage() {
         <section className="space-y-4">
           <SectionHeading label="Top recommendations" />
           {topRecs.length > 0 ? (
+            // #1 is featured full-width (voices in its own satellite); #2/#3 are
+            // quiet equal-height cards beneath. Grid stretch equalises the pair —
+            // no cross-row spans (the dashboard's failure mode).
             <div className="space-y-4">
-              {topRecs.map((rec, i) => (
-                <RecCard key={rec.id} rec={rec} word={priorityWord(i)} voices={recThemes(rec)} quotes={pick(recSupportAudienceIds(rec), 3, `${rec.title} ${rec.reasoning}`, rec.hero_quote)} gatePassed />
-              ))}
+              <FeaturedRec
+                rec={topRecs[0]}
+                word={priorityWord(0)}
+                voices={recThemes(topRecs[0])}
+                quotes={pick(recSupportAudienceIds(topRecs[0]), 2, `${topRecs[0].title} ${topRecs[0].reasoning}`, topRecs[0].hero_quote)}
+              />
+              {topRecs.length > 1 && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {topRecs.slice(1).map((rec, i) => (
+                    <RecCard key={rec.id} rec={rec} word={priorityWord(i + 1)} voices={recThemes(rec)} gatePassed clamp className="h-full" />
+                  ))}
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -300,10 +318,11 @@ export default async function MarketIntelligencePage() {
         </section>
       )}
 
-      {/* Early signals (spec §3.4) — honestly framed */}
+      {/* Early signals (spec §3.4) — honestly framed, grouped in a shaded panel
+          (the Meltwater "keyphrases" cluster: soft cards + a chip cloud on shade) */}
       {(earlyInsights.length > 0 || singleSourceThemes.length > 0) && (
-        <section className="space-y-4">
-          <SectionHeading label="Early signals" hint="worth watching, not yet confirmed" />
+        <section className="space-y-4 rounded-3xl bg-muted/40 p-4 sm:p-5">
+          <SectionHeading label="Early signals" />
           {earlyInsights.map((mi) => (
             <InsightCard key={mi.id} mi={mi} tier="early_signal" themes={insightThemes(mi)} conversations={conversationCount(mi)} quotes={pick(insightAudienceIds(mi), 2, `${mi.title} ${mi.description}`, mi.hero_quote)} />
           ))}
@@ -343,11 +362,11 @@ export default async function MarketIntelligencePage() {
   )
 }
 
-function PageHeader() {
+function PageHeader({ showLegend }: { showLegend: boolean }) {
   return (
-    <div>
+    <div className="flex items-start justify-between gap-4">
       <h1 className="text-2xl font-bold">Market Intelligence</h1>
-      <p className="text-sm text-muted-foreground italic">&ldquo;What should we do?&rdquo;</p>
+      <HowToRead items={LEGEND_ITEMS} open={showLegend} basePath="/dashboard/market" />
     </div>
   )
 }
@@ -376,67 +395,93 @@ function CollapsedSection({ label, count, children }: { label: string; count: nu
 
 /** §3.1 — the "someone already read everything for you" headline block. */
 function ShortRead({ s }: { s: CiSummary }) {
-  const cols = [
-    { label: 'Unmet needs', items: s.top_unmet_needs, dot: 'bg-clay' },
-    { label: 'Buying triggers', items: s.top_buying_triggers, dot: 'bg-pine' },
-    // "Who stands out" not "Your differentiators": Pass D's list includes
-    // competitor standouts, so a "your" heading would mislabel two-thirds of it.
-    { label: 'Who stands out', items: s.top_differentiators, dot: 'bg-plum' },
-  ].filter((c) => (c.items?.length ?? 0) > 0)
-  const threats = s.threats ?? []
+  // A tight "at a glance" digest — four equal icon-anchored cards, no dead space.
+  // The woven read lives on the dashboard; this page shows the specifics behind
+  // the recommendations, not a second narrative. ("Who stands out" not "Your
+  // differentiators": the list includes competitor standouts.)
+  const facets = [
+    { label: 'Unmet needs', items: s.top_unmet_needs, Icon: Target, fg: 'text-clay', bg: 'bg-clay/10' },
+    { label: 'Buying triggers', items: s.top_buying_triggers, Icon: TrendingUp, fg: 'text-pine', bg: 'bg-pine/10' },
+    { label: 'Who stands out', items: s.top_differentiators, Icon: Sparkles, fg: 'text-plum', bg: 'bg-plum/10' },
+    { label: 'Threats to watch', items: s.threats, Icon: AlertTriangle, fg: 'text-warning', bg: 'bg-warning/15' },
+  ].filter((f) => (f.items?.length ?? 0) > 0)
+  if (facets.length === 0) return null
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">The short read</CardTitle>
-        <p className="text-xs text-muted-foreground">Every conversation analysed, distilled to what matters — start here.</p>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {cols.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {cols.map((c) => (
-              <div key={c.label} className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{c.label}</div>
-                <ul className="space-y-1.5">
-                  {c.items.slice(0, 3).map((item, i) => (
-                    <li key={i} className="flex gap-2 text-sm">
-                      <span className={`mt-1.5 size-1.5 shrink-0 rounded-full ${c.dot}`} aria-hidden />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
+    <section className="space-y-3">
+      <h2 className="text-base font-semibold">The short read</h2>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {facets.map((f) => (
+          <Card key={f.label} className={f.label === 'Threats to watch' ? 'rounded-lg ring-1 ring-warning/25' : 'rounded-lg'}>
+            <CardContent className="space-y-3 py-5">
+              {/* Colored icon badge + hued label so each facet reads distinctly */}
+              <div className="flex items-center gap-2.5">
+                <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-md ${f.bg}`}>
+                  <f.Icon className={`size-4 ${f.fg}`} aria-hidden />
+                </span>
+                <span className={`text-xs font-semibold uppercase tracking-wide ${f.fg}`}>{f.label}</span>
               </div>
-            ))}
+              <ul className="space-y-2">
+                {f.items.slice(0, 3).map((item, i) => (
+                  <li key={i} className="text-sm leading-snug text-foreground/85">{item}</li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** Shared "see the voices" pill used by both rec card variants. */
+function VoicesLink({ voices }: { voices: string[] }) {
+  if (voices.length === 0) return null
+  return (
+    <Link
+      href={`/dashboard/voice?themes=${encodeURIComponent(voices.join(','))}#grounding`}
+      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/5"
+    >
+      See the voices behind this <span aria-hidden>→</span>
+    </Link>
+  )
+}
+
+/** The #1 action — a featured two-panel card: recommendation on the left, an
+ *  "In their words" quote satellite on the right (Meltwater main-plus-satellite).
+ *  The one place raw voices lead a rec, so the secondary cards stay quiet. */
+function FeaturedRec({ rec, word, voices, quotes }: {
+  rec: Recommendation
+  word: string
+  voices: string[]
+  quotes: string[]
+}) {
+  return (
+    <Card className="ring-1 ring-primary/15">
+      <CardContent className="space-y-4 py-6 sm:px-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <PriorityChip word={word} />
+          <CategoryChip>{rec.type}</CategoryChip>
+          <EvidenceChip tier="confirmed" />
+        </div>
+        <div className="grid gap-6 lg:grid-cols-[1.7fr_1fr]">
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold leading-snug">{rec.title}</h3>
+            <p className="text-sm leading-relaxed text-muted-foreground">{rec.reasoning}</p>
+            <div className="pt-1"><VoicesLink voices={voices} /></div>
           </div>
-        )}
-        {(s.emotional_snapshot || threats.length > 0) && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-t pt-4">
-            {s.emotional_snapshot && (
-              <div className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Audience mood</div>
-                <p className="text-sm text-muted-foreground">{s.emotional_snapshot}</p>
-              </div>
-            )}
-            {threats.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Threats to watch</div>
-                <ul className="space-y-1.5">
-                  {threats.map((t, i) => (
-                    <li key={i} className="flex gap-2 text-sm">
-                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-warning" aria-hidden />
-                      {t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
+          {quotes.length > 0 && (
+            <div className="space-y-2 rounded-xl bg-muted/50 p-4">
+              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">In their words</div>
+              <Quotes items={quotes} />
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
 }
 
-function RecCard({ rec, word, voices, gatePassed, compact, quotes = [] }: {
+function RecCard({ rec, word, voices, gatePassed, compact, quotes = [], className, clamp }: {
   rec: Recommendation
   /** Calibrated priority word — positional (Act now / Plan next / Worth considering). */
   word: string
@@ -445,9 +490,13 @@ function RecCard({ rec, word, voices, gatePassed, compact, quotes = [] }: {
   compact?: boolean
   /** Verbatim voices that lead the card (evidence-led); empty on compact/archive. */
   quotes?: string[]
+  /** Grid placement / sizing from the caller. */
+  className?: string
+  /** Clamp the reasoning so a secondary card never becomes a wall of text. */
+  clamp?: boolean
 }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center gap-2">
           <PriorityChip word={word} />
@@ -456,23 +505,26 @@ function RecCard({ rec, word, voices, gatePassed, compact, quotes = [] }: {
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        {!compact && <Quotes items={quotes} />}
+        {!compact && quotes.length > 0 && <Quotes items={quotes} />}
         <div className="space-y-1">
           <h3 className={`font-semibold ${compact ? 'text-sm' : 'text-base'}`}>{rec.title}</h3>
-          <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'}`}>{rec.reasoning}</p>
+          <p className={`text-muted-foreground ${compact ? 'text-xs' : 'text-sm'} ${clamp ? 'line-clamp-6' : ''}`}>{rec.reasoning}</p>
         </div>
-        {voices.length > 0 && (
-          <Link
-            href={`/dashboard/voice?themes=${encodeURIComponent(voices.join(','))}#grounding`}
-            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/5"
-          >
-            See the voices behind this <span aria-hidden>→</span>
-          </Link>
-        )}
+        <VoicesLink voices={voices} />
       </CardContent>
     </Card>
   )
 }
+
+// Icon per insight type for the Meltwater-style eyebrow (safe lucide names).
+const INSIGHT_ICON = {
+  unmet_need: Target,
+  sentiment_trajectory: TrendingUp,
+  sentiment_differential: TrendingUp,
+  industry_signal: Sparkles,
+  platform_pattern: Sparkles,
+  cross_platform_synthesis: Sparkles,
+} as const
 
 function InsightCard({ mi, tier, themes, conversations, quotes = [] }: {
   mi: MarketInsight
@@ -483,26 +535,37 @@ function InsightCard({ mi, tier, themes, conversations, quotes = [] }: {
   /** Verbatim voices that lead the card (evidence-led); empty in the archive. */
   quotes?: string[]
 }) {
+  const Icon = INSIGHT_ICON[mi.insight_type as keyof typeof INSIGHT_ICON] ?? Lightbulb
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <CategoryChip>{mi.insight_type}</CategoryChip>
+      <CardContent className="space-y-4 py-6 sm:px-7">
+        {/* Icon eyebrow + evidence chip */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <Icon className="size-4 text-primary" aria-hidden />
+            {prettyType(mi.insight_type)}
+          </div>
           <EvidenceChip tier={tier} />
         </div>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <Quotes items={quotes} />
-        <div className="space-y-1">
-          <h3 className="text-base font-semibold">{mi.title}</h3>
-          <p className="text-sm text-muted-foreground">{mi.description}</p>
+        {/* The finding — the headline — then the read */}
+        <div className="space-y-1.5">
+          <h3 className="text-lg font-semibold leading-snug">{mi.title}</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">{mi.description}</p>
         </div>
+        {/* One voice */}
+        {quotes.length > 0 && <Quotes items={quotes.slice(0, 1)} />}
         {themes.length > 0 && (
-          <div className="border-t pt-3 space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs font-medium text-muted-foreground">
-                Grounded in{conversations > 0 ? ` · ${conversations} conversation${conversations === 1 ? '' : 's'}` : ''}
-              </div>
+          <div className="space-y-3 border-t pt-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              {/* The grounded-in count, promoted to the card's number-anchor */}
+              {conversations > 0 ? (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold tabular-nums">{conversations}</span>
+                  <span className="text-xs text-muted-foreground">conversation{conversations === 1 ? '' : 's'} grounding this</span>
+                </div>
+              ) : (
+                <span className="text-xs font-medium text-muted-foreground">Grounded in supporting themes</span>
+              )}
               <Link
                 href={`/dashboard/voice?themes=${encodeURIComponent(themes.join(','))}#grounding`}
                 className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium text-primary ring-1 ring-primary/25 transition-colors hover:bg-primary/5"

@@ -59,7 +59,7 @@
 }
 
 :root {
-  --radius: 1rem;
+  --radius: 0.3rem;
 
   /* Warm cream canvas + deep-green ink */
   --background: #F6F1E7;

@@ -363,7 +363,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   await writeRunSummary({
     clientId, runId, metrics, videos,
     periodMetrics, periodVideos,
-    ciSummary: d.ciSummary, period: tc?.report_period ?? null,
+    ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, period: tc?.report_period ?? null,
   })
 
   return {

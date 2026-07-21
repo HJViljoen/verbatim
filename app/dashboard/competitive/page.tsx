@@ -1,7 +1,8 @@
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { categoryTint, levelBadge, accentSolid } from '@/lib/ui-colors'
-import { CalibrationLegend } from '@/components/calibration-legend'
+import { HowToRead } from '@/components/how-to-read'
+import type { GlossaryKey } from '@/lib/calibration'
 import { Quotes } from '@/components/quotes'
 import { rankByTheme, fetchQuotesByAudience, createQuotePicker, bucketByAudienceId, scopeToCompetitor, type ThemeBucketRow } from '@/lib/quotes'
 
@@ -48,7 +49,14 @@ const prettyType = (s: string) => s.replace(/_/g, ' ')
 
 const chipBase = 'px-2 py-0.5 rounded-full text-xs font-medium capitalize'
 
-export default async function CompetitiveIntelligencePage() {
+const LEGEND_ITEMS: GlossaryKey[] = ['conversations']
+
+export default async function CompetitiveIntelligencePage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ detail?: string }>
+}) {
+  const showLegend = ((await searchParams) ?? {}).detail === 'legend'
   // Auth + tenant via the RLS-enforced session client. See lib/auth.ts.
   const { supabase, clientId } = await getSessionContext()
 
@@ -58,7 +66,7 @@ export default async function CompetitiveIntelligencePage() {
     .from('pipeline_runs').select('id, started_at')
     .eq('client_id', clientId).in('status', ['completed', 'partial'])
     .order('started_at', { ascending: false }).limit(1).maybeSingle()
-  if (!latestRun) return <Shell><EmptyRun /></Shell>
+  if (!latestRun) return <Shell showLegend={showLegend}><EmptyRun /></Shell>
   const runId = latestRun.id as string
 
   // Insights + grounding themes for this run; Share of Tracked Conversation
@@ -118,8 +126,7 @@ export default async function CompetitiveIntelligencePage() {
   const otherItems = insights.filter((c) => !CATEGORY_ORDER.includes(c.category as typeof CATEGORY_ORDER[number]))
 
   return (
-    <Shell subtitle={`${insights.length} competitive insight${insights.length === 1 ? '' : 's'} · ${sov.competitorCount} tracked competitor${sov.competitorCount === 1 ? '' : 's'} · this update`}>
-      <CalibrationLegend items={['conversations']} />
+    <Shell showLegend={showLegend}>
       <ShareOfVoice sov={sov} brand={brand} />
 
       {insights.length === 0 ? (
@@ -250,14 +257,12 @@ function ShareOfVoice({ sov, brand }: { sov: Share; brand: string }) {
 
 // --- Shell + empty states ---------------------------------------------------
 
-function Shell({ children, subtitle }: { children: React.ReactNode; subtitle?: string }) {
+function Shell({ children, showLegend }: { children: React.ReactNode; showLegend: boolean }) {
   return (
     <div className="space-y-6">
-      <div>
+      <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-bold">Competitive Intelligence</h1>
-        <p className="text-sm text-muted-foreground">
-          {subtitle ?? 'Competitor intelligence from competitors’ customers’ voices.'}
-        </p>
+        <HowToRead items={LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive" />
       </div>
       {children}
     </div>

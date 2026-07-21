@@ -2,9 +2,10 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
-import { PassDaSchema, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary } from './schemas'
+import { PassDaSchema, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief } from './schemas'
 import { priorityForRank } from '../calibration'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
+import { validateBrief } from './narrative'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import { readsAsHeroQuote } from '../quotes'
@@ -27,7 +28,14 @@ import type { AggregatedTheme, SovEntry } from './types'
 // rule (no model-chosen intensity words; measured badges say how much), and D-b
 // switches from a model-set priority field to RANKED output: array order is the
 // priority, code assigns high/medium/low by position (priorityForRank).
-const PROMPT_VERSION_A = 'pass_d_a_v2'
+// v3 (2026-07-18): also author the executive_brief — the woven dashboard hero
+// (headline_finding + metric-tagged beats carrying [[n]] tokens). The one place
+// the model frames numbers; validateBrief scrubs any it leaks and the dashboard
+// substitutes the authoritative figures at render.
+// v4 (2026-07-18): consumer_intelligence_summary gains a woven `narrative` — the
+// executive-read paragraph that leads Market Intelligence (same voice as the
+// brief), so that page reads as a written briefing, not list-shaped cards.
+const PROMPT_VERSION_A = 'pass_d_a_v4'
 // v5 (2026-07-07): also select a hero_quote per recommendation AND per market
 // insight (evidence-led cards, Redesign Spec §1) — the one place a raw verbatim
 // belongs. Code validates each against the shown quotes and drops non-matches.
@@ -61,6 +69,9 @@ export interface RunPassDResult {
   marketInsights: { id: string; insight_type: string; title: string; confidence_score: number; opportunity_score: number }[]
   recommendations: { id: string; type: string; title: string; priority: string | null }[]
   ciSummary: CiSummary | null
+  /** Sanitised dashboard hero brief, or null when the model produced none usable
+   *  (render falls back to a code-composed narrative). */
+  executiveBrief: ExecutiveBrief | null
   rejectedRefs: number
   promptTokens: number
   completionTokens: number
@@ -78,10 +89,14 @@ function buildSystemPromptA(brandName?: string): string {
     'You are given audience themes (distilled from real comments) and, if present, competitive insights.',
     'Synthesise across the whole conversation — not one theme at a time.',
     '',
-    'Produce two things:',
+    'Produce three things:',
     '1. market_insights — patterns that span themes: unmet needs, platform patterns, industry signals,',
     '   cross-platform synthesis, sentiment trajectory. Look at the market, not a single bucket.',
     '2. consumer_intelligence_summary — the at-a-glance read of the whole corpus:',
+    '   - narrative: the executive read that LEADS the page — 2–4 flowing sentences, written the way you would',
+    '     brief a busy owner out loud: what the market is telling ' + name + ', what is driving it, and what it',
+    '     means for them. ONE woven paragraph, not a list; plain client-facing prose, no numbers, no bracket',
+    '     indices. This is the same voice as the executive_brief below — a written read, not bullet points.',
     '   - top_unmet_needs: the 3 (at most) clearest unmet needs in the conversation.',
     '   - top_buying_triggers: the 3 (at most) clearest events/reasons that push people to buy.',
     '   - top_differentiators: the 3 (at most) clearest things that set brands apart in this conversation (name the brand each favours).',
@@ -90,6 +105,19 @@ function buildSystemPromptA(brandName?: string): string {
     '   Every summary item must trace back to the themes/competitive insights below — nothing invented, no numbers.',
     '   The summary is client-facing prose: NEVER include bracket indices (T1, C2, …) or any internal references',
     '   in its text — plain sentences only. Indices belong ONLY in the market_insights supporting fields.',
+    '3. executive_brief — the short briefing that leads the dashboard, written for a busy decision-maker:',
+    '   - headline_finding: the single most important thing ' + name + ' should take away this update —',
+    '     WHAT the audience is telling them and WHY it matters, in one or two plain sentences. No figures.',
+    '   - narrative: 2–3 short beats, most important first, each featuring ONE of these measured figures:',
+    '       • top_theme — the single theme the conversation most returns to (name it; you have the labels).',
+    `       • sentiment — how customers feel across the conversation.`,
+    `       • share_of_voice — ${name}'s presence in the tracked conversation.`,
+    '     Write each beat as ONE woven sentence and place the literal token [[n]] exactly once, at the spot',
+    '     where the figure belongs — the product substitutes the real number there. Do NOT write the number',
+    '     yourself, and do NOT state its size or direction (no "positive", no "leads", no "small"): the product',
+    '     supplies the value and its calibrated word. Explain what the figure reveals and why it matters. Use',
+    '     each metric at most once and omit a beat whose evidence is thin. Example shape: "Strap comfort is the',
+    '     thread buyers keep returning to, heard across [[n]]." Same client-facing prose rules as the summary.',
     '',
     'Rules:',
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
@@ -347,6 +375,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     marketInsights: [],
     recommendations: [],
     ciSummary: null,
+    executiveBrief: null,
     rejectedRefs: 0,
     promptTokens: 0,
     completionTokens: 0,
@@ -380,6 +409,11 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     return result
   }
   result.ciSummary = a.parsed.consumer_intelligence_summary
+  // Executive brief: scrub any number/magnitude the model leaked into its prose;
+  // the dashboard substitutes authoritative figures at render (a null brief just
+  // means render falls back to the code-composed narrative).
+  const brief = validateBrief(a.parsed.executive_brief)
+  result.executiveBrief = brief.brief
 
   // Citation-relevance floor (teardown §Run 1, defect 1): a T# ref must be
   // semantically RELATED to the insight citing it, not merely exist — run 1 had
@@ -464,7 +498,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_a', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_A, systemPrompt: systemPromptA, userPrompt: userPromptA,
-      response: { market_insights: miRows.length, ci_summary: true, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected },
+      response: { market_insights: miRows.length, ci_summary: true, executive_brief: !!brief.brief, brief_leaked: brief.leaked, brief_dropped: brief.dropped, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected },
       error: null, usage: a.usage, durationMs: a.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })

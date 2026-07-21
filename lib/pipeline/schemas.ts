@@ -167,6 +167,13 @@ const recommendationSchema = z.object({
 // Intelligence (Spec §3). Item counts (top 3) are prompt-enforced — strict
 // structured outputs don't support maxItems.
 const ciSummarySchema = z.object({
+  // The woven "short read" that LEADS Market Intelligence — the executive-read
+  // version of this summary: 2–4 flowing sentences, written the way you'd brief
+  // an owner out loud, synthesising the market picture (needs, triggers,
+  // standouts, mood, threats) into one written narrative. Client-facing prose;
+  // no numbers, no bracket indices. The structured fields below stay as the
+  // supporting detail beneath it. (Added 2026-07-18 — pass_d_a_v4.)
+  narrative: z.string(),
   top_unmet_needs: z.array(z.string()),
   top_buying_triggers: z.array(z.string()),
   top_differentiators: z.array(z.string()),
@@ -174,13 +181,47 @@ const ciSummarySchema = z.object({
   threats: z.array(z.string()),
 })
 
-/** Pass D-a — market insights + consumer-intelligence summary. */
+// --- Executive brief (2026-07-18) — the woven dashboard hero narrative --------
+// The ONE place the model authors number-framing prose (a scoped relaxation of
+// CALIBRATED_PROSE_RULE): it writes the flowing exec-briefing sentences and
+// decides which figure goes where, but never types the number itself — it drops
+// a literal `[[n]]` token at the figure's position and the dashboard substitutes
+// the authoritative value from run_summary at render (lib/dashboard-narrative).
+// So the model owns the sentence; code owns every rendered digit. Metrics the
+// beats may feature — the set of boldable, code-owned figures the render layer
+// can supply. NOT deltas: "since last update" movement is code-only chrome.
+export const BRIEF_METRICS = ['top_theme', 'sentiment', 'share_of_voice'] as const
+export type BriefMetric = (typeof BRIEF_METRICS)[number]
+
+const briefBeatSchema = z.object({
+  // Which measured figure this beat features. Each beat in a brief uses a
+  // distinct metric; a beat whose metric isn't computable this run is dropped.
+  metric: z.enum(BRIEF_METRICS),
+  // One woven sentence. Contains the literal token `[[n]]` exactly once, where
+  // the metric's figure belongs (render bolds the real value in). Explains what
+  // the figure reveals and why it matters. No digits, no magnitude words.
+  text: z.string(),
+})
+
+const executiveBriefSchema = z.object({
+  // The single lead takeaway — WHAT the audience is telling the brand and WHY it
+  // matters, in one or two sentences. Numberless: no digits, no magnitude words,
+  // no `[[n]]` (the hero pairs this claim with the verdict + a real quote).
+  headline_finding: z.string(),
+  // 2–3 woven beats, most important first, each featuring a distinct metric.
+  narrative: z.array(briefBeatSchema),
+})
+
+/** Pass D-a — market insights + consumer-intelligence summary + exec brief. */
 export const PassDaSchema = z.object({
   market_insights: z.array(marketInsightSchema),
   consumer_intelligence_summary: ciSummarySchema,
+  executive_brief: executiveBriefSchema,
 })
 export type PassDaOutput = z.infer<typeof PassDaSchema>
 export type CiSummary = z.infer<typeof ciSummarySchema>
+export type ExecutiveBrief = z.infer<typeof executiveBriefSchema>
+export type BriefBeat = z.infer<typeof briefBeatSchema>
 
 /** Pass D-b — recommendations, grounded via retrieved verbatim evidence. */
 export const PassDbSchema = z.object({

@@ -180,6 +180,13 @@ async function main() {
     console.log(`  mood:            ${d.ciSummary.emotional_snapshot}`)
     console.log(`  threats:         ${d.ciSummary.threats.join(' | ') || '(none)'}`)
   }
+  console.log('\n=== PASS D-a — executive brief (render substitutes [[n]]) ===')
+  if (d.executiveBrief) {
+    console.log(`  headline: ${d.executiveBrief.headline_finding}`)
+    for (const beat of d.executiveBrief.narrative) console.log(`  · [${beat.metric}] ${beat.text}`)
+  } else {
+    console.log('  (none produced — dashboard will use the code-composed fallback)')
+  }
   console.log(`\n=== PASS D-b — recommendations (${d.recommendations.length}) ===`)
   for (const r of d.recommendations) {
     console.log(`  [${r.type} · ${r.priority}] ${r.title}`)
@@ -191,7 +198,7 @@ async function main() {
     await writeRunSummary({
       clientId: args.clientId, runId: args.runId!, metrics, videos,
       periodMetrics, periodVideos,
-      ciSummary: d.ciSummary, period: tc?.report_period ?? null,
+      ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, period: tc?.report_period ?? null,
     })
     console.log('\nrun_summary written.')
   }
