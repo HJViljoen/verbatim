@@ -1,3 +1,4 @@
+import { Zap, Film, Megaphone, Play } from 'lucide-react'
 import { selectAll } from '@/lib/supabase-admin'
 import { getSessionContext } from '@/lib/auth'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -153,7 +154,7 @@ export default async function ContentPage() {
           {hookPerf.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">What hooks are working</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Zap className="size-4 text-primary" aria-hidden /> What hooks are working</CardTitle>
                 <p className="text-xs text-muted-foreground">
                   Opening styles ranked by the engagement they earn — read from each video&rsquo;s caption and the conversation it sparked, not the footage.
                 </p>
@@ -199,7 +200,7 @@ export default async function ContentPage() {
           {typePerf.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">What formats are working</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base"><Film className="size-4 text-primary" aria-hidden /> What formats are working</CardTitle>
                 <p className="text-xs text-muted-foreground">Video formats ranked by average engagement across this update.</p>
               </CardHeader>
               <CardContent className="overflow-x-auto">
@@ -231,7 +232,7 @@ export default async function ContentPage() {
       {voices.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Top voices</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Megaphone className="size-4 text-primary" aria-hidden /> Top voices</CardTitle>
             <p className="text-xs text-muted-foreground">The accounts driving the category conversation this update, by reach.</p>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -270,7 +271,7 @@ export default async function ContentPage() {
       {all.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">All videos</CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base"><Play className="size-4 text-primary" aria-hidden /> All videos</CardTitle>
             {all.length > CATALOG_CAP && (
               <p className="text-xs text-muted-foreground mt-1">Top {CATALOG_CAP} of {all.length} by views.</p>
             )}
@@ -315,7 +316,6 @@ function PageHeader({ sub }: { sub: string | null }) {
   return (
     <div>
       <h1 className="text-2xl font-bold">Content</h1>
-      <p className="text-sm text-muted-foreground italic">&ldquo;What content works in this niche?&rdquo;</p>
       {sub && <p className="text-sm text-muted-foreground mt-1">{sub}</p>}
     </div>
   )

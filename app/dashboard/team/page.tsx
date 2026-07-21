@@ -1,3 +1,4 @@
+import { UserPlus, Users, Clock } from 'lucide-react'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { getBaseUrl } from '@/lib/site'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -58,7 +59,7 @@ export default async function TeamPage() {
 
       {canManage && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Invite a teammate</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><UserPlus className="size-4 text-primary" aria-hidden /> Invite a teammate</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <InviteForm inviterRole={role} />
             <p className="text-[11px] text-muted-foreground/70">
@@ -70,7 +71,7 @@ export default async function TeamPage() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-sm">Members ({memberRows.length})</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Users className="size-4 text-primary" aria-hidden /> Members ({memberRows.length})</CardTitle></CardHeader>
         <CardContent className="divide-y">
           {memberRows.map((m) => {
             const isSelf = m.id === userId
@@ -94,7 +95,7 @@ export default async function TeamPage() {
 
       {canManage && (
         <Card>
-          <CardHeader><CardTitle className="text-sm">Pending invites ({invites.length})</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-sm"><Clock className="size-4 text-primary" aria-hidden /> Pending invites ({invites.length})</CardTitle></CardHeader>
           <CardContent className="divide-y">
             {invites.length === 0 ? (
               <p className="py-3 text-sm text-muted-foreground first:pt-0">No pending invites.</p>

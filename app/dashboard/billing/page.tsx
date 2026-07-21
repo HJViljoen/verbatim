@@ -1,3 +1,4 @@
+import { CreditCard } from 'lucide-react'
 import { getSessionContext } from '@/lib/auth'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { isStripeConfigured } from '@/lib/stripe'
@@ -69,7 +70,7 @@ export default async function BillingPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>{REASON_LABEL[access.reason] ?? 'Plan'}</CardTitle>
+          <CardTitle className="flex items-center gap-2"><CreditCard className="size-4 text-primary" aria-hidden /> {REASON_LABEL[access.reason] ?? 'Plan'}</CardTitle>
           <CardDescription>
             {access.reason === 'comped' &&
               'This workspace has complimentary full access and is never charged.'}

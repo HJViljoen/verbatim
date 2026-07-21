@@ -32,7 +32,6 @@ export default async function ReportsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Reports</h1>
-        <p className="text-sm text-muted-foreground italic">&ldquo;What changed, week by week?&rdquo;</p>
       </div>
 
       {reports.length === 0 ? (
