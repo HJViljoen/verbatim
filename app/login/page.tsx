@@ -1,32 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useActionState } from 'react'
 import Link from 'next/link'
+import { login, type LoginState } from './actions'
+
+const idle: LoginState = { message: '' }
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const router = useRouter()
-  const supabase = createClient()
-
-  async function handleLogin(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    } else {
-      router.push('/dashboard')
-    }
-  }
+  const [state, formAction, pending] = useActionState(login, idle)
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-background px-4 overflow-hidden">
@@ -39,36 +20,38 @@ export default function LoginPage() {
         </div>
         <p className="text-muted-foreground mb-7 text-sm">Consumer intelligence, in their own words.</p>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <form action={formAction} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Email</label>
             <input
               type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition"
+              name="email"
+              autoComplete="email"
               required
+              disabled={pending}
+              className="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1.5">Password</label>
             <input
               type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition"
+              name="password"
+              autoComplete="current-password"
               required
+              disabled={pending}
+              className="w-full rounded-xl border border-input bg-background/60 px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition"
             />
           </div>
 
-          {error && <p className="text-destructive text-sm">{error}</p>}
+          {state.message && <p className="text-destructive text-sm">{state.message}</p>}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={pending}
             className="w-full rounded-xl bg-primary text-primary-foreground py-2.5 text-sm font-semibold hover:brightness-110 active:translate-y-px disabled:opacity-50 transition cursor-pointer"
           >
-            {loading ? 'Signing in…' : 'Sign in'}
+            {pending ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 

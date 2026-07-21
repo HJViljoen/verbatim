@@ -7,8 +7,8 @@ import {
 } from "@/components/ui/sidebar"
 import { LayoutDashboard, Target, MessageCircle, Swords, Play, TrendingUp, FileText, Users, CreditCard, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase"
+import { usePathname } from "next/navigation"
+import { signOut } from "@/app/login/actions"
 
 // Trends only appears once the tenant has ≥2 comparable updates on record (the
 // layout computes `showTrends`) — otherwise the page has nothing to chart and is
@@ -29,8 +29,6 @@ const TRENDS_ITEM = { href: "/dashboard/trends", label: "Trends", icon: Trending
 
 export function AppSidebar({ showTrends = false }: { showTrends?: boolean }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const supabase = createClient()
   // Slot Trends just above Reports when the tenant has history to show.
   const navItems = showTrends
     ? baseNav.flatMap((item) => (item.href === "/dashboard/reports" ? [TRENDS_ITEM, item] : [item]))
@@ -40,8 +38,7 @@ export function AppSidebar({ showTrends = false }: { showTrends?: boolean }) {
   const { setOpenMobile } = useSidebar()
 
   async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push("/login")
+    await signOut()
   }
 
   return (
