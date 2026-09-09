@@ -13,6 +13,17 @@ export interface BillingActionState {
   message: string
 }
 
+// A platform admin viewing another tenant arrives with role 'owner', which is
+// what makes the rest of the app usable from over there. Money is the one
+// place that is wrong: a checkout attaches a card, and a portal session can
+// cancel a live subscription — neither is something to do on a customer's
+// behalf by accident, from a screen whose only cue is a small tag in the
+// corner. Billing stays on your own workspace; that is deliberate, and the
+// message says so rather than pretending the button failed.
+const operatorElsewhere = (operator: { isHome: boolean } | null) =>
+  operator !== null && !operator.isHome
+const NOT_YOURS = 'You’re viewing another workspace. Switch back to your own to manage billing.'
+
 // Start a Stripe Checkout subscription and redirect the owner to it. On success
 // Stripe redirects back to /dashboard/billing; the webhook is what actually
 // flips subscription_status (don't trust the return URL for entitlement).
@@ -20,7 +31,10 @@ export async function startCheckout(
   _prev: BillingActionState,
   _formData: FormData,
 ): Promise<BillingActionState> {
-  const { clientId, role, email } = await getSessionContext()
+  const { clientId, role, email, operator } = await getSessionContext()
+  if (operatorElsewhere(operator)) {
+    return { ok: false, message: NOT_YOURS }
+  }
   if (role !== 'owner') {
     return { ok: false, message: 'Only the workspace owner can manage billing.' }
   }
@@ -71,7 +85,10 @@ export async function openBillingPortal(
   _prev: BillingActionState,
   _formData: FormData,
 ): Promise<BillingActionState> {
-  const { clientId, role } = await getSessionContext()
+  const { clientId, role, operator } = await getSessionContext()
+  if (operatorElsewhere(operator)) {
+    return { ok: false, message: NOT_YOURS }
+  }
   if (role !== 'owner') {
     return { ok: false, message: 'Only the workspace owner can manage billing.' }
   }

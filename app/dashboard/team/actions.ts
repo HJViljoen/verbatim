@@ -94,9 +94,15 @@ export async function inviteMember(_prev: ActionState, formData: FormData): Prom
 
 const idSchema = z.object({ id: z.uuid() })
 
-// Owner/admin revokes a pending invite. RLS scopes the update to the tenant.
+// Owner/admin revokes a pending invite.
+//
+// The .eq('client_id') is not belt-and-braces: it used to be RLS alone that
+// scoped this update to the tenant, and RLS stops being the fence when the
+// session client is the service role — which it now is for a platform admin
+// viewing another workspace (lib/auth.ts). Every other query on this path was
+// already tenant-scoped in SQL; this was the one that wasn't.
 export async function revokeInvitation(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const { supabase, role } = await getSessionContext()
+  const { supabase, clientId, role } = await getSessionContext()
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to do that.' }
   }
@@ -107,6 +113,7 @@ export async function revokeInvitation(_prev: ActionState, formData: FormData): 
     .from('invitations')
     .update({ status: 'revoked' })
     .eq('id', parsed.data.id)
+    .eq('client_id', clientId)
     .eq('status', 'pending')
   if (error) return { ok: false, message: `Could not revoke: ${error.message}` }
 

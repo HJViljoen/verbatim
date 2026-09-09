@@ -132,6 +132,21 @@ functions (defined in the baseline).
   apply `20260822110000_demographic_redact_backfill.sql` AFTER (its readers
   must be live) → run `retention-dry.ts --refresh-sample 50` → then
   `RETENTION_ENABLED=1` and watch the first sweep.
+- **Workspace switcher (operator only, 2026-09-09)**: a user listed in
+  `public.platform_admins` sees a tenant dropdown in place of the sidebar
+  wordmark and can point their session at any client — the whole app follows,
+  reads and writes alike, with an "Operator" tag in the header whenever the
+  viewed tenant is not their own. The mechanism is one httpOnly cookie
+  (`vb_workspace`, a client uuid, one year) honoured **only** in `lib/auth.ts`
+  and **only** after `isPlatformAdmin()` passes; for anyone else the cookie is
+  inert, so forging it changes nothing. While viewing another tenant the
+  session's role is `owner` and reads use the service role (RLS keys every
+  tenant policy on the caller's own `users.client_id`, so the session client
+  would see nothing over there) — writes already went through the service role
+  everywhere. Billing/Stripe actions are the one exception and refuse to run
+  from an operator view. Adding an operator is a hand-written
+  `insert into platform_admins (user_id) values (...)`; there is no UI, no env
+  allowlist, and no migration behind this feature.
 - Run state lives in `pipeline_runs.status`
   (`running`/`completed`/`partial`/`failed`); a run failure also emails
   `ALERT_EMAIL` when configured.
