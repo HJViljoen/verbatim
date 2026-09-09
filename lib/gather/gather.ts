@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
-import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodWindowDays, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
+import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
 import { runActor, isActorRunFailedError } from './apify'
 import { adapters } from './platforms'
 import { parseSubreddits, activeSubreddits, subredditLabel } from './subreddits'
@@ -22,6 +22,7 @@ import type {
   PlatformAdapter,
   FetchedTranscript,
   TranscriptResult,
+  SearchVariant,
 } from './types'
 
 // Gather orchestrator. For each platform: search → normalise → upsert videos →
@@ -169,8 +170,6 @@ export interface GatherWindow {
   since: string | null
 }
 
-const sinceDateFor = (period: string): string =>
-  new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
 
 /** True when a row belongs to the window. Null/unknown dates STAY — only
  *  content KNOWN older than the window is excluded, so a platform with patchy
@@ -203,7 +202,7 @@ export async function resolveGatherWindow(clientId: string, runId: string, perio
     .limit(1)
     .maybeSingle()
   if (error) throw new Error(`resolve gather window: ${error.message}`)
-  return data ? { baseline: false, since: sinceDateFor(period) } : { baseline: true, since: null }
+  return data ? { baseline: false, since: periodSince(period) } : { baseline: true, since: null }
 }
 
 // ---- step-sized pieces -------------------------------------------------------
@@ -217,7 +216,22 @@ export interface SearchTask {
    *  `keyword` as a search term. `keyword` is then the display label ('r/x'),
    *  which keeps source_keywords and keyword_performance meaningful. */
   community?: string
+  /** Which slice of the platform's surface this task asks for (Instagram:
+   *  reels vs feed posts). Absent on platforms with a single surface. */
+  variant?: SearchVariant
 }
+
+/** A task's human label — bucket, keyword, and the variant when there is one. */
+export const searchLabel = (t: SearchTask): string =>
+  `${t.bucket}:${t.keyword}${t.variant ? `:${t.variant}` : ''}`
+
+/**
+ * The Inngest step id for one search task. Step ids are a stability contract,
+ * so the variant is a SUFFIX and only appears where a variant exists: every
+ * platform but Instagram keeps the id it has always had.
+ */
+export const searchStepId = (t: SearchTask): string =>
+  `search:${t.platform}:${t.keyword}${t.variant ? `:${t.variant}` : ''}`
 
 /** One keyword search's normalised output (videos tagged with the keyword). */
 export interface SearchResult {
@@ -240,30 +254,50 @@ export interface GateResult {
 
 /** The full run's search plan: platform × keyword. Platforms without an adapter
  *  are skipped (the orchestrator has nothing to run for them). */
+/**
+ * Every search task for ONE platform — the shared body of both plan paths (the
+ * Inngest fan-out and the CLI's runGather), so a spend-bearing change can never
+ * land on one and not the other. Pure: config in, tasks out.
+ *
+ * A platform that declares `searchVariants` gets one task per keyword PER
+ * variant (Instagram: reels + posts, because its actor returns one or the other
+ * per call). The variants share the keyword, so keyword_performance still
+ * aggregates them into that keyword's single (run, platform, keyword) row.
+ */
+export function buildPlatformTasks(config: GatherConfig, platform: Platform): SearchTask[] {
+  const adapter = adapters[platform]
+  if (!adapter) return []
+  const variants = adapter.searchVariants
+  const tasks: SearchTask[] = []
+  for (const group of buildSearchPlan(config)) {
+    if (variants?.length) {
+      for (const variant of variants) tasks.push({ platform, keyword: group.keyword, bucket: group.bucket, variant })
+    } else {
+      tasks.push({ platform, keyword: group.keyword, bucket: group.bucket })
+    }
+  }
+  // Reddit additionally harvests each discovered community WHOLESALE — the
+  // conversation people have when they aren't using our keywords is the only
+  // thing Reddit offers that TikTok/Instagram don't. One extra search per
+  // active community, so the plan grows by N+M, never N*M.
+  // Gated by the same flag as discovery. Without this the flag is a one-way
+  // switch: once communities are promoted, turning it OFF would stop proposing
+  // but keep fanning out M harvest searches and their comment scrapes every
+  // run, and the only rollback would be hand-editing jsonb.
+  if (platform === 'reddit' && redditDiscoveryEnabled()) {
+    for (const name of activeSubreddits(config.subreddits)) {
+      tasks.push({ platform, keyword: subredditLabel(name), bucket: 'industry', community: name })
+    }
+  }
+  return tasks
+}
+
 export async function planGatherSearches(clientId: string, platforms?: Platform[]): Promise<SearchTask[]> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, clientId)
   const wanted = platforms ?? (config.platforms as Platform[])
   const tasks: SearchTask[] = []
-  for (const platform of wanted) {
-    if (!adapters[platform]) continue
-    for (const group of buildSearchPlan(config)) {
-      tasks.push({ platform, keyword: group.keyword, bucket: group.bucket })
-    }
-    // Reddit additionally harvests each discovered community WHOLESALE — the
-    // conversation people have when they aren't using our keywords is the only
-    // thing Reddit offers that TikTok/Instagram don't. One extra search per
-    // active community, so the plan grows by N+M, never N*M.
-    // Gated by the same flag as discovery. Without this the flag is a one-way
-    // switch: once communities are promoted, turning it OFF would stop proposing
-    // but keep fanning out M harvest searches and their comment scrapes every
-    // run, and the only rollback would be hand-editing jsonb.
-    if (platform === 'reddit' && redditDiscoveryEnabled()) {
-      for (const name of activeSubreddits(config.subreddits)) {
-        tasks.push({ platform, keyword: subredditLabel(name), bucket: 'industry', community: name })
-      }
-    }
-  }
+  for (const platform of wanted) tasks.push(...buildPlatformTasks(config, platform))
   return capSearchPlan(tasks)
 }
 
@@ -304,7 +338,7 @@ export function capSearchPlan(
   // Loud: a silently shortened plan reads as a quiet week.
   console.warn(
     `[plan-gather] ${tasks.length} searches planned, capping at ${cap}. ` +
-    `Dropped ${finalDropped.length}: ${finalDropped.map((t) => `${t.platform}:${t.keyword}`).join(', ')}`,
+    `Dropped ${finalDropped.length}: ${finalDropped.map((t) => `${t.platform}:${searchLabel(t)}`).join(', ')}`,
   )
   return kept
 }
@@ -319,6 +353,8 @@ export async function searchOne(opts: {
   bucket: KeywordBucket
   /** Reddit community harvest — see SearchTask.community. */
   community?: string
+  /** Instagram's reels/posts split — see SearchTask.variant. */
+  variant?: SearchVariant
   maxVideos?: number
   period?: string
 }): Promise<SearchResult> {
@@ -338,6 +374,7 @@ export async function searchOne(opts: {
   } else if (adapter.videoSearch) {
     const { actor, input } = adapter.videoSearch(config, [opts.keyword], config.max_videos, {
       community: opts.community,
+      variant: opts.variant,
     })
     raw = await runActor(actor, input)
   } else {
@@ -1094,22 +1131,18 @@ export async function runGather(opts: GatherOptions): Promise<PlatformResult[]> 
       // Reddit, one community harvest per active subreddit. Kept identical on
       // purpose: this is the only path with --dry-run, and a spend-bearing
       // feature the CLI can't exercise is one that can only be tested in prod.
-      const tasks = [
-        ...buildSearchPlan(config).map((g) => ({ keyword: g.keyword, bucket: g.bucket, community: undefined as string | undefined })),
-        ...(platform === 'reddit' && redditDiscoveryEnabled()
-          ? activeSubreddits(config.subreddits).map((name) => ({ keyword: subredditLabel(name), bucket: 'industry' as KeywordBucket, community: name }))
-          : []),
-      ]
+      const tasks = buildPlatformTasks(config, platform)
       const searches: SearchResult[] = []
       for (const task of tasks) {
         try {
           searches.push(await searchOne({
             clientId: opts.clientId, runId: opts.runId, platform,
             keyword: task.keyword, bucket: task.bucket, community: task.community,
+            variant: task.variant,
             maxVideos: opts.maxVideos, period: opts.period,
           }))
         } catch (e) {
-          errors.push(`search ${task.bucket}:${task.keyword}: ${(e as Error).message}`)
+          errors.push(`search ${searchLabel(task)}: ${(e as Error).message}`)
           searches.push({ keyword: task.keyword, bucket: task.bucket, videos: [] })
         }
       }

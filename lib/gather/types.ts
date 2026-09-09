@@ -147,6 +147,14 @@ export interface NormaliseCtx {
   config: GatherConfig
 }
 
+/**
+ * A result variant a platform's search must run SEPARATELY to cover its whole
+ * surface. Instagram's flagship actor answers with either reels or feed posts
+ * per call (`resultsType`), never both, so one keyword needs two searches;
+ * every other platform returns everything in one and leaves this alone.
+ */
+export type SearchVariant = 'reels' | 'posts'
+
 /** The minimum a video needs for its comment scrape. */
 export interface VideoRef {
   video_id: string
@@ -177,11 +185,22 @@ export interface PlatformAdapter {
     config: GatherConfig,
     terms: string[],
     limit: number,
-    /** Community harvest (Reddit): pull a whole community's recent posts rather
-     *  than running a keyword search. Absent = keyword search, the behaviour
-     *  every other platform has. Platforms that ignore it are unaffected. */
-    opts?: { community?: string },
+    opts?: {
+      /** Community harvest (Reddit): pull a whole community's recent posts rather
+       *  than running a keyword search. Absent = keyword search, the behaviour
+       *  every other platform has. Platforms that ignore it are unaffected. */
+      community?: string
+      /** Which slice of the platform's surface this search asks for — see
+       *  `searchVariants`. Absent on platforms that have only one. */
+      variant?: SearchVariant
+    },
   ): { actor: string; input: RawItem }
+  /**
+   * The variants the planner must fan this platform's every keyword out over.
+   * Absent = one search per keyword (the shape every platform had before
+   * Instagram needed two). Order is the planner's order.
+   */
+  searchVariants?: readonly SearchVariant[]
   /** Apify actor slug + input for scraping one video's comments. */
   commentScrape?(video: VideoRef, config: GatherConfig): { actor: string; input: RawItem }
   /**

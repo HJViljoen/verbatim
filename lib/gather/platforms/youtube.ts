@@ -2,7 +2,7 @@ import type { PlatformAdapter, GatherConfig, VideoRef, RawItem, FetchedTranscrip
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
 import { runActor } from '../apify'
-import { APIFY_ACTORS } from '../../config'
+import { APIFY_ACTORS, periodWindowDays } from '../../config'
 
 // YouTube adapter — official YouTube Data API v3 (replaced the Apify actor on
 // 2026-07-05). YouTube is the one platform with a free, complete, reliable
@@ -36,10 +36,10 @@ function itemsOf(data: Record<string, unknown>): RawItem[] {
   return Array.isArray(data.items) ? (data.items as RawItem[]) : []
 }
 
-/** report_period → RFC-3339 `publishedAfter` lower bound for the search window. */
+/** report_period → RFC-3339 `publishedAfter` lower bound for the search window.
+ *  Same window length as everything else — periodWindowDays is the one mapping. */
 function periodToPublishedAfter(period: string): string {
-  const days = period === 'daily' ? 1 : period === 'monthly' ? 30 : 7
-  return new Date(Date.now() - days * 86_400_000).toISOString()
+  return new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString()
 }
 
 /** ISO-8601 duration ('PT1M30S') → seconds. */

@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
-import { planGatherSearches, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
+import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
 import { decideAnalysis, emptyReasonTally, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
@@ -365,15 +365,15 @@ export const runPipeline = inngest.createFunction(
           const wave = await Promise.all(
             tasks.slice(w, w + SEARCH_PARALLEL).map(async (task): Promise<SearchResult> => {
               try {
-                return await step.run(`search:${platform}:${task.keyword}`, () =>
+                return await step.run(searchStepId(task), () =>
                   searchOne({
                     clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
-                    community: task.community,
+                    community: task.community, variant: task.variant,
                     maxVideos: options.maxVideos, period: options.period,
                   }),
                 )
               } catch (e) {
-                noteError(`search:${platform}:${task.keyword}`, e)
+                noteError(searchStepId(task), e)
                 return { keyword: task.keyword, bucket: task.bucket, videos: [] }
               }
             }),

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { inWindow, resolveScrapeCap, capSearchPlan } from './gather'
+import { inWindow, resolveScrapeCap, capSearchPlan, buildPlatformTasks, searchStepId, searchLabel } from './gather'
 import type { SearchTask } from './gather'
-import { periodWindowDays } from '../config'
+import { periodWindowDays, periodSince } from '../config'
 import { reddit } from './platforms/reddit'
 import { usableTranscript } from '../pipeline/transcript-input'
 import type { GatherConfig, NormaliseCtx, VideoRef } from './types'
@@ -317,5 +317,86 @@ describe('capSearchPlan — the run-level spend ceiling (T0-2)', () => {
 
   it('a single platform over the cap is simply trimmed', () => {
     expect(capSearchPlan(plan({ tiktok: 200 }), 80)).toHaveLength(80)
+  })
+})
+
+
+// Instagram's dual search (2026-09-09). One keyword becomes two tasks because
+// the actor answers with either reels or feed posts, never both — and the two
+// must stay one keyword downstream so keyword_performance keeps aggregating
+// them into that keyword's single (run, platform, keyword, bucket) row.
+
+const planConfig = (over: Partial<GatherConfig> = {}): GatherConfig => ({
+  brand_keywords: ['sealand gear'],
+  competitor_keywords: ['cotopaxi backpack'],
+  competitor_names: ['Cotopaxi'],
+  industry_keywords: ['upcycled bag'],
+  platforms: ['instagram', 'tiktok'],
+  max_videos: 100,
+  comment_depth: 100,
+  report_period: 'monthly',
+  own_handles: {},
+  subreddits: [],
+  ...over,
+})
+
+describe('buildPlatformTasks — per-platform search plan', () => {
+  it('expands every Instagram keyword into its two variants', () => {
+    const tasks = buildPlatformTasks(planConfig(), 'instagram')
+    expect(tasks).toHaveLength(6) // 3 keywords x 2 variants
+    expect(tasks.filter((t) => t.keyword === 'sealand gear').map((t) => t.variant)).toEqual(['reels', 'posts'])
+    expect(tasks.every((t) => t.platform === 'instagram')).toBe(true)
+  })
+
+  it('leaves single-surface platforms at one task per keyword', () => {
+    const tasks = buildPlatformTasks(planConfig(), 'tiktok')
+    expect(tasks).toHaveLength(3)
+    expect(tasks.every((t) => t.variant === undefined)).toBe(true)
+  })
+
+  it('keeps the keyword itself unsplit, so both variants credit one keyword row', () => {
+    const keywords = new Set(buildPlatformTasks(planConfig(), 'instagram').map((t) => t.keyword))
+    expect([...keywords].sort()).toEqual(['cotopaxi backpack', 'sealand gear', 'upcycled bag'])
+  })
+
+  it('searches a keyword listed in two buckets only once', () => {
+    const tasks = buildPlatformTasks(planConfig({ industry_keywords: ['sealand gear', 'upcycled bag'] }), 'instagram')
+    expect(tasks.filter((t) => t.keyword === 'sealand gear')).toHaveLength(2) // the two variants, not four
+  })
+})
+
+describe('searchStepId — Inngest ids stay unique and stable', () => {
+  it('suffixes the variant only where one exists (other platforms unchanged)', () => {
+    expect(searchStepId({ platform: 'tiktok', keyword: 'upcycled bag', bucket: 'industry' })).toBe('search:tiktok:upcycled bag')
+    expect(searchStepId({ platform: 'instagram', keyword: 'upcycled bag', bucket: 'industry', variant: 'reels' }))
+      .toBe('search:instagram:upcycled bag:reels')
+  })
+
+  it('gives every task in a full plan its own id', () => {
+    const config = planConfig({ platforms: ['instagram', 'tiktok', 'youtube'] })
+    const tasks = (['instagram', 'tiktok', 'youtube'] as const).flatMap((p) => buildPlatformTasks(config, p))
+    const ids = tasks.map(searchStepId)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('labels a task with its bucket, keyword and variant', () => {
+    expect(searchLabel({ platform: 'instagram', keyword: 'upcycled bag', bucket: 'industry', variant: 'posts' }))
+      .toBe('industry:upcycled bag:posts')
+    expect(searchLabel({ platform: 'tiktok', keyword: 'upcycled bag', bucket: 'industry' })).toBe('industry:upcycled bag')
+  })
+})
+
+describe('periodSince — the one date the gather agrees on', () => {
+  it('is periodWindowDays back from today, as a UTC date', () => {
+    for (const period of ['daily', 'weekly', 'monthly']) {
+      const expected = new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
+      expect(periodSince(period)).toBe(expected)
+    }
+  })
+
+  it('is a plain YYYY-MM-DD the Instagram actor and inWindow both accept', () => {
+    expect(periodSince('weekly')).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(inWindow(periodSince('weekly'), periodSince('weekly'))).toBe(true)
+    expect(inWindow(periodSince('monthly'), periodSince('weekly'))).toBe(false)
   })
 })

@@ -216,7 +216,13 @@ export const APIFY_ACTORS = {
     transcript: process.env.APIFY_YT_TRANSCRIPT_ACTOR ?? 'scrape-creators~best-youtube-transcripts-scraper',
   },
   instagram: {
-    video: process.env.APIFY_IG_VIDEO_ACTOR ?? 'reGe1ST3OBgYZSsZJ', // apify/instagram-hashtag-scraper
+    // The flagship apify/instagram-scraper drives discovery too (2026-09-09).
+    // apify/instagram-hashtag-scraper (reGe1ST3OBgYZSsZJ) has NO date input, so
+    // every IG search paid for whatever the hashtag page happened to show and
+    // the window was enforced afterwards by throwing results away. The flagship
+    // takes `onlyPostsNewerThan` and a `resultsType`, which buys both a dated
+    // search and the reels/posts split IG needs to be covered at all.
+    video: process.env.APIFY_IG_VIDEO_ACTOR ?? 'shu8hvrXbJbY3Eb9W', // apify/instagram-scraper
     // apify/instagram-scraper (flagship) in `comments` mode — replaced
     // apify/instagram-comment-scraper (SbK00X0JYCPblD2wp), which returned 0.
     comment: process.env.APIFY_IG_COMMENT_ACTOR ?? 'shu8hvrXbJbY3Eb9W',
@@ -796,6 +802,15 @@ export function periodToTikTokRange(period: string): string {
  *  same numbers). */
 export function periodWindowDays(period: string): number {
   return period === 'daily' ? 1 : period === 'monthly' ? 30 : 7
+}
+
+/** report_period → the window's inclusive lower bound as 'YYYY-MM-DD' (UTC day).
+ *  The one date the whole gather agrees on: the flow-run window filter, the
+ *  Instagram actor's `onlyPostsNewerThan`, and the owned-census stop condition
+ *  all read it, so a search bound can never disagree with the filter that
+ *  judges what the search returned. */
+export function periodSince(period: string): string {
+  return new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
 }
 
 

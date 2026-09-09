@@ -1,11 +1,12 @@
 import type { PlatformAdapter } from '../types'
-import { APIFY_ACTORS, COMMENT_THRESHOLD } from '../../config'
-import { num, str, first, getPath, toDateOnly, cleanHashtag } from '../util'
+import { APIFY_ACTORS, COMMENT_THRESHOLD, periodSince } from '../../config'
+import { num, str, first, getPath, toDateOnly, cleanHashtag, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
 
-// Instagram adapter. Quirks from Technical.md: the search input uses `hashtags`
-// (alphanumeric only) / `resultsLimit` / `resultsType`, not the TikTok shape;
-// IG exposes neither views nor shares; the id is the post shortcode.
+// Instagram adapter. Discovery runs on the flagship apify/instagram-scraper
+// (2026-09-09): hashtag pages by `directUrls`, one `resultsType` per call,
+// `resultsLimit` per url, `onlyPostsNewerThan` for the window. IG exposes no
+// share count; reels (only) carry plays; the id is the post shortcode.
 //
 // Comments (2026-07-05): moved off apify/instagram-comment-scraper (returned 0
 // for every video) to the flagship apify/instagram-scraper in `comments` mode —
@@ -15,27 +16,49 @@ import { tagVideo } from '../tagging'
 // from the shortcode. ⚠️ Not yet re-run live (Apify was over-quota) — smoke-test
 // one IG video's comments on the next paid run before trusting it.
 
+/** `productType` → the format name the product speaks. The flagship actor
+ *  reports 'clips' (a reel), 'feed' (a single photo/video post) and
+ *  'carousel_container' (a multi-image post); `type` ('Video'/'Image'/'Sidecar')
+ *  is the older, coarser field and stays as the fallback. */
+function contentFormat(v: Record<string, unknown>): string {
+  const productType = str(v.productType)
+  if (productType === 'clips') return 'Reel'
+  if (productType === 'feed') return 'Post'
+  if (productType === 'carousel_container') return 'Carousel'
+  const type = str(v.type)
+  if (type === 'Video') return 'Reel'
+  if (type === 'Sidecar') return 'Carousel'
+  if (type === 'Image') return 'Post'
+  return 'Reel'
+}
+
 export const instagram: PlatformAdapter = {
   platform: 'instagram',
 
-  videoSearch(config, terms, limit) {
-    // This actor applies resultsLimit PER hashtag. The orchestrator now searches
-    // one keyword at a time (terms is a single hashtag), so resultsLimit is that
-    // keyword's quota — matching TT/YT and removing the old per-hashtag volume skew.
-    // (cleanHashtag strips '#'/spaces/punctuation — required.)
+  // Both halves of Instagram, dated at the source (2026-09-09). The flagship
+  // actor answers a hashtag URL with EITHER reels OR feed posts per call, so a
+  // keyword only gets its full surface from two searches — see `searchVariants`.
+  // `onlyPostsNewerThan` moves the window into the search itself: the hashtag
+  // scraper had no date input, so IG was the one platform paying for whatever
+  // the tag page happened to show and then discarding most of it in the gate.
+  //
+  // Baseline (unwindowed) runs are dated here too, exactly as TikTok's
+  // `dateRange` and YouTube's `publishedAfter` already are — a search bound is
+  // the platform's, not the run's.
+  searchVariants: ['reels', 'posts'] as const,
+
+  videoSearch(config, terms, limit, opts) {
+    // resultsLimit is PER url. The orchestrator searches one keyword at a time
+    // (terms is a single hashtag), so it is that keyword's quota — matching
+    // TT/YT. (cleanHashtag strips '#'/spaces/punctuation — required.)
     const hashtags = terms.map(cleanHashtag).filter(Boolean)
     return {
       actor: APIFY_ACTORS.instagram.video,
       input: {
-        hashtags,
+        directUrls: hashtags.map((t) => `https://www.instagram.com/explore/tags/${t}/`),
+        resultsType: opts?.variant ?? 'reels',
         resultsLimit: limit,
-        // Reels (not photo posts) for V1: positioning is "media-based" (we analyse
-        // the comments, not the video), so this is a comment-signal/consistency
-        // call — reels are comment-dense and keep IG consistent with the other two
-        // short-form-video V1 platforms. Revisit "all posts" if IG volume is thin.
-        // Confirm the exact value the actor expects (could be 'reels' / 'clips').
-        resultsType: 'reels',
-        keywordSearch: false,
+        onlyPostsNewerThan: periodSince(config.report_period),
       },
     }
   },
@@ -51,8 +74,11 @@ export const instagram: PlatformAdapter = {
     if (!shortCode) return null
 
     const account_name = str(first(v.ownerUsername, getPath(v, ['owner', 'username'])))
-    const likes = num(first(v.likesCount, v.likes))
-    const comments_count = num(first(v.commentsCount, v.commentCount))
+    // -1 is Instagram's "likes hidden", not a count — floor it at 0 so it can
+    // never subtract from an engagement rate or a leaderboard.
+    const likes = Math.max(0, num(first(v.likesCount, v.likes)))
+    const comments_count = Math.max(0, num(first(v.commentsCount, v.commentCount)))
+    const views = Math.max(0, num(first(v.videoPlayCount, v.igPlayCount)))
 
     const rawTags = Array.isArray(v.hashtags) ? v.hashtags : []
     const hashtags = rawTags.map((t: unknown) => str(t)).filter(Boolean)
@@ -68,15 +94,18 @@ export const instagram: PlatformAdapter = {
       account_followers: num(first(v.ownerFollowers, getPath(v, ['owner', 'followers']))),
       caption,
       hashtags,
-      content_format: str(first(v.type, v.productType)) || 'Reel',
-      views: 0, // IG doesn't expose view counts; 0 per the schema's count convention (engagement_rate stays null)
+      content_format: contentFormat(v),
+      // The flagship actor DOES expose plays on reels (`videoPlayCount`) — the
+      // hashtag scraper never did, hence the old hardcoded 0. Photo posts still
+      // carry no count, and 0 views keeps engagement_rate null for them.
+      views,
       likes,
       shares: 0,
       comments_count,
-      engagement_rate: null, // no views → no blended engagement
+      engagement_rate: views > 0 ? engagementRate(views, likes, 0, comments_count) : null,
       upload_date: toDateOnly(v.timestamp, v.takenAt),
       audio_name: str(first(getPath(v, ['musicInfo', 'song_name']), v.musicName)),
-      is_sponsored: Boolean(first(v.isSponsored, v.isPaidPartnership, false)),
+      is_sponsored: Boolean(first(v.paidPartnership, v.isSponsored, v.isPaidPartnership, false)),
       duration_seconds: Math.round(num(first(v.videoDuration, v.duration))),
       ...tagVideo({ account_name, caption, hashtags }, ctx.config),
     }
