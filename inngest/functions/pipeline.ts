@@ -22,7 +22,7 @@ import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
-import { withApifyRunContext } from '@/lib/gather/apify-runs'
+import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
@@ -911,6 +911,26 @@ export const runPipeline = inngest.createFunction(
         error_message: summariseRunErrors(totalErrors, runErrors),
       }).eq('id', runId)
     })
+
+    // 7a-i. Settle the Apify ledger BEFORE reading it. `usageTotalUsd` on a
+    //     just-finished run under-reports: a pay-per-event actor's charges land
+    //     about a minute after the run ends. Measured live 2026-09-09 — an
+    //     Instagram run read $0 at the moment it returned and $0.0023 sixty
+    //     seconds later, chargedEventCounts going 0 → 1 — so reading usage at
+    //     the moment the actor returns does not under-report by a little, it
+    //     can report nothing at all. The step waits out the youngest run's
+    //     settling minute (bounded, SETTLE_MAX_WAIT_MS) and re-reads each row.
+    //     Non-fatal: an unsettled row still counts, and run_costs says
+    //     'exact_unsettled' rather than presenting a floor as a total.
+    const settled = await step
+      .run('settle-apify-usage', () => settleApifyRuns(clientId, runId))
+      .catch((e) => {
+        console.error(`[apify-settle] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+    if (settled?.checked) {
+      console.log(`[apify-settle] ${settled.settled}/${settled.checked} settled (${settled.failed} failed) after ${Math.round(settled.waitedMs / 1000)}s · $${settled.beforeUsd} → $${settled.afterUsd}`)
+    }
 
     // 7a. Cost ledger. After close-run so the run's own status write is never
     //     at risk from bookkeeping, and non-fatal for the same reason: what a

@@ -8,10 +8,11 @@ import { createAdminClient, selectAll } from '../supabase-admin'
 // had to come from Apify's own billing history, because the product held no
 // record of what it had spent.
 
-/** Apify's account-level runs list. run-sync-get-dataset-items returns only
- *  dataset items — no run id, no usage — so per-call attribution would mean
- *  changing the hottest, most expensive path in gather. This reads the account
- *  ledger once at close-run instead and attributes by time window. */
+/** Apify's account-level runs list — the FALLBACK path since Phase 3
+ *  (2026-09-09). Runs that predate apify_runs, and any run whose best-effort
+ *  row writes all failed, still get a figure this way: read the account ledger
+ *  once at close-run and attribute by time window. It is labelled for what it
+ *  is, because the account is shared and the window is not a boundary. */
 const APIFY_RUNS_URL = 'https://api.apify.com/v2/actor-runs'
 
 export interface ApifyRun {
@@ -21,7 +22,34 @@ export interface ApifyRun {
   actId?: string
 }
 
-export type ApifyAttribution = 'exact' | 'ambiguous' | 'partial' | 'unavailable'
+export type ApifyAttribution = 'exact' | 'exact_unsettled' | 'ambiguous' | 'partial' | 'unavailable'
+
+export interface ApifyRunRow {
+  usage_usd: number | string | null
+  settled: boolean | null
+}
+
+/**
+ * Sum what THIS run's own actor calls cost.
+ *
+ * Exact by construction, not by inference: every row is one actor run this
+ * pipeline run started (lib/gather/apify-runs.ts), so no other tenant's spend
+ * can land in it and no page limit can cut it short.
+ *
+ * 'exact_unsettled' is the honest label when the settle pass could not re-read
+ * a row: a pay-per-event actor's charges land about a minute AFTER its run
+ * ends, so an unsettled figure is a floor. Measured live 2026-09-09 — an
+ * Instagram run read $0 at the moment it returned and $0.0023 a minute later,
+ * with chargedEventCounts going 0 → 1. Unsettled does not mean approximately
+ * right; it can mean nothing has been charged yet at all.
+ */
+export function exactApifySpend(rows: ApifyRunRow[]): { usd: number; attribution: ApifyAttribution } {
+  const usd = rows.reduce((s, r) => s + Number(r.usage_usd ?? 0), 0)
+  return {
+    usd: Math.round(usd * 10000) / 10000,
+    attribution: rows.some((r) => !r.settled) ? 'exact_unsettled' : 'exact',
+  }
+}
 
 /**
  * Sum the Apify runs that belong to this pipeline run's window.
@@ -122,34 +150,53 @@ export async function writeRunCosts(clientId: string, runId: string): Promise<Ru
     Object.entries(byPass).reduce((s, [pass, v]) => (pass === 'transcribe' ? s : s + v), 0) * 10000,
   ) / 10000
 
-  // NOTE: an analysis-only resume rewrites started_at to now (T0-1), so a
-  // resumed run's window deliberately excludes the original gather's Apify
-  // spend — that spend belongs to the attempt that made it, not to the resume.
-  const windowStart = (runRow?.started_at as string | undefined) ?? new Date(Date.now() - 6 * 3600_000).toISOString()
-  const windowEnd = new Date().toISOString()
+  // Apify, exact: this run's OWN actor calls, one row each (Phase 3). Nothing
+  // is inferred — no other tenant's spend can be in the set and no page limit
+  // can cut it short — so this wins whenever the run has rows at all.
+  const { data: apifyRows } = await admin
+    .from('apify_runs')
+    .select('usage_usd, settled')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+  const rows = (apifyRows ?? []) as ApifyRunRow[]
 
-  const [apifyPage, { count: concurrent }] = await Promise.all([
-    fetchApifyRuns(windowStart),
-    // OVERLAP, not "started in the window": a run that began before this one
-    // and is still in flight spends on the same Apify account, and the
-    // scheduler fans tenants out seconds apart. Counting only runs that
-    // STARTED inside the window labelled the last-dispatched run 'exact' while
-    // two others were spending alongside it.
-    admin.from('pipeline_runs')
-      .select('id', { head: true, count: 'exact' })
-      .neq('id', runId)
-      .lte('started_at', windowEnd)
-      .or(`completed_at.is.null,completed_at.gte.${windowStart}`),
-  ])
+  let apify: { usd: number; attribution: ApifyAttribution }
+  let apifyAvailable = true
+  if (rows.length) {
+    apify = exactApifySpend(rows)
+  } else {
+    // Fallback: runs that predate apify_runs, and the pathological case where
+    // every best-effort row write failed. Attributed by time window, labelled.
+    //
+    // NOTE: an analysis-only resume rewrites started_at to now (T0-1), so a
+    // resumed run's window deliberately excludes the original gather's Apify
+    // spend — that spend belongs to the attempt that made it, not to the resume.
+    const windowStart = (runRow?.started_at as string | undefined) ?? new Date(Date.now() - 6 * 3600_000).toISOString()
+    const windowEnd = new Date().toISOString()
 
-  const apify = apifyPage
-    ? attributeApifySpend(apifyPage.runs, windowStart, windowEnd, (concurrent ?? 0) + 1, apifyPage.complete)
-    : { usd: 0, attribution: 'unavailable' as ApifyAttribution }
+    const [apifyPage, { count: concurrent }] = await Promise.all([
+      fetchApifyRuns(windowStart),
+      // OVERLAP, not "started in the window": a run that began before this one
+      // and is still in flight spends on the same Apify account, and the
+      // scheduler fans tenants out seconds apart. Counting only runs that
+      // STARTED inside the window labelled the last-dispatched run 'exact' while
+      // two others were spending alongside it.
+      admin.from('pipeline_runs')
+        .select('id', { head: true, count: 'exact' })
+        .neq('id', runId)
+        .lte('started_at', windowEnd)
+        .or(`completed_at.is.null,completed_at.gte.${windowStart}`),
+    ])
+    apifyAvailable = !!apifyPage
+    apify = apifyPage
+      ? attributeApifySpend(apifyPage.runs, windowStart, windowEnd, (concurrent ?? 0) + 1, apifyPage.complete)
+      : { usd: 0, attribution: 'unavailable' as ApifyAttribution }
+  }
 
   const summary: RunCostSummary = {
     openaiUsd,
     transcribeUsd,
-    apifyUsd: apifyPage ? apify.usd : null,
+    apifyUsd: apifyAvailable ? apify.usd : null,
     apifyAttribution: apify.attribution,
     byPass,
   }

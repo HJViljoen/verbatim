@@ -52,3 +52,11 @@ comment on table public.apify_runs is
   'One row per Apify actor run started by the pipeline. Summed by run_costs for apify_attribution=''exact''; usage_usd is a floor until settled=true.';
 comment on column public.apify_runs.settled is
   'False until the close-run settle pass re-read usageTotalUsd at least 60s after the run finished. Pay-per-event charges land after the run ends, so an unsettled figure is a floor.';
+
+-- run_costs.apify_attribution gains a fifth value and its first two change
+-- meaning: 'exact' now means "summed from this run's own apify_runs rows",
+-- 'exact_unsettled' the same sum while at least one row is still a floor, and
+-- 'ambiguous'/'partial'/'unavailable' keep their old meanings on the fallback
+-- window path. No CHECK constraint to widen — the column is free text.
+comment on column public.run_costs.apify_attribution is
+  '''exact'' = summed from this run''s apify_runs rows; ''exact_unsettled'' = the same sum with at least one run''s pay-per-event charges not yet settled (a floor); ''ambiguous''/''partial''/''unavailable'' = the account-window fallback for runs with no rows.';

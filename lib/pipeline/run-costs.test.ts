@@ -1,9 +1,40 @@
 import { describe, it, expect } from 'vitest'
-import { attributeApifySpend } from './run-costs'
+import { attributeApifySpend, exactApifySpend } from './run-costs'
 
 const run = (startedAt: string, usd: number) => ({ startedAt, usageTotalUsd: usd })
 
-describe('attributeApifySpend (Tier 1)', () => {
+describe('exactApifySpend (Phase 3) — this run\'s own actor calls', () => {
+  const row = (usd: number | string | null, settled = true) => ({ usage_usd: usd, settled })
+
+  it('sums the run\'s own rows and claims exact', () => {
+    // Nothing inferred: every row IS an actor run this pipeline run started,
+    // so a second tenant on the same Apify account cannot land in the total.
+    expect(exactApifySpend([row(0.0023), row(0.0552), row(1.2)])).toEqual({ usd: 1.2575, attribution: 'exact' })
+  })
+
+  it('says exact_unsettled while any row is still a floor', () => {
+    // Pay-per-event charges land ~a minute after a run ends, so an unsettled
+    // row can read $0 for a run that did cost money (measured live 2026-09-09).
+    const r = exactApifySpend([row(0.5), row(0, false)])
+    expect(r.usd).toBe(0.5)
+    expect(r.attribution).toBe('exact_unsettled')
+  })
+
+  it('reads numeric columns that come back as strings', () => {
+    // postgres numeric arrives from PostgREST as a string.
+    expect(exactApifySpend([row('0.0552'), row('0.0023')]).usd).toBe(0.0575)
+  })
+
+  it('treats a missing usage figure as zero rather than NaN', () => {
+    expect(exactApifySpend([row(null), row(0.1)]).usd).toBe(0.1)
+  })
+
+  it('a run that spent nothing is still exact, not unavailable', () => {
+    expect(exactApifySpend([row(0)])).toEqual({ usd: 0, attribution: 'exact' })
+  })
+})
+
+describe('attributeApifySpend (Tier 1) — the labelled FALLBACK for runs with no rows', () => {
   const start = '2026-08-23T04:00:00Z'
   const end = '2026-08-23T07:00:00Z'
 

@@ -265,12 +265,19 @@ export async function backfillTranscriptsBatch(opts: {
     if (error) errors.push(`backfill update (${v.video_id}): ${error.message}`)
   }
 
-  // Cost (T2.4): the actor's ESTIMATED spend plus the content gate's tokens,
-  // on the 'transcribe' pass so run_costs.transcribe_usd covers both transcript
-  // paths. call_index is offset past the fan-out's batch numbers so the two
-  // paths' rows never look like the same call.
+  // Cost (T2.4): the content gate's tokens, on the 'transcribe' pass so
+  // run_costs.transcribe_usd covers both transcript paths. call_index is offset
+  // past the fan-out's batch numbers so the two paths' rows never look like the
+  // same call.
+  //
+  // The actor's spend is NOT in cost_usd (Phase 3, 2026-09-09): apify_runs now
+  // records what each of these actor calls actually cost, and run_costs reports
+  // it on the apify line. Adding the estimate here too would count the same
+  // money twice — and it was always an estimate against a real bill. It stays
+  // in `response.apify_est_usd` as observability, which is where the media-path
+  // transcribe row has always kept its actor estimate.
   if (!opts.dryRun) {
-    const costUsd = estUsd + estimateCost(CONTENT_GATE_MODEL, gate.prompt, gate.completion)
+    const costUsd = estimateCost(CONTENT_GATE_MODEL, gate.prompt, gate.completion)
     const { error: logErr } = await admin.from('ai_call_log').insert({
       client_id: opts.clientId,
       run_id: opts.runId,
