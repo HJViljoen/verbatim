@@ -32,6 +32,35 @@ export function supportsOwnedProfile(platform: string): boolean {
   return (OWNED_PROFILE_PLATFORMS as readonly string[]).includes(platform)
 }
 
+/**
+ * Whose account is being read. The owned layer was written for the client and
+ * hardcoded that identity into every row it produced; a competitor's own posts
+ * are the same read with a different name on the result, and they are the only
+ * way a competitor page can quote what the competitor actually claims.
+ */
+export type OwnedEntity = { kind: 'client' } | { kind: 'competitor'; name: string }
+
+/** The identity columns an entity's rows carry. One place, so a row can never
+ *  be stamped 'competitor_owned' while claiming to be the client's. */
+export function entityIdentity(entity: OwnedEntity): {
+  source: 'owned' | 'competitor_owned'
+  is_client: boolean
+  is_competitor: boolean
+  competitor_name: string | null
+} {
+  return entity.kind === 'client'
+    ? { source: 'owned', is_client: true, is_competitor: false, competitor_name: null }
+    : { source: 'competitor_owned', is_client: false, is_competitor: true, competitor_name: entity.name }
+}
+
+/** An entity's stable step-id segment. Inngest step ids must be stable strings,
+ *  and a competitor name is free text ("Topo Designs") — this is the slug. */
+export function entitySlug(entity: OwnedEntity): string {
+  if (entity.kind === 'client') return 'client'
+  const slug = entity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return slug || 'competitor'
+}
+
 /** One platform's profile read: the snapshot numbers + recent own posts
  *  (already shaped as VideoInsert rows, WITHOUT source — the orchestrator
  *  stamps source:'owned' + is_client:true on write). */
@@ -141,9 +170,10 @@ export function emptyProfileIsGlitch(postsCount: number | null, recentPosts: num
 export function stampOwnedSource<T extends { video_id: string }>(
   posts: T[],
   existing: { video_id: string; source: string | null }[],
+  fresh: 'owned' | 'competitor_owned' = 'owned',
 ): (T & { source: string })[] {
   const stored = new Map(existing.map((r) => [r.video_id, r.source]))
-  return posts.map((p) => ({ ...p, source: stored.get(p.video_id) ?? 'owned' }))
+  return posts.map((p) => ({ ...p, source: stored.get(p.video_id) ?? fresh }))
 }
 
 /**
@@ -192,76 +222,117 @@ export function stopUploadsWalk(
   return pageDates.length > 0 && pageDates.every((d) => d != null && d < since)
 }
 
-/** One platform's census entry: how many posts the account published in the
- *  window, and the window and handle the count is true for. */
+/** One account's census entry: how many posts it published in the window, and
+ *  the window and handle the count is true for. */
 export interface OwnedCensusEntry {
   posts: number
   since: string
   until: string
   handle: string
 }
-export type OwnedCensus = Record<string, OwnedCensusEntry>
+
+/**
+ * The run's account census. The client's own accounts are the number the share
+ * tile speaks ("you published n posts this update"); competitors are kept in
+ * their own branch, keyed by the exact competitor_names entry, so a competitor
+ * posting daily can never be summed into the client's own count.
+ */
+export interface OwnedCensus {
+  client: Record<string, OwnedCensusEntry>
+  competitors: Record<string, Record<string, OwnedCensusEntry>>
+}
 
 interface CensusRow {
   platform: string
   source?: string | null
   is_client?: boolean | null
+  is_competitor?: boolean | null
+  competitor_name?: string | null
   account_name?: string | null
   upload_date?: string | null
 }
 
+const norm = (x: string | null | undefined) => (x ?? '').trim().toLowerCase()
+
 /**
- * The client's EXACT own-post count per platform for the window — the number
- * behind "you published n posts this update". Built from stored rows so an
- * analysis-only resume reports the same census a full run does.
+ * The EXACT own-post count per account for the window — the number behind "you
+ * published n posts this update", and the same fact for every tracked
+ * competitor. Built from stored rows so an analysis-only resume reports the
+ * same census a full run does.
  *
  * `is_client` alone is not the test: it is true for any video ABOUT the brand,
- * including a stranger's review. Authorship is the account, so the count is
- * over the client's OWN accounts — the configured handle plus whatever
- * account_name the owned reads themselves stored for that platform (YouTube's
- * handle is a channel id, but its rows carry the channel's title).
+ * including a stranger's review. Authorship is the ACCOUNT, so the count is
+ * over the configured handle plus whatever account_name the owned reads
+ * themselves stored for that platform (YouTube's handle is a channel id, but
+ * its rows carry the channel's title).
  *
- * That second half also fixes the undercount that `source = 'owned'` alone
- * would cause: a client post the keyword gather discovered first keeps
- * source 'discovered' forever (metric continuity, stampOwnedSource), and it is
- * still a post the client published.
+ * That second half also fixes the undercount `source = 'owned'` alone would
+ * cause: a post the keyword gather discovered first keeps source 'discovered'
+ * forever (metric continuity, stampOwnedSource), and it is still a post that
+ * account published.
  *
  * Undated rows are excluded: a census is a count, and a post we cannot date
  * cannot be counted into a window.
  */
 export function buildOwnedCensus(
   rows: CensusRow[],
-  opts: { handles: Record<string, string>; since: string; until: string },
+  opts: {
+    handles: Record<string, string>
+    competitorHandles?: Record<string, Record<string, string>>
+    since: string
+    until: string
+  },
 ): OwnedCensus {
-  const norm = (x: string | null | undefined) => (x ?? '').trim().toLowerCase()
-  const ownNames = new Map<string, Set<string>>()
-  for (const [platform, handle] of Object.entries(opts.handles)) {
-    if (handle) ownNames.set(platform, new Set([norm(handle)]))
-  }
-  for (const r of rows) {
-    if (r.source !== 'owned' || !ownNames.has(r.platform)) continue
-    if (r.account_name) ownNames.get(r.platform)!.add(norm(r.account_name))
-  }
-
-  const census: OwnedCensus = {}
-  for (const [platform, handle] of Object.entries(opts.handles)) {
-    if (!handle) continue
-    census[platform] = { posts: 0, since: opts.since, until: opts.until, handle }
-  }
-  for (const r of rows) {
-    const entry = census[r.platform]
-    if (!entry || !r.is_client) continue
-    if (!r.upload_date || r.upload_date < opts.since || r.upload_date > opts.until) continue
-    if (!ownNames.get(r.platform)?.has(norm(r.account_name))) continue
-    entry.posts++
+  const census: OwnedCensus = { client: {}, competitors: {} }
+  countAccounts(rows, opts.handles, { source: 'owned' }, opts, census.client)
+  for (const [name, handles] of Object.entries(opts.competitorHandles ?? {})) {
+    const entry: Record<string, OwnedCensusEntry> = {}
+    countAccounts(rows, handles ?? {}, { source: 'competitor_owned', competitorName: name }, opts, entry)
+    census.competitors[name] = entry
   }
   return census
 }
 
-/** Total posts across every platform's census — the tile's headline number. */
+/** One entity's per-platform counts, written into `into`. */
+function countAccounts(
+  rows: CensusRow[],
+  handles: Record<string, string>,
+  who: { source: string; competitorName?: string },
+  window: { since: string; until: string },
+  into: Record<string, OwnedCensusEntry>,
+): void {
+  const ownNames = new Map<string, Set<string>>()
+  for (const [platform, handle] of Object.entries(handles)) {
+    if (!handle) continue
+    ownNames.set(platform, new Set([norm(handle)]))
+    into[platform] = { posts: 0, since: window.since, until: window.until, handle }
+  }
+  // Names the owned read itself stored for this account — the bridge to rows
+  // the keyword gather found first and left on source 'discovered'.
+  for (const r of rows) {
+    if (r.source !== who.source || !ownNames.has(r.platform)) continue
+    if (who.competitorName && norm(r.competitor_name) !== norm(who.competitorName)) continue
+    if (r.account_name) ownNames.get(r.platform)!.add(norm(r.account_name))
+  }
+  for (const r of rows) {
+    const entry = into[r.platform]
+    if (!entry) continue
+    const belongs = who.competitorName
+      ? r.is_competitor && norm(r.competitor_name) === norm(who.competitorName)
+      : r.is_client
+    if (!belongs) continue
+    if (!r.upload_date || r.upload_date < window.since || r.upload_date > window.until) continue
+    if (!ownNames.get(r.platform)?.has(norm(r.account_name))) continue
+    entry.posts++
+  }
+}
+
+/** The client's own posts across every platform — the share tile's headline
+ *  number. Competitors are deliberately not in it. */
 export function ownedCensusTotal(census: OwnedCensus | null | undefined): number | null {
-  if (!census || !Object.keys(census).length) return null
-  return Object.values(census).reduce((n, e) => n + (e?.posts ?? 0), 0)
+  const client = census?.client
+  if (!client || !Object.keys(client).length) return null
+  return Object.values(client).reduce((n, e) => n + (e?.posts ?? 0), 0)
 }
 
 // ---- Per-platform profile fetchers (I/O) ------------------------------------
@@ -292,9 +363,7 @@ function igPost(post: RawItem, handle: string, followers: number, ctx: Ctx): Vid
     audio_name: '',
     is_sponsored: Boolean(post.paidPartnership),
     duration_seconds: Math.round(num(first(post.videoDuration, post.duration))),
-    is_client: true,
-    is_competitor: false,
-    competitor_name: null,
+    ...identityOf(ctx),
   }
 }
 
@@ -355,9 +424,7 @@ function ttProfile(handle: string, raw: RawItem[], ctx: Ctx): OwnProfile {
       // integer column. Sending the float rejected the whole upsert with 22P02
       // on every retry — the deterministic half of the 2026-08-16 failure.
       duration_seconds: Math.round(num(getPath(v, ['video', 'duration']))),
-      is_client: true,
-      is_competitor: false,
-      competitor_name: null,
+      ...identityOf(ctx),
     })
   }
   const followers = channel?.followers == null ? null : num(channel.followers)
@@ -376,6 +443,15 @@ function ttProfile(handle: string, raw: RawItem[], ctx: Ctx): OwnProfile {
 interface Ctx {
   clientId: string
   runId: string
+  /** Whose account this read belongs to. Absent = the client's (every caller
+   *  before competitors existed). */
+  entity?: OwnedEntity
+}
+
+/** The is_client / is_competitor / competitor_name a read's rows carry. */
+const identityOf = (ctx: Ctx) => {
+  const { is_client, is_competitor, competitor_name } = entityIdentity(ctx.entity ?? { kind: 'client' })
+  return { is_client, is_competitor, competitor_name }
 }
 
 async function ytProfile(channelId: string, ctx: Ctx, since: string | null): Promise<OwnProfile> {
@@ -453,9 +529,7 @@ async function ytProfile(channelId: string, ctx: Ctx, since: string | null): Pro
           audio_name: '',
           is_sponsored: false,
           duration_seconds: 0,
-          is_client: true,
-          is_competitor: false,
-          competitor_name: null,
+          ...identityOf(ctx),
         })
       }
     }
@@ -598,6 +672,8 @@ export async function ingestOwnedPosts(opts: {
   platform: string
   handle: string
   windowStart: string | null
+  /** Whose account this is. Absent = the client's. */
+  entity?: OwnedEntity
 }): Promise<{
   refs: { video_id: string; video_url: string; comments_count: number }[]
   /** How many in-window posts this read stored — the census figure for this
@@ -607,9 +683,13 @@ export async function ingestOwnedPosts(opts: {
   warnings: string[]
 }> {
   const since = opts.windowStart ? opts.windowStart.slice(0, 10) : null
+  const entity = opts.entity ?? { kind: 'client' as const }
+  const identity = entityIdentity(entity)
+  const label = `${opts.platform}:${entitySlug(entity)}`
   const profile = await fetchOwnProfile(opts.platform, opts.handle, {
     clientId: opts.clientId,
     runId: opts.runId,
+    entity,
   }, since)
   const postsSeen = profile.postsSeen ?? profile.recentPosts.length
   // The census cut. TikTok has no date filter at the source and Instagram's
@@ -617,7 +697,7 @@ export async function ingestOwnedPosts(opts: {
   // one rule, whatever the platform did or didn't honour.
   profile.recentPosts = ownPostsInWindow(profile.recentPosts, since)
   if (profile.recentPosts.length >= OWN_POSTS_CEILING) {
-    warnCeiling(opts.platform, opts.handle, profile.recentPosts.length)
+    warnCeiling(label, opts.handle, profile.recentPosts.length)
   }
   const warnings: string[] = [...(profile.warnings ?? [])]
   // Judge the READ, not the window. A brand that published nothing this month
@@ -627,7 +707,7 @@ export async function ingestOwnedPosts(opts: {
   // the official API, where a failed page throws and an empty window is true.
   if (opts.platform !== 'youtube' && emptyProfileIsGlitch(profile.postsCount, postsSeen)) {
     throw new Error(
-      `owned profile (${opts.platform} @${opts.handle}) returned 0 posts at all but reports ${profile.postsCount} posts — scrape glitch, retrying`,
+      `owned profile (${label} @${opts.handle}) returned 0 posts at all but reports ${profile.postsCount} posts — scrape glitch, retrying`,
     )
   }
   if (profile.recentPosts.length) {
@@ -646,6 +726,7 @@ export async function ingestOwnedPosts(opts: {
     const rows = stampOwnedSource(
       profile.recentPosts,
       (existing ?? []) as { video_id: string; source: string | null }[],
+      identity.source,
     )
     const { error } = await admin
       .from('videos')
@@ -667,10 +748,10 @@ export async function ingestOwnedPosts(opts: {
           .upsert(rawRows, { onConflict: 'client_id,platform,video_id,run_id' })
         if (rawErr) warnings.push(`video_raw upsert failed: ${rawErr.message}`)
       }
-      console.log(`[owned-posts:${opts.platform}] transcript raws filed: ${rawRows.length}/${profile.recentPosts.length}`)
+      console.log(`[owned-posts:${label}] transcript raws filed: ${rawRows.length}/${profile.recentPosts.length}`)
     }
   }
-  console.log(`[owned-posts:${opts.platform}] census: ${profile.recentPosts.length} post(s) in window since ${since ?? 'all time'}`)
+  console.log(`[owned-posts:${label}] census: ${profile.recentPosts.length} post(s) in window since ${since ?? 'all time'}`)
   return {
     refs: ownedCommentRefs(profile.recentPosts, {
       windowStart: opts.windowStart,
@@ -682,6 +763,6 @@ export async function ingestOwnedPosts(opts: {
 }
 
 /** A census that hits the ceiling is no longer exact — say so loudly. */
-function warnCeiling(platform: string, handle: string, n: number): void {
-  console.warn(`[owned-posts:${platform}] @${handle} hit the ${OWN_POSTS_CEILING}-post ceiling (${n}) — the census for this window may be short`)
+function warnCeiling(label: string, handle: string, n: number): void {
+  console.warn(`[owned-posts:${label}] @${handle} hit the ${OWN_POSTS_CEILING}-post ceiling (${n}) — the census for this window may be short`)
 }

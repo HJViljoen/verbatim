@@ -82,6 +82,11 @@ describe('ownVoice — is this client-bucket video the client speaking?', () => 
   it('an owned post is own voice regardless of account name', () => {
     expect(ownVoice({ source: 'owned', account_name: 'whatever' }, OSSUR)).toBe(true)
   })
+  it("a COMPETITOR's own post is never the client's voice", () => {
+    // competitor_owned rows arrived 2026-09-09; the check is on 'owned'
+    // exactly, and a competitor's handle folds to none of the brand keywords.
+    expect(ownVoice({ source: 'competitor_owned', account_name: 'ottobock' }, OSSUR)).toBe(false)
+  })
   it("a discovered video from one of the client's own accounts is own voice (name folds to a brand keyword)", () => {
     expect(ownVoice({ source: 'discovered', account_name: 'ÖSSUR' }, OSSUR)).toBe(true)
     expect(ownVoice({ source: 'discovered', account_name: 'Össur Academy' }, OSSUR)).toBe(true)

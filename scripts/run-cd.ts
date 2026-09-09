@@ -78,7 +78,7 @@ async function main() {
     let q = admin.from('videos').select('*').eq('client_id', args.clientId)
     if (args.platform !== 'all') q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
-  })).filter((v) => v.source !== 'owned')
+  })).filter((v) => v.source !== 'owned' && v.source !== 'competitor_owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors pass-a.ts.

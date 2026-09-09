@@ -13,7 +13,7 @@ import { loadBrandClaims, shapeBrandVoice } from '@/lib/pipeline/claims'
 import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
-import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus } from '@/lib/gather/owned'
+import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
@@ -322,8 +322,9 @@ export const runPipeline = inngest.createFunction(
         )
     const gatherPlatforms = [...new Set(plan.map((t) => t.platform))]
 
-    // Owned layer inputs (Wave 2): the client's own handles + the report
-    // window start for scoping which own posts earn a comment scrape.
+    // Owned layer inputs (Wave 2): the accounts to read — the client's own
+    // handles and each tracked competitor's — plus the report window start,
+    // which scopes both the census and which posts earn a comment scrape.
     // Analysis-only resumes skip gather AND owned ingestion together.
     const ownedPlan = plan.length
       ? await step
@@ -331,18 +332,19 @@ export const runPipeline = inngest.createFunction(
             const admin = createAdminClient()
             const { data } = await admin
               .from('tracking_configs')
-              .select('own_handles, report_period')
+              .select('own_handles, competitor_handles, report_period')
               .eq('client_id', clientId)
               .maybeSingle()
             const period = (data?.report_period as string | null) ?? 'weekly'
             const window = await resolveGatherWindow(clientId, runId, period)
             return {
               handles: (data?.own_handles ?? {}) as Record<string, string>,
+              competitorHandles: (data?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
               windowStart: window.since,
             }
           })
-          .catch(() => ({ handles: {} as Record<string, string>, windowStart: null as string | null }))
-      : { handles: {} as Record<string, string>, windowStart: null as string | null }
+          .catch(() => EMPTY_OWNED_PLAN)
+      : EMPTY_OWNED_PLAN
     const ownedHandles = ownedPlan.handles
 
     // 3. Gather, fanned out: per-keyword search steps → one gate step per
@@ -409,38 +411,57 @@ export const runPipeline = inngest.createFunction(
             }),
           )
         }
-        // Owned layer (Wave 2): the client's own recent posts + their comments,
-        // stamped source:'owned' — feeds Step 2c, never the discovered-corpus
-        // metrics (SoV guard). Non-fatal: catch on the step promise.
+        // Owned layer (Wave 2): an ACCOUNT's own recent posts + their comments.
+        // The client's, stamped source:'owned', and since 2026-09-09 each
+        // tracked competitor's, stamped 'competitor_owned' — same read, same
+        // window, different name on the rows. Neither ever feeds the
+        // discovered-corpus metrics (SoV guard); the competitor rows exist so a
+        // competitor page can quote what that brand actually claims instead of
+        // saying nothing was captured from their own videos.
+        // Non-fatal: catch on the step promise.
         // Runs BEFORE the transcribe steps (moved 2026-08-16, Brand Voice) so
         // the own posts' video_raw rows are in this run's transcribe plan —
-        // step IDs unchanged, order only.
+        // order only.
         // supportsOwnedProfile: Reddit has no owned-account concept, so an
         // own_handles.reddit entry is skipped rather than thrown (Wave 3).
-        if (ownedHandles[platform] && supportsOwnedProfile(platform)) {
-          const owned = await step
-            .run(`owned-posts:${platform}`, () =>
-              ingestOwnedPosts({ clientId, runId, platform, handle: ownedHandles[platform], windowStart: ownedPlan.windowStart }),
-            )
-            .catch((e) => {
-              console.error(`[owned-posts:${platform}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
-              noteError(`owned-posts:${platform}`, e)
-              return { refs: [] as { video_id: string; video_url: string; comments_count: number }[], posts: 0, warnings: [] as string[] }
-            })
-          // Best-effort degradations (IG transcript refetch, video_raw write)
-          // count as run errors: the week's own-voice claims are missing, and
-          // a run that says so is the point of 'partial'.
-          for (const w of owned.warnings) noteError(`owned-posts:${platform}`, w)
-          const ownedRefs = owned.refs
-          for (let w = 0; w < ownedRefs.length; w += COMMENT_BATCH) {
-            await step
-              .run(`owned-comments:${platform}:${Math.floor(w / COMMENT_BATCH) + 1}`, () =>
-                scrapeCommentsBatch({ clientId, runId, platform: platform as Platform, refs: ownedRefs.slice(w, w + COMMENT_BATCH), source: 'owned' }),
+        //
+        // Step ids gained an entity segment here (`owned-posts:instagram:client`).
+        // Renaming a step id strands an in-flight run across a deploy, so this
+        // shipped between runs, with pipeline_runs.status='running' at zero.
+        if (supportsOwnedProfile(platform)) {
+          const reads: { entity: OwnedEntity; handle: string }[] = []
+          if (ownedHandles[platform]) reads.push({ entity: { kind: 'client' }, handle: ownedHandles[platform] })
+          for (const [name, handles] of Object.entries(ownedPlan.competitorHandles)) {
+            const handle = handles?.[platform]
+            if (handle) reads.push({ entity: { kind: 'competitor', name }, handle })
+          }
+          for (const { entity, handle } of reads) {
+            const who = `${platform}:${entitySlug(entity)}`
+            const owned = await step
+              .run(`owned-posts:${who}`, () =>
+                ingestOwnedPosts({ clientId, runId, platform, handle, windowStart: ownedPlan.windowStart, entity }),
               )
               .catch((e) => {
-                noteError(`owned-comments:${platform}`, e)
-                return { comments: 0, errors: ['owned comment scrape failed'] }
+                console.error(`[owned-posts:${who}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+                noteError(`owned-posts:${who}`, e)
+                return { refs: [] as { video_id: string; video_url: string; comments_count: number }[], posts: 0, warnings: [] as string[] }
               })
+            // Best-effort degradations (the IG census fallback, the video_raw
+            // write) count as run errors: the week's own-voice claims are
+            // missing, and a run that says so is the point of 'partial'.
+            for (const w of owned.warnings) noteError(`owned-posts:${who}`, w)
+            const ownedRefs = owned.refs
+            const source = entity.kind === 'client' ? 'owned' as const : 'competitor_owned' as const
+            for (let w = 0; w < ownedRefs.length; w += COMMENT_BATCH) {
+              await step
+                .run(`owned-comments:${who}:${Math.floor(w / COMMENT_BATCH) + 1}`, () =>
+                  scrapeCommentsBatch({ clientId, runId, platform: platform as Platform, refs: ownedRefs.slice(w, w + COMMENT_BATCH), source }),
+                )
+                .catch((e) => {
+                  noteError(`owned-comments:${who}`, e)
+                  return { comments: 0, errors: ['owned comment scrape failed'] }
+                })
+            }
           }
         }
         // Transcripts (flag-gated), fanned out like Pass A: a plan step chunks
@@ -872,6 +893,14 @@ export const runPipeline = inngest.createFunction(
   },
 )
 
+/** What plan-owned reports when a tenant has no handles configured, or the
+ *  step itself failed — no accounts to read, no window to read them over. */
+const EMPTY_OWNED_PLAN = {
+  handles: {} as Record<string, string>,
+  competitorHandles: {} as Record<string, Record<string, string>>,
+  windowStart: null as string | null,
+}
+
 /** Batch size for the Pass A fan-out. Sized from the 2026-07-03 live failure:
  *  at comment_depth 100 a call runs ~10-20s (batches of 40 timed out at ~15-29
  *  calls, three attempts straight), so 12 ≈ 2-4 min under the 300s cap. */
@@ -981,7 +1010,7 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   }>(() =>
     admin.from('videos')
       .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript')
-      .eq('client_id', clientId).in('source', ['discovered', 'owned']).order('id', { ascending: true }),
+      .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
   )
   const counts = new Map<string, number>()
   const comments = await selectAll<{ platform: string; video_id: string }>(() =>
@@ -1065,13 +1094,17 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
 async function runSynthesisHalf(clientId: string, runId: string) {
   const admin = createAdminClient()
 
-  // SoV guard (Owned-Data-Plan): owned-account posts never count toward the
-  // discovered-corpus metrics — a client's own posting must not inflate their
-  // share of conversation. Filtering videos also drops their comments below.
+  // SoV guard (Owned-Data-Plan): an ACCOUNT's own posts never count toward the
+  // discovered-corpus metrics. It was only ever the client's posts that were
+  // held out; now that competitors' own posts are gathered too, the same rule
+  // covers them — otherwise a competitor who posts twice a day would out-share
+  // a competitor the market actually talks about, and share would stop being a
+  // measure of the conversation at all. Filtering videos drops their comments
+  // below with them.
   const allVideos = await selectAll<VideoRow>(() =>
     admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const videos = allVideos.filter((v) => v.source !== 'owned')
+  const videos = allVideos.filter((v) => v.source !== 'owned' && v.source !== 'competitor_owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors run-cd.ts.
@@ -1098,7 +1131,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const metrics = computeMetrics(videos, comments, analysedVideoIds)
 
   const { data: tc } = await admin.from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles, competitor_handles')
     .eq('client_id', clientId).maybeSingle()
 
   // Period slice — only what THIS run gathered, minus rows KNOWN to be older
@@ -1119,6 +1152,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   // often the market posted about them.
   const ownedCensus = buildOwnedCensus(allVideos, {
     handles: (tc?.own_handles ?? {}) as Record<string, string>,
+    competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
     since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
     until: new Date().toISOString().slice(0, 10),
   })

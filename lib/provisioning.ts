@@ -32,6 +32,11 @@ export interface TenantSpec {
   reportPeriod?: 'weekly' | 'monthly' | 'paused'
   maxVideos?: number
   commentDepth?: number
+  /** Each competitor's own accounts, keyed by the EXACT competitorNames entry:
+   *  `{ "Cotopaxi": { instagram: 'cotopaxi', youtube: 'UC…' } }`. Optional — a
+   *  tenant without them simply has no competitor census. Operator-set: a wrong
+   *  handle credits another brand's posts to a tracked competitor. */
+  competitorHandles?: Record<string, Record<string, string>>
   plan?: string
   comped?: boolean
   /** An operator running this IS the approval. Off means the tenant is created
@@ -89,6 +94,8 @@ export interface ProvisionPlan {
     competitor_names: string[]
     competitor_keywords: string[]
     industry_keywords: string[]
+    /** Competitor-owned account handles, keyed by competitor name. */
+    competitor_handles: Record<string, Record<string, string>>
     platforms: string[]
     report_emails: string[]
     report_day: string
@@ -108,6 +115,13 @@ export function buildProvisionPlan(spec: TenantSpec, now = new Date()): Provisio
   // tagging matches competitor_NAMES, and nothing in the app ever wrote the
   // former, so a hand-made tenant gathered nothing about its competitors.
   const competitorKeywords = deriveCompetitorKeywords(competitorNames)
+  // Only handles for names we actually track: a key that matches no competitor
+  // would read an account whose posts nothing downstream could attribute.
+  const competitorHandles = Object.fromEntries(
+    Object.entries(spec.competitorHandles ?? {}).filter(([name]) =>
+      competitorNames.some((n) => n.toLowerCase() === name.toLowerCase()),
+    ),
+  )
 
   const warnings: string[] = []
   const dropped = competitorNames.filter(
@@ -147,6 +161,7 @@ export function buildProvisionPlan(spec: TenantSpec, now = new Date()): Provisio
       report_period: spec.reportPeriod ?? 'paused',
       max_videos: spec.maxVideos ?? ONBOARDING_MAX_VIDEOS,
       comment_depth: spec.commentDepth ?? 50,
+      competitor_handles: competitorHandles,
     },
     warnings,
   }

@@ -12,6 +12,8 @@ import {
   buildOwnedCensus,
   ownedCensusTotal,
   ownedCommentRefs,
+  entityIdentity,
+  entitySlug,
   OWN_POSTS_CEILING,
 } from './owned'
 import { shareFootnoteLead } from '../calibration'
@@ -167,6 +169,16 @@ describe('igRawsByShortcode', () => {
 
 const post = (upload_date: string | null) => ({ upload_date })
 
+interface CensusFixture {
+  platform: string
+  source: string
+  is_client: boolean
+  is_competitor: boolean
+  competitor_name: string | null
+  account_name: string
+  upload_date: string | null
+}
+
 describe('ownPostsInWindow — the census cut', () => {
   it('keeps posts on or after the window start', () => {
     const kept = ownPostsInWindow([post('2026-08-09'), post('2026-08-10'), post('2026-09-01')], '2026-08-10')
@@ -214,26 +226,32 @@ describe('stopUploadsWalk — how far the YouTube uploads walk goes', () => {
 describe('buildOwnedCensus', () => {
   const opts = {
     handles: { instagram: 'sealandgear', youtube: 'UCCthtmYgmon7h0meZaC1FEQ' },
+    competitorHandles: { Cotopaxi: { instagram: 'cotopaxi' } },
     since: '2026-08-10',
     until: '2026-09-09',
   }
-  const row = (over: Partial<{ platform: string; source: string | null; is_client: boolean; account_name: string; upload_date: string }>) => ({
-    platform: 'instagram', source: 'owned', is_client: true, account_name: 'sealandgear', upload_date: '2026-09-01', ...over,
+  const row = (over: Partial<CensusFixture> = {}): CensusFixture => ({
+    platform: 'instagram', source: 'owned', is_client: true, is_competitor: false, competitor_name: null,
+    account_name: 'sealandgear', upload_date: '2026-09-01', ...over,
+  })
+  const comp = (over: Partial<CensusFixture> = {}): CensusFixture => row({
+    source: 'competitor_owned', is_client: false, is_competitor: true, competitor_name: 'Cotopaxi',
+    account_name: 'cotopaxi', ...over,
   })
 
   it("counts the client's own in-window posts per platform", () => {
-    const census = buildOwnedCensus([row({}), row({ upload_date: '2026-08-20' })], opts)
-    expect(census.instagram).toEqual({ posts: 2, since: '2026-08-10', until: '2026-09-09', handle: 'sealandgear' })
+    const census = buildOwnedCensus([row(), row({ upload_date: '2026-08-20' })], opts)
+    expect(census.client.instagram).toEqual({ posts: 2, since: '2026-08-10', until: '2026-09-09', handle: 'sealandgear' })
   })
 
   it('reports zero for a configured platform that published nothing', () => {
-    expect(buildOwnedCensus([row({})], opts).youtube.posts).toBe(0)
+    expect(buildOwnedCensus([row()], opts).client.youtube.posts).toBe(0)
   })
 
   it('counts an own post the keyword gather discovered first', () => {
     // stampOwnedSource keeps such a row on 'discovered' forever (metric
     // continuity) — but the client still published it.
-    expect(buildOwnedCensus([row({ source: 'discovered' })], opts).instagram.posts).toBe(1)
+    expect(buildOwnedCensus([row({ source: 'discovered' })], opts).client.instagram.posts).toBe(1)
   })
 
   it('matches YouTube rows by the channel title the owned read stored, not the channel id', () => {
@@ -241,31 +259,54 @@ describe('buildOwnedCensus', () => {
       row({ platform: 'youtube', account_name: 'Sealand Gear', source: 'owned' }),
       row({ platform: 'youtube', account_name: 'Sealand Gear', source: 'discovered' }),
     ]
-    expect(buildOwnedCensus(rows, opts).youtube.posts).toBe(2)
+    expect(buildOwnedCensus(rows, opts).client.youtube.posts).toBe(2)
   })
 
   it("never counts someone else's video about the brand", () => {
-    expect(buildOwnedCensus([row({ source: 'discovered', account_name: 'some.reviewer' })], opts).instagram.posts).toBe(0)
+    expect(buildOwnedCensus([row({ source: 'discovered', account_name: 'some.reviewer' })], opts).client.instagram.posts).toBe(0)
   })
 
   it('excludes posts outside the window and posts with no date', () => {
-    const rows = [row({ upload_date: '2026-08-09' }), row({ upload_date: '2026-09-10' }), { platform: 'instagram', source: 'owned', is_client: true, account_name: 'sealandgear', upload_date: null }]
-    expect(buildOwnedCensus(rows, opts).instagram.posts).toBe(0)
+    const rows = [row({ upload_date: '2026-08-09' }), row({ upload_date: '2026-09-10' }), row({ upload_date: null })]
+    expect(buildOwnedCensus(rows, opts).client.instagram.posts).toBe(0)
   })
 
   it('ignores platforms with no configured handle', () => {
-    expect(buildOwnedCensus([row({ platform: 'tiktok' })], opts).tiktok).toBeUndefined()
+    expect(buildOwnedCensus([row({ platform: 'tiktok' })], opts).client.tiktok).toBeUndefined()
+  })
+
+  it('counts each competitor under its own name, never into the client', () => {
+    const census = buildOwnedCensus([row(), comp(), comp({ upload_date: '2026-08-15' })], opts)
+    expect(census.client.instagram.posts).toBe(1)
+    expect(census.competitors.Cotopaxi.instagram).toEqual({ posts: 2, since: '2026-08-10', until: '2026-09-09', handle: 'cotopaxi' })
+  })
+
+  it("never credits one competitor with another's posts", () => {
+    const opts2 = { ...opts, competitorHandles: { Cotopaxi: { instagram: 'cotopaxi' }, Freitag: { instagram: 'freitag' } } }
+    const census = buildOwnedCensus([comp(), comp({ competitor_name: 'Freitag', account_name: 'freitag' })], opts2)
+    expect(census.competitors.Cotopaxi.instagram.posts).toBe(1)
+    expect(census.competitors.Freitag.instagram.posts).toBe(1)
+  })
+
+  it('has an empty competitors branch when no competitor handles are configured', () => {
+    expect(buildOwnedCensus([row()], { ...opts, competitorHandles: undefined }).competitors).toEqual({})
   })
 })
 
 describe('ownedCensusTotal', () => {
-  it('sums the platforms', () => {
-    expect(ownedCensusTotal({ instagram: { posts: 28, since: 'a', until: 'b', handle: 'x' }, youtube: { posts: 0, since: 'a', until: 'b', handle: 'y' } })).toBe(28)
+  const entry = (posts: number) => ({ posts, since: 'a', until: 'b', handle: 'x' })
+
+  it('sums the client\'s platforms', () => {
+    expect(ownedCensusTotal({ client: { instagram: entry(28), youtube: entry(0) }, competitors: {} })).toBe(28)
+  })
+
+  it('never counts a competitor into "you published"', () => {
+    expect(ownedCensusTotal({ client: { instagram: entry(28) }, competitors: { Cotopaxi: { instagram: entry(40) } } })).toBe(28)
   })
 
   it('is null when no census was written (updates before 2026-09-09)', () => {
     expect(ownedCensusTotal(null)).toBeNull()
-    expect(ownedCensusTotal({})).toBeNull()
+    expect(ownedCensusTotal({ client: {}, competitors: {} })).toBeNull()
   })
 })
 
@@ -292,5 +333,51 @@ describe('ownedCommentRefs shares the gather window rule', () => {
   it('drops posts below the comment threshold and outside the window', () => {
     expect(ownedCommentRefs([p('2026-09-01', 2)], { windowStart: '2026-08-10', threshold: 5 })).toHaveLength(0)
     expect(ownedCommentRefs([p('2026-07-01', 9)], { windowStart: '2026-08-10', threshold: 5 })).toHaveLength(0)
+  })
+})
+
+
+// ---- Competitor accounts (2026-09-09) ---------------------------------------
+// The same read, a different name on the rows. The identity has to come from
+// ONE place: a row stamped 'competitor_owned' while claiming to be the client's
+// would put a competitor's own posts into the client's say-vs-hear.
+
+describe('entityIdentity', () => {
+  it('stamps the client', () => {
+    expect(entityIdentity({ kind: 'client' })).toEqual({
+      source: 'owned', is_client: true, is_competitor: false, competitor_name: null,
+    })
+  })
+
+  it('stamps a competitor with its name, never as the client', () => {
+    expect(entityIdentity({ kind: 'competitor', name: 'Topo Designs' })).toEqual({
+      source: 'competitor_owned', is_client: false, is_competitor: true, competitor_name: 'Topo Designs',
+    })
+  })
+})
+
+describe('entitySlug — Inngest step ids are stable strings', () => {
+  it('names the client', () => {
+    expect(entitySlug({ kind: 'client' })).toBe('client')
+  })
+
+  it('slugs a free-text competitor name', () => {
+    expect(entitySlug({ kind: 'competitor', name: 'Topo Designs' })).toBe('topo-designs')
+    expect(entitySlug({ kind: 'competitor', name: 'FREITAG®' })).toBe('freitag')
+  })
+
+  it('never produces an empty segment', () => {
+    expect(entitySlug({ kind: 'competitor', name: '—' })).toBe('competitor')
+  })
+})
+
+describe("stampOwnedSource keeps a known row's source, and stamps the right one on new rows", () => {
+  it('stamps fresh competitor posts competitor_owned', () => {
+    const rows = stampOwnedSource([{ video_id: 'a' }, { video_id: 'b' }], [{ video_id: 'a', source: 'discovered' }], 'competitor_owned')
+    expect(rows.map((r) => r.source)).toEqual(['discovered', 'competitor_owned'])
+  })
+
+  it('still defaults to owned for the client', () => {
+    expect(stampOwnedSource([{ video_id: 'a' }], []).map((r) => r.source)).toEqual(['owned'])
   })
 })

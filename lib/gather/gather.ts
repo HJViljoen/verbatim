@@ -722,9 +722,10 @@ export async function scrapeCommentsBatch(opts: {
   platform: Platform
   refs: VideoRef[]
   dryRun?: boolean
-  /** Stamp rows as the client's own-post comments (owned layer). Default
-   *  omits the column → DB default 'discovered'. */
-  source?: 'owned'
+  /** Stamp rows as an account's own-post comments (owned layer) — the client's
+   *  or a tracked competitor's. Default omits the column → DB default
+   *  'discovered'. */
+  source?: 'owned' | 'competitor_owned'
 }): Promise<{ comments: number; errors: string[] }> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, opts.clientId)

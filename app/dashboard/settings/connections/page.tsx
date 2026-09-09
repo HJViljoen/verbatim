@@ -17,11 +17,20 @@ export default async function ConnectionsPage() {
   const { supabase, clientId } = await getSessionContext()
   const [{ data: client }, { data: tc }, schedules] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    supabase.from('tracking_configs').select('platforms, own_handles, report_period').eq('client_id', clientId).maybeSingle(),
+    supabase.from('tracking_configs').select('platforms, own_handles, competitor_handles, report_period').eq('client_id', clientId).maybeSingle(),
     recipientsBySchedule(createAdminClient(), clientId),
   ])
   const platforms = new Set<string>((tc?.platforms as string[] | null) ?? [])
   const handles = (tc?.own_handles as Record<string, string> | null) ?? {}
+  // The competitor accounts we read alongside the client's own. Operator-set
+  // like own_handles — a wrong handle here would credit another brand's posts
+  // to a tracked competitor — so this is a statement of fact, not a form.
+  const competitorHandles = Object.entries((tc?.competitor_handles as Record<string, Record<string, string>> | null) ?? {})
+    .map(([name, byPlatform]) => ({
+      name,
+      platforms: SOURCES.filter((p) => byPlatform?.[p]),
+    }))
+    .filter((c) => c.platforms.length > 0)
   const activeSchedules = schedules.filter((s) => s.active)
   const scheduleCount = activeSchedules.filter((s) => s.recipients.length > 0).length
   const addressCount = activeSchedules.reduce((n, s) => n + s.recipients.length, 0)
@@ -42,6 +51,19 @@ export default async function ConnectionsPage() {
           ))}
           <ConnectionRow name="Reddit" what={platforms.has('reddit') ? 'Threads and comments' : 'Threads and comments, on request'} status={platforms.has('reddit') ? 'connected' : 'in-development'} />
         </SettingsCard>
+
+        {competitorHandles.length > 0 ? (
+          <SettingsCard title="Competitor accounts we read" description="What the brands you track publish themselves, so their claims can be set beside your own. Their posts never count toward anyone's share of the conversation.">
+            {competitorHandles.map((c) => (
+              <ConnectionRow
+                key={c.name}
+                name={c.name}
+                what={`Their own posts on ${c.platforms.map(platformLabel).join(', ')}`}
+                status="connected"
+              />
+            ))}
+          </SettingsCard>
+        ) : null}
 
         <SettingsCard title="Where reports go" description="Scheduled updates go out by email, each schedule to its own list. Chat destinations are next.">
           <ConnectionRow

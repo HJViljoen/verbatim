@@ -204,4 +204,10 @@ describe('passALane — the comment floor vs the Wave 4 claims lane', () => {
     expect(passALane({ ...owned, transcript_status: 'lyrics' }, 57)).toBe('skip')
     expect(passALane({ ...owned, transcript_status: null }, 57)).toBe('skip')
   })
+
+  it("a COMPETITOR's own posts take the same lane — their fans' comments are not our audience either", () => {
+    const theirs = { ...yt({ is_competitor: true, transcript_status: 'ok' }), source: 'competitor_owned' }
+    expect(passALane(theirs, 200)).toBe('claims_only')
+    expect(passALane({ ...theirs, transcript_status: 'no_media' }, 200)).toBe('skip')
+  })
 })

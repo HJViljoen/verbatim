@@ -94,7 +94,10 @@ export const ownedSnapshotsDaily = inngest.createFunction(
               followers: profile.followers,
               posts_count: profile.postsCount,
               metrics: null,
-            }, { onConflict: 'client_id,platform,snapshot_date' })
+              // Per ACCOUNT, not per platform (2026-09-09): the key gained `handle`
+              // so tracking more than one account on a platform cannot overwrite
+              // a row a day.
+            }, { onConflict: 'client_id,platform,handle,snapshot_date' })
             if (error) throw new Error(`snapshot upsert: ${error.message}`)
             return { wrote: true as const }
           })

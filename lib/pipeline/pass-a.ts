@@ -176,11 +176,15 @@ export function passALane(
   comments: number,
   floor: number = passAMinComments(v.platform),
 ): PassALane {
-  // The client's OWN posts (Brand Voice, 2026-08-16): claims lane or nothing.
-  // Never the full lane — their fans' comments would contaminate audience
-  // themes (Owned-Data-Plan guardrail: segment, never blend). Their words
-  // are the purest "say" side there is; their comments stay Step 2c's.
-  if (v.source === 'owned') return v.transcript_status === 'ok' ? 'claims_only' : 'skip'
+  // An ACCOUNT's own posts (Brand Voice, 2026-08-16; competitors 2026-09-09):
+  // claims lane or nothing. Never the full lane — a brand's own fans' comments
+  // would contaminate audience themes (Owned-Data-Plan guardrail: segment,
+  // never blend), and that is as true of a competitor's fans as of the
+  // client's. Their words are the purest "say" side there is; the client's own
+  // comments stay Step 2c's.
+  if (v.source === 'owned' || v.source === 'competitor_owned') {
+    return v.transcript_status === 'ok' ? 'claims_only' : 'skip'
+  }
   if (comments >= floor) return 'full'
   if ((v.is_client || v.is_competitor) && v.transcript_status === 'ok') return 'claims_only'
   return 'skip'
