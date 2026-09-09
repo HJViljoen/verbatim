@@ -43,3 +43,6 @@ next-env.d.ts
 
 # local render/smoke output
 scratch/
+
+# Agent worktrees (Claude Code --isolation worktree)
+.claude/worktrees/

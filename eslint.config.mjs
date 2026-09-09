@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Agent worktrees live inside the repo (.claude/worktrees/<agent>/) and
+    // carry their own node_modules; linting them doubles every warning and
+    // adds thousands of errors from vendored code (found 2026-09-09).
+    ".claude/worktrees/**",
   ]),
 ]);
 
