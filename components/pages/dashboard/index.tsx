@@ -183,7 +183,7 @@ const share: R = ({ share: s }, mode) => {
   const app = mode === 'app'
   const body = s && s.segments.length > 0 ? (
     <>
-      <Ring interactive={app} segments={s.segments.map((seg) => ({ label: seg.label, value: seg.value, color: seg.color }))} size={128} thickness={16} center={s.client ? fmtPct(s.client.pct) : undefined} sub={s.client ? 'you' : undefined} />
+      <Ring interactive={app} segments={s.segments.map((seg) => ({ label: seg.label, value: seg.value, color: seg.color }))} size={128} thickness={16} center={s.client ? fmtPct(s.client.pct) : '0%'} sub="you" />
       <div role="list" className="flex min-w-0 flex-1 flex-col gap-1 text-[11.5px]">
         {s.segments.map((seg, i) => (
           <div key={seg.label} data-seg={i} tabIndex={app ? 0 : undefined} role="listitem" aria-label={`${seg.label} ${fmtPct(seg.pct)}`} className="flex items-center gap-1.5 px-1.5 py-0.5 -mx-1.5 outline-none focus-visible:ring-1 focus-visible:ring-ring">
