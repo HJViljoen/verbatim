@@ -118,8 +118,63 @@ export const WHISPER_PER_MINUTE = 0.006
  *  spend. Apify spend is otherwise unrecorded in the DB for every platform. */
 export const YT_TRANSCRIPT_PER_ITEM_USD = 0.001
 
-/** Skip Whisper for media larger than this (bytes) — the API's own file cap. */
+/** Skip Whisper for media larger than this (bytes) — the API's own file cap.
+ *  It binds ONLY on the OpenAI path: OpenAI's transcription endpoints are
+ *  upload-only and reject anything bigger, while AssemblyAI takes either a URL
+ *  it fetches itself or an upload with no practical size limit, so a 110MB reel
+ *  that Whisper could never read transcribes fine there. */
 export const TRANSCRIBE_MAX_BYTES = 25 * 1024 * 1024
+
+/** AssemblyAI is the primary transcription provider when ASSEMBLYAI_API_KEY is
+ *  set (2026-09-09): it bills per audio MINUTE like Whisper but at ~40% of the
+ *  price, auto-detects 99 languages (Afrikaans included, which matters for a
+ *  South African corpus), and — the reason it was adopted — accepts a media URL
+ *  or an unbounded upload instead of a 25MB file. Same shape as
+ *  WHISPER_PER_MINUTE: MODEL_PRICING cannot express per-minute pricing. */
+export const ASSEMBLYAI_PER_MINUTE = 0.0025
+
+/** ESTIMATED cost of one video through the Apify speech-to-text actor (the
+ *  second transcript path, by PLATFORM URL — see APIFY_ACTORS.speech). Measured
+ *  live 2026-09-09 on one Instagram reel and one TikTok: $0.0552 per run of one
+ *  ≤1-minute video = $0.005 actor start + $0.02 platform fetch + $0.03 per
+ *  STARTED audio minute (+$0.0002 compute). Batching N urls into one run pays
+ *  the start once, so the per-video estimate excludes it and the batch adds it.
+ *  Estimates, not a bill: exact per-run Apify usage lands in Phase 3. */
+export const SPEECH_ACTOR_START_USD = 0.005
+export const SPEECH_ACTOR_PER_VIDEO_USD = 0.02
+export const SPEECH_ACTOR_PER_MINUTE_USD = 0.03
+
+/** Same, for the YouTube-only actor (codepoetry/youtube-transcript-ai-scraper).
+ *  Read off its pricing 2026-09-09: $0.0025 per start event and AI fallback
+ *  raises the actor to 4GB = 4 events, $0.001 per video whose captions existed,
+ *  $0.012 per STARTED AI minute when they didn't. A 2-video live run charged
+ *  $0.02 total. */
+export const YT_SPEECH_START_USD = 0.01
+export const YT_SPEECH_PER_CAPTION_USD = 0.001
+export const YT_SPEECH_PER_AI_MINUTE_USD = 0.012
+
+/** Guards on the YouTube AI fallback, which bills per minute and runs at ~1x
+ *  real time: never spend more than this many AI minutes in one batch, and skip
+ *  any single video longer than this (a 40-minute upload is $0.48 and would eat
+ *  the whole step; its captions, when it has them, still come through). */
+export const YT_SPEECH_MAX_AI_MINUTES = 20
+export const YT_SPEECH_SKIP_LONGER_THAN_MIN = 20
+
+/** Transcript attempts a video gets before 'failed' is terminal. A transcript
+ *  is a precondition of analysis (Phase 2, 2026-09-09), so one bad fetch — an
+ *  expired CDN link, a flaky actor, an AssemblyAI timeout — must not
+ *  permanently exclude a video the way a single 'failed' stamp used to. */
+export const TRANSCRIPT_MAX_ATTEMPTS = 3
+
+/** Videos per transcript-backfill Inngest step. The platform-URL path is one
+ *  Apify actor run per batch (all urls in one input), and the actor measured
+ *  ~20s per short video end to end, so 8 ≈ 170s — under the 300s step cap with
+ *  room for the content gate. YouTube runs its own, slower actor (AI fallback
+ *  measured ~90s/video), hence its own smaller batch. */
+export const BACKFILL_BATCH = 8
+export const BACKFILL_BATCH_YOUTUBE = 2
+/** Backfill steps dispatched per parallel wave (the transcribe wave pattern). */
+export const BACKFILL_PARALLEL = 4
 
 /** Max transcript characters injected into a Pass A prompt (~600 tokens),
  *  clipped code-point-safe (clipText). Short reels rarely reach this. */
@@ -243,6 +298,24 @@ export const APIFY_ACTORS = {
   reddit: {
     video: process.env.APIFY_REDDIT_ACTOR ?? 'harshmaur~reddit-scraper',
     comment: process.env.APIFY_REDDIT_ACTOR ?? 'harshmaur~reddit-scraper',
+  },
+  // The SECOND transcript path (Phase 2, 2026-09-09): transcription from the
+  // PLATFORM URL, so a video whose signed media link expired weeks ago is still
+  // reachable. Not a platform — a provider — so it sits outside the per-platform
+  // keys above.
+  //
+  //  media   — andronixmd/speech-to-text-transcriber. Downloads the video itself
+  //            (yt-dlp) and transcribes it. Live-tested 2026-09-09: Instagram
+  //            reel and TikTok both SUCCEEDED (~22s, $0.055 each); YouTube
+  //            failed on both URLs tried with "this URL could not be fetched or
+  //            transcribed" (yt-dlp is blocked from its IPs), so YouTube uses:
+  //  youtube — codepoetry/youtube-transcript-ai-scraper with enableAiFallback,
+  //            which reads captions when they exist and Whispers the audio when
+  //            they don't. Slower (~90s/video) and flakier (1 of 2 test videos
+  //            returned AI_TRANSCRIPTION_FAILED) — hence its own batch size.
+  speech: {
+    media: process.env.APIFY_SPEECH_ACTOR ?? '9gGHAFoDt1HgX35A5',
+    youtube: process.env.APIFY_YT_SPEECH_ACTOR ?? 'wEsIUWo0tpwtzpjf3',
   },
 } as const
 

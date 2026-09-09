@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
-import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
+import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, ASSEMBLYAI_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
 import { runActor, isActorRunFailedError } from './apify'
 import { adapters } from './platforms'
 import { parseSubreddits, activeSubreddits, subredditLabel } from './subreddits'
@@ -871,6 +871,14 @@ export async function planTranscribeBatches(clientId: string, runId: string, pla
  *  gate calls; 200s leaves room under the 300s Vercel step cap. */
 const ISOLATION_DEADLINE_MS = 200_000
 
+/** Wall-clock ONE transcribe step may spend resolving videos, measured from the
+ *  step's start. Same 300s Vercel cap, same reasoning as ISOLATION_DEADLINE_MS,
+ *  but it bounds the RESOLUTION loop rather than the caption fetch: a provider
+ *  that polls (AssemblyAI) can otherwise stretch a batch indefinitely. Past it
+ *  the loop stops and leaves the rest of the batch untouched — a NULL status
+ *  re-plans, an invented one would not. */
+export const TRANSCRIBE_STEP_DEADLINE_MS = 210_000
+
 /** Batch caption fetch with per-id isolation. One actor run per batch is the
  *  cheap path; but when the actor's run FAILS on a batch (Apify 400
  *  run-failed — e.g. the 11-hour livestream that crashed the caption actor on
@@ -945,6 +953,7 @@ export async function transcribeBatch(opts: {
   const errors: string[] = []
   if (!canTranscribe(adapter)) return { transcribed: 0, skipped: 0, errors }
   const startedAt = Date.now()
+  const stepDeadline = startedAt + TRANSCRIBE_STEP_DEADLINE_MS
 
   const rawRows = await selectAll<{ video_id: string; raw: RawItem }>(() => {
     let q = admin
@@ -1002,9 +1011,15 @@ export async function transcribeBatch(opts: {
   let transcribed = 0
   let skipped = 0
   let whisperMinutes = 0
+  let assemblyMinutes = 0
   const gate = { prompt: 0, completion: 0 }
   const statusCounts: Record<string, number> = {}
+  let outOfBudget = 0
   for (const row of pending) {
+    // Out of step budget: stop resolving. The untouched rows keep a NULL
+    // status, so they re-plan (this run's backfill, or the next run) instead of
+    // being stamped with a verdict nothing measured.
+    if (Date.now() >= stepDeadline) { outOfBudget++; continue }
     if (fetched && fetchFailed.has(row.video_id)) {
       // The actor's run failed on this id ALONE while its batch-mates resolved
       // in the same pass (fetchTranscriptsIsolating enforces that) — a
@@ -1042,10 +1057,11 @@ export async function transcribeBatch(opts: {
         ? await gateFetched(fetched.get(row.video_id) ?? null)
         : adapter.extractTranscript
           ? (adapter.extractTranscript(row.raw) ?? { text: '', lang: null, source: null, status: 'no_media' as const })
-          : await resolveTranscript(adapter.extractMedia!(row.raw))
-      // Spend happened the moment Whisper/the gate ran — accumulate BEFORE the
+          : await resolveTranscript(adapter.extractMedia!(row.raw), { platform: opts.platform, deadline: stepDeadline })
+      // Spend happened the moment the provider/gate ran — accumulate BEFORE the
       // persist attempt so a failed update can't under-log real cost.
       whisperMinutes += t.whisperMinutes ?? 0
+      assemblyMinutes += t.assemblyMinutes ?? 0
       gate.prompt += t.gateTokens?.prompt ?? 0
       gate.completion += t.gateTokens?.completion ?? 0
       statusCounts[t.status] = (statusCounts[t.status] ?? 0) + 1
@@ -1077,7 +1093,10 @@ export async function transcribeBatch(opts: {
   // invisible to estimateCost — so this is the one place the spend is recorded.
   // A logging failure must never sink capture.
   if (!opts.dryRun && pending.length) {
-    const costUsd = whisperMinutes * WHISPER_PER_MINUTE + estimateCost(CONTENT_GATE_MODEL, gate.prompt, gate.completion)
+    const costUsd =
+      whisperMinutes * WHISPER_PER_MINUTE +
+      assemblyMinutes * ASSEMBLYAI_PER_MINUTE +
+      estimateCost(CONTENT_GATE_MODEL, gate.prompt, gate.completion)
     const { error: logErr } = await admin.from('ai_call_log').insert({
       client_id: opts.clientId,
       run_id: opts.runId,
@@ -1089,10 +1108,12 @@ export async function transcribeBatch(opts: {
       response: {
         ok: transcribed, statuses: statusCounts, failed: errors.length,
         whisper_minutes: Math.round(whisperMinutes * 100) / 100,
+        assemblyai_minutes: Math.round(assemblyMinutes * 100) / 100,
         gate_prompt_tokens: gate.prompt, gate_completion_tokens: gate.completion,
         // The caption actor bills per item, empties included — an estimate, not
         // a bill; the DB records no other Apify spend for any platform.
         ...(fetched ? { apify_est_usd: Math.round(pending.length * YT_TRANSCRIPT_PER_ITEM_USD * 1e4) / 1e4 } : {}),
+        ...(outOfBudget ? { out_of_budget: outOfBudget } : {}),
       },
       error_message: null,
       prompt_tokens: gate.prompt,
@@ -1104,8 +1125,9 @@ export async function transcribeBatch(opts: {
     if (logErr) console.warn(`[${opts.platform}] transcribe cost log failed: ${logErr.message}`)
   }
 
+  if (outOfBudget) console.warn(`[${opts.platform}] transcribe step out of budget with ${outOfBudget} video(s) left — they stay unattempted`)
   console.log(
-    `[${opts.platform}] transcripts${opts.batchNo ? ` (batch ${opts.batchNo})` : ''}: ${transcribed} ok, ${skipped} empty/no-speech, ${rawRows.length - pending.length} already-done · ${Math.round(whisperMinutes * 10) / 10} whisper-min`,
+    `[${opts.platform}] transcripts${opts.batchNo ? ` (batch ${opts.batchNo})` : ''}: ${transcribed} ok, ${skipped} empty/no-speech, ${rawRows.length - pending.length} already-done · ${Math.round(whisperMinutes * 10) / 10} whisper-min · ${Math.round(assemblyMinutes * 10) / 10} assemblyai-min`,
   )
   return { transcribed, skipped, errors }
 }

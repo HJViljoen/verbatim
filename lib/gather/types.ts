@@ -124,12 +124,20 @@ export interface MediaRef {
 export interface TranscriptResult {
   text: string
   lang: string | null
-  source: 'tiktok_caption' | 'whisper' | 'reddit_selftext' | 'youtube_caption' | null
+  source: 'tiktok_caption' | 'whisper' | 'reddit_selftext' | 'youtube_caption' | 'assemblyai' | 'apify_speech' | null
   status: 'ok' | 'no_speech' | 'lyrics' | 'garbled' | 'no_media' | 'failed'
   /** Whisper audio minutes billed for this video (absent: caption/no-media path). */
   whisperMinutes?: number
+  /** AssemblyAI audio minutes billed for this video (absent: every other path). */
+  assemblyMinutes?: number
+  /** ESTIMATED Apify spend for this video's transcript (the platform-URL path;
+   *  exact per-run usage is Phase 3's job). */
+  actorUsdEstimate?: number
   /** Content-gate token usage (absent when the letter gate short-circuited). */
   gateTokens?: { prompt: number; completion: number }
+  /** Why a 'failed' result failed — stored in videos.transcript_error so a
+   *  retry (or a human) can see what the last attempt hit. */
+  error?: string
 }
 
 /** Raw text a `fetchTranscripts` hook hands back — pre-gate. `lang` is whatever

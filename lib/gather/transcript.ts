@@ -6,7 +6,7 @@ import {
   TRANSCRIBE_MAX_BYTES,
   CONTENT_GATE_MODEL,
 } from '../config'
-import type { MediaRef, SubtitleTrack, TranscriptResult } from './types'
+import type { MediaRef, Platform, SubtitleTrack, TranscriptResult } from './types'
 
 // Transcript resolution (Step 1 — capture only). One transcript per video,
 // however sourced: a platform caption track when the actor returns one (free),
@@ -183,14 +183,124 @@ export async function gateTranscript(
   return { text, lang, source, status: verdict === 'speech' ? 'ok' : verdict, whisperMinutes, gateTokens: tokens }
 }
 
+// ---- AssemblyAI --------------------------------------------------------------
+// The primary media path when ASSEMBLYAI_API_KEY is set (2026-09-09). Whisper
+// stays as the fallback — no key, or AssemblyAI erred on this video — so the
+// provider swap can be undone by unsetting one env var.
+
+const ASSEMBLYAI_BASE = 'https://api.assemblyai.com/v2'
+
+/** Poll interval while a transcript job runs. AssemblyAI turns a 30s reel
+ *  around in ~10-20s, so this is a handful of polls, not a spin. */
+const ASSEMBLYAI_POLL_MS = 3_000
+
+/** Wall-clock ONE video's AssemblyAI job may take before we give up on it —
+ *  the ISOLATION_DEADLINE_MS pattern (lib/gather/gather.ts), for the same
+ *  reason: a slow provider must not walk an Inngest step past the 300s
+ *  function cap. The batch passes its own remaining budget as `deadline`;
+ *  this bounds a single job when nobody does. */
+export const ASSEMBLYAI_DEADLINE_MS = 120_000
+
+export function assemblyAiKey(): string | null {
+  return process.env.ASSEMBLYAI_API_KEY?.trim() || null
+}
+
+/**
+ * How this platform's media has to reach AssemblyAI.
+ *   'url'    — the CDN answers an anonymous third-party GET, so AssemblyAI
+ *              fetches the bytes itself: no download here, no upload, no size
+ *              limit at all. Instagram (verified 2026-09-09: 200 + accept-ranges
+ *              on a signed CDN url from a datacenter IP).
+ *   'upload' — the CDN serves only the client that was handed the link (TikTok
+ *              answers a third-party GET with 503), so the in-function download
+ *              — which does work — feeds POST /v2/upload.
+ * Unknown platforms take the safe route: upload.
+ */
+export function assemblySubmission(platform: Platform | undefined | null): 'url' | 'upload' {
+  return platform === 'instagram' ? 'url' : 'upload'
+}
+
+async function assemblyUpload(mediaUrl: string, key: string): Promise<string> {
+  // The one path that downloads. Deliberately NO TRANSCRIBE_MAX_BYTES check:
+  // that cap exists because OpenAI's transcription endpoints are upload-only
+  // with a 25MB limit, and it silently dropped the longest (often richest)
+  // videos. AssemblyAI's upload endpoint has no practical cap.
+  const res = await fetch(mediaUrl)
+  if (!res.ok) throw new Error(`media fetch ${res.status}`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (!buf.byteLength) throw new Error('media empty')
+  const up = await fetch(`${ASSEMBLYAI_BASE}/upload`, {
+    method: 'POST',
+    headers: { authorization: key, 'content-type': 'application/octet-stream' },
+    body: new Uint8Array(buf),
+  })
+  if (!up.ok) throw new Error(`assemblyai upload ${up.status}: ${(await up.text().catch(() => '')).slice(0, 200)}`)
+  const j = (await up.json()) as { upload_url?: string }
+  if (!j.upload_url) throw new Error('assemblyai upload returned no url')
+  return j.upload_url
+}
+
+/**
+ * Transcribe one media reference with AssemblyAI. Throws on any failure so the
+ * caller can fall back to Whisper — this is a provider, not a verdict.
+ * `language_detection` is on: the corpus is South African and multilingual, and
+ * a wrong language hint is worse than none.
+ */
+export async function assemblyTranscribe(
+  mediaUrl: string,
+  opts: { platform?: Platform; key: string; deadline?: number; now?: () => number; sleep?: (ms: number) => Promise<void> },
+): Promise<{ text: string; lang: string | null; minutes: number }> {
+  const now = opts.now ?? Date.now
+  const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  const deadline = opts.deadline ?? now() + ASSEMBLYAI_DEADLINE_MS
+  const audioUrl =
+    assemblySubmission(opts.platform) === 'url' ? mediaUrl : await assemblyUpload(mediaUrl, opts.key)
+
+  const sub = await fetch(`${ASSEMBLYAI_BASE}/transcript`, {
+    method: 'POST',
+    headers: { authorization: opts.key, 'content-type': 'application/json' },
+    body: JSON.stringify({ audio_url: audioUrl, language_detection: true }),
+  })
+  if (!sub.ok) throw new Error(`assemblyai submit ${sub.status}: ${(await sub.text().catch(() => '')).slice(0, 200)}`)
+  const job = (await sub.json()) as { id?: string }
+  if (!job.id) throw new Error('assemblyai submit returned no id')
+
+  for (;;) {
+    const r = await fetch(`${ASSEMBLYAI_BASE}/transcript/${job.id}`, { headers: { authorization: opts.key } })
+    if (!r.ok) throw new Error(`assemblyai poll ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`)
+    const j = (await r.json()) as {
+      status?: string; text?: string | null; language_code?: string | null; audio_duration?: number | null; error?: string | null
+    }
+    if (j.status === 'completed') {
+      return {
+        text: (j.text ?? '').trim(),
+        lang: normaliseLang(j.language_code),
+        minutes: (j.audio_duration ?? 0) / 60,
+      }
+    }
+    if (j.status === 'error') throw new Error(`assemblyai: ${(j.error ?? 'unknown error').slice(0, 200)}`)
+    // Out of budget. The job keeps running on their side (and is billed), so
+    // this is a real attempt — it just doesn't get a verdict here. The video
+    // stays a backfill candidate this run and re-plans next run.
+    if (now() + ASSEMBLYAI_POLL_MS >= deadline) throw new Error(`assemblyai still ${j.status ?? 'pending'} at the step deadline`)
+    await sleep(ASSEMBLYAI_POLL_MS)
+  }
+}
+
 /**
  * Resolve one transcript from a platform's media reference. Never throws — a
  * failure returns a status so one bad video can't sink the batch. Order: free
- * caption track first (TikTok when present), then Whisper on the media
- * (Instagram always; TikTok without a usable caption). Applies the speech-gate:
- * a near-empty result is `no_speech`, not `ok`.
+ * caption track first (TikTok when present), then the media — AssemblyAI when
+ * ASSEMBLYAI_API_KEY is set, Whisper when it isn't or when AssemblyAI erred.
+ * Applies the speech-gate: a near-empty result is `no_speech`, not `ok`.
+ *
+ * `deadline` is an absolute epoch-ms the whole resolution must finish inside
+ * (the batch's remaining wall-clock); without one each provider bounds itself.
  */
-export async function resolveTranscript(media: MediaRef): Promise<TranscriptResult> {
+export async function resolveTranscript(
+  media: MediaRef,
+  opts: { platform?: Platform; deadline?: number } = {},
+): Promise<TranscriptResult> {
   try {
     const track = media.subtitleTracks ? pickTrack(media.subtitleTracks) : null
     if (track?.url) {
@@ -211,12 +321,27 @@ export async function resolveTranscript(media: MediaRef): Promise<TranscriptResu
       }
     }
     if (media.mediaUrl) {
+      const key = assemblyAiKey()
+      if (key) {
+        try {
+          const { text, lang, minutes } = await assemblyTranscribe(media.mediaUrl, {
+            platform: opts.platform, key, deadline: opts.deadline,
+          })
+          const gated = await gateTranscript(text, lang, 'assemblyai')
+          return { ...gated, assemblyMinutes: minutes }
+        } catch (e) {
+          // Provider failure, not a verdict on the video: fall through to
+          // Whisper, which reads the same bytes (under its 25MB cap).
+          console.warn(`[transcript] assemblyai failed, falling back to whisper: ${(e as Error).message}`)
+        }
+      }
       const { text, lang, minutes } = await whisperMedia(media.mediaUrl)
       return await gateTranscript(text, lang, 'whisper', minutes)
     }
     return { text: '', lang: null, source: null, status: 'no_media' }
   } catch (e) {
-    console.warn(`[transcript] ${(e as Error).message}`)
-    return { text: '', lang: null, source: null, status: 'failed' }
+    const message = (e as Error).message
+    console.warn(`[transcript] ${message}`)
+    return { text: '', lang: null, source: null, status: 'failed', error: message.slice(0, 300) }
   }
 }

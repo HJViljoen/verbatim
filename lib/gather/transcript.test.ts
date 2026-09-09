@@ -150,3 +150,15 @@ describe('orderAndChunkPending (transcribe fan-out plan)', () => {
     expect(orderAndChunkPending([], 8, 1000)).toEqual([])
   })
 })
+
+describe('assemblySubmission (AssemblyAI route by platform)', () => {
+  it('lets AssemblyAI fetch Instagram itself and uploads everything else', async () => {
+    const { assemblySubmission } = await import('./transcript')
+    // Verified live 2026-09-09: an IG signed CDN url answers an anonymous
+    // datacenter GET 200 with accept-ranges, TikTok's answers 503.
+    expect(assemblySubmission('instagram')).toBe('url')
+    expect(assemblySubmission('tiktok')).toBe('upload')
+    expect(assemblySubmission('youtube')).toBe('upload')
+    expect(assemblySubmission(undefined)).toBe('upload')
+  })
+})
