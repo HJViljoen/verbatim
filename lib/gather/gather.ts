@@ -972,19 +972,26 @@ export async function transcribeBatch(opts: {
   // client's history grows.
   const candidateIds = rawRows.map((r) => r.video_id)
   const done = new Set<string>()
+  // Attempts so far, for the same rows (Phase 2): every attempt any path makes
+  // is counted on the video, and 'failed' is terminal only once the count is
+  // spent. Read here rather than in a second query — the done-check already
+  // touches exactly these rows.
+  const attempts = new Map<string, number>()
   for (let i = 0; i < candidateIds.length; i += 100) {
     const { data, error } = await admin
       .from('videos')
-      .select('video_id')
+      .select('video_id, transcript_status, transcript_attempts')
       .eq('client_id', opts.clientId)
       .eq('platform', opts.platform)
       .in('video_id', candidateIds.slice(i, i + 100))
-      .not('transcript_status', 'is', null)
     if (error) {
       errors.push(`transcribe done-check: ${error.message}`)
       return { transcribed: 0, skipped: 0, errors }
     }
-    for (const r of data ?? []) done.add(r.video_id as string)
+    for (const r of (data ?? []) as { video_id: string; transcript_status: string | null; transcript_attempts: number | null }[]) {
+      if (r.transcript_status != null) done.add(r.video_id)
+      attempts.set(r.video_id, r.transcript_attempts ?? 0)
+    }
   }
 
   const filtered = rawRows.filter((r) => !done.has(r.video_id))
@@ -1032,7 +1039,11 @@ export async function transcribeBatch(opts: {
       if (!opts.dryRun) {
         const { error } = await admin
           .from('videos')
-          .update({ transcript: null, transcript_lang: null, transcript_source: null, transcript_status: 'failed' })
+          .update({
+            transcript: null, transcript_lang: null, transcript_source: null, transcript_status: 'failed',
+            transcript_attempts: (attempts.get(row.video_id) ?? 0) + 1,
+            transcript_error: (fetchFailed.get(row.video_id) ?? 'caption actor run-failed on this id').slice(0, 300),
+          })
           .eq('client_id', opts.clientId)
           .eq('platform', opts.platform)
           .eq('video_id', row.video_id)
@@ -1073,6 +1084,8 @@ export async function transcribeBatch(opts: {
             transcript_lang: t.lang,
             transcript_source: t.source,
             transcript_status: t.status,
+            transcript_attempts: (attempts.get(row.video_id) ?? 0) + 1,
+            transcript_error: t.error ?? null,
           })
           .eq('client_id', opts.clientId)
           .eq('platform', opts.platform)

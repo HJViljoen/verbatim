@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { speechActorFor, speechCandidateKey, speechActorInput, parseSpeechItems, estimateSpeechUsd } from './transcript-url'
+import { speechActorFor, speechCandidateKey, speechActorInput, parseSpeechItems, estimateSpeechUsd, shouldIsolate, type UrlTranscriptOutcome } from './transcript-url'
 import { APIFY_ACTORS } from '../config'
 
 // The platform-URL transcript path (Phase 2 T2.2, 2026-09-09). Every fixture
@@ -112,22 +112,50 @@ describe('estimateSpeechUsd', () => {
   it('matches the live bill: one 1-minute video through the media actor', () => {
     // Observed 2026-09-09: $0.0552 settled (start 0.005 + fetch 0.02 +
     // audio-minute 0.03 + $0.0002 compute, which the estimate leaves out).
-    expect(estimateSpeechUsd('media', 1, 0.42)).toBeCloseTo(0.055, 4)
+    expect(estimateSpeechUsd('media', { runs: 1, transcribed: 1, minutes: 0.42 })).toBeCloseTo(0.055, 4)
+    // And the live 2-video TikTok backfill batch: $0.1052 settled.
+    expect(estimateSpeechUsd('media', { runs: 1, transcribed: 2, minutes: 1.2 })).toBeCloseTo(0.105, 4)
   })
 
   it('pays the run start once, so a batch is cheaper per video', () => {
-    const one = estimateSpeechUsd('media', 1, 1)
-    const eight = estimateSpeechUsd('media', 8, 8)
+    const one = estimateSpeechUsd('media', { runs: 1, transcribed: 1, minutes: 1 })
+    const eight = estimateSpeechUsd('media', { runs: 1, transcribed: 8, minutes: 8 })
     expect(eight).toBeLessThan(one * 8)
   })
 
   it('bills YouTube per STARTED AI minute', () => {
     // Live run of two YouTube videos, one of which failed: $0.02 settled.
-    expect(estimateSpeechUsd('youtube', 1, 0.9)).toBeCloseTo(0.01 + 0.001 + 0.012, 4)
+    expect(estimateSpeechUsd('youtube', { runs: 1, transcribed: 1, minutes: 0.9 })).toBeCloseTo(0.01 + 0.001 + 0.012, 4)
   })
 
-  it('is zero when nothing was transcribed — a failed run must not invent spend', () => {
-    expect(estimateSpeechUsd('media', 0, 0)).toBe(0)
-    expect(estimateSpeechUsd('youtube', 0, 0)).toBe(0)
+  it('still charges for a run that transcribed nothing — the start fee is paid either way', () => {
+    // The Instagram batch that resolved nothing still cost $0.0052.
+    expect(estimateSpeechUsd('media', { runs: 1, transcribed: 0, minutes: 0 })).toBeCloseTo(0.005, 4)
+    // …and the isolation pass buys one run per url.
+    expect(estimateSpeechUsd('media', { runs: 3, transcribed: 0, minutes: 0 })).toBeCloseTo(0.015, 4)
+    expect(estimateSpeechUsd('media', { runs: 0, transcribed: 0, minutes: 0 })).toBe(0)
+  })
+})
+
+describe('shouldIsolate', () => {
+  const ok = (): UrlTranscriptOutcome => ({ ok: true, text: 'words', lang: 'en', minutes: 1 })
+  const bad = (): UrlTranscriptOutcome => ({ ok: false, error: 'this URL could not be fetched or transcribed' })
+
+  it('re-tries one url at a time only when the whole batch resolved nothing', () => {
+    // Measured 2026-09-09: a batch of two Instagram urls resolved nothing, and
+    // minutes later both of those urls transcribed fine — so a whole-batch
+    // failure says nothing about the videos.
+    expect(shouldIsolate(new Map([['a', bad()], ['b', bad()]]), 2)).toBe(true)
+    // One resolving is the evidence that the actor is healthy: the rest are
+    // real per-video verdicts.
+    expect(shouldIsolate(new Map([['a', ok()], ['b', bad()]]), 2)).toBe(false)
+  })
+
+  it('never isolates a batch of one — there is nothing to learn and a second run to pay for', () => {
+    expect(shouldIsolate(new Map([['a', bad()]]), 1)).toBe(false)
+  })
+
+  it('isolates when the actor dropped every id, too', () => {
+    expect(shouldIsolate(new Map(), 4)).toBe(true)
   })
 })

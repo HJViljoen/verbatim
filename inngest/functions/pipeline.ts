@@ -14,6 +14,7 @@ import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
+import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
@@ -28,7 +29,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, captureRunFlags, periodSince, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 
@@ -590,7 +591,76 @@ export const runPipeline = inngest.createFunction(
     //    (videos.analyzed_* bookkeeping, lib/pipeline/pass-a-plan.ts); off, it
     //    selects every eligible video exactly as before. The step result keeps
     //    the per-reason tally so a run log shows what drove the re-reads.
-    const passAPlan = await step.run('plan-pass-a', () => planPassABatches(clientId, runId, !!options.forcePassA, flags))
+    let passAPlan = await step.run('plan-pass-a', () => planPassABatches(clientId, runId, !!options.forcePassA, flags))
+
+    // 4c. The transcript PRECONDITION (Phase 2, 2026-09-09). Everything above
+    //     transcribes from THIS run's media urls, which are signed and expire —
+    //     so a video gathered weeks ago reaches Pass A with no transcript and no
+    //     way to get one, and a single 'failed' used to be permanent. Here, the
+    //     videos Pass A actually selected get one more attempt, from their
+    //     PLATFORM url (which never expires) via a different provider
+    //     (lib/gather/transcript-url.ts). The rule being enforced is
+    //     transcriptPreconditionMet: a video enters analysis only with a usable
+    //     transcript, after an attempt this run, or when no attempt is possible.
+    //     Runs AFTER plan-pass-a because the selection is the candidate set, and
+    //     BEFORE the waves because the wave reads the row it writes.
+    //     Non-fatal throughout: a video without a transcript is analysed without
+    //     one, exactly as before this existed.
+    const backfill = { tally: emptyBackfillTally(), estUsd: 0, batches: 0, unmet: 0, exhausted: 0, errors: 0 }
+    if (flags.transcripts && passAPlan.batches.length) {
+      const selectedIds = passAPlan.batches.flat()
+      const plan = await step
+        .run('plan-transcript-backfill', () => planTranscriptBackfill(clientId, selectedIds))
+        .catch((e) => {
+          noteError('plan-transcript-backfill', e)
+          return { batches: [], selected: selectedIds.length, needing: 0, exhausted: 0 }
+        })
+      backfill.batches = plan.batches.length
+      backfill.exhausted = plan.exhausted
+      for (let w = 0; w < plan.batches.length; w += BACKFILL_PARALLEL) {
+        const wave = await Promise.all(
+          plan.batches.slice(w, w + BACKFILL_PARALLEL).map((b, j) =>
+            step
+              .run(`transcript-backfill:${w + j + 1}-of-${plan.batches.length}`, () =>
+                backfillTranscriptsBatch({ clientId, runId, platform: b.platform, videos: b.videos, batchNo: w + j + 1 }),
+              )
+              // Per-step catch (the transcribe fan-out's precedent): one batch
+              // out of retries must not abandon the rest, and its videos simply
+              // keep the status they had.
+              .catch((e: unknown) => ({
+                tally: emptyBackfillTally(), newlyUsable: 0, estUsd: 0,
+                errors: [`transcript-backfill step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+              })),
+          ),
+        )
+        for (const r of wave) {
+          backfill.tally = mergeTallies(backfill.tally, r.tally)
+          backfill.estUsd += r.estUsd
+          for (const err of r.errors) { backfill.errors++; noteError('transcript-backfill', err) }
+        }
+      }
+      // Videos that needed an attempt and did not get one (a batch out of
+      // retries): the precondition is unmet for exactly these, and the run says
+      // so rather than pretending the corpus is complete.
+      backfill.unmet = Math.max(0, plan.needing - backfill.tally.attempted)
+      if (plan.needing) {
+        console.log(
+          `[transcript-precondition] ${plan.selected} selected · ${plan.needing} needed an attempt · ${formatTally(backfill.tally)} · ${backfill.exhausted} out of attempts · ${backfill.unmet} unmet · ~$${backfill.estUsd.toFixed(3)} apify (est)`,
+        )
+      }
+      // A new transcript changes what Pass A sees (and, for brand-side videos,
+      // which lane they belong in), so the selection is re-taken on the fresh
+      // rows. Only worth a step when something actually landed.
+      if (backfill.tally.ok > 0) {
+        passAPlan = await step
+          .run('replan-pass-a', () => planPassABatches(clientId, runId, !!options.forcePassA, flags))
+          .catch((e) => {
+            noteError('replan-pass-a', e)
+            return passAPlan
+          })
+      }
+    }
+
     const batches = passAPlan.batches
     const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
     // Batches dispatch in parallel waves — batches are disjoint video sets, so
@@ -889,7 +959,7 @@ export const runPipeline = inngest.createFunction(
         })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
+    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, transcriptBackfill: backfill, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
 

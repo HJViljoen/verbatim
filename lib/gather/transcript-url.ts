@@ -118,23 +118,55 @@ export function parseSpeechItems(kind: 'media' | 'youtube', items: RawItem[]): M
 }
 
 /**
- * ESTIMATED Apify spend for one platform-URL batch. Both actors bill per run
- * plus per video plus per (started) audio minute; `minutes` is what the items
- * reported. Labelled an estimate everywhere it is stored — Phase 3 replaces it
- * with the run's actual `usageTotalUsd`.
+ * ESTIMATED Apify spend for one platform-URL backfill. Both actors bill per RUN
+ * (paid even when every url in it failed — the isolation pass below buys extra
+ * runs), plus per transcribed video, plus per started audio minute. Checked
+ * against the settled bills of the live runs on 2026-09-09: a 2-video TikTok
+ * batch estimated $0.1050 and cost $0.1052.
+ *
+ * Estimates, not a bill: exact per-run Apify usage lands in Phase 3.
  */
-export function estimateSpeechUsd(kind: 'media' | 'youtube', videos: number, minutes: number): number {
-  if (!videos) return 0
+export function estimateSpeechUsd(
+  kind: 'media' | 'youtube',
+  usage: { runs: number; transcribed: number; minutes: number },
+): number {
+  if (!usage.runs) return 0
   const usd =
     kind === 'youtube'
-      ? YT_SPEECH_START_USD + videos * YT_SPEECH_PER_CAPTION_USD + Math.ceil(minutes) * YT_SPEECH_PER_AI_MINUTE_USD
-      : SPEECH_ACTOR_START_USD + videos * SPEECH_ACTOR_PER_VIDEO_USD + Math.ceil(minutes) * SPEECH_ACTOR_PER_MINUTE_USD
+      ? usage.runs * YT_SPEECH_START_USD + usage.transcribed * YT_SPEECH_PER_CAPTION_USD + Math.ceil(usage.minutes) * YT_SPEECH_PER_AI_MINUTE_USD
+      : usage.runs * SPEECH_ACTOR_START_USD + usage.transcribed * SPEECH_ACTOR_PER_VIDEO_USD + Math.ceil(usage.minutes) * SPEECH_ACTOR_PER_MINUTE_USD
   return Math.round(usd * 1e4) / 1e4
 }
 
 /**
+ * Should a batch's result be re-tried one url at a time? Only when NOTHING in a
+ * multi-url batch resolved.
+ *
+ * Measured 2026-09-09: a batch of two Instagram urls came back with both items
+ * "this URL could not be fetched or transcribed" — and minutes later the same
+ * two urls transcribed fine, one of them in a batch of two. So a whole-batch
+ * failure is transient far more often than it is a verdict on the videos, and
+ * an extra $0.005 run is the cheap way to find out which it was. Same evidence
+ * rule as the caption actor's isolation pass (fetchTranscriptsIsolating,
+ * lib/gather/gather.ts): one video resolving is proof the actor is healthy, so
+ * the rest of that batch's failures are real per-video verdicts.
+ */
+export function shouldIsolate(results: Map<string, UrlTranscriptOutcome>, batchSize: number): boolean {
+  if (batchSize < 2) return false
+  for (const r of results.values()) if (r.ok) return false
+  return true
+}
+
+/** Wall-clock the per-url isolation pass may spend before giving up on the rest
+ *  (the ISOLATION_DEADLINE_MS pattern — a step must stay under 300s). */
+const URL_ISOLATION_DEADLINE_MS = 150_000
+
+/**
  * Transcribe a batch of videos by PLATFORM URL. One actor run for the whole
- * batch (both actors take a url list), which pays the per-run start fee once.
+ * batch (both actors take a url list), which pays the per-run start fee once —
+ * unless nothing in the batch resolved, in which case each url is re-tried
+ * alone (see shouldIsolate: one bad url can take its batch-mates down with it).
+ *
  * Throws only when the actor call itself fails — a per-video failure comes back
  * as an `ok:false` outcome, and an id the actor dropped entirely is simply
  * absent from the map (the caller decides what that means).
@@ -142,25 +174,47 @@ export function estimateSpeechUsd(kind: 'media' | 'youtube', videos: number, min
 export async function transcribeUrls(
   platform: Platform,
   videos: { video_id: string; video_url: string }[],
-  opts: { timeoutSecs?: number } = {},
+  opts: { timeoutSecs?: number; deadlineMs?: number; now?: () => number } = {},
 ): Promise<{ results: Map<string, UrlTranscriptOutcome>; estUsd: number }> {
   const route = speechActorFor(platform)
   if (!route || !videos.length) return { results: new Map(), estUsd: 0 }
-  const items = await runActor(route.actor, speechActorInput(route.kind, videos), { timeoutSecs: opts.timeoutSecs ?? 280 })
-  const byKey = parseSpeechItems(route.kind, items)
-  const results = new Map<string, UrlTranscriptOutcome>()
-  let minutes = 0
-  let billed = 0
-  for (const v of videos) {
-    const r = byKey.get(speechCandidateKey(route.kind, v))
-    if (!r) continue
-    results.set(v.video_id, r)
-    if (r.ok) {
-      minutes += r.minutes
-      billed++
+  const now = opts.now ?? Date.now
+  const deadline = now() + (opts.deadlineMs ?? URL_ISOLATION_DEADLINE_MS)
+
+  const call = async (batch: { video_id: string; video_url: string }[]) => {
+    const items = await runActor(route.actor, speechActorInput(route.kind, batch), { timeoutSecs: opts.timeoutSecs ?? 240 })
+    const byKey = parseSpeechItems(route.kind, items)
+    const out = new Map<string, UrlTranscriptOutcome>()
+    for (const v of batch) {
+      const r = byKey.get(speechCandidateKey(route.kind, v))
+      if (r) out.set(v.video_id, r)
     }
+    return out
   }
-  return { results, estUsd: estimateSpeechUsd(route.kind, billed, minutes) }
+
+  let runs = 1
+  const results = await call(videos)
+  if (shouldIsolate(results, videos.length)) {
+    console.warn(`[transcript-url] ${platform} batch of ${videos.length} resolved nothing — retrying one url at a time`)
+    const isolated = new Map<string, UrlTranscriptOutcome>()
+    for (const v of videos) {
+      // Out of budget: keep the batch's verdict for the rest rather than walking
+      // the step past its cap.
+      if (now() > deadline) break
+      runs++
+      for (const [k, r] of await call([v])) isolated.set(k, r)
+    }
+    for (const [k, r] of isolated) results.set(k, r)
+  }
+
+  let minutes = 0
+  let transcribed = 0
+  for (const r of results.values()) {
+    if (!r.ok) continue
+    minutes += r.minutes
+    transcribed++
+  }
+  return { results, estUsd: estimateSpeechUsd(route.kind, { runs, transcribed, minutes }) }
 }
 
 /** One video by platform URL — the single-video form of `transcribeUrls`, for
