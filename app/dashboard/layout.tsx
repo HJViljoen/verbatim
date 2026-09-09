@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
+import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
 import { agentEnabled } from "@/lib/config"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
@@ -15,7 +16,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // page gets the width back (Heinrich, 2026-08-28 walk-through).
   return (
     <SidebarProvider style={{ '--sidebar-width': '14rem' } as React.CSSProperties}>
-      <AppSidebar showAgent={agentEnabled()} />
+      {/* The sidebar header streams: the shell paints the wordmark immediately
+          and, for a platform admin only, the tenant switcher replaces it when
+          the session resolves. Same reason as the banner below — this layout
+          must not await anything. */}
+      <AppSidebar
+        showAgent={agentEnabled()}
+        header={
+          <Suspense fallback={<SidebarWordmark />}>
+            <WorkspaceSwitcherLoader />
+          </Suspense>
+        }
+      />
       {/* min-w-0: without it this flex item refuses to shrink below the
           intrinsic width of wide children (the Content page's 9-column table),
           so the whole page overflows the phone viewport instead of the table

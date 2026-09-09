@@ -47,7 +47,7 @@ const ITEM_CLASS =
   "data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 " +
   "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
-export function AppSidebar({ showAgent = false }: { showAgent?: boolean }) {
+export function AppSidebar({ showAgent = false, header }: { showAgent?: boolean; header?: React.ReactNode }) {
   const pathname = usePathname()
   // The agent sits directly under the profile it reads from.
   const intelligence: NavItem[] = showAgent
@@ -85,10 +85,17 @@ export function AppSidebar({ showAgent = false }: { showAgent?: boolean }) {
 
   return (
     <Sidebar variant="sidebar" collapsible="offcanvas">
+      {/* `header` arrives as a slot rather than being rendered here because
+          this component is "use client" and the workspace switcher's loader is
+          a server component: it has to be composed above, in the layout, and
+          passed down. Without it — every user who is not a platform admin —
+          this is the wordmark, unchanged. */}
       <SidebarHeader>
-        <div className="flex items-baseline gap-2 px-4 pt-5 pb-1">
-          <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
-        </div>
+        {header ?? (
+          <div className="flex items-baseline gap-2 px-4 pt-5 pb-1">
+            <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="gap-1 pt-1">
