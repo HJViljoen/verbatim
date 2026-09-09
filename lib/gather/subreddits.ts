@@ -34,6 +34,32 @@ export function activeSubreddits(entries: SubredditEntry[]): string[] {
   return entries.filter((e) => e.status === 'active').map((e) => e.name)
 }
 
+/**
+ * Apply an OPERATOR's decisions to a tenant's community list: add the ones it
+ * doesn't have, set the status of the ones it does. Everything else is left
+ * exactly as it is — a rejected community stays rejected, because that verdict
+ * was paid for with a probe and re-proposing it would spend the same money to
+ * learn the same thing.
+ *
+ * Distinct from applyStrikes and the discovery probe, which are the system
+ * changing its own mind. This is a human overriding it, by name.
+ */
+export function setSubredditStatuses(
+  existing: SubredditEntry[],
+  changes: { name: string; status: SubredditEntry['status'] }[],
+  today: string,
+): SubredditEntry[] {
+  const out = existing.map((e) => ({ ...e }))
+  for (const change of changes) {
+    const key = subredditKey(change.name)
+    if (!key) continue
+    const found = out.find((e) => subredditKey(e.name) === key)
+    if (found) found.status = change.status
+    else out.push({ name: key, status: change.status, discovered_at: today })
+  }
+  return out
+}
+
 /** Names already known to the tenant in ANY state — including rejected ones, so
  *  a proposal step doesn't keep re-suggesting a community the probe already
  *  threw out. */

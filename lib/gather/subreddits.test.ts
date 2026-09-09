@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { subredditKey, activeSubreddits, knownSubreddits, parseSubreddits, applyStrikes } from './subreddits'
+import { subredditKey, activeSubreddits, knownSubreddits, parseSubreddits, applyStrikes, setSubredditStatuses } from './subreddits'
 import type { SubredditEntry } from './types'
 
 // The canonical key is load-bearing: the per-subreddit ROI loop joins stored
@@ -187,5 +187,52 @@ describe('applyStrikes', () => {
     expect(out.entries.filter((e) => e.status === 'active')).toHaveLength(4)
     // …and the survivors' strike history is cleared by their productive run.
     expect(out.entries.filter((e) => e.strikes).length).toBe(0)
+  })
+})
+
+
+// An operator adding or promoting a community by name (2026-09-09). The rule
+// that matters: nothing they didn't name is touched — a rejected community's
+// verdict was paid for with a probe.
+
+describe('setSubredditStatuses', () => {
+  const existing = [
+    { name: 'backpacks', status: 'active' as const, discovered_at: '2026-08-17' },
+    { name: 'edc', status: 'rejected' as const, discovered_at: '2026-08-17', probe: { sampled: 12, kept: 0, at: '2026-08-17' } },
+  ]
+
+  it('adds a community the tenant does not have', () => {
+    const out = setSubredditStatuses(existing, [{ name: 'onebag', status: 'active' }], '2026-09-09')
+    expect(out).toHaveLength(3)
+    expect(out[2]).toEqual({ name: 'onebag', status: 'active', discovered_at: '2026-09-09' })
+  })
+
+  it('sets the status of one it does, keeping its history', () => {
+    const out = setSubredditStatuses(existing, [{ name: 'edc', status: 'candidate' }], '2026-09-09')
+    expect(out).toHaveLength(2)
+    expect(out[1].status).toBe('candidate')
+    expect(out[1].probe).toEqual({ sampled: 12, kept: 0, at: '2026-08-17' })
+    expect(out[1].discovered_at).toBe('2026-08-17')
+  })
+
+  it('leaves every community the operator did not name exactly as it was', () => {
+    const out = setSubredditStatuses(existing, [{ name: 'onebag', status: 'active' }], '2026-09-09')
+    expect(out.slice(0, 2)).toEqual(existing)
+  })
+
+  it('matches by normalised name, so r/OneBag and onebag are one community', () => {
+    const out = setSubredditStatuses([{ name: 'onebag', status: 'candidate', discovered_at: '2026-09-01' }], [{ name: 'r/OneBag', status: 'active' }], '2026-09-09')
+    expect(out).toHaveLength(1)
+    expect(out[0].status).toBe('active')
+  })
+
+  it('ignores a name that is not a valid community', () => {
+    expect(setSubredditStatuses(existing, [{ name: 'u/someone', status: 'active' }], '2026-09-09')).toEqual(existing)
+  })
+
+  it('does not mutate the list it was given', () => {
+    const input = [{ name: 'edc', status: 'rejected' as const, discovered_at: '2026-08-17' }]
+    setSubredditStatuses(input, [{ name: 'edc', status: 'active' }], '2026-09-09')
+    expect(input[0].status).toBe('rejected')
   })
 })
