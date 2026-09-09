@@ -1,5 +1,5 @@
 import { createAdminClient } from '../lib/supabase-admin'
-import { fetchOwnProfile, ownedCommentRefs, stampOwnedSource, OWN_POSTS_LIMIT } from '../lib/gather/owned'
+import { fetchOwnProfile, ownedCommentRefs, ownPostsInWindow, stampOwnedSource, OWN_POSTS_CEILING } from '../lib/gather/owned'
 import { resolveGatherWindow, scrapeCommentsBatch } from '../lib/gather/gather'
 import { COMMENT_THRESHOLD } from '../lib/config'
 import type { Platform } from '../lib/gather/types'
@@ -12,14 +12,15 @@ const COMMENT_BATCH = 3
 // the owned-posts step body OUTSIDE Inngest so the actual throw is visible.
 // Read-only by default; --commit performs the real upsert.
 //   node --env-file=.env.local --import tsx scripts/diagnose-owned.ts \
-//     --client <uuid> --run <uuid> [--platform tiktok] [--commit]
+//     --client <uuid> --run <uuid> [--platform tiktok] [--period monthly] [--commit]
 
 function parseArgs(argv: string[]) {
-  const args = { clientId: '', runId: '', platform: '', commit: false, comments: false }
+  const args = { clientId: '', runId: '', platform: '', period: '', commit: false, comments: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--run') args.runId = argv[++i]
     else if (argv[i] === '--platform') args.platform = argv[++i]
+    else if (argv[i] === '--period') args.period = argv[++i]
     else if (argv[i] === '--commit') args.commit = true
     else if (argv[i] === '--comments') args.comments = true
     else throw new Error(`unknown flag: ${argv[i]}`)
@@ -30,7 +31,7 @@ function parseArgs(argv: string[]) {
 }
 
 async function main() {
-  const { clientId, runId, platform: only, commit, comments } = parseArgs(process.argv.slice(2))
+  const { clientId, runId, platform: only, period: periodOverride, commit, comments } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
 
   const { data: cfg } = await admin
@@ -39,7 +40,7 @@ async function main() {
     .eq('client_id', clientId)
     .maybeSingle()
   const handles = (cfg?.own_handles ?? {}) as Record<string, string>
-  const period = (cfg?.report_period as string | null) ?? 'weekly'
+  const period = periodOverride || (cfg?.report_period as string | null) || 'weekly'
   // Same window the pipeline's owned step would have used, so a backfill lands
   // exactly the refs the run should have scraped — not a wider all-time sweep.
   const window = await resolveGatherWindow(clientId, runId, period)
@@ -55,12 +56,18 @@ async function main() {
 
     let profile
     try {
-      profile = await fetchOwnProfile(platform, handle, { clientId, runId })
+      profile = await fetchOwnProfile(platform, handle, { clientId, runId }, window.since)
     } catch (e) {
       console.log(`  FETCH THREW: ${e instanceof Error ? e.message : String(e)}`)
       continue
     }
-    console.log(`  followers=${profile.followers} postsCount=${profile.postsCount} recentPosts=${profile.recentPosts.length} (limit ${OWN_POSTS_LIMIT})`)
+    // Same census cut the pipeline step applies, so this prints the number the
+    // run would store — not the raw read.
+    profile.recentPosts = ownPostsInWindow(profile.recentPosts, window.since)
+    console.log(`  followers=${profile.followers} postsCount=${profile.postsCount} inWindowPosts=${profile.recentPosts.length} (ceiling ${OWN_POSTS_CEILING})`)
+    for (const p of [...profile.recentPosts].sort((a, b) => (a.upload_date ?? '').localeCompare(b.upload_date ?? ''))) {
+      console.log(`    ${p.upload_date} ${p.video_id} ${p.content_format || '-'} comments=${p.comments_count} views=${p.views}`)
+    }
     if (!profile.recentPosts.length) {
       console.log('  NO RECENT POSTS PARSED — nothing would be written, no error raised')
       continue

@@ -2,6 +2,7 @@ import { createAdminClient } from '../supabase-admin'
 import type { CiSummary, ExecutiveBrief, SayVsHearEntry } from './schemas'
 import type { VideoRow, Step2aMetrics } from './types'
 import type { BrandVoiceSnapshot } from './claims'
+import type { OwnedCensus } from '../gather/owned'
 
 // run_summary writer. The table existed unwritten since v4.1; the pipeline back
 // half now populates one row per run (Redesign Spec §8): deterministic corpus
@@ -30,6 +31,10 @@ export interface WriteRunSummaryArgs {
   brandVoice?: BrandVoiceSnapshot | null
   /** tracking_configs.report_period ('weekly' | 'monthly' | …), if known. */
   period?: string | null
+  /** Exact own-post count per platform for this run's window (the census).
+   *  Omitted by CLI callers that don't compute it; the column stays null and
+   *  the share tile falls back to its pre-census wording. */
+  ownedCensus?: OwnedCensus | null
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -75,7 +80,7 @@ export function sentimentFamily(videos: VideoRow[], family: 'audience' | 'framin
 }
 
 export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> {
-  const { clientId, runId, metrics, videos, periodMetrics, periodVideos, ciSummary, executiveBrief, sayVsHear, brandVoice, period } = args
+  const { clientId, runId, metrics, videos, periodMetrics, periodVideos, ciSummary, executiveBrief, sayVsHear, brandVoice, period, ownedCensus } = args
   const admin = createAdminClient()
 
   // Corpus (all-time) distribution — the market-map state; raw counts live in
@@ -127,6 +132,7 @@ export async function writeRunSummary(args: WriteRunSummaryArgs): Promise<void> 
     say_vs_hear: sayVsHear ?? null,
     brand_voice: brandVoice ?? null,
     period: period ?? null,
+    owned_census: ownedCensus ?? null,
     run_date: new Date().toISOString(),
   })
   if (error) throw new Error(`persist run_summary: ${error.message}`)

@@ -13,7 +13,7 @@ import { loadBrandClaims, shapeBrandVoice } from '@/lib/pipeline/claims'
 import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
-import { ingestOwnedPosts, supportsOwnedProfile } from '@/lib/gather/owned'
+import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus } from '@/lib/gather/owned'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
@@ -28,7 +28,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, captureRunFlags, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, captureRunFlags, periodSince, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 
@@ -425,7 +425,7 @@ export const runPipeline = inngest.createFunction(
             .catch((e) => {
               console.error(`[owned-posts:${platform}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
               noteError(`owned-posts:${platform}`, e)
-              return { refs: [] as { video_id: string; video_url: string; comments_count: number }[], warnings: [] as string[] }
+              return { refs: [] as { video_id: string; video_url: string; comments_count: number }[], posts: 0, warnings: [] as string[] }
             })
           // Best-effort degradations (IG transcript refetch, video_raw write)
           // count as run errors: the week's own-voice claims are missing, and
@@ -1068,9 +1068,10 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   // SoV guard (Owned-Data-Plan): owned-account posts never count toward the
   // discovered-corpus metrics — a client's own posting must not inflate their
   // share of conversation. Filtering videos also drops their comments below.
-  const videos = (await selectAll<VideoRow>(() =>
+  const allVideos = await selectAll<VideoRow>(() =>
     admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
-  )).filter((v) => v.source !== 'owned')
+  )
+  const videos = allVideos.filter((v) => v.source !== 'owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors run-cd.ts.
@@ -1097,7 +1098,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const metrics = computeMetrics(videos, comments, analysedVideoIds)
 
   const { data: tc } = await admin.from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords, report_period')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles')
     .eq('client_id', clientId).maybeSingle()
 
   // Period slice — only what THIS run gathered, minus rows KNOWN to be older
@@ -1112,6 +1113,16 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date, window.since))
   const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments, analysedVideoIds)
+  // Census fact: how many posts the CLIENT published in this window, exactly —
+  // read off the owned rows rather than inferred from the discovered corpus, and
+  // frozen with the window it is true for. The share tile sets it against how
+  // often the market posted about them.
+  const ownedCensus = buildOwnedCensus(allVideos, {
+    handles: (tc?.own_handles ?? {}) as Record<string, string>,
+    since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
+    until: new Date().toISOString().slice(0, 10),
+  })
+
   const { data: client } = await admin.from('clients')
     .select('company_name').eq('id', clientId).maybeSingle()
   const brandName = client?.company_name ?? undefined
@@ -1141,6 +1152,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
     periodMetrics, periodVideos,
     ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
     brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period: tc?.report_period ?? null,
+    ownedCensus,
   })
 
   return {

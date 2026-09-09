@@ -1,7 +1,7 @@
 import { runActor } from './apify'
 import { createAdminClient } from '../supabase-admin'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, transcriptsEnabled } from '../config'
-import { instagram } from './platforms/instagram'
+import { inWindow } from './gather'
 import type { RawItem, VideoInsert } from './types'
 import { getPath, first, num, str } from './util'
 
@@ -40,6 +40,10 @@ export interface OwnProfile {
   followers: number | null
   postsCount: number | null
   recentPosts: VideoInsert[]
+  /** How many posts the read parsed BEFORE the census window was applied. The
+   *  empty-profile glitch guard has to judge the READ, not the window: a brand
+   *  that genuinely published nothing this month is not a scrape failure. */
+  postsSeen?: number
   /** Raw item per recent post (video_id → item), for the transcript layer
    *  (Brand Voice, 2026-08-16). Own posts used to bypass `video_raw` and so
    *  were never transcribed on any platform — the client's own words were
@@ -51,9 +55,19 @@ export interface OwnProfile {
   warnings?: string[]
 }
 
-/** How many recent own posts a profile read pulls (weekly own-post ingestion
- *  window — a brand posting more than this weekly is not our segment). */
-export const OWN_POSTS_LIMIT = 12
+/**
+ * Runaway guard on a census read, NOT a sample size. The client's own post
+ * count for the window has to be EXACT — it is the denominator behind "you
+ * published n posts this update", and a top-12 slice silently understated
+ * every brand that posts more than that (Sealand: 28 Instagram posts in 30
+ * days against a ceiling of 12). The window is what bounds the read; this only
+ * stops a misconfigured handle from pulling a decade of posts.
+ */
+export const OWN_POSTS_CEILING = 200
+
+/** A read with no window (the daily follower snapshot) wants numbers, not the
+ *  census — one small page is enough and costs a fraction as much. */
+export const OWN_POSTS_SNAPSHOT = 12
 
 // ---- Snapshot sanity guards (pure) ------------------------------------------
 
@@ -97,6 +111,10 @@ export function acceptSnapshot(
  * emptiness; null is a scrape that didn't answer the question and gets retried.
  * The cost of being wrong is a non-fatal step error on a genuinely empty
  * account — loud and recorded, which beats losing a week of owned data silently.
+ *
+ * `recentPosts` must be the count BEFORE the census window is applied (see
+ * OwnProfile.postsSeen): an account that simply didn't post this month is not
+ * a glitch, and once the read is windowed the two are indistinguishable here.
  */
 export function emptyProfileIsGlitch(postsCount: number | null, recentPosts: number): boolean {
   if (recentPosts > 0) return false
@@ -140,47 +158,162 @@ export function followerFloorPct(platform: string, followers: number, basePct: n
   return Math.max(basePct, (2 * magnitude * 100) / followers)
 }
 
+/**
+ * The census cut: own posts that belong to the window, exactly.
+ *
+ * A FILTER, not a walk that stops at the first old post. A profile feed is
+ * roughly newest-first but not reliably so — Instagram and TikTok both let a
+ * brand pin an old post to the top of its grid, and a walk would end on it and
+ * report zero. The ceiling, not the ordering, is what bounds the read.
+ *
+ * Undated posts are dropped here, unlike the discovery window (inWindow keeps
+ * them so a patchy platform can't be blanked). A census is a count: a post we
+ * cannot date cannot be counted as published in a window.
+ */
+export function ownPostsInWindow<T extends { upload_date: string | null }>(posts: T[], since: string | null): T[] {
+  if (!since) return posts
+  return posts.filter((p) => p.upload_date != null && inWindow(p.upload_date, since))
+}
+
+/**
+ * Has the YouTube uploads walk seen enough? Uploads come back newest-first one
+ * page at a time, so the walk ends when a WHOLE page falls before the window
+ * (one stray old item mid-page must not end it) or the ceiling is reached.
+ * With no window there is nothing to walk toward — one page is the snapshot.
+ */
+export function stopUploadsWalk(
+  pageDates: (string | null)[],
+  since: string | null,
+  collected: number,
+  ceiling: number = OWN_POSTS_CEILING,
+): boolean {
+  if (!since) return true
+  if (collected >= ceiling) return true
+  return pageDates.length > 0 && pageDates.every((d) => d != null && d < since)
+}
+
+/** One platform's census entry: how many posts the account published in the
+ *  window, and the window and handle the count is true for. */
+export interface OwnedCensusEntry {
+  posts: number
+  since: string
+  until: string
+  handle: string
+}
+export type OwnedCensus = Record<string, OwnedCensusEntry>
+
+interface CensusRow {
+  platform: string
+  source?: string | null
+  is_client?: boolean | null
+  account_name?: string | null
+  upload_date?: string | null
+}
+
+/**
+ * The client's EXACT own-post count per platform for the window — the number
+ * behind "you published n posts this update". Built from stored rows so an
+ * analysis-only resume reports the same census a full run does.
+ *
+ * `is_client` alone is not the test: it is true for any video ABOUT the brand,
+ * including a stranger's review. Authorship is the account, so the count is
+ * over the client's OWN accounts — the configured handle plus whatever
+ * account_name the owned reads themselves stored for that platform (YouTube's
+ * handle is a channel id, but its rows carry the channel's title).
+ *
+ * That second half also fixes the undercount that `source = 'owned'` alone
+ * would cause: a client post the keyword gather discovered first keeps
+ * source 'discovered' forever (metric continuity, stampOwnedSource), and it is
+ * still a post the client published.
+ *
+ * Undated rows are excluded: a census is a count, and a post we cannot date
+ * cannot be counted into a window.
+ */
+export function buildOwnedCensus(
+  rows: CensusRow[],
+  opts: { handles: Record<string, string>; since: string; until: string },
+): OwnedCensus {
+  const norm = (x: string | null | undefined) => (x ?? '').trim().toLowerCase()
+  const ownNames = new Map<string, Set<string>>()
+  for (const [platform, handle] of Object.entries(opts.handles)) {
+    if (handle) ownNames.set(platform, new Set([norm(handle)]))
+  }
+  for (const r of rows) {
+    if (r.source !== 'owned' || !ownNames.has(r.platform)) continue
+    if (r.account_name) ownNames.get(r.platform)!.add(norm(r.account_name))
+  }
+
+  const census: OwnedCensus = {}
+  for (const [platform, handle] of Object.entries(opts.handles)) {
+    if (!handle) continue
+    census[platform] = { posts: 0, since: opts.since, until: opts.until, handle }
+  }
+  for (const r of rows) {
+    const entry = census[r.platform]
+    if (!entry || !r.is_client) continue
+    if (!r.upload_date || r.upload_date < opts.since || r.upload_date > opts.until) continue
+    if (!ownNames.get(r.platform)?.has(norm(r.account_name))) continue
+    entry.posts++
+  }
+  return census
+}
+
+/** Total posts across every platform's census — the tile's headline number. */
+export function ownedCensusTotal(census: OwnedCensus | null | undefined): number | null {
+  if (!census || !Object.keys(census).length) return null
+  return Object.values(census).reduce((n, e) => n + (e?.posts ?? 0), 0)
+}
+
 // ---- Per-platform profile fetchers (I/O) ------------------------------------
 
-function igProfile(handle: string, raw: RawItem[], ctx: Ctx): OwnProfile {
+/** One Instagram post item (details-mode summary or posts-mode full item) as a
+ *  VideoInsert. Both shapes carry the same field names for what we store. */
+function igPost(post: RawItem, handle: string, followers: number, ctx: Ctx): VideoInsert | null {
+  const shortCode = str(first(post.shortCode, post.shortcode, post.code))
+  if (!shortCode) return null
+  return {
+    client_id: ctx.clientId,
+    run_id: ctx.runId,
+    platform: 'instagram' as const,
+    video_id: shortCode,
+    video_url: str(post.url) || `https://www.instagram.com/p/${shortCode}/`,
+    account_name: handle,
+    account_followers: followers,
+    caption: str(first(post.caption, post.text) ?? ''),
+    hashtags: (Array.isArray(post.hashtags) ? post.hashtags : []).map(String),
+    content_format: str(first(post.productType, post.type)),
+    // -1 is "likes hidden", a state and not a count (platforms/instagram.ts).
+    views: Math.max(0, num(first(post.videoPlayCount, post.videoViewCount))),
+    likes: Math.max(0, num(first(post.likesCount, post.likes))),
+    shares: 0,
+    comments_count: Math.max(0, num(first(post.commentsCount, post.commentCount))),
+    engagement_rate: null,
+    upload_date: str(post.timestamp).slice(0, 10) || null,
+    audio_name: '',
+    is_sponsored: Boolean(post.paidPartnership),
+    duration_seconds: Math.round(num(first(post.videoDuration, post.duration))),
+    is_client: true,
+    is_competitor: false,
+    competitor_name: null,
+  }
+}
+
+function igProfile(handle: string, raw: RawItem[], posts: RawItem[], ctx: Ctx): OwnProfile {
   const p = (raw[0] ?? {}) as RawItem
-  const posts = (Array.isArray(p.latestPosts) ? p.latestPosts : []) as RawItem[]
+  const followers = num(p.followersCount)
   const recentPosts: VideoInsert[] = []
-  for (const post of posts.slice(0, OWN_POSTS_LIMIT)) {
-    const shortCode = str(first(post.shortCode, post.shortcode, post.code))
-    if (!shortCode) continue
-    const likes = num(first(post.likesCount, post.likes))
-    const comments = num(first(post.commentsCount, post.commentCount))
-    recentPosts.push({
-      client_id: ctx.clientId,
-      run_id: ctx.runId,
-      platform: 'instagram' as const,
-      video_id: shortCode,
-      video_url: str(post.url) || `https://www.instagram.com/p/${shortCode}/`,
-      account_name: handle,
-      account_followers: num(p.followersCount),
-      caption: str(first(post.caption, post.text) ?? ''),
-      hashtags: (Array.isArray(post.hashtags) ? post.hashtags : []).map(String),
-      content_format: str(first(post.productType, post.type)),
-      views: num(post.videoViewCount),
-      likes,
-      shares: 0,
-      comments_count: comments,
-      engagement_rate: null,
-      upload_date: str(post.timestamp).slice(0, 10) || null,
-      audio_name: '',
-      is_sponsored: Boolean(post.paidPartnership),
-      duration_seconds: 0,
-      is_client: true,
-      is_competitor: false,
-      competitor_name: null,
-    })
+  for (const post of posts) {
+    const row = igPost(post, handle, followers, ctx)
+    if (row) recentPosts.push(row)
   }
   return {
     handle,
-    followers: p.followersCount == null ? null : num(p.followersCount),
+    followers: p.followersCount == null ? null : followers,
     postsCount: p.postsCount == null ? null : num(p.postsCount),
     recentPosts,
+    // Either read answering is proof the account was reachable: the census call
+    // is windowed, the details summary is not.
+    postsSeen: Math.max(recentPosts.length, latestPostsOf(raw).length),
   }
 }
 
@@ -188,7 +321,7 @@ function ttProfile(handle: string, raw: RawItem[], ctx: Ctx): OwnProfile {
   const channel = (raw[0] as RawItem | undefined)?.channel as RawItem | undefined
   const recentPosts: VideoInsert[] = []
   const raws: Record<string, RawItem> = {}
-  for (const item of raw.slice(0, OWN_POSTS_LIMIT)) {
+  for (const item of raw) {
     const v = item as RawItem
     const id = str(v.id)
     const url = str(getPath(v, ['postPage']))
@@ -233,6 +366,9 @@ function ttProfile(handle: string, raw: RawItem[], ctx: Ctx): OwnProfile {
     followers,
     postsCount: channel?.videos == null ? null : num(channel.videos),
     recentPosts,
+    // The profile read is unwindowed (the actor's dateRange is search-only), so
+    // what it parsed is what the account has — the honest glitch signal.
+    postsSeen: recentPosts.length,
     raws,
   }
 }
@@ -242,7 +378,7 @@ interface Ctx {
   runId: string
 }
 
-async function ytProfile(channelId: string, ctx: Ctx): Promise<OwnProfile> {
+async function ytProfile(channelId: string, ctx: Ctx, since: string | null): Promise<OwnProfile> {
   const key = process.env.YOUTUBE_API_KEY
   if (!key) throw new Error('YOUTUBE_API_KEY not set')
   const base = 'https://www.googleapis.com/youtube/v3'
@@ -257,51 +393,70 @@ async function ytProfile(channelId: string, ctx: Ctx): Promise<OwnProfile> {
   const raws: Record<string, RawItem> = {}
   const recentPosts: VideoInsert[] = []
   if (uploads) {
-    const plRes = await fetch(`${base}/playlistItems?part=contentDetails&playlistId=${uploads}&maxResults=${OWN_POSTS_LIMIT}&key=${key}`)
-    if (plRes.ok) {
-      const pl = (await plRes.json()) as { items?: RawItem[] }
-      const videoIds = (pl.items ?? [])
-        .map((i) => str(getPath(i, ['contentDetails', 'videoId'])))
-        .filter(Boolean) as string[]
-      if (videoIds.length) {
-        const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${videoIds.join(',')}&key=${key}`)
-        if (vRes.ok) {
-          const vs = (await vRes.json()) as { items?: RawItem[] }
-          for (const v of vs.items ?? []) {
-            const id = str(v.id)
-            if (!id) continue
-            raws[id] = v
-            const vStats = (v.statistics ?? {}) as RawItem
-            const snippet = (v.snippet ?? {}) as RawItem
-            const views = num(vStats.viewCount)
-            const likes = num(vStats.likeCount)
-            const comments = num(vStats.commentCount)
-            recentPosts.push({
-              client_id: ctx.clientId,
-              run_id: ctx.runId,
-              platform: 'youtube' as const,
-              video_id: id,
-              video_url: `https://www.youtube.com/watch?v=${id}`,
-              account_name: str(snippet.channelTitle) || channelId,
-              account_followers: num(stats.subscriberCount),
-              caption: [str(snippet.title), str(snippet.description)].filter(Boolean).join('\n\n'),
-              hashtags: [],
-              content_format: '',
-              views,
-              likes,
-              shares: 0,
-              comments_count: comments,
-              engagement_rate: views > 0 ? Number((((likes + comments) / views) * 100).toFixed(2)) : null,
-              upload_date: str(getPath(snippet, ['publishedAt'])).slice(0, 10) || null,
-              audio_name: '',
-              is_sponsored: false,
-              duration_seconds: 0,
-              is_client: true,
-              is_competitor: false,
-              competitor_name: null,
-            })
-          }
-        }
+    // Walk the uploads playlist page by page until it drops out of the window.
+    // One page (the old behaviour) is a sample; the census needs every upload
+    // in the period, and playlistItems costs 1 quota unit a page.
+    const pageSize = since ? 50 : OWN_POSTS_SNAPSHOT
+    let pageToken: string | undefined
+    const videoIds: string[] = []
+    for (;;) {
+      const url = `${base}/playlistItems?part=contentDetails&playlistId=${uploads}&maxResults=${pageSize}&key=${key}` +
+        (pageToken ? `&pageToken=${pageToken}` : '')
+      const plRes = await fetch(url)
+      // A first page that fails is a read that answered nothing — it must not
+      // pass as "the channel published nothing this window".
+      if (!plRes.ok) {
+        if (!pageToken) throw new Error(`yt playlistItems ${plRes.status}`)
+        break
+      }
+      const pl = (await plRes.json()) as { items?: RawItem[]; nextPageToken?: string }
+      const items = pl.items ?? []
+      for (const i of items) {
+        const id = str(getPath(i, ['contentDetails', 'videoId']))
+        if (id) videoIds.push(id)
+      }
+      const pageDates = items.map((i) => str(getPath(i, ['contentDetails', 'videoPublishedAt'])).slice(0, 10) || null)
+      pageToken = pl.nextPageToken
+      if (!pageToken || stopUploadsWalk(pageDates, since, videoIds.length)) break
+    }
+    // videos.list takes 50 ids a call and costs 1 unit each.
+    for (let i = 0; i < videoIds.length; i += 50) {
+      const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${videoIds.slice(i, i + 50).join(',')}&key=${key}`)
+      if (!vRes.ok) continue
+      const vs = (await vRes.json()) as { items?: RawItem[] }
+      for (const v of vs.items ?? []) {
+        const id = str(v.id)
+        if (!id) continue
+        raws[id] = v
+        const vStats = (v.statistics ?? {}) as RawItem
+        const snippet = (v.snippet ?? {}) as RawItem
+        const views = num(vStats.viewCount)
+        const likes = num(vStats.likeCount)
+        const comments = num(vStats.commentCount)
+        recentPosts.push({
+          client_id: ctx.clientId,
+          run_id: ctx.runId,
+          platform: 'youtube' as const,
+          video_id: id,
+          video_url: `https://www.youtube.com/watch?v=${id}`,
+          account_name: str(snippet.channelTitle) || channelId,
+          account_followers: num(stats.subscriberCount),
+          caption: [str(snippet.title), str(snippet.description)].filter(Boolean).join('\n\n'),
+          hashtags: [],
+          content_format: '',
+          views,
+          likes,
+          shares: 0,
+          comments_count: comments,
+          engagement_rate: views > 0 ? Number((((likes + comments) / views) * 100).toFixed(2)) : null,
+          upload_date: str(getPath(snippet, ['publishedAt'])).slice(0, 10) || null,
+          audio_name: '',
+          is_sponsored: false,
+          duration_seconds: 0,
+          is_client: true,
+          is_competitor: false,
+          competitor_name: null,
+        })
       }
     }
   }
@@ -314,51 +469,79 @@ async function ytProfile(channelId: string, ctx: Ctx): Promise<OwnProfile> {
   }
 }
 
-/** Fetch one platform's own-profile read. Throws on hard failure — callers
- *  decide non-fatality. */
+/**
+ * Fetch one platform's own-profile read. Throws on hard failure — callers
+ * decide non-fatality.
+ *
+ * `since` decides what kind of read this is. With a window it is a CENSUS: every
+ * post the account published in the period, up to OWN_POSTS_CEILING. Without one
+ * it is the daily follower snapshot, which wants the numbers and one cheap page.
+ */
 export async function fetchOwnProfile(
   platform: string,
   handle: string,
   ctx: Ctx,
+  since: string | null = null,
 ): Promise<OwnProfile> {
-  if (platform === 'youtube') return ytProfile(handle, ctx)
+  if (platform === 'youtube') return ytProfile(handle, ctx, since)
   if (platform === 'instagram') {
-    const raw = await runActor(APIFY_ACTORS.instagram.post, {
+    // Two reads, because one actor mode cannot answer both questions. `details`
+    // is the only mode that returns followersCount/postsCount (the snapshot and
+    // the empty-profile guard), and it caps latestPosts at 12 with no date
+    // input — useless as a census. `posts` mode on the same profile URL takes
+    // `onlyPostsNewerThan` and returns FULL items, verified live on
+    // @sealandgear 2026-09-09: 28 posts for a 30-day window, reels included
+    // (12 of the 28 were productType 'clips'), so there is no separate reels
+    // call to make. Those full items also carry the media URLs, which is what
+    // the transcript refetch used to cost a third actor run to go and get.
+    const details = await runActor(APIFY_ACTORS.instagram.post, {
       directUrls: [`https://www.instagram.com/${handle}/`],
       resultsType: 'details',
       resultsLimit: 1,
     }, { timeoutSecs: 120 })
-    const profile = igProfile(handle, raw, ctx)
-    // The details read returns post SUMMARIES (no media url). For the
-    // transcript layer, refetch the recent posts in posts mode — the same
-    // by-URL call the backfill uses — and key the full items by shortcode.
-    // Best-effort: a refetch failure costs this week's own transcripts, not
-    // the owned layer — but it is REPORTED (profile.warnings → run errors), so
-    // a week with zero own-voice claims never passes as a clean run.
-    if (transcriptsEnabled() && profile.recentPosts.length) {
-      try {
-        const { actor, input } = instagram.refetchByUrl!(profile.recentPosts.map((p) => p.video_url))
-        const full = await runActor(actor, input, { timeoutSecs: 180 })
-        profile.raws = igRawsByShortcode(full)
-        const filed = profile.recentPosts.filter((p) => profile.raws![p.video_id]).length
-        if (filed === 0) profile.warnings = [`instagram refetch returned no matching posts (${full.length} items for ${profile.recentPosts.length} posts)`]
-      } catch (e) {
-        profile.warnings = [`instagram refetch for transcripts failed: ${e instanceof Error ? e.message : String(e)}`]
+    if (!since) return igProfile(handle, details, latestPostsOf(details), ctx)
+
+    const census = await runActor(APIFY_ACTORS.instagram.post, {
+      directUrls: [`https://www.instagram.com/${handle}/`],
+      resultsType: 'posts',
+      resultsLimit: OWN_POSTS_CEILING,
+      onlyPostsNewerThan: since,
+    }, { timeoutSecs: 300 })
+    const profile = igProfile(handle, details, census, ctx)
+    if (transcriptsEnabled()) profile.raws = igRawsByShortcode(census)
+    // The census read is what the count rests on, so a details read that
+    // disagrees with it (the known latestPosts glitch) must not be the thing
+    // that decides. Fall back to the details posts only when the census came
+    // back empty AND the account claims posts — that is the glitch signature.
+    if (profile.recentPosts.length === 0) {
+      const fallback = igProfile(handle, details, latestPostsOf(details), ctx)
+      if (fallback.recentPosts.length > 0) {
+        profile.recentPosts = ownPostsInWindow(fallback.recentPosts, since)
+        profile.warnings = [`instagram census read returned 0 posts; fell back to the profile summary (${profile.recentPosts.length} in window)`]
       }
     }
     return profile
   }
   if (platform === 'tiktok') {
+    // The actor's `dateRange` is search-only (confirmed against its input
+    // schema 2026-09-09), so a profile census is "pull the ceiling, then cut to
+    // the window" — the one platform where the window costs items we discard.
     const raw = await runActor(APIFY_ACTORS.tiktok.video, {
       startUrls: [`https://www.tiktok.com/@${handle}`],
-      maxItems: OWN_POSTS_LIMIT,
+      maxItems: since ? OWN_POSTS_CEILING : OWN_POSTS_SNAPSHOT,
       // Keep the media + caption fields — without the passthrough the actor
       // trims them and the transcript layer has nothing to resolve.
       customMapFunction: '(object) => { return {...object} }',
-    }, { timeoutSecs: 180 })
+    }, { timeoutSecs: 300 })
     return ttProfile(handle, raw, ctx)
   }
   throw new Error(`no own-profile fetcher for platform: ${platform}`)
+}
+
+/** The post summaries an IG `details` read carries (capped at 12 by the actor). */
+function latestPostsOf(details: RawItem[]): RawItem[] {
+  const p = (details[0] ?? {}) as RawItem
+  return (Array.isArray(p.latestPosts) ? p.latestPosts : []) as RawItem[]
 }
 
 /** Posts-mode items keyed by shortcode (the IG video_id). Pure; exported for tests. */
@@ -386,16 +569,18 @@ export function ownedRawRows(
 }
 
 /** Own posts new/fresh enough to be worth a paid comment scrape this run:
- *  in the report window (or undated), above the comment threshold. Pure. */
+ *  in the report window (or undated), above the comment threshold. Pure.
+ *  Shares `inWindow` with the gather filter — this had its own inline copy of
+ *  the rule, and two copies of a window rule eventually disagree. */
 export function ownedCommentRefs(
   posts: VideoInsert[],
   opts: { windowStart: string | null; threshold: number | null },
 ): { video_id: string; video_url: string; comments_count: number }[] {
+  const since = opts.windowStart ? opts.windowStart.slice(0, 10) : null
   return posts
     .filter((p) => {
       if (opts.threshold != null && p.comments_count < opts.threshold) return false
-      if (!opts.windowStart) return true
-      return !p.upload_date || p.upload_date >= opts.windowStart.slice(0, 10)
+      return inWindow(p.upload_date, since)
     })
     .map((p) => ({ video_id: p.video_id, video_url: p.video_url, comments_count: p.comments_count }))
 }
@@ -415,17 +600,34 @@ export async function ingestOwnedPosts(opts: {
   windowStart: string | null
 }): Promise<{
   refs: { video_id: string; video_url: string; comments_count: number }[]
+  /** How many in-window posts this read stored — the census figure for this
+   *  platform, reported so a run's log says what it counted. */
+  posts: number
   /** Non-fatal degradations the caller should count as run errors. */
   warnings: string[]
 }> {
+  const since = opts.windowStart ? opts.windowStart.slice(0, 10) : null
   const profile = await fetchOwnProfile(opts.platform, opts.handle, {
     clientId: opts.clientId,
     runId: opts.runId,
-  })
+  }, since)
+  const postsSeen = profile.postsSeen ?? profile.recentPosts.length
+  // The census cut. TikTok has no date filter at the source and Instagram's
+  // date bound is the actor's word, so the window is applied here as well —
+  // one rule, whatever the platform did or didn't honour.
+  profile.recentPosts = ownPostsInWindow(profile.recentPosts, since)
+  if (profile.recentPosts.length >= OWN_POSTS_CEILING) {
+    warnCeiling(opts.platform, opts.handle, profile.recentPosts.length)
+  }
   const warnings: string[] = [...(profile.warnings ?? [])]
-  if (emptyProfileIsGlitch(profile.postsCount, profile.recentPosts.length)) {
+  // Judge the READ, not the window. A brand that published nothing this month
+  // is a fact to report, not a glitch to retry — and once the read is windowed,
+  // `recentPosts.length` stops being evidence either way (Sealand's YouTube:
+  // 146 uploads, none in the last 30 days). YouTube is exempt entirely: it is
+  // the official API, where a failed page throws and an empty window is true.
+  if (opts.platform !== 'youtube' && emptyProfileIsGlitch(profile.postsCount, postsSeen)) {
     throw new Error(
-      `owned profile (${opts.platform} @${opts.handle}) returned 0 recent posts but reports ${profile.postsCount} posts — scrape glitch, retrying`,
+      `owned profile (${opts.platform} @${opts.handle}) returned 0 posts at all but reports ${profile.postsCount} posts — scrape glitch, retrying`,
     )
   }
   if (profile.recentPosts.length) {
@@ -468,11 +670,18 @@ export async function ingestOwnedPosts(opts: {
       console.log(`[owned-posts:${opts.platform}] transcript raws filed: ${rawRows.length}/${profile.recentPosts.length}`)
     }
   }
+  console.log(`[owned-posts:${opts.platform}] census: ${profile.recentPosts.length} post(s) in window since ${since ?? 'all time'}`)
   return {
     refs: ownedCommentRefs(profile.recentPosts, {
       windowStart: opts.windowStart,
       threshold: opts.platform === 'youtube' ? 1 : COMMENT_THRESHOLD,
     }),
+    posts: profile.recentPosts.length,
     warnings,
   }
+}
+
+/** A census that hits the ceiling is no longer exact — say so loudly. */
+function warnCeiling(platform: string, handle: string, n: number): void {
+  console.warn(`[owned-posts:${platform}] @${handle} hit the ${OWN_POSTS_CEILING}-post ceiling (${n}) — the census for this window may be short`)
 }

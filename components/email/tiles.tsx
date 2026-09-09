@@ -6,6 +6,7 @@ import type { CompetitiveData } from '../../lib/pages/competitive'
 import { INTENT_LABEL } from '../../lib/content-tiles'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
+import { shareFootnoteLead } from '../../lib/calibration'
 import { EMAIL, FONT, tokenHex } from '../../lib/email/theme'
 import { Badge, Bar, Columns, DeltaText, Img, Quote, RankedRow, Stat, text } from './primitives'
 
@@ -106,7 +107,7 @@ const share: E<DashboardData> = ({ share: s }) => {
         ], { aligns: ['left', 'right', 'right'], widths: [undefined, 60, 70] })))}
       </div>
       <div style={{ ...text.small, marginTop: 6 }}>
-        {s.client ? `${fmtInt(s.client.videos)} of your videos` : 'none of your videos'}{s.topCompetitor ? ` · ${fmtInt(s.topCompetitor.videos)} ${s.topCompetitor.name}` : ''}{s.rest ? ` · ${fmtInt(s.rest.videos)} category` : ''}.
+        {shareFootnoteLead(s.ownedPosts, s.client?.videos ?? null)}{s.topCompetitor ? ` · ${fmtInt(s.topCompetitor.videos)} ${s.topCompetitor.name}` : ''}{s.rest ? ` · ${fmtInt(s.rest.videos)} category` : ''}.
         {s.client && s.topCompetitor ? (s.client.pct >= s.topCompetitor.pct ? ` You lead the tracked brands; ${s.topCompetitor.name} follows.` : ` ${s.topCompetitor.name} leads the tracked brands.`) : ''}
       </div>
     </div>

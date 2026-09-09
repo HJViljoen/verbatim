@@ -23,7 +23,7 @@ const fixture: DashboardData = {
     voices: 421, platforms: [{ label: 'Instagram', count: 300 }, { label: 'TikTok', count: 121 }],
   },
   sentiment: { positivePct: 89, judged: 155, deltaText: null, tierLabel: 'Strongly positive', segments: [{ label: 'Positive', count: 138, pct: 89, color: 'bg-positive' }] },
-  share: { usePeriodShare: false, segments: [{ label: 'Sealand', value: 56, pct: 11.3, color: 'var(--you)', delta: null, good: 'up' }], client: { videos: 56, pct: 11.3 }, topCompetitor: { name: 'Ottobock', videos: 82, pct: 16.6 }, rest: { videos: 356, pct: 72.1 } },
+  share: { usePeriodShare: false, ownedPosts: null, segments: [{ label: 'Sealand', value: 56, pct: 11.3, color: 'var(--you)', delta: null, good: 'up' }], client: { videos: 56, pct: 11.3 }, topCompetitor: { name: 'Ottobock', videos: 82, pct: 16.6 }, rest: { videos: 356, pct: 72.1 } },
   themes: { rows: [{ label: 'Everyday questions', description: '', category: 'question', bucket: 'category', memberThemes: ['t1'], conversations: 167, isNew: false }], max: 167, analysedConversations: 494, confirmed: 17, topCompetitorName: 'Ottobock' },
   movement: null,
   accounts: { series: [], topEvent: null },

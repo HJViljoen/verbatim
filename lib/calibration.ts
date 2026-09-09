@@ -148,3 +148,21 @@ export function priorityForRank(rank: number): 'high' | 'medium' | 'low' {
   if (rank <= 2) return 'medium'
   return 'low'
 }
+
+// ---- Share tile · what you published vs what the market said ---------------
+// The share ring is a market measure: it counts what OTHER people posted about
+// each tracked brand, and the client's own posts are deliberately kept out of
+// it (they would inflate their own share). That left the footnote saying "12 of
+// your videos" about videos the client did not make. With an exact own-post
+// census (run_summary.owned_census) the two facts can finally be said apart:
+// what you published, and how often the market brought you up.
+
+/** The share tile's opening clause. `ownedPosts` null = an update written
+ *  before the census existed; the old wording stands rather than a guess. */
+export function shareFootnoteLead(ownedPosts: number | null, clientVideos: number | null): string {
+  const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`
+  if (ownedPosts == null) {
+    return clientVideos ? `${clientVideos.toLocaleString('en-US')} of your videos` : 'none of your videos'
+  }
+  return `You published ${plural(ownedPosts, 'post')} this update · the market posted about you ${plural(clientVideos ?? 0, 'time')}`
+}

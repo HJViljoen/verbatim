@@ -14,6 +14,7 @@ import {
   type ThemeRankRow, type HistoryRow, type Sov, type AudienceSentiment, type Bucket, type Movement, type AccountSeries,
 } from '../dashboard-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
+import { ownedCensusTotal, type OwnedCensus } from '../gather/owned'
 
 // Dashboard loader — the data half of app/dashboard/page.tsx (split 2026-08-29,
 // Reports & Exports T3). Everything below the session line of the old page,
@@ -30,6 +31,7 @@ import type { MethodNoteData } from '../../components/print/method-note'
 interface SummaryRow {
   run_id: string
   run_date: string
+  owned_census: OwnedCensus | null
   total_videos: number | null
   total_comments: number | null
   period_videos: number | null
@@ -141,6 +143,10 @@ export interface DashboardData {
   share: {
     usePeriodShare: boolean
     segments: ShareSeg[]
+    /** Posts the client themselves published in this update's window (the
+     *  owned census). Null on updates written before the census existed — the
+     *  footnote then keeps its old wording. */
+    ownedPosts: number | null
     client: { videos: number; pct: number } | null
     topCompetitor: { name: string; videos: number; pct: number } | null
     rest: { videos: number; pct: number } | null
@@ -172,7 +178,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
 
   // Anchor on the newest run WITH DATA; an in-flight run has no analysis rows
   // yet, so anchoring on it would blank the page for the duration of every run.
-  const SUMMARY_COLS = 'run_id, run_date, total_videos, total_comments, period_videos, period_comments, share_of_voice, period_share_of_voice, period_sentiment_positive, audience_sentiment, period_audience_sentiment'
+  const SUMMARY_COLS = 'run_id, run_date, owned_census, total_videos, total_comments, period_videos, period_comments, share_of_voice, period_share_of_voice, period_sentiment_positive, audience_sentiment, period_audience_sentiment'
   const [{ data: client }, { data: tc }, { data: latestRun }, runningRes, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs')
@@ -420,6 +426,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     } : null,
     share: share ? {
       usePeriodShare, segments: shareSegments,
+      ownedPosts: ownedCensusTotal(summary?.owned_census),
       client: share.client ? { videos: share.client.videos, pct: share.client.pct } : null,
       topCompetitor: topCompetitor ? { name: topCompetitor.name, videos: topCompetitor.videos, pct: topCompetitor.pct } : null,
       rest: share.rest ? { videos: share.rest.videos, pct: share.rest.pct } : null,

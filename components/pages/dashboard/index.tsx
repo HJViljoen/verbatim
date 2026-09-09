@@ -17,6 +17,7 @@ import { Mover } from '@/components/charts/mover'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { dashboardEmail } from '@/components/email/tiles'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '@/lib/format'
+import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -193,7 +194,7 @@ const share: R = ({ share: s }, mode) => {
           </div>
         ))}
         <p className="mt-1 line-clamp-2 px-0 text-[11px] leading-[1.4] text-muted-foreground">
-          {s.client ? `${fmtInt(s.client.videos)} of your videos` : 'none of your videos'}{s.topCompetitor ? ` · ${fmtInt(s.topCompetitor.videos)} ${s.topCompetitor.name}` : ''}{s.rest ? ` · ${fmtInt(s.rest.videos)} category` : ''}.
+          {shareFootnoteLead(s.ownedPosts, s.client?.videos ?? null)}{s.topCompetitor ? ` · ${fmtInt(s.topCompetitor.videos)} ${s.topCompetitor.name}` : ''}{s.rest ? ` · ${fmtInt(s.rest.videos)} category` : ''}.
           {s.client && s.topCompetitor ? (s.client.pct >= s.topCompetitor.pct ? ` You lead the tracked brands; ${s.topCompetitor.name} follows.` : ` ${s.topCompetitor.name} leads the tracked brands.`) : ''}
         </p>
       </div>

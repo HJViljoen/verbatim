@@ -7,7 +7,14 @@ import {
   stampOwnedSource,
   ownedRawRows,
   igRawsByShortcode,
+  ownPostsInWindow,
+  stopUploadsWalk,
+  buildOwnedCensus,
+  ownedCensusTotal,
+  ownedCommentRefs,
+  OWN_POSTS_CEILING,
 } from './owned'
+import { shareFootnoteLead } from '../calibration'
 
 describe('supportsOwnedProfile', () => {
   it('covers the three scraped platforms', () => {
@@ -149,5 +156,141 @@ describe('igRawsByShortcode', () => {
     ])
     expect(Object.keys(out)).toEqual(['Db6AVCIiJPK', 'Dbn476REwYZ'])
     expect(out.Db6AVCIiJPK.audioUrl).toBe('x')
+  })
+})
+
+
+// ---- The census (2026-09-09) -------------------------------------------------
+// The client's own post count for the window must be EXACT. The old read took
+// the 12 most recent posts per platform and called it a week; Sealand published
+// 28 on Instagram in 30 days.
+
+const post = (upload_date: string | null) => ({ upload_date })
+
+describe('ownPostsInWindow — the census cut', () => {
+  it('keeps posts on or after the window start', () => {
+    const kept = ownPostsInWindow([post('2026-08-09'), post('2026-08-10'), post('2026-09-01')], '2026-08-10')
+    expect(kept.map((p) => p.upload_date)).toEqual(['2026-08-10', '2026-09-01'])
+  })
+
+  it('drops undated posts — a count cannot include a post it cannot date', () => {
+    expect(ownPostsInWindow([post(null), post('2026-09-01')], '2026-08-10')).toHaveLength(1)
+  })
+
+  it('keeps everything when there is no window (a baseline read)', () => {
+    expect(ownPostsInWindow([post(null), post('2019-01-01')], null)).toHaveLength(2)
+  })
+
+  it('filters rather than stopping at the first old post — brands pin posts to the top', () => {
+    // A pinned 2024 post sits above this month's; a walk would stop on it and
+    // report zero for an account that posted all week.
+    const feed = [post('2024-01-01'), post('2026-09-08'), post('2026-09-07')]
+    expect(ownPostsInWindow(feed, '2026-08-10')).toHaveLength(2)
+  })
+})
+
+describe('stopUploadsWalk — how far the YouTube uploads walk goes', () => {
+  it('stops when a whole page falls before the window', () => {
+    expect(stopUploadsWalk(['2026-07-01', '2026-06-30'], '2026-08-10', 2)).toBe(true)
+  })
+
+  it('keeps going while any item on the page is in the window', () => {
+    expect(stopUploadsWalk(['2026-09-01', '2026-07-01'], '2026-08-10', 2)).toBe(false)
+  })
+
+  it('keeps going past an undated item rather than ending on it', () => {
+    expect(stopUploadsWalk([null, '2026-07-01'], '2026-08-10', 2)).toBe(false)
+  })
+
+  it('stops at the ceiling, whatever the dates say', () => {
+    expect(stopUploadsWalk(['2026-09-01'], '2026-08-10', OWN_POSTS_CEILING)).toBe(true)
+  })
+
+  it('takes one page when there is no window (the daily snapshot)', () => {
+    expect(stopUploadsWalk(['2026-09-01'], null, 1)).toBe(true)
+  })
+})
+
+describe('buildOwnedCensus', () => {
+  const opts = {
+    handles: { instagram: 'sealandgear', youtube: 'UCCthtmYgmon7h0meZaC1FEQ' },
+    since: '2026-08-10',
+    until: '2026-09-09',
+  }
+  const row = (over: Partial<{ platform: string; source: string | null; is_client: boolean; account_name: string; upload_date: string }>) => ({
+    platform: 'instagram', source: 'owned', is_client: true, account_name: 'sealandgear', upload_date: '2026-09-01', ...over,
+  })
+
+  it("counts the client's own in-window posts per platform", () => {
+    const census = buildOwnedCensus([row({}), row({ upload_date: '2026-08-20' })], opts)
+    expect(census.instagram).toEqual({ posts: 2, since: '2026-08-10', until: '2026-09-09', handle: 'sealandgear' })
+  })
+
+  it('reports zero for a configured platform that published nothing', () => {
+    expect(buildOwnedCensus([row({})], opts).youtube.posts).toBe(0)
+  })
+
+  it('counts an own post the keyword gather discovered first', () => {
+    // stampOwnedSource keeps such a row on 'discovered' forever (metric
+    // continuity) — but the client still published it.
+    expect(buildOwnedCensus([row({ source: 'discovered' })], opts).instagram.posts).toBe(1)
+  })
+
+  it('matches YouTube rows by the channel title the owned read stored, not the channel id', () => {
+    const rows = [
+      row({ platform: 'youtube', account_name: 'Sealand Gear', source: 'owned' }),
+      row({ platform: 'youtube', account_name: 'Sealand Gear', source: 'discovered' }),
+    ]
+    expect(buildOwnedCensus(rows, opts).youtube.posts).toBe(2)
+  })
+
+  it("never counts someone else's video about the brand", () => {
+    expect(buildOwnedCensus([row({ source: 'discovered', account_name: 'some.reviewer' })], opts).instagram.posts).toBe(0)
+  })
+
+  it('excludes posts outside the window and posts with no date', () => {
+    const rows = [row({ upload_date: '2026-08-09' }), row({ upload_date: '2026-09-10' }), { platform: 'instagram', source: 'owned', is_client: true, account_name: 'sealandgear', upload_date: null }]
+    expect(buildOwnedCensus(rows, opts).instagram.posts).toBe(0)
+  })
+
+  it('ignores platforms with no configured handle', () => {
+    expect(buildOwnedCensus([row({ platform: 'tiktok' })], opts).tiktok).toBeUndefined()
+  })
+})
+
+describe('ownedCensusTotal', () => {
+  it('sums the platforms', () => {
+    expect(ownedCensusTotal({ instagram: { posts: 28, since: 'a', until: 'b', handle: 'x' }, youtube: { posts: 0, since: 'a', until: 'b', handle: 'y' } })).toBe(28)
+  })
+
+  it('is null when no census was written (updates before 2026-09-09)', () => {
+    expect(ownedCensusTotal(null)).toBeNull()
+    expect(ownedCensusTotal({})).toBeNull()
+  })
+})
+
+describe('shareFootnoteLead — what you published vs what the market said', () => {
+  it('separates the two facts once the census exists', () => {
+    expect(shareFootnoteLead(28, 12)).toBe('You published 28 posts this update · the market posted about you 12 times')
+  })
+
+  it('says one post and one time in the singular', () => {
+    expect(shareFootnoteLead(1, 1)).toBe('You published 1 post this update · the market posted about you 1 time')
+  })
+
+  it('keeps the old wording for an update written before the census', () => {
+    expect(shareFootnoteLead(null, 56)).toBe('56 of your videos')
+    expect(shareFootnoteLead(null, 0)).toBe('none of your videos')
+  })
+})
+
+describe('ownedCommentRefs shares the gather window rule', () => {
+  const p = (upload_date: string | null, comments_count: number) => ({ upload_date, comments_count, video_id: 'v', video_url: 'u' }) as never
+  it("keeps undated posts (inWindow's rule — a patchy platform is never blanked)", () => {
+    expect(ownedCommentRefs([p(null, 9)], { windowStart: '2026-08-10', threshold: 5 })).toHaveLength(1)
+  })
+  it('drops posts below the comment threshold and outside the window', () => {
+    expect(ownedCommentRefs([p('2026-09-01', 2)], { windowStart: '2026-08-10', threshold: 5 })).toHaveLength(0)
+    expect(ownedCommentRefs([p('2026-07-01', 9)], { windowStart: '2026-08-10', threshold: 5 })).toHaveLength(0)
   })
 })
