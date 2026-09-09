@@ -45,8 +45,40 @@ each sized to fit the 300s cap:
 
 1. **Gather** (skipped on analysis-only resumes) — per-keyword search steps →
    one relevance/attribution gate per platform → comment-scrape batches →
-   transcript batches (flag-gated by `TRANSCRIPTS_ENABLED`). Delta-scraping
-   skips unchanged re-finds and re-checks grown videos.
+   owned-account reads → transcript batches (flag-gated by
+   `TRANSCRIPTS_ENABLED`). Delta-scraping skips unchanged re-finds and
+   re-checks grown videos.
+
+   **Every platform is dated at the source.** TikTok has `dateRange`, YouTube
+   `publishedAfter`, and Instagram (since 2026-09-09) `onlyPostsNewerThan` on
+   the flagship `apify/instagram-scraper`. That actor answers a hashtag with
+   *either* reels *or* feed posts per call, so **Instagram plans two searches
+   per keyword** (`search:instagram:<kw>:reels` / `:posts`) — the variant rides
+   on the adapter (`searchVariants`), and the keyword itself is never split, so
+   `keyword_performance` still keeps one row per (run, platform, keyword,
+   bucket). `periodSince` in `lib/config.ts` is the one date the window filter,
+   the actor bounds and the census all read.
+
+   **Owned reads are a census, not a sample.** Each configured account's posts
+   *for the window* are stored (`OWN_POSTS_CEILING` = 200 is a runaway guard, not
+   a sample size), and the count per platform is frozen in
+   `run_summary.owned_census` with the window and handle it is true for. The
+   share tile speaks it: "You published n posts this update · the market posted
+   about you k times."
+
+   **Competitors get the same read.** `tracking_configs.competitor_handles`
+   (operator-set, keyed by the exact `competitor_names` entry) names each
+   tracked brand's own accounts; their posts are stored `source:'competitor_owned'`
+   with their transcripts, so competitive briefs can quote what a competitor
+   actually claims. No account's own posts — client's or competitor's — ever
+   count toward share of conversation.
+
+   Run ceilings live in `lib/config.ts`: `GATHER_MAX_SEARCHES_PER_RUN` (120),
+   `REDDIT_COMMENT_SCRAPE_CAP` / `RECHECK_CAP` (100 each), `TRANSCRIBE_CAP`
+   (5000), `RUN_MODEL_BUDGET_USD` (60). They are kill switches sized above any
+   honest run, not budgets — meeting one means something is wrong.
+   `COMMENT_THRESHOLD` (5) is the exception: it is a real decision about which
+   posts are worth a paid comment scrape, and it matches the analysis floor.
 2. **Pass A** — per-video GPT insight extraction, fanned out in batches.
    **Incremental since 2026-08-17** (flag `INCREMENTAL_PASS_A`): insights are
    durable facts about a *video* — `videos.analyzed_run_id` points at the run
@@ -248,8 +280,10 @@ All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 | `run-cd.ts` | Back half locally: metrics → A2 → Pass B/C/D → run_summary (A2 reads the corpus's *current* insights via `audience_insights_current`; `--run` is the run the output is written under) |
 | `run-recs.ts` | Regenerate one run's recommendations only |
 | `run-relevance.ts` | Relevance gate dry-run over stored videos (no spend) |
-| `run-tagging.ts` | Entity-tagging strategy comparison |
+| `run-tagging.ts` | Entity-tagging strategy comparison; `--write` re-stamps the stored corpus after `competitor_names` changes |
 | `run-owned-events.ts` | Owned-account event detection |
+| `diagnose-owned.ts` | Replays the owned-posts step outside Inngest — prints the in-window census per platform with dates; read-only unless `--commit` |
+| `sealand-config-2026-09.ts` | Sealand's tracking config for the census pass (keywords, subreddits, competitor handles); dry by default, `--apply` writes |
 | `send-report.ts` | A schedule's digest: preview / test send / real send |
 | `seed-demo.ts` | Idempotent demo-tenant seeder (careful: doesn't recreate account_events/weekly_reports; after a re-seed, re-run the backfill block of `supabase/migrations/20260818090000_incremental_pass_a.sql` so the demo videos' `analyzed_run_id` points at W6 — the `*_current` views are empty until it does) |
 | `regate-corpus.ts` | Re-apply the relevance gate post-hoc (`--apply` deletes) |

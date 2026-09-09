@@ -256,15 +256,17 @@ describe('resolveScrapeCap', () => {
   // videoLimit is a COST-CONTROL lever. On the one platform carrying its own
   // ceiling it must only ever tighten — otherwise an operator capping a TikTok
   // test would silently raise Reddit's guard.
+  // The literals are deliberate: asserting against the constant would let the
+  // cap move without anyone reading this test. 25 → 100 on 2026-09-09.
   it('caps Reddit by default and leaves other platforms uncapped', () => {
-    expect(resolveScrapeCap('reddit')).toBe(25)
+    expect(resolveScrapeCap('reddit')).toBe(100)
     expect(resolveScrapeCap('tiktok')).toBeNull()
     expect(resolveScrapeCap('instagram')).toBeNull()
   })
 
   it('lets an explicit limit tighten Reddit but never loosen it', () => {
     expect(resolveScrapeCap('reddit', 10)).toBe(10)
-    expect(resolveScrapeCap('reddit', 60)).toBe(25) // not 60
+    expect(resolveScrapeCap('reddit', 250)).toBe(100) // not 250
   })
 
   it('honours an explicit limit on uncapped platforms', () => {

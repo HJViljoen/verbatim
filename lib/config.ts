@@ -92,9 +92,14 @@ export const CONTENT_GATE_MODEL = 'gpt-4.1-mini'
 
 /** Runaway BACKSTOP, not a budget (Heinrich 2026-08-08: transcribe everything
  *  analysed — whole-run Whisper ≈ $2.50–3.50 at run-1 scale). A real run's
- *  biggest platform was ~460 candidates; 1000 exists so a pathological gather
- *  can't spend unbounded time/money. */
-export const TRANSCRIBE_CAP = 1000
+ *  biggest platform was ~460 candidates.
+ *
+ *  1000 → 5000 (2026-09-09): the gather this guards got several times larger
+ *  in one pass — Instagram searches two surfaces instead of one, every
+ *  in-window own post is stored instead of twelve, and three competitors'
+ *  accounts joined. At 1000 it would have stopped being a backstop and started
+ *  being a silent cut. It is still ~10x any real run. */
+export const TRANSCRIBE_CAP = 5000
 
 /** Videos per transcribe Inngest step. Download-dominated (~10s/video after
  *  the IG audio-first fix) — 8 ≈ 80s/step, wide margin under the 300s cap. */
@@ -274,11 +279,17 @@ export const REDDIT_KEYWORD_SEARCH_POSTS = 20
  *  per-scrape cost is a fraction and their corpora are keyword-bounded already.
  *
  *  HONEST CEILING: this caps FRESH scrapes only. Delta re-scrapes are a second,
- *  independent budget (RECHECK_CAP, also 25), and harvest makes re-checks the
- *  steady state rather than an edge case — a harvest re-pulls a community's
- *  newest posts weekly and Reddit threads keep accruing comments, with no free
- *  count lookup to avoid paying. So Reddit's real comment-scrape ceiling is
- *  25 + 25 = 50 scrapes ~= $2.60-3.00 — the dominant line by far.
+ *  independent budget (RECHECK_CAP), and harvest makes re-checks the steady
+ *  state rather than an edge case — a harvest re-pulls a community's newest
+ *  posts weekly and Reddit threads keep accruing comments, with no free count
+ *  lookup to avoid paying. So Reddit's real comment-scrape ceiling is this cap
+ *  plus that one — the dominant line by far.
+ *
+ *  25 → 100 (2026-09-09, approved with the wider envelope). "Every gathered
+ *  item that clears the check gets its comments" is the requirement, and at 25
+ *  the cap — not the check — was deciding, on the platform whose comments are
+ *  the most considered text in the corpus. That takes Reddit's ceiling to
+ *  ~$6/run at the shape above, inside the raised monthly cap.
  *
  *  Worst case at the Ossur shape (8 keywords, 5 active communities) is
  *  ~$3.2-3.5/run after REDDIT_KEYWORD_SEARCH_POSTS cut the keyword-search line
@@ -290,7 +301,7 @@ export const REDDIT_KEYWORD_SEARCH_POSTS = 20
  *  spent richest-first, MORE communities means a better candidate pool for the
  *  same money. To go lower, cut these two caps, not the community count.
  *  Measured 2026-08-16. */
-export const REDDIT_COMMENT_SCRAPE_CAP = 25
+export const REDDIT_COMMENT_SCRAPE_CAP = 100
 
 // --- Subreddit discovery probe (Wave 3) --------------------------------------
 // A GPT-proposed subreddit is only a candidate. Before it can be searched on
@@ -419,13 +430,22 @@ export const EVAL_GROUNDING_FLOOR = 0.98
  *
  * A runaway run had no stop at all: the only lever was `clients.is_active`,
  * flipped by hand, and it was written under pressure the day a run had to be
- * killed and there was nothing to kill it with. Real runs cost $2.18-$2.70, so
- * $15 is roughly six times the worst observed run: high enough that no honest
- * run meets it, low enough that a loop cannot drain the account overnight.
+ * killed and there was nothing to kill it with. It is a KILL SWITCH, not a
+ * budget: it has to sit far enough above an honest run that meeting it always
+ * means something is wrong. Set too close, it truncates real work silently —
+ * the exact failure a spend guard exists to prevent.
+ *
+ * $15 → $60 (2026-09-09, approved). Real runs cost $2.18-$2.70 at the old
+ * corpus size, and this pass multiplies that corpus: Instagram searches two
+ * surfaces, own posts are a census rather than a top-12 slice, three
+ * competitors' own accounts are gathered and analysed, and every analysed
+ * video is meant to arrive with a transcript. $15 was ~6x the worst observed
+ * run; $60 restores that headroom on the other side of the change.
+ *
  * Checked at every step boundary against ai_call_log, alongside the abort
  * switch, so it costs no extra round trip.
  */
-export const RUN_MODEL_BUDGET_USD = Number(process.env.RUN_MODEL_BUDGET_USD ?? 15)
+export const RUN_MODEL_BUDGET_USD = Number(process.env.RUN_MODEL_BUDGET_USD ?? 60)
 
 /**
  * Minimum analysed videos in an entity's bucket before the product will draw a
@@ -526,8 +546,14 @@ export const YOUTUBE_BACKSTOP_NIGHTLY_CAP = 5000
 
 /** Hard cap on keyword searches dispatched by one run, across all platforms.
  *  Each search is an Apify actor run; the plan is keywords x platforms, so a
- *  config at every ceiling (45 keywords, 4 platforms) would otherwise plan 180. */
-export const GATHER_MAX_SEARCHES_PER_RUN = 80
+ *  config at every ceiling (45 keywords, 4 platforms) would otherwise plan 180.
+ *
+ *  80 → 120 (2026-09-09): Instagram plans TWO searches per keyword now, since
+ *  its actor answers with reels or feed posts but never both, so the same
+ *  config costs one platform's worth of searches more. Sealand's shape is 13
+ *  keywords x 4 platforms + 13 Instagram variants + 4 community harvests = 69,
+ *  still well clear — which is the point. An operator should never meet this. */
+export const GATHER_MAX_SEARCHES_PER_RUN = 120
 
 /** Hard ceilings applied to the config as READ, so a row that predates the
  *  CHECK constraints (or is edited by an operator with service-role access)
@@ -783,8 +809,14 @@ export const APIFY_COST_ESTIMATES: Record<string, { search: number; perVideoComm
 export const RECHECK_MIN_GROWTH = 3
 
 /** Max re-check scrapes per platform per run — cost guardrail so a viral spike
- *  across many old videos can't blow up a weekly run's Apify bill. */
-export const RECHECK_CAP = 25
+ *  across many old videos can't blow up a weekly run's Apify bill.
+ *
+ *  25 → 100 (2026-09-09). ~27% of a video's lifetime comments arrive after its
+ *  first week and collecting them is the entire point of this layer; at 25 a
+ *  corpus of a few hundred still-active videos met the cap most weeks, so the
+ *  layer was sampling the tail rather than gathering it. A TikTok/Instagram
+ *  re-scrape is a fraction of a Reddit one, so 100 stays single-digit dollars. */
+export const RECHECK_CAP = 100
 
 /** How far back (days) the native-API re-check looks for still-active stored
  *  videos (YouTube — free counts via videos.list). Days 8-30 hold ~11% of
