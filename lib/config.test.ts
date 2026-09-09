@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -66,6 +66,34 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     // point — a deploy or an env edit mid-run used to split a run in two.
     expect(transcriptsEnabled()).toBe(false)
     expect(captured.transcripts).toBe(true)
+  })
+})
+
+describe('effectivePeriod — one period per run, resolved once', () => {
+  it('lets a trigger override the tenant cadence', () => {
+    expect(effectivePeriod('monthly', 'weekly')).toBe('monthly')
+    // The Sealand case: report_period 'paused' (a 7-day window) with a manual
+    // {period:'monthly'} run. Before this rule the gather widened to 30 days
+    // and the synthesis half still measured 7 against it.
+    expect(effectivePeriod('monthly', 'paused')).toBe('monthly')
+    expect(periodWindowDays(effectivePeriod('monthly', 'paused'))).toBe(30)
+  })
+
+  it('falls back to the tenant cadence, then to weekly', () => {
+    expect(effectivePeriod(undefined, 'monthly')).toBe('monthly')
+    expect(effectivePeriod(null, 'paused')).toBe('paused')
+    expect(effectivePeriod(undefined, undefined)).toBe('weekly')
+    expect(effectivePeriod(null, null)).toBe('weekly')
+    // Empty strings are not a period — they used to slip past a `??` guard.
+    expect(effectivePeriod('', '')).toBe('weekly')
+  })
+
+  it('gives gather and synthesis the SAME window bound for one run', () => {
+    // The invariant the bug broke: whatever the run gathered over is the
+    // window the period slice and the owned census are cut against.
+    const period = effectivePeriod('monthly', 'paused')
+    expect(periodSince(period)).toBe(periodSince('monthly'))
+    expect(periodSince(period)).not.toBe(periodSince('paused'))
   })
 })
 

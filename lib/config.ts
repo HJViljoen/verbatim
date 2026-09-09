@@ -927,6 +927,24 @@ export function periodSince(period: string): string {
   return new Date(Date.now() - periodWindowDays(period) * 86_400_000).toISOString().slice(0, 10)
 }
 
+/**
+ * A run's EFFECTIVE period, resolved ONCE per run: the trigger's
+ * `options.period` override wins over the tenant's
+ * `tracking_configs.report_period`, and 'weekly' is the fallback when neither
+ * is set (the same default every call site used to inline).
+ *
+ * The whole point is that one value drives the run end to end — the gather
+ * window and the search adapters' date bounds, the owned-post window, the
+ * synthesis period slice, the owned census and `run_summary.period`. Before
+ * this, only the gather half honoured the override: a manual `{period:
+ * 'monthly'}` run on a tenant whose report_period is 'paused' gathered 30 days
+ * and then reported the 7-day slice against it (run cb0d97b2, 2026-09-09 —
+ * 1,149 videos gathered, period_videos=405).
+ */
+export function effectivePeriod(optionsPeriod?: string | null, configPeriod?: string | null): string {
+  return optionsPeriod || configPeriod || 'weekly'
+}
+
 
 // ------------------------------------------------- Reports & Exports (2026-08-29)
 

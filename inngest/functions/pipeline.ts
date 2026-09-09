@@ -30,7 +30,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
 
@@ -75,11 +75,14 @@ export interface PipelineRunOptions {
 
 /** open-run step result. `runId: null` = skipped by the single-flight guard.
  *  `flags` is the run's frozen flag snapshot (absent on runs opened before
- *  2026-08-18, which fall back to reading the environment). */
+ *  2026-08-18, which fall back to reading the environment); `period` is the
+ *  run's effective period, frozen the same way (absent on runs opened before
+ *  2026-09-09). */
 interface OpenRunResult {
   runId: string | null
   skipped?: string
   flags?: RunFlags
+  period?: string
 }
 
 export const runPipeline = inngest.createFunction(
@@ -188,9 +191,17 @@ export const runPipeline = inngest.createFunction(
           .update({ status: 'failed', error_message: `abandoned: still 'running' after ${RUN_STALE_AFTER_HOURS}h when a new run opened`, completed_at: new Date().toISOString() })
           .in('id', decision.staleRunIds)
       }
-      // Frozen here, inside the memoised step: every later step replays this
-      // value instead of re-reading an environment that may have moved.
+      // Frozen here, inside the memoised step: every later step replays these
+      // values instead of re-reading an environment (or a tenant config) that
+      // may have moved.
       const flags = captureRunFlags()
+      // The run's effective period — the trigger's override, else the tenant's
+      // configured cadence. Resolved ONCE, here, so gather, the owned window,
+      // the synthesis slice, the census and run_summary.period cannot disagree
+      // and a retry cannot see a different answer.
+      const { data: tcPeriod } = await admin.from('tracking_configs')
+        .select('report_period').eq('client_id', clientId).maybeSingle()
+      const period = effectivePeriod(options.period, tcPeriod?.report_period as string | null)
       if (options.runId) {
         // started_at moves to NOW. It is set only at insert, and a resumed run
         // is by definition hours old, so leaving it would make every resumed
@@ -202,7 +213,7 @@ export const runPipeline = inngest.createFunction(
           .eq('id', options.runId).eq('client_id', clientId)
         if (error?.code === PG_UNIQUE_VIOLATION) return { runId: null, skipped: 'another run opened first (unique index)' }
         if (error) throw new Error(`reopen run: ${error.message}`)
-        return { runId: options.runId, flags }
+        return { runId: options.runId, flags, period }
       }
       const { error } = await admin
         .from('pipeline_runs')
@@ -214,18 +225,24 @@ export const runPipeline = inngest.createFunction(
           .select('id').eq('id', newRunId).eq('client_id', clientId).maybeSingle()
         if (ours) {
           console.warn(`[open-run] reusing run ${newRunId} from a previous attempt of this step`)
-          return { runId: newRunId, flags }
+          return { runId: newRunId, flags, period }
         }
         return { runId: null, skipped: 'another run opened first (unique index)' }
       }
       if (error) throw new Error(`open run: ${error.message}`)
-      return { runId: newRunId, flags }
+      return { runId: newRunId, flags, period }
     })
     // Pre-2026-08-18 memoised shape: the step returned the run id itself.
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
     // A run opened before this shipped has no snapshot; read the environment,
     // which is exactly what it was doing anyway.
     const flags: RunFlags = (typeof opened === 'string' ? undefined : opened.flags) ?? captureRunFlags()
+    // The run's effective period (options.period ?? tracking_configs.report_period),
+    // frozen by open-run. A run opened before 2026-09-09 has no frozen value:
+    // it falls back to its own options and then, at each use site, to reading
+    // tracking_configs — i.e. exactly the behaviour it started under.
+    const runPeriod: string | null =
+      (typeof opened === 'string' ? undefined : opened.period) ?? options.period ?? null
     if (!runId) {
       const reason = typeof opened === 'string' ? '' : opened.skipped ?? ''
       // A skipped SCHEDULED run would otherwise cost the client their whole
@@ -337,7 +354,10 @@ export const runPipeline = inngest.createFunction(
               .select('own_handles, competitor_handles, report_period')
               .eq('client_id', clientId)
               .maybeSingle()
-            const period = (data?.report_period as string | null) ?? 'weekly'
+            // The run's frozen period, not a fresh read of the config: a
+            // manual {period:'monthly'} run must widen the owned window the
+            // same way it widens the gather.
+            const period = runPeriod ?? effectivePeriod(options.period, data?.report_period as string | null)
             const window = await resolveGatherWindow(clientId, runId, period)
             return {
               handles: (data?.own_handles ?? {}) as Record<string, string>,
@@ -374,7 +394,7 @@ export const runPipeline = inngest.createFunction(
                     searchOne({
                       clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
                       community: task.community, variant: task.variant,
-                      maxVideos: options.maxVideos, period: options.period,
+                      maxVideos: options.maxVideos, period: runPeriod ?? undefined,
                     }),
                   ),
                 )
@@ -388,7 +408,7 @@ export const runPipeline = inngest.createFunction(
         }
         const gate = await step.run(`gate:${platform}`, () =>
           withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, () =>
-            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: options.period }),
+            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined }),
           ),
         )
         totalVideos += gate.videosKept
@@ -823,7 +843,7 @@ export const runPipeline = inngest.createFunction(
         return null
       })
 
-    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId))
+    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId, runPeriod))
 
     // Keyword ROI bookkeeping — fills keyword_performance.insights_contributed
     // for this run. Catch on the step promise (transcribe precedent): retries
@@ -1197,7 +1217,7 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
 
 // Back half, synthesis step: metrics → Pass C → Pass D (a+b) → run_summary,
 // over the themes persisted by the persist-themes step. Mirrors scripts/run-cd.ts.
-async function runSynthesisHalf(clientId: string, runId: string) {
+async function runSynthesisHalf(clientId: string, runId: string, runPeriod: string | null = null) {
   const admin = createAdminClient()
 
   // SoV guard (Owned-Data-Plan): an ACCOUNT's own posts never count toward the
@@ -1248,7 +1268,12 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   // null) keep the full run slice: the first run IS the map, not a period.
   // Feeds run_summary's period_* columns; the full-corpus metrics above stay
   // the market-map state. (Teardown 2026-07-09 — cumulative-metrics fix.)
-  const window = await resolveGatherWindow(clientId, runId, tc?.report_period ?? 'weekly')
+  // The run's effective period — the trigger's override if it had one, else
+  // the tenant's cadence. Read from the run, NOT from tracking_configs: a
+  // manual {period:'monthly'} on a 'paused' tenant gathered 30 days and then
+  // measured the week against it (run cb0d97b2, 2026-09-09).
+  const period = runPeriod ?? effectivePeriod(null, tc?.report_period as string | null)
+  const window = await resolveGatherWindow(clientId, runId, period)
   const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date, window.since))
   const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments, analysedVideoIds)
@@ -1259,7 +1284,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
   const ownedCensus = buildOwnedCensus(allVideos, {
     handles: (tc?.own_handles ?? {}) as Record<string, string>,
     competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
-    since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
+    since: window.since ?? periodSince(period),
     until: new Date().toISOString().slice(0, 10),
   })
 
@@ -1291,7 +1316,7 @@ async function runSynthesisHalf(clientId: string, runId: string) {
     clientId, runId, metrics, videos,
     periodMetrics, periodVideos,
     ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
-    brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period: tc?.report_period ?? null,
+    brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period,
     ownedCensus,
   })
 

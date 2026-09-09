@@ -29,7 +29,10 @@ export interface WriteRunSummaryArgs {
   sayVsHear?: SayVsHearEntry[] | null
   /** Brand-voice snapshot (counts + About-you entries), or null. */
   brandVoice?: BrandVoiceSnapshot | null
-  /** tracking_configs.report_period ('weekly' | 'monthly' | …), if known. */
+  /** The run's EFFECTIVE period ('weekly' | 'monthly' | …) — the trigger's
+   *  options.period override if it had one, else tracking_configs.report_period.
+   *  It is the window the period_* columns and owned_census were computed over,
+   *  so it must be the same value that produced them, not a fresh config read. */
   period?: string | null
   /** Exact own-post count per platform for this run's window (the census).
    *  Omitted by CLI callers that don't compute it; the column stays null and
