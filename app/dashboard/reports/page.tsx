@@ -5,6 +5,8 @@ import { MasterDetail } from '@/components/shell/master-detail'
 import { PaneHeader, PaneBody, RailGroup, RailLink, ListRows, ListRow, PaneEmpty, DetailHeader, DetailSection } from '@/components/shell/master-list'
 import { ListSearch } from '@/components/shell/list-search'
 import { ShareLinks, type ShareLinkView } from '@/components/reports/share-links'
+import { ReportViewer } from '@/components/reports/report-viewer'
+import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { coverPlainText } from '@/lib/reports/cover'
@@ -64,7 +66,7 @@ const sendLine = (s: SendRow) =>
   : sendDidNotFinish(s.status, s.claimed_at) ? `did not finish · ${fmtWhen(s.claimed_at)}`
   : `sending · ${fmtWhen(s.claimed_at)}`
 
-export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
   const group: Group = sp.group === 'built' ? 'built' : 'sent'
@@ -114,6 +116,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     const { data: row } = await supabase.from('weekly_reports').select('html_content').eq('client_id', clientId).eq('id', selectedLegacy.id).maybeSingle()
     legacyHtml = row?.html_content ? String(row.html_content).replace(/<head>/i, '<head><base target="_blank">') : null
   }
+
+  // The viewer over the page (?view=): the build's frozen pages, read here
+  // instead of downloaded. Scoped to this workspace by the loader; an id that
+  // names nothing simply does not open.
+  let viewer: ViewerSnapshot | null = null
+  if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  const closeViewer = viewerHref(BASE, { group: sp.group, item: buildId ?? sentId ?? undefined }, null)
 
   const rail = (
     <>
@@ -166,7 +175,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           {builds.length > 0 ? (
             <ListRows>
               {builds.map((b) => (
-                <ListRow key={b.id} href={href('built', b.id)} active={b.id === buildId} search={b.title}>
+                <ListRow key={b.id} href={viewerHref(BASE, { group: 'built', item: b.id }, b.id)} active={b.id === buildId} search={b.title}>
                   <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{b.title}</p>
                   <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">built {fmtWhen(b.created_at)} · {b.artifacts.length ? b.artifacts.map((a) => a.format.toUpperCase()).join(', ') : 'no file'}</p>
                 </ListRow>
@@ -224,6 +233,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <DetailSection>
         {selectedBuild.cover && selectedBuild.figures && <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(selectedBuild.cover.body, selectedBuild.figures)}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Link href={viewerHref(BASE, { group: 'built', item: selectedBuild.id }, selectedBuild.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open the report</Link>
           {selectedBuild.artifacts.map((a) => (
             <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · re-renders' : ''}</a>
           ))}
@@ -244,6 +254,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <Link href="/dashboard/studio"><BarPill primary>Open the Studio</BarPill></Link>
       </PageBar>
       <MasterDetail id="reports" rail={rail} list={list} detail={detail} />
+      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
     </PageFrame>
   )
 }

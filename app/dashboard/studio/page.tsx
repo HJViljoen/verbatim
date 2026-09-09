@@ -9,6 +9,8 @@ import { BUILD_COLS, BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
 import { documentTemplate } from '@/lib/reports/documents/templates'
 import { DeleteReport } from '@/components/reports/delete-report'
 import { ShareLinks, type ShareLinkView } from '@/components/reports/share-links'
+import { ReportViewer } from '@/components/reports/report-viewer'
+import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/reports/viewer'
 import { ScheduleForm } from '@/components/schedules/schedule-form'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
@@ -39,7 +41,7 @@ interface SendRow { id: string; schedule_id: string | null; status: string; subj
 const readerOf = (r: Pick<Report, 'audience' | 'cover'>) => r.cover?.reader?.trim() || AUDIENCES.find((a) => a.key === r.audience)?.label || 'General'
 const pagesOf = (sections: { page: string }[]) => [...new Set(sections.map((s) => catalogueTitle(s.page)))]
 
-export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string }> }) {
+export default async function StudioPage({ searchParams }: { searchParams?: Promise<{ item?: string; view?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId, role, email } = await getSessionContext()
   const canManage = canManageTenant(role)
@@ -122,6 +124,13 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
         .map((x) => ({ id: x.id, url: `${base}/r/${x.token}`, title: x.title, createdAt: x.created_at, expiresAt: x.expires_at, revokedAt: x.revoked_at, protected: Boolean(x.password_hash), views: x.view_count, lastViewedAt: x.last_viewed_at, buildAt: byBuild.get(x.snapshot_id) ?? x.created_at }))
     }
   }
+
+  // The viewer over the page (?view=): a build's frozen pages, read here
+  // rather than downloaded. The loader scopes it to this workspace.
+  let viewer: ViewerSnapshot | null = null
+  if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
+  const openViewer = (snapshotId: string) => viewerHref(BASE, { item: selectedId ?? undefined }, snapshotId)
+  const closeViewer = viewerHref(BASE, { item: selectedId ?? undefined }, null)
 
   const sendingLine = (s: ScheduleRow | null) => {
     if (!s) return 'not sent to anyone yet'
@@ -218,6 +227,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
                             {b.needs_review && <span className="text-warning">a finding was dropped after a check, read before sending</span>}
                             {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="font-mono text-[10.5px] text-muted-foreground">edited</span>}
                             {Number(b.cost_usd) > 0 && <span className="font-mono text-[10.5px] text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
+                            {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className="font-medium underline underline-offset-2">Open</Link>}
                             {art && <a href={`/api/artifacts/${art.id}`} className="font-medium underline underline-offset-2">PDF · {fmtBytes(art.bytes)}{art.stale ? ' · re-renders' : ''}</a>}
                           </li>
                         )
@@ -233,6 +243,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
                         <p className="font-mono text-[10.5px] text-muted-foreground">built {fmtWhen(b.created_at)}{b === builds[0] && selected.status === 'draft' ? ' · edited since, build again for a current PDF' : ''}</p>
                         {b.cover && b.figures && <p className="mt-1.5 text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(b.cover.body, b.figures)}</p>}
                         <div className="mt-2 flex flex-wrap gap-3">
+                          <Link href={openViewer(b.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open</Link>
                           {b.artifacts.map((a) => (
                             <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · re-renders' : ''}</a>
                           ))}
@@ -257,6 +268,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
           )}
         </section>
       </div>
+      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
     </PageFrame>
   )
 }
