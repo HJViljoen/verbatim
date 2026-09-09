@@ -2,6 +2,7 @@ import { createAdminClient } from '../supabase-admin'
 import {
   BACKFILL_BATCH,
   BACKFILL_BATCH_YOUTUBE,
+  BACKFILL_CAP,
   CONTENT_GATE_MODEL,
   TRANSCRIPT_MAX_ATTEMPTS,
   estimateCost,
@@ -97,20 +98,25 @@ export interface BackfillBatch {
  */
 export function planBackfillBatches(
   candidates: BackfillCandidate[],
-  opts: { batchSize?: number; youtubeBatchSize?: number; maxAttempts?: number } = {},
+  opts: { batchSize?: number; youtubeBatchSize?: number; maxAttempts?: number; cap?: number } = {},
 ): BackfillBatch[] {
   const batchSize = opts.batchSize ?? BACKFILL_BATCH
   const ytBatchSize = opts.youtubeBatchSize ?? BACKFILL_BATCH_YOUTUBE
+  const wanted = candidates
+    .filter((c) => needsTranscriptAttempt(c, opts.maxAttempts ?? TRANSCRIPT_MAX_ATTEMPTS))
+    // Richest-first ACROSS platforms, then capped: the cap is a runaway
+    // backstop, so what it cuts must be the least-signal videos, and they come
+    // back next run.
+    .sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
+    .slice(0, opts.cap ?? BACKFILL_CAP)
   const byPlatform = new Map<string, BackfillCandidate[]>()
-  for (const c of candidates) {
-    if (!needsTranscriptAttempt(c, opts.maxAttempts ?? TRANSCRIPT_MAX_ATTEMPTS)) continue
+  for (const c of wanted) {
     const list = byPlatform.get(c.platform) ?? []
     list.push(c)
     byPlatform.set(c.platform, list)
   }
   const batches: BackfillBatch[] = []
   for (const [platform, list] of [...byPlatform.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    list.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
     const size = platform === 'youtube' ? ytBatchSize : batchSize
     for (let i = 0; i < list.length; i += size) {
       batches.push({
@@ -126,8 +132,11 @@ export interface BackfillPlan {
   batches: BackfillBatch[]
   /** Videos Pass A selected (the set the precondition is asked about). */
   selected: number
-  /** Of those, videos that still need an attempt — the backfill's work. */
+  /** Of those, videos that still need an attempt. */
   needing: number
+  /** Of those, videos this run will actually attempt (needing, minus whatever
+   *  BACKFILL_CAP defers to the next run). */
+  planned: number
   /** Of those, videos that can never carry a transcript now: attempts spent, no
    *  url, or a platform with nothing to transcribe. They satisfy the
    *  precondition by exhaustion, and the run should say how many there were. */
@@ -154,7 +163,8 @@ export async function planTranscriptBackfill(clientId: string, videoIds: string[
   const batches = planBackfillBatches(rows)
   const needing = rows.filter((r) => needsTranscriptAttempt(r)).length
   const exhausted = rows.filter((r) => r.transcript_status !== 'ok' && !needsTranscriptAttempt(r)).length
-  return { batches, selected: rows.length, needing, exhausted }
+  const planned = batches.reduce((n, b) => n + b.videos.length, 0)
+  return { batches, selected: rows.length, needing, planned, exhausted }
 }
 
 /** Per-run transcript bookkeeping, logged so a run says plainly how many videos

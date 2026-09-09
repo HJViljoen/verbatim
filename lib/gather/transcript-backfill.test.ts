@@ -132,3 +132,16 @@ describe('mergeTallies', () => {
     expect(mergeTallies(a, b)).toEqual({ attempted: 5, ok: 2, no_speech: 2, lyrics: 0, garbled: 0, failed: 1, no_media: 0 })
   })
 })
+
+describe('planBackfillBatches — the runaway cap', () => {
+  it('cuts the least-signal videos, across platforms, never the richest', () => {
+    // The cap is a spend backstop (~$0.055 a video), not a quality budget: what
+    // it defers comes back next run, so it must defer the quietest videos.
+    const many = Array.from({ length: 6 }, (_, i) =>
+      v({ id: `${i}`, video_id: `v${i}`, comments_count: i * 10, platform: i % 2 ? 'tiktok' : 'instagram', video_url: `https://x/${i}` }),
+    )
+    const batches = planBackfillBatches(many, { batchSize: 8, cap: 3 })
+    const kept = batches.flatMap((b) => b.videos.map((x) => x.video_id))
+    expect(kept.sort()).toEqual(['v3', 'v4', 'v5'])
+  })
+})

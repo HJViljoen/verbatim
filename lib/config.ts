@@ -176,6 +176,15 @@ export const BACKFILL_BATCH_YOUTUBE = 2
 /** Backfill steps dispatched per parallel wave (the transcribe wave pattern). */
 export const BACKFILL_PARALLEL = 4
 
+/** Runaway BACKSTOP on the platform-URL backfill, in videos per run — NOT a
+ *  quality budget. That path costs ~$0.055 a video (the actor downloads the
+ *  video), so an unbounded first backfill over a corpus with hundreds of
+ *  transcript-less videos could spend $40+ in one run and exhaust the $200
+ *  monthly Apify cap, which would take the whole gather down with it. Videos
+ *  are attempted richest-first, so a capped run takes the highest-signal ones
+ *  and the rest come on the next run; the run log says how many were left. */
+export const BACKFILL_CAP = 400
+
 /** Max transcript characters injected into a Pass A prompt (~600 tokens),
  *  clipped code-point-safe (clipText). Short reels rarely reach this. */
 export const TRANSCRIPT_PROMPT_CHARS = 2400

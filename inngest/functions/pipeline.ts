@@ -606,14 +606,14 @@ export const runPipeline = inngest.createFunction(
     //     BEFORE the waves because the wave reads the row it writes.
     //     Non-fatal throughout: a video without a transcript is analysed without
     //     one, exactly as before this existed.
-    const backfill = { tally: emptyBackfillTally(), estUsd: 0, batches: 0, unmet: 0, exhausted: 0, errors: 0 }
+    const backfill = { tally: emptyBackfillTally(), estUsd: 0, batches: 0, unmet: 0, deferred: 0, exhausted: 0, errors: 0 }
     if (flags.transcripts && passAPlan.batches.length) {
       const selectedIds = passAPlan.batches.flat()
       const plan = await step
         .run('plan-transcript-backfill', () => planTranscriptBackfill(clientId, selectedIds))
         .catch((e) => {
           noteError('plan-transcript-backfill', e)
-          return { batches: [], selected: selectedIds.length, needing: 0, exhausted: 0 }
+          return { batches: [], selected: selectedIds.length, needing: 0, planned: 0, exhausted: 0 }
         })
       backfill.batches = plan.batches.length
       backfill.exhausted = plan.exhausted
@@ -642,10 +642,11 @@ export const runPipeline = inngest.createFunction(
       // Videos that needed an attempt and did not get one (a batch out of
       // retries): the precondition is unmet for exactly these, and the run says
       // so rather than pretending the corpus is complete.
-      backfill.unmet = Math.max(0, plan.needing - backfill.tally.attempted)
+      backfill.unmet = Math.max(0, plan.planned - backfill.tally.attempted)
+      backfill.deferred = plan.needing - plan.planned
       if (plan.needing) {
         console.log(
-          `[transcript-precondition] ${plan.selected} selected · ${plan.needing} needed an attempt · ${formatTally(backfill.tally)} · ${backfill.exhausted} out of attempts · ${backfill.unmet} unmet · ~$${backfill.estUsd.toFixed(3)} apify (est)`,
+          `[transcript-precondition] ${plan.selected} selected · ${plan.needing} needed an attempt · ${formatTally(backfill.tally)} · ${backfill.exhausted} out of attempts · ${backfill.deferred} deferred by the cap · ${backfill.unmet} unmet · ~$${backfill.estUsd.toFixed(3)} apify (est)`,
         )
       }
       // A new transcript changes what Pass A sees (and, for brand-side videos,

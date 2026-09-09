@@ -42,6 +42,7 @@ interface Candidate {
   video_url: string
   bucket: Bucket
   comments: number
+  attempts: number
 }
 
 interface Opts {
@@ -139,11 +140,12 @@ async function loadCandidates(admin: ReturnType<typeof createAdminClient>, o: Op
     is_client: boolean
     is_competitor: boolean
     transcript_status: string | null
+    transcript_attempts: number | null
   }
   const videos = await selectAll<VRow>(() => {
     let q = admin
       .from('videos')
-      .select('id, run_id, platform, video_id, video_url, is_client, is_competitor, transcript_status')
+      .select('id, run_id, platform, video_id, video_url, is_client, is_competitor, transcript_status, transcript_attempts')
       .eq('client_id', o.clientId)
       .order('id', { ascending: true })
     if (o.platform) q = q.eq('platform', o.platform)
@@ -184,6 +186,7 @@ async function loadCandidates(admin: ReturnType<typeof createAdminClient>, o: Op
       video_url: v.video_url,
       bucket: v.is_client ? 'client' : v.is_competitor ? 'competitor' : 'industry',
       comments: n,
+      attempts: v.transcript_attempts ?? 0,
     })
   }
   return out
@@ -286,7 +289,12 @@ async function main() {
           }
           const { error } = await admin
             .from('videos')
-            .update({ transcript: t.text || null, transcript_lang: t.lang, transcript_source: t.source, transcript_status: t.status })
+            .update({
+              transcript: t.text || null, transcript_lang: t.lang, transcript_source: t.source, transcript_status: t.status,
+              // Every attempt counts, on every path (Phase 2) — this script is
+              // one of them.
+              transcript_attempts: c.attempts + 1, transcript_error: t.error ?? null,
+            })
             .eq('id', c.id)
           if (error) console.warn(`  ! ${c.video_id} update: ${error.message}`)
           const mark = t.status === 'ok' ? '✓' : '·'
@@ -327,11 +335,13 @@ async function main() {
         if (!raw) {
           stats.missing++
           console.log(`  ✗ ${c.video_id} — not returned (deleted/private?)`)
-          await admin.from('videos').update({ transcript_status: 'failed' }).eq('id', c.id)
+          await admin.from('videos')
+            .update({ transcript_status: 'failed', transcript_attempts: c.attempts + 1, transcript_error: 'refetch returned no item' })
+            .eq('id', c.id)
           continue
         }
 
-        const t = await resolveTranscript(adapter.extractMedia(raw))
+        const t = await resolveTranscript(adapter.extractMedia(raw), { platform })
         stats[t.status]++
         if (t.status === 'ok') {
           langs.set(t.lang ?? 'unknown', (langs.get(t.lang ?? 'unknown') ?? 0) + 1)
@@ -345,6 +355,8 @@ async function main() {
             transcript_lang: t.lang,
             transcript_source: t.source,
             transcript_status: t.status,
+            transcript_attempts: c.attempts + 1,
+            transcript_error: t.error ?? null,
           })
           .eq('id', c.id)
         if (error) console.warn(`  ! ${c.video_id} update: ${error.message}`)
