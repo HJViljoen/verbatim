@@ -22,6 +22,7 @@ import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
+import { withApifyRunContext } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
@@ -369,11 +370,13 @@ export const runPipeline = inngest.createFunction(
             tasks.slice(w, w + SEARCH_PARALLEL).map(async (task): Promise<SearchResult> => {
               try {
                 return await step.run(searchStepId(task), () =>
-                  searchOne({
-                    clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
-                    community: task.community, variant: task.variant,
-                    maxVideos: options.maxVideos, period: options.period,
-                  }),
+                  withApifyRunContext({ clientId, runId, step: searchStepId(task) }, () =>
+                    searchOne({
+                      clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
+                      community: task.community, variant: task.variant,
+                      maxVideos: options.maxVideos, period: options.period,
+                    }),
+                  ),
                 )
               } catch (e) {
                 noteError(searchStepId(task), e)
@@ -384,7 +387,9 @@ export const runPipeline = inngest.createFunction(
           searches.push(...wave)
         }
         const gate = await step.run(`gate:${platform}`, () =>
-          gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: options.period }),
+          withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, () =>
+            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: options.period }),
+          ),
         )
         totalVideos += gate.videosKept
         for (const err of gate.errors) noteError(`gate:${platform}`, err)
@@ -403,7 +408,9 @@ export const runPipeline = inngest.createFunction(
             commentBatches.slice(w, w + COMMENT_PARALLEL).map(async (refs, j) => {
               try {
                 const r = await step.run(`comments:${platform}:${w + j + 1}`, () =>
-                  scrapeCommentsBatch({ clientId, runId, platform, refs }),
+                  withApifyRunContext({ clientId, runId, step: `comments:${platform}:${w + j + 1}` }, () =>
+                    scrapeCommentsBatch({ clientId, runId, platform, refs }),
+                  ),
                 )
                 for (const err of r.errors) noteError(`comments:${platform}:${w + j + 1}`, err)
               } catch (e) {
@@ -440,7 +447,9 @@ export const runPipeline = inngest.createFunction(
             const who = `${platform}:${entitySlug(entity)}`
             const owned = await step
               .run(`owned-posts:${who}`, () =>
-                ingestOwnedPosts({ clientId, runId, platform, handle, windowStart: ownedPlan.windowStart, entity }),
+                withApifyRunContext({ clientId, runId, step: `owned-posts:${who}` }, () =>
+                  ingestOwnedPosts({ clientId, runId, platform, handle, windowStart: ownedPlan.windowStart, entity }),
+                ),
               )
               .catch((e) => {
                 console.error(`[owned-posts:${who}] out of retries: ${e instanceof Error ? e.message : String(e)}`)
@@ -456,7 +465,9 @@ export const runPipeline = inngest.createFunction(
             for (let w = 0; w < ownedRefs.length; w += COMMENT_BATCH) {
               await step
                 .run(`owned-comments:${who}:${Math.floor(w / COMMENT_BATCH) + 1}`, () =>
-                  scrapeCommentsBatch({ clientId, runId, platform: platform as Platform, refs: ownedRefs.slice(w, w + COMMENT_BATCH), source }),
+                  withApifyRunContext({ clientId, runId, step: `owned-comments:${who}:${Math.floor(w / COMMENT_BATCH) + 1}` }, () =>
+                    scrapeCommentsBatch({ clientId, runId, platform: platform as Platform, refs: ownedRefs.slice(w, w + COMMENT_BATCH), source }),
+                  ),
                 )
                 .catch((e) => {
                   noteError(`owned-comments:${who}`, e)
@@ -481,7 +492,9 @@ export const runPipeline = inngest.createFunction(
                 txBatches.slice(w, w + TRANSCRIBE_PARALLEL).map((videoIds, j) =>
                   step
                     .run(`transcribe:${platform}:${w + j + 1}-of-${txBatches.length}`, () =>
-                      transcribeBatch({ clientId, runId, platform, videoIds, batchNo: w + j + 1 }),
+                      withApifyRunContext({ clientId, runId, step: `transcribe:${platform}:${w + j + 1}-of-${txBatches.length}` }, () =>
+                        transcribeBatch({ clientId, runId, platform, videoIds, batchNo: w + j + 1 }),
+                      ),
                     )
                     // Per-step catch (comments-fan-out precedent): one batch
                     // exhausting its retries must not abandon the remaining
@@ -622,7 +635,9 @@ export const runPipeline = inngest.createFunction(
           plan.batches.slice(w, w + BACKFILL_PARALLEL).map((b, j) =>
             step
               .run(`transcript-backfill:${w + j + 1}-of-${plan.batches.length}`, () =>
-                backfillTranscriptsBatch({ clientId, runId, platform: b.platform, videos: b.videos, batchNo: w + j + 1 }),
+                withApifyRunContext({ clientId, runId, step: `transcript-backfill:${w + j + 1}-of-${plan.batches.length}` }, () =>
+                  backfillTranscriptsBatch({ clientId, runId, platform: b.platform, videos: b.videos, batchNo: w + j + 1 }),
+                ),
               )
               // Per-step catch (the transcribe fan-out's precedent): one batch
               // out of retries must not abandon the rest, and its videos simply
