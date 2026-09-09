@@ -42,7 +42,9 @@ export function ReportViewer({ snapshot, closeHref }: { snapshot: ViewerSnapshot
         aria-label="Report viewer"
         className="fixed inset-2 z-40 flex flex-col overflow-hidden rounded-lg bg-card shadow-tile-hover md:inset-y-4 md:right-4 md:left-[calc(var(--sidebar-width)+1rem)]"
       >
-        <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-border/70 px-5 py-3">
+        {/* pl-14 on a phone: the floating navigation trigger sits in the shell
+            above this panel, and the title has to start clear of it. */}
+        <header className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1.5 border-b border-border/70 py-3 pr-5 pl-14 md:pl-5">
           <h2 className="min-w-0 truncate text-[15px] font-semibold leading-[1.3] tracking-[-0.005em]">{title}</h2>
           <p className="font-mono text-[11px] text-muted-foreground">built {date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
           <div className="ml-auto flex shrink-0 items-center gap-2">
