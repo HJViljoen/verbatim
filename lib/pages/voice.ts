@@ -9,6 +9,7 @@ import {
   themeTrajectories, themeMovers, voiceTiers, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
+import { pickThemedRunId } from './themed-run'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 
@@ -250,23 +251,38 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   if (!latestRun) return { empty: true, legendItems: LEGEND_ITEMS }
   const runId = latestRun.id as string
 
-  const themesRes = await supabase.from('themes')
-    .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
-    .eq('client_id', clientId).eq('run_id', runId)
-    .order('evidence_count', { ascending: false })
-    .order('rank_score', { ascending: false, nullsFirst: false })
-
-  const themes = (themesRes.data ?? []) as ThemeRow[]
   // The updates that count for movement: closed updates that produced themes
   // (an update from before themes existed is no baseline for "new").
   const themedRunIds = new Set(historyRows.map((r) => r.run_id))
-  themedRunIds.add(runId)
   const runDates = new Map(
     summaryRows.filter((s) => s.run_id && themedRunIds.has(s.run_id) && !runningIds.includes(s.run_id)).map((s) => [s.run_id, s.run_date]),
   )
-  if (!runDates.has(runId)) runDates.set(runId, (latestRun.started_at as string).slice(0, 10))
+  // This update produced themes but hasn't written its summary row yet.
+  if (themedRunIds.has(runId) && !runDates.has(runId)) runDates.set(runId, (latestRun.started_at as string).slice(0, 10))
+
+  // Themes anchor on the newest update that actually produced any, which is
+  // the latest update whenever its theme pass ran (lib/pages/themed-run). When
+  // it didn't, the page keeps serving the last themes read rather than an empty
+  // map — every other read on this page stays on the latest update. historyRows
+  // already holds every update's theme rows, so this costs no round trip.
+  const themedRunId = pickThemedRunId([...runDates].map(([run_id, created_at]) => ({ run_id, created_at })), runningIds)
+
+  const themesRes = themedRunId
+    ? await supabase.from('themes')
+        .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
+        .eq('client_id', clientId).eq('run_id', themedRunId)
+        .order('evidence_count', { ascending: false })
+        .order('rank_score', { ascending: false, nullsFirst: false })
+    : { data: null }
+
+  const themes = (themesRes.data ?? []) as ThemeRow[]
   const updatesCount = runDates.size
-  const runDate = runDates.get(runId) ?? (latestRun.started_at as string)
+  // The page is dated by the update its themes came from — the map, the movers
+  // and the list are all read from it, so the date stays truthful when the
+  // latest update carried none.
+  const runDate = (themedRunId ? runDates.get(themedRunId) : null)
+    ?? summaryRows.find((s) => s.run_id === runId)?.run_date
+    ?? (latestRun.started_at as string)
   const showNew = updatesCount > 1
   const samples = (samplesRes.data ?? []) as { id: string; phrase: string; platform: string | null }[]
   const sampleTotal = samplesRes.count ?? samples.length

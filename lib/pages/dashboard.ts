@@ -15,6 +15,7 @@ import {
 } from '../dashboard-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { ownedCensusTotal, type OwnedCensus } from '../gather/owned'
+import { fetchThemedRunId } from './themed-run'
 
 // Dashboard loader — the data half of app/dashboard/page.tsx (split 2026-08-29,
 // Reports & Exports T3). Everything below the session line of the old page,
@@ -220,15 +221,15 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   if (!runId) return { empty: true, brand, nextUpdate }
 
   // ── everything keyed on the anchored run, in one wave ──────────────────
-  let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
-  if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   let latestVidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
   if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
   let earlierThemesQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) earlierThemesQ = earlierThemesQ.not('run_id', 'in', notRunning)
-  const [recRes, latestThemedRes, miRes, latestVidRes, eventsRes, bucketRes] = await Promise.all([
+  const [recRes, themedRunId, miRes, latestVidRes, eventsRes, bucketRes] = await Promise.all([
     supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
-    themedQ.order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // Themes come from the newest update that produced any — normally this
+    // update, but a failed theme pass must not blank the theme tiles.
+    fetchThemedRunId(supabase, clientId, runningIds),
     supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).eq('run_id', runId),
     // The newest update that gathered videos (an analysis-only update re-reads
     // old videos and gathers none) — anchors the platform split below.
@@ -242,7 +243,6 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
 
   // ── the third wave: what depends on the second ─────────────────────────
   const videoRunId = (latestVidRes.data?.run_id as string | undefined) ?? runId
-  const themedRunId = latestThemedRes.data?.run_id as string | undefined
   const recs = (recRes.data ?? []) as RecRow[]
   const oneThing = topRecommendation(recs)
   const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
