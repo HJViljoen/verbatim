@@ -143,7 +143,7 @@ const shareLine: R = (d) => {
   const lead = d.selection.vs
   return (
     <Tile exportKey="competitive.shareLine" col={7} row={2} eyebrow="Share of tracked conversation over time"
-      meta={series ? `${d.updatesCount} updates · ${series.layer === 'cumulative' ? 'all-time share' : 'share per update'}` : undefined}
+      meta={series ? `${d.updatesCount} updates · ${series.layer === 'cumulative' ? 'share across all updates' : 'share per update'}` : undefined}
       footerNote={series ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
       bodyClassName="min-h-0 justify-center">
       {series && lead ? (

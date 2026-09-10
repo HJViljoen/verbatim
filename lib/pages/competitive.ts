@@ -6,8 +6,9 @@ import type { Quote, Scope } from '../renderables/types'
 import type { GlossaryKey } from '../calibration'
 import { fmtInt, fmtPct, weekdayDate, cap } from '../format'
 import { shareBreakdown, pointDelta, type Sov } from '../dashboard-tiles'
+import type { OwnedCensus } from '../gather/owned'
 import {
-  leadCompetitor, competitorShares, competitorBucket, bucketStats, themeCounts, faceOffRows, praisedFor, shareSeries,
+  leadCompetitor, competitorShares, competitorBucket, bucketStats, themeCounts, faceOffRows, ownedPostCounts, praisedFor, shareSeries,
   orderInsights, groupByKind, coverageOf, coverageText, SENTIMENT_MIN_JUDGED, type VideoStatRow, type FaceOffRow, type ShareSeries,
 } from '../competitive-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
@@ -31,6 +32,9 @@ import { EXPORT_FULL_MAX_ITEMS } from '../config'
 interface SummaryRow {
   run_id: string
   run_date: string
+  /** exact own-post census per account, written since 2026-09-09; null on
+   *  every update before it — the face-off shows an em dash, not a zero */
+  owned_census: OwnedCensus | null
   total_videos: number | null
   share_of_voice: Sov | null
   period_share_of_voice: Sov | null
@@ -169,7 +173,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
     selectAll<SummaryRow>(() =>
-      supabase.from('run_summary').select('run_id, run_date, total_videos, share_of_voice, period_share_of_voice')
+      supabase.from('run_summary').select('run_id, run_date, owned_census, total_videos, share_of_voice, period_share_of_voice')
         .eq('client_id', clientId).order('run_date', { ascending: true }),
     ),
   ])
@@ -250,7 +254,8 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   const selected = itemId ? insights.find((ci) => ci.id === itemId) ?? null : null
 
   // ── the face-off vs the selected competitor ────────────────────────────
-  const rows = lead ? faceOffRows({ sov: faceSov, layer: faceLayer, competitor: lead, stats, themes: themesByBucket, fmtInt, fmtPct }) : []
+  const owned = ownedPostCounts(summary?.owned_census, lead)
+  const rows = lead ? faceOffRows({ sov: faceSov, layer: faceLayer, competitor: lead, stats, themes: themesByBucket, owned, fmtInt, fmtPct }) : []
   const youPraise = praisedFor(themeRows, 'client')
   const themPraise = lead ? praisedFor(themeRows, competitorBucket(lead)) : null
   const youDelta = pointDelta(share?.client?.pct, sharePrev?.client?.pct)

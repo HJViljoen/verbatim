@@ -5,6 +5,7 @@
 // videos, themes), never re-estimated; model scores only gate and order.
 
 import type { Sov, HistoryRow } from './dashboard-tiles'
+import type { OwnedCensus } from './gather/owned'
 import { COMPETITIVE_MIN_VIDEOS } from './config'
 
 // ── who we face ───────────────────────────────────────────────────────────
@@ -118,7 +119,7 @@ export const SENTIMENT_MIN_JUDGED = 5
 export interface FaceOffSide { value: number; text: string }
 
 export interface FaceOffRow {
-  key: 'videos' | 'comments' | 'share' | 'engagement' | 'sentiment' | 'themes'
+  key: 'posts' | 'videos' | 'comments' | 'share' | 'engagement' | 'sentiment' | 'themes'
   label: string
   you: FaceOffSide
   them: FaceOffSide
@@ -135,6 +136,27 @@ export function pairScale(a: number, b: number): { a: number; b: number } {
   return { a: s(a), b: s(b) }
 }
 
+/** What each side PUBLISHED this update, summed over their platforms — the
+ *  own-post census (run_summary.owned_census), not the discovered corpus. The
+ *  share rows below count what the market posted ABOUT a brand and leave a
+ *  brand's own posts out by design, so without this row a busy client reads as
+ *  "posted nothing". Null when the update predates the census (2026-09-09):
+ *  the strip shows an em dash rather than a false zero. A competitor with no
+ *  branch of their own has genuinely published nothing we tracked, so 0.
+ *  Competitor names are matched case-insensitively — the census is keyed by
+ *  the competitor_names entry, share_of_voice by the bucket suffix. */
+export function ownedPostCounts(
+  census: OwnedCensus | null | undefined,
+  competitor: string | null,
+): { you: number; them: number } | null {
+  if (!census) return null
+  const sum = (byPlatform: Record<string, { posts?: number | null }> | null | undefined) =>
+    Object.values(byPlatform ?? {}).reduce((n, e) => n + (Number(e?.posts) || 0), 0)
+  const comps = census.competitors ?? {}
+  const key = competitor ? Object.keys(comps).find((k) => k.toLowerCase() === competitor.toLowerCase()) : undefined
+  return { you: sum(census.client), them: key ? sum(comps[key]) : 0 }
+}
+
 export interface FaceOffInput {
   /** the share map the videos + share rows are read from */
   sov: Sov | null | undefined
@@ -145,17 +167,22 @@ export interface FaceOffInput {
   stats: Map<string, BucketStats> | null
   /** themes by bucket for the latest themed update (null when none) */
   themes: Map<string, number> | null
+  /** own posts per side (ownedPostCounts): null renders an em dash for an
+   *  update written before the census; omit it to leave the row out entirely */
+  owned?: { you: number; them: number } | null
   fmtInt: (n: number) => string
   fmtPct: (n: number, decimals?: 0 | 1) => string
 }
 
 /**
- * The six butterfly rows, each grounded or dropped — never fabricated:
- * videos + share from share_of_voice; comments, engagement and positive
- * sentiment from this update's videos; themes from the latest themed update.
+ * The butterfly rows, each grounded or dropped — never fabricated: own posts
+ * from owned_census; videos + share from share_of_voice; comments, engagement
+ * and positive sentiment from this update's videos; themes from the latest
+ * themed update. Own posts lead, so the market rows beneath are read as what
+ * they are: what other people posted about each brand.
  */
 export function faceOffRows(input: FaceOffInput): FaceOffRow[] {
-  const { sov, layer, competitor, stats, themes, fmtInt, fmtPct } = input
+  const { sov, layer, competitor, stats, themes, owned, fmtInt, fmtPct } = input
   const themKey = competitorBucket(competitor)
   const rows: FaceOffRow[] = []
   const row = (key: FaceOffRow['key'], label: string, a: number, b: number, fa: string, fb: string) => {
@@ -163,16 +190,20 @@ export function faceOffRows(input: FaceOffInput): FaceOffRow[] {
     rows.push({ key, label, you: { value: a, text: fa }, them: { value: b, text: fb }, youPct: sc.a, themPct: sc.b })
   }
 
+  if (owned !== undefined) {
+    if (owned) row('posts', 'Posts by the brand', owned.you, owned.them, fmtInt(owned.you), fmtInt(owned.them))
+    else rows.push({ key: 'posts', label: 'Posts by the brand', you: { value: 0, text: '—' }, them: { value: 0, text: '—' }, youPct: 0, themPct: 0 })
+  }
   const you = sov?.client
   const them = sov?.[themKey]
   if (sov && (you || them)) {
     const a = Number(you?.videos ?? 0), b = Number(them?.videos ?? 0)
-    row('videos', layer === 'period' ? 'Videos this update' : 'Videos tracked', a, b, fmtInt(a), fmtInt(b))
+    row('videos', layer === 'period' ? 'Videos about the brand' : 'Videos about the brand, tracked', a, b, fmtInt(a), fmtInt(b))
   }
   const ys = stats?.get('client'), ts = stats?.get(themKey)
   if (stats && (ys || ts)) {
     const a = ys?.comments ?? 0, b = ts?.comments ?? 0
-    row('comments', 'Comments under them', a, b, fmtInt(a), fmtInt(b))
+    row('comments', 'Comments about the brand', a, b, fmtInt(a), fmtInt(b))
   }
   if (sov && (you || them)) {
     const a = Number(you?.pct_videos ?? 0), b = Number(them?.pct_videos ?? 0)

@@ -13,7 +13,7 @@ export const YOU_COLOR = 'var(--you)'
 export const THEM_COLOR = 'var(--comp)'
 
 // One grid for the header and every row: side · centre · side.
-const GRID = 'grid grid-cols-[minmax(0,1fr)_150px_minmax(0,1fr)] gap-x-3'
+const GRID = 'grid grid-cols-[minmax(0,1fr)_172px_minmax(0,1fr)] gap-x-3'
 
 /** The header row: two eyebrows with their "praised for" lines around a centre label. */
 export function FaceOffHeader({

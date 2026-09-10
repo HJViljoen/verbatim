@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   competitorShares, leadCompetitor, videoBucket, isAudienceSentiment, bucketStats, themeCounts, pairScale,
-  faceOffRows, praisedFor, shareSeries, kindOf, orderInsights, groupByKind, coverageOf, coverageText, competitiveHref,
+  faceOffRows, ownedPostCounts, praisedFor, shareSeries, kindOf, orderInsights, groupByKind, coverageOf, coverageText, competitiveHref,
   SENTIMENT_MIN_JUDGED,
 } from './competitive-tiles'
 
@@ -70,7 +70,7 @@ describe('faceOffRows', () => {
   it('grounds all six rows when every source is there', () => {
     const rows = faceOffRows({ sov, layer: 'period', competitor: 'Ottobock', stats, themes, fmtInt, fmtPct })
     expect(rows.map((r) => r.key)).toEqual(['videos', 'comments', 'share', 'engagement', 'sentiment', 'themes'])
-    expect(rows[0].label).toBe('Videos this update')
+    expect(rows[0].label).toBe('Videos about the brand')
     expect(rows[0].you).toEqual({ value: 27, text: '27' })
     expect(rows[0].them).toEqual({ value: 75, text: '75' })
     expect(rows[0].themPct).toBe(100)
@@ -81,7 +81,7 @@ describe('faceOffRows', () => {
   })
   it('labels the cumulative layer honestly', () => {
     const rows = faceOffRows({ sov, layer: 'cumulative', competitor: 'Ottobock', stats, themes, fmtInt, fmtPct })
-    expect(rows[0].label).toBe('Videos tracked')
+    expect(rows[0].label).toBe('Videos about the brand, tracked')
   })
   it('drops rows it cannot ground instead of inventing them', () => {
     const thin = new Map([
@@ -96,6 +96,50 @@ describe('faceOffRows', () => {
     const rows = faceOffRows({ sov, layer: 'period', competitor: 'Nobody', stats, themes, fmtInt, fmtPct })
     expect(rows[0].them).toEqual({ value: 0, text: '0' })
     expect(rows[0].themPct).toBe(2)
+  })
+})
+
+describe('ownedPostCounts', () => {
+  const entry = (posts: number) => ({ posts, since: '2026-09-01', until: '2026-09-08', handle: 'h' })
+  const census = {
+    client: { instagram: entry(28), youtube: entry(3) },
+    competitors: { Ottobock: { instagram: entry(40) }, Blatchford: {} },
+  }
+  it('sums each side over its platforms and matches the competitor case-insensitively', () => {
+    expect(ownedPostCounts(census, 'Ottobock')).toEqual({ you: 31, them: 40 })
+    expect(ownedPostCounts(census, 'ottobock')).toEqual({ you: 31, them: 40 })
+  })
+  it('reads a competitor with no census branch as nothing published, not as missing', () => {
+    expect(ownedPostCounts(census, 'Blatchford')).toEqual({ you: 31, them: 0 })
+    expect(ownedPostCounts(census, 'Nobody')).toEqual({ you: 31, them: 0 })
+    expect(ownedPostCounts(census, null)).toEqual({ you: 31, them: 0 })
+  })
+  it('is null for an update written before the census existed', () => {
+    expect(ownedPostCounts(null, 'Ottobock')).toBeNull()
+    expect(ownedPostCounts(undefined, 'Ottobock')).toBeNull()
+  })
+})
+
+describe('faceOffRows · own posts', () => {
+  const stats = new Map([
+    ['client', { videos: 27, comments: 410, avgEngagement: 4.1, engagementN: 20, judged: 10, positive: 9 }],
+    ['competitor:Ottobock', { videos: 75, comments: 1180, avgEngagement: 3.2, engagementN: 60, judged: 30, positive: 24 }],
+  ])
+  it('leads with what each side published, above the market rows', () => {
+    const rows = faceOffRows({ sov, layer: 'period', competitor: 'Ottobock', stats, themes: null, owned: { you: 31, them: 40 }, fmtInt, fmtPct })
+    expect(rows[0].key).toBe('posts')
+    expect(rows[0].label).toBe('Posts by the brand')
+    expect(rows[0].you).toEqual({ value: 31, text: '31' })
+    expect(rows[0].them).toEqual({ value: 40, text: '40' })
+    expect(rows.map((r) => r.key)).toEqual(['posts', 'videos', 'comments', 'share', 'engagement', 'sentiment'])
+  })
+  it('shows an em dash with no bars when the update predates the census', () => {
+    const rows = faceOffRows({ sov, layer: 'period', competitor: 'Ottobock', stats, themes: null, owned: null, fmtInt, fmtPct })
+    expect(rows[0]).toEqual({ key: 'posts', label: 'Posts by the brand', you: { value: 0, text: '—' }, them: { value: 0, text: '—' }, youPct: 0, themPct: 0 })
+  })
+  it('leaves the row out when no census was asked for', () => {
+    const rows = faceOffRows({ sov, layer: 'period', competitor: 'Ottobock', stats, themes: null, fmtInt, fmtPct })
+    expect(rows.some((r) => r.key === 'posts')).toBe(false)
   })
 })
 
