@@ -16,18 +16,20 @@ export function fmtInt(n: number): string {
   return sign + Math.abs(r).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
-/** 6163 → "6.2K", 18391 → "18.4K", 1_200_000 → "1.2M", 468 → "468".
- *  One decimal below 10 of a unit ("6.2K"), none above ("18K") — the compact
- *  form a stat tile wants, never false precision. */
+/** 6163 → "6.2K", 57729 → "57.7K", 308000 → "308K", 1_200_000 → "1.2M", 468 → "468".
+ *  One decimal below 100K ("57.7K"), none above ("308K") — thousands keep
+ *  precision up to the full "XXX" width; millions keep one decimal below
+ *  10M ("1.2M"), none above ("18M") — the compact form a stat tile wants,
+ *  never false precision. */
 export function fmtCompact(n: number): string {
   const abs = Math.abs(n)
   const sign = n < 0 ? '-' : ''
-  const one = (v: number) => {
-    const s = v < 10 ? (Math.round(v * 10) / 10).toFixed(1) : Math.round(v).toString()
+  const one = (v: number, decimalBelow: number) => {
+    const s = v < decimalBelow ? (Math.round(v * 10) / 10).toFixed(1) : Math.round(v).toString()
     return s.endsWith('.0') ? s.slice(0, -2) : s
   }
-  if (abs >= 1_000_000) return `${sign}${one(abs / 1_000_000)}M`
-  if (abs >= 1_000) return `${sign}${one(abs / 1_000)}K`
+  if (abs >= 1_000_000) return `${sign}${one(abs / 1_000_000, 10)}M`
+  if (abs >= 1_000) return `${sign}${one(abs / 1_000, 100)}K`
   return `${sign}${Math.round(abs)}`
 }
 
