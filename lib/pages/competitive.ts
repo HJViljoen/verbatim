@@ -12,6 +12,7 @@ import {
 } from '../competitive-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
+import { fetchThemedRunId } from './themed-run'
 
 // Competitive Intelligence loader — the data half of the old
 // app/dashboard/competitive/page.tsx (split 2026-08-29, Reports & Exports
@@ -183,17 +184,16 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   if (!runId) return { empty: true, brand, nextUpdate }
 
   // ── the update's state + its history + this update's videos ───────────
-  let themedQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
-  if (notRunning) themedQ = themedQ.not('run_id', 'in', notRunning)
   let latestVidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
   if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
-  const [ciRes, latestThemedRes, latestVidRes] = await Promise.all([
+  const [ciRes, themedRunId, latestVidRes] = await Promise.all([
     supabase.from('competitive_insights').select('id, category, competitor_name, title, finding, evidence, impact_level, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId),
-    themedQ.order('created_at', { ascending: false }).limit(1).maybeSingle(),
+    // The newest update that produced themes, which is this one unless its
+    // theme pass failed (lib/pages/themed-run).
+    fetchThemedRunId(supabase, clientId, runningIds),
     latestVidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
   ])
-  const themedRunId = (latestThemedRes.data?.run_id as string | undefined) ?? null
   const videoRunId = (latestVidRes.data?.run_id as string | undefined) ?? null
   const [themeRows, videoRows] = await Promise.all([
     themedRunId
