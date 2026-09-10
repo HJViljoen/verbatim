@@ -143,8 +143,8 @@ const shareLine: R = (d) => {
   const lead = d.selection.vs
   return (
     <Tile exportKey="competitive.shareLine" col={7} row={2} eyebrow="Share of tracked conversation over time"
-      meta={series ? `${d.updatesCount} updates · ${series.layer === 'cumulative' ? 'share across all updates' : 'share per update'}` : undefined}
-      footerNote={series ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
+      meta={series ? `${d.updatesCount} updates · ${series.layers.some((l) => l === 'period') ? 'share in each update' : 'share across all updates'}` : undefined}
+      footerNote={series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
       bodyClassName="min-h-0 justify-center">
       {series && lead ? (
         <div className="overflow-x-auto">
@@ -155,6 +155,7 @@ const shareLine: R = (d) => {
             ]}
             labels={series.dates.map(shortDate)}
             format={(v) => `${round1(v)}%`}
+            points pointNote={(i) => (series.layers[i] === 'cumulative' ? 'all updates' : undefined)}
             width={620} height={150} padL={40} padR={110}
           />
         </div>

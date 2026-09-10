@@ -1,11 +1,13 @@
 // Multi-series line over updates with direct end labels (no legend box for ≤4
 // series), a light baseline + midline, and optional event markers ringed on
-// the first series. Server SVG, scales to its container width.
+// the first series. With `points`, every update gets a dot whose <title> reads
+// that point's own value. Server SVG, scales to its container width.
 
 export interface LineSeries { label: string; values: number[]; color: string }
 
 export function LineChart({
   series, labels, format = (v) => `${v}`, width = 560, height = 150, padL = 34, padR = 90, endLabels = true, markers = [], zeroBase = true,
+  points = false, pointNote,
 }: {
   series: LineSeries[]
   /** One x label per point (already formatted, e.g. "16 Aug"). */
@@ -18,6 +20,12 @@ export function LineChart({
   endLabels?: boolean
   markers?: { i: number; label: string }[]
   zeroBase?: boolean
+  /** Mark every update and answer "what was this one?" on hover: a dot per
+   *  point with a title reading "<series> <value> · <x label>". */
+  points?: boolean
+  /** An extra clause for that point's title, e.g. "all updates" where the
+   *  number means something different from the rest of the line. */
+  pointNote?: (i: number) => string | undefined
 }) {
   const all = series.flatMap((s) => s.values)
   if (all.length === 0) return null
@@ -40,6 +48,17 @@ export function LineChart({
           <g key={s.label}>
             <polyline points={pts} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
             <circle cx={x(last)} cy={y(s.values[last])} r={3.2} fill={s.color} stroke="var(--tile)" strokeWidth={1.5} />
+            {points && s.values.map((v, i) => {
+              const note = pointNote?.(i)
+              const title = `${s.label} ${format(v)}${labels?.[i] ? ` · ${labels[i]}` : ''}${note ? ` · ${note}` : ''}`
+              return (
+                <g key={i}>
+                  {i !== last && <circle cx={x(i)} cy={y(v)} r={2.2} fill={s.color} stroke="var(--tile)" strokeWidth={1} />}
+                  {/* a hand-sized target over a 2px dot; the title is the hover */}
+                  <circle cx={x(i)} cy={y(v)} r={9} fill="transparent"><title>{title}</title></circle>
+                </g>
+              )
+            })}
             {endLabels && (
               <text x={x(last) + 8} y={y(s.values[last]) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
                 {s.label} <tspan fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(s.values[last])}</tspan>

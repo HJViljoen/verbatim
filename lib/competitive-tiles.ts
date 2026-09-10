@@ -248,32 +248,45 @@ export function praisedFor(rows: PraiseThemeRow[], bucket: string): string | nul
 // ── share of tracked conversation over time ───────────────────────────────
 
 export interface ShareSeries {
-  /** ONE layer for the whole series — period when every row carries it, else cumulative */
-  layer: 'period' | 'cumulative'
   dates: string[]
   you: number[]
   them: number[] | null
-  /** first → last, in points */
-  youDelta: number
+  /** One per point: 'period' is that update's own window; 'cumulative' is the
+   *  fallback for an update that predates the period split, and is what the
+   *  reader must be told about that point alone. */
+  layers: ShareLayer[]
+  /** earliest comparable update → latest, in points; null when no earlier
+   *  update was measured the same way as the latest one */
+  youDelta: number | null
   themDelta: number | null
 }
 
+export type ShareLayer = 'period' | 'cumulative'
+
 const hasKeys = (o: Sov | null | undefined) => !!o && Object.keys(o).length > 0
 
-/** You vs the faced competitor across every update (Trends' series rule, ported):
- *  null below two updates — nothing to draw. */
+/** You vs the faced competitor across every update. Each point is THAT
+ *  update's own share, not the running total, so hovering yesterday's run
+ *  answers "what was their share yesterday?". Runs from before the period
+ *  split carry no window of their own and fall back to their cumulative
+ *  figure, marked point by point. Null below two updates — nothing to draw. */
 export function shareSeries(history: Pick<HistoryRow, 'run_date' | 'share_of_voice' | 'period_share_of_voice'>[], competitor: string | null): ShareSeries | null {
   if (history.length < 2) return null
-  const allPeriod = history.every((s) => hasKeys(s.period_share_of_voice))
-  const sovOf = (s: (typeof history)[number]) => (allPeriod ? s.period_share_of_voice : s.share_of_voice) ?? {}
-  const you = history.map((s) => Number(sovOf(s).client?.pct_videos ?? 0))
-  const them = competitor ? history.map((s) => Number(sovOf(s)[competitorBucket(competitor)]?.pct_videos ?? 0)) : null
-  const delta = (arr: number[]) => Math.round((arr[arr.length - 1] - arr[0]) * 10) / 10
+  const layers: ShareLayer[] = history.map((s) => (hasKeys(s.period_share_of_voice) ? 'period' : 'cumulative'))
+  const sovOf = (s: (typeof history)[number], i: number) => (layers[i] === 'period' ? s.period_share_of_voice : s.share_of_voice) ?? {}
+  const pctOf = (bucket: string) => history.map((s, i) => Number(sovOf(s, i)[bucket]?.pct_videos ?? 0))
+  const you = pctOf('client')
+  const them = competitor ? pctOf(competitorBucket(competitor)) : null
+  // "Since your first update" must compare like with like: the latest update
+  // against the earliest one measured the same way.
+  const last = history.length - 1
+  const from = layers.indexOf(layers[last])
+  const delta = (arr: number[]) => (from === last ? null : Math.round((arr[last] - arr[from]) * 10) / 10)
   return {
-    layer: allPeriod ? 'period' : 'cumulative',
     dates: history.map((s) => s.run_date),
     you,
     them,
+    layers,
     youDelta: delta(you),
     themDelta: them ? delta(them) : null,
   }

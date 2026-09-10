@@ -158,26 +158,44 @@ describe('praisedFor', () => {
 })
 
 describe('shareSeries', () => {
-  const h = (date: string, client: number, otto: number, period: boolean) => ({
+  const h = (date: string, client: number | null, otto: number, period: boolean) => ({
     run_date: date,
-    share_of_voice: { client: { videos: 1, pct_videos: client + 1 }, 'competitor:Ottobock': { videos: 1, pct_videos: otto + 1 } },
-    period_share_of_voice: period ? { client: { videos: 1, pct_videos: client }, 'competitor:Ottobock': { videos: 1, pct_videos: otto } } : null,
+    share_of_voice: { client: { videos: 1, pct_videos: (client ?? 0) + 1 }, 'competitor:Ottobock': { videos: 1, pct_videos: otto + 1 } },
+    period_share_of_voice: period
+      ? {
+          ...(client == null ? {} : { client: { videos: 1, pct_videos: client } }),
+          'competitor:Ottobock': { videos: 1, pct_videos: otto },
+        }
+      : null,
   })
-  it('draws one layer across every update and gates on two', () => {
+  it('plots each update on its own, and gates on two', () => {
     expect(shareSeries([h('2026-08-09', 3, 9, true)], 'Ottobock')).toBeNull()
     const s = shareSeries([h('2026-08-09', 3.1, 9.2, true), h('2026-08-16', 5.8, 16, true)], 'Ottobock')!
-    expect(s.layer).toBe('period')
+    expect(s.layers).toEqual(['period', 'period'])
     expect(s.you).toEqual([3.1, 5.8])
     expect(s.them).toEqual([9.2, 16])
     expect(s.youDelta).toBe(2.7)
     expect(s.themDelta).toBe(6.8)
     expect(s.dates).toEqual(['2026-08-09', '2026-08-16'])
   })
-  it('falls back to cumulative for the WHOLE series when one row lacks the period layer', () => {
+  it('falls back to cumulative for the one update that predates the period split, and marks it', () => {
     const s = shareSeries([h('2026-08-09', 3, 9, false), h('2026-08-16', 5, 16, true)], 'Ottobock')!
-    expect(s.layer).toBe('cumulative')
-    expect(s.you).toEqual([4, 6])
-    expect(s.them).toEqual([10, 17])
+    expect(s.layers).toEqual(['cumulative', 'period'])
+    expect(s.you).toEqual([4, 5])
+    expect(s.them).toEqual([10, 16])
+  })
+  it('compares like with like, and drops the delta when nothing earlier matches the latest layer', () => {
+    const s = shareSeries([h('2026-08-02', 1, 4, false), h('2026-08-09', 3, 9, true), h('2026-08-16', 5, 16, true)], 'Ottobock')!
+    expect(s.youDelta).toBe(2)
+    expect(s.themDelta).toBe(7)
+    const one = shareSeries([h('2026-08-09', 3, 9, false), h('2026-08-16', 5, 16, true)], 'Ottobock')!
+    expect(one.youDelta).toBeNull()
+    expect(one.themDelta).toBeNull()
+  })
+  it('reads an update the client is absent from as 0%', () => {
+    const s = shareSeries([h('2026-08-09', null, 9, true), h('2026-08-16', 5, 16, true)], 'Ottobock')!
+    expect(s.you).toEqual([0, 5])
+    expect(s.youDelta).toBe(5)
   })
   it('has no competitor line without a competitor', () => {
     const s = shareSeries([h('2026-08-09', 3, 9, true), h('2026-08-16', 5, 16, true)], null)!
