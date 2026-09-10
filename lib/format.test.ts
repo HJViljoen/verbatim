@@ -12,15 +12,31 @@ describe('fmtInt', () => {
 })
 
 describe('fmtCompact', () => {
-  it('uses one decimal under 10 of a unit and none above', () => {
+  it('uses one decimal under 100K and none above; millions keep one decimal under 10M', () => {
     expect(fmtCompact(6163)).toBe('6.2K')
-    expect(fmtCompact(18391)).toBe('18K')
+    expect(fmtCompact(18391)).toBe('18.4K')
     expect(fmtCompact(1_200_000)).toBe('1.2M')
     expect(fmtCompact(18_200_000)).toBe('18M')
     expect(fmtCompact(468)).toBe('468')
-    expect(fmtCompact(61234)).toBe('61K')
+    expect(fmtCompact(61234)).toBe('61.2K')
     expect(fmtCompact(1000)).toBe('1K')
     expect(fmtCompact(-2500)).toBe('-2.5K')
+  })
+  it('rounds 57,729 followers to 57.7K, not 58K', () => {
+    expect(fmtCompact(57_729)).toBe('57.7K')
+  })
+  it('keeps one decimal for other sub-100K values', () => {
+    expect(fmtCompact(3_900)).toBe('3.9K')
+    expect(fmtCompact(9_950)).toBe('10K')
+  })
+  it('drops the decimal at 100K and above', () => {
+    expect(fmtCompact(99_950)).toBe('100K')
+    expect(fmtCompact(100_000)).toBe('100K')
+    expect(fmtCompact(308_000)).toBe('308K')
+  })
+  it('leaves millions unchanged', () => {
+    expect(fmtCompact(3_600_000)).toBe('3.6M')
+    expect(fmtCompact(1_234_567)).toBe('1.2M')
   })
 })
 
