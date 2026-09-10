@@ -14,13 +14,17 @@ export interface WriteRunSummaryArgs {
   clientId: string
   runId: string
   metrics: Step2aMetrics
-  /** The corpus videos — sentiment distribution comes from Pass A's per-video sentiment. */
+  /** The corpus videos — sentiment distribution comes from Pass A's per-video
+   *  sentiment. MARKET rows only (metrics.isDiscoveredVideo): `metrics` above
+   *  counts a brand's own posts too (share rule, 2026-09-10), but this is how
+   *  the audience received videos about the brand, so census rows stay out. */
   videos: VideoRow[]
   /** Metrics over ONLY this run's gathered rows (period_* columns — the honest
    *  week-over-week layer; Teardown 2026-07-09). Optional: CLI callers that
    *  predate the split may omit it and period columns stay null. */
   periodMetrics?: Step2aMetrics
-  /** This run's videos (run_id = current) — period sentiment distribution. */
+  /** This run's videos (run_id = current) — period sentiment distribution.
+   *  Market rows only, same rule as `videos`. */
   periodVideos?: VideoRow[]
   ciSummary: CiSummary | null
   /** Pass D-a's woven dashboard hero brief (already sanitised), or null. */

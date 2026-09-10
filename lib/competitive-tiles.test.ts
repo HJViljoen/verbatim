@@ -70,7 +70,7 @@ describe('faceOffRows', () => {
   it('grounds all six rows when every source is there', () => {
     const rows = faceOffRows({ sov, layer: 'period', competitor: 'Ottobock', stats, themes, fmtInt, fmtPct })
     expect(rows.map((r) => r.key)).toEqual(['videos', 'comments', 'share', 'engagement', 'sentiment', 'themes'])
-    expect(rows[0].label).toBe('Videos about the brand')
+    expect(rows[0].label).toBe('Videos by and about the brand')
     expect(rows[0].you).toEqual({ value: 27, text: '27' })
     expect(rows[0].them).toEqual({ value: 75, text: '75' })
     expect(rows[0].themPct).toBe(100)
@@ -81,7 +81,7 @@ describe('faceOffRows', () => {
   })
   it('labels the cumulative layer honestly', () => {
     const rows = faceOffRows({ sov, layer: 'cumulative', competitor: 'Ottobock', stats, themes, fmtInt, fmtPct })
-    expect(rows[0].label).toBe('Videos about the brand, tracked')
+    expect(rows[0].label).toBe('Videos by and about the brand, tracked')
   })
   it('drops rows it cannot ground instead of inventing them', () => {
     const thin = new Map([

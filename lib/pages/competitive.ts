@@ -206,10 +206,16 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
             .eq('client_id', clientId).eq('run_id', themedRunId).order('id'),
         )
       : Promise.resolve([] as ThemeRow[]),
+    // Every tracked row for the update, census posts included — the face-off's
+    // comment and engagement rows sit next to share, which counts a brand's own
+    // posts since 2026-09-10, so they read the same corpus or the labels lie.
+    // (Sentiment is unaffected in practice: it takes the audience family only,
+    // and an own post never takes Pass A's full lane.)
     videoRunId
       ? selectAll<VideoStatRow>(() =>
           supabase.from('videos').select('is_client, is_competitor, competitor_name, comments_count, engagement_rate, sentiment, sentiment_source, analyzed_lane')
-            .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered').order('id'),
+            .eq('client_id', clientId).eq('run_id', videoRunId)
+            .in('source', ['discovered', 'owned', 'competitor_owned']).order('id'),
         )
       : Promise.resolve([] as VideoStatRow[]),
   ])

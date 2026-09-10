@@ -179,6 +179,21 @@ functions (defined in the baseline).
   from an operator view. Adding an operator is a hand-written
   `insert into platform_admins (user_id) values (...)`; there is no UI, no env
   allowlist, and no migration behind this feature.
+- **Share of tracked conversation counts by AND about (2026-09-10)**: the share
+  measure takes everything relating to a brand — videos other accounts posted
+  about it and the brand's own account posts (`videos.source` `owned` and
+  `competitor_owned`) — on the same rule for the client and every tracked
+  competitor. The bucket comes from identity (`is_client`, `is_competitor` +
+  `competitor_name`), which the census gather stamps onto own-post rows, and
+  those videos' comments count with them. Before this the metrics excluded both
+  census sources, which was asymmetric: a competitor's own post that keyword
+  search happened to find already counted, because it lands on source
+  `discovered`, while the same post read off their profile did not. The
+  run_summary sentiment distribution stays market-only (own posts carry the
+  brand's framing of itself, not the audience's reaction), and so does the
+  Content page's field tile, which keeps its separate "Your own posts" row —
+  each filters at its own call site (`isDiscoveredVideo` in
+  `lib/pipeline/metrics.ts`; `source = 'discovered'` in the Content read).
 - Run state lives in `pipeline_runs.status`
   (`running`/`completed`/`partial`/`failed`); a run failure also emails
   `ALERT_EMAIL` when configured.

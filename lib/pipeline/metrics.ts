@@ -18,6 +18,19 @@ function entityOf(v: VideoRow): string {
   return 'industry-other'
 }
 
+/**
+ * Is this a market row — a video some OTHER account posted about a brand —
+ * rather than a census row read off a brand's own profile (`owned` = the
+ * client's, `competitor_owned` = a tracked competitor's)?
+ *
+ * Share of tracked conversation counts both since 2026-09-10, so the metrics
+ * here take every row. Readers that measure the market's REACTION — the
+ * run_summary sentiment distribution, the Content page's field tile — are the
+ * ones that filter, and they filter with this.
+ */
+export const isDiscoveredVideo = (v: { source?: string | null }): boolean =>
+  v.source !== 'owned' && v.source !== 'competitor_owned'
+
 function wordCount(s: string): number {
   return s.trim().split(/\s+/).filter(Boolean).length
 }
@@ -63,6 +76,12 @@ const round = (n: number, dp: number) => {
  * Compute the full Step 2a metrics block from a run's videos + comments.
  * Pure: no DB access. The orchestrator persists comment_quality_scores onto
  * videos and holds the rest in memory for Pass A / Step 2b.
+ *
+ * The caller decides the corpus. Since 2026-09-10 the pipeline hands it every
+ * row — what the market posted about a brand AND what the brand's own account
+ * posted — and share_of_voice buckets them by IDENTITY (is_client /
+ * is_competitor + competitor_name), which census rows carry, so an own post
+ * lands under its own brand rather than in 'industry-other'.
  */
 export function computeMetrics(
   videos: VideoRow[],

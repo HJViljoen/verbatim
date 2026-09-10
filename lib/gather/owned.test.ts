@@ -310,13 +310,13 @@ describe('ownedCensusTotal', () => {
   })
 })
 
-describe('shareFootnoteLead — what you published vs what the market said', () => {
+describe('shareFootnoteLead — what you published vs what was tracked', () => {
   it('separates the two facts once the census exists', () => {
-    expect(shareFootnoteLead(28, 12)).toBe('You published 28 posts this update · the market posted about you 12 times')
+    expect(shareFootnoteLead(28, 12)).toBe('You published 28 posts this update · 12 videos by and about you were tracked')
   })
 
-  it('says one post and one time in the singular', () => {
-    expect(shareFootnoteLead(1, 1)).toBe('You published 1 post this update · the market posted about you 1 time')
+  it('says one post and one video in the singular', () => {
+    expect(shareFootnoteLead(1, 1)).toBe('You published 1 post this update · 1 video by and about you was tracked')
   })
 
   it('keeps the old wording for an update written before the census', () => {

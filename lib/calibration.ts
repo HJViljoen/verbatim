@@ -149,13 +149,14 @@ export function priorityForRank(rank: number): 'high' | 'medium' | 'low' {
   return 'low'
 }
 
-// ---- Share tile · what you published vs what the market said ---------------
-// The share ring is a market measure: it counts what OTHER people posted about
-// each tracked brand, and the client's own posts are deliberately kept out of
-// it (they would inflate their own share). That left the footnote saying "12 of
-// your videos" about videos the client did not make. With an exact own-post
-// census (run_summary.owned_census) the two facts can finally be said apart:
-// what you published, and how often the market brought you up.
+// ---- Share tile · what you published vs what was tracked -------------------
+// The share ring counts everything tracked for a brand: videos other accounts
+// posted about it AND the brand's own posts, on the same rule for the client
+// and every competitor (2026-09-10). The footnote keeps the two facts apart
+// anyway, because a reader who published nothing and a reader who published
+// daily read the same ring very differently: the exact own-post census
+// (run_summary.owned_census) says what YOU published, the share count says how
+// much was tracked in total.
 
 /** The share tile's opening clause. `ownedPosts` null = an update written
  *  before the census existed; the old wording stands rather than a guess. */
@@ -164,5 +165,6 @@ export function shareFootnoteLead(ownedPosts: number | null, clientVideos: numbe
   if (ownedPosts == null) {
     return clientVideos ? `${clientVideos.toLocaleString('en-US')} of your videos` : 'none of your videos'
   }
-  return `You published ${plural(ownedPosts, 'post')} this update · the market posted about you ${plural(clientVideos ?? 0, 'time')}`
+  const tracked = clientVideos ?? 0
+  return `You published ${plural(ownedPosts, 'post')} this update · ${plural(tracked, 'video')} by and about you ${tracked === 1 ? 'was' : 'were'} tracked`
 }

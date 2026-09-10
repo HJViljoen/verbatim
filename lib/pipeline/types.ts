@@ -31,8 +31,10 @@ export interface VideoRow {
    *  'framing' = classify-meta (the video's own caption/transcript framing).
    *  run_summary keeps the families apart (T0-8, 2026-08-18). */
   sentiment_source?: 'audience' | 'framing' | string | null
-  /** 'discovered' (keyword search) or 'owned' (the client's own accounts).
-   *  The SoV guard keeps owned rows out of discovered-corpus metrics. */
+  /** 'discovered' (keyword search), 'owned' (the client's own accounts) or
+   *  'competitor_owned' (a tracked competitor's). Share of tracked
+   *  conversation counts all three since 2026-09-10; readers that want the
+   *  market's reaction only use metrics.isDiscoveredVideo. */
   source?: string | null
   /** Step 1 transcript capture. Only status 'ok' text is ever readable — go
    *  through lib/pipeline/transcript-input.usableTranscript, never directly. */
