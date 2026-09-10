@@ -10,7 +10,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey } from '../calibration'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
 import {
-  themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation,
+  themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,
   type ThemeRankRow, type HistoryRow, type Sov, type AudienceSentiment, type Bucket, type Movement, type AccountSeries,
 } from '../dashboard-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
@@ -265,7 +265,9 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   // The latest update = the run we anchored on; everything before it is history.
   // A run's summary is written before the run closes, so an in-flight run can
   // already have a row — keep it out of the history every series is drawn from.
-  const history = historyRaw.filter((s) => s.run_id && !runningIds.includes(s.run_id))
+  // Two runs on the same calendar day collapse to the later one (latestPerDay)
+  // so a sparkline/movement chart never draws two points with the same date.
+  const history = latestPerDay(historyRaw.filter((s) => s.run_id && !runningIds.includes(s.run_id)))
   const summary = history.find((s) => s.run_id === runId) ?? history[history.length - 1] ?? null
   const summaryIdx = summary ? history.indexOf(summary) : -1
   const prev = summaryIdx > 0 ? history[summaryIdx - 1] : null

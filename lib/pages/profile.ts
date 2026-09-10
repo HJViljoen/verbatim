@@ -6,6 +6,7 @@ import { normalisePersona, shareOf, platformTotals, platformRows, platformsFromR
 import type { PlatformRow, ShareSeries } from '../../components/profile-stats'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
+import { latestPerDay } from '../dashboard-tiles'
 
 // Consumer Profile loader — the data half of the old app/dashboard/profile/page.tsx
 // (split 2026-08-29, Reports & Exports T7). "Who is actually talking?" — a few
@@ -168,8 +169,10 @@ export async function loadProfile(scope: Scope): Promise<ProfileData | ProfileEm
     ? [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([p]) => p)
     : platformsFromRows(rows)
 
-  // How the mix has moved (rows fetched in the first wave above).
-  const history = (historyRows ?? []) as { run_date: string; personas: Partial<Persona>[] }[]
+  // How the mix has moved (rows fetched in the first wave above). Two updates
+  // on the same calendar day collapse to the later one (latestPerDay) so the
+  // chart never draws two points with the same date label.
+  const history = latestPerDay((historyRows ?? []) as { run_date: string; personas: Partial<Persona>[] }[])
   const shareDates = history.map((h) => h.run_date)
   const series = shareSeries(personas, history)
 

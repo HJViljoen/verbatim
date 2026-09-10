@@ -118,6 +118,22 @@ export function pointDelta(now: number | null | undefined, prev: number | null |
   return Math.round((now - prev) * 10) / 10
 }
 
+// ── one point per calendar day ──────────────────────────────────────────────
+
+/** Collapses a run_summary (or any per-run) history to one row per calendar
+ *  day (the run's `run_date`, UTC) — two runs on the same day must read as one
+ *  point on a chart, not two x-axis labels that print the same date. Keeps
+ *  the LATEST run of the day; returns rows sorted ascending by run_date. */
+export function latestPerDay<T extends { run_date: string }>(rows: T[]): T[] {
+  const byDay = new Map<string, T>()
+  for (const r of rows) {
+    const day = r.run_date.slice(0, 10)
+    const existing = byDay.get(day)
+    if (!existing || r.run_date > existing.run_date) byDay.set(day, r)
+  }
+  return [...byDay.values()].sort((a, b) => a.run_date.localeCompare(b.run_date))
+}
+
 // ── movement over updates ─────────────────────────────────────────────────
 
 export interface HistoryRow {

@@ -5,7 +5,7 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import type { GlossaryKey } from '../calibration'
 import { fmtInt, fmtPct, weekdayDate, cap } from '../format'
-import { shareBreakdown, pointDelta, type Sov } from '../dashboard-tiles'
+import { shareBreakdown, pointDelta, latestPerDay, type Sov } from '../dashboard-tiles'
 import type { OwnedCensus } from '../gather/owned'
 import {
   leadCompetitor, competitorShares, competitorBucket, bucketStats, themeCounts, faceOffRows, ownedPostCounts, praisedFor, shareSeries,
@@ -214,7 +214,9 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
       : Promise.resolve([] as VideoStatRow[]),
   ])
 
-  const history = historyRaw.filter((s) => s.run_id && !runningIds.includes(s.run_id))
+  // Two runs on the same calendar day collapse to the later one (latestPerDay)
+  // so the share-over-time line never draws two points with the same date.
+  const history = latestPerDay(historyRaw.filter((s) => s.run_id && !runningIds.includes(s.run_id)))
   const summary = history.find((s) => s.run_id === runId) ?? history[history.length - 1] ?? null
   const summaryIdx = summary ? history.indexOf(summary) : -1
   const prev = summaryIdx > 0 ? history[summaryIdx - 1] : null

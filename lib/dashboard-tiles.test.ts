@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   themeTiers, topThemes, bucketKind, platformSplit, sentimentSplit, shareBreakdown, pointDelta,
-  movement, accountSeries, topRecommendation, type HistoryRow,
+  movement, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
 } from './dashboard-tiles'
 
 describe('themeTiers', () => {
@@ -81,6 +81,31 @@ describe('shareBreakdown / pointDelta', () => {
   it('pointDelta', () => {
     expect(pointDelta(5.8, 3.5)).toBe(2.3)
     expect(pointDelta(5.8, null)).toBeNull()
+  })
+})
+
+describe('latestPerDay', () => {
+  it('collapses two same-day runs to the later one', () => {
+    const rows = [
+      { run_date: '2026-09-09T14:31:00Z', v: 'morning' },
+      { run_date: '2026-09-09T22:47:00Z', v: 'evening' },
+    ]
+    expect(latestPerDay(rows)).toEqual([{ run_date: '2026-09-09T22:47:00Z', v: 'evening' }])
+  })
+  it('leaves distinct days untouched, in order', () => {
+    const rows = [
+      { run_date: '2026-09-08T10:00:00Z', v: 'a' },
+      { run_date: '2026-09-09T10:00:00Z', v: 'b' },
+    ]
+    expect(latestPerDay(rows)).toEqual(rows)
+  })
+  it('returns rows sorted ascending by run_date regardless of input order', () => {
+    const rows = [
+      { run_date: '2026-09-09T22:47:00Z', v: 'evening' },
+      { run_date: '2026-09-08T10:00:00Z', v: 'a' },
+      { run_date: '2026-09-09T14:31:00Z', v: 'morning' },
+    ]
+    expect(latestPerDay(rows).map((r) => r.v)).toEqual(['a', 'evening'])
   })
 })
 
