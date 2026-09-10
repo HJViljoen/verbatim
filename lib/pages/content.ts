@@ -13,6 +13,7 @@ import { periodWindowDays } from '../config'
 import {
   perfVsMedian, medianEngagement, bestDuration, fieldSentence, topVoices, roleByAccount, handleKey,
   entityScoreboard, durationPerf, entityPlaybooks, trendingSounds, entityKey, shapeInbox, intentCounts, isIntent,
+  fieldRowLabel, ownPostsRow, type OwnPost,
   type PerfMultiple, type DurationVerdict, type Voice,
   type EntityRow, type EntityPlaybook, type EntityKind,
   type Intent, type InboxRow, type InboxSource,
@@ -217,7 +218,7 @@ export interface ContentFieldData {
   analysedVideos: number
 }
 
-const KIND_COLOR: Record<EntityKind, string> = { you: 'var(--you)', competitor: 'var(--comp)', category: 'var(--cat)' }
+const KIND_COLOR: Record<EntityKind, string> = { you: 'var(--you)', competitor: 'var(--comp)', category: 'var(--cat)', own: 'var(--you)' }
 const COMPETITOR_COLORS = ['var(--comp)', 'color-mix(in srgb, var(--comp) 70%, var(--tile))', 'color-mix(in srgb, var(--comp) 48%, var(--tile))', 'var(--mixed)']
 
 // ── your accounts ───────────────────────────────────────────────────────────
@@ -345,10 +346,17 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // Discovered videos only — the client's own posts are a different segment
   // (Owned-Data-Plan: "segment, never blend") and never mix into market content
   // intelligence.
-  const all = await selectAll<VideoRow>(() => supabase.from('videos')
-    .select('id, platform, account_name, account_followers, video_url, views, likes, engagement_rate, upload_date, duration_seconds, audio_name, transcript_status, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
-    .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered')
-    .order('views', { ascending: false }).order('id', { ascending: true }))
+  const [all, ownPosts] = await Promise.all([
+    selectAll<VideoRow>(() => supabase.from('videos')
+      .select('id, platform, account_name, account_followers, video_url, views, likes, engagement_rate, upload_date, duration_seconds, audio_name, transcript_status, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
+      .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered')
+      .order('views', { ascending: false }).order('id', { ascending: true })),
+    // The other side of that segment, for the field tile's own-posts row only:
+    // what the client itself posted in the same update. Nothing else on this
+    // page may read it.
+    selectAll<OwnPost>(() => supabase.from('videos').select('views, engagement_rate')
+      .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'owned').order('id', { ascending: true })),
+  ])
 
   // ── the inbox ──────────────────────────────────────────────────────────
   const roles = roleByAccount(all)
@@ -369,11 +377,15 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
 
   // ── the field ──────────────────────────────────────────────────────────
   const scoreboard = entityScoreboard(all)
-  const fieldRows = [
+  // The market rows: discovered videos ABOUT each brand, so they say so.
+  const marketRows = [
     ...scoreboard.filter((r) => r.kind === 'you'),
     ...scoreboard.filter((r) => r.kind === 'competitor').slice(0, 2),
     ...scoreboard.filter((r) => r.kind === 'category'),
-  ]
+  ].map((r) => ({ ...r, label: fieldRowLabel(r) }))
+  // The client's own posts lead, above the market — segment, never blend.
+  const own = ownPostsRow(ownPosts)
+  const fieldRows: EntityRow[] = [...(own ? [{ ...own, medianDuration: null }] : []), ...marketRows]
   const fieldEngMax = Math.max(...fieldRows.map((r) => r.avgEng ?? 0), 0)
   const sentence = fieldSentence(scoreboard)
   let compIdx = 0
@@ -410,7 +422,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
     },
     field: {
       rows: fieldColored, sentence, engMax: fieldEngMax,
-      hiddenCount: scoreboard.length - fieldRows.length,
+      hiddenCount: scoreboard.length - marketRows.length,
       totalVideos: all.length, analysedVideos: analysed.length,
     },
     voices: { shown: voices, all: voicesAll, max: voiceMax },

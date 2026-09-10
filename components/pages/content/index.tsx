@@ -52,6 +52,7 @@ const KIND_CHIP: Record<EntityKind, string> = {
   you: 'bg-accent text-accent-foreground',
   competitor: 'bg-comp/15 text-foreground',
   category: 'bg-inner text-muted-foreground',
+  own: 'bg-accent text-accent-foreground',
 }
 const ROLE_CHIP: Record<VoiceRole, string> = {
   you: 'bg-accent text-accent-foreground',
@@ -149,8 +150,16 @@ const field: R = (d, mode) => {
               </tr>
             </thead>
             <tbody>
-              {f.rows.map((r) => (
-                <tr key={r.label} className="border-t border-border/70">
+              {f.rows.map((r, i) => (
+                <Fragment key={r.label}>
+                  {r.kind !== 'own' && i > 0 && f.rows[i - 1].kind === 'own' && (
+                    <tr>
+                      <td colSpan={4} className="border-t-2 border-border pb-0.5 pt-2 text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
+                        The market
+                      </td>
+                    </tr>
+                  )}
+                <tr className="border-t border-border/70">
                   <td className="w-[42%] py-2 pr-2">
                     <span className="flex items-center gap-1.5">
                       <span className="size-1.5 shrink-0 rounded-full" style={{ background: r.color }} aria-hidden />
@@ -170,6 +179,7 @@ const field: R = (d, mode) => {
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                 </tr>
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   intentOf, ageLabel, contextLine, orderInbox, inboxRows, intentCounts, shapeInbox,
   medianEngagement, perfVsMedian, fmtMultiple, bestDuration,
-  fieldSentence, topVoices, roleByAccount, initials,
+  fieldSentence, fieldRowLabel, ownPostsRow, topVoices, roleByAccount, initials,
   entityKey, entityScoreboard, durationPerf, entityPlaybooks, trendingSounds, durationLabel, pretty,
   type InboxRow, type InboxSource, type VoiceRole, type EntityVideo,
 } from './content-tiles'
@@ -165,28 +165,28 @@ describe('fieldSentence', () => {
       { label: 'You', kind: 'you', videos: 27, views: 129_000, avgEng: 4.1 },
       { label: 'Ottobock', kind: 'competitor', videos: 75, views: 73_000, avgEng: 3.2 },
       { label: 'Category creators', kind: 'category', videos: 366, views: 18_200_000, avgEng: 6.6 },
-    ])).toBe('You out-engage Ottobock per video but posted 27 videos to their 75; category creators own reach.')
+    ])).toBe('Videos about you out-engage those about Ottobock but 27 videos mentioned you to their 75; category creators own reach.')
   })
   it('flips the joiner when engagement and volume agree', () => {
     expect(fieldSentence([
       { label: 'You', kind: 'you', videos: 80, views: 900_000, avgEng: 4.1 },
       { label: 'Ottobock', kind: 'competitor', videos: 20, views: 73_000, avgEng: 3.2 },
-    ])).toBe('You out-engage Ottobock per video and posted 80 videos to their 20; you own reach.')
+    ])).toBe('Videos about you out-engage those about Ottobock and 80 videos mentioned you to their 20; videos about you own reach.')
     expect(fieldSentence([
       { label: 'You', kind: 'you', videos: 10, views: 1_000, avgEng: 2 },
       { label: 'Ottobock', kind: 'competitor', videos: 20, views: 5_000, avgEng: 3.2 },
-    ])).toBe('Ottobock out-engages you per video and posted 10 videos to their 20; Ottobock owns reach.')
+    ])).toBe('Videos about Ottobock out-engage those about you and 10 videos mentioned you to their 20; videos about Ottobock own reach.')
   })
   it('stays quiet without numbers to compare', () => {
     expect(fieldSentence([{ label: 'You', kind: 'you', videos: 3, views: 0, avgEng: null }])).toBeNull()
     expect(fieldSentence([
       { label: 'Ottobock', kind: 'competitor', videos: 5, views: 100, avgEng: null },
       { label: 'Category creators', kind: 'category', videos: 50, views: 9_000, avgEng: null },
-    ])).toBe('Ottobock posted 5 videos this update; category creators own reach.')
+    ])).toBe('5 videos mentioned Ottobock this update; category creators own reach.')
     expect(fieldSentence([
       { label: 'You', kind: 'you', videos: 4, views: 0, avgEng: null },
       { label: 'Ottobock', kind: 'competitor', videos: 4, views: 0, avgEng: null },
-    ])).toBe('You posted as often (4 each).')
+    ])).toBe('You and Ottobock were mentioned as often (4 each).')
   })
 })
 
@@ -285,5 +285,35 @@ describe('entityKey and the scoreboard', () => {
     expect(durationLabel(9)).toBe('9s')
     expect(durationLabel(92)).toBe('1:32 min')
     expect(pretty('before_after')).toBe('before after')
+  })
+})
+
+describe('the field rows: about-the-brand vs your own posts', () => {
+  it('labels a market row as being ABOUT the brand, category creators unchanged', () => {
+    expect(fieldRowLabel({ label: 'You', kind: 'you' })).toBe('About you')
+    expect(fieldRowLabel({ label: 'Cotopaxi', kind: 'competitor' })).toBe('About Cotopaxi')
+    expect(fieldRowLabel({ label: 'Category creators', kind: 'category' })).toBe('Category creators')
+  })
+
+  it('sums views and averages engagement over the posts that carry a rate', () => {
+    expect(ownPostsRow([
+      { views: 1_200, engagement_rate: 4 },
+      { views: 800, engagement_rate: 2 },
+      { views: 0, engagement_rate: 0 },
+    ])).toEqual({ label: 'Your own posts', kind: 'own', videos: 3, views: 2_000, avgEng: 3, engN: 2 })
+  })
+
+  it('reads string numbers and a missing view count as zero', () => {
+    expect(ownPostsRow([{ views: '500', engagement_rate: '5' }, { views: null, engagement_rate: null }]))
+      .toMatchObject({ videos: 2, views: 500, avgEng: 5, engN: 1 })
+  })
+
+  it('states no engagement when nothing was viewed (Instagram photo posts)', () => {
+    expect(ownPostsRow([{ views: 0, engagement_rate: 0 }, { views: null, engagement_rate: 3 }]))
+      .toEqual({ label: 'Your own posts', kind: 'own', videos: 2, views: 0, avgEng: null, engN: 0 })
+  })
+
+  it('has no row without own posts', () => {
+    expect(ownPostsRow([])).toBeNull()
   })
 })

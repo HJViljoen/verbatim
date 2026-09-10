@@ -241,7 +241,9 @@ export function bestDuration(bands: DurationBandPerf[], median: number | null, m
 
 export interface FieldRow {
   label: string
-  kind: 'you' | 'competitor' | 'category'
+  /** 'you' | 'competitor' | 'category' are DISCOVERED videos about that brand;
+   *  'own' is the client's own posts — a different segment, never blended in. */
+  kind: 'you' | 'competitor' | 'category' | 'own'
   videos: number
   views: number
   avgEng: number | null
@@ -260,28 +262,28 @@ export function fieldSentence(rows: FieldRow[]): string | null {
     let eng: string | null = null
     if (you.avgEng != null && comp.avgEng != null) {
       const ratio = you.avgEng / comp.avgEng
-      eng = ratio >= 1.1 ? `You out-engage ${comp.label} per video`
-        : ratio <= 1 / 1.1 ? `${comp.label} out-engages you per video`
-        : `You and ${comp.label} engage about the same per video`
+      eng = ratio >= 1.1 ? `Videos about you out-engage those about ${comp.label}`
+        : ratio <= 1 / 1.1 ? `Videos about ${comp.label} out-engage those about you`
+        : `Videos about you and about ${comp.label} engage about the same`
     }
-    const post = you.videos < comp.videos ? `posted ${you.videos} ${you.videos === 1 ? 'video' : 'videos'} to their ${comp.videos}`
-      : you.videos > comp.videos ? `posted ${you.videos} videos to their ${comp.videos}`
-      : `posted as often (${you.videos} each)`
+    const post = you.videos !== comp.videos
+      ? `${you.videos} ${you.videos === 1 ? 'video' : 'videos'} mentioned you to their ${comp.videos}`
+      : `you and ${comp.label} were mentioned as often (${you.videos} each)`
     if (eng) {
-      const youAhead = eng.startsWith('You out-engage'), postFewer = you.videos < comp.videos
+      const youAhead = eng.startsWith('Videos about you out-engage'), postFewer = you.videos < comp.videos
       const joiner = youAhead === postFewer ? ' but ' : ' and '
       parts.push(`${eng}${joiner}${post}`)
-    } else parts.push(`You ${post}`)
+    } else parts.push(post)
   } else if (comp && cat && !you) {
-    parts.push(`${comp.label} posted ${comp.videos} ${comp.videos === 1 ? 'video' : 'videos'} this update`)
+    parts.push(`${comp.videos} ${comp.videos === 1 ? 'video' : 'videos'} mentioned ${comp.label} this update`)
   } else if (you && cat && !comp) {
-    parts.push(`You posted ${you.videos} ${you.videos === 1 ? 'video' : 'videos'} this update`)
+    parts.push(`${you.videos} ${you.videos === 1 ? 'video' : 'videos'} mentioned you this update`)
   }
 
   const byViews = [...rows].filter((r) => r.views > 0).sort((a, b) => b.views - a.views)
   if (byViews.length > 1) {
     const lead = byViews[0]
-    parts.push(lead.kind === 'you' ? 'you own reach' : lead.kind === 'category' ? 'category creators own reach' : `${lead.label} owns reach`)
+    parts.push(lead.kind === 'you' ? 'videos about you own reach' : lead.kind === 'category' ? 'category creators own reach' : `videos about ${lead.label} own reach`)
   }
   if (parts.length === 0) return null
   const s = parts.join('; ')
@@ -353,6 +355,44 @@ export function entityScoreboard(all: EntityVideo[]): EntityRow[] {
   })
   const order = (r: EntityRow) => (r.kind === 'you' ? 0 : r.kind === 'category' ? 2 : 1)
   return rows.sort((a, b) => order(a) - order(b) || b.videos - a.videos)
+}
+
+/** The field's rows count DISCOVERED videos tagged to a brand — videos other
+ *  accounts posted ABOUT it, never the brand's own posts. "You" read as "you
+ *  posted 2 videos", which is false; the row is about you. Only the field
+ *  tile relabels — the playbooks keep the entity's own name. */
+export const fieldRowLabel = (r: { label: string; kind: EntityKind }): string =>
+  r.kind === 'you' ? 'About you'
+  : r.kind === 'competitor' ? `About ${r.label}`
+  : r.label
+
+export const OWN_POSTS_LABEL = 'Your own posts'
+
+/** The narrow shape the own-posts row needs of a `videos` row. */
+export interface OwnPost {
+  views: number | string | null
+  engagement_rate: number | string | null
+}
+
+/** The client's own posts this update (`source = 'owned'`) as one field row —
+ *  the segment the market rows deliberately exclude, shown beside them and
+ *  never summed into them. Views total, engagement averaged over the posts
+ *  that carry a rate, same as a market row. Instagram photo posts carry no
+ *  views: with nothing viewed, both views and engagement stay unstated (0%
+ *  would be a measurement that was never made). */
+export function ownPostsRow(posts: OwnPost[]): (FieldRow & { engN: number }) | null {
+  if (posts.length === 0) return null
+  const views = posts.reduce((s, p) => s + Number(p.views ?? 0), 0)
+  const withEng = posts.filter((p) => Number(p.engagement_rate) > 0)
+  const measured = views > 0 && withEng.length > 0
+  return {
+    label: OWN_POSTS_LABEL,
+    kind: 'own',
+    videos: posts.length,
+    views,
+    avgEng: measured ? withEng.reduce((s, p) => s + Number(p.engagement_rate), 0) / withEng.length : null,
+    engN: measured ? withEng.length : 0,
+  }
 }
 
 const DURATION_BANDS: { label: string; min: number; max: number }[] = [
