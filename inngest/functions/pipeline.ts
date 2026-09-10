@@ -27,7 +27,7 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
-import { computeMetrics } from '@/lib/pipeline/metrics'
+import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
@@ -442,10 +442,11 @@ export const runPipeline = inngest.createFunction(
         // Owned layer (Wave 2): an ACCOUNT's own recent posts + their comments.
         // The client's, stamped source:'owned', and since 2026-09-09 each
         // tracked competitor's, stamped 'competitor_owned' — same read, same
-        // window, different name on the rows. Neither ever feeds the
-        // discovered-corpus metrics (SoV guard); the competitor rows exist so a
-        // competitor page can quote what that brand actually claims instead of
-        // saying nothing was captured from their own videos.
+        // window, different name on the rows. Both feed share of tracked
+        // conversation, which counts a brand's own posts alongside what the
+        // market posted about it (share rule, 2026-09-10); the competitor rows
+        // also let a competitor page quote what that brand actually claims
+        // instead of saying nothing was captured from their own videos.
         // Non-fatal: catch on the step promise.
         // Runs BEFORE the transcribe steps (moved 2026-08-16, Brand Voice) so
         // the own posts' video_raw rows are in this run's transcribe plan —
@@ -1220,17 +1221,24 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
 async function runSynthesisHalf(clientId: string, runId: string, runPeriod: string | null = null) {
   const admin = createAdminClient()
 
-  // SoV guard (Owned-Data-Plan): an ACCOUNT's own posts never count toward the
-  // discovered-corpus metrics. It was only ever the client's posts that were
-  // held out; now that competitors' own posts are gathered too, the same rule
-  // covers them — otherwise a competitor who posts twice a day would out-share
-  // a competitor the market actually talks about, and share would stop being a
-  // measure of the conversation at all. Filtering videos drops their comments
-  // below with them.
-  const allVideos = await selectAll<VideoRow>(() =>
+  // Share rule (Heinrich, 2026-09-10). "Share of tracked conversation" counts
+  // EVERYTHING relating to a brand: videos the market posted ABOUT it and the
+  // brand's OWN account posts, for the client and every tracked competitor
+  // alike. That replaces the old SoV guard, which held source 'owned' and
+  // 'competitor_owned' out of these metrics — narrow, and asymmetric on top of
+  // it: a competitor's own post that keyword search happened to surface counts
+  // already (it lands on source 'discovered'), while the identical post read
+  // off their profile did not. So the corpus is every row now.
+  // Bucketing is by IDENTITY, not source — is_client → client, is_competitor +
+  // competitor_name → competitor:<name> (lib/pipeline/metrics.ts) — and
+  // lib/gather/owned.ts stamps that identity onto census rows, so an own post
+  // lands under its own brand. Their comments ride along via wantedVideos
+  // below, deliberately: they are conversation about the brand too.
+  // Anything in this half that must stay market-only filters at its own call
+  // site with isDiscoveredVideo (today: the sentiment distribution).
+  const videos = await selectAll<VideoRow>(() =>
     admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const videos = allVideos.filter((v) => v.source !== 'owned' && v.source !== 'competitor_owned')
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors run-cd.ts.
@@ -1278,10 +1286,11 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments, analysedVideoIds)
   // Census fact: how many posts the CLIENT published in this window, exactly —
-  // read off the owned rows rather than inferred from the discovered corpus, and
-  // frozen with the window it is true for. The share tile sets it against how
-  // often the market posted about them.
-  const ownedCensus = buildOwnedCensus(allVideos, {
+  // read off the owned rows rather than inferred from the corpus, and frozen
+  // with the window it is true for. The share tile sets it against how many
+  // videos by and about the client were tracked in total — share counts both,
+  // so the census is where "what you published" is still said on its own.
+  const ownedCensus = buildOwnedCensus(videos, {
     handles: (tc?.own_handles ?? {}) as Record<string, string>,
     competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
     since: window.since ?? periodSince(period),
@@ -1312,9 +1321,18 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
     clientClaims: claims.client, persist: true,
   })
 
+  // The sentiment distribution stays MARKET-ONLY. It answers "how did the
+  // audience receive videos about this brand", and a census row carries either
+  // no audience sentiment at all (own posts never take Pass A's full lane) or a
+  // framing sentiment read off the brand's own caption — the brand rating
+  // itself. Widening share did not widen this, so the filter is explicit here
+  // rather than inherited from the corpus.
+  const marketVideos = videos.filter(isDiscoveredVideo)
+  const marketPeriodVideos = periodVideos.filter(isDiscoveredVideo)
+
   await writeRunSummary({
-    clientId, runId, metrics, videos,
-    periodMetrics, periodVideos,
+    clientId, runId, metrics, videos: marketVideos,
+    periodMetrics, periodVideos: marketPeriodVideos,
     ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
     brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period,
     ownedCensus,

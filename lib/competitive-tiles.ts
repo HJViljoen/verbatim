@@ -137,10 +137,11 @@ export function pairScale(a: number, b: number): { a: number; b: number } {
 }
 
 /** What each side PUBLISHED this update, summed over their platforms — the
- *  own-post census (run_summary.owned_census), not the discovered corpus. The
- *  share rows below count what the market posted ABOUT a brand and leave a
- *  brand's own posts out by design, so without this row a busy client reads as
- *  "posted nothing". Null when the update predates the census (2026-09-09):
+ *  own-post census (run_summary.owned_census), an exact count of a brand's own
+ *  posts. The share rows below count those posts too since 2026-09-10, but
+ *  mixed into everything the market said, so this row is the only place the
+ *  reader sees how much each brand published on its own account.
+ *  Null when the update predates the census (2026-09-09):
  *  the strip shows an em dash rather than a false zero. A competitor with no
  *  branch of their own has genuinely published nothing we tracked, so 0.
  *  Competitor names are matched case-insensitively — the census is keyed by
@@ -178,8 +179,9 @@ export interface FaceOffInput {
  * The butterfly rows, each grounded or dropped — never fabricated: own posts
  * from owned_census; videos + share from share_of_voice; comments, engagement
  * and positive sentiment from this update's videos; themes from the latest
- * themed update. Own posts lead, so the market rows beneath are read as what
- * they are: what other people posted about each brand.
+ * themed update. Own posts lead, so the rows beneath are read as what they
+ * are: everything tracked for each brand, its own posts included (share rule,
+ * 2026-09-10).
  */
 export function faceOffRows(input: FaceOffInput): FaceOffRow[] {
   const { sov, layer, competitor, stats, themes, owned, fmtInt, fmtPct } = input
@@ -198,12 +200,12 @@ export function faceOffRows(input: FaceOffInput): FaceOffRow[] {
   const them = sov?.[themKey]
   if (sov && (you || them)) {
     const a = Number(you?.videos ?? 0), b = Number(them?.videos ?? 0)
-    row('videos', layer === 'period' ? 'Videos about the brand' : 'Videos about the brand, tracked', a, b, fmtInt(a), fmtInt(b))
+    row('videos', layer === 'period' ? 'Videos by and about the brand' : 'Videos by and about the brand, tracked', a, b, fmtInt(a), fmtInt(b))
   }
   const ys = stats?.get('client'), ts = stats?.get(themKey)
   if (stats && (ys || ts)) {
     const a = ys?.comments ?? 0, b = ts?.comments ?? 0
-    row('comments', 'Comments about the brand', a, b, fmtInt(a), fmtInt(b))
+    row('comments', 'Comments by and about the brand', a, b, fmtInt(a), fmtInt(b))
   }
   if (sov && (you || them)) {
     const a = Number(you?.pct_videos ?? 0), b = Number(them?.pct_videos ?? 0)

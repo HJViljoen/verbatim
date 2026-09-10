@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { computeMetrics } from '../lib/pipeline/metrics'
+import { computeMetrics, isDiscoveredVideo } from '../lib/pipeline/metrics'
 import { runStepA2 } from '../lib/pipeline/step-a2'
 import { runPassB } from '../lib/pipeline/pass-b'
 import { runPassC } from '../lib/pipeline/pass-c'
@@ -72,13 +72,15 @@ async function main() {
   // Metrics corpus: client videos + their comments. `--platform all` spans every
   // platform so Share of Voice is market-wide (correct for a multi-platform run);
   // a named platform scopes the SOV/engagement metrics to that platform only.
-  // SoV guard (Owned-Data-Plan): owned-account posts stay out of the
-  // discovered-corpus metrics; their comments drop out via wantedVideos below.
-  const videos = (await selectAll<VideoRow>(() => {
+  // Share rule (2026-09-10, mirrors the Inngest synthesis half): the metrics
+  // count everything relating to a brand — market videos about it AND the
+  // brand's own posts (source 'owned' / 'competitor_owned'), bucketed by
+  // identity. Their comments ride along via wantedVideos below.
+  const videos = await selectAll<VideoRow>(() => {
     let q = admin.from('videos').select('*').eq('client_id', args.clientId)
     if (args.platform !== 'all') q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
-  })).filter((v) => v.source !== 'owned' && v.source !== 'competitor_owned')
+  })
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length
   // limit once the corpus grows to ~1k+ videos ("fetch failed"). Mirrors pass-a.ts.
@@ -215,8 +217,11 @@ async function main() {
   // run_summary — metrics + sentiment + CI summary; the email-delta baseline.
   if (persist) {
     await writeRunSummary({
-      clientId: args.clientId, runId: args.runId!, metrics, videos,
-      periodMetrics, periodVideos,
+      // Sentiment stays market-only (own posts carry the brand's own framing,
+      // not the audience's reaction) — the explicit filter the widened corpus
+      // no longer applies for it.
+      clientId: args.clientId, runId: args.runId!, metrics, videos: videos.filter(isDiscoveredVideo),
+      periodMetrics, periodVideos: periodVideos.filter(isDiscoveredVideo),
       ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
       brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period: tc?.report_period ?? null,
     })
