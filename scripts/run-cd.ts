@@ -228,17 +228,24 @@ async function main() {
       periodMetrics, periodVideos: periodVideos.filter(isDiscoveredVideo),
       ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
       brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period: tc?.report_period ?? null,
-      // The census, like the Inngest half. Without it this script writes
-      // owned_census null, and the surfaces that count own posts through the
-      // census (Content's "Your own posts", the share tile) silently lose the
-      // row — a CLI-driven synthesis must not leave the app poorer than an
-      // Inngest one.
-      ownedCensus: buildOwnedCensus(videos, {
-        handles: (tc?.own_handles ?? {}) as Record<string, string>,
-        competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
-        since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
-        until: new Date().toISOString().slice(0, 10),
-      }),
+      // The census, like the Inngest half — but ONLY on a market-wide read.
+      // Without it this script writes owned_census null and the surfaces that
+      // count own posts through the census (Content's "Your own posts", the
+      // share tile) silently lose the row. Built from a platform-SCOPED corpus
+      // it would be worse than absent: countAccounts writes a zero-post entry
+      // for every configured handle, so a default `--platform tiktok` run would
+      // store "0 Instagram posts, 0 YouTube posts" as though it were measured.
+      // Absent is honest; wrong is not.
+      ...(args.platform === 'all'
+        ? {
+            ownedCensus: buildOwnedCensus(videos, {
+              handles: (tc?.own_handles ?? {}) as Record<string, string>,
+              competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
+              since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
+              until: new Date().toISOString().slice(0, 10),
+            }),
+          }
+        : {}),
     })
     console.log('\nrun_summary written.')
   }

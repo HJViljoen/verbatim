@@ -660,6 +660,7 @@ export async function fetchOwnProfile(
       // trims them and the transcript layer has nothing to resolve.
       customMapFunction: '(object) => { return {...object} }',
     }, { timeoutSecs })
+    const startedAt = Date.now()
     let raw = await read(300)
     // "Succeeded with zero items" is a flake signature runActor's retry cannot
     // see: fetchWithRetry only retries transport errors, and this run reports
@@ -667,11 +668,14 @@ export async function fetchOwnProfile(
     // mode); TikTok has no second mode, so the guard is one retry. A Rareform
     // census came back empty exactly this way on 2026-09-09.
     //
-    // The retry gets a SHORTER timeout on purpose: both reads live in one
-    // Inngest step and the route's maxDuration is 300s, so two full-length
-    // attempts could outlive the function that is awaiting them.
-    if (since && raw.length === 0) {
-      const retried = await read(120)
+    // Retry only if the invocation can survive it. Both reads live in ONE
+    // Inngest step under a 300s maxDuration, so the retry's budget is whatever
+    // is left of that — not a fixed second timeout. A first read that burned
+    // 250s must not start a 120s retry the function cannot outlive; with less
+    // than 30s of headroom, don't try at all.
+    const budgetSecs = Math.floor((300_000 - (Date.now() - startedAt)) / 1000) - 20
+    if (since && raw.length === 0 && budgetSecs >= 30) {
+      const retried = await read(Math.min(120, budgetSecs))
       if (retried.length > 0) {
         // The reads disagree, which is proof the first one flaked. Worth saying.
         console.warn(`[owned] tiktok census for @${handle} returned 0 then ${retried.length} on retry — first read flaked`)

@@ -44,8 +44,10 @@ import { normForMatch } from './quote-match'
 // — it only picks up videos where classified_type IS NULL, so those labels do
 // not change until someone nulls the column.
 //
-// To re-label deliberately: bump PROMPT_VERSION_V4 and run with
-// INCREMENTAL_PASS_A on, knowing it re-reads the corpus once.
+// To re-label deliberately: bump BOTH constants below (a transcripts-disabled
+// tenant books against PROMPT_VERSION, so bumping only the v4 one would leave
+// those tenants un-re-read) and run with INCREMENTAL_PASS_A on, knowing it
+// re-reads the corpus once.
 const PROMPT_VERSION = 'pass_a_v3.1'
 const PROMPT_VERSION_V4 = 'pass_a_v4.1'
 const MAX_CLAIMS_PER_VIDEO = 3
@@ -547,6 +549,12 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       .order('comments_count', { ascending: false, nullsFirst: false })
       .order('id', { ascending: true })
   }
+  /** The same filters as buildVideos, counted without reading a single row. */
+  const countVideos = () => {
+    let q = admin.from('videos').select('id', { count: 'exact', head: true }).eq('client_id', clientId)
+    if (platform) q = q.eq('platform', platform)
+    return q
+  }
   let videoRows: VideoRow[]
   if (limit) {
     const { data, error: vErr } = await buildVideos().limit(limit)
@@ -559,22 +567,22 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // grown corpus is the same memory hazard that hung Postgres on 2026-09-09.
     // Cap it loudly rather than pull the table.
     if (!videoIds?.length) {
-      // Ask for one row more than the cap and stop there. Reading everything
-      // and THEN complaining would already have done the damage the cap exists
-      // to prevent — these rows carry transcripts.
-      const { data, error: vErr } = await buildVideos().limit(PASS_A_UNBOUNDED_CAP + 1)
-      if (vErr) throw new Error(`load videos: ${vErr.message}`)
-      if ((data ?? []).length > PASS_A_UNBOUNDED_CAP) {
+      // COUNT first, head-only: it reads no rows, so no transcripts cross the
+      // wire just to find out how many there are. `.limit(cap + 1)` would not
+      // work here — PostgREST caps a bare select at 1000 whatever the client
+      // asks for (AGENTS.md), so the guard would never fire AND the read would
+      // silently truncate to 1000 instead of paginating.
+      const { count, error: cErr } = await countVideos()
+      if (cErr) throw new Error(`count videos: ${cErr.message}`)
+      if ((count ?? 0) > PASS_A_UNBOUNDED_CAP) {
         throw new Error(
           `pass A asked for the whole corpus with no videoIds and no --limit ` +
-          `(cap ${PASS_A_UNBOUNDED_CAP}). Pass --limit or a video-id batch: video rows carry ` +
-          `transcripts and an uncapped scan can exhaust the database.`,
+          `(${count} videos, cap ${PASS_A_UNBOUNDED_CAP}). Pass --limit or a video-id batch: ` +
+          `video rows carry transcripts and an uncapped scan can exhaust the database.`,
         )
       }
-      videoRows = (data ?? []) as VideoRow[]
-    } else {
-      videoRows = await selectAll<VideoRow>(buildVideos)
     }
+    videoRows = await selectAll<VideoRow>(buildVideos)
   }
 
   // 3. Comments for those videos, grouped by (platform, video_id). Paginated —
