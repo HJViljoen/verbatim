@@ -49,6 +49,19 @@ export interface ClassifyInput {
   transcript_status: string | null
 }
 
+/** Is this PostgREST error "that column does not exist"? Postgres raises 42703
+ *  (undefined_column) and PostgREST passes the code through, but a schema-cache
+ *  miss can surface as PGRST204 with the column named in the message instead —
+ *  so the column name is checked either way. Narrow on purpose: the point is to
+ *  survive a deploy that lands before its migration, not to swallow write
+ *  failures. */
+export function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: string; message?: string }
+  const named = (message ?? '').includes(column)
+  return (code === '42703' && named) || (code === 'PGRST204' && named)
+}
+
 /** Ids of videos still unclassified, chunked into call-sized batches. */
 export function planClassifyBatches(
   videos: { id: string; classified_type: string | null }[],
@@ -208,29 +221,42 @@ export async function runClassifyMetaBatch(
   const byId = validateClassifyResponse(parsed, batchIds)
   let classified = 0
   let nulls = 0
+  let versionColumnMissing = false
   for (const [id, item] of byId) {
     if (item.classified_type == null && item.hook_style == null && item.topics.length === 0) {
       nulls++
       continue
     }
-    const { error } = await admin
+    const labels = {
+      classified_type: item.classified_type,
+      hook_style: item.hook_style,
+      hook_text: item.hook_text,
+      topics: item.topics.length ? item.topics : null,
+      // Framing sentiment (caption + transcript, no comments). Provenance is
+      // stamped so run_summary never blends it with Pass A's audience read
+      // (T0-8): the two families are different measurements.
+      sentiment: item.sentiment,
+      sentiment_source: item.sentiment == null ? null : 'framing',
+    }
+    // Which regime chose these labels (null on every row written before
+    // 2026-09-11 — see the column's comment).
+    const write = (withVersion: boolean) => admin
       .from('videos')
-      .update({
-        classified_type: item.classified_type,
-        hook_style: item.hook_style,
-        hook_text: item.hook_text,
-        topics: item.topics.length ? item.topics : null,
-        // Framing sentiment (caption + transcript, no comments). Provenance is
-        // stamped so run_summary never blends it with Pass A's audience read
-        // (T0-8): the two families are different measurements.
-        sentiment: item.sentiment,
-        sentiment_source: item.sentiment == null ? null : 'framing',
-        // Which regime chose these labels (null on every row written before
-        // 2026-09-11 — see the column's comment).
-        classified_prompt_version: CLASSIFY_META_PROMPT_VERSION,
-      })
+      .update(withVersion ? { ...labels, classified_prompt_version: CLASSIFY_META_PROMPT_VERSION } : labels)
       .eq('id', id)
       .is('classified_type', null)
+
+    let { error } = await write(!versionColumnMissing)
+    // The model call is already billed by the time we get here. If this deploy
+    // landed ahead of its migration, the bookkeeping column is the only thing
+    // missing — write the labels without it rather than throw the batch away,
+    // re-bill it on every Inngest retry and close the run `partial`. Once one
+    // row says the column is absent, the rest of the batch skips the attempt.
+    if (error && isMissingColumnError(error, 'classified_prompt_version')) {
+      versionColumnMissing = true
+      console.warn(`[classify-meta] videos.classified_prompt_version does not exist — apply supabase/migrations/20260911120000_classified_prompt_version.sql. Writing labels without it; those rows will read as the pre-2026-09-11 regime.`)
+      ;({ error } = await write(false))
+    }
     if (error) throw new Error(`classify-meta persist: ${error.message}`)
     classified++
   }
