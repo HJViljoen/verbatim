@@ -61,8 +61,11 @@ describe('cosine', () => {
 // Oracle: the O(n³) implementation this file's exported clustering replaced on
 // 2026-09-11, copied here VERBATIM (only the name changed). The nearest-
 // neighbour-chain rewrite is a speed change, not a semantics change, so the two
-// must agree on the set of clusters for every input. Do not "fix" this copy to
-// match the new one — if they diverge, the new one is wrong.
+// must agree on the set of clusters for every input with a TIE-FREE similarity
+// matrix. Under exact ties they break them differently (chain: lowest index;
+// oracle: `>=`, so the LAST max pair) and both answers are valid average
+// linkages. Do not "fix" this copy to match the new one — if they diverge on
+// tie-free input, the new one is wrong.
 // ---------------------------------------------------------------------------
 function referenceAverageLinkage(vecs: number[][], threshold: number): number[][] {
   const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { isMegaCluster, megaClusterThreshold } from './step-a2'
+import { aggregate, isMegaCluster, megaClusterThreshold } from './step-a2'
+import type { InsightRow } from './types'
 import { MEGA_CLUSTER_MIN } from '../config'
 
 // Scale-aware mega-cluster tripwire (recalibrated 2026-08-09). The two
@@ -37,5 +38,32 @@ describe('isMegaCluster', () => {
   it('falls back to MIN when the denominator is degenerate', () => {
     expect(megaClusterThreshold(0)).toBe(MEGA_CLUSTER_MIN)
     expect(isMegaCluster(MEGA_CLUSTER_MIN + 1, 0)).toBe(true)
+  })
+})
+
+describe('aggregate — what a theme carries out of clustering', () => {
+  const ins = (id: string, strength: number, description: string): InsightRow => ({
+    id, category: 'pain_point', theme: `t_${id}`, description, strength_score: strength,
+    emotion: 'frustrated', sentiment_impact: 'negative', source_video_id: `v_${id}`,
+    platform: 'tiktok', is_client: true, is_competitor: false, competitor_name: null,
+  } as InsightRow)
+
+  // Pass B's label prompt shows the two highest-strength descriptions as its
+  // `e.g.` lines, so whatever decides ties there decides theme LABELS. Member
+  // order must not be that decider: the clusterer emits members in whatever
+  // order its merges happened to take, and a clustering change that keeps every
+  // cluster identical would otherwise still rename themes on the next run.
+  it('picks the same two sample descriptions whatever order the members arrive in', () => {
+    const members = [ins('c', 7, 'third'), ins('a', 7, 'first'), ins('b', 9, 'top')]
+    const forward = aggregate(members, 'client').sampleDescriptions
+    const reversed = aggregate([...members].reverse(), 'client').sampleDescriptions
+    expect(forward).toEqual(['top', 'first'])
+    expect(reversed).toEqual(forward)
+  })
+
+  it('still orders by strength first', () => {
+    const t = aggregate([ins('a', 2, 'weak'), ins('b', 9, 'strong')], 'client')
+    expect(t.sampleDescriptions[0]).toBe('strong')
+    expect(t.strengthScore).toBe(9)
   })
 })

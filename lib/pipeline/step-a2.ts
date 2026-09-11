@@ -126,13 +126,19 @@ export function compareThemes(a: AggregatedTheme, b: AggregatedTheme): number {
   return rank(b) - rank(a) || mean(b) - mean(a) || a.theme.localeCompare(b.theme)
 }
 
-function aggregate(cluster: InsightRow[], bucket: string): AggregatedTheme {
+export function aggregate(cluster: InsightRow[], bucket: string): AggregatedTheme {
   // Working slug = highest-strength member's; the client-facing label comes
   // from Pass B. Category = mode of the members' (bucket-level clustering can
   // legitimately merge across categories).
   const canonical = cluster.reduce((a, b) => (b.strength_score > a.strength_score ? b : a))
   const supportingVideoIds = [...new Set(cluster.map((i) => i.source_video_id))]
-  const byStrength = [...cluster].sort((a, b) => b.strength_score - a.strength_score)
+  // Ties break on id, not on the order the clusterer happened to emit members
+  // in. strength_score is a small integer, so ties are common and Array.sort is
+  // stable — without the id the top two here would follow member order, and
+  // those two descriptions are the `e.g.` lines in Pass B's label prompt
+  // (pass-b.ts:75) and the description fallback (:117). A clusterer that
+  // emitted the same members in a different order would then rename themes.
+  const byStrength = [...cluster].sort((a, b) => b.strength_score - a.strength_score || a.id.localeCompare(b.id))
   return {
     bucket,
     category: mode(cluster.map((i) => i.category)),

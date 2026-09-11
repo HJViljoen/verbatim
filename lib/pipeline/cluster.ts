@@ -108,6 +108,13 @@ export function embedInput(ins: Pick<InsightRow, 'theme' | 'description'>): stri
  *  A reciprocal pair BELOW the threshold retires both: each one's best possible
  *  similarity is already under the line, and every later similarity involving
  *  it is a weighted mean of values ≤ that, so neither can ever clear it again.
+ *
+ *  "Identical to the old loop" holds for a TIE-FREE similarity matrix. Under
+ *  exact ties the two break them differently (this one takes the lowest index,
+ *  the old loop's `>=` took the last max pair), and both are valid average
+ *  linkages — a constructed binary-vector case does diverge. The realistic tie
+ *  source is duplicate insight text embedding identically, and 1200 seeded
+ *  cases at dim 16 with 15% exact duplicates produced no divergence.
  */
 export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
   const n = vecs.length
@@ -192,9 +199,16 @@ export function averageLinkageClusters(vecs: number[][], threshold: number): num
     remaining--
   }
 
-  // Deterministic output: members ascending, groups by smallest member — the
-  // order the global-max loop happened to produce, now stated rather than
-  // inherited from merge history.
+  // Deterministic output: members ascending, groups by smallest member. The
+  // GROUP order is what the old loop also produced; the member order is not —
+  // it emitted merge history ([0,5] merged with [2,3] came out [0,5,2,3]).
+  // Member order is read downstream: step-a2's `aggregate` builds
+  // `supportingInsightIds` and `memberThemes` in it (the first names the
+  // theme's working slug, and Voice draws its ribbon quotes off the first few
+  // insight ids), so those move once, on the next run, and are stable after.
+  // The one place it could have moved a client-facing WORD — Pass B's label
+  // prompt, which shows the top two descriptions by strength — no longer
+  // depends on it: `aggregate` breaks that tie on insight id.
   for (const g of done) g.sort((x, y) => x - y)
   return done.sort((x, y) => x[0] - y[0])
 }
