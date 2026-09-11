@@ -1,5 +1,6 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { APIFY_COST_ESTIMATES } from '../lib/config'
+import { summariseTerms, insightBearingUpdates, REVIEW_RULE, type KeywordPerfRow } from '../lib/keywords/value'
 
 // Operator read of keyword ROI across every gathered run — the pruning tool.
 // keyword_performance is written by gather (analysis-only re-runs add nothing),
@@ -18,9 +19,10 @@ import { APIFY_COST_ESTIMATES } from '../lib/config'
 // DROP-CANDIDATE when: ≥3 such runs, pooled survival <5%, pooled found ≥100,
 // pooled insights 0. Per-platform by construction — a keyword can be dropped
 // on Instagram and kept on YouTube.
-const DROP_MIN_RUNS = 3
-const DROP_MAX_SURVIVAL = 0.05
-const DROP_MIN_FOUND = 100
+//
+// The rule itself now lives in lib/keywords/value.ts (2026-09-11), because the
+// client's Settings page shows the same judgment as a "Worth reviewing" hint.
+// One rule, two readers; this script keeps the per-platform grouping.
 
 function parseArgs(argv: string[]): { clientId: string | null } {
   const args = { clientId: null as string | null }
@@ -31,15 +33,7 @@ function parseArgs(argv: string[]): { clientId: string | null } {
   return args
 }
 
-interface KpRow {
-  run_id: string
-  platform: string
-  keyword: string
-  bucket: string
-  videos_found: number
-  gate_survived: number
-  eligible_videos: number
-  insights_contributed: number | null
+interface KpRow extends KeywordPerfRow {
   value_score: number | string | null
   created_at: string
 }
@@ -67,83 +61,46 @@ async function reportClient(clientId: string) {
 
   // Runs whose whole client run produced at least one attributed insight —
   // the only runs the drop rule may pool over.
-  const insightsByRun = new Map<string, number>()
-  for (const r of rows) {
-    insightsByRun.set(r.run_id, (insightsByRun.get(r.run_id) ?? 0) + (r.insights_contributed ?? 0))
-  }
-  const insightfulRuns = new Set([...insightsByRun].filter(([, n]) => n > 0).map(([id]) => id))
+  const insightfulRuns = insightBearingUpdates(rows)
 
   const runs = new Set(rows.map((r) => r.run_id))
   const first = rows[0].created_at.slice(0, 10)
   const last = rows[rows.length - 1].created_at.slice(0, 10)
   console.log(`client ${clientId} · ${runs.size} gathered run${runs.size === 1 ? '' : 's'} (${insightfulRuns.size} with insights) · ${first} → ${last}\n`)
 
-  interface Agg {
-    platform: string
-    keyword: string
-    bucket: string
-    runs: Set<string>
-    insightfulRuns: Set<string>
-    found: number
-    survived: number
-    insightfulFound: number
-    insightfulSurvived: number
-    insights: number
-    est: number
-    scoreSum: number
-    scoreN: number
-  }
-  const byPair = new Map<string, Agg>()
+  // Money and the provisional value_score stay here — they are the operator's
+  // two columns, and neither belongs in a client-facing summary.
+  const est = new Map<string, number>()
+  const score = new Map<string, { sum: number; n: number }>()
   for (const r of rows) {
     const key = `${r.platform}::${r.keyword}`
-    const agg = byPair.get(key) ?? {
-      platform: r.platform, keyword: r.keyword, bucket: r.bucket,
-      runs: new Set<string>(), insightfulRuns: new Set<string>(),
-      found: 0, survived: 0, insightfulFound: 0, insightfulSurvived: 0,
-      insights: 0, est: 0, scoreSum: 0, scoreN: 0,
-    }
-    agg.runs.add(r.run_id)
-    agg.found += r.videos_found
-    agg.survived += r.gate_survived
-    agg.insights += r.insights_contributed ?? 0
-    agg.est += estRowCost(r)
-    if (insightfulRuns.has(r.run_id)) {
-      agg.insightfulRuns.add(r.run_id)
-      agg.insightfulFound += r.videos_found
-      agg.insightfulSurvived += r.gate_survived
-    }
+    est.set(key, (est.get(key) ?? 0) + estRowCost(r))
     if (r.value_score != null) {
-      agg.scoreSum += Number(r.value_score)
-      agg.scoreN += 1
+      const s = score.get(key) ?? { sum: 0, n: 0 }
+      score.set(key, { sum: s.sum + Number(r.value_score), n: s.n + 1 })
     }
-    byPair.set(key, agg)
   }
 
-  const isDrop = (a: Agg) =>
-    a.insightfulRuns.size >= DROP_MIN_RUNS &&
-    a.insightfulFound >= DROP_MIN_FOUND &&
-    (a.insightfulFound > 0 ? a.insightfulSurvived / a.insightfulFound : 0) < DROP_MAX_SURVIVAL &&
-    a.insights === 0
-
-  const table = [...byPair.values()]
-    .map((a) => ({
-      platform: a.platform,
-      keyword: a.keyword,
-      bucket: a.bucket,
-      runs: a.runs.size,
-      found: a.found,
-      relevant: a.survived,
-      'rate %': a.found > 0 ? Math.round((a.survived / a.found) * 100) : 0,
-      insights: a.insights,
-      '$est': a.est.toFixed(2),
-      'avg score': a.scoreN > 0 ? (a.scoreSum / a.scoreN).toFixed(1) : '—',
-      'DROP?': isDrop(a) ? 'DROP-CANDIDATE' : '',
-    }))
-    .sort((a, b) => a['rate %'] - b['rate %'] || b.found - a.found)
+  const table = summariseTerms(rows, 'platform-term').map((t) => {
+    const s = score.get(t.key)
+    return {
+      platform: t.platforms[0],
+      keyword: t.keyword,
+      bucket: t.bucket,
+      runs: t.updates,
+      found: t.found,
+      relevant: t.kept,
+      'rate %': Math.round(t.keptRate * 100),
+      insights: t.insights,
+      '$est': (est.get(t.key) ?? 0).toFixed(2),
+      'avg score': s && s.n > 0 ? (s.sum / s.n).toFixed(1) : '—',
+      'DROP?': t.worthReviewing ? 'DROP-CANDIDATE' : '',
+    }
+  })
 
   console.table(table)
   console.log('sorted worst relevance first · rate = gate_survived / videos_found at gather time · $est = coarse Apify ranking estimate, not an invoice')
-  console.log(`DROP-CANDIDATE: ≥${DROP_MIN_RUNS} insight-bearing runs, <${DROP_MAX_SURVIVAL * 100}% survival, ≥${DROP_MIN_FOUND} found, 0 insights — judged per platform\n`)
+  console.log(`DROP-CANDIDATE: ≥${REVIEW_RULE.MIN_UPDATES} insight-bearing runs, <${REVIEW_RULE.MAX_KEPT_RATE * 100}% survival, ≥${REVIEW_RULE.MIN_FOUND} found, 0 insights — judged per platform\n`)
 }
 
 async function main() {

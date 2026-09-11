@@ -63,7 +63,7 @@ describe('community harvest input', () => {
     // are NOT using our keywords. A keyword search cannot see it.
     const { reddit } = await import('./platforms/reddit')
     const config = {
-      brand_keywords: ['ossur'], competitor_keywords: [], competitor_names: [], industry_keywords: [],
+      brand_keywords: ['ossur'], competitor_keywords: [], competitor_names: [], industry_keywords: [], exclude_terms: [],
       platforms: ['reddit'], max_videos: 50, comment_depth: 50, report_period: 'weekly',
       own_handles: {}, subreddits: [],
     }

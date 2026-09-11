@@ -56,9 +56,63 @@ export function matchEntities(v: TagCandidate, config: GatherConfig): EntityMatc
   return { brand, competitors }
 }
 
+/**
+ * True when this text is about an excluded sense of the name, not the client.
+ *
+ * The rule is deliberately as simple as it can be stated: an exclusion term
+ * appears AND nothing else the client configured does. `brandHits` is every
+ * OTHER configured term found in the same text — the product and category words
+ * that say the match is really about this brand. One of those present, and the
+ * exclusion never fires: "not the volcano, the jacket" keeps its jacket.
+ *
+ * So this only ever drops a match whose sole evidence is the bare name — the
+ * Cotopaxi-the-volcano and Sealand-the-shipping-line class (see the migration
+ * 20260911140000_exclude_terms.sql). Everything subtler stays with the LLM
+ * relevance gate, which reads the same terms as hints; a blanket text denylist
+ * would throw away real comments that merely mention the other sense.
+ */
+export function excludedByTerms(text: string, brandHits: string[], excludeTerms: string[]): boolean {
+  if (brandHits.length > 0) return false
+  const hay = fold(text)
+  if (hay === '') return false
+  return excludeTerms.some((t) => {
+    const term = fold(t)
+    return term !== '' && hay.includes(term)
+  })
+}
+
+/** Configured terms present in the haystack, minus the names that already matched. */
+function otherConfiguredHits(hay: string, config: GatherConfig, matched: Set<string>): string[] {
+  const terms = [
+    ...(config.brand_keywords ?? []),
+    ...(config.competitor_names ?? []),
+    ...(config.industry_keywords ?? []),
+  ]
+  const out = new Set<string>()
+  for (const t of terms) {
+    const term = fold(t)
+    if (term === '' || matched.has(term)) continue
+    if (hay.includes(term)) out.add(term)
+  }
+  return [...out]
+}
+
 /** Single-bucket substring tags (priority client > competitor). */
 export function tagVideo(v: TagCandidate, config: GatherConfig): VideoTags {
   const { brand, competitors } = matchEntities(v, config)
+  const untagged: VideoTags = { is_client: false, is_competitor: false, competitor_name: null }
+  if (!brand && competitors.length === 0) return untagged
+
+  const exclude = config.exclude_terms ?? []
+  if (exclude.length > 0) {
+    const text = [v.account_name, v.caption, ...(v.hashtags ?? [])].join(' ')
+    const hay = fold(text)
+    const matched = new Set<string>()
+    if (brand) for (const k of config.brand_keywords ?? []) if (fold(k) !== '' && hay.includes(fold(k))) matched.add(fold(k))
+    for (const c of competitors) matched.add(fold(c))
+    if (excludedByTerms(text, otherConfiguredHits(hay, config, matched), exclude)) return untagged
+  }
+
   return {
     is_client: brand,
     is_competitor: !brand && competitors.length > 0,

@@ -7,6 +7,7 @@ const config: GatherConfig = {
   competitor_keywords: [],
   competitor_names: ['Ottobock'],
   industry_keywords: ['prosthetic', 'amputee'],
+  exclude_terms: [],
   platforms: ['reddit'],
   max_videos: 25,
   comment_depth: 50,

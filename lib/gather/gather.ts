@@ -124,6 +124,7 @@ const DEFAULT_CONFIG: Omit<GatherConfig, 'platforms'> = {
   competitor_keywords: [],
   competitor_names: [],
   industry_keywords: [],
+  exclude_terms: [],
   max_videos: 25,
   comment_depth: 50,
   report_period: 'weekly',
@@ -150,6 +151,7 @@ async function loadConfig(admin: Admin, clientId: string): Promise<GatherConfig>
     competitor_keywords: data.competitor_keywords ?? [],
     competitor_names: data.competitor_names ?? [],
     industry_keywords: data.industry_keywords ?? [],
+    exclude_terms: data.exclude_terms ?? [],
     platforms: data.platforms ?? ['tiktok', 'youtube', 'instagram'],
     // Clamped, not trusted (T0-2). The CHECK constraints bound what a tenant
     // can write; this bounds what a run will act on whatever the row says.
