@@ -381,7 +381,9 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
     // brand's, below. Scoping this query to run_id + source 'owned' (as it did
     // until 2026-09-11) counted only posts this run happened to capture off the
     // owned read — 11 where the census said 36 — because a post the keyword
-    // gather found first keeps source 'discovered' forever.
+    // gather found first kept source 'discovered' for life. The owned read
+    // corrects that from 2026-09-11, but only for accounts own_handles names,
+    // so identity still decides here rather than the column.
     selectAll<OwnPostRow>(() => supabase.from('videos')
       .select('views, engagement_rate, platform, account_name, source, upload_date, is_client, is_competitor, competitor_name')
       .eq('client_id', clientId).eq('is_client', true).order('id', { ascending: true })),

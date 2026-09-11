@@ -85,7 +85,8 @@ async function main() {
       continue
     }
     const known = (existing ?? []) as { video_id: string; source: string | null }[]
-    console.log(`  already known: ${known.length}/${profile.recentPosts.length} → ${profile.recentPosts.length - known.length} would be stamped source:'owned'`)
+    const stuck = known.filter((k) => k.source === 'discovered').length
+    console.log(`  already known: ${known.length}/${profile.recentPosts.length} → all ${profile.recentPosts.length} stamped source:'owned' (${stuck} of the known ones corrected off 'discovered')`)
 
     const refs = ownedCommentRefs(profile.recentPosts, {
       windowStart: window.since,
@@ -100,7 +101,7 @@ async function main() {
     // Shares the pipeline's own source-stamping, deliberately — an inline copy
     // here drifted from the fix once already (2026-08-16) and re-reproduced the
     // 23502 it was supposed to prove fixed.
-    const rows = stampOwnedSource(profile.recentPosts, known)
+    const rows = stampOwnedSource(profile.recentPosts)
     const { error } = await admin.from('videos').upsert(rows, { onConflict: 'client_id,platform,video_id' })
     if (error) {
       console.log(`  UPSERT ERROR: ${error.code} ${error.message}`)
