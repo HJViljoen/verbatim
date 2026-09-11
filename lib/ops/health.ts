@@ -31,6 +31,12 @@ export const RUN_START_LEAD_MS = 3600_000
 export const RUN_STUCK_MS = 6 * 3600_000
 /** An owed report this long after the run completed should have gone out. */
 export const REPORT_GRACE_MS = 3 * 3600_000
+/** How far back an undelivered update is still worth naming. This check used to
+ *  run twice — once inside the dispatcher over 36 h, once here over 14 days —
+ *  so one genuine miss produced one Inngest email plus a fortnight of daily ops
+ *  emails. The dispatcher's copy is gone and this window is short, because
+ *  alert fatigue is how 6 September stayed invisible for five days. */
+export const REPORT_MISSED_WINDOW_MS = 48 * 3600_000
 /** How far back the caller reads runs and sends. Nothing older is evidence:
  *  a run stranded at 'analyzing' since 2026-06-13 would otherwise alert every
  *  morning forever, and a missed slot we cannot see rows for proves nothing. */
@@ -62,6 +68,9 @@ export interface HealthRun {
 export interface HealthReportSend {
   runId: string | null
   sentAt: string | null
+  /** report_sends.status — 'sent', 'ready' (held for review) and 'skipped' (no
+   *  recipients) all mean the send path did as it was told. */
+  status: string | null
 }
 
 export interface HealthInputs {
@@ -70,7 +79,7 @@ export interface HealthInputs {
   clients: HealthClient[]
   /** pipeline_runs from the last LOOKBACK_MS. */
   runs: HealthRun[]
-  /** report_sends with status 'sent' from the last LOOKBACK_MS. */
+  /** report_sends of EVERY status from the last LOOKBACK_MS. */
   reportSends: HealthReportSend[]
 }
 
@@ -187,15 +196,16 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
   }
 
   // 4. A run that finished owing a report, and the report never went out.
-  //    cadenceReliability already knows what "owed" means (options.sendReport,
-  //    completed or partial, a report_sends row with sent_at) — do not restate it.
-  const settled = inputs.runs.filter((r) => {
+  //    cadenceReliability owns both halves of that rule — what "owed" means
+  //    (options.sendReport, completed or partial) and which report_sends states
+  //    settle it — so neither is restated here.
+  const ripe = inputs.runs.filter((r) => {
     const t = r.completedAt ? Date.parse(r.completedAt) : NaN
-    return !Number.isNaN(t) && now - t > REPORT_GRACE_MS && now - t <= LOOKBACK_MS
+    return !Number.isNaN(t) && now - t > REPORT_GRACE_MS && now - t <= REPORT_MISSED_WINDOW_MS
   })
   const cadence = cadenceReliability(
-    settled.map((r) => ({ id: r.id, status: r.status, options: r.options, completedAt: r.completedAt })),
-    inputs.reportSends.map((s) => ({ runId: s.runId, sentAt: s.sentAt })),
+    ripe.map((r) => ({ id: r.id, status: r.status, options: r.options, completedAt: r.completedAt })),
+    inputs.reportSends.map((s) => ({ runId: s.runId, sentAt: s.sentAt, status: s.status })),
   )
   const runById = new Map(inputs.runs.map((r) => [r.id, r]))
   for (const id of cadence.missedRunIds) {

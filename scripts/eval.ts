@@ -139,14 +139,16 @@ async function main() {
         admin.from('pipeline_runs').select('id, status, options, completed_at')
           .eq('client_id', client.id).order('id', { ascending: true }),
       ),
-      selectAll<{ run_id: string | null; sent_at: string | null }>(() =>
-        admin.from('report_sends').select('run_id, sent_at')
-          .eq('client_id', client.id).eq('status', 'sent').order('sent_at', { ascending: true }),
+      selectAll<{ run_id: string | null; sent_at: string | null; status: string }>(() =>
+        // Every status, not just 'sent': cadenceReliability decides which ones
+        // settle a run (a review hold and a recipient-less schedule are not misses).
+        admin.from('report_sends').select('run_id, sent_at, status')
+          .eq('client_id', client.id).order('claimed_at', { ascending: true }),
       ),
     ])
     const cadence = cadenceReliability(
       runRows.map((r) => ({ id: r.id, status: r.status, options: r.options, completedAt: r.completed_at })),
-      reportRows.map((r) => ({ runId: r.run_id, sentAt: r.sent_at })),
+      reportRows.map((r) => ({ runId: r.run_id, sentAt: r.sent_at, status: r.status })),
     )
 
     // ---- 4. Gate verdicts ---------------------------------------------------

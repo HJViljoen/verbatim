@@ -222,9 +222,47 @@ describe('assessPipelineHealth — an owed report that never went out', () => {
     const f = assessPipelineHealth(inputs({
       clients: [client],
       runs: [owed(agoH(4))],
-      reportSends: [{ runId: 'r1', sentAt: agoH(3) }],
+      reportSends: [{ runId: 'r1', sentAt: agoH(3), status: 'sent' }],
     }))
     expect(f).toEqual([])
+  })
+
+  it('does not alert on a send held for review', () => {
+    // report_schedules.review is a shipped toggle: the build stops at a 'ready'
+    // send and waits for a member to press Send. Alerting on that would fire
+    // every morning on correct behaviour.
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [owed(agoH(4))],
+      reportSends: [{ runId: 'r1', sentAt: null, status: 'ready' }],
+    }))
+    expect(f).toEqual([])
+  })
+
+  it('does not alert on a schedule that had no recipients', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [owed(agoH(4))],
+      reportSends: [{ runId: 'r1', sentAt: null, status: 'skipped' }],
+    }))
+    expect(f).toEqual([])
+  })
+
+  it('still alerts when the only row is a claimed or failed send', () => {
+    for (const status of ['claimed', 'failed']) {
+      const f = assessPipelineHealth(inputs({
+        clients: [client],
+        runs: [owed(agoH(4))],
+        reportSends: [{ runId: 'r1', sentAt: null, status }],
+      }))
+      expect(kinds(f)).toEqual(['report_missed'])
+    }
+  })
+
+  it('stops naming a miss once it is two days old', () => {
+    // 14 days of daily nagging about one miss is how an alert stops being read.
+    expect(assessPipelineHealth(inputs({ clients: [client], runs: [owed(agoH(49))] }))).toEqual([])
+    expect(kinds(assessPipelineHealth(inputs({ clients: [client], runs: [owed(agoH(47))] })))).toEqual(['report_missed'])
   })
 
   it('does not blame a run that was never asked to report', () => {
