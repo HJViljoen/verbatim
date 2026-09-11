@@ -100,7 +100,6 @@ export function embedInput(ins: Pick<InsightRow, 'theme' | 'description'>): stri
  *  fine at Step A2's per-bucket sizes (≤ a few hundred insights).
  */
 export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
-  const n = vecs.length
   const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
   // sim[a][b] = average cross-pair similarity between clusters a and b.
   const sim: number[][] = vecs.map((vi) => vecs.map((vj) => cosine(vi, vj)))

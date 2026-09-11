@@ -11,10 +11,6 @@ import { sendAlertEmail } from '@/lib/email'
 // report_day; monthly runs fire on the 1st. Evaluated in Africa/Johannesburg so
 // report_day matches the user's local week. Runs 06:00 SAST.
 
-const WEEKDAYS = [
-  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
-] as const
-
 function localToday(tz = 'Africa/Johannesburg') {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, weekday: 'long', day: 'numeric',
