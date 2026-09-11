@@ -583,6 +583,14 @@ export function captureRunFlags(): RunFlags {
  *  and the erasure script looks for clones in it. */
 export const DEMO_CLIENT_ID = 'de300055-0000-4000-8000-000000000001'
 
+/** The two live tenants. Every CLI script defaults to one of them and twenty
+ *  of them held their own copy of the uuid; a tenant that ever needed moving
+ *  would have been moved in nineteen places and missed in one. The `--client`
+ *  flags are unchanged — these are defaults, not the only value a script can
+ *  take. */
+export const SEALAND_CLIENT_ID = 'ac16988e-c4f3-4baf-b388-73895852a554'
+export const OSSUR_CLIENT_ID = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
+
 /** Master switch for the retention sweep. OFF unless set, so the cron deploys
  *  dormant and its first pass is something an operator watches rather than
  *  something that happens at 04:00. It is the only destructive job in the

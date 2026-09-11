@@ -13,7 +13,7 @@ import { createAdminClient, selectAll } from '../lib/supabase-admin'
 //   … --dormant <id> --apply          (retire an entry; next run opens a fresh one)
 //   … --revive <id> --apply
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
 interface Args {
   clientId: string

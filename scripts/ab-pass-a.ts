@@ -23,7 +23,7 @@ import type { VideoRow } from '../lib/pipeline/types'
 // columns end up holding the v4 (transcript-grounded) values.
 // Synthesis comparison happens separately via run-cd.ts --run <each arm>.
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
 type Bucket = 'client' | 'competitor' | 'industry'
 const bucketOf = (v: Pick<VideoRow, 'is_client' | 'is_competitor'>): Bucket =>

@@ -1,5 +1,6 @@
 import { randomUUID, createHash } from 'crypto'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
+import { DEMO_CLIENT_ID, OSSUR_CLIENT_ID } from '../lib/config'
 import { computeMetrics } from '../lib/pipeline/metrics'
 import type { VideoRow, CommentRow, Step2aMetrics } from '../lib/pipeline/types'
 import { runStep2c } from '../lib/pipeline/owned-events'
@@ -31,10 +32,9 @@ import { ensureDefaultSchedule } from '../lib/schedules/default'
 
 // ---- constants --------------------------------------------------------------
 
-const OSSUR_CLIENT_ID = 'e52cac94-30e1-426a-9a36-31b11e0b30b6' // read-only source
+// OSSUR_CLIENT_ID is the read-only source of every SELECT here (lib/config).
 const SOURCE_RUN_ID = 'f9548a97-ded0-44ea-b727-2ffee709f09e'   // the full completed Ossur run
 
-const DEMO_CLIENT_ID = 'de300055-0000-4000-8000-000000000001'
 const DEMO_EMAIL = 'demo@verbatimintel.com'
 
 // Fixed run ids (W1 oldest → W6 newest) so re-runs are stable.

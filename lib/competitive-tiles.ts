@@ -298,7 +298,7 @@ export function shareSeries(history: Pick<HistoryRow, 'run_date' | 'share_of_voi
 
 /** Reading order: lead with strength, then threats, gaps, tone; anything the
  *  model files elsewhere comes last. */
-export const CATEGORY_ORDER = ['topic_ownership', 'competitive_threat', 'content_gap', 'sentiment_differential', 'engagement_benchmark', 'notable_account', 'organic_vs_paid'] as const
+export const CATEGORY_ORDER = ['topic_ownership', 'competitive_threat', 'content_gap', 'sentiment_differential', 'engagement_benchmark', 'notable_account'] as const
 
 export type KindTone = 'lead' | 'threat' | 'gap' | 'tone' | 'other'
 
@@ -311,7 +311,6 @@ const KINDS: Record<string, Kind> = {
   sentiment_differential: { label: 'Sentiment differential', tone: 'tone', blurb: 'the same topic, a different emotional tone across brands' },
   engagement_benchmark: { label: 'Engagement benchmark', tone: 'other', blurb: 'a cross-brand performance contrast' },
   notable_account: { label: 'Account to watch', tone: 'other', blurb: 'a high-signal account in the category' },
-  organic_vs_paid: { label: 'Organic vs paid', tone: 'other', blurb: 'how the conversation splits between earned and paid' },
 }
 
 export function kindOf(category: string | null | undefined): Kind {

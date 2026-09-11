@@ -9,7 +9,7 @@ import { embedTexts, cosine } from '../lib/pipeline/cluster'
 // data, not guessed. Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/citation-floor.ts [--client <uuid>] [--run <uuid>]
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
 function parseArgs(argv: string[]): { clientId: string; runId?: string } {
   const args = { clientId: SEALAND as string, runId: undefined as string | undefined }

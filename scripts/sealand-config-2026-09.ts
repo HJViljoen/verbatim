@@ -16,7 +16,7 @@ import type { SubredditEntry } from '../lib/gather/types'
 // fall back to the category bucket rather than keep a competitor name nothing
 // tracks any more.)
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
 /**
  * Competitor accounts, resolved live 2026-09-09 and verified before being

@@ -13,7 +13,7 @@ import { runPassA, type RunPassAOptions } from '../lib/pipeline/pass-a'
 //   --dry-run            assemble prompts + estimate tokens, no API calls / writes
 //   --no-persist         run live calls but don't write to DB
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
+import { OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 
 function parseArgs(argv: string[]): RunPassAOptions & { dryRun: boolean } {
   const opts: RunPassAOptions & { dryRun: boolean } = {
