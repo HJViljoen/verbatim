@@ -653,33 +653,38 @@ export async function fetchOwnProfile(
     // The actor's `dateRange` is search-only (confirmed against its input
     // schema 2026-09-09), so a profile census is "pull the ceiling, then cut to
     // the window" — the one platform where the window costs items we discard.
-    const read = () => runActor(APIFY_ACTORS.tiktok.video, {
+    const read = (timeoutSecs: number) => runActor(APIFY_ACTORS.tiktok.video, {
       startUrls: [`https://www.tiktok.com/@${handle}`],
       maxItems: since ? OWN_POSTS_CEILING : OWN_POSTS_SNAPSHOT,
       // Keep the media + caption fields — without the passthrough the actor
       // trims them and the transcript layer has nothing to resolve.
       customMapFunction: '(object) => { return {...object} }',
-    }, { timeoutSecs: 300 })
-    let raw = await read()
+    }, { timeoutSecs })
+    let raw = await read(300)
     // "Succeeded with zero items" is a flake signature runActor's retry cannot
     // see: fetchWithRetry only retries transport errors, and this run reports
     // success. Instagram has had a fallback for it since 0762f66 (a second read
-    // mode); TikTok has no second mode, so the guard is one honest retry. A
-    // Rareform census came back empty exactly this way on 2026-09-09.
+    // mode); TikTok has no second mode, so the guard is one retry. A Rareform
+    // census came back empty exactly this way on 2026-09-09.
+    //
+    // The retry gets a SHORTER timeout on purpose: both reads live in one
+    // Inngest step and the route's maxDuration is 300s, so two full-length
+    // attempts could outlive the function that is awaiting them.
     if (since && raw.length === 0) {
-      raw = await read()
+      const retried = await read(120)
+      if (retried.length > 0) {
+        // The reads disagree, which is proof the first one flaked. Worth saying.
+        console.warn(`[owned] tiktok census for @${handle} returned 0 then ${retried.length} on retry — first read flaked`)
+        raw = retried
+      } else {
+        // Both empty. This is NOT raised as a run warning: a zero-item profile
+        // read is indistinguishable from an account that genuinely has no
+        // videos, and a registered-but-unused handle would then alert every
+        // week forever. Logged, not alarmed.
+        console.warn(`[owned] tiktok census for @${handle} returned 0 posts twice — empty account or an unrecoverable read`)
+      }
     }
-    const profile = ttProfile(handle, raw, ctx)
-    // Still nothing. Say so on the run rather than let a census of zero pass as
-    // a measurement — "you published nothing" and "we could not read your
-    // account" must never look the same on the page.
-    if (since && raw.length === 0) {
-      profile.warnings = [
-        ...(profile.warnings ?? []),
-        `tiktok census read for @${handle} returned 0 posts twice; the count for this account is unverified`,
-      ]
-    }
-    return profile
+    return ttProfile(handle, raw, ctx)
   }
   throw new Error(`no own-profile fetcher for platform: ${platform}`)
 }

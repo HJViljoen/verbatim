@@ -27,6 +27,25 @@ import { normForMatch } from './quote-match'
 // category definition drops "age" and a rule keeps identity disclosures out of
 // every other quote. A version bump re-reads the corpus on the next run when
 // INCREMENTAL_PASS_A is on; that is the cost of a prompt change (AGENTS.md).
+// DELIBERATELY NOT BUMPED for the 2026-09-11 classified_type/hook_style
+// definitions, and that is a decision, not an oversight.
+//
+// Bumping re-reads every eligible video on the next run. For Sealand that is
+// thousands of videos of real OpenAI spend, landing unannounced on whichever
+// run happens to go next — Össur's Sunday, most likely. Whether to pay to
+// re-label the back catalogue is Heinrich's call to make deliberately, not a
+// side effect of a prompt edit.
+//
+// The cost of NOT bumping, stated plainly so it is not discovered later:
+// videos analysed before this change keep labels the model chose when it was
+// given bare enum names, videos analysed after get labels chosen against the
+// definitions, and nothing on any surface distinguishes the two. Content's
+// hook_style comparison averages both regimes. classify-meta is stricter still
+// — it only picks up videos where classified_type IS NULL, so those labels do
+// not change until someone nulls the column.
+//
+// To re-label deliberately: bump PROMPT_VERSION_V4 and run with
+// INCREMENTAL_PASS_A on, knowing it re-reads the corpus once.
 const PROMPT_VERSION = 'pass_a_v3.1'
 const PROMPT_VERSION_V4 = 'pass_a_v4.1'
 const MAX_CLAIMS_PER_VIDEO = 3
@@ -539,13 +558,22 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // scripts. A video row carries its transcript, so an uncapped scan of a
     // grown corpus is the same memory hazard that hung Postgres on 2026-09-09.
     // Cap it loudly rather than pull the table.
-    videoRows = await selectAll<VideoRow>(buildVideos)
-    if (!videoIds?.length && videoRows.length > PASS_A_UNBOUNDED_CAP) {
-      throw new Error(
-        `pass A loaded ${videoRows.length} videos with no videoIds and no --limit ` +
-        `(cap ${PASS_A_UNBOUNDED_CAP}). Pass --limit or a video-id batch: video rows carry ` +
-        `transcripts and an uncapped scan can exhaust the database.`,
-      )
+    if (!videoIds?.length) {
+      // Ask for one row more than the cap and stop there. Reading everything
+      // and THEN complaining would already have done the damage the cap exists
+      // to prevent — these rows carry transcripts.
+      const { data, error: vErr } = await buildVideos().limit(PASS_A_UNBOUNDED_CAP + 1)
+      if (vErr) throw new Error(`load videos: ${vErr.message}`)
+      if ((data ?? []).length > PASS_A_UNBOUNDED_CAP) {
+        throw new Error(
+          `pass A asked for the whole corpus with no videoIds and no --limit ` +
+          `(cap ${PASS_A_UNBOUNDED_CAP}). Pass --limit or a video-id batch: video rows carry ` +
+          `transcripts and an uncapped scan can exhaust the database.`,
+        )
+      }
+      videoRows = (data ?? []) as VideoRow[]
+    } else {
+      videoRows = await selectAll<VideoRow>(buildVideos)
     }
   }
 

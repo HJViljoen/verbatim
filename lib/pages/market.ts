@@ -167,7 +167,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
 
   // Latest COMPLETED update — an in-flight one has no synthesis rows yet, so
   // the page keeps serving the previous read until the new one closes.
-  const [{ data: client }, { data: latestRun }, newsRes, themedRunId] = await Promise.all([
+  const [{ data: client }, { data: latestRun }, newsRes, { data: runningRuns }] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -180,16 +180,28 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .eq('client_id', clientId).lte('ring', 2)
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(NEWS_SHOWN),
-    // The last update whose theme pass actually produced rows. Every other read
-    // on this page stays on the latest update; the theme reads below fall back
-    // the way Voice does, so a run that gathered but produced no themes doesn't
-    // empty the page's quote scoping (lib/pages/themed-run).
-    fetchThemedRunId(supabase, clientId),
+    // In-flight updates, so the themed-run lookup below can exclude them.
+    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
   ])
   const brand = client?.company_name ?? 'Your brand'
 
   if (!latestRun) return { empty: true, brand, legendItems: LEGEND_ITEMS }
   const runId = latestRun.id as string
+
+  // The last update whose theme pass actually produced rows — normally this
+  // update; when its theme pass produced none, the page keeps serving the last
+  // themes read rather than emptying (lib/pages/themed-run).
+  //
+  // In-flight updates are excluded, exactly as Dashboard and Voice exclude
+  // them. Theme rows are written per run and land BEFORE close-run, so without
+  // this an update still running is the newest themed run: the early-signal
+  // pills would show an unfinished update's themes while every other read on
+  // this page is still on the last completed one, and the bucket map would be
+  // keyed to a run whose insight ids the page never cites — which empties the
+  // map and makes scopeToClientVoices fail open. That is the exact hole this
+  // page's quote scoping exists to close.
+  const runningIds = ((runningRuns ?? []) as { id: string }[]).map((r) => r.id)
+  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds)
 
   const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRes] = await Promise.all([
     supabase.from('market_insights')

@@ -9,7 +9,8 @@ import { loadBrandClaims, shapeBrandVoice } from '../lib/pipeline/claims'
 import { persistThemes } from '../lib/pipeline/themes'
 import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, periodSince } from '../lib/config'
+import { buildOwnedCensus } from '../lib/gather/owned'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
 import type { CommentRow, SynthesisVideoRow } from '../lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '../lib/pipeline/types'
@@ -102,7 +103,7 @@ async function main() {
 
   const { data: tc } = await admin
     .from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles, competitor_handles')
     .eq('client_id', args.clientId)
     .maybeSingle()
 
@@ -227,6 +228,17 @@ async function main() {
       periodMetrics, periodVideos: periodVideos.filter(isDiscoveredVideo),
       ciSummary: d.ciSummary, executiveBrief: d.executiveBrief, sayVsHear: d.sayVsHear,
       brandVoice: shapeBrandVoice(claims, tc?.brand_keywords ?? []), period: tc?.report_period ?? null,
+      // The census, like the Inngest half. Without it this script writes
+      // owned_census null, and the surfaces that count own posts through the
+      // census (Content's "Your own posts", the share tile) silently lose the
+      // row — a CLI-driven synthesis must not leave the app poorer than an
+      // Inngest one.
+      ownedCensus: buildOwnedCensus(videos, {
+        handles: (tc?.own_handles ?? {}) as Record<string, string>,
+        competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
+        since: window.since ?? periodSince(tc?.report_period ?? 'weekly'),
+        until: new Date().toISOString().slice(0, 10),
+      }),
     })
     console.log('\nrun_summary written.')
   }
