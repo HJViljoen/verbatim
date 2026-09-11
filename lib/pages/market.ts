@@ -16,6 +16,7 @@ import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
 import { row, rows } from './read'
+import { selectAll } from '../supabase-admin'
 import { fetchRunningRunIds } from './latest-video-run'
 
 // Market Intelligence loader — the data half of the old app/dashboard/market/
@@ -207,7 +208,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // page's quote scoping exists to close.
   const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'market')
 
-  const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRes] = await Promise.all([
+  const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRows] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId)
@@ -228,12 +229,21 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
     // Entity buckets per audience insight — quote pools on this page are
     // client-facing claims, so competitor-audience voices are scoped out.
-    // `label` + `member_themes` ride along for the grounding chips: the chip
-    // must read as the Voice card it opens, and the two have said different
-    // things about the same theme since the chips were built off the raw slug.
-    supabase.from('themes')
-      .select('bucket, supporting_insight_ids, label, member_themes, strength_score')
-      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
+    // `label`, `member_themes` and the Voice ordering keys ride along for the
+    // grounding chips: the chip must name the theme Voice LEADS with for that
+    // slug, and the two have said different things about the same theme since
+    // the chips were built off the raw slug.
+    //
+    // selectAll, not a bare select: one run's themes cross the 1000-row cap
+    // (Sealand's latest is at 936 and every update adds), and a silent cap here
+    // would drop chip labels AND empty part of the bucket map, which makes
+    // scopeToClientVoices fail open — a competitor's customers quoted under a
+    // claim about the client, with nothing in the log.
+    selectAll<ThemeBucketRow & GroundingThemeRow>(() =>
+      supabase.from('themes')
+        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, rank_score')
+        .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
+    ),
   ])
 
   const insights = rows<MarketInsight>(miRes, 'market.marketInsights')
@@ -261,7 +271,6 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // base table (fetchInsightsByIds), not the current view (incremental Pass A).
   const citedIds = new Set<string>()
   for (const mi of insights) for (const id of mi.evidence?.supporting_theme_ids ?? []) citedIds.add(id)
-  const bucketRows = rows<ThemeBucketRow & GroundingThemeRow>(bucketRes, 'market.themeBuckets')
   for (const t of bucketRows) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
   const audienceRows = await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null; platform: string | null }>(
     supabase, [...citedIds], 'id, theme, source_video_id, platform',

@@ -6,6 +6,7 @@
 // signal") that lib/curation assigns.
 
 import { CURATION_GATE, gateTier, type GateTier } from './curation'
+import { byThemeLead } from './voice-tiles'
 
 // ── recommendations: the agenda ───────────────────────────────────────────
 
@@ -204,22 +205,30 @@ export interface ThemeChip { slug: string; label: string | null }
 export interface GroundingThemeRow {
   label: string | null
   member_themes: string[] | null
-  strength_score: number | null
+  evidence_count: number
+  rank_score?: number | null
 }
 
-/** insight slug → the curated label of this run's theme that holds it. A slug
- *  can sit in more than one theme (clusters are per bucket, and a rec can cite
- *  both); the strongest theme wins, ties by label so the map is deterministic —
- *  it is also the one that leads the Voice list the chip links to. */
+/** insight slug → the curated label of this run's theme that holds it.
+ *
+ *  A slug routinely sits in more than one theme (clusters are per bucket, and
+ *  one rec can cite both), so this has to pick the SAME one Voice opens on:
+ *  the chip links to `?themes=<slug>`, Voice keeps every theme whose
+ *  `member_themes` holds it, orders them with `byThemeLead` and leads with the
+ *  first (`poolFor(...)[0]`, lib/pages/voice.ts). Ordering by anything else —
+ *  strength_score, say — puts a different name on the chip than on the card it
+ *  opens, which is the defect the chips were changed to fix. Label asc is the
+ *  last tie-break, so the map is deterministic. */
 export function labelsBySlug(themes: GroundingThemeRow[]): Map<string, string> {
-  const best = new Map<string, { label: string; score: number }>()
+  const best = new Map<string, GroundingThemeRow & { label: string }>()
   for (const t of themes) {
     const label = t.label?.trim()
     if (!label) continue
-    const score = Number(t.strength_score ?? 0)
     for (const slug of t.member_themes ?? []) {
       const cur = best.get(slug)
-      if (!cur || score > cur.score || (score === cur.score && label < cur.label)) best.set(slug, { label, score })
+      if (!cur || byThemeLead(t, cur) < 0 || (byThemeLead(t, cur) === 0 && label < cur.label)) {
+        best.set(slug, { ...t, label })
+      }
     }
   }
   return new Map([...best].map(([slug, b]) => [slug, b.label]))

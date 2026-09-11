@@ -140,15 +140,33 @@ describe('tier counts + news chips', () => {
 
 describe('grounding chips', () => {
   const themes = [
-    { label: 'Comfort in daily wear', member_themes: ['comfort_fit', 'all_day_comfort'], strength_score: 8 },
-    { label: 'Durability in the field', member_themes: ['strap_wear'], strength_score: 6 },
-    // Same slug in a second (weaker) theme — a slug can be cited from more
-    // than one bucket; the chip must read as the card that leads Voice.
-    { label: 'Sizing confusion', member_themes: ['comfort_fit'], strength_score: 3 },
-    { label: '  ', member_themes: ['blank_label'], strength_score: 9 },
+    { label: 'Comfort in daily wear', member_themes: ['comfort_fit', 'all_day_comfort'], evidence_count: 12, rank_score: 4 },
+    { label: 'Durability in the field', member_themes: ['strap_wear'], evidence_count: 9, rank_score: 3 },
+    // Same slug in a second theme — a slug can be cited from more than one
+    // bucket; the chip must read as the card that leads Voice.
+    { label: 'Sizing confusion', member_themes: ['comfort_fit'], evidence_count: 4, rank_score: 9 },
+    { label: '  ', member_themes: ['blank_label'], evidence_count: 40, rank_score: 9 },
   ]
 
-  it('labels a slug with the strongest theme that holds it', () => {
+  it('labels a slug with the theme Voice leads with, not the strongest', () => {
+    // The keys Voice orders by are evidence_count then rank_score — NOT
+    // strength_score, which is what this used to sort on. On the live corpora
+    // the two disagreed for 30 of Össur's 123 multi-theme slugs and 25 of
+    // Sealand's 84, and every one of those chips named a card other than the
+    // one the chip opened.
+    const m = labelsBySlug([
+      { label: 'Heard by more people', member_themes: ['s'], evidence_count: 20, rank_score: 1 },
+      { label: 'Ranked higher, heard less', member_themes: ['s'], evidence_count: 5, rank_score: 99 },
+    ])
+    expect(m.get('s')).toBe('Heard by more people')
+    const tied = labelsBySlug([
+      { label: 'Bravo', member_themes: ['s'], evidence_count: 7, rank_score: 2 },
+      { label: 'Alpha', member_themes: ['s'], evidence_count: 7, rank_score: 2 },
+    ])
+    expect(tied.get('s')).toBe('Alpha') // label asc is the last tie-break
+  })
+
+  it('labels a slug with the theme that holds it', () => {
     const m = labelsBySlug(themes)
     expect(m.get('comfort_fit')).toBe('Comfort in daily wear')
     expect(m.get('all_day_comfort')).toBe('Comfort in daily wear')

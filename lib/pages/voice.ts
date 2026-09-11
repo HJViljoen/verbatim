@@ -8,7 +8,7 @@ import { prevalenceTier, type GlossaryKey, type PrevalenceTier } from '../calibr
 import { fmtCompact, weekdayDate, platformLabel } from '../format'
 import { latestPerDay } from '../dashboard-tiles'
 import {
-  themeTrajectories, themeMovers, voiceTiers, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
+  themeTrajectories, themeMovers, voiceTiers, byThemeLead, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
 import { pickThemedRunId } from './themed-run'
@@ -279,15 +279,20 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // already holds every update's theme rows, so this costs no round trip.
   const themedRunId = pickThemedRunId([...runDates].map(([run_id, created_at]) => ({ run_id, created_at })), runningIds)
 
-  const themesRes = themedRunId
-    ? await supabase.from('themes')
-        .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
-        .eq('client_id', clientId).eq('run_id', themedRunId)
-        .order('evidence_count', { ascending: false })
-        .order('rank_score', { ascending: false, nullsFirst: false })
-    : { data: null, error: null }
-
-  const themes = readRows<ThemeRow>(themesRes, 'voice.themes')
+  // selectAll: this is the page's whole theme corpus for one update, and one
+  // update crosses the 1000-row cap (Sealand's latest is at 936). A bare
+  // select would drop the tail silently — the heard-once tier, and with it the
+  // member_themes a grounding deep link matches on.
+  const themes = themedRunId
+    ? await selectAll<ThemeRow>(() =>
+        supabase.from('themes')
+          .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
+          .eq('client_id', clientId).eq('run_id', themedRunId)
+          .order('evidence_count', { ascending: false })
+          .order('rank_score', { ascending: false, nullsFirst: false })
+          .order('id'),
+      )
+    : []
   const updatesCount = runDates.size
   // The page is dated by the update its themes came from — the map, the movers
   // and the list are all read from it, so the date stays truthful when the
@@ -335,7 +340,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // deep link shows exactly the themes behind that insight, singles included.
   const poolFor = (shownThemes: ThemeRow[]) => (deepLinked ? shownThemes : voiceTiers(shownThemes).confirmed)
     .slice()
-    .sort((a, b) => b.evidence_count - a.evidence_count || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0))
+    .sort(byThemeLead)
   const ribbonIdsFor = (pool: ThemeRow[]) => pool.slice(0, RIBBON_THEMES).flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
   // The theme pane (2026-08-28): ?theme=<id> selects a theme beside the map —
   // the old ?detail=<themeId> drawer links still land — and the widest-heard

@@ -211,6 +211,18 @@ export function themeMovers(trajectories: Trajectory[]): Trajectory[] {
 
 // ── tiers ─────────────────────────────────────────────────────────────────
 
+/** The keys that decide which theme LEADS a list of themes on Voice: widest
+ *  heard first (evidence_count = real conversations), then the run's own
+ *  salience order. Exported because Market's grounding chips must name the
+ *  same winner — a chip that says one thing and opens a card saying another is
+ *  the mismatch the chips were fixed to end (A1) — and two copies of an
+ *  ordering rule drift. */
+export interface ThemeLeadRow { evidence_count: number; rank_score?: number | null }
+
+export function byThemeLead(a: ThemeLeadRow, b: ThemeLeadRow): number {
+  return b.evidence_count - a.evidence_count || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0)
+}
+
 export interface VoiceTierRow { single_source: boolean | null; strength_score: number | null }
 
 /** Voice's three tiers as lists: confirmed = heard in more than one
