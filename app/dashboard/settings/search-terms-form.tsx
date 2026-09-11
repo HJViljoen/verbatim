@@ -64,7 +64,7 @@ function TermList({
 
       {/* The terms themselves. Hidden inputs carry them, one per term, so a
           term containing a comma survives the round trip. */}
-      <ul className="flex flex-wrap gap-1.5">
+      <ul className="flex flex-1 flex-wrap content-start gap-1.5">
         {terms.map((t) => (
           <li key={t}>
             <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-tile py-0.5 pl-2.5 pr-1 text-[11.5px] shadow-block">
@@ -85,7 +85,9 @@ function TermList({
         {terms.length === 0 && <li className="text-[11.5px] text-muted-foreground">none yet</li>}
       </ul>
 
-      <div className="flex items-center gap-1.5">
+      {/* mt-auto: the three lists are equal-height grid cells, so the add rows
+          line up even when one list's chips wrap onto a second line. */}
+      <div className="mt-auto flex items-center gap-1.5">
         <Input
           value={draft}
           onChange={(e) => { setDraft(e.target.value); setError(null) }}
