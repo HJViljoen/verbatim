@@ -252,7 +252,13 @@ interface CensusRow {
   upload_date?: string | null
 }
 
-const norm = (x: string | null | undefined) => (x ?? '').trim().toLowerCase()
+/** How an account name is compared everywhere the census rule is applied.
+ *  Deliberately NOT gather/util `fold`, which also strips diacritics: both
+ *  sides of a comparison must normalise identically, and "Össur" folded is
+ *  "ossur" while normalised it stays "össur". Exported so no caller can pick
+ *  the other one by accident. */
+export const normAccount = (x: string | null | undefined) => (x ?? '').trim().toLowerCase()
+const norm = normAccount
 
 /**
  * The EXACT own-post count per account for the window — the number behind "you
@@ -293,6 +299,56 @@ export function buildOwnedCensus(
   return census
 }
 
+/** The account names that ARE this entity, per platform: the configured handle
+ *  plus every account name the owned read itself stored for it. That second
+ *  half is the bridge to rows the keyword gather found FIRST and therefore left
+ *  on source 'discovered' forever (stampOwnedSource keeps source stable for
+ *  metric continuity). Identity, not source, is what makes a post the brand's.
+ *
+ *  Exported so every surface that asks "is this ours" asks it the same way.
+ *  Three different answers used to exist — a source string, a brand-keyword
+ *  fold, and this — and they disagreed on screen. */
+export function ownAccountNames(
+  rows: CensusRow[],
+  handles: Record<string, string>,
+  who: { source: string; competitorName?: string },
+): Map<string, Set<string>> {
+  const ownNames = new Map<string, Set<string>>()
+  for (const [platform, handle] of Object.entries(handles)) {
+    if (!handle) continue
+    ownNames.set(platform, new Set([norm(handle)]))
+  }
+  for (const r of rows) {
+    if (r.source !== who.source || !ownNames.has(r.platform)) continue
+    if (who.competitorName && norm(r.competitor_name) !== norm(who.competitorName)) continue
+    if (r.account_name) ownNames.get(r.platform)!.add(norm(r.account_name))
+  }
+  return ownNames
+}
+
+/** Every row this entity published inside the window — the exact set the census
+ *  counts, returned as rows.
+ *
+ *  Undated rows are excluded: a census is a count, and a post we cannot date
+ *  cannot be counted into a window. */
+export function ownedPostsIn<T extends CensusRow>(
+  rows: T[],
+  handles: Record<string, string>,
+  who: { source: string; competitorName?: string },
+  window: { since: string; until: string },
+): T[] {
+  const ownNames = ownAccountNames(rows, handles, who)
+  return rows.filter((r) => {
+    if (!ownNames.has(r.platform)) return false
+    const belongs = who.competitorName
+      ? r.is_competitor && norm(r.competitor_name) === norm(who.competitorName)
+      : r.is_client
+    if (!belongs) return false
+    if (!r.upload_date || r.upload_date < window.since || r.upload_date > window.until) return false
+    return ownNames.get(r.platform)!.has(norm(r.account_name))
+  })
+}
+
 /** One entity's per-platform counts, written into `into`. */
 function countAccounts(
   rows: CensusRow[],
@@ -301,30 +357,27 @@ function countAccounts(
   window: { since: string; until: string },
   into: Record<string, OwnedCensusEntry>,
 ): void {
-  const ownNames = new Map<string, Set<string>>()
+  // A configured handle always gets an entry, even at zero posts: "you posted
+  // nothing this window" is a fact worth printing.
   for (const [platform, handle] of Object.entries(handles)) {
     if (!handle) continue
-    ownNames.set(platform, new Set([norm(handle)]))
     into[platform] = { posts: 0, since: window.since, until: window.until, handle }
   }
-  // Names the owned read itself stored for this account — the bridge to rows
-  // the keyword gather found first and left on source 'discovered'.
-  for (const r of rows) {
-    if (r.source !== who.source || !ownNames.has(r.platform)) continue
-    if (who.competitorName && norm(r.competitor_name) !== norm(who.competitorName)) continue
-    if (r.account_name) ownNames.get(r.platform)!.add(norm(r.account_name))
-  }
-  for (const r of rows) {
+  for (const r of ownedPostsIn(rows, handles, who, window)) {
     const entry = into[r.platform]
-    if (!entry) continue
-    const belongs = who.competitorName
-      ? r.is_competitor && norm(r.competitor_name) === norm(who.competitorName)
-      : r.is_client
-    if (!belongs) continue
-    if (!r.upload_date || r.upload_date < window.since || r.upload_date > window.until) continue
-    if (!ownNames.get(r.platform)?.has(norm(r.account_name))) continue
-    entry.posts++
+    if (entry) entry.posts++
   }
+}
+
+/** The window a stored census was computed for. Every platform entry carries
+ *  the same one; the first that exists answers. Null when there is no census. */
+export function censusWindow(
+  census: OwnedCensus | null | undefined,
+): { since: string; until: string } | null {
+  for (const e of Object.values(census?.client ?? {})) {
+    if (e?.since && e?.until) return { since: e.since, until: e.until }
+  }
+  return null
 }
 
 /** The client's own posts across every platform — the share tile's headline

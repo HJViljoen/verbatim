@@ -102,7 +102,7 @@ async function main() {
 
   const { data: tc } = await admin
     .from('tracking_configs')
-    .select('brand_keywords, competitor_names, industry_keywords, report_period')
+    .select('brand_keywords, competitor_names, industry_keywords, report_period, own_handles')
     .eq('client_id', args.clientId)
     .maybeSingle()
 
@@ -121,7 +121,7 @@ async function main() {
 
   // Brand claims (Step 2b) — all-time, newest-run-per-video, tracked
   // competitors only; empty for tenants that have never run Pass A v4.
-  const claims = await loadBrandClaims(admin, args.clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [])
+  const claims = await loadBrandClaims(admin, args.clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [], (tc?.own_handles ?? {}) as Record<string, string>)
   if (claims.client.length || claims.about.length || claims.competitors.length) {
     console.log(`\nBrand claims: ${claims.client.length} own voice · ${claims.about.length} about you · ${claims.competitors.length} competitor`)
   }

@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  acceptSnapshot,
-  followerFloorPct,
-  supportsOwnedProfile,
-  emptyProfileIsGlitch,
-  stampOwnedSource,
-  ownedRawRows,
-  igRawsByShortcode,
-  ownPostsInWindow,
-  stopUploadsWalk,
-  buildOwnedCensus,
-  ownedCensusTotal,
-  ownedCommentRefs,
-  entityIdentity,
-  entitySlug,
-  OWN_POSTS_CEILING,
-} from './owned'
+import { acceptSnapshot, followerFloorPct, supportsOwnedProfile, emptyProfileIsGlitch, stampOwnedSource, ownedRawRows, igRawsByShortcode, ownPostsInWindow, stopUploadsWalk, buildOwnedCensus, ownedCensusTotal, ownedCommentRefs, entityIdentity, entitySlug, OWN_POSTS_CEILING, ownedPostsIn, ownAccountNames, normAccount, censusWindow } from './owned'
 import { shareFootnoteLead } from '../calibration'
 
 describe('supportsOwnedProfile', () => {
@@ -379,5 +363,47 @@ describe("stampOwnedSource keeps a known row's source, and stamps the right one 
 
   it('still defaults to owned for the client', () => {
     expect(stampOwnedSource([{ video_id: 'a' }], []).map((r) => r.source)).toEqual(['owned'])
+  })
+})
+
+describe('one definition of "our post" (2026-09-11)', () => {
+  const handles = { instagram: 'sealandsa', tiktok: 'sealandsa' }
+  const rows = [
+    // Found off the owned read — carries source 'owned'.
+    { platform: 'instagram', source: 'owned', is_client: true, is_competitor: false, competitor_name: null, account_name: 'sealandsa', upload_date: '2026-09-05' },
+    // The SAME account, but keyword search found this one first, so it is
+    // stuck on 'discovered' forever. It is still a post the brand published.
+    { platform: 'instagram', source: 'discovered', is_client: true, is_competitor: false, competitor_name: null, account_name: 'sealandsa', upload_date: '2026-09-06' },
+    // Outside the window.
+    { platform: 'instagram', source: 'discovered', is_client: true, is_competitor: false, competitor_name: null, account_name: 'sealandsa', upload_date: '2026-01-01' },
+    // Someone else talking about the brand.
+    { platform: 'instagram', source: 'discovered', is_client: true, is_competitor: false, competitor_name: null, account_name: 'some_reviewer', upload_date: '2026-09-06' },
+  ]
+  const window = { since: '2026-08-15', until: '2026-09-11' }
+
+  it('counts a sticky-discovered own post, because identity decides, not source', () => {
+    const kept = ownedPostsIn(rows, handles, { source: 'owned' }, window)
+    expect(kept.map((r) => r.upload_date)).toEqual(['2026-09-05', '2026-09-06'])
+  })
+
+  it('gives the same answer as the census it is extracted from', () => {
+    const census = buildOwnedCensus(rows, { handles, since: window.since, until: window.until })
+    expect(census.client.instagram.posts).toBe(ownedPostsIn(rows, handles, { source: 'owned' }, window).length)
+  })
+
+  it('learns account names off the owned rows', () => {
+    const names = ownAccountNames(rows, handles, { source: 'owned' })
+    expect(names.get('instagram')?.has('sealandsa')).toBe(true)
+    expect(names.get('instagram')?.has('some_reviewer')).toBe(false)
+  })
+
+  it('normalises case without stripping accents, so Össur stays Össur', () => {
+    expect(normAccount('  Össur  ')).toBe('össur')
+  })
+
+  it('reads the window back off a stored census', () => {
+    const census = buildOwnedCensus(rows, { handles, since: window.since, until: window.until })
+    expect(censusWindow(census)).toEqual(window)
+    expect(censusWindow(null)).toBeNull()
   })
 })

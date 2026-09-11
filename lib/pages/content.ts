@@ -18,6 +18,7 @@ import {
   type EntityRow, type EntityPlaybook, type EntityKind,
   type Intent, type InboxRow, type InboxSource,
 } from '../content-tiles'
+import { censusWindow, ownedPostsIn, type OwnedCensus } from '../gather/owned'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // Content loader — the data half of the old app/dashboard/videos/page.tsx +
@@ -332,6 +333,19 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   if (runningIds.length) vidQ = vidQ.not('run_id', 'in', `(${runningIds.join(',')})`)
   const { data: latestVid } = await vidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle()
 
+  /** The own-posts query's row: the numbers the tile needs, plus the identity
+ *  columns the census rule reads. Satisfies both OwnPost and CensusRow. */
+interface OwnPostRow extends OwnPost {
+  platform: string
+  account_name: string | null
+  source: string | null
+  upload_date: string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+}
+
+const ownHandleMap = ((tc as { own_handles?: Record<string, string> } | null)?.own_handles ?? {}) as Record<string, string>
   const ownHandles = new Set(
     Object.values(((tc as { own_handles?: Record<string, string> } | null)?.own_handles ?? {}) as Record<string, string>)
       .filter((h): h is string => typeof h === 'string' && h.length > 0)
@@ -346,16 +360,25 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // Discovered videos only — the client's own posts are a different segment
   // (Owned-Data-Plan: "segment, never blend") and never mix into market content
   // intelligence.
-  const [all, ownPosts] = await Promise.all([
+  const [all, ownPosts, { data: summary }] = await Promise.all([
     selectAll<VideoRow>(() => supabase.from('videos')
       .select('id, platform, account_name, account_followers, video_url, views, likes, engagement_rate, upload_date, duration_seconds, audio_name, transcript_status, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
       .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered')
       .order('views', { ascending: false }).order('id', { ascending: true })),
     // The other side of that segment, for the field tile's own-posts row only:
-    // what the client itself posted in the same update. Nothing else on this
-    // page may read it.
-    selectAll<OwnPost>(() => supabase.from('videos').select('views, engagement_rate')
-      .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'owned').order('id', { ascending: true })),
+    // what the client itself published in the census WINDOW. Nothing else on
+    // this page may read it.
+    //
+    // Candidates, not the answer: the census decides which of these are the
+    // brand's, below. Scoping this query to run_id + source 'owned' (as it did
+    // until 2026-09-11) counted only posts this run happened to capture off the
+    // owned read — 11 where the census said 36 — because a post the keyword
+    // gather found first keeps source 'discovered' forever.
+    selectAll<OwnPostRow>(() => supabase.from('videos')
+      .select('views, engagement_rate, platform, account_name, source, upload_date, is_client, is_competitor, competitor_name')
+      .eq('client_id', clientId).eq('is_client', true).order('id', { ascending: true })),
+    // The census this update froze — its window is the one the own-posts row counts over.
+    supabase.from('run_summary').select('owned_census').eq('client_id', clientId).eq('run_id', videoRunId).maybeSingle(),
   ])
 
   // ── the inbox ──────────────────────────────────────────────────────────
@@ -384,7 +407,17 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
     ...scoreboard.filter((r) => r.kind === 'category'),
   ].map((r) => ({ ...r, label: fieldRowLabel(r) }))
   // The client's own posts lead, above the market — segment, never blend.
-  const own = ownPostsRow(ownPosts)
+  //
+  // Counted by the census's own rule, over the census's own window, so the
+  // number here and the "Posts by the brand" number cannot disagree: same
+  // function, same inputs. With no stored census there is no window to count,
+  // and the row is omitted rather than guessed.
+  const ownedCensus = (summary?.owned_census ?? null) as OwnedCensus | null
+  const window = censusWindow(ownedCensus)
+  const ownPostsInWindow = window
+    ? ownedPostsIn(ownPosts, ownHandleMap, { source: 'owned' }, window)
+    : []
+  const own = ownPostsRow(ownPostsInWindow)
   const fieldRows: EntityRow[] = [...(own ? [{ ...own, medianDuration: null }] : []), ...marketRows]
   const fieldEngMax = Math.max(...fieldRows.map((r) => r.avgEng ?? 0), 0)
   const sentence = fieldSentence(scoreboard)

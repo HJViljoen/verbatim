@@ -1,5 +1,6 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { fold } from '../gather/util'
+import { ownAccountNames, normAccount } from '../gather/owned'
 
 // Brand-claims loader (Step 2b; hygiene hardened for real runs 2026-08-08).
 // Claims are durable brand messaging captured by Pass A v4 from client/
@@ -109,10 +110,21 @@ export function shapeBrandVoice(claims: BrandClaims, brandKeywords: string[] | n
 export const THIRD_PARTY_ACCOUNT_WORDS = ['review', 'reviews', 'reviewer', 'unboxing', 'fan', 'fans', 'fanpage', 'vs', 'versus']
 
 export function ownVoice(
-  v: { source: string | null | undefined; account_name: string | null | undefined },
+  v: {
+    source: string | null | undefined
+    account_name: string | null | undefined
+    platform?: string | null | undefined
+  },
   brandKeywords: string[] | null | undefined,
+  /** The brand's account names per platform, from the census rule
+   *  (lib/gather/owned.ts ownAccountNames). Authoritative when supplied: a post
+   *  the keyword gather found first keeps source 'discovered' forever, so
+   *  source alone under-counts the brand's own voice. The keyword fold below
+   *  stays as the fallback for callers that cannot supply this. */
+  ownNames?: Map<string, Set<string>>,
 ): boolean {
   if (v.source === 'owned') return true
+  if (v.platform && v.account_name && ownNames?.get(v.platform)?.has(normAccount(v.account_name))) return true
   const acct = fold(v.account_name ?? '')
   if (!acct) return false
   const words = new Set(acct.split(/[^a-z0-9]+/).filter(Boolean))
@@ -214,6 +226,9 @@ export async function loadBrandClaims(
   clientId: string,
   trackedCompetitors: string[],
   brandKeywords: string[] | null | undefined = [],
+  /** tracking_configs.own_handles. Lets the client/about split use the same
+   *  account-identity rule the census counts by, instead of source alone. */
+  ownHandles: Record<string, string> | null | undefined = {},
 ): Promise<BrandClaims> {
   interface JoinedRow {
     run_id: string
@@ -236,6 +251,13 @@ export async function loadBrandClaims(
       .order('created_at', { ascending: false })
       .order('id', { ascending: true }),
   )
+  // The brand's account names, learned the same way the census learns them.
+  const joined = raw.map((r) => (Array.isArray(r.videos) ? r.videos[0] : r.videos) ?? null)
+  const ownNames = ownAccountNames(
+    joined.map((v) => ({ platform: v?.platform ?? '', source: v?.source ?? null, account_name: v?.account_name ?? null })),
+    ownHandles ?? {},
+    { source: 'owned' },
+  )
   const rows: ClaimRow[] = raw.map((r) => {
     const v = (Array.isArray(r.videos) ? r.videos[0] : r.videos) ?? null
     return {
@@ -246,7 +268,7 @@ export async function loadBrandClaims(
       claim: r.claim,
       quote: r.quote,
       voice: r.entity === 'client'
-        ? (ownVoice({ source: v?.source, account_name: v?.account_name }, brandKeywords) ? 'own' : 'about')
+        ? (ownVoice({ source: v?.source, account_name: v?.account_name, platform: v?.platform }, brandKeywords, ownNames) ? 'own' : 'about')
         : undefined,
       account: v?.account_name ?? null,
       platform: v?.platform ?? null,

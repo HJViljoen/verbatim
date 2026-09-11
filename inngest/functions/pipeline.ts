@@ -1311,7 +1311,7 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   // tracked competitors only; empty for tenants that never ran Pass A v4.
   // Client claims split by voice: `client` = the brand speaking (own posts +
   // own accounts) → say-vs-hear; `about` = third parties → the About-you block.
-  const claims = await loadBrandClaims(admin, clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [])
+  const claims = await loadBrandClaims(admin, clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [], (tc?.own_handles ?? {}) as Record<string, string>)
 
   // Floor-passing themes only — early signals surface on pages, not in C/D.
   const themes = (await loadThemes(clientId, runId)).filter((t) => !t.singleSource)
