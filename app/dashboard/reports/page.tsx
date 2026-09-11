@@ -234,7 +234,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <DetailSection label="Files and links">
           <div className="flex flex-wrap items-center gap-3">
             {artifact ? (
-              <a href={`/api/artifacts/${artifact.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the PDF · {fmtBytes(artifact.bytes)}{artifact.stale ? ' · re-renders' : ''}{selectedSend.report_schedules?.attach_pdf ? ' · was attached' : ''}</a>
+              <a href={`/api/artifacts/${artifact.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the PDF · {fmtBytes(artifact.bytes)}{artifact.stale ? ' · rebuilt on download' : ''}{selectedSend.report_schedules?.attach_pdf ? ' · was attached' : ''}</a>
             ) : <span className="text-[12px] text-muted-foreground">No PDF stored.</span>}
           </div>
           <div className="mt-3"><ShareLinks snapshotId={selectedSend.snapshot_id} links={shareLinks} /></div>
@@ -268,7 +268,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Link href={viewerHref(BASE, { group: 'built', item: selectedBuild.id }, selectedBuild.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open the report</Link>
           {selectedBuild.artifacts.map((a) => (
-            <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · re-renders' : ''}</a>
+            <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · rebuilt on download' : ''}</a>
           ))}
           {selectedBuild.report_id && <Link href={`/dashboard/studio?item=${selectedBuild.report_id}`} className="text-[12px] font-medium underline underline-offset-2">Open in the Studio</Link>}
         </div>

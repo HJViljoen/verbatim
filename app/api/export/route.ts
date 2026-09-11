@@ -125,6 +125,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ artifactId: artifact.id, snapshotId: snap.id, url, ms, bytes: artifact.bytes })
   } catch (e) {
     console.error('[export] failed:', e)
-    return NextResponse.json({ error: 'Couldn’t render this — try again.' }, { status: 500 })
+    // Reader-facing: no "render", no "snapshot", no "artifact" (calibrated copy).
+    return NextResponse.json({ error: 'Couldn’t make that file — try again.' }, { status: 500 })
   }
 }
