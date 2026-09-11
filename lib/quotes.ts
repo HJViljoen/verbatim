@@ -383,6 +383,53 @@ export async function fetchQuoteTextsByRefs(
   return out
 }
 
+/** Whose post a video is, read LIVE from `videos`.
+ *
+ *  The same rule Step A2 uses to stamp `themes.bucket` (lib/pipeline/step-a2.ts),
+ *  kept identical on purpose. The difference is when it is evaluated: a theme
+ *  bucket is a snapshot frozen at the run that wrote it, so a re-tag
+ *  (scripts/run-tagging.ts --write) moves `videos.is_client` and leaves every
+ *  stored bucket saying the old thing. Reading it live is the only answer that
+ *  cannot be stale.
+ */
+export function videoBucketOf(v: {
+  is_client?: boolean | null
+  is_competitor?: boolean | null
+  competitor_name?: string | null
+}): string {
+  if (v.is_client) return 'client'
+  if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
+  return 'industry-other'
+}
+
+/** audience-insight id → entity bucket, resolved through each insight's source
+ *  video's CURRENT tags. Insights with no source video are absent from the map
+ *  (the caller falls back to the stored theme bucket for those). */
+export async function fetchLiveBucketsByAudience(
+  client: unknown,
+  insights: { id: string; source_video_id: string | null }[],
+): Promise<Map<string, string>> {
+  const c = client as EvidenceClient
+  const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
+  if (!videoIds.length) return new Map()
+  const rows = await fetchChunks<{
+    id: string
+    is_client: boolean | null
+    is_competitor: boolean | null
+    competitor_name: string | null
+  }>(videoIds, (chunk) =>
+    c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk),
+  )
+  const bucketByVideo = new Map(rows.map((r) => [r.id, videoBucketOf(r)]))
+  const out = new Map<string, string>()
+  for (const i of insights) {
+    if (!i.source_video_id) continue
+    const b = bucketByVideo.get(i.source_video_id)
+    if (b) out.set(i.id, b)
+  }
+  return out
+}
+
 /** Insight fields for a SET OF IDS, chunked to stay under the PostgREST URL cap.
  *  Reads the BASE table, never `audience_insights_current`: ids stored by the
  *  run a page is displaying must still resolve while a NEWER run has superseded

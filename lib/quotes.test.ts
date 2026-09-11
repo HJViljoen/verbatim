@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   createCitedQuotePicker,
   bucketByAudienceId,
+  videoBucketOf,
+  fetchLiveBucketsByAudience,
   scopeToClientVoices,
   scopeToCompetitor,
   readsAsHeroQuote,
@@ -33,6 +35,90 @@ describe('scopeToClientVoices', () => {
 
   it('passes everything through when no bucket map exists (old runs)', () => {
     expect(scopeToClientVoices(['k1'], new Map())).toEqual(['k1'])
+  })
+})
+
+describe('videoBucketOf — live entity, not a cached one', () => {
+  it('reads the client, a named competitor and the rest', () => {
+    expect(videoBucketOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
+    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
+    expect(videoBucketOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
+  })
+
+  it('matches Step A2 for a competitor with no name', () => {
+    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: null })).toBe('competitor:unknown')
+  })
+})
+
+describe('fetchLiveBucketsByAudience', () => {
+  // Minimal stand-in for the supabase admin client: one `videos` select.
+  const clientReturning = (rows: unknown[]) => ({
+    from: () => ({ select: () => ({ in: () => Promise.resolve({ data: rows, error: null }) }) }),
+  })
+
+  it('maps each insight to its source video\'s CURRENT tags', async () => {
+    const admin = clientReturning([
+      { id: 'v-client', is_client: true, is_competitor: false, competitor_name: null },
+      { id: 'v-patagonia', is_client: false, is_competitor: true, competitor_name: 'Patagonia' },
+    ])
+    const out = await fetchLiveBucketsByAudience(admin, [
+      { id: 'a1', source_video_id: 'v-client' },
+      { id: 'a2', source_video_id: 'v-patagonia' },
+    ])
+    expect(out.get('a1')).toBe('client')
+    expect(out.get('a2')).toBe('competitor:Patagonia')
+  })
+
+  it('leaves an insight with no source video unmapped', async () => {
+    const out = await fetchLiveBucketsByAudience(clientReturning([]), [{ id: 'a1', source_video_id: null }])
+    expect(out.has('a1')).toBe(false)
+  })
+})
+
+describe('the live entity gate (the 2026-09-10 Patagonia answer)', () => {
+  it('drops a competitor-sourced insight the stored themes never bucketed', async () => {
+    // The bug: 'p2' came off a Patagonia video but the run's themes did not
+    // mention it, so scopeToClientVoices kept it and the agent quoted it under
+    // "What your customers said".
+    const stored = bucketByAudienceId(themes)
+    expect(scopeToClientVoices(['c1', 'p2'], stored)).toEqual(['c1', 'p2']) // the old behaviour
+
+    const admin = {
+      from: () => ({
+        select: () => ({
+          in: () => Promise.resolve({
+            data: [{ id: 'v9', is_client: false, is_competitor: true, competitor_name: 'Patagonia' }],
+            error: null,
+          }),
+        }),
+      }),
+    }
+    const live = await fetchLiveBucketsByAudience(admin, [{ id: 'p2', source_video_id: 'v9' }])
+    const merged = new Map(stored)
+    for (const [id, bucket] of live) merged.set(id, bucket)
+    expect(scopeToClientVoices(['c1', 'p2'], merged)).toEqual(['c1'])
+  })
+
+  it('rescues a client insight whose stored bucket is stale after a re-tag', async () => {
+    // The mirror error: the stored bucket says competitor, the video is now
+    // tagged as the client's own. Live tags win in both directions.
+    const stored = bucketByAudienceId([{ bucket: 'competitor:Cotopaxi', supporting_insight_ids: ['x1'] }])
+    expect(scopeToClientVoices(['x1'], stored)).toEqual([])
+
+    const admin = {
+      from: () => ({
+        select: () => ({
+          in: () => Promise.resolve({
+            data: [{ id: 'v1', is_client: true, is_competitor: false, competitor_name: null }],
+            error: null,
+          }),
+        }),
+      }),
+    }
+    const live = await fetchLiveBucketsByAudience(admin, [{ id: 'x1', source_video_id: 'v1' }])
+    const merged = new Map(stored)
+    for (const [id, bucket] of live) merged.set(id, bucket)
+    expect(scopeToClientVoices(['x1'], merged)).toEqual(['x1'])
   })
 })
 

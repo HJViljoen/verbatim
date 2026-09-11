@@ -4,6 +4,7 @@ import {
   bucketByAudienceId,
   scopeToClientVoices,
   fetchInsightsByIds,
+  fetchLiveBucketsByAudience,
   fetchQuoteCitationsByAudience,
   type QuoteCitation,
 } from '../quotes'
@@ -179,12 +180,6 @@ export async function retrieveForQueries(
     }
     for (const id of t.supporting_insight_ids ?? []) if (!themeByInsight.has(id)) themeByInsight.set(id, ref)
   }
-  const scoped = new Set(scopeToClientVoices(fused.map((f) => f.id), bucketById))
-  const kept = fused.filter((f) => scoped.has(f.id))
-  if (kept.length === 0) {
-    return { insights: [], conversationCount: 0, emptyQueries, runId }
-  }
-
   // Base table, not the view: these are id-set lookups, and AGENTS.md keeps
   // those on the base table so a row an in-flight run has superseded but not
   // yet pruned still resolves.
@@ -196,11 +191,32 @@ export async function retrieveForQueries(
     journey_stage: string | null
     source_video_id: string | null
   }
+  // Resolve BEFORE scoping: the authoritative entity of an insight is the
+  // current tag on the video it came from, and that is only knowable once the
+  // rows (and their source_video_id) are in hand. `fused` is already capped at
+  // `limit`, so this fetch is bounded.
   const rows = await fetchInsightsByIds<InsightRowLite>(
     admin,
-    kept.map((k) => k.id),
+    fused.map((f) => f.id),
     'id, theme, description, emotion, journey_stage, source_video_id',
   )
+
+  // The entity gate. A stored theme bucket is a snapshot frozen at the run that
+  // wrote it, and `scopeToClientVoices` keeps ids it does not recognise — so on
+  // 2026-09-10 the agent answered "what do people think of Sealand" with a
+  // Patagonia comment under "What your customers said": that insight was either
+  // absent from the current run's themes or still carried a pre-re-tag bucket.
+  // Live tags win; the stored bucket is only the fallback for an insight with
+  // no source video to ask about.
+  const liveBucketById = await fetchLiveBucketsByAudience(admin, rows)
+  const entityBucketById = new Map(bucketById)
+  for (const [id, bucket] of liveBucketById) entityBucketById.set(id, bucket)
+
+  const scoped = new Set(scopeToClientVoices(fused.map((f) => f.id), entityBucketById))
+  const kept = fused.filter((f) => scoped.has(f.id))
+  if (kept.length === 0) {
+    return { insights: [], conversationCount: 0, emptyQueries, runId }
+  }
   const rowById = new Map(rows.map((r) => [r.id, r]))
   const quotesById = await fetchQuoteCitationsByAudience(admin, kept.map((k) => k.id))
 
@@ -217,7 +233,7 @@ export async function retrieveForQueries(
       emotion: row.emotion,
       journeyStage: row.journey_stage,
       videoId: row.source_video_id,
-      bucket: bucketById.get(row.id) ?? 'industry-other',
+      bucket: entityBucketById.get(row.id) ?? 'industry-other',
       themeRef: themeByInsight.get(row.id) ?? null,
       similarity: hit.bestSimilarity,
       quotes: (quotesById.get(row.id) ?? []).sort((a, b) => a.rank - b.rank),

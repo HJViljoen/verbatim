@@ -6,7 +6,7 @@ import { ANALYSIS_MODEL, SYNTHESIS_MODEL, estimateCost, ASK_MAX_CLAIMS, ASK_THEM
 import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { embedTexts } from '../pipeline/cluster'
-import { bucketByAudienceId, fetchInsightsByIds, fetchQuotesByAudience, scopeToClientVoices } from '../quotes'
+import { bucketByAudienceId, fetchInsightsByIds, fetchLiveBucketsByAudience, fetchQuotesByAudience, scopeToClientVoices } from '../quotes'
 import { normaliseRef, shortlistThemes, summarise, validateJudgement, validateVerdicts, type AskTheme, type RawVerdict } from './verdicts'
 import type { AskResult, ClaimResult, ExtractedClaim } from './types'
 
@@ -204,19 +204,28 @@ export async function verdictPass(
   const bucketById = bucketByAudienceId(
     themes.map((t) => ({ bucket: t.bucket, supporting_insight_ids: t.insightIds })),
   )
-  const poolIds = scopeToClientVoices(
-    [...new Set(shortlists.flatMap((s) => s.themes.flatMap((t) => t.insightIds.slice(0, 40))))],
-    bucketById,
-  )
-  const quotesByAudience = poolIds.length ? await fetchQuotesByAudience(admin, poolIds) : new Map()
+  const candidateIds = [...new Set(shortlists.flatMap((s) => s.themes.flatMap((t) => t.insightIds.slice(0, 40))))]
 
   // What the verdicts get checked against: which of those insights still exist,
   // which actually carry a quotable comment, and which video each came from.
   // The base table, not the view — stored ids must resolve even when a newer
   // run has superseded the rows but not yet pruned them.
-  const insightRows = poolIds.length
-    ? await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(admin, poolIds, 'id, source_video_id')
+  //
+  // Fetched BEFORE scoping so the entity gate can read each insight's source
+  // video's CURRENT tags: a stored theme bucket is frozen at the run that wrote
+  // it, and scopeToClientVoices keeps ids it does not recognise. Same gate as
+  // the agent path (lib/agent/retrieve.ts), same reason.
+  const candidateRows = candidateIds.length
+    ? await fetchInsightsByIds<{ id: string; source_video_id: string | null }>(admin, candidateIds, 'id, source_video_id')
     : []
+  const liveBucketById = await fetchLiveBucketsByAudience(admin, candidateRows)
+  const entityBucketById = new Map(bucketById)
+  for (const [id, bucket] of liveBucketById) entityBucketById.set(id, bucket)
+
+  const poolIds = scopeToClientVoices(candidateIds, entityBucketById)
+  const poolSet = new Set(poolIds)
+  const insightRows = candidateRows.filter((r) => poolSet.has(r.id))
+  const quotesByAudience = poolIds.length ? await fetchQuotesByAudience(admin, poolIds) : new Map()
   const liveInsightIds = new Set(insightRows.map((r) => r.id))
   const quotedInsightIds = new Set([...quotesByAudience.keys()] as string[])
 
