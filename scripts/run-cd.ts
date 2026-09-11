@@ -11,7 +11,7 @@ import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
-import type { VideoRow, CommentRow, SynthesisVideoRow } from '../lib/pipeline/types'
+import type { CommentRow, SynthesisVideoRow } from '../lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '../lib/pipeline/types'
 
 // CLI orchestrator for the back half of the analysis chain: cross-reference →

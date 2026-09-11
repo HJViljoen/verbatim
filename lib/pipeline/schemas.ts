@@ -22,6 +22,54 @@ export const HOOK_STYLES = [
   'controversy', 'demonstration', 'listicle', 'trend-riding', 'shock-value',
 ] as const
 
+/** What each classified_type MEANS. Written because the two prompts used to
+ *  hand the model the bare labels and let it infer from the words alone — and
+ *  several of these overlap in ordinary English (tutorial/how-to/educational,
+ *  review/testimonial), so the model was drawing the lines rather than us.
+ *  Every neighbouring enum in these prompts (insight_category, journey_stage)
+ *  is defined a clause each; these now match.
+ *
+ *  Keep in lockstep with CLASSIFIED_TYPES — classifiedTypeLines() asserts it. */
+export const CLASSIFIED_TYPE_DEFS: Record<(typeof CLASSIFIED_TYPES)[number], string> = {
+  tutorial: 'teaches a repeatable skill step by step, so the viewer can do it themselves.',
+  review: 'one product or service judged by someone who used it, reaching a verdict.',
+  comparison: 'two or more named options set against each other.',
+  testimonial: "a person's own outcome told as endorsement — what it did for them, not a verdict on features.",
+  unboxing: 'opening or first-looking at a product, reacting to what is in the box.',
+  'how-to': 'solves ONE specific task by the shortest route. A tutorial teaches the skill; a how-to fixes the thing.',
+  story: 'a narrative with events over time, told for its own sake.',
+  challenge: 'taking part in a named format, dare or trend that has rules.',
+  'behind-the-scenes': 'how the thing is made, or what happens off camera.',
+  educational: 'explains how something works or why it is true — understanding, not a procedure (that is tutorial).',
+  promotional: 'exists to sell or announce: offers, launches, discounts, a call to buy.',
+  entertainment: 'made to amuse. No instructional, commercial or narrative purpose beyond the laugh.',
+}
+
+/** What each hook_style MEANS. hook_style is about the OPENING SECONDS only —
+ *  not the video's overall shape. A tutorial can open on a bold claim. */
+export const HOOK_STYLE_DEFS: Record<(typeof HOOK_STYLES)[number], string> = {
+  question: 'opens by asking the viewer something.',
+  statistic: 'opens with a number or a measured claim.',
+  'bold-claim': 'opens with a strong assertion stated as fact, carrying no number.',
+  'personal-story': 'opens in the first person with something that happened to the speaker.',
+  'before-after': 'opens on a transformation or the contrast between two states.',
+  controversy: 'opens by taking a contested side, or naming a disagreement.',
+  demonstration: 'opens by showing the thing working, in use, mid-action.',
+  listicle: 'opens by announcing a counted list.',
+  'trend-riding': 'opens on a current sound, format, meme or event.',
+  'shock-value': 'opens with something startling or extreme, to stop the scroll.',
+}
+
+/** The definition block as prompt lines, in enum order. Throws if a value ever
+ *  loses its definition, so the two cannot drift apart silently. */
+export function enumDefLines(values: readonly string[], defs: Record<string, string>): string[] {
+  return values.map((v) => {
+    const d = defs[v]
+    if (!d) throw new Error(`no definition for enum value "${v}"`)
+    return `- ${v}: ${d}`
+  })
+}
+
 export const VIDEO_SENTIMENTS = ['positive', 'negative', 'neutral', 'mixed'] as const
 
 export const INSIGHT_CATEGORIES = [

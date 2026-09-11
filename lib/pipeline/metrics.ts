@@ -1,4 +1,4 @@
-import type { VideoRow, SynthesisVideoRow, CommentRow, Step2aMetrics, SovEntry, PlatformSummary } from './types'
+import type { SynthesisVideoRow, CommentRow, Step2aMetrics, SovEntry, PlatformSummary } from './types'
 
 // Step 2a — deterministic metrics (Architecture/Analysis-Passes §Step 2a).
 // No GPT. Counts/percentages computed here and templated into prompts/outputs

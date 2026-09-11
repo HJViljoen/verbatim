@@ -2,7 +2,7 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
-import { PassAVideoSchema, PassAVideoSchemaV4, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
+import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
 import { usableTranscript } from './transcript-input'
@@ -208,6 +208,12 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
     `- Brand: ${brand}`,
     `- Competitors: ${competitors}`,
     `- Industry: ${industry}`,
+    '',
+    'Video types (apply these definitions strictly):',
+    ...enumDefLines(CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS),
+    '',
+    "Hook styles — the OPENING SECONDS only, not the video's overall shape:",
+    ...enumDefLines(HOOK_STYLES, HOOK_STYLE_DEFS),
     '',
     'Insight categories (apply these definitions strictly):',
     '- pain_point: a problem, frustration, or unmet need with a product, the category, or the lived experience. NOT general sadness or sympathy.',

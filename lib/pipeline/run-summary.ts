@@ -1,6 +1,6 @@
 import { createAdminClient } from '../supabase-admin'
 import type { CiSummary, ExecutiveBrief, SayVsHearEntry } from './schemas'
-import type { VideoRow, SynthesisVideoRow, Step2aMetrics } from './types'
+import type { SynthesisVideoRow, Step2aMetrics } from './types'
 import type { BrandVoiceSnapshot } from './claims'
 import type { OwnedCensus } from '../gather/owned'
 
