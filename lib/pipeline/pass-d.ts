@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
@@ -12,6 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
+import { assignLineage, type PriorRec } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -752,7 +754,12 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
         rejectedRefs++
       }
     }
+    // Minted here, not by the column default, so a row that starts its own
+    // lineage carries `lineage_id = id` in ONE insert — and so a lineage read
+    // that fails still leaves every row with a valid identity of its own.
+    const id = randomUUID()
     return {
+      id,
       client_id: clientId,
       run_id: runId,
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
@@ -761,8 +768,19 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
       hero_quote: validateQuote(rec.hero_quote),
+      lineage_id: id,
+      status: 'new',
     }
   })
+
+  // ---- lineage: carry the client's status across the replace ----------------
+  // Pass D-b deletes and reinserts every recommendation, so without this a
+  // status the client set on Monday is gone by Sunday. Best-effort by design:
+  // continuity is worth an embedding call, never worth a failed update.
+  let lineageLog: Record<string, number> = {}
+  if (persist && recRows.length) {
+    lineageLog = await applyLineage(admin, clientId, runId, recRows)
+  }
 
   if (persist) {
     // Replace only after a successful parse — a failed call leaves the old rows.
@@ -785,7 +803,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB,
-      response: { recommendations: recRows.length, rejected_refs: rejectedRefs },
+      response: { recommendations: recRows.length, rejected_refs: rejectedRefs, ...lineageLog },
       error: null, usage: b.usage, durationMs: b.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
@@ -795,6 +813,82 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
 
   out.rejectedRefs = rejectedRefs
   return out
+}
+
+/** Rows carried by `applyLineage` — the insert shape's lineage half. */
+interface LineageTarget {
+  id: string
+  type: string
+  title: string
+  lineage_id: string
+  status: string
+}
+
+/**
+ * Read the previous update's recommendations and carry their identity — and
+ * any status the client set — onto the rows about to be inserted. Mutates
+ * `rows` in place; returns counters for the AI log.
+ *
+ * The I/O half of `rec-lineage.ts` (the matching itself is pure and tested
+ * there). Everything here is best-effort: a missing previous update, a failed
+ * embedding call or a lineage column that does not exist yet all leave every
+ * row with the self-lineage it was minted with. Continuity is worth an
+ * embedding call (a dozen short titles, ~0 cost against a run that spends
+ * dollars on synthesis); it is never worth failing an update over.
+ */
+async function applyLineage(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  runId: string,
+  rows: LineageTarget[],
+): Promise<Record<string, number>> {
+  try {
+    // The previous update's set: newest rows for this client that are not this
+    // update's, narrowed to the single run they came from. `recommendations`
+    // holds a handful of rows per update, so this never approaches the 1000-row
+    // cap that would need selectAll.
+    const { data, error } = await admin
+      .from('recommendations')
+      .select('id, lineage_id, type, title, status, run_id, created_at')
+      .eq('client_id', clientId)
+      .neq('run_id', runId)
+      .order('created_at', { ascending: false })
+      .limit(60)
+    if (error) throw new Error(error.message)
+    const recent = (data ?? []) as (PriorRec & { run_id: string })[]
+    const prevRunId = recent[0]?.run_id
+    const priors = recent.filter((r) => r.run_id === prevRunId)
+    if (priors.length === 0) return { lineage_priors: 0 }
+
+    let newVectors: number[][] = []
+    let priorVectors: number[][] = []
+    try {
+      const vecs = await embedTexts([...rows.map((r) => r.title), ...priors.map((r) => r.title)])
+      newVectors = vecs.slice(0, rows.length)
+      priorVectors = vecs.slice(rows.length)
+    } catch {
+      // Exact-title matching still works without vectors.
+    }
+
+    const assigned = assignLineage(rows, priors, newVectors, priorVectors)
+    let inheritedStatus = 0
+    assigned.forEach((a, i) => {
+      rows[i].lineage_id = a.lineageId
+      if (a.status) {
+        rows[i].status = a.status
+        inheritedStatus++
+      }
+    })
+    return {
+      lineage_priors: priors.length,
+      lineage_matched: assigned.filter((a) => a.matchKind !== 'new').length,
+      lineage_status_carried: inheritedStatus,
+    }
+  } catch {
+    // Logged as a counter rather than thrown: the update ships, every
+    // recommendation reads New for one more week.
+    return { lineage_error: 1 }
+  }
 }
 
 /**
