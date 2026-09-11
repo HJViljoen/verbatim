@@ -102,6 +102,16 @@ describe('buildTranslatePrompt', () => {
     expect(p.system).toMatch(/no commentary|never comment/i)
   })
 
+  it('forbids repairing a garbled passage into something that makes sense', () => {
+    // The live check (2026-09-11) caught v1 returning a fluent, confident
+    // English sentence for a 102-char transcript ASR had reduced to non-words.
+    // A plausible sentence over a garbled source is a fabrication that nothing
+    // downstream can catch — the quote validator checks the ORIGINAL.
+    expect(p.system).toMatch(/NEVER repair/)
+    expect(p.system).toContain('[unintelligible]')
+    expect(p.system).toMatch(/fabrication/i)
+  })
+
   it('protects brand and product names from being translated', () => {
     expect(p.system).toMatch(/brand|product name/i)
   })

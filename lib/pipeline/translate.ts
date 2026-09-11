@@ -76,7 +76,16 @@ export function needsTranslation(v: TranslatableVideo): boolean {
   return true
 }
 
-const TRANSLATE_PROMPT_VERSION = 'translate_v1'
+// v1.1 (2026-09-11): the unintelligibility rule was rewritten after the live
+// check. On a 102-character Telugu-adjacent Hindi transcript that ASR had
+// reduced to non-words, v1 returned a fluent, confident English sentence that
+// the source does not say — the exact failure mode this feature exists to
+// remove, arriving by a different door. The sharper rule returns the same
+// passage marked [unintelligible], and re-running two clean samples (pt, de)
+// under it produced translations indistinguishable in quality from v1's. The
+// version string is diagnostic only (ai_call_log.prompt_version); nothing
+// re-reads on it.
+const TRANSLATE_PROMPT_VERSION = 'translate_v1.1'
 
 const translationSchema = z.object({
   translation: z.string(),
@@ -92,7 +101,7 @@ export function buildTranslatePrompt(text: string, lang: string | null): { syste
     '- Translate FAITHFULLY and COMPLETELY. Every sentence in the source gets a sentence in the output, in the same order. Do not summarise, condense, or drop filler, repetition, hesitation or profanity — the analysis reads tone and emphasis, not just content.',
     '- Plain, natural English. Render idiom as the nearest English idiom rather than word-for-word, but never embellish: if the speaker is vague, the translation is vague.',
     '- Keep brand names, product names, model numbers, handles and hashtags exactly as written in the source. Do not translate or localise them.',
-    '- Transcripts are machine-made and often messy: no punctuation, run-on speech, mis-heard words. Translate what is there. Where a passage is genuinely unintelligible, render it as [unintelligible] rather than inventing a plausible line.',
+    '- These transcripts are MACHINE-MADE and often wrong: mis-heard words, non-words, missing punctuation, sentences that cut off mid-word. Translate what is actually there. NEVER repair a passage into something that makes sense — a plausible English sentence over a garbled source is a fabrication, and downstream it becomes a false finding. Where a word or passage is not intelligible, write [unintelligible] in its place. A short transcript that is mostly non-words should come back mostly [unintelligible]; that is the correct answer, not a failure.',
     '- No commentary, no notes, no preamble, no labels. Return only the translation.',
     '- If the text is already English, return it unchanged.',
   ].join('\n')
