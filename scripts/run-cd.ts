@@ -11,7 +11,8 @@ import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
-import type { VideoRow, CommentRow } from '../lib/pipeline/types'
+import type { VideoRow, CommentRow, SynthesisVideoRow } from '../lib/pipeline/types'
+import { SYNTHESIS_VIDEO_COLUMNS } from '../lib/pipeline/types'
 
 // CLI orchestrator for the back half of the analysis chain: cross-reference →
 // Step A2 → Pass B → themes → Pass C → Pass D (a+b) → run_summary, over an
@@ -76,8 +77,10 @@ async function main() {
   // count everything relating to a brand — market videos about it AND the
   // brand's own posts (source 'owned' / 'competitor_owned'), bucketed by
   // identity. Their comments ride along via wantedVideos below.
-  const videos = await selectAll<VideoRow>(() => {
-    let q = admin.from('videos').select('*').eq('client_id', args.clientId)
+  // Columns, never `*` — same reason as the Inngest half: a video row carries
+  // its transcript, and reading the whole table hung Postgres on 2026-09-09.
+  const videos = await selectAll<SynthesisVideoRow>(() => {
+    let q = admin.from('videos').select(SYNTHESIS_VIDEO_COLUMNS).eq('client_id', args.clientId)
     if (args.platform !== 'all') q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
   })

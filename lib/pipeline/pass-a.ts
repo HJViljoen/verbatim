@@ -482,6 +482,9 @@ async function loadCommentsFor(
   return out
 }
 
+/** Refuse an uncapped whole-corpus Pass A read (transcript-bearing rows). */
+const PASS_A_UNBOUNDED_CAP = 2000
+
 export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> {
   const {
     clientId,
@@ -525,7 +528,19 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     if (vErr) throw new Error(`load videos: ${vErr.message}`)
     videoRows = (data ?? []) as VideoRow[]
   } else {
+    // Unbounded only when a caller asks for the whole corpus — the pipeline
+    // always passes videoIds (batches of PASS_A_BATCH), so this branch is CLI
+    // scripts. A video row carries its transcript, so an uncapped scan of a
+    // grown corpus is the same memory hazard that hung Postgres on 2026-09-09.
+    // Cap it loudly rather than pull the table.
     videoRows = await selectAll<VideoRow>(buildVideos)
+    if (!videoIds?.length && videoRows.length > PASS_A_UNBOUNDED_CAP) {
+      throw new Error(
+        `pass A loaded ${videoRows.length} videos with no videoIds and no --limit ` +
+        `(cap ${PASS_A_UNBOUNDED_CAP}). Pass --limit or a video-id batch: video rows carry ` +
+        `transcripts and an uncapped scan can exhaust the database.`,
+      )
+    }
   }
 
   // 3. Comments for those videos, grouped by (platform, video_id). Paginated —

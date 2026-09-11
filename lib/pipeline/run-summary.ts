@@ -1,6 +1,6 @@
 import { createAdminClient } from '../supabase-admin'
 import type { CiSummary, ExecutiveBrief, SayVsHearEntry } from './schemas'
-import type { VideoRow, Step2aMetrics } from './types'
+import type { VideoRow, SynthesisVideoRow, Step2aMetrics } from './types'
 import type { BrandVoiceSnapshot } from './claims'
 import type { OwnedCensus } from '../gather/owned'
 
@@ -18,14 +18,14 @@ export interface WriteRunSummaryArgs {
    *  sentiment. MARKET rows only (metrics.isDiscoveredVideo): `metrics` above
    *  counts a brand's own posts too (share rule, 2026-09-10), but this is how
    *  the audience received videos about the brand, so census rows stay out. */
-  videos: VideoRow[]
+  videos: SynthesisVideoRow[]
   /** Metrics over ONLY this run's gathered rows (period_* columns — the honest
    *  week-over-week layer; Teardown 2026-07-09). Optional: CLI callers that
    *  predate the split may omit it and period columns stay null. */
   periodMetrics?: Step2aMetrics
   /** This run's videos (run_id = current) — period sentiment distribution.
    *  Market rows only, same rule as `videos`. */
-  periodVideos?: VideoRow[]
+  periodVideos?: SynthesisVideoRow[]
   ciSummary: CiSummary | null
   /** Pass D-a's woven dashboard hero brief (already sanitised), or null. */
   executiveBrief?: ExecutiveBrief | null
@@ -67,13 +67,13 @@ export interface SentimentFamily {
  * full lane reads comments, so 'full' means audience and anything else means
  * framing. That is the same rule the migration's backfill applies.
  */
-export function sentimentSource(v: VideoRow): 'audience' | 'framing' {
+export function sentimentSource(v: SynthesisVideoRow): 'audience' | 'framing' {
   if (v.sentiment_source === 'audience') return 'audience'
   if (v.sentiment_source === 'framing') return 'framing'
   return v.analyzed_lane === 'full' ? 'audience' : 'framing'
 }
 
-export function sentimentFamily(videos: VideoRow[], family: 'audience' | 'framing'): SentimentFamily {
+export function sentimentFamily(videos: SynthesisVideoRow[], family: 'audience' | 'framing'): SentimentFamily {
   const counts = { positive: 0, neutral: 0, negative: 0, mixed: 0 }
   let judged = 0
   for (const v of videos) {

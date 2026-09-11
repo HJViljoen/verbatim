@@ -50,6 +50,29 @@ export interface VideoRow {
   analyzed_lane?: string | null
 }
 
+/** The columns the synthesis half actually reads.
+ *
+ *  Kept as a list because `select('*')` over this table is a memory hazard:
+ *  a video row carries `transcript`, and on 2026-09-09 a synthesis read of
+ *  ~3,043 Sealand rows hung Postgres for eight hours on a 224MB-shared_buffers
+ *  instance. Every column below is consumed downstream (computeMetrics,
+ *  buildOwnedCensus, isDiscoveredVideo, writeRunSummary's sentiment
+ *  distribution, the period-window filter); nothing else is. Add to this list
+ *  only alongside the code that reads the new column.
+ */
+export const SYNTHESIS_VIDEO_COLUMNS = 'id, run_id, platform, video_id, account_name, is_client, is_competitor, competitor_name, views, likes, shares, comments_count, upload_date, sentiment, sentiment_source, source, analyzed_lane'
+
+/** A video as the synthesis half reads it — SYNTHESIS_VIDEO_COLUMNS only.
+ *  Deliberately NOT VideoRow: the other columns are absent at runtime, and a
+ *  cast to VideoRow would hand a later reader `undefined` dressed as a value. */
+export type SynthesisVideoRow = Pick<
+  VideoRow,
+  | 'id' | 'run_id' | 'platform' | 'video_id' | 'account_name'
+  | 'is_client' | 'is_competitor' | 'competitor_name'
+  | 'views' | 'likes' | 'shares' | 'comments_count'
+  | 'upload_date' | 'sentiment' | 'sentiment_source' | 'source' | 'analyzed_lane'
+>
+
 export interface CommentRow {
   id: string
   client_id: string

@@ -32,7 +32,8 @@ import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
-import type { VideoRow, CommentRow } from '@/lib/pipeline/types'
+import type { VideoRow, CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
+import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
 
 // The full Verbatim pipeline as one durable Inngest function — the port of the
 // scripts/run-*.ts CLI sequence the orchestrator was always meant to own
@@ -1236,8 +1237,13 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   // below, deliberately: they are conversation about the brand too.
   // Anything in this half that must stay market-only filters at its own call
   // site with isDiscoveredVideo (today: the sentiment distribution).
-  const videos = await selectAll<VideoRow>(() =>
-    admin.from('videos').select('*').eq('client_id', clientId).order('id', { ascending: true }),
+  // Columns, never `*`: a video row carries its transcript, and reading the
+  // whole table hung Postgres for eight hours on 2026-09-09 (~3,043 Sealand
+  // rows, 224MB shared_buffers). SYNTHESIS_VIDEO_COLUMNS is exactly what the
+  // consumers below read — see lib/pipeline/types.ts.
+  const videos = await selectAll<SynthesisVideoRow>(() =>
+    admin.from('videos').select(SYNTHESIS_VIDEO_COLUMNS).eq('client_id', clientId)
+      .order('id', { ascending: true }),
   )
   // Load the client's comments in one paginated scan and filter to the corpus
   // videos IN MEMORY — a `.in('video_id', [all ids])` filter blows the URL length

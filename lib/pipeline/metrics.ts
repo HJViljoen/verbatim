@@ -1,4 +1,4 @@
-import type { VideoRow, CommentRow, Step2aMetrics, SovEntry, PlatformSummary } from './types'
+import type { VideoRow, SynthesisVideoRow, CommentRow, Step2aMetrics, SovEntry, PlatformSummary } from './types'
 
 // Step 2a — deterministic metrics (Architecture/Analysis-Passes §Step 2a).
 // No GPT. Counts/percentages computed here and templated into prompts/outputs
@@ -12,7 +12,7 @@ function videoKey(platform: string, videoId: string): string {
   return `${platform}::${videoId}`
 }
 
-function entityOf(v: VideoRow): string {
+function entityOf(v: SynthesisVideoRow): string {
   if (v.is_client) return 'client'
   if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
   return 'industry-other'
@@ -84,7 +84,7 @@ const round = (n: number, dp: number) => {
  * lands under its own brand rather than in 'industry-other'.
  */
 export function computeMetrics(
-  videos: VideoRow[],
+  videos: SynthesisVideoRow[],
   comments: CommentRow[],
   /** Video ids that produced at least one current insight. Lets share_of_voice
    *  carry what a finding can rest on, not just what we scraped (Tier 1). */
