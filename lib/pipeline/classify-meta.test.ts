@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildClassifySystemPrompt,
   buildClassifyUserPrompt,
+  isMissingColumnError,
   planClassifyBatches,
   validateClassifyResponse,
   type ClassifyInput,
@@ -78,5 +79,26 @@ describe('validateClassifyResponse', () => {
       ids,
     )
     expect([...out.keys()]).toEqual(['id-b'])
+  })
+})
+
+describe('isMissingColumnError — surviving a deploy that lands before its migration', () => {
+  // The model call is billed before the update runs, so a throw here loses the
+  // classification, re-bills it on every Inngest retry and closes the run
+  // `partial`. A bookkeeping column that does not exist yet must not cost that.
+  it('recognises the undefined-column error for that column', () => {
+    expect(isMissingColumnError({ code: '42703', message: `column "classified_prompt_version" of relation "videos" does not exist` }, 'classified_prompt_version')).toBe(true)
+  })
+
+  it('recognises the PostgREST schema-cache spelling of it', () => {
+    expect(isMissingColumnError({ code: 'PGRST204', message: "Could not find the 'classified_prompt_version' column of 'videos' in the schema cache" }, 'classified_prompt_version')).toBe(true)
+  })
+
+  it('does not swallow a real write failure', () => {
+    expect(isMissingColumnError({ code: '23502', message: 'null value in column "source" violates not-null constraint' }, 'classified_prompt_version')).toBe(false)
+    expect(isMissingColumnError({ code: '42703', message: `column "hook_style" does not exist` }, 'classified_prompt_version')).toBe(false)
+    expect(isMissingColumnError({ message: 'classified_prompt_version' }, 'classified_prompt_version')).toBe(false)
+    expect(isMissingColumnError(null, 'classified_prompt_version')).toBe(false)
+    expect(isMissingColumnError('42703', 'classified_prompt_version')).toBe(false)
   })
 })

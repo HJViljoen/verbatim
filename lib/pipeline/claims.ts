@@ -118,8 +118,9 @@ export function ownVoice(
   brandKeywords: string[] | null | undefined,
   /** The brand's account names per platform, from the census rule
    *  (lib/gather/owned.ts ownAccountNames). Authoritative when supplied: a post
-   *  the keyword gather found first keeps source 'discovered' forever, so
-   *  source alone under-counts the brand's own voice. The keyword fold below
+   *  the keyword gather found first kept source 'discovered' for life until
+   *  2026-09-11, and one from an account own_handles does not name still does,
+   *  so source alone under-counts the brand's own voice. The keyword fold below
    *  stays as the fallback for callers that cannot supply this. */
   ownNames?: Map<string, Set<string>>,
 ): boolean {

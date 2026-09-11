@@ -85,34 +85,25 @@ describe('stampOwnedSource', () => {
     // The 2026-08-16 YouTube failure: 2 of 12 posts already known, so those
     // rows carried no `source` key, PostgREST filled NULL, and the NOT NULL
     // constraint rejected the whole upsert (23502).
-    const rows = stampOwnedSource(posts, [{ video_id: 'a', source: 'discovered' }])
+    const rows = stampOwnedSource(posts)
     expect(rows.every((r) => typeof r.source === 'string' && r.source.length > 0)).toBe(true)
   })
 
-  it('keeps an already-discovered client post on the discovered layer', () => {
-    // Flipping it to 'owned' would drop it out of the SoV series and fake a
-    // share decline — metric continuity beats layer purity.
-    const rows = stampOwnedSource(posts, [{ video_id: 'a', source: 'discovered' }])
-    expect(rows.find((r) => r.video_id === 'a')!.source).toBe('discovered')
+  it("corrects a post the keyword gather found first (2026-09-11: source tells the truth)", () => {
+    // It used to stay 'discovered' for life, so share of voice could not fall
+    // when a row left the discovered layer. Share counts everything by AND
+    // about a brand since 2026-09-10, so the only thing the stickiness still
+    // bought was passALane putting the brand's own fans' comments through the
+    // audience lane.
+    expect(stampOwnedSource(posts).map((r) => r.source)).toEqual(['owned', 'owned', 'owned'])
   })
 
-  it("keeps a post already stored as 'owned' on the owned layer", () => {
-    const rows = stampOwnedSource(posts, [{ video_id: 'b', source: 'owned' }])
-    expect(rows.find((r) => r.video_id === 'b')!.source).toBe('owned')
-  })
-
-  it("stamps posts new to us as 'owned'", () => {
-    const rows = stampOwnedSource(posts, [{ video_id: 'a', source: 'discovered' }])
-    expect(rows.find((r) => r.video_id === 'c')!.source).toBe('owned')
-  })
-
-  it("treats a stored NULL source as new rather than propagating the NULL", () => {
-    const rows = stampOwnedSource(posts, [{ video_id: 'a', source: null }])
-    expect(rows.find((r) => r.video_id === 'a')!.source).toBe('owned')
+  it('stamps every post of a competitor read competitor_owned', () => {
+    expect(stampOwnedSource(posts, 'competitor_owned').every((r) => r.source === 'competitor_owned')).toBe(true)
   })
 
   it('preserves every input field', () => {
-    const rows = stampOwnedSource([{ video_id: 'a', views: 12 }], [])
+    const rows = stampOwnedSource([{ video_id: 'a', views: 12 }])
     expect(rows[0]).toEqual({ video_id: 'a', views: 12, source: 'owned' })
   })
 })
@@ -233,7 +224,7 @@ describe('buildOwnedCensus', () => {
   })
 
   it('counts an own post the keyword gather discovered first', () => {
-    // stampOwnedSource keeps such a row on 'discovered' forever (metric
+    // stampOwnedSource kept such a row on 'discovered' for life (metric
     // continuity) — but the client still published it.
     expect(buildOwnedCensus([row({ source: 'discovered' })], opts).client.instagram.posts).toBe(1)
   })
@@ -355,14 +346,14 @@ describe('entitySlug — Inngest step ids are stable strings', () => {
   })
 })
 
-describe("stampOwnedSource keeps a known row's source, and stamps the right one on new rows", () => {
-  it('stamps fresh competitor posts competitor_owned', () => {
-    const rows = stampOwnedSource([{ video_id: 'a' }, { video_id: 'b' }], [{ video_id: 'a', source: 'discovered' }], 'competitor_owned')
-    expect(rows.map((r) => r.source)).toEqual(['discovered', 'competitor_owned'])
+describe('stampOwnedSource stamps the reading entity on every row', () => {
+  it("a competitor's own post the keyword gather found first becomes competitor_owned", () => {
+    const rows = stampOwnedSource([{ video_id: 'a' }, { video_id: 'b' }], 'competitor_owned')
+    expect(rows.map((r) => r.source)).toEqual(['competitor_owned', 'competitor_owned'])
   })
 
   it('still defaults to owned for the client', () => {
-    expect(stampOwnedSource([{ video_id: 'a' }], []).map((r) => r.source)).toEqual(['owned'])
+    expect(stampOwnedSource([{ video_id: 'a' }]).map((r) => r.source)).toEqual(['owned'])
   })
 })
 

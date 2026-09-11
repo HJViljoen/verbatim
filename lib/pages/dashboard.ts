@@ -255,15 +255,21 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
-  const [platformRows, themeRowsRes, earlierRes, supportInsights, bucketRes] = await Promise.all([
+  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows] = await Promise.all([
     selectAll<{ platform: string | null }>(() =>
       supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
     ),
+    // selectAll: one update's themes cross the 1000-row cap (Sealand's latest
+    // is at 936), and this read is unordered, so a silent cap would hand
+    // topThemes an arbitrary 1000 of them and the tiles would rank the wrong
+    // eight without saying so.
     themedRunId
-      ? supabase.from('themes')
-          .select('label, description, category, bucket, member_themes, evidence_count, strength_score, rank_score, first_seen')
-          .eq('client_id', clientId).eq('run_id', themedRunId)
-      : Promise.resolve({ data: null, error: null }),
+      ? selectAll<ThemeRankRow>(() =>
+          supabase.from('themes')
+            .select('label, description, category, bucket, member_themes, evidence_count, strength_score, rank_score, first_seen')
+            .eq('client_id', clientId).eq('run_id', themedRunId).order('id'),
+        )
+      : Promise.resolve([] as ThemeRankRow[]),
     themedRunId ? earlierThemesQ.neq('run_id', themedRunId).limit(1) : Promise.resolve({ data: null, error: null }),
     oneThing ? fetchInsightsByIds<{ id: string; theme: string; platform: string | null }>(supabase, supportIds, 'id, theme, platform') : Promise.resolve([]),
     // Theme buckets for scoping the recommendation's voices. Keyed on the run
@@ -272,8 +278,13 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     // scopeToClientVoices fails open on an empty map — competitor voices under
     // a claim about the client. Moved into this wave when themedRunId became
     // available, which costs no extra round trip.
-    supabase.from('themes').select('bucket, supporting_insight_ids')
-      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
+    // selectAll for the same reason, and a sharper one: a capped bucket map
+    // leaves cited insight ids unmapped, and scopeToClientVoices fails open on
+    // a miss — a competitor's customers quoted under a claim about the client.
+    selectAll<ThemeBucketRow>(() =>
+      supabase.from('themes').select('bucket, supporting_insight_ids')
+        .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
+    ),
   ])
 
   // The latest update = the run we anchored on; everything before it is history.
@@ -358,7 +369,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   let themes: TopTheme[] = []
   let analysedConversations = 0
   if (themedRunId) {
-    themes = topThemes(rows<ThemeRankRow>(themeRowsRes, 'dashboard.themes'), 8, rows(earlierRes, 'dashboard.earlierThemes').length > 0)
+    themes = topThemes(themeRows, 8, rows(earlierRes, 'dashboard.earlierThemes').length > 0)
     analysedConversations = Object.values(summary?.share_of_voice ?? {}).reduce((t, e) => t + Number(e?.analysed_videos ?? 0), 0)
   }
 
@@ -367,7 +378,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   let oneThingVoices = 0
   let oneThingPlatforms: { label: string; count: number }[] = []
   if (oneThing) {
-    const bucketById = bucketByAudienceId(rows<ThemeBucketRow>(bucketRes, 'dashboard.themeBuckets'))
+    const bucketById = bucketByAudienceId(bucketRows)
     const themeSlugById = new Map(supportInsights.map((a) => [a.id, a.theme]))
     const scopedIds = scopeToClientVoices(supportIds, bucketById)
     oneThingVoices = scopedIds.length

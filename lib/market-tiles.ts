@@ -6,6 +6,7 @@
 // signal") that lib/curation assigns.
 
 import { CURATION_GATE, gateTier, type GateTier } from './curation'
+import { byThemeLead } from './voice-tiles'
 
 // ── recommendations: the agenda ───────────────────────────────────────────
 
@@ -188,4 +189,64 @@ export function newsRingChip(ring: number): NewsRingChip {
   if (ring === 0) return { label: 'Your brand', tone: 'positive' }
   if (ring === 1) return { label: 'Competitor', tone: 'clay' }
   return { label: 'Category', tone: 'sand' }
+}
+
+// ── "Grounded in" chips ───────────────────────────────────────────────────
+
+/** One grounding chip. `slug` is the Pass A insight slug — the deep-link key
+ *  into Voice of Customer, which matches it against `themes.member_themes`
+ *  (slugs, because labels churn ~88% run to run). `label` is the curated theme
+ *  label Voice DISPLAYS for that slug, so the chip and the card the chip opens
+ *  say the same thing; null when this update has no theme holding the slug,
+ *  and the renderer falls back to the slug's words. */
+export interface ThemeChip { slug: string; label: string | null }
+
+/** A run's themes, as far as chip labelling is concerned. */
+export interface GroundingThemeRow {
+  label: string | null
+  member_themes: string[] | null
+  evidence_count: number
+  rank_score?: number | null
+}
+
+/** insight slug → the curated label of this run's theme that holds it.
+ *
+ *  A slug routinely sits in more than one theme (clusters are per bucket, and
+ *  one rec can cite both), so this has to pick the SAME one Voice opens on:
+ *  the chip links to `?themes=<slug>`, Voice keeps every theme whose
+ *  `member_themes` holds it, orders them with `byThemeLead` and leads with the
+ *  first (`poolFor(...)[0]`, lib/pages/voice.ts). Ordering by anything else —
+ *  strength_score, say — puts a different name on the chip than on the card it
+ *  opens, which is the defect the chips were changed to fix. Label asc is the
+ *  last tie-break, so the map is deterministic. */
+export function labelsBySlug(themes: GroundingThemeRow[]): Map<string, string> {
+  const best = new Map<string, GroundingThemeRow & { label: string }>()
+  for (const t of themes) {
+    const label = t.label?.trim()
+    if (!label) continue
+    for (const slug of t.member_themes ?? []) {
+      const cur = best.get(slug)
+      if (!cur || byThemeLead(t, cur) < 0 || (byThemeLead(t, cur) === 0 && label < cur.label)) {
+        best.set(slug, { ...t, label })
+      }
+    }
+  }
+  return new Map([...best].map(([slug, b]) => [slug, b.label]))
+}
+
+/** The chips for a set of insight slugs, capped. Deduped on what the READER
+ *  sees, not on the slug: several cited insights routinely cluster into one
+ *  theme, and three chips reading "Durability in the field" is a defect. */
+export function themeChips(slugs: Iterable<string>, labels: Map<string, string>, n = 4): ThemeChip[] {
+  const out: ThemeChip[] = []
+  const seen = new Set<string>()
+  for (const slug of slugs) {
+    const label = labels.get(slug) ?? null
+    const key = label ?? slug
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ slug, label })
+    if (out.length >= n) break
+  }
+  return out
 }

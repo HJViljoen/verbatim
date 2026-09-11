@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { GateTier } from '@/lib/curation'
 import { glossaryRule, priorityWord } from '@/lib/calibration'
 import { fmtInt, weekdayDate, shortDate, platformLabel } from '@/lib/format'
-import { claimVerdict, claimCountsLine, newsRingChip, type ClaimTone } from '@/lib/market-tiles'
+import { claimVerdict, claimCountsLine, newsRingChip, type ClaimTone, type ThemeChip } from '@/lib/market-tiles'
 import { HowToRead } from '@/components/how-to-read'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
@@ -59,20 +59,29 @@ function PriorityChip({ word }: { word: string }) {
   return <Chip tone={word === 'Act now' ? 'warning' : 'sand'} title={PRIORITY_TIP[word]}>{word}</Chip>
 }
 
-const voiceHref = (themes: string[]) => `/dashboard/voice?themes=${encodeURIComponent(themes.join(','))}#grounding`
+/** Snapshots frozen before 2026-09-11 hold bare slugs where the loader now
+ *  puts `{ slug, label }`; an export renders the same words it was taken with,
+ *  so both shapes have to render. */
+type Grounding = ThemeChip | string
+const asChip = (t: Grounding): ThemeChip => (typeof t === 'string' ? { slug: t, label: null } : t)
+/** What the chip says: the curated theme label Voice shows, and only when this
+ *  update has no theme holding the slug, the slug's own words. */
+const chipText = (t: ThemeChip): string => t.label ?? prettyType(t.slug)
+
+const voiceHref = (themes: Grounding[]) => `/dashboard/voice?themes=${encodeURIComponent(themes.map((t) => asChip(t).slug).join(','))}#grounding`
 
 /** Cross-page link to Voice of Customer — a link in the app, a plain chip row
  *  on paper (nothing there can be clicked). */
-function ThemeChips({ themes, mode }: { themes: string[]; mode: RenderMode }) {
+function ThemeChips({ themes, mode }: { themes: Grounding[]; mode: RenderMode }) {
   if (themes.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1">
-      {themes.map((t) => mode === 'app' ? (
-        <Link key={t} href={`/dashboard/voice?themes=${encodeURIComponent(t)}`} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
-          {prettyType(t)}
+      {themes.map(asChip).map((t) => mode === 'app' ? (
+        <Link key={t.slug} href={`/dashboard/voice?themes=${encodeURIComponent(t.slug)}`} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
+          {chipText(t)}
         </Link>
       ) : (
-        <span key={t} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{prettyType(t)}</span>
+        <span key={t.slug} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{chipText(t)}</span>
       ))}
     </div>
   )
@@ -324,7 +333,7 @@ const list: R = (d, mode) => {
 // ── detail: the selected item in full ──────────────────────────────────
 /** Grounded-in stats + theme chips, shared by every kind that has grounding
  *  (recs, insights). */
-function GroundedIn({ conv, voices, platforms, themes, mode }: { conv: number; voices: number; platforms: { label: string; count: number }[]; themes: string[]; mode: RenderMode }) {
+function GroundedIn({ conv, voices, platforms, themes, mode }: { conv: number; voices: number; platforms: { label: string; count: number }[]; themes: Grounding[]; mode: RenderMode }) {
   return (
     <>
       <p className="text-[12.5px] text-secondary-foreground">

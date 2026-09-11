@@ -665,7 +665,10 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // PostgREST URL cap on the update.
     if (persist && lowSignal.length) {
       for (const part of chunk(lowSignal.map((l) => l.id), 200)) {
-        await admin.from('comments').update({ is_low_signal: true }).in('id', part)
+        // Non-fatal, but not silent: an unflagged spam set stays in the
+        // drill-down looking like kept evidence, and the run would never say so.
+        const { error } = await admin.from('comments').update({ is_low_signal: true }).in('id', part)
+        if (error) console.error(`[pass-a] low-signal flag failed for ${part.length} comments on video ${v.id} (${v.platform} ${v.video_id}, run ${opts.runId ?? 'none'}): ${error.message}`)
       }
     }
 
