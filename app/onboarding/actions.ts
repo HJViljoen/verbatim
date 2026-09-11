@@ -6,13 +6,21 @@ import { requireUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { ensureDefaultSchedule } from '@/lib/schedules/default'
 import { SELECTABLE_PLATFORMS } from '@/app/dashboard/settings/constants'
-import { deriveCompetitorKeywords, ONBOARDING_MAX_VIDEOS } from '@/lib/onboarding-config'
+import { deriveCompetitorKeywords, cleanTerms, ONBOARDING_MAX_VIDEOS } from '@/lib/onboarding-config'
+import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 
 // State shape (a type) — idle value lives in the client form; a 'use server'
 // module may only export async functions.
 export interface OnboardingState {
   ok: boolean
   message: string
+}
+
+export interface SuggestTermsState {
+  ok: boolean
+  message: string
+  /** Candidates for the chips. Nothing is stored until the workspace is created. */
+  suggestions: { brand: string[]; competitors: string[]; category: string[] } | null
 }
 
 const csv = (v: FormDataEntryValue | null) =>
@@ -32,6 +40,39 @@ const schema = z.object({
 
 const TRIAL_DAYS = 14
 
+/**
+ * Propose search terms from what the form already holds (WP5, 2026-09-11).
+ *
+ * The vault has asked for this since the first strategy note — "if a Head of
+ * Marketing has to figure out what industry_keywords means, they'll bounce".
+ * Until now onboarding could only DERIVE (copy the competitor names into the
+ * search list); it never proposed the words buyers actually type, which is the
+ * half of the corpus a name alone cannot find.
+ *
+ * One gpt-4.1-mini call, ~$0.001, and nothing it returns is stored: the form
+ * shows the terms as chips and only the kept ones reach tracking_configs.
+ */
+export async function suggestTerms(_prev: SuggestTermsState, formData: FormData): Promise<SuggestTermsState> {
+  await requireUser()
+  const companyName = String(formData.get('company_name') ?? '').trim()
+  if (!companyName) return { ok: false, message: 'Enter your company name first.', suggestions: null }
+
+  try {
+    const s = await suggestSearchTerms({
+      company_name: companyName,
+      competitor_names: csv(formData.get('competitor_names')),
+      industry_keywords: csv(formData.get('industry_keywords')),
+    })
+    console.log(`[onboarding] search-term suggestions for "${companyName}": $${s.costUsd.toFixed(4)}`)
+    const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
+    const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
+    if (total === 0) return { ok: false, message: 'Nothing to suggest from that yet — name a competitor and try again.', suggestions: null }
+    return { ok: true, message: 'Keep the ones that sound like your buyers.', suggestions }
+  } catch (e) {
+    return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
+  }
+}
+
 // Provision a brand-new workspace for the signed-in, membership-less user:
 // creates the client, an initial tracking_config, and the user's owner
 // membership — then drops them into the dashboard. Uses the service role
@@ -46,9 +87,13 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
     .from('users').select('id').eq('id', user.id).maybeSingle()
   if (existing) redirect('/dashboard')
 
+  // Terms the user kept from the suggestion step, on their own field names so
+  // they can never be confused with the comma-separated category box.
+  const kept = (name: string) => formData.getAll(name).map(String)
+
   const parsed = schema.safeParse({
     company_name: formData.get('company_name'),
-    industry_keywords: csv(formData.get('industry_keywords')),
+    industry_keywords: cleanTerms([...csv(formData.get('industry_keywords')), ...kept('suggested_category')]),
     competitor_names: csv(formData.get('competitor_names')),
     platforms: formData.getAll('platforms').map(String),
   })
@@ -82,11 +127,17 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
   //    ever wrote it, so a self-serve tenant gathered nothing about the
   //    competitors it just named. max_videos overrides the column default of
   //    10, which is too thin for the analysis floors to leave anything.
+  //    Kept suggestions ADD to the derivation, never replace it: the derived
+  //    competitor list is the floor that makes the product work at all, and a
+  //    model's extra spellings are a bonus on top of it. The company name is
+  //    the same floor for brand_keywords.
   const { error: cfgErr } = await admin.from('tracking_configs').insert({
     client_id: clientId,
-    brand_keywords: [company_name],
+    //    The company name itself bypasses the 4-character floor: a short name
+    //    ("Gap") is still the one term this tenant cannot be tracked without.
+    brand_keywords: [company_name, ...cleanTerms(kept('suggested_brand')).filter((t) => t.toLowerCase() !== company_name.toLowerCase())].slice(0, 15),
     competitor_names,
-    competitor_keywords: deriveCompetitorKeywords(competitor_names),
+    competitor_keywords: cleanTerms([...deriveCompetitorKeywords(competitor_names), ...kept('suggested_competitor')]),
     industry_keywords,
     platforms,
     max_videos: ONBOARDING_MAX_VIDEOS,
