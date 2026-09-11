@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone,
-  categoryChip, shortPhrases,
-  type ThemeHistoryRow,
-} from './voice-tiles'
+import { squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone, categoryChip, shortPhrases, type ThemeHistoryRow, moverDirection } from './voice-tiles'
 
 describe('squarify', () => {
   const area = (r: { w: number; h: number }) => r.w * r.h
@@ -192,5 +188,27 @@ describe('category chips and short phrases', () => {
     ]
     expect(shortPhrases(rows).map((r) => r.phrase)).toEqual(['ok', 'So worth it', 'game changer', 'eight words exactly is the cut off here'])
     expect(shortPhrases(rows, 2).map((r) => r.phrase)).toEqual(['ok', 'So worth it'])
+  })
+})
+
+describe('moverDirection — colour follows the visible slope', () => {
+  it('reads DOWN when the last step fell, even on a long climb', () => {
+    // The demo-day bug: strength climbed across every update, so movement was
+    // "gaining" and the row drew a green line that visibly sloped down.
+    expect(moverDirection('gaining', -4)).toBe('down')
+  })
+
+  it('reads UP when the last step rose, even on a long decline', () => {
+    expect(moverDirection('fading', 3)).toBe('up')
+  })
+
+  it('keeps the new chip its own colour', () => {
+    expect(moverDirection('emerging', -2)).toBe('new')
+  })
+
+  it('falls back to the long run when the last step is flat or unknown', () => {
+    expect(moverDirection('fading', 0)).toBe('down')
+    expect(moverDirection('gaining', null)).toBe('up')
+    expect(moverDirection('steady', null)).toBe('up')
   })
 })

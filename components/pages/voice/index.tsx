@@ -3,7 +3,10 @@ import { Fragment, type ReactNode } from 'react'
 import { PREVALENCE_BADGE } from '@/lib/ui-colors'
 import { PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { fmtInt, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '@/lib/format'
-import { categoryLabel, categoryChip, emotionTone, bucketKind, type Trajectory } from '@/lib/voice-tiles'
+import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, type Trajectory } from '@/lib/voice-tiles'
+
+/** Mover colours, keyed by the direction the plotted line actually goes. */
+const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(--you)' } as const
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
@@ -278,7 +281,7 @@ function MoverRow({ t, sparkWidth }: { t: Trajectory; sparkWidth?: number }) {
       value={t.latestEvidence}
       delta={t.movement === 'emerging' ? null : t.evidenceDelta}
       good="up"
-      color={t.movement === 'fading' ? 'var(--negative)' : t.movement === 'emerging' ? 'var(--you)' : 'var(--positive)'}
+      color={MOVER_COLOR[moverDirection(t.movement, t.evidenceDelta)]}
       sparkWidth={sparkWidth ?? 72}
     />
   )

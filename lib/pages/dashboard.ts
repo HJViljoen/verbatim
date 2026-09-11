@@ -317,7 +317,12 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const sharePrevSov = usePeriodShare ? prev?.period_share_of_voice : prev?.share_of_voice
   const share = shareBreakdown(shareNowSov)
   const sharePrev = shareBreakdown(sharePrevSov)
-  const briefShare = shareBreakdown(summary?.share_of_voice)
+  // The brief reads the SAME layer as the ring beside it. Pass D writes the
+  // beat with a [[n]] placeholder, never a literal number, so the prose is
+  // layer-agnostic and the page decides — which means pinning this to the
+  // cumulative row only ever produced two different numbers side by side on
+  // the same screen (demo day, 2026-09-10: brief 1%, ring this-update).
+  const briefShare = share
   // Your share moves only when it clears the band (T0-8): arrows are earned.
   const shareVerdict = share?.client && sharePrev?.client
     ? proportionDelta({ nowPct: share.client.pct, nowN: share.tracked, nowK: share.client.videos, prevPct: sharePrev.client.pct, prevN: sharePrev.tracked, prevK: sharePrev.client.videos }, SHARE_BAND)
@@ -378,8 +383,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     brand,
     topTheme: themes[0] ? { label: themes[0].label, description: themes[0].description, conversations: themes[0].conversations } : null,
     sentiment: sent ? { positivePct: Math.round(sent.positivePct) } : null,
-    // Pass D authored the brief against the cumulative share_of_voice — substitute
-    // the same layer, whatever the ring shows.
+    // Same layer as the ring — see briefShare above.
     shareOfVoice: briefShare?.client ? { clientPct: Math.round(briefShare.client.pct), hasCompetitors: briefShare.competitors.length > 0 } : null,
   }
   const narrative = composeDashboardNarrative(summary?.executive_brief, figures)

@@ -121,6 +121,25 @@ export function movementOf(strength: number[], emerged: boolean): Movement {
   return d >= MOVEMENT_STEP ? 'gaining' : d <= -MOVEMENT_STEP ? 'fading' : 'steady'
 }
 
+/** Which way a mover row should READ, for colour.
+ *
+ *  The row plots `evidence` and prints `evidenceDelta` — conversations, last
+ *  step. `movement` answers a different question (strength, first update to
+ *  last), and colouring by it put a green line on a theme whose visible slope
+ *  went down (demo day, 2026-09-10). Colour follows what the eye can see; the
+ *  long-run `movement` still earns the "New" chip and orders the list.
+ *
+ *  A flat or unknown last step falls back to `movement` rather than inventing
+ *  a direction. */
+export function moverDirection(
+  movement: Movement,
+  evidenceDelta: number | null,
+): 'up' | 'down' | 'new' {
+  if (movement === 'emerging') return 'new'
+  if (evidenceDelta != null && evidenceDelta !== 0) return evidenceDelta > 0 ? 'up' : 'down'
+  return movement === 'fading' ? 'down' : 'up'
+}
+
 /** Join every update's themes into per-identity series. `runDates` maps
  *  run_id → run_date (ISO) for every update that should count; rows whose run
  *  is not in the map are ignored (an in-flight update, say). Returns the
