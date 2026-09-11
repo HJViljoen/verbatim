@@ -4,12 +4,20 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { deriveCompetitorKeywords } from '@/lib/onboarding-config'
+import { deriveCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
+import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { PERIODS, DAYS } from './constants'
 
 export interface SettingsFormState {
   ok: boolean
   message: string
+}
+
+export interface SuggestState {
+  ok: boolean
+  message: string
+  /** Candidates only — nothing is stored until the client keeps them and saves. */
+  suggestions: { brand: string[]; competitors: string[]; category: string[] } | null
 }
 
 // Comma-separated text field -> trimmed, de-blanked string[].
@@ -106,4 +114,120 @@ export async function updateTrackingConfig(
 
   revalidatePath('/dashboard/settings')
   return { ok: true, message: 'Settings saved.' }
+}
+
+// ---- Search terms (WP5, 2026-09-11) ----------------------------------------
+//
+// The "facts vs knobs" line moved. Keywords are a fact the client owns — only
+// they know that "Cotopaxi" is also a volcano, or which two words their buyers
+// actually type. What made keywords an operator lever was cost and quality:
+// cost is now bounded below the UI (the CHECK constraints cap each bucket at
+// 15, GATHER_MAX_SEARCHES_PER_RUN caps a run at 120 searches), and quality is
+// what the performance table beside the editor is for. max_videos,
+// comment_depth and platforms stay operator knobs and are still absent here.
+//
+// Three of the four columns are REVOKEd from `authenticated` (T0-2), so they
+// are written with the admin client — the same route competitor_keywords
+// already takes above, after the same role check. exclude_terms is granted to
+// the tenant role (20260911140000_exclude_terms.sql) and goes through the
+// session client, so RLS is the last word on it.
+
+const termList = (what: string) =>
+  z.array(z.string())
+    .max(MAX_TERMS_PER_BUCKET, `keep at most ${MAX_TERMS_PER_BUCKET} ${what}`)
+    .refine((xs) => xs.every((x) => x.trim().length >= MIN_KEYWORD_CHARS), {
+      message: `each term needs at least ${MIN_KEYWORD_CHARS} characters — shorter words find the whole internet`,
+    })
+
+const termsSchema = z.object({
+  brand_keywords: termList('terms for your brand').min(1, 'keep at least one term for your brand'),
+  competitor_keywords: termList('competitor terms'),
+  industry_keywords: termList('category terms'),
+  exclude_terms: termList('exclusions'),
+})
+
+export async function updateSearchTerms(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const { supabase, clientId, role } = await getSessionContext()
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change search terms.' }
+  }
+
+  const list = (name: string) => formData.getAll(name).map(String)
+  const parsed = termsSchema.safeParse({
+    brand_keywords: list('brand_keywords'),
+    competitor_keywords: list('competitor_keywords'),
+    industry_keywords: list('industry_keywords'),
+    exclude_terms: list('exclude_terms'),
+  })
+  if (!parsed.success) {
+    const first = parsed.error.issues[0]
+    return { ok: false, message: `Could not save: ${first?.message ?? 'check your terms.'}` }
+  }
+
+  // Tidy once more on the server: the same trim/de-dupe/cap the form applies,
+  // so a crafted POST cannot store a list the UI could never produce.
+  const terms = {
+    brand_keywords: cleanTerms(parsed.data.brand_keywords),
+    competitor_keywords: cleanTerms(parsed.data.competitor_keywords),
+    industry_keywords: cleanTerms(parsed.data.industry_keywords),
+  }
+  if (terms.brand_keywords.length === 0) {
+    return { ok: false, message: 'Could not save: keep at least one term for your brand.' }
+  }
+
+  const { error: exclErr } = await supabase
+    .from('tracking_configs')
+    .update({ exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+  if (exclErr) {
+    return { ok: false, message: `Could not save: ${exclErr.message}` }
+  }
+
+  const { error } = await createAdminClient()
+    .from('tracking_configs')
+    .update(terms)
+    .eq('client_id', clientId)
+  if (error) {
+    return { ok: false, message: `Could not save your search terms: ${error.message}` }
+  }
+
+  revalidatePath('/dashboard/settings')
+  return { ok: true, message: 'Saved. Your next update searches these terms.' }
+}
+
+/** Ask the model for more terms. Offers only — nothing is written here. */
+export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData): Promise<SuggestState> {
+  const { supabase, clientId, role } = await getSessionContext()
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change search terms.', suggestions: null }
+  }
+
+  const [{ data: client }, { data: cfg }] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    supabase.from('tracking_configs').select('competitor_names, industry_keywords').eq('client_id', clientId).maybeSingle(),
+  ])
+  const companyName = (client?.company_name as string | undefined) ?? ''
+  if (!companyName) {
+    return { ok: false, message: 'We need your company name first.', suggestions: null }
+  }
+
+  try {
+    const s = await suggestSearchTerms({
+      company_name: companyName,
+      competitor_names: (cfg?.competitor_names ?? []) as string[],
+      industry_keywords: (cfg?.industry_keywords ?? []) as string[],
+    })
+    console.log(`[settings] search-term suggestions for ${clientId}: $${s.costUsd.toFixed(4)}`)
+    const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
+    const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
+    if (total === 0) {
+      return { ok: false, message: 'Nothing worth suggesting — add a competitor or a category word and try again.', suggestions: null }
+    }
+    return { ok: true, message: `${total} to consider. Keep the ones that sound like your buyers.`, suggestions }
+  } catch (e) {
+    return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
+  }
 }

@@ -16,20 +16,33 @@
  *  Patagonia → the region lesson, which cost 331 of 602 videos on Sealand's
  *  first run). They stay in competitor_names for tagging; they just do not
  *  become search terms until an operator says so. */
-const MIN_KEYWORD_CHARS = 4
+export const MIN_KEYWORD_CHARS = 4
 
-export function deriveCompetitorKeywords(competitorNames: string[]): string[] {
+/** The tracking_configs cardinality ceiling, per bucket (T0-2 CHECK). */
+export const MAX_TERMS_PER_BUCKET = 15
+
+/**
+ * Tidy a list of search terms: trim, collapse inner whitespace, drop anything
+ * under MIN_KEYWORD_CHARS, de-dupe case-insensitively, cap at the DB ceiling.
+ * Shared by the derivation below and by every list a client edits itself
+ * (app/dashboard/settings), so the same word is the same term everywhere.
+ */
+export function cleanTerms(terms: string[]): string[] {
   const seen = new Set<string>()
   const out: string[] = []
-  for (const raw of competitorNames) {
-    const name = raw.trim().replace(/\s+/g, ' ')
-    if (name.length < MIN_KEYWORD_CHARS) continue
-    const key = name.toLowerCase()
+  for (const raw of terms) {
+    const term = `${raw}`.trim().replace(/\s+/g, ' ')
+    if (term.length < MIN_KEYWORD_CHARS) continue
+    const key = term.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)
-    out.push(name)
+    out.push(term)
   }
-  return out.slice(0, 15) // matches the tracking_configs cardinality ceiling
+  return out.slice(0, MAX_TERMS_PER_BUCKET)
+}
+
+export function deriveCompetitorKeywords(competitorNames: string[]): string[] {
+  return cleanTerms(competitorNames)
 }
 
 /** Videos per keyword search for a new tenant. The column default is 10, which

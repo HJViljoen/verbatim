@@ -124,6 +124,19 @@ export function termValue(rows: KeywordPerfRow[], insightBearing: ReadonlySet<st
 }
 
 /**
+ * The rows of the `k` most recently gathered updates. A client's whole history
+ * is the right window for the CLI and the wrong one for a page: a term changed
+ * three months ago should not still be judged on what it did before the change.
+ */
+export function recentUpdates<T extends { run_id: string; created_at: string }>(rows: T[], k: number): T[] {
+  const newestFirst = [...new Set(
+    [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)).map((r) => r.run_id),
+  )].slice(0, k)
+  const keep = new Set(newestFirst)
+  return rows.filter((r) => keep.has(r.run_id))
+}
+
+/**
  * Every term, worst relevance first. `by` picks the grouping: 'term' pools a
  * term across platforms (Settings), 'platform-term' keeps them apart (the CLI,
  * where a term can be dropped on one platform and kept on another).

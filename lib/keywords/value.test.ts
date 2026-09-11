@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { insightBearingUpdates, summariseTerms, termValue, type KeywordPerfRow } from './value'
+import { insightBearingUpdates, recentUpdates, summariseTerms, termValue, type KeywordPerfRow } from './value'
 
 // The rule these tests pin is the one scripts/keyword-roi.ts printed as
 // DROP-CANDIDATE: >=3 insight-bearing updates, <5% kept, >=100 found, 0
@@ -126,5 +126,29 @@ describe('summariseTerms', () => {
     ]
     const out = summariseTerms(rows, 'platform-term')
     expect(out.map((t) => t.key)).toEqual(['instagram::bags', 'youtube::bags'])
+  })
+})
+
+describe('recentUpdates', () => {
+  const dated = (run_id: string, created_at: string) => ({ run_id, created_at })
+
+  it('keeps every row of the k newest updates and nothing older', () => {
+    const rows = [
+      dated('old', '2026-07-01T00:00:00Z'),
+      dated('new', '2026-09-10T00:00:00Z'),
+      dated('new', '2026-09-10T00:00:30Z'),
+      dated('mid', '2026-08-01T00:00:00Z'),
+    ]
+    expect(recentUpdates(rows, 2).map((r) => r.run_id)).toEqual(['new', 'new', 'mid'])
+  })
+
+  it('returns everything when there are fewer updates than asked for', () => {
+    const rows = [dated('a', '2026-09-01T00:00:00Z')]
+    expect(recentUpdates(rows, 8)).toHaveLength(1)
+  })
+
+  it('keeps the caller’s row order, so a sorted read stays sorted', () => {
+    const rows = [dated('b', '2026-09-02T00:00:00Z'), dated('a', '2026-09-01T00:00:00Z')]
+    expect(recentUpdates(rows, 2).map((r) => r.run_id)).toEqual(['b', 'a'])
   })
 })
