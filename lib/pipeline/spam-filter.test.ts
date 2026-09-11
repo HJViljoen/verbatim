@@ -102,6 +102,16 @@ describe('filterComments — what it must NOT cut', () => {
     expect(keptText([c('same jacket here', 'ann'), c('same jacket here', 'bob')])).toHaveLength(2)
   })
 
+  it('collapses two anonymous comments with the same text — worth a look, not a bug', () => {
+    // The dedup key is `${author ?? ''}::${norm}`, so a null author makes every
+    // anonymous commenter the same person. Two different people saying "love
+    // these" under a platform that gave no handle: the second is dropped. Pinned
+    // as the CURRENT behaviour, not endorsed — the alternative (keep both) risks
+    // letting a bot through, and the trade is a policy call, not a fix to make
+    // inside a debt sweep.
+    expect(reasons([c('love these', null), c('love these', null)])).toEqual(['duplicate'])
+  })
+
   it('scopes dedup to one call, so the same voice under another video is not a duplicate', () => {
     const first = filterComments([c('these run so small', 'ann')])
     const second = filterComments([c('these run so small', 'ann')])

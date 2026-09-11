@@ -36,6 +36,16 @@ describe('pickThemedRunId', () => {
     expect(pickThemedRunId([{ run_id: 'undated' }])).toBe('undated')
   })
 
+  it('skips a theme row orphaned by a deleted update', () => {
+    // themes.run_id is nullable with an ON DELETE SET NULL FK; the same one-row
+    // read that makes this matter for videos makes it matter here.
+    expect(pickThemedRunId([
+      { run_id: null, created_at: '2026-09-10T00:00:00Z' },
+      { run_id: 'real', created_at: '2026-09-06T00:00:00Z' },
+    ])).toBe('real')
+    expect(pickThemedRunId([{ run_id: null, created_at: '2026-09-10T00:00:00Z' }])).toBeNull()
+  })
+
   it('breaks a tie on the caller’s own order', () => {
     expect(pickThemedRunId([
       { run_id: 'first', created_at: '2026-08-23' },

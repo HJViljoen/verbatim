@@ -329,7 +329,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // makes: every page's method note needs a company, and nothing on this page
   // read it before.
   const [runningIds, tcRes, clientRes, digest, snapRows, eventsRes] = await Promise.all([
-    fetchRunningRunIds(supabase, clientId),
+    fetchRunningRunIds(supabase, clientId, 'content'),
     supabase.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle(),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadEngageDigest(supabase, clientId),
@@ -349,7 +349,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // Anchor on the newest update WITH videos, excluding in-flight ones (the
   // dashboard's videoRunId pattern) — the page keeps serving the previous
   // update while a new one is collecting.
-  const latestVideoRun = await fetchLatestVideoRun(supabase, clientId, runningIds)
+  const latestVideoRun = await fetchLatestVideoRun(supabase, clientId, runningIds, 'content')
 
   // Read once, used twice: the census rule wants the raw handle map, the inbox
   // wants the folded key set.

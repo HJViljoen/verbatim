@@ -190,7 +190,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    fetchRunningRunIds(supabase, clientId),
+    fetchRunningRunIds(supabase, clientId, 'dashboard'),
     supabase.from('theme_registry').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     selectAll<SummaryRow>(() =>
       supabase.from('run_summary').select(`${SUMMARY_COLS}, executive_brief`).eq('client_id', clientId).order('run_date', { ascending: true }),
@@ -238,11 +238,11 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
     // Themes come from the newest update that produced any — normally this
     // update, but a failed theme pass must not blank the theme tiles.
-    fetchThemedRunId(supabase, clientId, runningIds),
+    fetchThemedRunId(supabase, clientId, runningIds, 'dashboard'),
     supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).eq('run_id', runId),
     // The newest update that gathered videos (an analysis-only update re-reads
     // old videos and gathers none) — anchors the platform split below.
-    fetchLatestVideoRun(supabase, clientId, runningIds),
+    fetchLatestVideoRun(supabase, clientId, runningIds, 'dashboard'),
     supabase.from('account_events').select('platform, severity, explained, magnitude_label, explanation')
       .eq('client_id', clientId).eq('run_id', runId).order('severity', { ascending: false }).limit(3),
   ])

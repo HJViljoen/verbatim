@@ -56,21 +56,28 @@ export function pickLatestVideoRun(
 }
 
 /** One round trip for the same rule: the DB orders and takes the newest video
- *  row, `pickLatestVideoRun` states what that row means. */
+ *  row, `pickLatestVideoRun` states what that row means. `page` names the
+ *  caller in the log line, because five loaders share this. */
 export async function fetchLatestVideoRun(
   supabase: SupabaseClient,
   clientId: string,
-  runningIds: readonly string[] = [],
+  runningIds: readonly string[],
+  page: string,
 ): Promise<LatestVideoRun | null> {
   let q = supabase.from('videos').select('run_id, scraped_at').eq('client_id', clientId)
   if (runningIds.length) q = q.not('run_id', 'in', `(${runningIds.join(',')})`)
-  const res = await q.order('scraped_at', { ascending: false }).limit(1)
-  return pickLatestVideoRun(rows<VideoRunRow>(res, 'latestVideoRun.videos'), runningIds)
+  // videos.run_id is nullable and its FK is ON DELETE SET NULL, so deleting an
+  // update orphans its videos rather than removing them. With .limit(1) there
+  // is no second row to fall through to, so one orphan at the top of the
+  // ordering would answer "no update ever gathered" — and Content reads that as
+  // its empty state. Excluded in SQL, because the picker never sees row two.
+  const res = await q.not('run_id', 'is', null).order('scraped_at', { ascending: false }).limit(1)
+  return pickLatestVideoRun(rows<VideoRunRow>(res, `${page}.videoRun`), runningIds)
 }
 
 /** The updates that are collecting right now. Every loader that anchors on a
  *  run needs them, and every loader asked for them itself until this. */
-export async function fetchRunningRunIds(supabase: SupabaseClient, clientId: string): Promise<string[]> {
+export async function fetchRunningRunIds(supabase: SupabaseClient, clientId: string, page: string): Promise<string[]> {
   const res = await supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running')
-  return rows<{ id: string }>(res, 'latestVideoRun.runningRuns').map((r) => r.id)
+  return rows<{ id: string }>(res, `${page}.runningRuns`).map((r) => r.id)
 }

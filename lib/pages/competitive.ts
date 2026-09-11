@@ -174,7 +174,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    fetchRunningRunIds(supabase, clientId),
+    fetchRunningRunIds(supabase, clientId, 'competitive'),
     selectAll<SummaryRow>(() =>
       supabase.from('run_summary').select('run_id, run_date, owned_census, total_videos, share_of_voice, period_share_of_voice')
         .eq('client_id', clientId).order('run_date', { ascending: true }),
@@ -196,10 +196,10 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
       .eq('client_id', clientId).eq('run_id', runId),
     // The newest update that produced themes, which is this one unless its
     // theme pass failed (lib/pages/themed-run).
-    fetchThemedRunId(supabase, clientId, runningIds),
+    fetchThemedRunId(supabase, clientId, runningIds, 'competitive'),
     // The newest update that gathered videos (lib/pages/latest-video-run) —
     // null gates the video-stat read below off entirely.
-    fetchLatestVideoRun(supabase, clientId, runningIds),
+    fetchLatestVideoRun(supabase, clientId, runningIds, 'competitive'),
   ])
   const videoRunId = latestVideoRun?.runId ?? null
   const [themeRows, videoRows] = await Promise.all([

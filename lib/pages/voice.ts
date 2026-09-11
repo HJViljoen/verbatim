@@ -227,7 +227,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    fetchRunningRunIds(supabase, clientId),
+    fetchRunningRunIds(supabase, clientId, 'voice'),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // Every update's themes, for the per-theme sparks and the movers (joined on
     // registry_id in lib/voice-tiles). selectAll: a tenant crosses 1000 rows in

@@ -8,10 +8,16 @@ const eslintConfig = defineConfig([
   // An underscore prefix is this repo's "deliberately unused" mark. Next's
   // default config has no ignore pattern, so a Server Action's required-but-
   // unused (_prev, _formData) pair warned forever and taught the team to read
-  // past warnings — which is how a real one gets missed.
+  // past warnings — which is how a real one gets missed. caughtErrors is the
+  // one case where an unused binding is unavoidable (`catch (_e)`), and
+  // typescript-eslint v8 checks it by default, so it needs the pattern too.
   {
     rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
     },
   },
   // Override default ignores of eslint-config-next.

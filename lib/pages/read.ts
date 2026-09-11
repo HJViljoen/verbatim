@@ -26,7 +26,15 @@ export function rows<T>(res: QueryResult, label: string): T[] {
     say(label, res.error)
     return []
   }
-  return (res.data ?? []) as T[]
+  if (res.data == null) return []
+  // A `maybeSingle()` result sent through here instead of `row()` is an object,
+  // and casting it to T[] moves the failure to the first `.map` at render time.
+  // Say it here, where the label names the read.
+  if (!Array.isArray(res.data)) {
+    say(label, { message: `expected rows, got ${typeof res.data} — use row() for a single read` })
+    return []
+  }
+  return res.data as T[]
 }
 
 /** One row from a `maybeSingle()` read; null on failure, with the failure logged. */

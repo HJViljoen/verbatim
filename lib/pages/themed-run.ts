@@ -44,14 +44,20 @@ export function pickThemedRunId(rows: ThemedRunRow[], runningIds: readonly strin
 
 /** One round trip for the same rule: the DB orders and takes the newest theme
  *  row, `pickThemedRunId` states what that row means. For a loader that already
- *  holds every update's theme rows, call `pickThemedRunId` directly instead. */
+ *  holds every update's theme rows, call `pickThemedRunId` directly instead.
+ *  `page` names the caller in the log line, because three loaders share this. */
 export async function fetchThemedRunId(
   supabase: SupabaseClient,
   clientId: string,
-  runningIds: readonly string[] = [],
+  runningIds: readonly string[],
+  page: string,
 ): Promise<string | null> {
+  // Same reason as lib/pages/latest-video-run: run_id is nullable with an
+  // ON DELETE SET NULL FK, and .limit(1) leaves no second row to fall through
+  // to, so one orphaned row at the top of the ordering would answer "no update
+  // ever produced themes".
   let q = supabase.from('themes').select('run_id, created_at').eq('client_id', clientId)
   if (runningIds.length) q = q.not('run_id', 'in', `(${runningIds.join(',')})`)
-  const res = await q.order('created_at', { ascending: false }).limit(1)
-  return pickThemedRunId(rows<ThemedRunRow>(res, 'themedRun.themes'), runningIds)
+  const res = await q.not('run_id', 'is', null).order('created_at', { ascending: false }).limit(1)
+  return pickThemedRunId(rows<ThemedRunRow>(res, `${page}.themedRun`), runningIds)
 }

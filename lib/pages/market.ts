@@ -183,7 +183,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(NEWS_SHOWN),
     // In-flight updates, so the themed-run lookup below can exclude them.
-    fetchRunningRunIds(supabase, clientId),
+    fetchRunningRunIds(supabase, clientId, 'market'),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'market.client')
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market.latestRun')
@@ -204,7 +204,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // keyed to a run whose insight ids the page never cites — which empties the
   // map and makes scopeToClientVoices fail open. That is the exact hole this
   // page's quote scoping exists to close.
-  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds)
+  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'market')
 
   const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRes] = await Promise.all([
     supabase.from('market_insights')

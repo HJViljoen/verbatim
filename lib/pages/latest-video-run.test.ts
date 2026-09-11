@@ -36,6 +36,18 @@ describe('pickLatestVideoRun', () => {
     expect(pickLatestVideoRun([{ run_id: 'undated' }])).toEqual({ runId: 'undated', scrapedAt: null })
   })
 
+  it('skips a video orphaned by a deleted update', () => {
+    // videos.run_id is nullable with an ON DELETE SET NULL FK, so deleting a
+    // pipeline_runs row leaves its videos behind with no run. The query filters
+    // these out (a .limit(1) read never reaches row two), and the picker states
+    // the same rule for any caller holding rows already.
+    expect(pickLatestVideoRun([
+      { run_id: null, scraped_at: '2026-09-10T00:00:00Z' },
+      { run_id: 'real', scraped_at: '2026-09-06T00:00:00Z' },
+    ])?.runId).toBe('real')
+    expect(pickLatestVideoRun([{ run_id: null, scraped_at: '2026-09-10T00:00:00Z' }])).toBeNull()
+  })
+
   it('breaks a tie on the caller’s own order', () => {
     expect(pickLatestVideoRun([
       { run_id: 'first', scraped_at: '2026-08-23' },
