@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { cadenceReliability } from '@/lib/pipeline/cadence'
 import { localDate, isWeeklyDue, isMonthlyDue } from '@/lib/pipeline/schedule-due'
+import { touchHeartbeat } from '@/lib/ops/heartbeat'
 import { sendAlertEmail } from '@/lib/email'
 
 // Daily cron that decides which clients are due a run today and dispatches one
@@ -16,8 +17,30 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
   {
     id: 'scheduled-pipeline-dispatcher',
     triggers: [{ cron: 'TZ=Africa/Johannesburg 0 6 * * *' }],
+    // This function had no failure handler: if find-due-clients threw its way
+    // out of retries, the morning's dispatch simply did not happen and the only
+    // trace was a red row in Inngest's dashboard that nobody watches (WP2).
+    onFailure: async ({ event }) => {
+      const message = (event.data as { error?: { message?: string } }).error?.message ?? 'dispatcher failed'
+      await sendAlertEmail(
+        'Verbatim ops — dispatcher FAILED',
+        `The 06:00 SAST scheduled-pipeline-dispatcher failed after retries, so no client was dispatched today.\n\n` +
+        `Error: ${message}\n\n` +
+        `Run a client by hand: POST /api/admin/trigger-run {"clientId":"…","options":{"sendReport":true}}\n` +
+        `Inngest dashboard: https://app.inngest.com`,
+      )
+    },
   },
   async ({ step }) => {
+    // Liveness beacon FIRST, before anything that can fail: the ops check
+    // outside Inngest reads this row to tell "the dispatcher ran and something
+    // went wrong" from "the dispatcher was never called" — the 2026-09-06
+    // failure mode. Its own failure is swallowed (touchHeartbeat never throws).
+    await step.run('heartbeat', async () => {
+      const { weekday, dayOfMonth } = localDate()
+      return touchHeartbeat(createAdminClient(), 'dispatcher', { weekday, dayOfMonth })
+    })
+
     const dueClientIds = await step.run('find-due-clients', async () => {
       const admin = createAdminClient()
       const today = localDate()
