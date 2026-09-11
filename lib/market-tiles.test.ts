@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
   claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, newsRingChip,
+  labelsBySlug, themeChips,
 } from './market-tiles'
 
 const mi = (id: string, score: number | null, themes: number, comp = 0) => ({
@@ -134,5 +135,44 @@ describe('tier counts + news chips', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })
     expect(newsRingChip(1)).toEqual({ label: 'Competitor', tone: 'clay' })
     expect(newsRingChip(2)).toEqual({ label: 'Category', tone: 'sand' })
+  })
+})
+
+describe('grounding chips', () => {
+  const themes = [
+    { label: 'Comfort in daily wear', member_themes: ['comfort_fit', 'all_day_comfort'], strength_score: 8 },
+    { label: 'Durability in the field', member_themes: ['strap_wear'], strength_score: 6 },
+    // Same slug in a second (weaker) theme — a slug can be cited from more
+    // than one bucket; the chip must read as the card that leads Voice.
+    { label: 'Sizing confusion', member_themes: ['comfort_fit'], strength_score: 3 },
+    { label: '  ', member_themes: ['blank_label'], strength_score: 9 },
+  ]
+
+  it('labels a slug with the strongest theme that holds it', () => {
+    const m = labelsBySlug(themes)
+    expect(m.get('comfort_fit')).toBe('Comfort in daily wear')
+    expect(m.get('all_day_comfort')).toBe('Comfort in daily wear')
+    expect(m.get('strap_wear')).toBe('Durability in the field')
+    expect(m.has('blank_label')).toBe(false) // an empty label is not a label
+  })
+
+  it('carries the slug for the deep link and the label for the reader', () => {
+    const chips = themeChips(['strap_wear'], labelsBySlug(themes))
+    expect(chips).toEqual([{ slug: 'strap_wear', label: 'Durability in the field' }])
+  })
+
+  it('leaves the label null when this update has no theme for the slug', () => {
+    expect(themeChips(['orphan_slug'], labelsBySlug(themes))).toEqual([{ slug: 'orphan_slug', label: null }])
+  })
+
+  it('dedupes on what the reader sees, not on the slug', () => {
+    const chips = themeChips(['comfort_fit', 'all_day_comfort', 'strap_wear'], labelsBySlug(themes))
+    expect(chips.map((c) => c.label)).toEqual(['Comfort in daily wear', 'Durability in the field'])
+  })
+
+  it('caps the row', () => {
+    const m = labelsBySlug([])
+    expect(themeChips(['a', 'b', 'c', 'd', 'e'], m)).toHaveLength(4)
+    expect(themeChips(['a', 'b', 'c'], m, 2)).toHaveLength(2)
   })
 })

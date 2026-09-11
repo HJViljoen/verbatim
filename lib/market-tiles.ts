@@ -189,3 +189,55 @@ export function newsRingChip(ring: number): NewsRingChip {
   if (ring === 1) return { label: 'Competitor', tone: 'clay' }
   return { label: 'Category', tone: 'sand' }
 }
+
+// ── "Grounded in" chips ───────────────────────────────────────────────────
+
+/** One grounding chip. `slug` is the Pass A insight slug — the deep-link key
+ *  into Voice of Customer, which matches it against `themes.member_themes`
+ *  (slugs, because labels churn ~88% run to run). `label` is the curated theme
+ *  label Voice DISPLAYS for that slug, so the chip and the card the chip opens
+ *  say the same thing; null when this update has no theme holding the slug,
+ *  and the renderer falls back to the slug's words. */
+export interface ThemeChip { slug: string; label: string | null }
+
+/** A run's themes, as far as chip labelling is concerned. */
+export interface GroundingThemeRow {
+  label: string | null
+  member_themes: string[] | null
+  strength_score: number | null
+}
+
+/** insight slug → the curated label of this run's theme that holds it. A slug
+ *  can sit in more than one theme (clusters are per bucket, and a rec can cite
+ *  both); the strongest theme wins, ties by label so the map is deterministic —
+ *  it is also the one that leads the Voice list the chip links to. */
+export function labelsBySlug(themes: GroundingThemeRow[]): Map<string, string> {
+  const best = new Map<string, { label: string; score: number }>()
+  for (const t of themes) {
+    const label = t.label?.trim()
+    if (!label) continue
+    const score = Number(t.strength_score ?? 0)
+    for (const slug of t.member_themes ?? []) {
+      const cur = best.get(slug)
+      if (!cur || score > cur.score || (score === cur.score && label < cur.label)) best.set(slug, { label, score })
+    }
+  }
+  return new Map([...best].map(([slug, b]) => [slug, b.label]))
+}
+
+/** The chips for a set of insight slugs, capped. Deduped on what the READER
+ *  sees, not on the slug: several cited insights routinely cluster into one
+ *  theme, and three chips reading "Durability in the field" is a defect. */
+export function themeChips(slugs: Iterable<string>, labels: Map<string, string>, n = 4): ThemeChip[] {
+  const out: ThemeChip[] = []
+  const seen = new Set<string>()
+  for (const slug of slugs) {
+    const label = labels.get(slug) ?? null
+    const key = label ?? slug
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ slug, label })
+    if (out.length >= n) break
+  }
+  return out
+}

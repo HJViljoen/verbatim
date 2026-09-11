@@ -9,7 +9,8 @@ import type { BrandVoiceSnapshot } from '../pipeline/claims'
 import { weekdayDate, platformLabel } from '../format'
 import {
   insightTiers, confirmedCompetitiveIds, orderAgenda, distinctVideos, claimCounts, ledgerRows, tierCounts,
-  type AgendaItem,
+  labelsBySlug, themeChips,
+  type AgendaItem, type GroundingThemeRow, type ThemeChip,
 } from '../market-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
@@ -76,7 +77,7 @@ export interface RecDetail extends RecRow {
   total: number
   voices: number
   platforms: { label: string; count: number }[]
-  themes: string[]
+  themes: ThemeChip[]
   quotes: Quote[]
 }
 
@@ -85,12 +86,12 @@ export interface InsightDetail extends InsightRow {
   kind: 'insight'
   voices: number
   platforms: { label: string; count: number }[]
-  themes: string[]
+  themes: ThemeChip[]
   quotes: Quote[]
 }
 
 export interface ClaimRow { id: string; youSay: string; yourQuote: string; theySay: string | null; gap: string; audience: string }
-export interface ClaimDetail extends ClaimRow { kind: 'claim'; themes: string[] }
+export interface ClaimDetail extends ClaimRow { kind: 'claim'; themes: ThemeChip[] }
 
 /** `quote` is a creator's own words about the brand, quoted from their video
  *  (run_summary.brand_voice.about[n]). It travels as a Quote with a
@@ -227,8 +228,11 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
     // Entity buckets per audience insight — quote pools on this page are
     // client-facing claims, so competitor-audience voices are scoped out.
+    // `label` + `member_themes` ride along for the grounding chips: the chip
+    // must read as the Voice card it opens, and the two have said different
+    // things about the same theme since the chips were built off the raw slug.
     supabase.from('themes')
-      .select('bucket, supporting_insight_ids')
+      .select('bucket, supporting_insight_ids, label, member_themes, strength_score')
       .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
   ])
 
@@ -257,7 +261,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // base table (fetchInsightsByIds), not the current view (incremental Pass A).
   const citedIds = new Set<string>()
   for (const mi of insights) for (const id of mi.evidence?.supporting_theme_ids ?? []) citedIds.add(id)
-  const bucketRows = rows<ThemeBucketRow>(bucketRes, 'market.themeBuckets')
+  const bucketRows = rows<ThemeBucketRow & GroundingThemeRow>(bucketRes, 'market.themeBuckets')
   for (const t of bucketRows) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
   const audienceRows = await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null; platform: string | null }>(
     supabase, [...citedIds], 'id, theme, source_video_id, platform',
@@ -269,10 +273,11 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // ── curation gate over the insights (already in opportunity order) ──────
   const tierById = insightTiers(insights)
   const tiers = tierCounts(tierById)
-  const slugsOf = (ids: Iterable<string>): string[] => {
+  const chipLabels = labelsBySlug(bucketRows)
+  const slugsOf = (ids: Iterable<string>): ThemeChip[] => {
     const slugs = new Set<string>()
     for (const id of ids) { const s = themeSlugById.get(id); if (s) slugs.add(s) }
-    return [...slugs].slice(0, 4)
+    return themeChips(slugs, chipLabels)
   }
   const insightIds = (mi: MarketInsight) => mi.evidence?.supporting_theme_ids ?? []
 

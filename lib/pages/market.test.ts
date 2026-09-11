@@ -48,7 +48,7 @@ const fixture: MarketData = {
   detail: {
     kind: 'rec', id: 'rec-1', rank: 0, total: 4, title: 'Launch an access pathway', reasoning: 'Because.', type: 'campaign', tier: 'confirmed', conversations: 12,
     voices: 5, platforms: [{ label: 'TikTok', count: 3 }],
-    themes: ['comfort'],
+    themes: [{ slug: 'comfort_in_daily_wear', label: 'Comfort in daily wear' }],
     quotes: [{ ref: 'h:recommendations:rec-1', text: 'What a brilliant attitude' }, { ref: 'e:ev-2', text: 'where are you from I need this' }],
   },
   shortRead: [{ key: 'top_unmet_needs', items: ['Comfort in daily wear'] }],
