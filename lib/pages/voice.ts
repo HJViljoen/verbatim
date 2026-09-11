@@ -11,6 +11,7 @@ import {
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
 import { pickThemedRunId } from './themed-run'
+import { fetchRunningRunIds } from './latest-video-run'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 
@@ -220,11 +221,11 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // everything keyed on client_id alone — theme history, update dates, the
   // phrase pool, the mood read — goes out here, with the run lookup; only
   // this update's themes wait for the run id.
-  const [{ data: latestRun }, runningRes, { data: client }, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
+  const [{ data: latestRun }, runningIds, { data: client }, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // Every update's themes, for the per-theme sparks and the movers (joined on
     // registry_id in lib/voice-tiles). selectAll: a tenant crosses 1000 rows in
@@ -246,7 +247,6 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       supabase.from('audience_insights_current').select('id, emotion').eq('client_id', clientId).order('id', { ascending: true }),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
   const brand = client?.company_name ?? 'your brand'
 
   if (!latestRun) return { empty: true, legendItems: LEGEND_ITEMS }

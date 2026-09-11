@@ -10,6 +10,7 @@ import {
   type EngageCandidate,
 } from '../engage'
 import { periodWindowDays } from '../config'
+import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 import {
   perfVsMedian, medianEngagement, bestDuration, fieldSentence, topVoices, roleByAccount, handleKey,
   entityScoreboard, durationPerf, entityPlaybooks, trendingSounds, entityKey, shapeInbox, intentCounts, isIntent,
@@ -28,7 +29,7 @@ import type { MethodNoteData } from '../../components/print/method-note'
 // it, then the field this update, top voices and the client's own accounts.
 //
 // TWO run anchors, kept separate (do not unify them): the video tiles anchor
-// on the newest update WITH videos (`latestVid`, excluding in-flight runs);
+// on the newest update WITH videos (`latestVideoRun`, excluding in-flight runs);
 // the reply inbox anchors inside loadEngageDigest, on the latest
 // completed/partial run — an analysis-only update re-reads old videos and
 // gathers none, so the two can point at different updates while a new one is
@@ -160,7 +161,7 @@ interface EngageDigest {
 
 /** The digest's data, ready to shape — null before the first completed update.
  *  Its own anchor (latest completed/partial run), separate from the video
- *  tiles' `latestVid` — see the file header. */
+ *  tiles' `latestVideoRun` — see the file header. */
 async function loadEngageDigest(supabase: SupabaseClient, clientId: string): Promise<EngageDigest | null> {
   const { data: run } = await supabase
     .from('pipeline_runs')
@@ -321,8 +322,8 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // pays it again). `client` (company name) is the one addition this split
   // makes: every page's method note needs a company, and nothing on this page
   // read it before.
-  const [{ data: runningRuns }, { data: tc }, { data: client }, digest, snapRows, { data: eventData }] = await Promise.all([
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+  const [runningIds, { data: tc }, { data: client }, digest, snapRows, { data: eventData }] = await Promise.all([
+    fetchRunningRunIds(supabase, clientId),
     supabase.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle(),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadEngageDigest(supabase, clientId),
@@ -340,10 +341,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // Anchor on the newest update WITH videos, excluding in-flight ones (the
   // dashboard's videoRunId pattern) — the page keeps serving the previous
   // update while a new one is collecting.
-  const runningIds = ((runningRuns ?? []) as { id: string }[]).map((r) => r.id)
-  let vidQ = supabase.from('videos').select('run_id, scraped_at').eq('client_id', clientId)
-  if (runningIds.length) vidQ = vidQ.not('run_id', 'in', `(${runningIds.join(',')})`)
-  const { data: latestVid } = await vidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle()
+  const latestVideoRun = await fetchLatestVideoRun(supabase, clientId, runningIds)
 
   // Read once, used twice: the census rule wants the raw handle map, the inbox
   // wants the folded key set.
@@ -354,10 +352,10 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
       .map(handleKey),
   )
 
-  if (!latestVid) return { empty: true }
+  if (!latestVideoRun) return { empty: true }
 
-  const videoRunId = latestVid.run_id as string
-  const updateDate = (latestVid.scraped_at as string | null) ?? null
+  const videoRunId = latestVideoRun.runId
+  const updateDate = latestVideoRun.scrapedAt
 
   // Discovered videos only — the client's own posts are a different segment
   // (Owned-Data-Plan: "segment, never blend") and never mix into market content

@@ -14,6 +14,7 @@ import {
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
+import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 
 // Competitive Intelligence loader — the data half of the old
 // app/dashboard/competitive/page.tsx (split 2026-08-29, Reports & Exports
@@ -166,20 +167,18 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
 
   // Anchor on the newest update WITH analysis; an in-flight one has no
   // findings yet and would blank the page for the duration of every update.
-  const [{ data: client }, { data: tc }, { data: latestRun }, runningRes, historyRaw] = await Promise.all([
+  const [{ data: client }, { data: tc }, { data: latestRun }, runningIds, historyRaw] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs').select('report_day, report_period').eq('client_id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId),
     selectAll<SummaryRow>(() =>
       supabase.from('run_summary').select('run_id, run_date, owned_census, total_videos, share_of_voice, period_share_of_voice')
         .eq('client_id', clientId).order('run_date', { ascending: true }),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
-  const notRunning = runningIds.length ? `(${runningIds.join(',')})` : null
   const brand = client?.company_name ?? 'Your brand'
   const brandShort = brand.split(/\s[—–-]\s/)[0].trim() || brand
   const runId = latestRun?.id as string | undefined
@@ -188,17 +187,17 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   if (!runId) return { empty: true, brand, nextUpdate }
 
   // ── the update's state + its history + this update's videos ───────────
-  let latestVidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
-  if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
-  const [ciRes, themedRunId, latestVidRes] = await Promise.all([
+  const [ciRes, themedRunId, latestVideoRun] = await Promise.all([
     supabase.from('competitive_insights').select('id, category, competitor_name, title, finding, evidence, impact_level, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId),
     // The newest update that produced themes, which is this one unless its
     // theme pass failed (lib/pages/themed-run).
     fetchThemedRunId(supabase, clientId, runningIds),
-    latestVidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
+    // The newest update that gathered videos (lib/pages/latest-video-run) —
+    // null gates the video-stat read below off entirely.
+    fetchLatestVideoRun(supabase, clientId, runningIds),
   ])
-  const videoRunId = (latestVidRes.data?.run_id as string | undefined) ?? null
+  const videoRunId = latestVideoRun?.runId ?? null
   const [themeRows, videoRows] = await Promise.all([
     themedRunId
       ? selectAll<ThemeRow>(() =>

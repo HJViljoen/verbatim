@@ -16,6 +16,7 @@ import {
 import type { MethodNoteData } from '../../components/print/method-note'
 import { ownedCensusTotal, type OwnedCensus } from '../gather/owned'
 import { fetchThemedRunId } from './themed-run'
+import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 
 // Dashboard loader — the data half of app/dashboard/page.tsx (split 2026-08-29,
 // Reports & Exports T3). Everything below the session line of the old page,
@@ -180,7 +181,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   // Anchor on the newest run WITH DATA; an in-flight run has no analysis rows
   // yet, so anchoring on it would blank the page for the duration of every run.
   const SUMMARY_COLS = 'run_id, run_date, owned_census, total_videos, total_comments, period_videos, period_comments, share_of_voice, period_share_of_voice, period_sentiment_positive, audience_sentiment, period_audience_sentiment'
-  const [{ data: client }, { data: tc }, { data: latestRun }, runningRes, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
+  const [{ data: client }, { data: tc }, { data: latestRun }, runningIds, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs')
       .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_day, report_period')
@@ -188,7 +189,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId),
     supabase.from('theme_registry').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     selectAll<SummaryRow>(() =>
       supabase.from('run_summary').select(`${SUMMARY_COLS}, executive_brief`).eq('client_id', clientId).order('run_date', { ascending: true }),
@@ -202,7 +203,6 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       supabase.from('themes').select('run_id, single_source, strength_score').eq('client_id', clientId).order('run_id').order('id'),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
   const notRunning = runningIds.length ? `(${runningIds.join(',')})` : null
   const brand = client?.company_name ?? 'Your brand'
   const brandShort = brand.split(/\s[—–-]\s/)[0].trim() || brand
@@ -221,11 +221,9 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   if (!runId) return { empty: true, brand, nextUpdate }
 
   // ── everything keyed on the anchored run, in one wave ──────────────────
-  let latestVidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
-  if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
   let earlierThemesQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) earlierThemesQ = earlierThemesQ.not('run_id', 'in', notRunning)
-  const [recRes, themedRunId, miRes, latestVidRes, eventsRes] = await Promise.all([
+  const [recRes, themedRunId, miRes, latestVideoRun, eventsRes] = await Promise.all([
     supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
     // Themes come from the newest update that produced any — normally this
     // update, but a failed theme pass must not blank the theme tiles.
@@ -233,13 +231,13 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).eq('run_id', runId),
     // The newest update that gathered videos (an analysis-only update re-reads
     // old videos and gathers none) — anchors the platform split below.
-    latestVidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
+    fetchLatestVideoRun(supabase, clientId, runningIds),
     supabase.from('account_events').select('platform, severity, explained, magnitude_label, explanation')
       .eq('client_id', clientId).eq('run_id', runId).order('severity', { ascending: false }).limit(3),
   ])
 
   // ── the third wave: what depends on the second ─────────────────────────
-  const videoRunId = (latestVidRes.data?.run_id as string | undefined) ?? runId
+  const videoRunId = latestVideoRun?.runId ?? runId
   const recs = (recRes.data ?? []) as RecRow[]
   const oneThing = topRecommendation(recs)
   const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
