@@ -29,7 +29,14 @@ import {
 // Pure planning/prompt/validation logic up top (tested in
 // classify-meta.test.ts); the I/O runner for the Inngest step below.
 
-export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v1'
+/** Bumped to v2 on 2026-09-11 with the label DEFINITIONS (bfe485f): the enum
+ *  values mean something different now than when the model was handed bare
+ *  names. Bumping is free here, unlike Pass A's — classify-meta selects on
+ *  `classified_type IS NULL` and nothing else, so no already-classified row is
+ *  re-read. The version rides onto each row it writes
+ *  (videos.classified_prompt_version) so the two regimes stop being
+ *  indistinguishable; rows written before today stay null. */
+export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v2'
 export const CLASSIFY_META_BATCH = 25
 
 export interface ClassifyInput {
@@ -218,6 +225,9 @@ export async function runClassifyMetaBatch(
         // (T0-8): the two families are different measurements.
         sentiment: item.sentiment,
         sentiment_source: item.sentiment == null ? null : 'framing',
+        // Which regime chose these labels (null on every row written before
+        // 2026-09-11 — see the column's comment).
+        classified_prompt_version: CLASSIFY_META_PROMPT_VERSION,
       })
       .eq('id', id)
       .is('classified_type', null)
