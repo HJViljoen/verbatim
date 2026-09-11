@@ -1,4 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
+import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
@@ -346,11 +347,12 @@ async function retrieveQuotes(
   if (insightIds.length === 0 || cap === 0) return []
   const quotes: { quote: string; audienceId: string }[] = []
   const CHUNK = 100
-  for (let i = 0; i < insightIds.length && quotes.length < cap; i += CHUNK) {
+  for (const part of chunk(insightIds, CHUNK)) {
+    if (quotes.length >= cap) break
     const { data, error } = await admin
       .from('insight_evidence')
       .select('quote, audience_insight_id')
-      .in('audience_insight_id', insightIds.slice(i, i + CHUNK))
+      .in('audience_insight_id', part)
       // Counts-not-quotes (2026-08-22): demographic_signal evidence cites but
       // never quotes. Filtered here, not just by the empty-string check below,
       // so redacted rows cannot eat the cap — and so a person's account of

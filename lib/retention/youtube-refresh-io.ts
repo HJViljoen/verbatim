@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { DEMO_CLIENT_ID } from '../config'
 import { adapters } from '../gather/platforms'
@@ -56,10 +57,10 @@ export async function deleteCommentsProperly(
   const insights = new Set<string>()
   const evidenceIds: string[] = []
   const sampleIds: string[] = []
-  for (let i = 0; i < ids.length; i += CHUNK) {
+  for (const part of chunk(ids, CHUNK)) {
     const [ev, ls] = await Promise.all([
-      admin.from('insight_evidence').select('id, audience_insight_id').in('comment_id', ids.slice(i, i + CHUNK)),
-      admin.from('language_samples').select('id').in('comment_id', ids.slice(i, i + CHUNK)),
+      admin.from('insight_evidence').select('id, audience_insight_id').in('comment_id', part),
+      admin.from('language_samples').select('id').in('comment_id', part),
     ])
     if (ev.error) throw new Error(`count evidence: ${ev.error.message}`)
     if (ls.error) throw new Error(`count samples: ${ls.error.message}`)
@@ -95,8 +96,8 @@ export async function deleteCommentsProperly(
     ...heroHits.map((h) => `h:${h.table}:${h.id}`),
   ]
   const snapshotIds = new Set<string>()
-  for (let i = 0; i < refs.length; i += 150) {
-    const { data, error } = await admin.from('report_snapshots').select('id').overlaps('evidence_ids', refs.slice(i, i + 150))
+  for (const part of chunk(refs, 150)) {
+    const { data, error } = await admin.from('report_snapshots').select('id').overlaps('evidence_ids', part)
     if (error) throw new Error(`find snapshots: ${error.message}`)
     for (const r of (data ?? []) as { id: string }[]) snapshotIds.add(r.id)
   }
@@ -105,8 +106,8 @@ export async function deleteCommentsProperly(
     return { deleted: ids.length, insightsAffected: insights.size, heroQuotesNulled: heroHits.length, artifactsStaled: would.artifacts }
   }
   const heroQuotesNulled = await nullHeroQuotes(admin, heroHits)
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const { error } = await admin.from('comments').delete().in('id', ids.slice(i, i + CHUNK))
+  for (const part of chunk(ids, CHUNK)) {
+    const { error } = await admin.from('comments').delete().in('id', part)
     if (error) throw new Error(`delete comments: ${error.message}`)
   }
   const staled = await markSnapshotsStale(admin, [...snapshotIds], { apply: true })
@@ -149,8 +150,8 @@ export async function refreshYoutubeComments(
   summary.missingExamples = [...new Set(diff.missingIds.map((id) => batch.find((b) => b.id === id)?.comment_id ?? id))].slice(0, 5)
 
   if (!opts.dryRun) {
-    for (let i = 0; i < diff.upserts.length; i += CHUNK) {
-      const { error } = await admin.from('comments').upsert(diff.upserts.slice(i, i + CHUNK), { onConflict: 'client_id,platform,comment_id' })
+    for (const part of chunk(diff.upserts, CHUNK)) {
+      const { error } = await admin.from('comments').upsert(part, { onConflict: 'client_id,platform,comment_id' })
       if (error) throw new Error(`refresh upsert: ${error.message}`)
     }
   }
@@ -161,11 +162,10 @@ export async function refreshYoutubeComments(
     const changed = diff.textChangedIds
     const evidence: { id: string; comment_id: string | null; quote: string; redacted?: boolean }[] = []
     const samples: { id: string; comment_id: string | null; phrase: string }[] = []
-    for (let i = 0; i < changed.length; i += CHUNK) {
-      const chunk = changed.slice(i, i + CHUNK)
+    for (const part of chunk(changed, CHUNK)) {
       const [ev, ls] = await Promise.all([
-        admin.from('insight_evidence').select('id, comment_id, quote, redacted').in('comment_id', chunk),
-        admin.from('language_samples').select('id, comment_id, phrase').in('comment_id', chunk),
+        admin.from('insight_evidence').select('id, comment_id, quote, redacted').in('comment_id', part),
+        admin.from('language_samples').select('id, comment_id, phrase').in('comment_id', part),
       ])
       if (ev.error) throw new Error(`load evidence: ${ev.error.message}`)
       if (ls.error) throw new Error(`load samples: ${ls.error.message}`)
@@ -177,12 +177,12 @@ export async function refreshYoutubeComments(
     summary.evidenceDropped = dropEv.length
     summary.samplesDropped = dropLs.length
     if (!opts.dryRun) {
-      for (let i = 0; i < dropEv.length; i += CHUNK) {
-        const { error } = await admin.from('insight_evidence').delete().in('id', dropEv.slice(i, i + CHUNK))
+      for (const part of chunk(dropEv, CHUNK)) {
+        const { error } = await admin.from('insight_evidence').delete().in('id', part)
         if (error) throw new Error(`drop evidence: ${error.message}`)
       }
-      for (let i = 0; i < dropLs.length; i += CHUNK) {
-        const { error } = await admin.from('language_samples').delete().in('id', dropLs.slice(i, i + CHUNK))
+      for (const part of chunk(dropLs, CHUNK)) {
+        const { error } = await admin.from('language_samples').delete().in('id', part)
         if (error) throw new Error(`drop samples: ${error.message}`)
       }
     }
@@ -257,8 +257,8 @@ export async function refreshYoutubeVideos(
     summary.heroQuotesNulled = r.heroQuotesNulled
     if (!opts.dryRun) {
       const tomb = videoTombstone(nowIso)
-      for (let i = 0; i < gone.length; i += CHUNK) {
-        const { error } = await admin.from('videos').update(tomb).in('id', gone.slice(i, i + CHUNK).map((g) => g.id))
+      for (const part of chunk(gone, CHUNK)) {
+        const { error } = await admin.from('videos').update(tomb).in('id', part.map((g) => g.id))
         if (error) throw new Error(`tombstone videos: ${error.message}`)
       }
     }

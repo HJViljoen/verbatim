@@ -1,4 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
+import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
@@ -47,9 +48,7 @@ export function planClassifyBatches(
   batchSize = CLASSIFY_META_BATCH,
 ): string[][] {
   const pending = videos.filter((v) => v.classified_type == null).map((v) => v.id)
-  const batches: string[][] = []
-  for (let i = 0; i < pending.length; i += batchSize) batches.push(pending.slice(i, i + batchSize))
-  return batches
+  return chunk(pending, batchSize)
 }
 
 export function buildClassifySystemPrompt(): string {

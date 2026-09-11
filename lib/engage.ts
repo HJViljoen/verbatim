@@ -13,6 +13,7 @@
 // then dedupe: one slot per comment, max 2 per video, category + total caps.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from './chunk'
 import { selectAll } from './supabase-admin'
 import { cleanQuote, englishHits } from './quotes'
 
@@ -181,9 +182,7 @@ async function chunkedIn<T>(
   // page's long pole was this helper's four stages, each a serial walk).
   // Chunks are disjoint, and concatenating in chunk order keeps the output
   // order the serial loop produced.
-  const chunks: string[][] = []
-  for (let i = 0; i < ids.length; i += 100) chunks.push(ids.slice(i, i + 100))
-  const pages = await Promise.all(chunks.map((chunk) => selectAll<T>(buildChunk(chunk))))
+  const pages = await Promise.all(chunk(ids, 100).map((part) => selectAll<T>(buildChunk(part))))
   return pages.flat()
 }
 

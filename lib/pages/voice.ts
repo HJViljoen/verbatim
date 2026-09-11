@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { fetchInsightsByIds, fetchQuoteCitationsByAudience, readsAsHeroQuote, cleanQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -487,9 +488,9 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     const wanted = [...tiers.confirmed].sort((a, b) => b.evidence_count - a.evidence_count).slice(0, EXPORT_FULL_MAX_ITEMS)
     const ids = wanted.flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
     const rows: EvidenceRow[] = []
-    for (let i = 0; i < ids.length; i += 120) {
+    for (const part of chunk(ids, 120)) {
       const { data } = await supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
-        .in('audience_insight_id', ids.slice(i, i + 120)).order('relevance_rank', { ascending: true })
+        .in('audience_insight_id', part).order('relevance_rank', { ascending: true })
       rows.push(...((data ?? []) as EvidenceRow[]))
     }
     const byInsight = new Map<string, EvidenceRow[]>()

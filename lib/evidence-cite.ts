@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from './chunk'
 
 /**
  * Citations for an evidence appendix (Reports & Exports T11, 2026-08-29):
@@ -43,12 +44,12 @@ export async function resolveCitations(admin: SupabaseClient, refs: CitationRef[
   const commentIds = [...new Set(refs.map((r) => r.commentId).filter((id): id is string => !!id))]
   const videoRowIds = [...new Set(refs.filter((r) => !r.commentId && r.videoId).map((r) => r.videoId as string))]
 
-  const chunk = <T,>(ids: string[], read: (ids: string[]) => PromiseLike<{ data: T[] | null }>) =>
-    Promise.all(Array.from({ length: Math.ceil(ids.length / 120) }, (_, i) => read(ids.slice(i * 120, i * 120 + 120)))).then((rs) => rs.flatMap((r) => r.data ?? []))
+  const chunked = <T,>(ids: string[], read: (ids: string[]) => PromiseLike<{ data: T[] | null }>) =>
+    Promise.all(chunk(ids, 120).map((part) => read(part))).then((rs) => rs.flatMap((r) => r.data ?? []))
 
   type CommentRow = { id: string; platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null; client_id: string }
   const comments = commentIds.length
-    ? await chunk<CommentRow>(commentIds, (ids) => admin.from('comments').select('id, platform, comment_date, video_id, comment_id, client_id').in('id', ids))
+    ? await chunked<CommentRow>(commentIds, (ids) => admin.from('comments').select('id, platform, comment_date, video_id, comment_id, client_id').in('id', ids))
     : []
 
   // Videos for the comments (by platform-native id) and for transcript refs (by row id).
@@ -56,8 +57,8 @@ export async function resolveCitations(admin: SupabaseClient, refs: CitationRef[
   const nativeIds = [...new Set(comments.map((c) => c.video_id).filter((v): v is string => !!v))]
   type VideoRow = { id: string; platform: string | null; video_id: string | null; video_url: string | null; upload_date: string | null }
   const [byNative, byRow] = await Promise.all([
-    nativeIds.length ? chunk<VideoRow>(nativeIds, (ids) => admin.from('videos').select('id, platform, video_id, video_url, upload_date').in('video_id', ids)) : Promise.resolve([] as VideoRow[]),
-    videoRowIds.length ? chunk<VideoRow>(videoRowIds, (ids) => admin.from('videos').select('id, platform, video_id, video_url, upload_date').in('id', ids)) : Promise.resolve([] as VideoRow[]),
+    nativeIds.length ? chunked<VideoRow>(nativeIds, (ids) => admin.from('videos').select('id, platform, video_id, video_url, upload_date').in('video_id', ids)) : Promise.resolve([] as VideoRow[]),
+    videoRowIds.length ? chunked<VideoRow>(videoRowIds, (ids) => admin.from('videos').select('id, platform, video_id, video_url, upload_date').in('id', ids)) : Promise.resolve([] as VideoRow[]),
   ])
   const videoByKey = new Map<string, VideoRow>()
   for (const v of byNative) if (v.platform && v.video_id && nativeKeys.includes(`${v.platform}::${v.video_id}`)) videoByKey.set(`${v.platform}::${v.video_id}`, v)

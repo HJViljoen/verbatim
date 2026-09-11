@@ -27,6 +27,7 @@
  *
  * Usage:  npx tsx scripts/eval.ts [--client <uuid>] [--floor 0.95] [--json]
  */
+import { chunk } from '../lib/chunk'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { reportGrounding, type EvidenceRow } from '../lib/eval/grounding'
 import { cadenceReliability, formatCadence } from '../lib/pipeline/cadence'
@@ -96,9 +97,9 @@ async function main() {
     )
     const commentIds = [...new Set(evidence.map((e) => e.comment_id).filter((x): x is string => Boolean(x)))]
     const textById = new Map<string, string>()
-    for (let i = 0; i < commentIds.length; i += 200) {
+    for (const part of chunk(commentIds, 200)) {
       const rows = await selectAll<{ id: string; text: string | null }>(() =>
-        admin.from('comments').select('id, text').in('id', commentIds.slice(i, i + 200)).order('id'),
+        admin.from('comments').select('id, text').in('id', part).order('id'),
       )
       for (const r of rows) if (r.text) textById.set(r.id, r.text)
     }

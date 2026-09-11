@@ -1,5 +1,6 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
@@ -496,11 +497,10 @@ async function loadCommentsFor(
   }
   const ids = [...new Set(videoRows.map((v) => v.video_id))]
   const out: CommentRow[] = []
-  for (let i = 0; i < ids.length; i += COMMENT_ID_FILTER_CHUNK) {
-    const chunk = ids.slice(i, i + COMMENT_ID_FILTER_CHUNK)
+  for (const part of chunk(ids, COMMENT_ID_FILTER_CHUNK)) {
     const rows = await selectAll<CommentRow>(() => {
       let q = admin.from('comments').select(COLS)
-        .eq('client_id', clientId).in('video_id', chunk).order('id', { ascending: true })
+        .eq('client_id', clientId).in('video_id', part).order('id', { ascending: true })
       if (platform) q = q.eq('platform', platform)
       return q
     })
@@ -660,8 +660,13 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     const { kept, lowSignal } = filterComments(all)
 
     // Flag low-signal comments (don't delete) — invariant: still visible in drill-down.
+    // Chunked at 200 like every other id filter here: one video's spam set is
+    // small in practice, but nothing caps it, and a big one would overflow the
+    // PostgREST URL cap on the update.
     if (persist && lowSignal.length) {
-      await admin.from('comments').update({ is_low_signal: true }).in('id', lowSignal.map((l) => l.id))
+      for (const part of chunk(lowSignal.map((l) => l.id), 200)) {
+        await admin.from('comments').update({ is_low_signal: true }).in('id', part)
+      }
     }
 
     const res: PerVideoResult = {

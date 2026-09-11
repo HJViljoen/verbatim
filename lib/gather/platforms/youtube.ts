@@ -1,4 +1,5 @@
 import type { PlatformAdapter, GatherConfig, VideoRef, RawItem, FetchedTranscript, RefreshedComment, RefreshedVideoStats } from '../types'
+import { chunk } from '../../chunk'
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
 import { runActor } from '../apify'
@@ -53,8 +54,8 @@ function isoDurationToSeconds(iso: string): number {
  *  a failure just leaves those channels at 0 followers, never fails the gather. */
 async function fetchSubscribers(channelIds: string[], key: string): Promise<Map<string, number>> {
   const out = new Map<string, number>()
-  for (let i = 0; i < channelIds.length; i += 50) {
-    const params = new URLSearchParams({ part: 'statistics', id: channelIds.slice(i, i + 50).join(','), key })
+  for (const part of chunk(channelIds, 50)) {
+    const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
     try {
       for (const ch of itemsOf(await ytGet('channels', params))) {
         const id = str(getPath(ch, ['id']))
@@ -141,9 +142,9 @@ export const youtube: PlatformAdapter = {
 
     // 2) videos.list → snippet + statistics + contentDetails (batched, 50/call).
     const items: RawItem[] = []
-    for (let i = 0; i < ids.length; i += 50) {
+    for (const part of chunk(ids, 50)) {
       const params = new URLSearchParams({
-        part: 'snippet,statistics,contentDetails', id: ids.slice(i, i + 50).join(','), key,
+        part: 'snippet,statistics,contentDetails', id: part.join(','), key,
       })
       items.push(...itemsOf(await ytGet('videos', params)))
     }
@@ -200,8 +201,8 @@ export const youtube: PlatformAdapter = {
   async fetchCommentCounts(videoIds: string[]): Promise<Map<string, number>> {
     const key = apiKey()
     const out = new Map<string, number>()
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const params = new URLSearchParams({ part: 'statistics', id: videoIds.slice(i, i + 50).join(','), key })
+    for (const part of chunk(videoIds, 50)) {
+      const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
       for (const v of itemsOf(await ytGet('videos', params))) {
         const id = str(getPath(v, ['id']))
         if (id) out.set(id, num(getPath(v, ['statistics', 'commentCount'])))
@@ -257,7 +258,7 @@ export const youtube: PlatformAdapter = {
         })
       }
     }
-    for (let i = 0; i < commentIds.length; i += 50) await fetchBatch(commentIds.slice(i, i + 50))
+    for (const part of chunk(commentIds, 50)) await fetchBatch(part)
     return { found, missing: commentIds.filter((id) => !seen.has(id)) }
   },
 
@@ -266,8 +267,8 @@ export const youtube: PlatformAdapter = {
   async refreshVideoStats(videoIds: string[]): Promise<{ found: Map<string, RefreshedVideoStats>; missing: string[] }> {
     const key = apiKey()
     const found = new Map<string, RefreshedVideoStats>()
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const params = new URLSearchParams({ part: 'statistics', id: videoIds.slice(i, i + 50).join(','), key })
+    for (const part of chunk(videoIds, 50)) {
+      const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
       for (const v of itemsOf(await ytGet('videos', params))) {
         const id = str(getPath(v, ['id']))
         if (!id) continue

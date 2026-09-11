@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
+import { chunk } from '../lib/chunk'
 import { runPassA, type RunPassASummary } from '../lib/pipeline/pass-a'
 import type { VideoRow } from '../lib/pipeline/types'
 
@@ -59,11 +60,11 @@ interface Classification {
 
 async function classificationSnapshot(admin: ReturnType<typeof createAdminClient>, ids: string[]): Promise<Map<string, Classification>> {
   const map = new Map<string, Classification>()
-  for (let i = 0; i < ids.length; i += 120) {
+  for (const part of chunk(ids, 120)) {
     const { data, error } = await admin
       .from('videos')
       .select('id, classified_type, hook_style, hook_text, topics, sentiment')
-      .in('id', ids.slice(i, i + 120))
+      .in('id', part)
     if (error) throw new Error(`snapshot: ${error.message}`)
     for (const r of data ?? []) map.set(r.id as string, r as unknown as Classification)
   }
