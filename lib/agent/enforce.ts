@@ -163,6 +163,11 @@ export function enforceRegisters(
       themeRefs,
       quotes,
       conversationCount: countConversations(insights),
+      // Whose audience this point rests on, read from the authoritative live
+      // bucket (lib/quotes.ts fetchLiveBucketsByAudience). The client's own
+      // bucket means these really are the brand's customers; anything else is
+      // the category talking, and the page must not call that "your customers".
+      voices: insights.length > 0 && insights.every((i) => i.bucket === 'client') ? 'client' : 'category',
     })
   }
 

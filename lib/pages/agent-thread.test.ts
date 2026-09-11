@@ -8,7 +8,7 @@ const base: AgentThreadData = {
     question: 'Why do people hesitate before buying a liner?', askedAt: '2026-08-22T10:00:00Z', prose: null, outcome: 'answered',
     answer: {
       answer: 'Comfort and fit come up before price.', silent: false, nearest: [], judgement: [{ text: 'Lead with fit.', basedOn: ['G1'] }], runId: 'r', costUsd: 0.02,
-      grounded: [{ id: 'G1', text: 'People worry about skin irritation.', insightIds: ['i1', 'i2'], themeRefs: [], conversationCount: 2,
+      grounded: [{ id: 'G1', text: 'People worry about skin irritation.', insightIds: ['i1', 'i2'], themeRefs: [], conversationCount: 2, voices: 'client',
         quotes: [{ ref: 'c:c1', text: 'my skin gets so irritated', commentId: 'c1', videoId: null, n: 1 }, { ref: 'v:v1', text: 'fit was the deciding thing', commentId: null, videoId: 'v1', n: 2 }] }],
     },
   }],

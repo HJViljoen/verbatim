@@ -20,6 +20,11 @@ export interface GroundedPoint {
    *  the whole difference between grounded and judgement. */
   insightIds: string[]
   themeRefs: { themeId: string; registryId: string | null; label: string }[]
+  /** Whose audience this point rests on: 'client' only when every insight
+   *  behind it came off a video tagged as the client's. The page uses it to
+   *  decide whether it may say "your customers" — on 2026-09-10 it said that
+   *  over a comment from another brand's audience. */
+  voices: 'client' | 'category'
   /** Real comments. A quote carries the id it came from — an uncitable quote
    *  never reaches this register. */
   quotes: { text: string; commentId: string | null; videoId: string | null }[]

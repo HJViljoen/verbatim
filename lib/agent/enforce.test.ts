@@ -315,3 +315,30 @@ describe('findings the fresh-eyes review caught', () => {
     expect(outcomeOf(out)).toBe('answered')
   })
 })
+
+describe('whose voices a grounded point rests on (the 2026-09-10 mislabel)', () => {
+  // The agent answered "what do people think of Sealand" and printed a comment
+  // from another brand's audience under the heading "What your customers said".
+  // The evidence was not a tracked competitor's, so the bucket gate kept it —
+  // correctly, it is category conversation. What was wrong was the CLAIM.
+  const clientInsight = (id: string): RetrievedInsight => ({ ...insight(id, `v-${id}`), bucket: 'client' })
+
+  it('says client only when every insight came off the client\'s own videos', () => {
+    const raw: RawAnswer = { answer: 'a', grounded: [{ ref: 'G1', text: 'They like the fit.', insightIds: ['i1', 'i2'] }] }
+    const out = enforceRegisters(raw, [clientInsight('i1'), clientInsight('i2')], opts)
+    expect(out.grounded[0].voices).toBe('client')
+  })
+
+  it('says category when ANY insight came from elsewhere', () => {
+    const raw: RawAnswer = { answer: 'a', grounded: [{ ref: 'G1', text: 'They like the fit.', insightIds: ['i1', 'i2'] }] }
+    // i2 is category conversation — a Patagonia comment, in the real incident.
+    const out = enforceRegisters(raw, [clientInsight('i1'), insight('i2', 'v-i2')], opts)
+    expect(out.grounded[0].voices).toBe('category')
+  })
+
+  it('never claims client voices for a point with no resolved evidence', () => {
+    const raw: RawAnswer = { answer: 'a', grounded: [{ ref: 'G1', text: 'x', insightIds: ['i1'] }] }
+    const out = enforceRegisters(raw, [insight('i1', 'v1')], opts)
+    expect(out.grounded[0]?.voices).not.toBe('client')
+  })
+})

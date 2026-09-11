@@ -674,18 +674,23 @@ export async function fetchOwnProfile(
     // 250s must not start a 120s retry the function cannot outlive; with less
     // than 30s of headroom, don't try at all.
     const budgetSecs = Math.floor((300_000 - (Date.now() - startedAt)) / 1000) - 20
-    if (since && raw.length === 0 && budgetSecs >= 30) {
-      const retried = await read(Math.min(120, budgetSecs))
+    if (since && raw.length === 0) {
+      const retried = budgetSecs >= 30 ? await read(Math.min(120, budgetSecs)) : []
       if (retried.length > 0) {
         // The reads disagree, which is proof the first one flaked. Worth saying.
         console.warn(`[owned] tiktok census for @${handle} returned 0 then ${retried.length} on retry — first read flaked`)
         raw = retried
       } else {
-        // Both empty. This is NOT raised as a run warning: a zero-item profile
-        // read is indistinguishable from an account that genuinely has no
-        // videos, and a registered-but-unused handle would then alert every
-        // week forever. Logged, not alarmed.
-        console.warn(`[owned] tiktok census for @${handle} returned 0 posts twice — empty account or an unrecoverable read`)
+        // Still nothing — or no time to ask again. NOT raised as a run warning:
+        // a zero-item profile read is indistinguishable from an account that
+        // genuinely has no videos, and a registered-but-unused handle would
+        // then alert every week forever. Logged, not alarmed — but always
+        // logged, including when the retry was skipped for want of budget.
+        console.warn(
+          `[owned] tiktok census for @${handle} returned 0 posts` +
+          (budgetSecs >= 30 ? ' twice' : ` (retry skipped, ${budgetSecs}s budget left)`) +
+          ' — empty account or an unrecoverable read',
+        )
       }
     }
     return ttProfile(handle, raw, ctx)

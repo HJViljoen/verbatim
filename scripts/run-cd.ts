@@ -220,6 +220,17 @@ async function main() {
 
   // run_summary — metrics + sentiment + CI summary; the email-delta baseline.
   if (persist) {
+    // This write REPLACES the run's summary row (delete-then-insert), and on a
+    // platform-scoped read every figure in it — metrics, period columns,
+    // sentiment, and the census — is scoped too. Pointed at a run whose Inngest
+    // synthesis already wrote market-wide numbers, this overwrites them. Say so
+    // rather than let it happen quietly.
+    if (args.platform !== 'all') {
+      console.warn(
+        `\n  ! --platform ${args.platform}: run_summary will be REPLACED with ${args.platform}-only ` +
+        `figures and no owned census. Use --platform all to write the market-wide row.`,
+      )
+    }
     await writeRunSummary({
       // Sentiment stays market-only (own posts carry the brand's own framing,
       // not the audience's reaction) — the explicit filter the widened corpus

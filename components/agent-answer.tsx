@@ -41,7 +41,15 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
 
       {hasGrounded && (
         <section className="space-y-4">
-          <h3 className="text-sm font-semibold">What your customers said</h3>
+          {/* The heading follows the evidence. "Your customers" is a claim
+              about whose audience spoke, and on 2026-09-10 it was printed over
+              a comment from another brand's audience. It is said only when
+              every point rests on the client's own videos. */}
+          <h3 className="text-sm font-semibold">
+            {answer.grounded.every((p) => p.voices === 'client')
+              ? 'What your customers said'
+              : 'What people said'}
+          </h3>
           {answer.grounded.map((point, i) => (
             <div key={point.id} className="space-y-2 rounded-lg border border-border/60 bg-popover p-4">
               {/* Not flex-wrap: a finding that runs to two lines was dropping
