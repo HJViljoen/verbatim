@@ -2,6 +2,7 @@ import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { billingAccess, type BillingClient } from '@/lib/billing'
 import { cadenceReliability } from '@/lib/pipeline/cadence'
+import { localDate, isWeeklyDue, isMonthlyDue } from '@/lib/pipeline/schedule-due'
 import { sendAlertEmail } from '@/lib/email'
 
 // Daily cron that decides which clients are due a run today and dispatches one
@@ -11,19 +12,6 @@ import { sendAlertEmail } from '@/lib/email'
 // report_day; monthly runs fire on the 1st. Evaluated in Africa/Johannesburg so
 // report_day matches the user's local week. Runs 06:00 SAST.
 
-const WEEKDAYS = [
-  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
-] as const
-
-function localToday(tz = 'Africa/Johannesburg') {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, weekday: 'long', day: 'numeric',
-  }).formatToParts(new Date())
-  const weekday = (parts.find((p) => p.type === 'weekday')?.value ?? '').toLowerCase()
-  const dayOfMonth = Number(parts.find((p) => p.type === 'day')?.value ?? '0')
-  return { weekday, dayOfMonth }
-}
-
 export const scheduledPipelineDispatcher = inngest.createFunction(
   {
     id: 'scheduled-pipeline-dispatcher',
@@ -32,7 +20,7 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
   async ({ step }) => {
     const dueClientIds = await step.run('find-due-clients', async () => {
       const admin = createAdminClient()
-      const { weekday, dayOfMonth } = localToday()
+      const today = localDate()
 
       const [{ data: clients }, { data: configs }] = await Promise.all([
         admin.from('clients')
@@ -54,9 +42,7 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
           console.log(`[scheduler] skipping ${client.id}: no access (${access.reason})`)
           continue
         }
-        const isWeeklyDue = cfg.report_period === 'weekly' && cfg.report_day === weekday
-        const isMonthlyDue = cfg.report_period === 'monthly' && dayOfMonth === 1
-        if (isWeeklyDue || isMonthlyDue) due.push(client.id)
+        if (isWeeklyDue(cfg, today) || isMonthlyDue(cfg, today)) due.push(client.id)
       }
       return due
     })
