@@ -19,7 +19,7 @@
     "inngest": "^4.20.0",
     "lucide-react": "^1.7.0",
     "next": "16.2.1",
-    "openai": "^6.42.0",
+    "openai": "^7.15.0",
     "puppeteer-core": "^25.9.0",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
