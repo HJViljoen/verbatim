@@ -23,12 +23,26 @@ export interface CadenceRun {
 export interface CadenceReport {
   runId: string | null
   sentAt: string | null
+  /** report_sends.status. Optional: a caller that already filtered to 'sent'
+   *  rows (scripts/eval.ts once did) is judged on sentAt as before. */
+  status?: string | null
 }
+
+/** A report_sends row in one of these states means the schedule did what it
+ *  was told, so the run is NOT a missed update:
+ *    sent    — it went out;
+ *    ready   — a review schedule deliberately stopped and is waiting for a
+ *              member to press Send (report_schedules.review is a shipped,
+ *              user-facing toggle, and holding is the correct behaviour);
+ *    skipped — the schedule has no recipients, so there was nobody to email.
+ *  'claimed' (started, never finished) and 'failed' are real misses. */
+export const SETTLED_SEND_STATUSES = new Set(['sent', 'ready', 'skipped'])
 
 export interface CadenceStats {
   /** Runs that finished in a reportable state AND were asked to report. */
   owed: number
-  /** Of those, how many actually emailed someone. */
+  /** Of those, how many the send path settled — emailed, held for review, or
+   *  deliberately skipped for want of recipients. */
   delivered: number
   /** owed - delivered. Each of these is an update a client did not get. */
   missed: number
@@ -45,12 +59,14 @@ export interface CadenceStats {
 const REPORTABLE = new Set(['completed', 'partial'])
 
 export function cadenceReliability(runs: CadenceRun[], reports: CadenceReport[]): CadenceStats {
-  const emailed = new Set(
-    reports.filter((r) => r.sentAt && r.runId).map((r) => r.runId as string),
+  const settled = new Set(
+    reports
+      .filter((r) => r.runId && (r.status == null ? Boolean(r.sentAt) : SETTLED_SEND_STATUSES.has(r.status)))
+      .map((r) => r.runId as string),
   )
   const reportable = runs.filter((r) => REPORTABLE.has(r.status))
   const owedRuns = reportable.filter((r) => r.options?.sendReport === true)
-  const missedRunIds = owedRuns.filter((r) => !emailed.has(r.id)).map((r) => r.id)
+  const missedRunIds = owedRuns.filter((r) => !settled.has(r.id)).map((r) => r.id)
   return {
     owed: owedRuns.length,
     delivered: owedRuns.length - missedRunIds.length,
