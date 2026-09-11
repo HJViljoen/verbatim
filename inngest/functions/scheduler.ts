@@ -38,7 +38,7 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
     // failure mode. Its own failure is swallowed (touchHeartbeat never throws).
     await step.run('heartbeat', async () => {
       const { weekday, dayOfMonth } = localDate()
-      return touchHeartbeat(createAdminClient(), 'dispatcher', { weekday, dayOfMonth })
+      return touchHeartbeat(createAdminClient, 'dispatcher', { weekday, dayOfMonth })
     })
 
     const dueClientIds = await step.run('find-due-clients', async () => {

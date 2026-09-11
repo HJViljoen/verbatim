@@ -28,7 +28,7 @@ export const keepWarm = inngest.createFunction(
       // Liveness beacon (WP2): the most frequent thing Inngest calls is also
       // the cheapest proof that Inngest is calling anything at all. Inside the
       // existing step so no step id changes; never throws.
-      await touchHeartbeat(createAdminClient(), 'inngest', result)
+      await touchHeartbeat(createAdminClient, 'inngest', result)
       return result
     })
   },
