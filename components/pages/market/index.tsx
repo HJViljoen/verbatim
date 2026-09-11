@@ -11,6 +11,7 @@ import { Tile, TileBlock, TileEmpty } from '@/components/shell/tile'
 import { MasterDetail } from '@/components/shell/master-detail'
 import { PaneHeader, PaneBody, RailGroup, RailLink, Segmented, ListRows, ListRow, PaneEmpty, DetailHeader, DetailSection, Verbatim } from '@/components/shell/master-list'
 import { ListSearch } from '@/components/shell/list-search'
+import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import {
   loadMarket, isMarketEmpty, marketHref, type MarketData, type MarketEmpty, type MarketDetail, type Group,
 } from '@/lib/pages/market'
@@ -264,7 +265,7 @@ const list: R = (d, mode) => {
             <ListRows>
               {l.rows.map((row) => (
                 <Row key={row.id} href={marketHref('recs', row.id, filter)} active={row.id === itemId} search={`${row.title} ${row.reasoning} ${prettyType(row.type)}`}>
-                  <div className="flex items-start gap-2.5">
+                  <div className={`flex items-start gap-2.5 ${row.status === 'dismissed' ? 'opacity-55' : ''}`}>
                     <span className="w-4 shrink-0 font-mono text-[12px] font-semibold tabular-nums text-muted-foreground">{row.rank + 1}</span>
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{row.title}</p>
@@ -273,6 +274,11 @@ const list: R = (d, mode) => {
                         <PriorityChip word={priorityWord(row.rank)} />
                         <EvidenceChip tier={row.tier} />
                         {row.conversations > 0 && <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{fmtInt(row.conversations)} conv.</span>}
+                        {/* A row IS a link, so it carries the word, not the
+                            control — a menu nested in an anchor navigates on
+                            every click. The menu lives in the detail pane the
+                            row opens. */}
+                        <span className="ml-auto"><RecStatusWord status={row.status} /></span>
                       </div>
                     </div>
                   </div>
@@ -369,6 +375,7 @@ function DetailPane({ d, mode }: { d: D; mode: RenderMode }) {
             <PriorityChip word={priorityWord(item.rank)} />
             <EvidenceChip tier={item.tier} />
             <Chip>{prettyType(item.type)}</Chip>
+            {app ? <RecStatusMenu id={item.id} status={item.status} className="ml-1" /> : <RecStatusWord status={item.status} />}
           </div>
         </DetailHeader>
         <PaneBody>

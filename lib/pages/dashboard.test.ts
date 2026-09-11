@@ -18,7 +18,7 @@ const fixture: DashboardData = {
   },
   hero: {
     show: true, headline: 'Commenters ask practical questions.', beats: [{ metric: 'top_theme', before: 'Heard across ', figure: '167', after: ' conversations.' }], fallback: false,
-    oneThing: { id: 'rec-1', title: 'Launch an access pathway', reasoning: 'Because.', priority: 'high' },
+    oneThing: { id: 'rec-1', title: 'Launch an access pathway', reasoning: 'Because.', priority: 'high', status: 'new' },
     quotes: [{ ref: 'h:recommendations:rec-1', text: 'What a brilliant attitude' }, { ref: 'e:ev-2', text: 'where are you from I need this' }],
     voices: 421, platforms: [{ label: 'Instagram', count: 300 }, { label: 'TikTok', count: 121 }],
   },

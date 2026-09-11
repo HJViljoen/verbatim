@@ -14,6 +14,7 @@ import { RankedBar } from '@/components/charts/ranked-bar'
 import { Ring } from '@/components/charts/ring'
 import { RingSync } from '@/components/charts/ring-sync'
 import { ClaimPopover } from '@/components/claim-popover'
+import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { Mover } from '@/components/charts/mover'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { dashboardEmail } from '@/components/email/tiles'
@@ -273,7 +274,15 @@ const recommendation: R = ({ hero: h }, mode) => {
   const app = mode === 'app'
   const grounded = h.voices > 0 ? `Grounded in ${fmtInt(h.voices)} voices${h.platforms.length > 1 ? ` · ${h.platforms.length} platforms` : ''}` : null
   return (
-    <Tile exportKey="dashboard.recommendation" col={3} row={1} distribute="center" hoverable={app && !!h.oneThing} className="py-3" eyebrow="Top recommendation" meta={h.oneThing ? priorityLabel(h.oneThing.priority) : undefined}
+    <Tile exportKey="dashboard.recommendation" col={3} row={1} distribute="center" hoverable={app && !!h.oneThing} className="py-3" eyebrow="Top recommendation"
+      meta={h.oneThing ? (
+        <span className="relative z-1 inline-flex items-center gap-1.5">
+          {priorityLabel(h.oneThing.priority)}
+          {/* z-1: the footer link covers the whole tile (after:inset-0), so the
+              control has to sit above it or the click only navigates. */}
+          {app ? <RecStatusMenu id={h.oneThing.id} status={h.oneThing.status} /> : <RecStatusWord status={h.oneThing.status} />}
+        </span>
+      ) : undefined}
       footer={h.oneThing ? (
         app ? (
           <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
