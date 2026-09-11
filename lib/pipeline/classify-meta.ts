@@ -4,7 +4,7 @@ import { openai } from '../openai'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
-import { usableTranscript } from './transcript-input'
+import { usableTranscript, usableTranslation } from './transcript-input'
 import {
   CLASSIFIED_TYPES,
   CLASSIFIED_TYPE_DEFS,
@@ -40,6 +40,7 @@ export interface ClassifyInput {
   hashtags: string[] | null
   transcript: string | null
   transcript_status: string | null
+  transcript_en: string | null
 }
 
 /** Ids of videos still unclassified, chunked into call-sized batches. */
@@ -80,7 +81,11 @@ export function buildClassifyUserPrompt(videos: ClassifyInput[]): string {
         `caption: ${v.caption?.trim() || '(none)'}`,
       ]
       if (v.hashtags?.length) lines.push(`hashtags: ${v.hashtags.join(' ')}`)
-      const transcript = usableTranscript(v)
+      // English where there is one: this step judges hook, format and framing
+      // sentiment, and none of that is served by the original language the way
+      // Pass A's verbatim evidence is. Falls back to the original, which is
+      // what it has always read (WP6, 2026-09-11).
+      const transcript = usableTranslation(v) ?? usableTranscript(v)
       if (transcript) lines.push(`transcript: ${transcript}`)
       return lines.join('\n')
     })
@@ -152,7 +157,7 @@ export async function runClassifyMetaBatch(
   const videos = await selectAll<ClassifyInput & { classified_type: string | null }>(() =>
     admin
       .from('videos')
-      .select('id, platform, account_name, caption, hashtags, transcript, transcript_status, classified_type')
+      .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
       .eq('client_id', clientId)
       .in('id', videoIds)
       .order('id'),

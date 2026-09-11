@@ -6,7 +6,7 @@ import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_VIDEO_QUOTE_MAX, estimateC
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
-import { usableTranscript } from './transcript-input'
+import { usableTranscript, usableTranslation } from './transcript-input'
 import type { VideoRow, CommentRow } from './types'
 import { normForMatch } from './quote-match'
 
@@ -44,6 +44,27 @@ import { normForMatch } from './quote-match'
 // hook_style comparison averages both regimes. classify-meta is stricter still
 // — it only picks up videos where classified_type IS NULL, so those labels do
 // not change until someone nulls the column.
+//
+// ALSO DELIBERATELY NOT BUMPED for the 2026-09-11 translation change (WP6).
+// The v4 system prompt gains one sentence ("When an ENGLISH TRANSLATION block
+// is present, reason from it but quote only from the ORIGINAL") and the user
+// prompt gains a second labelled block — but ONLY for a video that has a
+// transcript_en. For every other video, which is ~73% of the corpus and 100%
+// of it before the first translate wave runs, the assembled user prompt is
+// byte-identical to v4.1's and the extra system sentence is inert: it
+// describes a block that is not there.
+//
+// So a corpus-wide re-read would be paying to re-analyse thousands of videos
+// whose input did not change. Instead the re-read is per-video and exact:
+// lib/pipeline/pass-a-plan.ts gains a 'translated' SelectReason, and a video
+// is re-read the first time it carries a translation the last read did not
+// see — the same mechanism 'transcript' has used since 2026-08-17, bookkept in
+// videos.analyzed_with_translation.
+//
+// The cost of not bumping, stated plainly: a non-English video analysed before
+// its translation landed keeps insights the model drew from text it read in
+// the original, until the next run re-reads it via 'translated'. That is one
+// run of lag, not a permanent split — unlike the classified_type case above.
 //
 // To re-label deliberately: bump BOTH constants below (a transcripts-disabled
 // tenant books against PROMPT_VERSION, so bumping only the v4 one would leave
@@ -290,7 +311,7 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
     'TRANSCRIPT rules — a TRANSCRIPT block, labelled "t", may be present: the words actually spoken in the video.',
     '- Ground the classification (type, hook style, hook_text, topics) in what the video says. When the transcript shows the video\'s opening words, hook_text should be those words.',
     '- The audio may be unrelated background/trending sound. Judge the transcript against the caption and account first; if it clearly is not this video\'s own content, ignore it.',
-    '- The transcript may be in any language; read it as-is.',
+    '- The transcript may be in any language; read it as-is. When an ENGLISH TRANSLATION block is present, reason from it to understand what was said, but quote ONLY from the ORIGINAL transcript, verbatim, in its own language — a quote from the translation is not that person\'s words and will be discarded.',
     '- Industry/other videos: the creator IS a customer — a produced video is a deliberate, costly act of opinion, a STRONGER signal than a passing comment. Their spoken words are first-class evidence: cite the transcript with the label "t", quoted VERBATIM, one short sentence or phrase per quote (never a long passage). When the transcript expresses an opinion, experience, complaint, or claim with consumer-intelligence value, report it as an insight (or fold it into a matching comment insight as extra evidence) — do not ignore transcript signal just because comments exist.',
     '- CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.',
     '- claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.',
@@ -304,7 +325,9 @@ interface CommentRef {
   text: string
 }
 
-function buildUserPrompt(v: VideoRow, refs: CommentRef[], transcript: string | null = null): string {
+/** Exported for tests and for eyeballing the assembled block shape without
+ *  spending a call (scripts/translate-transcripts.ts --prompt). */
+export function buildUserPrompt(v: VideoRow, refs: CommentRef[], transcript: string | null = null, translation: string | null = null): string {
   const lines: string[] = [
     'VIDEO',
     `- platform: ${v.platform}`,
@@ -315,7 +338,23 @@ function buildUserPrompt(v: VideoRow, refs: CommentRef[], transcript: string | n
     `- format: ${v.content_format ?? '(unknown)'}`,
   ]
   if (transcript) {
-    lines.push('', `TRANSCRIPT [t] (lang: ${v.transcript_lang ?? 'unknown'})`, transcript)
+    // Two blocks, and the labels carry the rule (WP6, 2026-09-11): the ORIGINAL
+    // is the evidence — it is what the quote validator matches against, and
+    // what "in their own words" means — while the translation exists only so
+    // the model reads a language it is reliable in. Without a translation the
+    // block is byte-identical to what v4 has always sent.
+    if (translation) {
+      lines.push(
+        '',
+        `TRANSCRIPT [t] (lang: ${v.transcript_lang ?? 'unknown'}) — ORIGINAL, quote from this verbatim:`,
+        transcript,
+        '',
+        'ENGLISH TRANSLATION (read this to understand; never quote from it):',
+        translation,
+      )
+    } else {
+      lines.push('', `TRANSCRIPT [t] (lang: ${v.transcript_lang ?? 'unknown'})`, transcript)
+    }
   }
   lines.push('', `COMMENTS (${refs.length})`)
   for (const r of refs) {
@@ -698,6 +737,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
           analyzed_prompt_version: promptVersion,
           analyzed_lane: 'skip',
           analyzed_with_transcript: useTranscripts && usableTranscript(v) !== null,
+          analyzed_with_translation: useTranscripts && usableTranscript(v) !== null && usableTranslation(v) !== null,
         }).eq('id', v.id)
       }
       continue
@@ -710,7 +750,8 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // insights the floor exists to prevent.
     const refs: CommentRef[] = claimsOnly ? [] : kept.map((c, i) => ({ label: `c${i + 1}`, realId: c.id, text: c.text ?? '' }))
     const transcript = useTranscripts ? usableTranscript(v) : null
-    const userPrompt = buildUserPrompt(v, refs, transcript)
+    const translation = transcript ? usableTranslation(v) : null
+    const userPrompt = buildUserPrompt(v, refs, transcript, translation)
 
     if (dryRun) {
       const estInputTokens = Math.ceil((systemPrompt.length + userPrompt.length) / 4)
@@ -827,7 +868,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
         claims: claims?.kept ?? null,
         claimsOnly,
         bookkeeping: trackAnalysis
-          ? { storedComments: all.length, promptVersion, lane: claimsOnly ? 'claims_only' : 'full', withTranscript: transcript !== null }
+          ? { storedComments: all.length, promptVersion, lane: claimsOnly ? 'claims_only' : 'full', withTranscript: transcript !== null, withTranslation: translation !== null }
           : null,
       })
       await logCall(admin, {
@@ -877,7 +918,7 @@ interface PersistArgs {
   /** Incremental Pass A (2026-08-17): what this read saw, written onto the
    *  video LAST so the pointer only moves once every row is in. Null = harness
    *  run (trackAnalysis:false): rows are written, the pointer is not moved. */
-  bookkeeping: { storedComments: number; promptVersion: string; lane: 'full' | 'claims_only'; withTranscript: boolean } | null
+  bookkeeping: { storedComments: number; promptVersion: string; lane: 'full' | 'claims_only'; withTranscript: boolean; withTranslation: boolean } | null
 }
 
 async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: PersistArgs): Promise<void> {
@@ -1008,6 +1049,7 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
     analyzed_prompt_version: bookkeeping.promptVersion,
     analyzed_lane: bookkeeping.lane,
     analyzed_with_transcript: bookkeeping.withTranscript,
+    analyzed_with_translation: bookkeeping.withTranslation,
   }).eq('id', video.id)
   if (bkErr) throw new Error(`update video analysis bookkeeping: ${bkErr.message}`)
 }

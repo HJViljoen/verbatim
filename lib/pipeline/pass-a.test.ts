@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, passALane } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane } from './pass-a'
 import { usableTranscript } from './transcript-input'
 import { PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
@@ -128,6 +128,47 @@ describe('buildSystemPrompt v4 line rewrites', () => {
     const v3 = buildSystemPrompt(tc, false)
     expect(v3).toContain('- Insights must come from the comments, not the metadata.')
     expect(v3).not.toContain('TRANSCRIPT')
+  })
+})
+
+describe('the ORIGINAL stays the evidence (WP6 translation, 2026-09-11)', () => {
+  const tc = { brand_keywords: ['sealand'], competitor_names: [], industry_keywords: [] }
+  const v = {
+    platform: 'tiktok', account_name: 'acc', caption: 'probando la mochila', hashtags: ['#mochila'],
+    content_format: 'reel', transcript_lang: 'es', is_client: false, is_competitor: false,
+  } as unknown as Parameters<typeof buildUserPrompt>[0]
+  const refs = [{ label: 'c1', realId: 'id-1', text: 'me encanta' }]
+
+  it('v4 tells the model to reason from the translation and quote only the original', () => {
+    const p = buildSystemPrompt(tc, true)
+    expect(p).toContain('ENGLISH TRANSLATION block is present')
+    expect(p).toContain('quote ONLY from the ORIGINAL transcript, verbatim')
+  })
+
+  it('the sentence is inert on v3 (no transcripts at all)', () => {
+    expect(buildSystemPrompt(tc, false)).not.toContain('ENGLISH TRANSLATION')
+  })
+
+  it('both blocks appear, labelled, original first', () => {
+    const p = buildUserPrompt(v, refs, 'probé esta mochila', 'I tried this backpack')
+    expect(p).toContain('TRANSCRIPT [t] (lang: es) — ORIGINAL, quote from this verbatim:')
+    expect(p).toContain('probé esta mochila')
+    expect(p).toContain('ENGLISH TRANSLATION (read this to understand; never quote from it):')
+    expect(p).toContain('I tried this backpack')
+    expect(p.indexOf('probé esta mochila')).toBeLessThan(p.indexOf('I tried this backpack'))
+  })
+
+  it('WITHOUT a translation the prompt is byte-identical to what v4 has always sent', () => {
+    // This is what buys not bumping PROMPT_VERSION_V4: for every English video
+    // — and for the whole corpus before the first translate wave — the model
+    // sees exactly the bytes it saw before this change.
+    expect(buildUserPrompt(v, refs, 'probé esta mochila', null))
+      .toBe(buildUserPrompt(v, refs, 'probé esta mochila'))
+    expect(buildUserPrompt(v, refs, 'probé esta mochila')).toContain('TRANSCRIPT [t] (lang: es)\nprobé esta mochila')
+  })
+
+  it('a translation alone adds nothing — no transcript, no blocks', () => {
+    expect(buildUserPrompt(v, refs, null, 'I tried this backpack')).not.toContain('TRANSLATION')
   })
 })
 

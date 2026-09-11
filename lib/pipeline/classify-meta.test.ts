@@ -15,6 +15,7 @@ const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => 
   caption: 'A day with my new running blade',
   hashtags: ['#runningblade'],
   transcript: null,
+  transcript_en: null,
   transcript_status: null,
   ...over,
 })
@@ -78,5 +79,29 @@ describe('validateClassifyResponse', () => {
       ids,
     )
     expect([...out.keys()]).toEqual(['id-b'])
+  })
+})
+
+describe('transcript block — English where there is one (WP6, 2026-09-11)', () => {
+  it('prefers the translation over the original', () => {
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: 'Hola, probé esta mochila', transcript_en: 'Hi, I tried this backpack', transcript_status: 'ok' }),
+    ])
+    expect(p).toContain('transcript: Hi, I tried this backpack')
+    expect(p).not.toContain('Hola')
+  })
+
+  it('falls back to the original when nothing was translated — the shape it has always had', () => {
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: 'Hola, probé esta mochila', transcript_en: null, transcript_status: 'ok' }),
+    ])
+    expect(p).toContain('transcript: Hola, probé esta mochila')
+  })
+
+  it('a translation cannot smuggle past the content gate', () => {
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: '♪♪ ♪♪', transcript_en: 'la la la', transcript_status: 'lyrics' }),
+    ])
+    expect(p).not.toContain('transcript:')
   })
 })
