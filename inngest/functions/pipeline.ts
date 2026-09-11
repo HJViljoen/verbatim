@@ -14,6 +14,7 @@ import { loadBrandClaims, shapeBrandVoice } from '@/lib/pipeline/claims'
 import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
+import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
@@ -31,7 +32,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -700,6 +701,78 @@ export const runPipeline = inngest.createFunction(
       }
     }
 
+    // 4d. TRANSLATION (WP6, 2026-09-11). Every transcript that exists by now —
+    //     this run's, the backfill's, and the whole historical corpus — in a
+    //     language that is not English gets an English rendering, so Pass A
+    //     reasons from a text it reads reliably instead of "as-is". Its own
+    //     wave rather than part of transcription, precisely so it reaches the
+    //     videos transcribed before it existed.
+    //
+    //     Placed AFTER the backfill (a transcript that lands there is
+    //     translatable in the same run) rather than before plan-pass-a, which
+    //     is where the plan described it: plan-pass-a runs FIRST in this
+    //     function — its selection is what the backfill attempts — so "before
+    //     plan-pass-a" would have meant translating before the run's own
+    //     transcripts existed. The selection is re-taken afterwards instead,
+    //     which is what the backfill already does for the same reason.
+    //
+    //     Non-fatal throughout: a video without a translation is analysed
+    //     without one, exactly as before this existed.
+    const translate = { batches: 0, needing: 0, deferred: 0, translated: 0, failed: 0, skipped: 0, cost: 0 }
+    if (flags.translation) {
+      const plan = await step
+        .run('plan-translate', () => planTranslateBatches(clientId))
+        .catch((e) => {
+          noteError('plan-translate', e)
+          return { batches: [] as string[][], needing: 0, deferred: 0, byLang: {} as Record<string, number> }
+        })
+      translate.batches = plan.batches.length
+      translate.needing = plan.needing
+      translate.deferred = plan.deferred
+      for (let w = 0; w < plan.batches.length; w += TRANSLATE_PARALLEL) {
+        const wave = await Promise.all(
+          plan.batches.slice(w, w + TRANSLATE_PARALLEL).map((videoIds, j) =>
+            step
+              .run(`translate:${w + j + 1}-of-${plan.batches.length}`, () =>
+                translateBatch({ clientId, runId, videoIds, batchNo: w + j + 1 }),
+              )
+              // Per-step catch (the transcribe fan-out's precedent): one batch
+              // out of retries must not abandon the rest, and its videos simply
+              // stay untranslated and re-plan next run.
+              .catch((e: unknown) => ({
+                translated: 0, skipped: 0, failed: 0, costUsd: 0,
+                errors: [`translate step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+              })),
+          ),
+        )
+        for (const r of wave) {
+          translate.translated += r.translated
+          translate.failed += r.failed
+          translate.skipped += r.skipped
+          translate.cost += r.costUsd
+          for (const err of r.errors) noteError('translate', err)
+        }
+      }
+      if (plan.needing) {
+        const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
+        console.log(
+          `[translate] ${plan.needing} needed · ${translate.translated} translated · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+        )
+      }
+      // A translation changes what Pass A sees on exactly those videos, and the
+      // 'translated' SelectReason is how they get re-read without a
+      // corpus-wide prompt bump — so the selection has to be re-taken on the
+      // rows this wave just wrote. Only worth a step when something landed.
+      if (translate.translated > 0) {
+        passAPlan = await step
+          .run('replan-pass-a-translated', () => planPassABatches(clientId, runId, !!options.forcePassA, flags))
+          .catch((e) => {
+            noteError('replan-pass-a-translated', e)
+            return passAPlan
+          })
+      }
+    }
+
     const batches = passAPlan.batches
     const passA = { analyzed: 0, claimsOnly: 0, skipped: 0, errored: 0, refused: 0, alreadyDone: 0, rateLimited: false, errors: [] as string[], batchesFailed: 0, insights: 0, languageSamples: 0, cost: 0, planned: passAPlan.selected, considered: passAPlan.considered, unchanged: passAPlan.reasons.unchanged, planReasons: passAPlan.reasons }
     // Batches dispatch in parallel waves — batches are disjoint video sets, so
@@ -1018,7 +1091,7 @@ export const runPipeline = inngest.createFunction(
         })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, transcriptBackfill: backfill, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
+    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
 
