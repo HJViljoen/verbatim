@@ -12,12 +12,15 @@ import { getBaseUrl } from '@/lib/site'
 import { coverPlainText } from '@/lib/reports/cover'
 import type { CoverText, FigureTable } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
+import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 
 // Reports — the archive of what went out and what was built (Stage 3):
 //   Sent  — every scheduled send (subject, who, when, the PDF, the share link,
 //           the email as sent — re-rendered from its snapshot, never stored),
 //           with the updates emailed before schedules existed beneath them.
 //   Built — PDFs built by hand in the Studio, with their share links.
+//   Exported — the pages and tiles a reader took from the export control on
+//           the page itself; the only place those files can be found again.
 // Making things happens in the Studio; this page is what left the building.
 
 interface SendRow {
@@ -47,7 +50,7 @@ interface BuildRow {
   artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[]
 }
 
-type Group = 'sent' | 'built'
+type Group = 'sent' | 'built' | 'exported'
 const BASE = '/dashboard/reports'
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -69,20 +72,24 @@ const sendLine = (s: SendRow) =>
 export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const group: Group = sp.group === 'built' ? 'built' : 'sent'
+  const group: Group = sp.group === 'built' ? 'built' : sp.group === 'exported' ? 'exported' : 'sent'
 
-  const [{ data: sendData }, { data: legacyData }, { data: buildData }] = await Promise.all([
+  const [{ data: sendData }, { data: legacyData }, { data: buildData }, { data: exportData }] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
       .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
     supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
     supabase.from('report_snapshots')
       .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, artifacts(id, format, bytes, stale, rendered_at, version)')
       .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(100),
+    supabase.from('report_snapshots')
+      .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
+      .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(50),
   ])
   const sends = (sendData ?? []) as unknown as SendRow[]
   const legacy = (legacyData ?? []) as LegacyReport[]
   const sentSnapshotIds = new Set(sends.map((s) => s.snapshot_id).filter(Boolean))
   const builds = ((buildData ?? []) as unknown as BuildRow[]).filter((b) => !sentSnapshotIds.has(b.id))
+  const exports = exportedRows((exportData ?? []) as unknown as ExportSnapshot[])
 
   // ── selection ─────────────────────────────────────────────────────────
   const sentIds = [...sends.map((s) => s.id), ...legacy.map((l) => l.id)]
@@ -91,6 +98,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const selectedLegacy = sentId && !selectedSend ? legacy.find((l) => l.id === sentId) ?? null : null
   const buildId = group === 'built' ? (sp.item && builds.some((b) => b.id === sp.item) ? sp.item : builds[0]?.id ?? null) : null
   const selectedBuild = buildId ? builds.find((b) => b.id === buildId) ?? null : null
+  const exportId = group === 'exported' ? (sp.item && exports.some((e) => e.id === sp.item) ? sp.item : exports[0]?.id ?? null) : null
+  const selectedExport = exportId ? exports.find((e) => e.id === exportId) ?? null : null
 
   // Share links for the selected item — read server-side (the token is
   // withheld from the workspace's RLS reads), scoped to the tenant.
@@ -131,6 +140,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <RailGroup label="Reports">
           <RailLink href={href('sent')} active={group === 'sent'} count={sends.length + legacy.length}>Sent</RailLink>
           <RailLink href={href('built')} active={group === 'built'} count={builds.length}>Built</RailLink>
+          <RailLink href={href('exported')} active={group === 'exported'} count={exports.length}>Exported</RailLink>
         </RailGroup>
       </PaneBody>
     </>
@@ -165,7 +175,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         </div>
       </PaneBody>
     </>
-  ) : (
+  ) : group === 'built' ? (
     <>
       <PaneHeader title="Built" meta={builds.length > 0 ? 'newest first' : undefined}>
         {builds.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search builds…" />}
@@ -183,6 +193,28 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
             </ListRows>
           ) : (
             <PaneEmpty>Nothing built by hand yet. Build any template in the Studio and its PDF lands here.</PaneEmpty>
+          )}
+        </div>
+      </PaneBody>
+    </>
+  ) : (
+    <>
+      <PaneHeader title="Exported" meta={exports.length > 0 ? 'newest first' : undefined}>
+        {exports.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search exports…" />}
+      </PaneHeader>
+      <PaneBody>
+        <div id={LIST_ID}>
+          {exports.length > 0 ? (
+            <ListRows>
+              {exports.map((e) => (
+                <ListRow key={e.id} href={href('exported', e.id)} active={e.id === exportId} search={`${e.title} ${e.what}`}>
+                  <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{e.title}</p>
+                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">{exportedLine(e, fmtWhen(e.createdAt))}</p>
+                </ListRow>
+              ))}
+            </ListRows>
+          ) : (
+            <PaneEmpty>Nothing exported yet. Export any page or tile from its menu; the files collect here.</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -227,7 +259,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     ) : (
       <PaneEmpty>Select an update to read it here.</PaneEmpty>
     )
-  ) : selectedBuild ? (
+  ) : group === 'built' ? (
+    selectedBuild ? (
     <>
       <DetailHeader eyebrow="Built in the Studio" title={selectedBuild.title} meta={`built ${fmtWhen(selectedBuild.created_at)}${selectedBuild.cover?.model ? '' : ' · cover written in code'}`} />
       <DetailSection>
@@ -244,8 +277,25 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <ShareLinks snapshotId={selectedBuild.id} links={shareLinks} />
       </DetailSection>
     </>
+    ) : (
+      <PaneEmpty>Select a build.</PaneEmpty>
+    )
+  ) : selectedExport ? (
+    <>
+      <DetailHeader eyebrow="Exported from the page" title={selectedExport.title} meta={exportedLine(selectedExport, fmtWhen(selectedExport.createdAt))} />
+      <DetailSection label="Files">
+        <div className="flex flex-wrap items-center gap-3">
+          {selectedExport.files.map((f) => (
+            <a key={f.id} href={`/api/artifacts/${f.id}`} className="text-[12px] font-medium underline underline-offset-2">Download the {f.format.toUpperCase()} · {fmtBytes(f.bytes)}</a>
+          ))}
+        </div>
+        {selectedExport.stale && (
+          <p className="mt-2 text-[11px] text-muted-foreground">This file was cleared from storage. Downloading it builds the same file again from the figures it was exported with; the quoted voices are read live, so a withdrawn comment never shows.</p>
+        )}
+      </DetailSection>
+    </>
   ) : (
-    <PaneEmpty>Select a build.</PaneEmpty>
+    <PaneEmpty>Select a file.</PaneEmpty>
   )
 
   return (
