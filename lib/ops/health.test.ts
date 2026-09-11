@@ -191,11 +191,23 @@ describe('assessPipelineHealth — stuck runs', () => {
     expect(f).toEqual([])
   })
 
-  it('ignores the ancient stranded run outside the 14-day window', () => {
-    // 06706296… has sat at 'analyzing' since 2026-06-13. Without the window it
-    // would alert every morning forever.
+  it("flags a run parked at 'analyzing', the status stuck runs actually have", () => {
+    // No pipeline_runs row in this install has ever been left at 'running' —
+    // the one stranded row, 06706296…, is 'analyzing' (written by the
+    // standalone Pass A script). A rule that only knew 'running' saw nothing.
     const f = assessPipelineHealth(inputs({
-      runs: [{ id: 'old', clientId: 'c1', status: 'running', options: null, startedAt: agoDays(90), completedAt: null }],
+      runs: [{ id: 'r1', clientId: 'c1', status: 'analyzing', options: null, startedAt: agoH(9), completedAt: null }],
+    }))
+    expect(kinds(f)).toEqual(['run_stuck'])
+    expect(f[0].detail).toContain("'analyzing'")
+  })
+
+  it('ignores the ancient stranded run outside the 14-day window', () => {
+    // 06706296… has sat at 'analyzing' since 2026-06-13. Now that the rule does
+    // recognise that status, the window is the only thing standing between it
+    // and an alert every morning forever.
+    const f = assessPipelineHealth(inputs({
+      runs: [{ id: 'old', clientId: 'c1', status: 'analyzing', options: null, startedAt: agoDays(90), completedAt: null }],
     }))
     expect(f).toEqual([])
   })

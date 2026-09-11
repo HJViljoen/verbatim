@@ -27,8 +27,14 @@ export const DISPATCHER_GRACE_MS = 90 * 60_000
 export const RUN_START_GRACE_MS = 2 * 3600_000
 /** A run that opened slightly early still counts as that slot's run. */
 export const RUN_START_LEAD_MS = 3600_000
-/** A run still 'running' this long after it opened is not coming back. */
+/** A run still in progress this long after it opened is not coming back. */
 export const RUN_STUCK_MS = 6 * 3600_000
+/** Statuses that mean "still going". Both occur at rest in production: the
+ *  orchestrator opens a run as 'running', and the standalone Pass A script
+ *  (lib/pipeline/pass-a.ts) parks it at 'analyzing' — which is what the row
+ *  stranded since 2026-06-13 actually is. A rule that only knew 'running' would
+ *  have missed the one stuck run this install has ever had. */
+export const IN_PROGRESS_STATUSES = new Set(['running', 'analyzing'])
 /** An owed report this long after the run completed should have gone out. */
 export const REPORT_GRACE_MS = 3 * 3600_000
 /** How far back an undelivered update is still worth naming. This check used to
@@ -182,7 +188,7 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
   // 3. A run that opened and never closed.
   const nameById = new Map(inputs.clients.map((c) => [c.id, c.name]))
   for (const r of inputs.runs) {
-    if (r.status !== 'running') continue
+    if (!IN_PROGRESS_STATUSES.has(r.status)) continue
     const t = r.startedAt ? Date.parse(r.startedAt) : NaN
     if (Number.isNaN(t)) continue
     const age = now - t
@@ -191,7 +197,7 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
       kind: 'run_stuck',
       clientId: r.clientId,
       clientName: nameById.get(r.clientId),
-      detail: `run ${r.id} has been 'running' since ${new Date(t).toISOString()} (${ago(age)})`,
+      detail: `run ${r.id} has been '${r.status}' since ${new Date(t).toISOString()} (${ago(age)})`,
     })
   }
 
