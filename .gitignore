@@ -46,3 +46,6 @@ scratch/
 
 # Agent worktrees (Claude Code --isolation worktree)
 .claude/worktrees/
+
+# graphify knowledge graph (local tool output; rebuildable)
+graphify-out/
