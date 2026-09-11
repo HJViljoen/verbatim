@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { rows } from './read'
 
 // The themed update — shared by every page loader that shows themes.
 //
@@ -52,5 +53,5 @@ export async function fetchThemedRunId(
   let q = supabase.from('themes').select('run_id, created_at').eq('client_id', clientId)
   if (runningIds.length) q = q.not('run_id', 'in', `(${runningIds.join(',')})`)
   const res = await q.order('created_at', { ascending: false }).limit(1)
-  return pickThemedRunId((res.data ?? []) as ThemedRunRow[], runningIds)
+  return pickThemedRunId(rows<ThemedRunRow>(res, 'themedRun.themes'), runningIds)
 }

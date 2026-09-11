@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { rows } from './read'
 
 // The video update — shared by every page loader that reads a corpus of videos.
 //
@@ -64,12 +65,12 @@ export async function fetchLatestVideoRun(
   let q = supabase.from('videos').select('run_id, scraped_at').eq('client_id', clientId)
   if (runningIds.length) q = q.not('run_id', 'in', `(${runningIds.join(',')})`)
   const res = await q.order('scraped_at', { ascending: false }).limit(1)
-  return pickLatestVideoRun((res.data ?? []) as VideoRunRow[], runningIds)
+  return pickLatestVideoRun(rows<VideoRunRow>(res, 'latestVideoRun.videos'), runningIds)
 }
 
 /** The updates that are collecting right now. Every loader that anchors on a
  *  run needs them, and every loader asked for them itself until this. */
 export async function fetchRunningRunIds(supabase: SupabaseClient, clientId: string): Promise<string[]> {
   const res = await supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running')
-  return ((res.data ?? []) as { id: string }[]).map((r) => r.id)
+  return rows<{ id: string }>(res, 'latestVideoRun.runningRuns').map((r) => r.id)
 }

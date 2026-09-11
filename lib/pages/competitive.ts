@@ -14,6 +14,7 @@ import {
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
+import { row, rows as readRows } from './read'
 import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 
 // Competitive Intelligence loader — the data half of the old
@@ -167,7 +168,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
 
   // Anchor on the newest update WITH analysis; an in-flight one has no
   // findings yet and would blank the page for the duration of every update.
-  const [{ data: client }, { data: tc }, { data: latestRun }, runningIds, historyRaw] = await Promise.all([
+  const [clientRes, tcRes, latestRunRes, runningIds, historyRaw] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs').select('report_day, report_period').eq('client_id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
@@ -179,6 +180,9 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
         .eq('client_id', clientId).order('run_date', { ascending: true }),
     ),
   ])
+  const client = row<{ company_name: string | null }>(clientRes, 'competitive.client')
+  const tc = row<{ report_day: string | null; report_period: string | null }>(tcRes, 'competitive.trackingConfig')
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'competitive.latestRun')
   const brand = client?.company_name ?? 'Your brand'
   const brandShort = brand.split(/\s[—–-]\s/)[0].trim() || brand
   const runId = latestRun?.id as string | undefined
@@ -244,7 +248,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   const themesByBucket = themeRows.length > 0 ? themeCounts(themeRows) : null
 
   // ── findings ───────────────────────────────────────────────────────────
-  const insights = orderInsights((ciRes.data ?? []) as CompetitiveInsight[])
+  const insights = orderInsights(readRows<CompetitiveInsight>(ciRes, 'competitive.insights'))
   const kinds = groupByKind(insights)
   const findingsByCompetitor = new Map<string, number>()
   for (const ci of insights) if (ci.competitor_name) findingsByCompetitor.set(ci.competitor_name, (findingsByCompetitor.get(ci.competitor_name) ?? 0) + 1)

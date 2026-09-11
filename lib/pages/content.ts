@@ -11,6 +11,7 @@ import {
 } from '../engage'
 import { periodWindowDays } from '../config'
 import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
+import { row, rows } from './read'
 import {
   perfVsMedian, medianEngagement, bestDuration, fieldSentence, topVoices, roleByAccount, handleKey,
   entityScoreboard, durationPerf, entityPlaybooks, trendingSounds, entityKey, shapeInbox, intentCounts, isIntent,
@@ -163,21 +164,26 @@ interface EngageDigest {
  *  Its own anchor (latest completed/partial run), separate from the video
  *  tiles' `latestVideoRun` — see the file header. */
 async function loadEngageDigest(supabase: SupabaseClient, clientId: string): Promise<EngageDigest | null> {
-  const { data: run } = await supabase
+  const run = row<{ id: string; started_at: string }>(await supabase
     .from('pipeline_runs')
     .select('id, started_at')
     .eq('client_id', clientId)
     .in('status', ['completed', 'partial'])
     .order('started_at', { ascending: false })
     .limit(1)
-    .maybeSingle()
+    .maybeSingle(), 'content.digestRun')
   if (!run) return null
 
-  const { data: config } = await supabase
+  const config = row<{
+    report_period: string | null
+    brand_keywords: string[] | null
+    competitor_keywords: string[] | null
+    industry_keywords: string[] | null
+  }>(await supabase
     .from('tracking_configs')
     .select('report_period, brand_keywords, competitor_keywords, industry_keywords')
     .eq('client_id', clientId)
-    .maybeSingle()
+    .maybeSingle(), 'content.digestTrackingConfig')
   const windowDays = periodWindowDays((config?.report_period as string) ?? 'weekly')
   const windowStart = new Date(Date.parse(run.started_at as string) - windowDays * 86_400_000).toISOString()
   const vocab = engageVocab([config?.brand_keywords, config?.competitor_keywords, config?.industry_keywords])
@@ -322,7 +328,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // pays it again). `client` (company name) is the one addition this split
   // makes: every page's method note needs a company, and nothing on this page
   // read it before.
-  const [runningIds, { data: tc }, { data: client }, digest, snapRows, { data: eventData }] = await Promise.all([
+  const [runningIds, tcRes, clientRes, digest, snapRows, eventsRes] = await Promise.all([
     fetchRunningRunIds(supabase, clientId),
     supabase.from('tracking_configs').select('own_handles').eq('client_id', clientId).maybeSingle(),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -336,6 +342,8 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
       .select('platform, metric, event_date, severity, magnitude_label, explained, explanation')
       .eq('client_id', clientId).order('event_date', { ascending: false }),
   ])
+  const tc = row<{ own_handles: Record<string, string> | null }>(tcRes, 'content.trackingConfig')
+  const client = row<{ company_name: string | null }>(clientRes, 'content.client')
   const brand = client?.company_name ?? 'Your brand'
 
   // Anchor on the newest update WITH videos, excluding in-flight ones (the
@@ -360,7 +368,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // Discovered videos only — the client's own posts are a different segment
   // (Owned-Data-Plan: "segment, never blend") and never mix into market content
   // intelligence.
-  const [all, ownPosts, { data: summary }] = await Promise.all([
+  const [all, ownPosts, summaryRes] = await Promise.all([
     selectAll<VideoRow>(() => supabase.from('videos')
       .select('id, platform, account_name, account_followers, video_url, views, likes, engagement_rate, upload_date, duration_seconds, audio_name, transcript_status, is_client, is_competitor, competitor_name, sentiment, classified_type, hook_style, hook_text, topics')
       .eq('client_id', clientId).eq('run_id', videoRunId).eq('source', 'discovered')
@@ -412,7 +420,8 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // number here and the "Posts by the brand" number cannot disagree: same
   // function, same inputs. With no stored census there is no window to count,
   // and the row is omitted rather than guessed.
-  const ownedCensus = (summary?.owned_census ?? null) as OwnedCensus | null
+  const summary = row<{ owned_census: OwnedCensus | null }>(summaryRes, 'content.runSummary')
+  const ownedCensus = summary?.owned_census ?? null
   const window = censusWindow(ownedCensus)
   const ownPostsInWindow = window
     ? ownedPostsIn(ownPosts, ownHandleMap, { source: 'owned' }, window)
@@ -433,7 +442,7 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   // ── your accounts (Trends' logic: snapshots → series; events newest first,
   // the first explained one speaks) ──────────────────────────────────────
   const accounts = accountSeries(snapRows, 30)
-  const events = (eventData ?? []) as EventRow[]
+  const events = rows<EventRow>(eventsRes, 'content.accountEvents')
   const sortedEvents = [...events].sort((a, b) => b.event_date.localeCompare(a.event_date) || b.severity - a.severity)
   const topEvent = sortedEvents.find((e) => e.explained && e.explanation) ?? sortedEvents[0] ?? null
   const explainedPlatforms = [...new Set(sortedEvents.filter((e) => e.explained && e.metric === 'followers').map((e) => e.platform))]

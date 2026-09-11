@@ -14,6 +14,7 @@ import {
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
+import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 
 // Market Intelligence loader — the data half of the old app/dashboard/market/
@@ -168,7 +169,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
 
   // Latest COMPLETED update — an in-flight one has no synthesis rows yet, so
   // the page keeps serving the previous read until the new one closes.
-  const [{ data: client }, { data: latestRun }, newsRes, runningIds] = await Promise.all([
+  const [clientRes, latestRunRes, newsRes, runningIds] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -184,6 +185,8 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     // In-flight updates, so the themed-run lookup below can exclude them.
     fetchRunningRunIds(supabase, clientId),
   ])
+  const client = row<{ company_name: string | null }>(clientRes, 'market.client')
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market.latestRun')
   const brand = client?.company_name ?? 'Your brand'
 
   if (!latestRun) return { empty: true, brand, legendItems: LEGEND_ITEMS }
@@ -229,18 +232,24 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
   ])
 
-  const insights = (miRes.data ?? []) as MarketInsight[]
-  const recommendations = (recRes.data ?? []) as Recommendation[]
-  const competitive = (ciRes.data ?? []) as CompetitiveRef[]
-  const ciSummary = (summaryRes.data?.consumer_intelligence_summary ?? null) as CiSummary | null
-  const sayVsHear = ((summaryRes.data?.say_vs_hear ?? null) as SayVsHearEntry[] | null) ?? null
-  const brandVoice = (summaryRes.data?.brand_voice ?? null) as BrandVoiceSnapshot | null
+  const insights = rows<MarketInsight>(miRes, 'market.marketInsights')
+  const recommendations = rows<Recommendation>(recRes, 'market.recommendations')
+  const competitive = rows<CompetitiveRef>(ciRes, 'market.competitiveInsights')
+  const summary = row<{
+    consumer_intelligence_summary: CiSummary | null
+    say_vs_hear: SayVsHearEntry[] | null
+    brand_voice: BrandVoiceSnapshot | null
+    run_date: string | null
+  }>(summaryRes, 'market.runSummary')
+  const ciSummary = summary?.consumer_intelligence_summary ?? null
+  const sayVsHear = summary?.say_vs_hear ?? null
+  const brandVoice = summary?.brand_voice ?? null
   const aboutYou = brandVoice?.about ?? []
-  const singleSourceThemes = (ssRes.data ?? []) as SingleSourceTheme[]
+  const singleSourceThemes = rows<SingleSourceTheme>(ssRes, 'market.singleSourceThemes')
   const singleSourceTotal = ssRes.count ?? singleSourceThemes.length
-  const news = (newsRes.data ?? []) as NewsRow[]
+  const news = rows<NewsRow>(newsRes, 'market.news')
   const newsTotal = newsRes.count ?? news.length
-  const runDate = (summaryRes.data?.run_date as string | undefined) ?? (latestRun.started_at as string)
+  const runDate = summary?.run_date ?? (latestRun.started_at as string)
 
   const miById = new Map(insights.map((mi) => [mi.id, mi]))
   const competitiveById = new Map(competitive.map((c) => [c.id, c]))
@@ -248,7 +257,8 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // base table (fetchInsightsByIds), not the current view (incremental Pass A).
   const citedIds = new Set<string>()
   for (const mi of insights) for (const id of mi.evidence?.supporting_theme_ids ?? []) citedIds.add(id)
-  for (const t of (bucketRes.data ?? []) as ThemeBucketRow[]) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
+  const bucketRows = rows<ThemeBucketRow>(bucketRes, 'market.themeBuckets')
+  for (const t of bucketRows) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
   const audienceRows = await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null; platform: string | null }>(
     supabase, [...citedIds], 'id, theme, source_video_id, platform',
   )
@@ -276,7 +286,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     }
     return ids
   }
-  const bucketById = bucketByAudienceId((bucketRes.data ?? []) as ThemeBucketRow[])
+  const bucketById = bucketByAudienceId(bucketRows)
   const recVoiceIds = (rec: Recommendation) => scopeToClientVoices(recSupportIds(rec), bucketById)
   const insightVoiceIds = (mi: MarketInsight) => scopeToClientVoices(insightIds(mi), bucketById)
 
