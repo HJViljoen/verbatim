@@ -41,6 +41,10 @@ export interface VideoRow {
   transcript?: string | null
   transcript_lang?: string | null
   transcript_status?: string | null
+  /** English rendering of `transcript`, written by the translate wave for
+   *  non-English videos (WP6, 2026-09-11). A reading aid for Pass A, never
+   *  evidence — read through transcript-input.usableTranslation. */
+  transcript_en?: string | null
   /** Incremental Pass A pointer: the run whose rows are this video's current
    *  analysis (see AGENTS.md). Read by runPassA for step-retry idempotency. */
   analyzed_run_id?: string | null

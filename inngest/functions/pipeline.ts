@@ -1136,10 +1136,23 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     transcript_status: string | null; source: string | null; run_id: string | null
     analyzed_run_id: string | null; analyzed_comment_count: number | null; analyzed_prompt_version: string | null
     analyzed_lane: string | null; analyzed_with_transcript: boolean | null
+    analyzed_with_translation: boolean | null
   }>(() =>
     admin.from('videos')
-      .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript')
+      .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript, analyzed_with_translation')
       .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
+  )
+  // WHICH videos carry a translation, as an id set — deliberately NOT a
+  // `transcript_en` column in the read above. That column is transcript-sized,
+  // and a corpus-wide read of transcript text once hung Postgres for eight
+  // hours (lib/pipeline/types.ts SYNTHESIS_VIDEO_COLUMNS); the plan only needs
+  // the null-ness, which PostgREST can answer without sending the text.
+  const translated = new Set(
+    (await selectAll<{ id: string }>(() =>
+      admin.from('videos').select('id')
+        .eq('client_id', clientId).eq('transcript_status', 'ok')
+        .not('transcript_en', 'is', null).order('id', { ascending: true }),
+    )).map((r) => r.id),
   )
   const counts = new Map<string, number>()
   const comments = await selectAll<{ platform: string; video_id: string }>(() =>
@@ -1171,12 +1184,16 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   for (const v of videos) {
     const n = counts.get(`${v.platform}::${v.video_id}`) ?? 0
     const transcriptUsableNow = withTranscripts && v.transcript_status === 'ok'
+    // A translation is only ever read alongside a transcript (it is the same
+    // text in English), so it cannot re-select a video the transcripts flag has
+    // already taken the transcript away from.
+    const translationUsableNow = transcriptUsableNow && translated.has(v.id)
     const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n)
     if (lane === 'skip') continue
     considered++
     if (!incremental && lane === 'claims_only' && v.run_id !== runId) { reasons.unchanged++; continue }
     const d = decideAnalysis({
-      state: v, laneNow: lane, storedComments: n, transcriptUsableNow, promptVersion, incremental, force, runId,
+      state: v, laneNow: lane, storedComments: n, transcriptUsableNow, translationUsableNow, promptVersion, incremental, force, runId,
     })
     reasons[d.reason]++
     if (d.select) eligible.push({ id: v.id, n })

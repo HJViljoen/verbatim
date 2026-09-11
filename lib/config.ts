@@ -194,6 +194,54 @@ export const TRANSCRIPT_PROMPT_CHARS = 2400
  *  quotes (D-b pools, cards) holds. */
 export const PASS_A_VIDEO_QUOTE_MAX = 200
 
+// --- Transcript translation (`transcript_en`, WP6 2026-09-11) ----------------
+// Pass A reads ~27% of transcripts in their original language ("read it as-is",
+// 2026-08-08). That held while nobody could show a loss, but the decision it
+// rested on was "build translation only if measurement demands it" and the
+// standing instruction since is accuracy first. So every non-English transcript
+// now also carries an English rendering, and Pass A is given BOTH: it reasons
+// from the translation and quotes only from the original, which is what keeps
+// the verbatim-evidence invariant (and the quote validator) intact.
+
+/** Master switch for the translation wave. Default ON — unlike every other
+ *  flag here, which defaults off because it gates spend on a path that did not
+ *  exist before. This one gates a path whose whole purpose is that analysis
+ *  stops silently degrading on a quarter of the corpus, so the safe default is
+ *  "on" and the switch exists to turn it OFF in a hurry (TRANSLATION_ENABLED=0)
+ *  if a run ever needs the pennies or the wall-time back. Read at call time so
+ *  it works in serverless; frozen per run by captureRunFlags. */
+export function translationEnabled(): boolean {
+  const v = process.env.TRANSLATION_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the translation call. Deliberately the FULL gpt-4.1, not mini:
+ *  this is the text Pass A reasons from for a quarter of the corpus, and a
+ *  mistranslated complaint becomes a wrong insight that nothing downstream can
+ *  catch (the quote validator checks the ORIGINAL, so it cannot). ~$0.012 per
+ *  non-English video at TRANSLATE_MAX_CHARS — a 300-video backlog is ~$4, one
+ *  run's worth of Apify is four times that. Quality over pennies. */
+export const TRANSLATE_MODEL = 'gpt-4.1'
+
+/** Transcript characters sent for translation, clipped code-point-safe.
+ *  Pass A only ever sees TRANSCRIPT_PROMPT_CHARS (2400) of the result, but
+ *  translating a little more leaves headroom if that cap rises without
+ *  re-translating the corpus. Beyond it the tail is dropped, not summarised. */
+export const TRANSLATE_MAX_CHARS = 4000
+
+/** Videos per translate Inngest step. One gpt-4.1 call per video, ~5-10s each,
+ *  so 8 ≈ 80s — the transcribe wave's shape and a wide margin under 300s. */
+export const TRANSLATE_BATCH = 8
+
+/** Translate steps dispatched per parallel wave (the transcribe wave pattern). */
+export const TRANSLATE_PARALLEL = 4
+
+/** Runaway BACKSTOP on translation, in videos per run — like BACKFILL_CAP, not
+ *  a quality budget. The first run after this ships faces the whole historical
+ *  non-English backlog at once; 400 caps that at ~$5 and the rest come on the
+ *  next run. Steady state is a handful of new videos a week. */
+export const TRANSLATE_CAP = 400
+
 /**
  * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
  * pre-approved fallback when string-match clustering fails, which the first real
@@ -562,6 +610,8 @@ export const COMPETITIVE_MIN_VIDEOS = 10
  */
 export interface RunFlags {
   transcripts: boolean
+  /** Default ON (translationEnabled) — see the translation block above. */
+  translation: boolean
   incrementalPassA: boolean
   themeRegistry: boolean
   redditDiscovery: boolean
@@ -571,6 +621,7 @@ export interface RunFlags {
 export function captureRunFlags(): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
+    translation: translationEnabled(),
     incrementalPassA: incrementalPassAEnabled(),
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),

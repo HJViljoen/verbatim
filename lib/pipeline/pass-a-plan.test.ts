@@ -17,6 +17,7 @@ const state = (over: Partial<VideoAnalysisState> = {}): VideoAnalysisState => ({
   analyzed_prompt_version: 'pass_a_v4',
   analyzed_lane: 'full',
   analyzed_with_transcript: false,
+  analyzed_with_translation: false,
   ...over,
 })
 
@@ -24,6 +25,7 @@ const base = {
   laneNow: 'full' as const,
   storedComments: 20,
   transcriptUsableNow: false,
+  translationUsableNow: false,
   promptVersion: 'pass_a_v4',
   incremental: true,
   force: false,
@@ -85,6 +87,41 @@ describe('decideAnalysis', () => {
   it('a usable transcript landing after the last read re-reads', () => {
     expect(decideAnalysis({ ...base, state: state({ analyzed_with_transcript: false }), transcriptUsableNow: true })).toEqual({ select: true, reason: 'transcript' })
     expect(decideAnalysis({ ...base, state: state({ analyzed_with_transcript: true }), transcriptUsableNow: true })).toEqual({ select: false, reason: 'unchanged' })
+  })
+
+  it('a translation landing after the last read re-reads (WP6, no version bump)', () => {
+    // The mechanism the 'transcript' reason established, for the second text a
+    // video can gain. It is what buys a corpus-wide prompt bump not happening:
+    // only the videos that actually gained an English rendering are re-read.
+    const s = state({ analyzed_with_transcript: true, analyzed_with_translation: false })
+    expect(decideAnalysis({ ...base, state: s, transcriptUsableNow: true, translationUsableNow: true }))
+      .toEqual({ select: true, reason: 'translated' })
+    expect(decideAnalysis({ ...base, state: state({ analyzed_with_transcript: true, analyzed_with_translation: true }), transcriptUsableNow: true, translationUsableNow: true }))
+      .toEqual({ select: false, reason: 'unchanged' })
+  })
+
+  it('an English video is never re-read for a translation it will never have', () => {
+    // translationUsableNow stays false for the ~73% of the corpus that is
+    // already English, so analyzed_with_translation false is not a re-read
+    // trigger on its own — otherwise every video would re-read every run.
+    expect(decideAnalysis({ ...base, state: state({ analyzed_with_transcript: true, analyzed_with_translation: false }), transcriptUsableNow: true }))
+      .toEqual({ select: false, reason: 'unchanged' })
+  })
+
+  it('a transcript and its translation landing together re-read once, as "transcript"', () => {
+    // Both are true on a video's first analysis; one re-read covers both, and
+    // the reason a run log shows is the one that came first.
+    expect(decideAnalysis({ ...base, state: state(), transcriptUsableNow: true, translationUsableNow: true }))
+      .toEqual({ select: true, reason: 'transcript' })
+  })
+
+  it('rows written before analyzed_with_translation existed re-read once', () => {
+    // The column defaults false, but a NULL (an older row, or a backfill that
+    // did not touch it) must read as "not analysed with one" rather than as
+    // true — otherwise the whole historical non-English corpus silently keeps
+    // its untranslated analysis forever.
+    expect(decideAnalysis({ ...base, state: state({ analyzed_with_transcript: true, analyzed_with_translation: null }), transcriptUsableNow: true, translationUsableNow: true }))
+      .toEqual({ select: true, reason: 'translated' })
   })
 
   it('a lane change re-reads (claims_only → full after crossing the floor)', () => {
