@@ -56,3 +56,107 @@ describe('cosine', () => {
     expect(cosine([0, 0], [1, 0])).toBe(0)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Oracle: the O(n³) implementation this file's exported clustering replaced on
+// 2026-09-11, copied here VERBATIM (only the name changed). The nearest-
+// neighbour-chain rewrite is a speed change, not a semantics change, so the two
+// must agree on the set of clusters for every input. Do not "fix" this copy to
+// match the new one — if they diverge, the new one is wrong.
+// ---------------------------------------------------------------------------
+function referenceAverageLinkage(vecs: number[][], threshold: number): number[][] {
+  const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
+  // sim[a][b] = average cross-pair similarity between clusters a and b.
+  const sim: number[][] = vecs.map((vi) => vecs.map((vj) => cosine(vi, vj)))
+
+  for (;;) {
+    let bestA = -1
+    let bestB = -1
+    let bestSim = threshold
+    for (let a = 0; a < active.length; a++) {
+      for (let b = a + 1; b < active.length; b++) {
+        if (sim[a][b] >= bestSim) {
+          bestA = a
+          bestB = b
+          bestSim = sim[a][b]
+        }
+      }
+    }
+    if (bestA < 0) return active
+
+    // Merge B into A; update average similarity by size-weighted mean.
+    const sizeA = active[bestA].length
+    const sizeB = active[bestB].length
+    for (let c = 0; c < active.length; c++) {
+      if (c === bestA || c === bestB) continue
+      sim[bestA][c] = sim[c][bestA] = (sizeA * sim[bestA][c] + sizeB * sim[bestB][c]) / (sizeA + sizeB)
+    }
+    active[bestA] = active[bestA].concat(active[bestB])
+    active.splice(bestB, 1)
+    sim.splice(bestB, 1)
+    for (const row of sim) row.splice(bestB, 1)
+  }
+}
+
+/** Deterministic PRNG (mulberry32) — the property test must be reproducible;
+ *  a flaky clustering test is worse than none. */
+function rng(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+/** A bucket-shaped corpus: a few concept centroids with jittered members plus
+ *  loose noise, so instances actually merge at every tested threshold instead
+ *  of degenerating to "all singletons" (pure uniform noise at dim 16 almost
+ *  never clears 0.58). Random floats make exact ties negligible. */
+function randomVecs(n: number, dim: number, seed: number): number[][] {
+  const r = rng(seed)
+  const centroids = Array.from({ length: Math.max(2, Math.ceil(n / 8)) }, () =>
+    Array.from({ length: dim }, () => r() * 2 - 1),
+  )
+  return Array.from({ length: n }, (_, i) => {
+    if (i % 5 === 0) return Array.from({ length: dim }, () => r() * 2 - 1) // noise
+    const c = centroids[Math.floor(r() * centroids.length)]
+    const spread = 0.3 + r() * 1.2 // some members tight, some loose
+    return c.map((x) => x + (r() * 2 - 1) * spread)
+  })
+}
+
+const asSets = (groups: number[][]): string[] =>
+  groups.map((g) => [...g].sort((a, b) => a - b).join(',')).sort()
+
+describe('averageLinkageClusters vs the O(n³) oracle', () => {
+  const sizes = [5, 40, 150]
+  const thresholds = [0.3, 0.58, 0.8]
+  for (let i = 0; i < 30; i++) {
+    const n = sizes[i % sizes.length]
+    const threshold = thresholds[Math.floor(i / 3) % thresholds.length]
+    const seed = 1000 + i
+    it(`matches the reference: n=${n} threshold=${threshold} seed=${seed}`, () => {
+      const vecs = randomVecs(n, 16, seed)
+      const mine = averageLinkageClusters(vecs, threshold)
+      const ref = referenceAverageLinkage(vecs, threshold)
+      expect(asSets(mine)).toEqual(asSets(ref))
+      // Every index placed exactly once, and the group order is by smallest
+      // member (the documented, deterministic convention).
+      expect(mine.flat().sort((a, b) => a - b)).toEqual(Array.from({ length: n }, (_, k) => k))
+      const firsts = mine.map((g) => Math.min(...g))
+      expect(firsts).toEqual([...firsts].sort((a, b) => a - b))
+    })
+  }
+
+  it('finishes n=1500 (dim 32) well inside a pipeline step budget', () => {
+    const vecs = randomVecs(1500, 32, 7)
+    const t0 = performance.now()
+    const groups = averageLinkageClusters(vecs, 0.58)
+    const ms = performance.now() - t0
+    console.log(`[cluster] n=1500 dim=32 threshold=0.58 -> ${groups.length} clusters in ${ms.toFixed(0)}ms`)
+    expect(groups.flat()).toHaveLength(1500)
+    expect(ms).toBeLessThan(2000)
+  }, 30_000)
+})
