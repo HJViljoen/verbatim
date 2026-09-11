@@ -7,6 +7,7 @@ import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, t
 
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { DetailDrawer } from '@/components/shell/detail-drawer'
@@ -375,7 +376,7 @@ export const voicePage: PageModule<D> = {
 }
 
 /** The app page: page bar, the grid, the drawers. */
-export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; detail?: string; params: Record<string, string | undefined> }) {
+export function VoicePage({ data: d, detail, params }: { data: VoiceData | VoiceEmpty; detail?: string; params: Record<string, string | undefined> }) {
   const showLegend = detail === 'legend'
   if (isVoiceEmpty(d)) {
     return (
@@ -394,10 +395,15 @@ export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; d
   const f = d.filters
   const closeHref = voiceHref(f, { detail: null })
   const themeHref = (id: string) => voiceHref(f, { theme: id })
+  // The export carries the seed the reader is looking at, so the file shows
+  // these five voices, not a fresh draw.
+  const exportParams = { ...params, seed: String(f.seed) }
   return (
+    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
     <PageFrame>
       <PageBar title="Voice of Customer" context={`What are they saying? · ${weekdayDate(d.runDate)}`}>
         {d.pillsInBar && <EntityPills d={d} />}
+        <ExportMenu />
         <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" />
       </PageBar>
 
@@ -447,5 +453,6 @@ export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; d
         {d.phrases.total > d.phrases.all.length && <p className="mt-3 text-[11px] text-muted-foreground">showing {fmtInt(d.phrases.all.length)} of {fmtInt(d.phrases.total)}</p>}
       </DetailDrawer>
     </PageFrame>
+    </ExportScope>
   )
 }
