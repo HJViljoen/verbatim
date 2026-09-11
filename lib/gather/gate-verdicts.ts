@@ -1,4 +1,5 @@
 import type { createAdminClient } from '../supabase-admin'
+import { chunk } from '../chunk'
 import type { RelevanceCandidate, RelevanceVerdict } from './relevance'
 
 // Recording what the relevance gate decides (Tier 1, 2026-08-18).
@@ -68,15 +69,15 @@ export function buildGateVerdictRows(
 export async function recordGateVerdicts(admin: Admin, rows: GateVerdictRow[]): Promise<number> {
   if (!rows.length) return 0
   let written = 0
-  for (let i = 0; i < rows.length; i += 200) {
+  for (const part of chunk(rows, 200)) {
     // Upsert, not insert: this runs inside a step that can replay (the
     // attribution call and two upserts after it can each fail), and a
     // re-insert would double every survival rate the table exists to measure.
     const { error } = await admin
       .from('gate_verdicts')
-      .upsert(rows.slice(i, i + 200), { onConflict: 'client_id,run_id,platform,video_id' })
+      .upsert(part, { onConflict: 'client_id,run_id,platform,video_id' })
     if (error) throw new Error(`record gate verdicts: ${error.message}`)
-    written += Math.min(200, rows.length - i)
+    written += part.length
   }
   return written
 }

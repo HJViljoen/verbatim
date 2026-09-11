@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
@@ -155,8 +156,7 @@ export async function classifyRelevance(
   // run sent ~460 videos in ONE call — judgment quality degrades at that size,
   // and if the structured output hits the completion cap the verdict array
   // truncates, silently KEEPING every unjudged video via the fail-open default.
-  for (let i = 0; i < undecided.length; i += GPT_BATCH) {
-    const batch = undecided.slice(i, i + GPT_BATCH)
+  for (const batch of chunk(undecided, GPT_BATCH)) {
     try {
       const completion = await openai.chat.completions.parse({
         model: ANALYSIS_MODEL,

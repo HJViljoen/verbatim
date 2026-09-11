@@ -1,4 +1,5 @@
 import { runActor } from './apify'
+import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, transcriptsEnabled } from '../config'
 import { inWindow } from './gather'
@@ -549,8 +550,8 @@ async function ytProfile(channelId: string, ctx: Ctx, since: string | null): Pro
       if (!pageToken || stopUploadsWalk(pageDates, since, videoIds.length)) break
     }
     // videos.list takes 50 ids a call and costs 1 unit each.
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${videoIds.slice(i, i + 50).join(',')}&key=${key}`)
+    for (const part of chunk(videoIds, 50)) {
+      const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${part.join(',')}&key=${key}`)
       if (!vRes.ok) continue
       const vs = (await vRes.json()) as { items?: RawItem[] }
       for (const v of vs.items ?? []) {

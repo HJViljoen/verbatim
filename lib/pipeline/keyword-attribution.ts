@@ -14,6 +14,7 @@
 // Pure function — the pipeline step and the backfill script supply the rows and
 // write the results. Tested in keyword-attribution.test.ts.
 
+import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -79,11 +80,11 @@ export async function attributeRunKeywords(
   // client corpus), so fetch by id — chunked to keep the .in() filter sane.
   const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter(Boolean))] as string[]
   const videos: AttributionVideo[] = []
-  for (let i = 0; i < videoIds.length; i += 200) {
+  for (const part of chunk(videoIds, 200)) {
     const { data, error } = await admin
       .from('videos')
       .select('id, platform, source_keywords')
-      .in('id', videoIds.slice(i, i + 200))
+      .in('id', part)
     if (error) throw new Error(`attribution videos fetch: ${error.message}`)
     videos.push(...((data ?? []) as AttributionVideo[]))
   }

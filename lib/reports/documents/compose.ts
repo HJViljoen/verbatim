@@ -1,4 +1,5 @@
 import { DOCUMENT_BLOCK_MAX, DOCUMENT_CITED_COUNT_MIN, DOCUMENT_FINDING_MIN_CONVERSATIONS, DOCUMENT_THIN_CONVERSATIONS } from '../../config'
+import { chunk } from '../../chunk'
 import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
@@ -327,12 +328,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       // Two a page, like personas. A claim is the company's own sentence and
       // is printed whole; four of them on one sheet ran off the bottom, and a
       // claim cut to fit is a misquote (found by rendering, 2026-09-02).
-      const out: DocPage[] = []
-      for (let i = 0; i < blocks.length; i += CLAIMS_PER_PAGE) {
-        const n = Math.floor(i / CLAIMS_PER_PAGE) + 1
-        out.push({ id: `say_hear_${n}`, kind: 'say_hear', title: PAGE_TITLE.say_hear, blocks: blocks.slice(i, i + CLAIMS_PER_PAGE) })
-      }
-      return out
+      return chunk(blocks, CLAIMS_PER_PAGE).map((part, i) => ({
+        id: `say_hear_${i + 1}`, kind: 'say_hear' as const, title: PAGE_TITLE.say_hear, blocks: part,
+      }))
     },
 
     // The questions the conversation puts and nobody settles.
@@ -357,12 +355,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
         }
       })
       for (const b of personaBlocks) blocksW.push({ blockId: b.id, basedOn: [] })
-      const out: DocPage[] = []
-      for (let i = 0; i < personaBlocks.length; i += PERSONAS_PER_PAGE) {
-        const n = Math.floor(i / PERSONAS_PER_PAGE) + 1
-        out.push({ id: `personas_${n}`, kind: 'personas', title: PAGE_TITLE.personas, blocks: personaBlocks.slice(i, i + PERSONAS_PER_PAGE) })
-      }
-      return out
+      return chunk(personaBlocks, PERSONAS_PER_PAGE).map((part, i) => ({
+        id: `personas_${i + 1}`, kind: 'personas' as const, title: PAGE_TITLE.personas, blocks: part,
+      }))
     },
 
     language: () => {

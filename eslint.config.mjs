@@ -5,6 +5,21 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // An underscore prefix is this repo's "deliberately unused" mark. Next's
+  // default config has no ignore pattern, so a Server Action's required-but-
+  // unused (_prev, _formData) pair warned forever and taught the team to read
+  // past warnings — which is how a real one gets missed. caughtErrors is the
+  // one case where an unused binding is unavoidable (`catch (_e)`), and
+  // typescript-eslint v8 checks it by default, so it needs the pattern too.
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
@@ -16,6 +31,9 @@ const eslintConfig = defineConfig([
     // carry their own node_modules; linting them doubles every warning and
     // adds thousands of errors from vendored code (found 2026-09-09).
     ".claude/worktrees/**",
+    // The sales bundle: a standalone static demo (its own vendored JS), not
+    // app code. 31 of the repo's 40 warnings came from it.
+    "demo/**",
   ]),
 ]);
 

@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import type { VideoRow } from './types'
 
 // Cross-reference detection (Redesign Spec 2026-07-03 §8) — client-brand
@@ -88,20 +89,20 @@ export async function runCrossReference(clientId: string): Promise<CrossReferenc
     else byKeyword.set(f.keyword, [f.id])
   }
   for (const [keyword, ids] of byKeyword) {
-    for (let i = 0; i < ids.length; i += CHUNK) {
+    for (const part of chunk(ids, CHUNK)) {
       const { error } = await admin
         .from('comments')
         .update({ client_brand_mention: true, brand_mention_keyword: keyword })
-        .in('id', ids.slice(i, i + CHUNK))
+        .in('id', part)
       if (error) throw new Error(`flag brand mentions: ${error.message}`)
     }
     result.mentionsFlagged += ids.length
   }
-  for (let i = 0; i < toClear.length; i += CHUNK) {
+  for (const part of chunk(toClear, CHUNK)) {
     const { error } = await admin
       .from('comments')
       .update({ client_brand_mention: false, brand_mention_keyword: null })
-      .in('id', toClear.slice(i, i + CHUNK))
+      .in('id', part)
     if (error) throw new Error(`clear brand mentions: ${error.message}`)
   }
   result.flagsCleared = toClear.length

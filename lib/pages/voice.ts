@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { fetchInsightsByIds, fetchQuoteCitationsByAudience, readsAsHeroQuote, cleanQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -11,6 +12,8 @@ import {
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
 import { pickThemedRunId } from './themed-run'
+import { row, rows as readRows } from './read'
+import { fetchRunningRunIds } from './latest-video-run'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 
@@ -220,11 +223,11 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // everything keyed on client_id alone — theme history, update dates, the
   // phrase pool, the mood read — goes out here, with the run lookup; only
   // this update's themes wait for the run id.
-  const [{ data: latestRun }, runningRes, { data: client }, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
+  const [latestRunRes, runningIds, clientRes, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId, 'voice'),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // Every update's themes, for the per-theme sparks and the movers (joined on
     // registry_id in lib/voice-tiles). selectAll: a tenant crosses 1000 rows in
@@ -246,7 +249,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       supabase.from('audience_insights_current').select('id, emotion').eq('client_id', clientId).order('id', { ascending: true }),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'voice.latestRun')
+  const client = row<{ company_name: string | null }>(clientRes, 'voice.client')
   const brand = client?.company_name ?? 'your brand'
 
   if (!latestRun) return { empty: true, legendItems: LEGEND_ITEMS }
@@ -281,9 +285,9 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
         .eq('client_id', clientId).eq('run_id', themedRunId)
         .order('evidence_count', { ascending: false })
         .order('rank_score', { ascending: false, nullsFirst: false })
-    : { data: null }
+    : { data: null, error: null }
 
-  const themes = (themesRes.data ?? []) as ThemeRow[]
+  const themes = readRows<ThemeRow>(themesRes, 'voice.themes')
   const updatesCount = runDates.size
   // The page is dated by the update its themes came from — the map, the movers
   // and the list are all read from it, so the date stays truthful when the
@@ -292,7 +296,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     ?? summaryRows.find((s) => s.run_id === runId)?.run_date
     ?? (latestRun.started_at as string)
   const showNew = updatesCount > 1
-  const samples = (samplesRes.data ?? []) as { id: string; phrase: string; platform: string | null }[]
+  const samples = readRows<{ id: string; phrase: string; platform: string | null }>(samplesRes, 'voice.languageSamples')
   const sampleTotal = samplesRes.count ?? samples.length
   const asQuote = (s: { id: string; phrase: string; platform: string | null }) => ({ ref: quoteRef.phrase(s.id), text: s.phrase, platform: s.platform })
   const phrases = shortPhrases(samples, PHRASES_SHOWN).map(asQuote)
@@ -358,7 +362,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
           .from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
           .in('audience_insight_id', detailTheme.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
           .order('relevance_rank', { ascending: true })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ])
   const insightMeta = new Map(insightRows.map((i) => [i.id, i]))
   const stagesPresent = new Set([...insightMeta.values()].map((i) => i.journey_stage).filter(Boolean))
@@ -436,8 +440,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const commentIds = ribbon.cards.map((c) => c.quote.citation.commentId).filter((id): id is string => !!id)
   const commentMeta = new Map<string, { likes: number | null; platform: string | null }>()
   if (commentIds.length > 0) {
-    const { data } = await supabase.from('comments').select('id, likes, platform').in('id', commentIds)
-    for (const c of (data ?? []) as { id: string; likes: number | null; platform: string | null }[]) commentMeta.set(c.id, c)
+    const res = await supabase.from('comments').select('id, likes, platform').in('id', commentIds)
+    for (const c of readRows<{ id: string; likes: number | null; platform: string | null }>(res, 'voice.ribbonComments')) commentMeta.set(c.id, c)
   }
   const cards: VoiceCardData[] = ribbon.cards.map(({ quote: c }) => {
     const meta = c.citation.commentId ? commentMeta.get(c.citation.commentId) : undefined
@@ -477,7 +481,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       quotes, withheld, memberThemes: t.member_themes,
     }
   }
-  const theme = detailTheme ? themeDetail(detailTheme, (detailEvidenceRes.data ?? []) as EvidenceRow[]) : null
+  const theme = detailTheme ? themeDetail(detailTheme, readRows<EvidenceRow>(detailEvidenceRes, 'voice.detailEvidence')) : null
 
   // `full` (print): every confirmed theme under the current filters, in full —
   // one evidence read for all of them, grouped per theme. Capped: a deck with
@@ -487,10 +491,10 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     const wanted = [...tiers.confirmed].sort((a, b) => b.evidence_count - a.evidence_count).slice(0, EXPORT_FULL_MAX_ITEMS)
     const ids = wanted.flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
     const rows: EvidenceRow[] = []
-    for (let i = 0; i < ids.length; i += 120) {
-      const { data } = await supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
-        .in('audience_insight_id', ids.slice(i, i + 120)).order('relevance_rank', { ascending: true })
-      rows.push(...((data ?? []) as EvidenceRow[]))
+    for (const part of chunk(ids, 120)) {
+      const res = await supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
+        .in('audience_insight_id', part).order('relevance_rank', { ascending: true })
+      rows.push(...readRows<EvidenceRow>(res, 'voice.allThemesEvidence'))
     }
     const byInsight = new Map<string, EvidenceRow[]>()
     for (const r of rows) byInsight.set(r.audience_insight_id, [...(byInsight.get(r.audience_insight_id) ?? []), r])

@@ -5,6 +5,8 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
+import { chunk } from './chunk'
+
 export interface QuoteRow {
   quote: string
   rank: number
@@ -177,10 +179,8 @@ interface EvidenceClient {
  *  here — each one, after an idle spell, at the DB's wake-up price. Chunks
  *  are disjoint by id, so processing the results in chunk order gives the
  *  same per-id ordering the serial loop did. */
-async function fetchChunks<R>(ids: string[], fetch: (chunk: string[]) => Rows, size = 120): Promise<R[]> {
-  const chunks: string[][] = []
-  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size))
-  const results = await Promise.all(chunks.map((chunk) => fetch(chunk)))
+async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
+  const results = await Promise.all(chunk(ids, size).map((part) => fetch(part)))
   return results.flatMap((r) => (r.data ?? []) as R[])
 }
 

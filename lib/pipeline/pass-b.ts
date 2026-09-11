@@ -1,4 +1,5 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
+import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost, PASS_B_CHUNK, PASS_B_PARALLEL } from '../config'
@@ -95,11 +96,7 @@ export function chunkThemesForLabelling(
     else byBucket.set(entry.theme.bucket, [entry])
   }
   const chunks: { label: string; theme: AggregatedTheme }[][] = []
-  for (const group of byBucket.values()) {
-    for (let i = 0; i < group.length; i += chunkSize) {
-      chunks.push(group.slice(i, i + chunkSize))
-    }
-  }
+  for (const group of byBucket.values()) chunks.push(...chunk(group, chunkSize))
   return chunks
 }
 

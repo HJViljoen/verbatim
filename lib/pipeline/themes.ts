@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled } from '../config'
 import { embedTexts, cosine } from './cluster'
 import { matchThemes, dormantIds, matchTally, type MatchKind, type RegistryEntry } from './theme-registry'
@@ -218,8 +219,8 @@ export async function persistThemes(
       registryScores[i] = r.score
     }
     // One round trip per 200 matched entries instead of ~540 sequential updates.
-    for (let i = 0; i < updates.length; i += 200) {
-      const { error } = await admin.from('theme_registry').upsert(updates.slice(i, i + 200), { onConflict: 'id' })
+    for (const part of chunk(updates, 200)) {
+      const { error } = await admin.from('theme_registry').upsert(part, { onConflict: 'id' })
       if (error) throw new Error(`update theme_registry: ${error.message}`)
     }
 

@@ -1,4 +1,5 @@
 import { openai } from '../openai'
+import { chunk } from '../chunk'
 import { EMBEDDING_MODEL, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import type { InsightRow } from './types'
 
@@ -48,11 +49,10 @@ const EMBED_BATCH = 512
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
   const out: number[][] = []
-  for (let i = 0; i < texts.length; i += EMBED_BATCH) {
-    const chunk = texts.slice(i, i + EMBED_BATCH)
-    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: chunk })
-    if (res.data.length !== chunk.length) {
-      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${chunk.length} inputs`)
+  for (const part of chunk(texts, EMBED_BATCH)) {
+    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part })
+    if (res.data.length !== part.length) {
+      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
     }
     // The API returns items with an `index`; sort to be order-safe. The index
     // is per-REQUEST, so sort within the chunk and append — never across.
@@ -100,7 +100,6 @@ export function embedInput(ins: Pick<InsightRow, 'theme' | 'description'>): stri
  *  fine at Step A2's per-bucket sizes (≤ a few hundred insights).
  */
 export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
-  const n = vecs.length
   const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
   // sim[a][b] = average cross-pair similarity between clusters a and b.
   const sim: number[][] = vecs.map((vi) => vecs.map((vj) => cosine(vi, vj)))

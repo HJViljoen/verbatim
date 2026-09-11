@@ -173,9 +173,13 @@ export type PassAClaim = z.infer<typeof claimSchema>
 // — raw counts/percentages are never model-emitted (invariant 5). Upstream record
 // references are short indices (T#/C#/M#) here, mapped to UUIDs in code (invariant 8).
 
+// organic_vs_paid was dropped 2026-09-11: 104 competitive_insights rows have
+// ever been written across every tenant and not one carried it. The model was
+// being offered a category it had no way to judge — nothing in Pass C's input
+// says whether a post was promoted.
 export const COMPETITIVE_CATEGORIES = [
   'topic_ownership', 'content_gap', 'competitive_threat', 'sentiment_differential',
-  'notable_account', 'organic_vs_paid', 'engagement_benchmark',
+  'notable_account', 'engagement_benchmark',
 ] as const
 
 export const IMPACT_LEVELS = ['high', 'medium', 'low'] as const

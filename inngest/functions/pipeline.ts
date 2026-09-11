@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import { chunk } from '../../lib/chunk'
 import { inngest } from '@/inngest/client'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
@@ -1181,10 +1182,7 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     if (d.select) eligible.push({ id: v.id, n })
   }
   eligible.sort((a, b) => b.n - a.n)
-  const batches: string[][] = []
-  for (let i = 0; i < eligible.length; i += PASS_A_BATCH) {
-    batches.push(eligible.slice(i, i + PASS_A_BATCH).map((v) => v.id))
-  }
+  const batches = chunk(eligible, PASS_A_BATCH).map((part) => part.map((v) => v.id))
   return { batches, considered, selected: eligible.length, reasons }
 }
 
@@ -1206,9 +1204,8 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
     // Chunk 200, not 500: ~500 uuids in an `in.()` filter overflows the
     // PostgREST URL cap ("fetch failed" — the lesson behind every other chunked
     // .in() in this repo). A first prune on a real tenant is thousands of rows.
-    for (let i = 0; i < stale.length; i += 200) {
-      const chunk = stale.slice(i, i + 200)
-      const { error } = await admin.from(table).delete().in('id', chunk)
+    for (const part of chunk(stale, 200)) {
+      const { error } = await admin.from(table).delete().in('id', part)
       if (error) throw new Error(`prune ${table}: ${error.message}`)
     }
     if (table === 'audience_insights') out.insights = stale.length

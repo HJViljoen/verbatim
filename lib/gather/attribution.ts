@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
@@ -37,12 +38,6 @@ const verdictSchema = z.object({
   reason: z.string(),
 })
 const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
-
-function chunk<T>(arr: T[], n: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
-  return out
-}
 
 function buildSystemPrompt(config: GatherConfig): string {
   const brand = config.brand_keywords?.[0] ?? 'the brand'

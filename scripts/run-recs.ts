@@ -12,7 +12,7 @@ import { createAdminClient } from '../lib/supabase-admin'
 //   --client <uuid>   client_id (default: Ossur)
 //   --no-persist      run the GPT call but don't replace the stored rows
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
+import { OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 
 interface Args {
   clientId: string

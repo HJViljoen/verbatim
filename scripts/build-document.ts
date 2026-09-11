@@ -24,7 +24,7 @@ import { documentTemplate, promptVersion } from '../lib/reports/documents/templa
 import { loadSignals } from '../lib/reports/documents/signals'
 import { composeQuestions } from '../lib/reports/documents/questions'
 import { runResearch } from '../lib/reports/documents/research'
-import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX } from '../lib/config'
+import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from '../lib/reports/documents/compose'
 import { generateDocument, DOCUMENT_WRITER_MODEL } from '../lib/reports/documents/write-model'
 import { periodOf } from '../lib/reports/documents/build'
@@ -35,7 +35,6 @@ import { createSnapshot } from '../lib/snapshots'
 import { renderArtifact, renderUrl } from '../lib/render/render'
 import { withBrowser } from '../lib/render/chromium'
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 const args = process.argv.slice(2)
 const flag = (name: string): string | undefined => {

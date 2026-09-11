@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { chunk } from '../lib/chunk'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { authorKey, handleVariants } from '../lib/gather/suppression'
 import { deleteCommentsProperly } from '../lib/retention/youtube-refresh-io'
@@ -96,9 +97,9 @@ async function main() {
   // 2. Demo clones — by comment_id first (the clone keeps it), pseudonyms second.
   const realCommentIds = [...new Set([...found.values()].filter((r) => r.client_id !== DEMO_CLIENT_ID).map((r) => r.comment_id))]
   const demoRows: CommentRow[] = []
-  for (let i = 0; i < realCommentIds.length; i += 200) {
+  for (const part of chunk(realCommentIds, 200)) {
     demoRows.push(...await selectAll<CommentRow>(() =>
-      admin.from('comments').select('id, client_id, author, text, platform, video_id, comment_id').eq('client_id', DEMO_CLIENT_ID).eq('platform', args.platform).in('comment_id', realCommentIds.slice(i, i + 200)).order('id', { ascending: true }),
+      admin.from('comments').select('id, client_id, author, text, platform, video_id, comment_id').eq('client_id', DEMO_CLIENT_ID).eq('platform', args.platform).in('comment_id', part).order('id', { ascending: true }),
     ))
   }
   const pseudonyms = [...new Set([...exactAuthors, ...handleVariants(args.handle)].flatMap(demoPseudonyms))]
@@ -121,11 +122,10 @@ async function main() {
   const ids = rows.map((r) => r.id)
   let evidenceRows = 0
   let sampleRows = 0
-  for (let i = 0; i < ids.length; i += 200) {
-    const chunk = ids.slice(i, i + 200)
+  for (const part of chunk(ids, 200)) {
     const [ev, ls] = await Promise.all([
-      admin.from('insight_evidence').select('id', { count: 'exact', head: true }).in('comment_id', chunk),
-      admin.from('language_samples').select('id', { count: 'exact', head: true }).in('comment_id', chunk),
+      admin.from('insight_evidence').select('id', { count: 'exact', head: true }).in('comment_id', part),
+      admin.from('language_samples').select('id', { count: 'exact', head: true }).in('comment_id', part),
     ])
     evidenceRows += ev.count ?? 0
     sampleRows += ls.count ?? 0
@@ -151,8 +151,8 @@ async function main() {
     bodiesMatched = logs.filter((l) => { const u = String(l.request?.user ?? ''); return texts.some((t) => u.includes(t)) }).map((l) => l.id)
     console.log(`ai_call_log bodies in the last ${AI_LOG_BODY_RETENTION_DAYS}d carrying the text: ${bodiesMatched.length} of ${logs.length} scanned → ${args.apply ? 'nulled' : 'would be nulled'}`)
     if (args.apply) {
-      for (let i = 0; i < bodiesMatched.length; i += 200) {
-        const { error } = await admin.from('ai_call_log').update({ request: null, response: null }).in('id', bodiesMatched.slice(i, i + 200))
+      for (const part of chunk(bodiesMatched, 200)) {
+        const { error } = await admin.from('ai_call_log').update({ request: null, response: null }).in('id', part)
         if (error) throw new Error(`null ai_call_log bodies: ${error.message}`)
       }
     }

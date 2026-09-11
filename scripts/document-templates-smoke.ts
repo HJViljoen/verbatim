@@ -25,7 +25,7 @@ const out = flag('out', 'scratch/document-templates-smoke')
 const base = flag('base', process.env.RENDER_BASE_URL ?? 'http://localhost:3000')
 const email = process.env.SHOT_EMAIL ?? 'demo@verbatimintel.com'
 const password = process.env.SHOT_PASSWORD ?? process.env.DEMO_PASSWORD ?? ''
-const DEMO = 'de300055-0000-4000-8000-000000000001'
+import { DEMO_CLIENT_ID as DEMO } from '../lib/config'
 
 const checks: { name: string; ok: boolean; note?: string }[] = []
 const check = (name: string, ok: boolean, note?: string) => { checks.push({ name, ok, note }); console.log(`${ok ? '✓' : '✗'} ${name}${note ? ` (${note})` : ''}`) }

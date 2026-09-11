@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD, MEGA_CLUSTER_MIN, MEGA_CLUSTER_SHARE } from '../config'
 import { clusterInsights, type ClusterMethod } from './cluster'
 import { mergeClusterLabels } from './theme-merge'
@@ -196,15 +197,13 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
   const videoIds = [...new Set(insightsBase.map((i) => i.source_video_id).filter(Boolean))]
   const videoEntity = new Map<string, { is_client: boolean; is_competitor: boolean; competitor_name: string | null }>()
   if (videoIds.length) {
-    const chunks: string[][] = []
-    for (let i = 0; i < videoIds.length; i += VIDEO_ID_CHUNK) chunks.push(videoIds.slice(i, i + VIDEO_ID_CHUNK))
     const pages = await Promise.all(
-      chunks.map((chunk) =>
+      chunk(videoIds, VIDEO_ID_CHUNK).map((part) =>
         selectAll<{ id: string; is_client: boolean; is_competitor: boolean; competitor_name: string | null }>(() =>
           admin
             .from('videos')
             .select('id, is_client, is_competitor, competitor_name')
-            .in('id', chunk)
+            .in('id', part)
             .order('id', { ascending: true }),
         ),
       ),

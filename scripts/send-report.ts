@@ -12,6 +12,7 @@
 
 import { writeFileSync } from 'fs'
 import { createAdminClient } from '../lib/supabase-admin'
+import { OSSUR_CLIENT_ID } from '../lib/config'
 import { resolveScheduleReport } from '../lib/schedules/resolve'
 import { snapshotReport } from '../lib/reports/build'
 import { renderDigestEmail } from '../lib/email/digest'
@@ -21,7 +22,7 @@ const args = process.argv.slice(2)
 const flag = (name: string, dflt = '') => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : dflt }
 const has = (name: string) => args.includes(`--${name}`)
 
-const clientId = flag('client', 'e52cac94-30e1-426a-9a36-31b11e0b30b6')
+const clientId = flag('client', OSSUR_CLIENT_ID)
 const out = flag('out', 'email-preview')
 // Links in the email point at the app (production when NEXT_PUBLIC_APP_URL is
 // set); the browser renders against the dev server unless RENDER_BASE_URL says otherwise.

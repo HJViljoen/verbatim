@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import { ANALYSIS_MODEL, REDDIT_COMMENT_SCRAPE_CAP, redditDiscoveryEnabled, periodSince, RECHECK_MIN_GROWTH, RECHECK_CAP, RECHECK_WINDOW_DAYS, TRANSCRIBE_CAP, TRANSCRIBE_BATCH, TRANSCRIBE_MODEL, CONTENT_GATE_MODEL, WHISPER_PER_MINUTE, ASSEMBLYAI_PER_MINUTE, YT_TRANSCRIPT_PER_ITEM_USD, estimateCost, transcriptsEnabled, GATHER_MAX_SEARCHES_PER_RUN, GATHER_MAX_VIDEOS_PER_SEARCH, GATHER_MAX_COMMENT_DEPTH } from '../config'
 import { runActor, isActorRunFailedError } from './apify'
 import { adapters } from './platforms'
@@ -812,9 +813,7 @@ export function orderAndChunkPending(
     .sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
     .slice(0, cap)
     .map((r) => r.video_id)
-  const batches: string[][] = []
-  for (let i = 0; i < ids.length; i += batchSize) batches.push(ids.slice(i, i + batchSize))
-  return batches
+  return chunk(ids, batchSize)
 }
 
 /** A platform can transcribe when its adapter implements exactly one of the
@@ -853,13 +852,13 @@ export async function planTranscribeBatches(clientId: string, runId: string, pla
   if (!rawIds.length) return []
 
   const rows: { video_id: string; comments_count: number | null; transcript_status: string | null }[] = []
-  for (let i = 0; i < rawIds.length; i += 100) {
+  for (const part of chunk(rawIds, 100)) {
     const { data, error } = await admin
       .from('videos')
       .select('video_id, comments_count, transcript_status')
       .eq('client_id', clientId)
       .eq('platform', platform)
-      .in('video_id', rawIds.slice(i, i + 100))
+      .in('video_id', part)
     if (error) throw new Error(`plan transcribe: ${error.message}`)
     rows.push(...((data ?? []) as typeof rows))
   }
@@ -906,20 +905,19 @@ export async function fetchTranscriptsIsolating(
   const failed = new Map<string, string>()
   const now = opts.now ?? Date.now
   const deadline = now() + (opts.deadlineMs ?? ISOLATION_DEADLINE_MS)
-  for (let i = 0; i < ids.length; i += batchSize) {
-    const chunk = ids.slice(i, i + batchSize)
+  for (const part of chunk(ids, batchSize)) {
     let batchErr: unknown
     try {
-      for (const [k, v] of await fetch(chunk)) fetched.set(k, v)
+      for (const [k, v] of await fetch(part)) fetched.set(k, v)
       continue
     } catch (e) {
-      if (!isActorRunFailedError(e) || chunk.length === 1) throw e
+      if (!isActorRunFailedError(e) || part.length === 1) throw e
       batchErr = e
     }
-    console.warn(`[transcript] batch of ${chunk.length} run-failed, isolating per id: ${(batchErr as Error).message.slice(0, 160)}`)
+    console.warn(`[transcript] batch of ${part.length} run-failed, isolating per id: ${(batchErr as Error).message.slice(0, 160)}`)
     const chunkFetched = new Map<string, FetchedTranscript | null>()
     const chunkFailed = new Map<string, string>()
-    for (const id of chunk) {
+    for (const id of part) {
       if (now() > deadline) throw batchErr // out of budget: leave the whole chunk NULL for the retry
       try {
         for (const [k, v] of await fetch([id])) chunkFetched.set(k, v)
@@ -977,13 +975,13 @@ export async function transcribeBatch(opts: {
   // spent. Read here rather than in a second query — the done-check already
   // touches exactly these rows.
   const attempts = new Map<string, number>()
-  for (let i = 0; i < candidateIds.length; i += 100) {
+  for (const part of chunk(candidateIds, 100)) {
     const { data, error } = await admin
       .from('videos')
       .select('video_id, transcript_status, transcript_attempts')
       .eq('client_id', opts.clientId)
       .eq('platform', opts.platform)
-      .in('video_id', candidateIds.slice(i, i + 100))
+      .in('video_id', part)
     if (error) {
       errors.push(`transcribe done-check: ${error.message}`)
       return { transcribed: 0, skipped: 0, errors }
