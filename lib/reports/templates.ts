@@ -18,6 +18,10 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     description: 'What changed since the last update, where you stand, what the market is talking about, comments worth a reply and where you stand against competitors: the update that goes out after every scheduled update, on paper and by email.',
     sections: [
       { page: 'dashboard', params: {}, keys: ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts'] },
+      // Initiative tracking rides in the starter, not in the schedules already
+      // running: an existing report's sections are a stored row, so nobody's
+      // weekly send changes shape because this shipped.
+      { page: 'dashboard', params: {}, keys: ['dashboard.initiatives'], framing: 'What you told us you are trying to move.' },
       { page: 'content', params: {}, keys: ['content.inbox'], framing: 'Comments worth a reply this update.' },
       { page: 'competitive', params: {}, keys: ['competitive.standings'] },
     ],

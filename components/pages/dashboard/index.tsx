@@ -319,6 +319,40 @@ const accounts: R = ({ accounts: a }, mode) => (
   </Tile>
 )
 
+// ── what you are trying to move ────────────────────────────────────────────
+// The one tile whose subject the CLIENT chose. It reports the conversation,
+// never the initiative: "up 2.3 points" is a fact about share, "working" would
+// be a claim about cause, and nothing here measures cause.
+const initiatives: R = ({ initiatives: t }, mode) => {
+  const app = mode === 'app'
+  return (
+    <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
+      meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
+      footer={app && t.total > 0 ? <Link href="/dashboard/settings/initiatives">Manage what you track →</Link> : undefined}
+    >
+      {t.rows.length > 0 ? (
+        <div className="flex flex-col gap-[3px]">
+          {t.rows.map((r) => (
+            <div key={r.id} className="flex items-center gap-3 text-[12px]">
+              <span className="min-w-0 flex-[2] truncate font-medium">{r.title}{r.competitorName ? <span className="text-muted-foreground"> · vs {r.competitorName}</span> : null}</span>
+              {r.series.length > 1
+                ? <Sparkline values={r.series} color={r.theirWay === false ? 'var(--comp)' : 'var(--you)'} width={64} height={16} />
+                : <span className="w-16" />}
+              <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
+              <span className="min-w-0 flex-[2] truncate text-[11.5px] text-muted-foreground">{r.line}</span>
+              <span className="w-16 text-right">
+                {r.sentimentDelta != null && r.sentimentDelta !== 0
+                  ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
+                  : <span className="text-[11px] text-muted-foreground">mood flat</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : <TileEmpty>Track a theme from Voice of Customer to see whether the conversation is moving.</TileEmpty>}
+    </Tile>
+  )
+}
+
 // ── the full brief (the drawer in the app; its own slide on paper) ─────────
 function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
   const h = d.hero
@@ -414,6 +448,7 @@ const renderables: Record<string, Renderable<D>> = {
   'dashboard.movement': { key: 'dashboard.movement', title: 'Since your first update', render: movement },
   'dashboard.recommendation': { key: 'dashboard.recommendation', title: 'Top recommendation', render: recommendation },
   'dashboard.accounts': { key: 'dashboard.accounts', title: 'On your accounts', render: accounts },
+  'dashboard.initiatives': { key: 'dashboard.initiatives', title: 'What you are trying to move', render: initiatives },
   'dashboard.brief': { key: 'dashboard.brief', title: 'The executive brief', render: brief },
 }
 
@@ -424,11 +459,20 @@ for (const [k, fn] of Object.entries(dashboardEmail)) renderables[k].email = fn
 /** The grid, in the page's order. */
 const GRID_ORDER = ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts']
 
-export function dashboardSlides(): Slide[] {
+/** The app grid, for THIS tenant. `dashboard.initiatives` joins only once
+ *  something is being tracked: the page is a one-screen grid, and a permanent
+ *  full-width row advertising an unused feature would cost every tenant a
+ *  scroll. The renderable exists either way, so an export or an arranged
+ *  report that asks for it gets the tile — empty state and all. */
+export const gridOrder = (d: D): string[] =>
+  d.initiatives.total > 0 ? [...GRID_ORDER, 'dashboard.initiatives'] : GRID_ORDER
+
+export function dashboardSlides(tracking = false): Slide[] {
   return [
     { title: 'Where you stand', keys: ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share'], layout: 'grid' },
     { title: 'The executive brief', keys: ['dashboard.brief'], layout: 'single' },
     { title: 'What is moving', keys: ['dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts'], layout: 'grid' },
+    ...(tracking ? [{ title: 'What you are trying to move', keys: ['dashboard.initiatives'], layout: 'single' as const }] : []),
   ]
 }
 
@@ -439,7 +483,7 @@ export const dashboardPage: PageModule<D> = {
     const d = await loadDashboard(scope)
     return isDashboardEmpty(d) ? null : d
   },
-  slides: () => dashboardSlides(),
+  slides: (d) => dashboardSlides(d.initiatives.total > 0),
   renderables,
   snapshotTitle: (d) => `Dashboard · ${d.brand} · ${weekdayDate(d.runDate)}`,
 }
@@ -459,7 +503,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
     )
   }
   return (
-    <ExportScope page="dashboard" params={params} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).map((k) => ({ key: k, title: renderables[k].title }))}>
     <PageFrame>
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
@@ -468,7 +512,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
       </PageBar>
 
       <PageGrid>
-        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}

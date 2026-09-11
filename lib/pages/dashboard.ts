@@ -8,6 +8,7 @@ import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuot
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { recStatus, sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey, type RecStatus } from '../calibration'
+import { loadInitiatives, type InitiativesData } from '../initiatives/read'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
 import {
   themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,
@@ -137,6 +138,7 @@ export interface DashboardData {
     voices: number
     platforms: { label: string; count: number }[]
   }
+  initiatives: InitiativesData
   sentiment: {
     positivePct: number
     judged: number
@@ -256,7 +258,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
-  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows] = await Promise.all([
+  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows, initiatives] = await Promise.all([
     selectAll<{ platform: string | null }>(() =>
       supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
     ),
@@ -286,6 +288,10 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       supabase.from('themes').select('bucket, supporting_insight_ids')
         .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
     ),
+    // Declared initiatives, measured (WP7c). Its own reads, but in this wave so
+    // it costs no extra round trip; it returns { rows: [], total: 0 } for the
+    // tenants — today, all of them — that have declared nothing.
+    loadInitiatives(supabase, clientId),
   ])
 
   // The latest update = the run we anchored on; everything before it is history.
@@ -452,6 +458,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       oneThing: oneThing ? { id: oneThing.id, title: oneThing.title, reasoning: oneThing.reasoning, priority: oneThing.priority, status: recStatus(oneThing.status) } : null,
       quotes: oneThingQuotes, voices: oneThingVoices, platforms: oneThingPlatforms,
     },
+    initiatives,
     sentiment: sent ? {
       positivePct: sent.positivePct, judged: sent.judged, deltaText: verdictDelta(sentimentVerdict),
       tierLabel: sentTier ? SENTIMENT_TIER_LABEL[sentTier] : null, segments: sentimentSegments,
