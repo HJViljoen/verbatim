@@ -112,6 +112,10 @@ export interface ThemeBlockData {
 
 export interface ThemeDetail {
   id: string
+  /** The theme's identity across updates (theme_registry). Null only on rows
+   *  written before the registry existed — an initiative cannot be declared on
+   *  one of those, because there is nothing stable to measure. */
+  registryId: string | null
   label: string
   bucket: string
   bucketName: string
@@ -479,7 +483,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     const denom = groupSize(t.bucket)
     const h = historyOf(t)
     return {
-      id: t.id, label: t.label, bucket: t.bucket, bucketName: bucketName(t.bucket), groupName: groupName(t.bucket), kind: bucketKind(t.bucket),
+      id: t.id, registryId: t.registry_id, label: t.label, bucket: t.bucket, bucketName: bucketName(t.bucket), groupName: groupName(t.bucket), kind: bucketKind(t.bucket),
       category: t.category, prevalence: prevalenceTier(t.evidence_count, denom), emotion: t.dominant_emotion, isNew: showNew && t.first_seen,
       description: t.description, count: t.evidence_count, denom, pct: denom > 0 ? Math.min(100, Math.round((t.evidence_count / denom) * 100)) : 0,
       history: h && h.evidence.length >= 2 ? { evidence: h.evidence, dates: h.dates } : null,

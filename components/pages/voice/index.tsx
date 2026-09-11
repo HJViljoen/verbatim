@@ -12,6 +12,7 @@ import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-g
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { DetailDrawer } from '@/components/shell/detail-drawer'
 import { DrawerLink } from '@/components/shell/drawer-link'
+import { TrackThisButton } from '@/components/initiative-sheet'
 import { Sparkline } from '@/components/charts/sparkline'
 import { RankedBar } from '@/components/charts/ranked-bar'
 import { Mover } from '@/components/charts/mover'
@@ -152,6 +153,7 @@ const theme: R = (d, mode) => {
       meta={t ? `${t.bucketName} · ${categoryLabel(t.category)}` : undefined}
       bodyClassName="overflow-y-auto pr-1"
       footer={mode === 'app' && t && t.memberThemes.length > 0 ? <Link href={`/dashboard/videos?themes=${encodeURIComponent(t.memberThemes.join(','))}`}>Videos behind this theme →</Link> : undefined}
+      footerNote={mode === 'app' && t?.registryId ? <TrackThisButton registryId={t.registryId} themeLabel={t.label} /> : undefined}
     >
       {t ? <ThemeBody t={t} showNew={d.showNew} /> : <TileEmpty>Select a block on the map to read the theme in full.</TileEmpty>}
     </Tile>
