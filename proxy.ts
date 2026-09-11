@@ -110,8 +110,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Exclude /api/inngest, /api/stripe and /api/admin: all are called without a
-  // Supabase session and carry their own auth (Inngest/Stripe signing keys, the
-  // service-role key for the admin trigger), so they must skip the redirect.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/inngest|api/stripe|api/admin).*)'],
+  // Exclude /api/inngest, /api/stripe, /api/admin and /api/cron: all are called
+  // without a Supabase session and carry their own auth (Inngest/Stripe signing
+  // keys, the service-role key for the admin trigger, CRON_SECRET for the ops
+  // check), so they must skip the redirect.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/inngest|api/stripe|api/admin|api/cron).*)'],
 }
