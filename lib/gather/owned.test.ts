@@ -224,7 +224,7 @@ describe('buildOwnedCensus', () => {
   })
 
   it('counts an own post the keyword gather discovered first', () => {
-    // stampOwnedSource keeps such a row on 'discovered' forever (metric
+    // stampOwnedSource kept such a row on 'discovered' for life (metric
     // continuity) — but the client still published it.
     expect(buildOwnedCensus([row({ source: 'discovered' })], opts).client.instagram.posts).toBe(1)
   })

@@ -17,7 +17,16 @@ import { SEALAND_CLIENT_ID } from '../lib/config'
 // the configured handle plus every account name an owned read has stored for
 // that platform. is_client is NOT the test — it is true of a stranger's review.
 //
-// Dry run by default; --apply writes.
+// What --apply costs, beyond the column: a flipped row's Pass A lane changes
+// (passALane sends owned/competitor_owned to claims-only or skip), plan-pass-a
+// re-selects it on the lane change, and both the skip and the claims lane move
+// videos.analyzed_run_id — so the video's OLD audience_insights become stale
+// and close-run's prune DELETES them, cascading to insight_evidence. On both
+// live tenants today that is 3 insights / 4 evidence rows, cited by zero
+// report_snapshots (checked 2026-09-11) — but check again before applying, and
+// never apply on a tenant with a frozen export citing them.
+//
+// Dry run by default; --apply writes and REQUIRES an explicit --client.
 //   node --env-file=.env.local --import tsx scripts/reconcile-video-source.ts --client <uuid> [--apply]
 
 interface Row {
@@ -30,13 +39,16 @@ interface Row {
 }
 
 function parseArgs(argv: string[]) {
-  let clientId = SEALAND_CLIENT_ID
+  let clientId: string | null = null
   let apply = false
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client' && argv[i + 1]) clientId = argv[++i]
     else if (argv[i] === '--apply') apply = true
   }
-  return { clientId, apply }
+  // A default tenant is fine to READ and a footgun to write: `--apply` with no
+  // --client would otherwise have written to a live tenant nobody named.
+  if (apply && !clientId) throw new Error('--apply requires an explicit --client <uuid>')
+  return { clientId: clientId ?? SEALAND_CLIENT_ID, apply }
 }
 
 async function main() {
