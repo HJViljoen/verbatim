@@ -29,7 +29,7 @@ export const HOOK_STYLES = [
  *  Every neighbouring enum in these prompts (insight_category, journey_stage)
  *  is defined a clause each; these now match.
  *
- *  Keep in lockstep with CLASSIFIED_TYPES — classifiedTypeLines() asserts it. */
+ *  Keep in lockstep with CLASSIFIED_TYPES — enumDefLines() asserts it. */
 export const CLASSIFIED_TYPE_DEFS: Record<(typeof CLASSIFIED_TYPES)[number], string> = {
   tutorial: 'teaches a repeatable skill step by step, so the viewer can do it themselves.',
   review: 'one product or service judged by someone who used it, reaching a verdict.',

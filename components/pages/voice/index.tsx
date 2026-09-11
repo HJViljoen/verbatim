@@ -5,8 +5,6 @@ import { PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { fmtInt, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '@/lib/format'
 import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, type Trajectory } from '@/lib/voice-tiles'
 
-/** Mover colours, keyed by the direction the plotted line actually goes. */
-const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(--you)' } as const
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
@@ -19,6 +17,9 @@ import { Mover } from '@/components/charts/mover'
 import { ThemeMap, BucketLegend, EDGE, type ThemeBlock } from './theme-map'
 import { loadVoice, isVoiceEmpty, voiceHref, type VoiceData, type VoiceEmpty, type ThemeDetail, type ThemeListRow } from '@/lib/pages/voice'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
+
+/** Mover colours, keyed by the direction the plotted line actually goes. */
+const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(--you)' } as const
 
 // Voice of Customer renderers — the JSX half of the old page (split
 // 2026-08-29, Reports & Exports T4), one pure function per tile. `mode`

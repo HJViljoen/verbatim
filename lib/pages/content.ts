@@ -296,6 +296,18 @@ export type ContentEmpty = { empty: true }
 
 export const isContentEmpty = (d: ContentData | ContentEmpty): d is ContentEmpty => 'empty' in d
 
+/** The own-posts query's row: the numbers the tile needs, plus the identity
+ *  columns the census rule reads. Satisfies both OwnPost and CensusRow. */
+interface OwnPostRow extends OwnPost {
+  platform: string
+  account_name: string | null
+  source: string | null
+  upload_date: string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+}
+
 export async function loadContent(scope: Scope): Promise<ContentData | ContentEmpty> {
   const supabase = scope.supabase as SupabaseClient
   const clientId = scope.clientId
@@ -333,21 +345,11 @@ export async function loadContent(scope: Scope): Promise<ContentData | ContentEm
   if (runningIds.length) vidQ = vidQ.not('run_id', 'in', `(${runningIds.join(',')})`)
   const { data: latestVid } = await vidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle()
 
-  /** The own-posts query's row: the numbers the tile needs, plus the identity
- *  columns the census rule reads. Satisfies both OwnPost and CensusRow. */
-interface OwnPostRow extends OwnPost {
-  platform: string
-  account_name: string | null
-  source: string | null
-  upload_date: string | null
-  is_client: boolean | null
-  is_competitor: boolean | null
-  competitor_name: string | null
-}
-
-const ownHandleMap = ((tc as { own_handles?: Record<string, string> } | null)?.own_handles ?? {}) as Record<string, string>
+  // Read once, used twice: the census rule wants the raw handle map, the inbox
+  // wants the folded key set.
+  const ownHandleMap = ((tc as { own_handles?: Record<string, string> } | null)?.own_handles ?? {}) as Record<string, string>
   const ownHandles = new Set(
-    Object.values(((tc as { own_handles?: Record<string, string> } | null)?.own_handles ?? {}) as Record<string, string>)
+    Object.values(ownHandleMap)
       .filter((h): h is string => typeof h === 'string' && h.length > 0)
       .map(handleKey),
   )

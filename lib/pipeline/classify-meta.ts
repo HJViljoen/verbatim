@@ -63,7 +63,6 @@ export function buildClassifySystemPrompt(): string {
     '- topics: 1-4 short lowercase topics the video is about. Empty array if unknowable.',
     `- sentiment: one of ${VIDEO_SENTIMENTS.join(', ')} for the video's own framing — or null.`,
     '',
-    '',
     'Video types (apply these definitions strictly):',
     ...enumDefLines(CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS),
     '',

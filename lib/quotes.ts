@@ -404,7 +404,15 @@ export function videoBucketOf(v: {
 
 /** audience-insight id → entity bucket, resolved through each insight's source
  *  video's CURRENT tags. Insights with no source video are absent from the map
- *  (the caller falls back to the stored theme bucket for those). */
+ *  (the caller falls back to the stored theme bucket for those).
+ *
+ *  DEFERRED, deliberately (2026-09-11): the other half of this problem is that
+ *  `scripts/run-tagging.ts --write` moves videos.is_client and re-buckets no
+ *  stored theme, so every surface that still reads `themes.bucket` (Dashboard,
+ *  Market, Pass C/D) keeps the pre-re-tag answer until the next full run. This
+ *  function fixes the agent and Ask paths by reading live; making run-tagging
+ *  trigger a Step A2 re-bucket would fix the rest. Not done — no tenant has been
+ *  re-tagged since its last run, so it changes nothing today. */
 export async function fetchLiveBucketsByAudience(
   client: unknown,
   insights: { id: string; source_video_id: string | null }[],
@@ -420,6 +428,17 @@ export async function fetchLiveBucketsByAudience(
   }>(videoIds, (chunk) =>
     c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk),
   )
+  // A short read here is not cosmetic. This map decides whether the agent may
+  // say "your customers" (lib/agent/enforce.ts → components/agent-answer.tsx),
+  // and an empty one silently reverts that decision to the stale stored bucket
+  // — the exact failure this gate was built to end. It must never be the first
+  // anyone hears of it.
+  if (rows.length < videoIds.length) {
+    console.warn(
+      `[quotes] live entity read resolved ${rows.length}/${videoIds.length} videos — ` +
+      `insights whose video did not resolve fall back to their stored theme bucket`,
+    )
+  }
   const bucketByVideo = new Map(rows.map((r) => [r.id, videoBucketOf(r)]))
   const out = new Map<string, string>()
   for (const i of insights) {
