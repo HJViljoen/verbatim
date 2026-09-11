@@ -298,6 +298,17 @@ export function buildPlatformTasks(config: GatherConfig, platform: Platform): Se
 export async function planGatherSearches(clientId: string, platforms?: Platform[]): Promise<SearchTask[]> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, clientId)
+  // Loud, because the terms are the client's now (WP5): tracking_configs is
+  // read fresh here on every run and never cached or pinned, so a term edited
+  // on Tuesday is searched on Wednesday. Printing the counts is how anyone can
+  // tell from the log alone whether a plan moved when someone says they changed
+  // it — the same reason capSearchPlan below shouts about what it dropped.
+  const ex = config.exclude_terms.length
+  console.log(
+    `[plan-gather] ${clientId} config: ${config.brand_keywords.length} brand · ` +
+    `${config.competitor_keywords.length} competitor · ${config.industry_keywords.length} category terms · ` +
+    `${ex} exclusion${ex === 1 ? '' : 's'}`,
+  )
   const wanted = platforms ?? (config.platforms as Platform[])
   const tasks: SearchTask[] = []
   for (const platform of wanted) tasks.push(...buildPlatformTasks(config, platform))
