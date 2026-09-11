@@ -77,6 +77,24 @@ function localToInstant(y: number, m: number, d: number, hour: number, tz: strin
   return new Date(ts)
 }
 
+/** 06:00 local on the civil date `daysBack` days before `local`. */
+function slotDaysBack(local: LocalDate, daysBack: number, tz: string): Date {
+  const civil = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth - daysBack))
+  return localToInstant(civil.getUTCFullYear(), civil.getUTCMonth() + 1, civil.getUTCDate(), SLOT_HOUR, tz)
+}
+
+/**
+ * The most recent 06:00 SAST, i.e. the last time the daily dispatcher cron was
+ * supposed to fire at all — regardless of whether any client was due. The ops
+ * check measures the dispatcher's heartbeat against this rather than against a
+ * fixed age: a fixed 26 h threshold is exactly the slot-to-check gap, so
+ * seconds of cron jitter decided whether a missed morning was reported.
+ */
+export function lastDailySlot(now: Date, tz: string = DEFAULT_TZ): Date {
+  const local = localDate(now, tz)
+  return slotDaysBack(local, local.hour < SLOT_HOUR ? 1 : 0, tz)
+}
+
 export function isWeeklyDue(cfg: ScheduleConfig, local: Pick<LocalDate, 'weekday'>): boolean {
   return cfg.report_period === 'weekly' && cfg.report_day === local.weekday
 }
@@ -106,9 +124,7 @@ export function lastExpectedSlot(cfg: ScheduleConfig, now: Date, tz: string = DE
     // On the report day itself, 06:00 may not have arrived yet — then the last
     // slot is a week ago, not this morning.
     if (daysBack === 0 && beforeSlotToday) daysBack = 7
-    // Step back over civil days, then resolve 06:00 local on that date.
-    const civil = new Date(Date.UTC(local.year, local.month - 1, local.dayOfMonth - daysBack))
-    return localToInstant(civil.getUTCFullYear(), civil.getUTCMonth() + 1, civil.getUTCDate(), SLOT_HOUR, tz)
+    return slotDaysBack(local, daysBack, tz)
   }
 
   if (cfg.report_period === 'monthly') {

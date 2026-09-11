@@ -11,13 +11,15 @@ const comped = { is_active: true, is_comped: true, approved_at: '2026-01-01T00:0
 
 function inputs(over: Partial<HealthInputs> = {}): HealthInputs {
   // Heartbeats default to fresh relative to whatever `now` the case uses, so a
-  // case about run cadence never trips the liveness checks by accident.
+  // case about run cadence never trips the liveness checks by accident. A beat
+  // three minutes old is always after the most recent 06:00 SAST slot, whatever
+  // `now` is, so the dispatcher rule stays quiet too.
   const now = over.now ?? NOW
   return {
     now,
     heartbeats: [
       { name: 'inngest', lastSeenAt: agoMin(3, now) },
-      { name: 'dispatcher', lastSeenAt: agoH(6, now) },
+      { name: 'dispatcher', lastSeenAt: agoMin(3, now) },
     ],
     clients: [],
     runs: [],
@@ -35,7 +37,7 @@ describe('assessPipelineHealth — Inngest liveness', () => {
 
   it('flags the keep-warm heartbeat once it is older than 30 minutes', () => {
     const f = assessPipelineHealth(inputs({
-      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(45) }, { name: 'dispatcher', lastSeenAt: agoH(6) }],
+      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(45) }, { name: 'dispatcher', lastSeenAt: agoMin(3) }],
     }))
     expect(kinds(f)).toEqual(['inngest_silent'])
     expect(f[0].detail).toContain('45')
@@ -43,7 +45,7 @@ describe('assessPipelineHealth — Inngest liveness', () => {
 
   it('does not flag the keep-warm heartbeat at 29 minutes', () => {
     const f = assessPipelineHealth(inputs({
-      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(29) }, { name: 'dispatcher', lastSeenAt: agoH(6) }],
+      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(29) }, { name: 'dispatcher', lastSeenAt: agoMin(3) }],
     }))
     expect(f).toEqual([])
   })
@@ -58,15 +60,44 @@ describe('assessPipelineHealth — Inngest liveness', () => {
     expect(f[1].detail).toBe('no heartbeat recorded yet')
   })
 
-  it('flags the daily dispatcher only past 26 hours', () => {
-    const ok = assessPipelineHealth(inputs({
-      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(3) }, { name: 'dispatcher', lastSeenAt: agoH(25) }],
-    }))
-    expect(ok).toEqual([])
-    const bad = assessPipelineHealth(inputs({
-      heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(3) }, { name: 'dispatcher', lastSeenAt: agoH(27) }],
-    }))
-    expect(kinds(bad)).toEqual(['dispatcher_silent'])
+  // The dispatcher is measured against its 06:00 SAST slot (04:00 UTC), never
+  // by age: a plain 26-h threshold is exactly the slot-to-check gap, so the
+  // cases below — all within seconds of that gap — are the ones that decide
+  // whether a missed morning is reported at all.
+  const dispatcherAt = (beat: string, at: string) => assessPipelineHealth(inputs({
+    now: new Date(at),
+    heartbeats: [{ name: 'inngest', lastSeenAt: agoMin(3, new Date(at)) }, { name: 'dispatcher', lastSeenAt: beat }],
+  }))
+
+  it("flags the dispatcher when the newest beat is yesterday's slot", () => {
+    // The 26-hour case: checked at 06:00 UTC, the beat landed 5 s after
+    // 04:00:00 UTC YESTERDAY — an age of 25h59m55s, which a 26-h threshold
+    // waves through and this rule does not.
+    const f = dispatcherAt('2026-09-15T04:00:05Z', '2026-09-16T06:00:00Z')
+    expect(kinds(f)).toEqual(['dispatcher_silent'])
+    expect(f[0].detail).toContain('2026-09-16T04:00:00.000Z')
+  })
+
+  it("says nothing when the beat landed at today's slot", () => {
+    expect(dispatcherAt('2026-09-16T04:00:05Z', '2026-09-16T06:00:00Z')).toEqual([])
+  })
+
+  it('allows a beat a few minutes early without calling it yesterday', () => {
+    // Cron jitter can fire the dispatcher just before 06:00:00 SAST.
+    expect(dispatcherAt('2026-09-16T03:52:00Z', '2026-09-16T06:00:00Z')).toEqual([])
+  })
+
+  it('waits 90 minutes after the slot before expecting the beat', () => {
+    // 05:00 UTC — only an hour past the slot; a slow morning is not a finding.
+    expect(dispatcherAt('2026-09-15T04:00:05Z', '2026-09-16T05:00:00Z')).toEqual([])
+    // 05:31 UTC — past the grace, and yesterday's beat is now the newest.
+    expect(kinds(dispatcherAt('2026-09-15T04:00:05Z', '2026-09-16T05:31:00Z'))).toEqual(['dispatcher_silent'])
+  })
+
+  it('is judged against yesterday\'s slot before 06:00 SAST', () => {
+    // 02:00 UTC on the 16th: the slot that has actually passed is the 15th's.
+    expect(dispatcherAt('2026-09-15T04:00:05Z', '2026-09-16T02:00:00Z')).toEqual([])
+    expect(kinds(dispatcherAt('2026-09-14T04:00:05Z', '2026-09-16T02:00:00Z'))).toEqual(['dispatcher_silent'])
   })
 })
 

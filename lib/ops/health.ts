@@ -11,12 +11,18 @@
 
 import { billingAccess, type BillingClient } from '../billing'
 import { cadenceReliability } from '../pipeline/cadence'
-import { lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
+import { lastDailySlot, lastExpectedSlot, type ScheduleConfig } from '../pipeline/schedule-due'
 
 /** keepWarm runs every 5 min; 30 min means six consecutive misses. */
 export const INNGEST_SILENT_MS = 30 * 60_000
-/** The dispatcher is daily, so 26 h is one missed morning plus slack. */
-export const DISPATCHER_SILENT_MS = 26 * 3600_000
+/** How far before its 06:00 SAST slot the dispatcher's beat may sit and still
+ *  count as this morning's. The dispatcher is not measured by age: a plain
+ *  26-h threshold is EXACTLY the slot-to-check gap, so a beat landing five
+ *  seconds after 06:00:00 reads as 25h59m59s on a 06:00 check and the missed
+ *  morning goes unreported. Compare against the slot instead. */
+export const DISPATCHER_BEAT_SLACK_MS = 15 * 60_000
+/** How long after the slot the dispatcher's beat is expected to have landed. */
+export const DISPATCHER_GRACE_MS = 90 * 60_000
 /** How long after its slot a run gets before "it never started". */
 export const RUN_START_GRACE_MS = 2 * 3600_000
 /** A run that opened slightly early still counts as that slot's run. */
@@ -92,17 +98,11 @@ function ago(ms: number): string {
   return `${Math.floor(hours / 24)} days ago`
 }
 
-function heartbeatFinding(
-  beats: Map<string, number>, name: string, kind: FindingKind, limitMs: number, now: number, label: string,
-): Finding | null {
-  const seen = beats.get(name)
-  // Absent is the loudest case, not an error: either nothing has ever written
-  // the row (table just shipped) or the writer has been dead since the table
-  // was created. Both mean "we cannot show that Inngest is alive".
-  if (seen === undefined) return { kind, detail: NO_HEARTBEAT }
-  const age = now - seen
-  if (age <= limitMs) return null
-  return { kind, detail: `${label} last checked in ${ago(age)} (${new Date(seen).toISOString()}); limit is ${ago(limitMs)}` }
+/** Absent is the loudest case, not an error: either nothing has ever written
+ *  the row (table just shipped) or the writer has been dead since the table was
+ *  created. Both mean "we cannot show that Inngest is alive". */
+function missingBeat(beats: Map<string, number>, name: string, kind: FindingKind): Finding | null {
+  return beats.has(name) ? null : { kind, detail: NO_HEARTBEAT }
 }
 
 export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
@@ -115,10 +115,31 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
     const t = Date.parse(b.lastSeenAt)
     if (!Number.isNaN(t)) beats.set(b.name, t)
   }
-  const inngest = heartbeatFinding(beats, 'inngest', 'inngest_silent', INNGEST_SILENT_MS, now, 'keep-warm (every 5 min)')
-  if (inngest) findings.push(inngest)
-  const dispatcher = heartbeatFinding(beats, 'dispatcher', 'dispatcher_silent', DISPATCHER_SILENT_MS, now, 'the 06:00 SAST dispatcher')
-  if (dispatcher) findings.push(dispatcher)
+  // keep-warm runs every five minutes, so plain age is the right measure.
+  const inngestBeat = beats.get('inngest')
+  const missingInngest = missingBeat(beats, 'inngest', 'inngest_silent')
+  if (missingInngest) findings.push(missingInngest)
+  else if (inngestBeat !== undefined && now - inngestBeat > INNGEST_SILENT_MS) {
+    findings.push({
+      kind: 'inngest_silent',
+      detail: `keep-warm (every 5 min) last checked in ${ago(now - inngestBeat)} (${new Date(inngestBeat).toISOString()}); limit is ${ago(INNGEST_SILENT_MS)}`,
+    })
+  }
+
+  // The dispatcher runs once, at 06:00 SAST, so it is measured against that
+  // slot rather than by age — see DISPATCHER_BEAT_SLACK_MS.
+  const dispatcherBeat = beats.get('dispatcher')
+  const missingDispatcher = missingBeat(beats, 'dispatcher', 'dispatcher_silent')
+  if (missingDispatcher) findings.push(missingDispatcher)
+  else if (dispatcherBeat !== undefined) {
+    const slot = lastDailySlot(inputs.now).getTime()
+    if (now >= slot + DISPATCHER_GRACE_MS && dispatcherBeat < slot - DISPATCHER_BEAT_SLACK_MS) {
+      findings.push({
+        kind: 'dispatcher_silent',
+        detail: `the 06:00 SAST dispatcher did not check in for the ${new Date(slot).toISOString()} slot; its last beat is ${new Date(dispatcherBeat).toISOString()} (${ago(now - dispatcherBeat)})`,
+      })
+    }
+  }
 
   // 2. Did every run that was due actually start? Absence of a pipeline_runs
   //    row is the only signal there is — nothing records "expected but never
