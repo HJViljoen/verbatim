@@ -225,7 +225,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
   let earlierThemesQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) earlierThemesQ = earlierThemesQ.not('run_id', 'in', notRunning)
-  const [recRes, themedRunId, miRes, latestVidRes, eventsRes, bucketRes] = await Promise.all([
+  const [recRes, themedRunId, miRes, latestVidRes, eventsRes] = await Promise.all([
     supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
     // Themes come from the newest update that produced any — normally this
     // update, but a failed theme pass must not blank the theme tiles.
@@ -236,9 +236,6 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     latestVidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
     supabase.from('account_events').select('platform, severity, explained, magnitude_label, explanation')
       .eq('client_id', clientId).eq('run_id', runId).order('severity', { ascending: false }).limit(3),
-    // Theme buckets for scoping the recommendation's voices (used below only
-    // when there is a recommendation; cheap, and it saves a wave).
-    supabase.from('themes').select('bucket, supporting_insight_ids').eq('client_id', clientId).eq('run_id', runId),
   ])
 
   // ── the third wave: what depends on the second ─────────────────────────
@@ -249,7 +246,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
-  const [platformRows, themeRowsRes, earlierRes, supportInsights] = await Promise.all([
+  const [platformRows, themeRowsRes, earlierRes, supportInsights, bucketRes] = await Promise.all([
     selectAll<{ platform: string | null }>(() =>
       supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
     ),
@@ -260,6 +257,14 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       : Promise.resolve({ data: null }),
     themedRunId ? earlierThemesQ.neq('run_id', themedRunId).limit(1) : Promise.resolve({ data: null }),
     oneThing ? fetchInsightsByIds<{ id: string; theme: string; platform: string | null }>(supabase, supportIds, 'id, theme, platform') : Promise.resolve([]),
+    // Theme buckets for scoping the recommendation's voices. Keyed on the run
+    // that actually produced themes, like the tiles above: keyed on `runId` it
+    // came back empty whenever this update's theme pass produced nothing, and
+    // scopeToClientVoices fails open on an empty map — competitor voices under
+    // a claim about the client. Moved into this wave when themedRunId became
+    // available, which costs no extra round trip.
+    supabase.from('themes').select('bucket, supporting_insight_ids')
+      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
   ])
 
   // The latest update = the run we anchored on; everything before it is history.

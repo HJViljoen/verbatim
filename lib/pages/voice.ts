@@ -5,6 +5,7 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { prevalenceTier, type GlossaryKey, type PrevalenceTier } from '../calibration'
 import { fmtCompact, weekdayDate, platformLabel } from '../format'
+import { latestPerDay } from '../dashboard-tiles'
 import {
   themeTrajectories, themeMovers, voiceTiers, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
   type ThemeHistoryRow, type Trajectory, type Bucket,
@@ -253,10 +254,17 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
 
   // The updates that count for movement: closed updates that produced themes
   // (an update from before themes existed is no baseline for "new").
+  //
+  // One point per calendar DAY, like every other movement chart: two runs on
+  // the same day (a rerun, an analysis-only resume) are one update, and left
+  // uncollapsed they drew two points on a trajectory and inflated the update
+  // count behind "heard in n updates".
   const themedRunIds = new Set(historyRows.map((r) => r.run_id))
-  const runDates = new Map(
-    summaryRows.filter((s) => s.run_id && themedRunIds.has(s.run_id) && !runningIds.includes(s.run_id)).map((s) => [s.run_id, s.run_date]),
+  const countedRuns = latestPerDay(
+    summaryRows.filter((s): s is typeof s & { run_date: string } =>
+      Boolean(s.run_id && s.run_date) && themedRunIds.has(s.run_id!) && !runningIds.includes(s.run_id!)),
   )
+  const runDates = new Map(countedRuns.map((s) => [s.run_id, s.run_date]))
   // This update produced themes but hasn't written its summary row yet.
   if (themedRunIds.has(runId) && !runDates.has(runId)) runDates.set(runId, (latestRun.started_at as string).slice(0, 10))
 

@@ -13,6 +13,7 @@ import {
 } from '../market-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
+import { fetchThemedRunId } from './themed-run'
 
 // Market Intelligence loader — the data half of the old app/dashboard/market/
 // page.tsx (split 2026-08-29, Reports & Exports T5). "What should we do?": a
@@ -166,7 +167,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
 
   // Latest COMPLETED update — an in-flight one has no synthesis rows yet, so
   // the page keeps serving the previous read until the new one closes.
-  const [{ data: client }, { data: latestRun }, newsRes] = await Promise.all([
+  const [{ data: client }, { data: latestRun }, newsRes, themedRunId] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -179,6 +180,11 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .eq('client_id', clientId).lte('ring', 2)
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(NEWS_SHOWN),
+    // The last update whose theme pass actually produced rows. Every other read
+    // on this page stays on the latest update; the theme reads below fall back
+    // the way Voice does, so a run that gathered but produced no themes doesn't
+    // empty the page's quote scoping (lib/pages/themed-run).
+    fetchThemedRunId(supabase, clientId),
   ])
   const brand = client?.company_name ?? 'Your brand'
 
@@ -201,14 +207,14 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     // insights — "Early signal" is a calibrated term, not a catch-all.
     supabase.from('themes')
       .select('label, description', { count: 'exact' })
-      .eq('client_id', clientId).eq('run_id', runId).eq('single_source', true)
+      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).eq('single_source', true)
       .gte('strength_score', CURATION_GATE.earlySignalMinScore)
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
     // Entity buckets per audience insight — quote pools on this page are
     // client-facing claims, so competitor-audience voices are scoped out.
     supabase.from('themes')
       .select('bucket, supporting_insight_ids')
-      .eq('client_id', clientId).eq('run_id', runId),
+      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
   ])
 
   const insights = (miRes.data ?? []) as MarketInsight[]

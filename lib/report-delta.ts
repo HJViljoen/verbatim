@@ -134,16 +134,28 @@ function audienceSides(current: RunSummaryRow, prev: RunSummaryRow):
   return { now: nowRow, prev: prevRow }
 }
 
+/** The start of a run's calendar day, as the comparable prefix of its
+ *  timestamp. Exported for the test that pins the same-day rule. */
+export function dayFloor(runDate: string): string {
+  return runDate.slice(0, 10)
+}
+
 export async function computeRunDelta(
   admin: Admin,
   clientId: string,
   current: RunSummaryRow,
 ): Promise<RunDelta | null> {
+  // "The previous update" means a previous DAY, not merely an earlier moment.
+  // run_date is a timestamptz, so `.lt(run_date)` alone also matches a rerun
+  // from earlier the same morning — and then every delta on the report is
+  // measured against a few hours of the same week rather than against the last
+  // one, which reads as "nothing changed". Cutting on the calendar day keeps a
+  // same-day rerun out while still finding yesterday's run.
   const { data: prev } = await admin
     .from('run_summary')
     .select(SUMMARY_COLS)
     .eq('client_id', clientId)
-    .lt('run_date', current.run_date)
+    .lt('run_date', dayFloor(current.run_date))
     .order('run_date', { ascending: false })
     .limit(1)
     .maybeSingle()
