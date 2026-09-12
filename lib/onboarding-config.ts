@@ -49,3 +49,22 @@ export function deriveCompetitorKeywords(competitorNames: string[]): string[] {
  *  is a demo-sized corpus: the analysis floors (>= 5 comments per video, >= 2
  *  videos per theme) leave almost nothing standing. Real tenants run 50-70. */
 export const ONBOARDING_MAX_VIDEOS = 30
+
+/**
+ * The competitor search list after a competitor-name change: the derived floor
+ * topped up onto whatever is already stored (2026-09-12).
+ *
+ * A union, never a replacement. The settings page used to skip this write
+ * whenever the stored list diverged from the derivation, reading divergence as
+ * "an operator curated this, don't clobber it". That was true while only an
+ * operator could write the column; now that a client edits its own search
+ * terms, the first edit would have frozen the derivation forever and adding a
+ * competitor would silently stop adding a search term for it — T0-7 again.
+ *
+ * Derived terms come FIRST so that a list already at the 15 cap still admits
+ * the floor: a competitor the client just named must be searchable, and a
+ * curated extra is the thing that can afford to fall off the end.
+ */
+export function mergeCompetitorKeywords(stored: string[], competitorNames: string[]): string[] {
+  return cleanTerms([...deriveCompetitorKeywords(competitorNames), ...stored])
+}

@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { deriveCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
+import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { PERIODS, DAYS } from './constants'
 
@@ -88,28 +88,34 @@ export async function updateTrackingConfig(
     return { ok: false, message: `Could not save: ${error.message}` }
   }
 
-  // competitor_keywords follows competitor_names unless an operator curated it
-  // (T0-7): gather searches from the keywords while tagging matches on the
-  // names, and no app surface ever wrote the keywords, so a self-serve tenant
-  // gathered nothing about the competitors it just named. Written with the
-  // admin client on purpose: T0-2 revoked the column from `authenticated`, so
-  // it stays unreachable from a crafted POST and moves only through this
-  // derivation. Authorization already passed (role check + the RLS update
-  // above). Non-fatal: the four facts are saved either way.
+  // competitor_keywords follows competitor_names (T0-7): gather searches from
+  // the keywords while tagging matches on the names, and no app surface ever
+  // wrote the keywords, so a self-serve tenant gathered nothing about the
+  // competitors it just named. Written with the admin client on purpose: T0-2
+  // revoked the column from `authenticated`, so it stays unreachable from a
+  // crafted POST and moves only through this derivation. Authorization already
+  // passed (role check + the RLS update above). Non-fatal: the four facts are
+  // saved either way.
+  //
+  // A UNION, not a replacement (2026-09-12). The old rule skipped the write
+  // entirely whenever the stored list diverged from the derivation, on the
+  // assumption that divergence meant an operator had hand-curated it. Now that
+  // the client can edit the term list itself, the first edit made that true
+  // forever: adding a competitor name would silently stop adding a search term
+  // for it — the exact T0-7 bug, reachable by ordinary use. So the derived
+  // terms are topped up onto whatever is stored, the way onboarding already
+  // merges them. Curation is respected for what it can express — the union
+  // never REMOVES a term anyone added.
   const storedKeywords = (current?.competitor_keywords ?? []) as string[]
-  const previousDerived = deriveCompetitorKeywords((current?.competitor_names ?? []) as string[])
   const sameSet = (a: string[], b: string[]) =>
     JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
-  const operatorCurated = storedKeywords.length > 0 && !sameSet(storedKeywords, previousDerived)
-  if (!operatorCurated) {
-    const next = deriveCompetitorKeywords(parsed.data.competitor_names)
-    if (!sameSet(storedKeywords, next)) {
-      const { error: kwErr } = await createAdminClient()
-        .from('tracking_configs')
-        .update({ competitor_keywords: next })
-        .eq('client_id', clientId)
-      if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
-    }
+  const next = mergeCompetitorKeywords(storedKeywords, parsed.data.competitor_names)
+  if (!sameSet(storedKeywords, next)) {
+    const { error: kwErr } = await createAdminClient()
+      .from('tracking_configs')
+      .update({ competitor_keywords: next })
+      .eq('client_id', clientId)
+    if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
   }
 
   revalidatePath('/dashboard/settings')
