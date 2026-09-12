@@ -397,7 +397,9 @@ export function composeSkeleton(t: DocumentTemplate, settings: Pick<DocumentSett
  *  the brief into questions, so what the researcher asks is exactly what the
  *  operator wrote. */
 export function briefAnchors(brief: string | null | undefined): AnchorQuestion[] {
-  const text = (brief ?? '').trim()
+  // One line: the brief goes into a question the researcher asks, and its own
+  // line breaks would split the question rather than the sentences do.
+  const text = (brief ?? '').replace(/\s+/g, ' ').trim()
   if (!text) return []
   return text
     .split(/(?<=[.!?])\s+/)

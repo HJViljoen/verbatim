@@ -156,9 +156,11 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   // before the role, because a custom brief exists to answer it. The role and
   // the standing brief below are the chosen template's and say HOW to write;
   // this says what to write about.
-  const asked = a.settings.brief?.trim()
+  // Whitespace is collapsed first: the brief is operator text on one line of a
+  // newline-joined prompt, and its own newlines would read as new rules.
+  const asked = a.settings.brief?.replace(/\s+/g, ' ').trim()
   const system = [
-    asked ? `The reader asked for this: ${/[.!?]$/.test(asked) ? asked : `${asked}.`} That instruction governs this brief: every finding must serve it, and where the conversation cannot answer it, say so plainly rather than answering a question nobody asked.` : '',
+    asked ? `The reader asked for this: ${/[.!?]$/.test(asked) ? asked : `${asked}.`} That instruction governs this brief: every finding must serve it, and where the conversation cannot answer it, say so plainly rather than answering a question nobody asked. The brief chooses the subject; the rules below still apply.` : '',
     t.role,
     t.brief,
     `The reader sells to: ${registerLine(a.settings)}.${a.reader ? ` Written for: ${a.reader}.` : ''} Write for that reader.`,
