@@ -13,6 +13,7 @@ import { coverPlainText } from '@/lib/reports/cover'
 import type { CoverText, FigureTable } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
+import { rows as readRows } from '@/lib/pages/read'
 
 // Reports — the archive of what went out and what was built (Stage 3):
 //   Sent  — every scheduled send (subject, who, when, the PDF, the share link,
@@ -74,7 +75,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const { supabase, clientId } = await getSessionContext()
   const group: Group = sp.group === 'built' ? 'built' : sp.group === 'exported' ? 'exported' : 'sent'
 
-  const [{ data: sendData }, { data: legacyData }, { data: buildData }, { data: exportData }] = await Promise.all([
+  const [sendRes, legacyRes, buildRes, exportRes] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
       .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
     supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
@@ -85,11 +86,14 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
       .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(50),
   ])
-  const sends = (sendData ?? []) as unknown as SendRow[]
-  const legacy = (legacyData ?? []) as LegacyReport[]
+  // readRows, not `data ?? []`: a failed read and an empty archive render the
+  // same page, so a broken query would show a client an empty Sent or Exported
+  // tab with nothing anywhere saying the read failed.
+  const sends = readRows<SendRow>(sendRes, 'reports.sends')
+  const legacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
   const sentSnapshotIds = new Set(sends.map((s) => s.snapshot_id).filter(Boolean))
-  const builds = ((buildData ?? []) as unknown as BuildRow[]).filter((b) => !sentSnapshotIds.has(b.id))
-  const exports = exportedRows((exportData ?? []) as unknown as ExportSnapshot[])
+  const builds = readRows<BuildRow>(buildRes, 'reports.builds').filter((b) => !sentSnapshotIds.has(b.id))
+  const exports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
 
   // ── selection ─────────────────────────────────────────────────────────
   const sentIds = [...sends.map((s) => s.id), ...legacy.map((l) => l.id)]
