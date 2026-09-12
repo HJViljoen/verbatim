@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
 import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { cn } from '@/lib/utils'
@@ -425,7 +426,7 @@ export const competitivePage: PageModule<D> = {
 }
 
 /** The app page: page bar, the overview grid, the findings master-detail. */
-export function CompetitivePage({ data: d, detail: detailParam }: { data: CompetitiveData | CompetitiveEmpty; detail?: string; params: Record<string, string | undefined> }) {
+export function CompetitivePage({ data: d, detail: detailParam, params }: { data: CompetitiveData | CompetitiveEmpty; detail?: string; params: Record<string, string | undefined> }) {
   const showLegend = detailParam === 'legend'
   if (isCompetitiveEmpty(d)) {
     return (
@@ -438,9 +439,11 @@ export function CompetitivePage({ data: d, detail: detailParam }: { data: Compet
     )
   }
   return (
+    <ExportScope page="competitive" params={params} tiles={Object.values(baseRenderables).map((r) => ({ key: r.key, title: r.title }))}>
     <PageFrame className="min-h-0 flex-1">
       <PageBar title="Competitive Intelligence" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
+        <ExportMenu />
         <HowToRead items={d.legendItems ?? LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive" />
       </PageBar>
 
@@ -454,5 +457,6 @@ export function CompetitivePage({ data: d, detail: detailParam }: { data: Compet
         <MasterDetail id="competitive-findings" className="md:h-[600px]" rail={rail(d, 'app')} list={list(d, 'app')} detail={detail(d, 'app')} />
       </div>
     </PageFrame>
+    </ExportScope>
   )
 }

@@ -1,4 +1,5 @@
 import { DOCUMENT_BLOCK_MAX, DOCUMENT_CITED_COUNT_MIN, DOCUMENT_FINDING_MIN_CONVERSATIONS, DOCUMENT_THIN_CONVERSATIONS } from '../../config'
+import { chunk } from '../../chunk'
 import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
@@ -130,7 +131,7 @@ export interface ComposeArgs {
   timings: Record<string, number>
   /** The self-check's outcome, when it ran: a verdict per surviving finding
    *  headline and the findings it dropped (lib/reports/documents/check.ts). */
-  check?: { verdicts: Record<string, 'echoes' | 'silent'>; dropped: { headline: string; reason: string }[] } | null
+  check?: { verdicts: Record<string, 'echoes' | 'silent'>; dropped: { headline: string; reason: string }[]; brief?: { answered: boolean; subjects: string[]; missed: string[] } | null } | null
 }
 
 export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; workings: DocumentWorkings } {
@@ -327,12 +328,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       // Two a page, like personas. A claim is the company's own sentence and
       // is printed whole; four of them on one sheet ran off the bottom, and a
       // claim cut to fit is a misquote (found by rendering, 2026-09-02).
-      const out: DocPage[] = []
-      for (let i = 0; i < blocks.length; i += CLAIMS_PER_PAGE) {
-        const n = Math.floor(i / CLAIMS_PER_PAGE) + 1
-        out.push({ id: `say_hear_${n}`, kind: 'say_hear', title: PAGE_TITLE.say_hear, blocks: blocks.slice(i, i + CLAIMS_PER_PAGE) })
-      }
-      return out
+      return chunk(blocks, CLAIMS_PER_PAGE).map((part, i) => ({
+        id: `say_hear_${i + 1}`, kind: 'say_hear' as const, title: PAGE_TITLE.say_hear, blocks: part,
+      }))
     },
 
     // The questions the conversation puts and nobody settles.
@@ -357,12 +355,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
         }
       })
       for (const b of personaBlocks) blocksW.push({ blockId: b.id, basedOn: [] })
-      const out: DocPage[] = []
-      for (let i = 0; i < personaBlocks.length; i += PERSONAS_PER_PAGE) {
-        const n = Math.floor(i / PERSONAS_PER_PAGE) + 1
-        out.push({ id: `personas_${n}`, kind: 'personas', title: PAGE_TITLE.personas, blocks: personaBlocks.slice(i, i + PERSONAS_PER_PAGE) })
-      }
-      return out
+      return chunk(personaBlocks, PERSONAS_PER_PAGE).map((part, i) => ({
+        id: `personas_${i + 1}`, kind: 'personas' as const, title: PAGE_TITLE.personas, blocks: part,
+      }))
     },
 
     language: () => {
@@ -374,7 +369,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
 
     method: () => {
       blocksW.push({ blockId: 'method.method', basedOn: [] })
-      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, a.template.skeleton.map((p) => p.kind)) }] }]
+      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, a.template.skeleton.map((p) => p.kind), a.settings.brief) }] }]
     },
   }
 
@@ -400,6 +395,11 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     figures,
     delta: s.delta,
     pages,
+    // What the skeleton above was composed from, so it can be composed again
+    // (WP7d): the eval and any rebuild read these, not the picker.
+    ...(a.settings.blocks?.length ? { blocks: a.settings.blocks } : {}),
+    ...(a.settings.role ? { role: a.settings.role } : {}),
+    ...(a.settings.brief ? { brief: a.settings.brief } : {}),
     lens: { means: a.template.lens.means, short: a.template.lens.short },
     method: {
       conversations: s.run.conversations,
@@ -423,6 +423,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     blocks: blocksW,
     concerns: s.concerns.map((c) => ({ label: c.label, buckets: c.buckets.map((b) => ({ bucket: b.bucket, label: b.label, evidenceCount: b.evidenceCount })), total: c.total, trajectory: c.trajectory })),
     dropped,
+    ...(a.check?.brief ? { brief: a.check.brief } : {}),
     heldBack: s.heldBackPhrases,
     costUsd: a.costUsd,
     timings: a.timings,
@@ -442,7 +443,7 @@ const PLATFORM_NAME: Record<string, string> = { tiktok: 'TikTok', instagram: 'In
 /** The report's basis, in code: what was read, how findings are ordered,
  *  how confidence is judged, what was held back. Not evidence per line; the
  *  page a professional report ends on. */
-export function methodItems(s: Signals, period: string, thin: boolean, updatesCount: number, kinds: DocPageKind[] = ['competitor', 'personas']): string[] {
+export function methodItems(s: Signals, period: string, thin: boolean, updatesCount: number, kinds: DocPageKind[] = ['competitor', 'personas'], brief?: string): string[] {
   const sources = sourcesOf(s).map((p) => PLATFORM_NAME[p] ?? p)
   const competitors = s.competitors.map((c) => c.name)
   const has = (k: DocPageKind) => kinds.includes(k)
@@ -456,7 +457,12 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     has('personas') ? 'Personas come from the consumer profile, which groups the whole conversation by who is speaking and where they are in the journey.' : '',
     has('asked') ? 'The questions page carries what the conversation asks and does not settle, in the wording the audience uses.' : '',
   ].filter(Boolean).join(' ')
+  // A custom brief says what it was asked, first: a reader of the PDF (and a
+  // reader of the snapshot later) can otherwise not tell what this document
+  // was written to answer. Operator prose, printed as written.
+  const asked = brief?.replace(/\s+/g, ' ').trim()
   return [
+    asked ? `This brief was written to answer an instruction from ${s.company}: "${/[.!?]$/.test(asked) ? asked : `${asked}.`}"` : '',
     `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`,
     `Findings are the researcher's readings of that conversation, ordered by the evidence behind them. Each rests on grounded points the analysis extracted and verified; confidence is judged from how many conversations and how many independent strands support the reading (solid, reasonable or thin), never by the writer.${thin ? ' This update was thin, so fewer findings were written rather than stretch the evidence.' : ''}`,
     `${wherePagesComeFrom}${wherePagesComeFrom && s.heldBackPhrases ? ' ' : ''}${s.heldBackPhrases ? `${fmtCount(s.heldBackPhrases)} phrases in other languages were read for the counts but not quoted.` : ''}`,

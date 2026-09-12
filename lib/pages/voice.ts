@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
 import { fetchInsightsByIds, fetchQuoteCitationsByAudience, readsAsHeroQuote, cleanQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
@@ -7,10 +8,12 @@ import { prevalenceTier, type GlossaryKey, type PrevalenceTier } from '../calibr
 import { fmtCompact, weekdayDate, platformLabel } from '../format'
 import { latestPerDay } from '../dashboard-tiles'
 import {
-  themeTrajectories, themeMovers, voiceTiers, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
+  themeTrajectories, themeMovers, voiceTiers, byThemeLead, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind, onCameraNote,
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
 import { pickThemedRunId } from './themed-run'
+import { row, rows as readRows } from './read'
+import { fetchRunningRunIds } from './latest-video-run'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 
@@ -39,6 +42,9 @@ export interface ThemeRow {
   supporting_insight_ids: string[]
   supporting_video_ids: string[]
   evidence_count: number
+  /** Of evidence_count, the conversations where it was said on camera (WP7a).
+   *  Null on an update themed before the column existed. */
+  video_evidence_count: number | null
   strength_score: number | null
   rank_score: number | null
   dominant_emotion: string | null
@@ -109,6 +115,10 @@ export interface ThemeBlockData {
 
 export interface ThemeDetail {
   id: string
+  /** The theme's identity across updates (theme_registry). Null only on rows
+   *  written before the registry existed — an initiative cannot be declared on
+   *  one of those, because there is nothing stable to measure. */
+  registryId: string | null
   label: string
   bucket: string
   bucketName: string
@@ -122,6 +132,8 @@ export interface ThemeDetail {
   count: number
   denom: number
   pct: number
+  /** "3 said on camera", or null when the theme is comment-only / unrecorded. */
+  onCamera: string | null
   history: { evidence: number[]; dates: string[] } | null
   quotes: Quote[]
   withheld: number
@@ -220,11 +232,11 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // everything keyed on client_id alone — theme history, update dates, the
   // phrase pool, the mood read — goes out here, with the run lookup; only
   // this update's themes wait for the run id.
-  const [{ data: latestRun }, runningRes, { data: client }, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
+  const [latestRunRes, runningIds, clientRes, historyRows, summaryRows, samplesRes, emotionRows] = await Promise.all([
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId, 'voice'),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // Every update's themes, for the per-theme sparks and the movers (joined on
     // registry_id in lib/voice-tiles). selectAll: a tenant crosses 1000 rows in
@@ -246,7 +258,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       supabase.from('audience_insights_current').select('id, emotion').eq('client_id', clientId).order('id', { ascending: true }),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'voice.latestRun')
+  const client = row<{ company_name: string | null }>(clientRes, 'voice.client')
   const brand = client?.company_name ?? 'your brand'
 
   if (!latestRun) return { empty: true, legendItems: LEGEND_ITEMS }
@@ -275,15 +288,27 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // already holds every update's theme rows, so this costs no round trip.
   const themedRunId = pickThemedRunId([...runDates].map(([run_id, created_at]) => ({ run_id, created_at })), runningIds)
 
-  const themesRes = themedRunId
-    ? await supabase.from('themes')
-        .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
-        .eq('client_id', clientId).eq('run_id', themedRunId)
-        .order('evidence_count', { ascending: false })
-        .order('rank_score', { ascending: false, nullsFirst: false })
-    : { data: null }
-
-  const themes = (themesRes.data ?? []) as ThemeRow[]
+  // selectAll: this is the page's whole theme corpus for one update, and one
+  // update crosses the 1000-row cap (Sealand's latest is at 936). A bare
+  // select would drop the tail silently — the heard-once tier, and with it the
+  // member_themes a grounding deep link matches on.
+  //
+  // `video_evidence_count` here is a HARD PRECONDITION on migration
+  // 20260912090000_theme_video_evidence.sql, not a seatbelted read: naming a
+  // column that does not exist raises 42703 and this page 500s for every
+  // tenant. Unlike the write in lib/pipeline/themes.ts, a read cannot degrade —
+  // dropping the column would change the row shape every caller below reads.
+  // Apply that migration before deploying.
+  const themes = themedRunId
+    ? await selectAll<ThemeRow>(() =>
+        supabase.from('themes')
+          .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, video_evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
+          .eq('client_id', clientId).eq('run_id', themedRunId)
+          .order('evidence_count', { ascending: false })
+          .order('rank_score', { ascending: false, nullsFirst: false })
+          .order('id'),
+      )
+    : []
   const updatesCount = runDates.size
   // The page is dated by the update its themes came from — the map, the movers
   // and the list are all read from it, so the date stays truthful when the
@@ -292,7 +317,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     ?? summaryRows.find((s) => s.run_id === runId)?.run_date
     ?? (latestRun.started_at as string)
   const showNew = updatesCount > 1
-  const samples = (samplesRes.data ?? []) as { id: string; phrase: string; platform: string | null }[]
+  const samples = readRows<{ id: string; phrase: string; platform: string | null }>(samplesRes, 'voice.languageSamples')
   const sampleTotal = samplesRes.count ?? samples.length
   const asQuote = (s: { id: string; phrase: string; platform: string | null }) => ({ ref: quoteRef.phrase(s.id), text: s.phrase, platform: s.platform })
   const phrases = shortPhrases(samples, PHRASES_SHOWN).map(asQuote)
@@ -331,7 +356,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // deep link shows exactly the themes behind that insight, singles included.
   const poolFor = (shownThemes: ThemeRow[]) => (deepLinked ? shownThemes : voiceTiers(shownThemes).confirmed)
     .slice()
-    .sort((a, b) => b.evidence_count - a.evidence_count || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0))
+    .sort(byThemeLead)
   const ribbonIdsFor = (pool: ThemeRow[]) => pool.slice(0, RIBBON_THEMES).flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
   // The theme pane (2026-08-28): ?theme=<id> selects a theme beside the map —
   // the old ?detail=<themeId> drawer links still land — and the widest-heard
@@ -358,7 +383,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
           .from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
           .in('audience_insight_id', detailTheme.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
           .order('relevance_rank', { ascending: true })
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ])
   const insightMeta = new Map(insightRows.map((i) => [i.id, i]))
   const stagesPresent = new Set([...insightMeta.values()].map((i) => i.journey_stage).filter(Boolean))
@@ -436,8 +461,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const commentIds = ribbon.cards.map((c) => c.quote.citation.commentId).filter((id): id is string => !!id)
   const commentMeta = new Map<string, { likes: number | null; platform: string | null }>()
   if (commentIds.length > 0) {
-    const { data } = await supabase.from('comments').select('id, likes, platform').in('id', commentIds)
-    for (const c of (data ?? []) as { id: string; likes: number | null; platform: string | null }[]) commentMeta.set(c.id, c)
+    const res = await supabase.from('comments').select('id, likes, platform').in('id', commentIds)
+    for (const c of readRows<{ id: string; likes: number | null; platform: string | null }>(res, 'voice.ribbonComments')) commentMeta.set(c.id, c)
   }
   const cards: VoiceCardData[] = ribbon.cards.map(({ quote: c }) => {
     const meta = c.citation.commentId ? commentMeta.get(c.citation.commentId) : undefined
@@ -470,14 +495,15 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     const denom = groupSize(t.bucket)
     const h = historyOf(t)
     return {
-      id: t.id, label: t.label, bucket: t.bucket, bucketName: bucketName(t.bucket), groupName: groupName(t.bucket), kind: bucketKind(t.bucket),
+      id: t.id, registryId: t.registry_id, label: t.label, bucket: t.bucket, bucketName: bucketName(t.bucket), groupName: groupName(t.bucket), kind: bucketKind(t.bucket),
       category: t.category, prevalence: prevalenceTier(t.evidence_count, denom), emotion: t.dominant_emotion, isNew: showNew && t.first_seen,
       description: t.description, count: t.evidence_count, denom, pct: denom > 0 ? Math.min(100, Math.round((t.evidence_count / denom) * 100)) : 0,
+      onCamera: onCameraNote(t.video_evidence_count, t.evidence_count),
       history: h && h.evidence.length >= 2 ? { evidence: h.evidence, dates: h.dates } : null,
       quotes, withheld, memberThemes: t.member_themes,
     }
   }
-  const theme = detailTheme ? themeDetail(detailTheme, (detailEvidenceRes.data ?? []) as EvidenceRow[]) : null
+  const theme = detailTheme ? themeDetail(detailTheme, readRows<EvidenceRow>(detailEvidenceRes, 'voice.detailEvidence')) : null
 
   // `full` (print): every confirmed theme under the current filters, in full —
   // one evidence read for all of them, grouped per theme. Capped: a deck with
@@ -486,11 +512,16 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   if (full) {
     const wanted = [...tiers.confirmed].sort((a, b) => b.evidence_count - a.evidence_count).slice(0, EXPORT_FULL_MAX_ITEMS)
     const ids = wanted.flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
+    // selectAll per chunk, not a bare select: evidence rows per insight are
+    // unbounded, and a chunk of 120 insights at ~9 rows each is already past
+    // the 1000-row cap — which truncates silently, so quotes would just be
+    // missing from an exported deck with nothing saying so. `.order('id')` is
+    // the stable tiebreaker range paging needs (relevance_rank is not unique).
     const rows: EvidenceRow[] = []
-    for (let i = 0; i < ids.length; i += 120) {
-      const { data } = await supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
-        .in('audience_insight_id', ids.slice(i, i + 120)).order('relevance_rank', { ascending: true })
-      rows.push(...((data ?? []) as EvidenceRow[]))
+    for (const part of chunk(ids, 120)) {
+      rows.push(...await selectAll<EvidenceRow>(() =>
+        supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
+          .in('audience_insight_id', part).order('relevance_rank', { ascending: true }).order('id')))
     }
     const byInsight = new Map<string, EvidenceRow[]>()
     for (const r of rows) byInsight.set(r.audience_insight_id, [...(byInsight.get(r.audience_insight_id) ?? []), r])

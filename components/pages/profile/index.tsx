@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import type { ReactNode } from 'react'
 import { HeartCrack, Compass, Users, UserRound, Layers, Zap } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -44,7 +45,10 @@ const persona: R = (d, mode) => {
           cast should be visible at once — a stepper hid four of them behind an
           arrow and made the reader page to find out who else is here. */}
       {d.personas.length > 1 ? (
-        <div className="flex flex-wrap items-center gap-1 rounded-full border border-border bg-card p-1">
+        // pr-24 in the app: the export control is absolutely placed in this
+        // page's top-right corner (it has no page bar to live in), so without
+        // the room it sits on top of the last persona's pill.
+        <div className={`flex flex-wrap items-center gap-1 rounded-full border border-border bg-card p-1 ${app ? 'pr-24' : ''}`}>
           {d.personas.map((p) => {
             const isActive = p.key === d.activeKey
             const cls = `flex-1 rounded-full px-4 py-2 text-center text-sm font-medium transition-colors ${
@@ -317,7 +321,7 @@ export const profilePage: PageModule<D> = {
 /** The app page: the switcher + composition, then the two summary cards —
  *  same order the old page returned, no `PageFrame`/`PageGrid` (this page's
  *  own bespoke layout). */
-export function ProfilePage({ data: d }: { data: ProfileData | ProfileEmpty; params: Record<string, string | undefined> }) {
+export function ProfilePage({ data: d, params }: { data: ProfileData | ProfileEmpty; params: Record<string, string | undefined> }) {
   if (isProfileEmpty(d)) {
     return (
       <div className="space-y-6">
@@ -332,10 +336,15 @@ export function ProfilePage({ data: d }: { data: ProfileData | ProfileEmpty; par
   return (
     // min-h-full + flex: the grid must be able to claim the remaining height,
     // which is what lets the figure reach the bottom of the pane.
+    <ExportScope page="profile" params={params} tiles={Object.values(renderables).map((r) => ({ key: r.key, title: r.title }))}>
       <div className="relative flex min-h-full flex-col gap-5">
+        {/* No page bar on this page: the export control sits in the top-right
+            corner, over nothing (the switcher is top-left). */}
+        <div className="absolute right-0 top-0 z-10"><ExportMenu /></div>
         {renderables['profile.persona'].render(d, 'app')}
         {renderables['profile.platformMix'].render(d, 'app')}
         {renderables['profile.shareOverTime'].render(d, 'app')}
       </div>
+    </ExportScope>
   )
 }

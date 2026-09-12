@@ -139,6 +139,18 @@ export const instagram: PlatformAdapter = {
     return { mediaUrl: str(first(v.audioUrl, v.videoUrl)) || null, subtitleTracks: null }
   },
 
+  // Cover frame (WP7b, 2026-09-12). Verified on real video_raw rows: `displayUrl`
+  // is present on 60 of 60 sampled items — reels (type Video / productType
+  // clips) included — and is the poster frame the grid shows. `images[0]` is the
+  // same URL when the field is populated at all, kept only as drift tolerance;
+  // there is no `thumbnailUrl` in this actor's output. Signed CDN link, expires
+  // in days, so it is only ever read during the run that gathered it.
+  coverUrl(raw) {
+    const v = raw as Record<string, unknown>
+    const images = Array.isArray(v.images) ? v.images : []
+    return str(first(v.displayUrl, images[0])) || null
+  },
+
   commentScrape(video, config) {
     return {
       actor: APIFY_ACTORS.instagram.comment,

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Fragment, type ReactNode } from 'react'
 import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { Quotes } from '@/components/quotes'
 import { ProportionBar } from '@/components/proportion-bar'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
@@ -13,12 +14,14 @@ import { RankedBar } from '@/components/charts/ranked-bar'
 import { Ring } from '@/components/charts/ring'
 import { RingSync } from '@/components/charts/ring-sync'
 import { ClaimPopover } from '@/components/claim-popover'
+import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import { Mover } from '@/components/charts/mover'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { dashboardEmail } from '@/components/email/tiles'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '@/lib/format'
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
+import { initiativesOf, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
 // Dashboard renderers — the JSX half of the old app/dashboard/page.tsx
@@ -272,7 +275,15 @@ const recommendation: R = ({ hero: h }, mode) => {
   const app = mode === 'app'
   const grounded = h.voices > 0 ? `Grounded in ${fmtInt(h.voices)} voices${h.platforms.length > 1 ? ` · ${h.platforms.length} platforms` : ''}` : null
   return (
-    <Tile exportKey="dashboard.recommendation" col={3} row={1} distribute="center" hoverable={app && !!h.oneThing} className="py-3" eyebrow="Top recommendation" meta={h.oneThing ? priorityLabel(h.oneThing.priority) : undefined}
+    <Tile exportKey="dashboard.recommendation" col={3} row={1} distribute="center" hoverable={app && !!h.oneThing} className="py-3" eyebrow="Top recommendation"
+      meta={h.oneThing ? (
+        <span className="relative z-1 inline-flex items-center gap-1.5">
+          {priorityLabel(h.oneThing.priority)}
+          {/* z-1: the footer link covers the whole tile (after:inset-0), so the
+              control has to sit above it or the click only navigates. */}
+          {app ? <RecStatusMenu id={h.oneThing.id} status={h.oneThing.status} /> : <RecStatusWord status={h.oneThing.status} />}
+        </span>
+      ) : undefined}
       footer={h.oneThing ? (
         app ? (
           <Link href={`/dashboard/market?rec=${encodeURIComponent(h.oneThing.id)}`} className="after:absolute after:inset-0">
@@ -308,6 +319,53 @@ const accounts: R = ({ accounts: a }, mode) => (
     ) : <TileEmpty>Add your own handles in Settings to follow your accounts here.</TileEmpty>}
   </Tile>
 )
+
+// ── what you are trying to move ────────────────────────────────────────────
+// The one tile whose subject the CLIENT chose. It reports the conversation,
+// never the initiative: "up 2.3 points" is a fact about share, "working" would
+// be a claim about cause, and nothing here measures cause.
+const initiatives: R = ({ initiatives }, mode) => {
+  const app = mode === 'app'
+  // Optional, always: `slides()` and every renderer are called with HYDRATED
+  // SNAPSHOT data as often as with live data (the render route, the report
+  // deck, a share link, the "email as sent" re-render). A snapshot frozen
+  // before this tile existed has no `initiatives` key at all, and reaching
+  // through it would 500 the reports list, the Studio, the share link and the
+  // PDF build. Frozen data renders forever — that is the contract.
+  const t = initiativesOf({ initiatives })
+  return (
+    <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
+      meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
+      footer={app && t.total > 0 ? <Link href="/dashboard/settings/initiatives">Manage what you track →</Link> : undefined}
+    >
+      {/* Five columns on a laptop; on a phone the title takes its own line and
+          the rest wraps under it. Held on one row, a 400px screen cut every
+          title to "C…" and every sentence to "Up…". */}
+      {t.rows.length > 0 ? (
+        <div className="flex flex-col gap-2 md:gap-[3px]">
+          {t.rows.map((r) => (
+            <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] md:flex-nowrap">
+              <span className="w-full min-w-0 truncate font-medium md:w-auto md:flex-[2]">{r.title}</span>
+              {r.series.length > 1
+                ? <Sparkline values={r.series} color={r.theirWay === false ? 'var(--comp)' : 'var(--you)'} width={64} height={16} />
+                : <span className="w-16" />}
+              <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
+              <span className="order-last w-full min-w-0 text-[11.5px] text-muted-foreground md:order-none md:w-auto md:flex-[2] md:truncate">{r.line}</span>
+              {/* Labelled, because it sits one column from a percentage and a
+                  bare "+0.3" reads as share points. Mood is a −1…+1 scale. */}
+              <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
+                <span className="text-[10.5px] text-muted-foreground">mood</span>
+                {r.sentimentDelta != null && r.sentimentDelta !== 0
+                  ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
+                  : <span className="text-[11px] text-muted-foreground">unchanged</span>}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : <TileEmpty>Track a theme from Voice of Customer to see whether the conversation is moving.</TileEmpty>}
+    </Tile>
+  )
+}
 
 // ── the full brief (the drawer in the app; its own slide on paper) ─────────
 function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
@@ -404,6 +462,7 @@ const renderables: Record<string, Renderable<D>> = {
   'dashboard.movement': { key: 'dashboard.movement', title: 'Since your first update', render: movement },
   'dashboard.recommendation': { key: 'dashboard.recommendation', title: 'Top recommendation', render: recommendation },
   'dashboard.accounts': { key: 'dashboard.accounts', title: 'On your accounts', render: accounts },
+  'dashboard.initiatives': { key: 'dashboard.initiatives', title: 'What you are trying to move', render: initiatives },
   'dashboard.brief': { key: 'dashboard.brief', title: 'The executive brief', render: brief },
 }
 
@@ -414,11 +473,20 @@ for (const [k, fn] of Object.entries(dashboardEmail)) renderables[k].email = fn
 /** The grid, in the page's order. */
 const GRID_ORDER = ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts']
 
-export function dashboardSlides(): Slide[] {
+/** The app grid, for THIS tenant. `dashboard.initiatives` joins only once
+ *  something is being tracked: the page is a one-screen grid, and a permanent
+ *  full-width row advertising an unused feature would cost every tenant a
+ *  scroll. The renderable exists either way, so an export or an arranged
+ *  report that asks for it gets the tile — empty state and all. */
+export const gridOrder = (d: D): string[] =>
+  isTrackingSomething(d) ? [...GRID_ORDER, 'dashboard.initiatives'] : GRID_ORDER
+
+export function dashboardSlides(tracking = false): Slide[] {
   return [
     { title: 'Where you stand', keys: ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share'], layout: 'grid' },
     { title: 'The executive brief', keys: ['dashboard.brief'], layout: 'single' },
     { title: 'What is moving', keys: ['dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts'], layout: 'grid' },
+    ...(tracking ? [{ title: 'What you are trying to move', keys: ['dashboard.initiatives'], layout: 'single' as const }] : []),
   ]
 }
 
@@ -429,13 +497,13 @@ export const dashboardPage: PageModule<D> = {
     const d = await loadDashboard(scope)
     return isDashboardEmpty(d) ? null : d
   },
-  slides: () => dashboardSlides(),
+  slides: (d) => dashboardSlides(isTrackingSomething(d)),
   renderables,
   snapshotTitle: (d) => `Dashboard · ${d.brand} · ${weekdayDate(d.runDate)}`,
 }
 
 /** The app page: page bar, the grid, the drawers. */
-export function DashboardPage({ data: d, detail }: { data: DashboardData | DashboardEmpty; detail?: string; params: Record<string, string | undefined> }) {
+export function DashboardPage({ data: d, detail, params }: { data: DashboardData | DashboardEmpty; detail?: string; params: Record<string, string | undefined> }) {
   if (isDashboardEmpty(d)) {
     return (
       <PageFrame>
@@ -449,14 +517,16 @@ export function DashboardPage({ data: d, detail }: { data: DashboardData | Dashb
     )
   }
   return (
+    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).map((k) => ({ key: k, title: renderables[k].title }))}>
     <PageFrame>
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
+        <ExportMenu />
         <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" />
       </PageBar>
 
       <PageGrid>
-        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}
@@ -468,6 +538,7 @@ export function DashboardPage({ data: d, detail }: { data: DashboardData | Dashb
         <FunnelBody d={d} />
       </DetailDrawer>
     </PageFrame>
+    </ExportScope>
   )
 }
 

@@ -18,6 +18,15 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     description: 'What changed since the last update, where you stand, what the market is talking about, comments worth a reply and where you stand against competitors: the update that goes out after every scheduled update, on paper and by email.',
     sections: [
       { page: 'dashboard', params: {}, keys: ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts'] },
+      // What this section does and does not change, precisely — the loose
+      // version of this comment ("an existing report's sections are a stored
+      // row") was only true of half the schedules. A `report_id` schedule sends
+      // the stored `reports.sections`, so it is untouched. A `starter_key`
+      // schedule resolves its sections from THIS array at send time
+      // (lib/schedules/resolve.ts), so it does pick the section up — which is
+      // why the email renderer returns null when nothing is tracked, and why
+      // the print deck's slide is gated on the same thing.
+      { page: 'dashboard', params: {}, keys: ['dashboard.initiatives'], framing: 'What you told us you are trying to move.' },
       { page: 'content', params: {}, keys: ['content.inbox'], framing: 'Comments worth a reply this update.' },
       { page: 'competitive', params: {}, keys: ['competitive.standings'] },
     ],

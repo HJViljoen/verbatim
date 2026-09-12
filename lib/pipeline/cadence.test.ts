@@ -32,6 +32,28 @@ describe('cadenceReliability (Tier 2)', () => {
     expect(s.owed).toBe(0)
   })
 
+  it('does not blame a run whose send is held for review', () => {
+    // report_schedules.review stops the build at a 'ready' send and waits for a
+    // member to press Send. That is the schedule doing as it was told.
+    const st = cadenceReliability([run('r1', 'completed', true)], [{ runId: 'r1', sentAt: null, status: 'ready' }])
+    expect(st).toMatchObject({ owed: 1, delivered: 1, missed: 0 })
+  })
+
+  it('does not blame a run whose schedule had nobody to email', () => {
+    const st = cadenceReliability([run('r1', 'completed', true)], [{ runId: 'r1', sentAt: null, status: 'skipped' }])
+    expect(st).toMatchObject({ owed: 1, delivered: 1, missed: 0 })
+  })
+
+  it('counts a send that was claimed and never finished as a miss', () => {
+    const st = cadenceReliability([run('r1', 'completed', true)], [{ runId: 'r1', sentAt: null, status: 'claimed' }])
+    expect(st).toMatchObject({ owed: 1, delivered: 0, missed: 1 })
+  })
+
+  it('counts a failed send as a miss', () => {
+    const st = cadenceReliability([run('r1', 'completed', true)], [{ runId: 'r1', sentAt: null, status: 'failed' }])
+    expect(st).toMatchObject({ owed: 1, missed: 1 })
+  })
+
   it('a stored but never-sent report does not count as delivered', () => {
     // The demo tenant has six stored reports and zero sends.
     const s = cadenceReliability([run('r1', 'completed', true)], [{ runId: 'r1', sentAt: null }])

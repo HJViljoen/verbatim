@@ -29,7 +29,7 @@ import type { Platform, RawItem, TranscriptResult } from '../lib/gather/types'
 //                        no refetch, no Whisper. Use after the gate changes.
 //   --dry-run            pick + report the sample only; no actor calls, no writes
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 const PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube']
 
 type Bucket = 'client' | 'competitor' | 'industry'

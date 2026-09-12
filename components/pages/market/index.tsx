@@ -3,13 +3,15 @@ import type { ReactNode } from 'react'
 import type { GateTier } from '@/lib/curation'
 import { glossaryRule, priorityWord } from '@/lib/calibration'
 import { fmtInt, weekdayDate, shortDate, platformLabel } from '@/lib/format'
-import { claimVerdict, claimCountsLine, newsRingChip, type ClaimTone } from '@/lib/market-tiles'
+import { claimVerdict, claimCountsLine, newsRingChip, type ClaimTone, type ThemeChip } from '@/lib/market-tiles'
 import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { Tile, TileBlock, TileEmpty } from '@/components/shell/tile'
 import { MasterDetail } from '@/components/shell/master-detail'
 import { PaneHeader, PaneBody, RailGroup, RailLink, Segmented, ListRows, ListRow, PaneEmpty, DetailHeader, DetailSection, Verbatim } from '@/components/shell/master-list'
 import { ListSearch } from '@/components/shell/list-search'
+import { RecStatusMenu, RecStatusWord } from '@/components/rec-status'
 import {
   loadMarket, isMarketEmpty, marketHref, type MarketData, type MarketEmpty, type MarketDetail, type Group,
 } from '@/lib/pages/market'
@@ -58,20 +60,33 @@ function PriorityChip({ word }: { word: string }) {
   return <Chip tone={word === 'Act now' ? 'warning' : 'sand'} title={PRIORITY_TIP[word]}>{word}</Chip>
 }
 
-const voiceHref = (themes: string[]) => `/dashboard/voice?themes=${encodeURIComponent(themes.join(','))}#grounding`
+/** Snapshots frozen before 2026-09-11 hold bare slugs where the loader now
+ *  puts `{ slug, label }`; an export renders the same words it was taken with,
+ *  so both shapes have to render. */
+type Grounding = ThemeChip | string
+const asChip = (t: Grounding): ThemeChip => (typeof t === 'string' ? { slug: t, label: null } : t)
+/** What the chip says: the curated theme label Voice shows, and only when this
+ *  update has no theme holding the slug, the slug's own words. */
+const chipText = (t: ThemeChip): string => t.label ?? prettyType(t.slug)
+
+const voiceHref = (themes: Grounding[]) => `/dashboard/voice?themes=${encodeURIComponent(themes.map((t) => asChip(t).slug).join(','))}#grounding`
 
 /** Cross-page link to Voice of Customer — a link in the app, a plain chip row
- *  on paper (nothing there can be clicked). */
-function ThemeChips({ themes, mode }: { themes: string[]; mode: RenderMode }) {
+ *  on paper (nothing there can be clicked).
+ *
+ *  Fixed radius, not `rounded-full`: since 2026-09-11 the chip carries the
+ *  curated theme LABEL, which is a phrase, not a slug — on a phone a long one
+ *  wraps, and a two-line pill renders as an oval (MASTER, 2026-08-22). */
+function ThemeChips({ themes, mode }: { themes: Grounding[]; mode: RenderMode }) {
   if (themes.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1">
-      {themes.map((t) => mode === 'app' ? (
-        <Link key={t} href={`/dashboard/voice?themes=${encodeURIComponent(t)}`} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
-          {prettyType(t)}
+      {themes.map(asChip).map((t) => mode === 'app' ? (
+        <Link key={t.slug} href={`/dashboard/voice?themes=${encodeURIComponent(t.slug)}`} className="rounded-[10px] bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
+          {chipText(t)}
         </Link>
       ) : (
-        <span key={t} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{prettyType(t)}</span>
+        <span key={t.slug} className="rounded-[10px] bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{chipText(t)}</span>
       ))}
     </div>
   )
@@ -254,7 +269,7 @@ const list: R = (d, mode) => {
             <ListRows>
               {l.rows.map((row) => (
                 <Row key={row.id} href={marketHref('recs', row.id, filter)} active={row.id === itemId} search={`${row.title} ${row.reasoning} ${prettyType(row.type)}`}>
-                  <div className="flex items-start gap-2.5">
+                  <div className={`flex items-start gap-2.5 ${row.status === 'dismissed' ? 'opacity-55' : ''}`}>
                     <span className="w-4 shrink-0 font-mono text-[12px] font-semibold tabular-nums text-muted-foreground">{row.rank + 1}</span>
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{row.title}</p>
@@ -263,6 +278,11 @@ const list: R = (d, mode) => {
                         <PriorityChip word={priorityWord(row.rank)} />
                         <EvidenceChip tier={row.tier} />
                         {row.conversations > 0 && <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{fmtInt(row.conversations)} conv.</span>}
+                        {/* A row IS a link, so it carries the word, not the
+                            control — a menu nested in an anchor navigates on
+                            every click. The menu lives in the detail pane the
+                            row opens. */}
+                        <span className="ml-auto"><RecStatusWord status={row.status} /></span>
                       </div>
                     </div>
                   </div>
@@ -323,7 +343,7 @@ const list: R = (d, mode) => {
 // ── detail: the selected item in full ──────────────────────────────────
 /** Grounded-in stats + theme chips, shared by every kind that has grounding
  *  (recs, insights). */
-function GroundedIn({ conv, voices, platforms, themes, mode }: { conv: number; voices: number; platforms: { label: string; count: number }[]; themes: string[]; mode: RenderMode }) {
+function GroundedIn({ conv, voices, platforms, themes, mode }: { conv: number; voices: number; platforms: { label: string; count: number }[]; themes: Grounding[]; mode: RenderMode }) {
   return (
     <>
       <p className="text-[12.5px] text-secondary-foreground">
@@ -359,6 +379,7 @@ function DetailPane({ d, mode }: { d: D; mode: RenderMode }) {
             <PriorityChip word={priorityWord(item.rank)} />
             <EvidenceChip tier={item.tier} />
             <Chip>{prettyType(item.type)}</Chip>
+            {app ? <RecStatusMenu id={item.id} status={item.status} className="ml-1" /> : <RecStatusWord status={item.status} />}
           </div>
         </DetailHeader>
         <PaneBody>
@@ -593,7 +614,7 @@ export const marketPage: PageModule<D> = {
 }
 
 /** The app page: page bar, the short read, the master-detail, the news feed. */
-export function MarketPage({ data: d, detail: detailParam }: { data: MarketData | MarketEmpty; detail?: string; params: Record<string, string | undefined> }) {
+export function MarketPage({ data: d, detail: detailParam, params }: { data: MarketData | MarketEmpty; detail?: string; params: Record<string, string | undefined> }) {
   const showLegend = detailParam === 'legend'
   if (isMarketEmpty(d)) {
     return (
@@ -608,14 +629,17 @@ export function MarketPage({ data: d, detail: detailParam }: { data: MarketData 
     )
   }
   return (
+    <ExportScope page="market" params={params} tiles={Object.values(renderables).map((r) => ({ key: r.key, title: r.title }))}>
     <PageFrame className="min-h-0 flex-1">
       <PageBar title="Market Intelligence" context={d.context}>
         <BarPill active>This update</BarPill>
+        <ExportMenu />
         <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market" />
       </PageBar>
       {shortRead(d, 'app')}
       <MasterDetail id="market" className="md:h-[640px]" rail={rail(d, 'app')} list={list(d, 'app')} detail={detail(d, 'app')} />
       {news(d, 'app')}
     </PageFrame>
+    </ExportScope>
   )
 }

@@ -45,6 +45,45 @@ export const EVIDENCE_FLOOR = 2
 export const MEGA_CLUSTER_MIN = 40
 export const MEGA_CLUSTER_SHARE = 0.25
 
+/**
+ * Video-as-signal weight (WP7a, 2026-09-12). A creator who filmed an opinion
+ * counts as one and a half comment-videos when a theme is ranked: the video is
+ * a deliberate, costly act of opinion, which is exactly what the Pass A prompt
+ * already tells the extraction model — and what nothing downstream read until
+ * now (`insight_evidence.source` existed, no ranking function queried it).
+ *
+ * 1.5 and not 2: creator corpora skew to tutorials, unboxings and feature
+ * walk-throughs, so an on-camera line is over-represented on product talk. At 2
+ * every theme tilts toward creator subject matter; at 1.5 an on-camera video
+ * breaks ties and lifts a theme past a marginally larger comment-only one
+ * without overturning volume.
+ *
+ * SCOPE, so nobody hunts for a bug that isn't there: this only ever moves
+ * `industry-other` themes. Pass A never cites source='video' on a client or
+ * competitor video — their transcripts are brand messaging and become
+ * `video_claims`, never audience evidence (pass-a.ts, "NEVER insight
+ * evidence") — so `videoEvidenceCount` is structurally 0 in the `client` and
+ * `competitor:*` buckets and no client-audience card can show "said on
+ * camera". That is the brand-voice/customer-voice split working as designed.
+ *
+ * Two honest limits. On-camera evidence exists only where a transcript does,
+ * and much of the corpus has none, so the signal is partly a proxy for "we had
+ * a transcript" — a platform and language artefact. And the flag is coarse:
+ * one transcript citation among five comment citations marks the whole video
+ * on camera, which is the common case, because Pass A is told to fold
+ * transcript signal into a matching comment insight.
+ */
+export const VIDEO_EVIDENCE_WEIGHT = 1.5
+
+/**
+ * Quote-picker bonus for a verbatim spoken on camera (WP7a). `quoteScore` and
+ * the theme bonus are whole numbers (English hits capped at 5, +2 for card
+ * length, +3 per on-topic word, theme overlap x2), so 0.15 is a tie-break and
+ * nothing more: two equally good quotes go to the one someone said out loud,
+ * and any comment that scores even one point better still wins.
+ */
+export const VIDEO_QUOTE_BONUS = 0.15
+
 /** Sampling temperature for analysis calls. 0 for reproducible iteration. */
 export const ANALYSIS_TEMPERATURE = 0
 
@@ -193,6 +232,213 @@ export const TRANSCRIPT_PROMPT_CHARS = 2400
  *  quotes sentence-scale so everything downstream that assumes comment-sized
  *  quotes (D-b pools, cards) holds. */
 export const PASS_A_VIDEO_QUOTE_MAX = 200
+
+// --- Transcript translation (`transcript_en`, WP6 2026-09-11) ----------------
+// Pass A reads ~27% of transcripts in their original language ("read it as-is",
+// 2026-08-08). That held while nobody could show a loss, but the decision it
+// rested on was "build translation only if measurement demands it" and the
+// standing instruction since is accuracy first. So every non-English transcript
+// now also carries an English rendering, and Pass A is given BOTH: it reasons
+// from the translation and quotes only from the original, which is what keeps
+// the verbatim-evidence invariant (and the quote validator) intact.
+
+/** Master switch for the translation wave. Default ON — unlike every other
+ *  flag here, which defaults off because it gates spend on a path that did not
+ *  exist before. This one gates a path whose whole purpose is that analysis
+ *  stops silently degrading on a quarter of the corpus, so the safe default is
+ *  "on" and the switch exists to turn it OFF in a hurry (TRANSLATION_ENABLED=0)
+ *  if a run ever needs the pennies or the wall-time back. Read at call time so
+ *  it works in serverless; frozen per run by captureRunFlags. */
+export function translationEnabled(): boolean {
+  const v = process.env.TRANSLATION_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the translation call. Deliberately the FULL gpt-4.1, not mini:
+ *  this is the text Pass A reasons from for a quarter of the corpus, and a
+ *  mistranslated complaint becomes a wrong insight that nothing downstream can
+ *  catch (the quote validator checks the ORIGINAL, so it cannot). ~$0.012 per
+ *  non-English video at the 2400-char prompt budget — a 300-video backlog is
+ *  ~$3, one
+ *  run's worth of Apify is four times that. Quality over pennies. */
+export const TRANSLATE_MODEL = 'gpt-4.1'
+
+// There is no separate translation input budget on purpose. The span sent for
+// translation is exactly TRANSCRIPT_PROMPT_CHARS of the original — the span
+// Pass A can actually quote from — so the two blocks in the prompt describe the
+// SAME speech. An independent budget (this was 4000 for a day) does not achieve
+// that: characters are not content. Measured 2026-09-12 on a Traditional
+// Chinese sample, 2051 source chars became 6508 English chars, so a translation
+// clipped to the original's 2400 covered ~37% of what the original block said
+// and Pass A read the other 63% "as-is" — the degradation this feature exists
+// to remove. Hence: clip the INPUT, never the output (usableTranslation returns
+// the English whole). If TRANSCRIPT_PROMPT_CHARS ever rises, that is a
+// deliberate act that re-translates.
+
+/** Videos per translate Inngest step. Latency tracks OUTPUT tokens, not source
+ *  length, and CJK/Indic sources generate 2-3x the output per source character:
+ *  measured 2026-09-12, a 4000-char Bengali source took 7.3s and a 2051-char
+ *  Traditional Chinese one 21.2s. At 4 per step even a pathological batch —
+ *  every call the 21s worst case, rounded up to 25s — is 100s, a third of the
+ *  300s Inngest step cap. (8 would have been 200s at that rate, and the
+ *  now-removed 4000-char input budget would have pushed it past 300s.) */
+export const TRANSLATE_BATCH = 4
+
+/** Translate steps dispatched per parallel wave (the transcribe wave pattern). */
+export const TRANSLATE_PARALLEL = 4
+
+/** Runaway BACKSTOP on translation, in videos per run — like BACKFILL_CAP, not
+ *  a quality budget. The first run after this ships faces the whole historical
+ *  non-English backlog at once; 400 caps that at ~$5 and the rest come on the
+ *  next run. Steady state is a handful of new videos a week.
+ *
+ *  400 now covers more ground than it did: since the language-detection change
+ *  (2026-09-12) the unknown-language rows are candidates too, which on Sealand
+ *  is 249 videos on top of its 290 known non-English ones. The first two runs
+ *  clear the backlog instead of the first one. */
+export const TRANSLATE_CAP = 400
+
+// --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------
+// The 2026-09-02 blind benchmark found, independently and twice, that every
+// incumbent listening tool misses on-screen text on TikTok/YouTube — and that
+// TikTok hooks are very often TYPED, never spoken. This reads the text on the
+// one frame we can actually get: the cover.
+//
+// What it is NOT, and the copy must never say otherwise (standing rule,
+// v5-Ideas.md): scene understanding, thumbnail analysis, or "we analyse the
+// visuals". It is on-screen text from the cover frame. Full-frame sampling needs
+// a video download plus ffmpeg, which Vercel serverless does not have, and the
+// media URLs expire in days regardless.
+
+/** Master switch for the OCR wave. Default ON, for the translation flag's
+ *  reason: it gates a path whose absence is a known, measured hole in the
+ *  analysis, so the safe default is "on" and the switch exists to turn it OFF
+ *  in a hurry (OCR_ENABLED=0) if a run needs the pennies or the wall-time back.
+ *  Read at call time so it works in serverless; frozen per run by
+ *  captureRunFlags. */
+export function ocrEnabled(): boolean {
+  const v = process.env.OCR_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the cover-frame read. gpt-4.1-mini takes image input and is the
+ *  cheapest vision-capable model already priced in MODEL_PRICING. Measured
+ *  2026-09-12 on real covers: $0.0003 to $0.0035 a call, depending on the
+ *  image's pixel size (see OCR_IMAGE_DETAIL — this model family ignores the
+ *  low/high detail flag). Transcribing text off a still is not a reasoning task
+ *  — the failure mode to guard against is the model DESCRIBING the picture, and
+ *  that is a prompt problem, not a model-size one.
+ *
+ *  IMAGE FORMAT: the vision input takes PNG, JPEG, WEBP and non-animated GIF
+ *  only. HEIC — which TikTok serves for about 9% of its covers — is rejected,
+ *  and no url rewrite gets a JPEG instead (verified live: the tplv transform is
+ *  inside the signed path). lib/pipeline/ocr.ts sniffs the magic bytes and
+ *  records those as 'no_image' rather than as a failed read. */
+export const OCR_MODEL = 'gpt-4.1-mini'
+
+/** Image detail level. Sent as 'low' — but measured live on 2026-09-12,
+ *  gpt-4.1-mini IGNORES it: this model family prices an image by its pixel
+ *  dimensions (a patch count), not by the 85/170-token low/high scheme the 4o
+ *  family uses. Eight real covers billed 576 prompt tokens for a YouTube
+ *  hqdefault (480x360) and up to 5,676 for a full-resolution Instagram still —
+ *  $0.00024 to $0.0024 of input, a 10x spread the flag does not close.
+ *
+ *  Left set deliberately: it costs nothing, it is honoured by every other
+ *  vision model, and if OCR_MODEL ever moves back to the 4o family it starts
+ *  working again. What actually bounds the cost is OpenAI's own patch cap, so
+ *  even a pathological image lands under ~$0.004 — see scripts/ocr-videos.ts
+ *  for the measured per-platform ranges. Downscaling before the call would
+ *  close the spread properly, but it needs an image library
+ *  (`sharp` is only a transitive dependency here, not one this repo declares),
+ *  and $0.0035 a worst-case image does not justify taking one on. */
+export const OCR_IMAGE_DETAIL = 'low' as const
+
+/** Cap on a cover image we will fetch and inline, in bytes. OpenAI's limit is
+ *  20MB of REQUEST, and base64 inflates by 4/3, so 8MB of source is a wide
+ *  margin. Real covers measured 2026-09-12: 30KB (YouTube hqdefault) to 2.4MB
+ *  (a full-resolution Instagram still). */
+export const OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/** Wall-clock budget for fetching one cover before the read is called failed.
+ *  Eight seconds keeps a batch of 8 inside the 300s step cap even if every
+ *  fetch times out. */
+export const OCR_FETCH_TIMEOUT_MS = 8_000
+
+/** Max characters of extracted text STORED per video. A cover frame carries a
+ *  hook card, not an essay; 600 is a generous ceiling that bounds a runaway
+ *  model output before it reaches the DB. */
+export const OCR_MAX_CHARS = 600
+
+/**
+ * Shortest an on-screen-text quote may be to count as evidence.
+ *
+ * A bare single token off a cover frame is a logo, a watermark, a handle or a
+ * price — never an insight, and it is also where the OCR model's per-token
+ * guessing is worst: measured 2026-09-12, a 480x360 YouTube thumbnail whose
+ * chest logo is genuinely illegible came back as "RB". The validator cannot
+ * catch that (it matches the quote against the model's own output), so the only
+ * defence is refusing to build a finding out of a fragment. A quote clears the
+ * bar by containing whitespace — i.e. being more than one word — or by being at
+ * least this long.
+ */
+export const PASS_A_OCR_MIN_QUOTE_CHARS = 12
+
+/** Max characters of on-screen text injected into the Pass A prompt. Same
+ *  number as OCR_MAX_CHARS deliberately — the stored text is already bounded to
+ *  prompt scale, so the two clips are the same clip and the quote validator
+ *  matches against exactly what the model saw. */
+export const OCR_PROMPT_CHARS = 600
+
+/** Videos per OCR Inngest step. One image call is ~2s; 8 is ~16s, far inside
+ *  the 300s step cap, and matches TRANSCRIBE_BATCH so the two gather-time waves
+ *  chunk the same corpus the same way. */
+export const OCR_BATCH = 8
+
+/** OCR steps dispatched per parallel wave (the transcribe wave pattern). */
+export const OCR_PARALLEL = 4
+
+/**
+ * Runaway BACKSTOP on the gather-time OCR wave, in videos PER RUN — shared
+ * across platforms, not per platform.
+ *
+ * TRANSCRIBE_CAP's precedent is per-platform, and this deliberately is not.
+ * `plan-ocr` runs inside the gather loop, so a per-platform cap would have made
+ * the real ceiling 3 x 1200 + OCR_BACKFILL_CAP = 3,900 images a run, three
+ * times the number written here. An unstated 3x is exactly the kind of number
+ * that turns up on a bill. The plan step is handed the REMAINDER instead, so
+ * the three platforms share one budget in gather order.
+ *
+ * Worst case, stated so nobody has to derive it — measured 2026-09-12, a cover
+ * costs $0.0003 (YouTube's 480x360 hqdefault, a flat 576 prompt tokens) to
+ * $0.0035 (a full-resolution Instagram still, ~5,700 tokens, at OpenAI's patch
+ * cap):
+ *
+ *   OCR_CAP 1200 + OCR_BACKFILL_CAP 300 = 1,500 images per run per tenant
+ *   → $0.37 (all YouTube) to $4.36 (all full-resolution) per run, worst case
+ *   → at most 7.3% of RUN_MODEL_BUDGET_USD
+ *
+ * (scripts/ocr-videos.ts prints that same line from the same constants, so the
+ * two cannot drift.)
+ *
+ * Steady state is nothing like that: a week's new videos is a few hundred
+ * covers, i.e. cents. The cap exists so a pathological run cannot spend
+ * unbounded, not to ration a real one.
+ */
+export const OCR_CAP = 1200
+
+/** Attempts a cover read gets before 'failed'/'no_image' becomes terminal, on
+ *  the platforms where retrying can help at all (see needsOcr). Three, matching
+ *  TRANSCRIPT_MAX_ATTEMPTS: enough that a CDN blip or an OpenAI 5xx cannot
+ *  permanently remove a video whose cover is still there, few enough that a
+ *  weekly run stops chasing a genuine dead end. */
+export const OCR_MAX_ATTEMPTS = 3
+
+/** Runaway backstop on the YouTube OCR BACKFILL — the second wave, over
+ *  historical rows whose cover is still reachable because it is derived from
+ *  the video id rather than a signed URL. Smaller than OCR_CAP because it is
+ *  paying down a backlog that has no deadline: a few hundred a run clears it
+ *  over a handful of weeks without any single run noticing. */
+export const OCR_BACKFILL_CAP = 300
 
 /**
  * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
@@ -562,6 +808,10 @@ export const COMPETITIVE_MIN_VIDEOS = 10
  */
 export interface RunFlags {
   transcripts: boolean
+  /** Default ON (translationEnabled) — see the translation block above. */
+  translation: boolean
+  /** Default ON (ocrEnabled) — see the on-screen-text block above. */
+  ocr: boolean
   incrementalPassA: boolean
   themeRegistry: boolean
   redditDiscovery: boolean
@@ -571,6 +821,8 @@ export interface RunFlags {
 export function captureRunFlags(): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
+    translation: translationEnabled(),
+    ocr: ocrEnabled(),
     incrementalPassA: incrementalPassAEnabled(),
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),
@@ -582,6 +834,14 @@ export function captureRunFlags(): RunFlags {
  *  pseudonyms; the retention refresh must never write real names back into it,
  *  and the erasure script looks for clones in it. */
 export const DEMO_CLIENT_ID = 'de300055-0000-4000-8000-000000000001'
+
+/** The two live tenants. Every CLI script defaults to one of them and twenty
+ *  of them held their own copy of the uuid; a tenant that ever needed moving
+ *  would have been moved in nineteen places and missed in one. The `--client`
+ *  flags are unchanged — these are defaults, not the only value a script can
+ *  take. */
+export const SEALAND_CLIENT_ID = 'ac16988e-c4f3-4baf-b388-73895852a554'
+export const OSSUR_CLIENT_ID = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 /** Master switch for the retention sweep. OFF unless set, so the cron deploys
  *  dormant and its first pass is something an operator watches rather than
@@ -733,6 +993,12 @@ export const ASK_PDF_MIN_CHARS_PER_PAGE = 200
  *  Crude on purpose: no new infrastructure, and the failure mode is a message
  *  rather than a bill. A real rate limiter belongs with the self-serve motion. */
 export const ASK_DAILY_LIMIT = 25
+
+/** Search-term suggestion calls per USER per rolling hour (WP5). One
+ *  gpt-4.1-mini call each, ~$0.001 — small, but the onboarding one is reachable
+ *  by any signed-in account before it has a tenant, so it needs a ceiling that
+ *  is per person rather than per tenant. Counted in `suggestion_calls`. */
+export const SUGGEST_HOURLY_LIMIT = 5
 
 /** Master switch for the Ask surface. OFF unless set, so merging changes
  *  nothing: the route refuses, the nav item is hidden. Shares the flag with the
@@ -1014,12 +1280,25 @@ export const DOCUMENT_CITED_COUNT_MIN = 3
  *  from the update's own concerns), and how many run at once. */
 export const DOCUMENT_QUESTIONS_MAX = 8
 export const DOCUMENT_RESEARCH_PARALLEL = 3
+/** Questions one per-competitor anchor turns into: a third competitor's card
+ *  is written from the signals alone. */
+export const COMPETITOR_QUESTIONS_MAX = 2
+/** What one research question costs and what the writing and the self-check
+ *  take out of the same build budget, both measured on the 2026-09-12 Sealand
+ *  custom build (8 questions, $0.378 research; $0.134 write, $0.021 check).
+ *  Used to say how many topic blocks a custom brief can afford to include. */
+export const DOCUMENT_QUESTION_USD = 0.05
+export const DOCUMENT_WRITE_CHECK_USD = 0.2
 /** A build row younger than this and not finished belongs to whoever is on
  *  it (the Studio answers 409 with its id); older, it is taken as dead
  *  (function killed, deploy mid-run) and marked failed so a new one may start. */
 export const DOCUMENT_BUILD_STALE_MS = 30 * 60_000
 /** Characters an operator's edit of one block may hold (a long paragraph is ~1,200). */
 export const DOCUMENT_EDIT_MAX = 4000
+/** Characters an operator's own brief may hold on a custom document (2026-09-12):
+ *  one instruction, long enough to name the question and the reader, short
+ *  enough that it stays an instruction rather than a draft. */
+export const DOCUMENT_BRIEF_MAX = 1200
 /** Characters per block field: pages look alike every week because the
  *  writer cannot run long. Enforced in the schema description and by scrub. */
 export const DOCUMENT_BLOCK_MAX: Record<string, number> = {

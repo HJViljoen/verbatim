@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { themeRank, compareThemes } from './step-a2'
-import type { AggregatedTheme } from './types'
+import { themeRank, compareThemes, aggregate } from './step-a2'
+import type { AggregatedTheme, InsightRow } from './types'
 
 const t = (over: Partial<AggregatedTheme>): AggregatedTheme => ({
   bucket: 'industry-other', category: 'praise', theme: 'a', memberThemes: [],
-  supportingVideoIds: [], supportingInsightIds: [], evidenceCount: 0,
+  supportingVideoIds: [], supportingInsightIds: [], evidenceCount: 0, videoEvidenceCount: 0,
   strengthScore: 0, meanStrength: 0, rankScore: 0,
   dominantEmotion: 'x', dominantSentimentImpact: 'positive',
   singleSource: false, sampleDescriptions: [], ...over,
@@ -54,6 +54,61 @@ describe('themeRank — evidence x share of bucket (Tier 1)', () => {
     expect(Number.isFinite(themeRank(5, 2))).toBe(true)
     expect(Number.isFinite(themeRank(5, 0))).toBe(true)
     expect(themeRank(0, 100)).toBe(0)
+  })
+})
+
+describe('themeRank — a creator saying it on camera weighs more (WP7a)', () => {
+  it('the plan\u2019s case: 3 comment videos + 1 on camera sits between 4 and 5 comment videos', () => {
+    const B = 300
+    const oncamera = themeRank(4, B, 1)
+    expect(oncamera).toBeGreaterThan(themeRank(4, B))
+    expect(oncamera).toBeLessThan(themeRank(5, B))
+  })
+
+  it('weights each on-camera video at VIDEO_EVIDENCE_WEIGHT comment-videos', () => {
+    // 2 of 4 supporting videos on camera = 2 + 2 x 1.5 = 5 weighted videos.
+    expect(themeRank(4, 300, 2)).toBe(themeRank(5, 300))
+  })
+
+  it('defaults to the pre-WP7a score when nothing was said on camera', () => {
+    for (const [e, b] of [[47, 400], [3, 400], [6, 10], [12, 12]] as const) {
+      expect(themeRank(e, b, 0)).toBe(themeRank(e, b))
+    }
+  })
+
+  it('cannot rescue a theme with no evidence at all', () => {
+    expect(themeRank(0, 100, 3)).toBe(0)
+  })
+
+  it('does not overturn volume: one on-camera video does not beat ten conversations', () => {
+    expect(themeRank(10, 300)).toBeGreaterThan(themeRank(2, 300, 2))
+  })
+})
+
+describe('aggregate — videoEvidenceCount counts videos, not citations', () => {
+  const ins = (id: string, video: string, onCamera: boolean): InsightRow => ({
+    id, category: 'praise', theme: 'a', description: 'd', strength_score: 5,
+    emotion: 'joy', sentiment_impact: 'positive', source_video_id: video, platform: 'youtube',
+    is_client: false, is_competitor: false, competitor_name: null, hasVideoEvidence: onCamera,
+  })
+
+  it('counts a video once however many of its insights were spoken on camera', () => {
+    const t = aggregate([ins('i1', 'v1', true), ins('i2', 'v1', true), ins('i3', 'v2', false)], 'industry-other')
+    expect(t.evidenceCount).toBe(2)
+    expect(t.videoEvidenceCount).toBe(1)
+  })
+
+  it('is zero for a comment-only theme, and never exceeds the evidence count', () => {
+    const comments = aggregate([ins('i1', 'v1', false), ins('i2', 'v2', false)], 'client')
+    expect(comments.videoEvidenceCount).toBe(0)
+    const all = aggregate([ins('i1', 'v1', true), ins('i2', 'v2', true)], 'client')
+    expect(all.videoEvidenceCount).toBe(all.evidenceCount)
+  })
+
+  it('treats an insight loaded without the flag as a comment (legacy readers)', () => {
+    const legacy = { ...ins('i1', 'v1', false) }
+    delete (legacy as Partial<InsightRow>).hasVideoEvidence
+    expect(aggregate([legacy], 'client').videoEvidenceCount).toBe(0)
   })
 })
 

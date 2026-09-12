@@ -1,4 +1,5 @@
 import { runActor } from './apify'
+import { chunk } from '../chunk'
 import { createAdminClient } from '../supabase-admin'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, transcriptsEnabled } from '../config'
 import { inWindow } from './gather'
@@ -151,29 +152,32 @@ export function emptyProfileIsGlitch(postsCount: number | null, recentPosts: num
 }
 
 /**
- * Give EVERY owned-post row an explicit `source`, preserving what a already-known
- * post already had.
+ * Give EVERY owned-post row an explicit `source` — the one the account this
+ * read came from earns, whether or not the row already existed.
  *
- * Two constraints collide here. (a) A client post the keyword gather already
- * discovered must stay 'discovered' — it has been in the SoV series since it was
- * found, and flipping it out would fake a share decline (metric continuity beats
- * layer purity); a post already stored as 'owned' must likewise stay 'owned'.
- * (b) PostgREST takes the UNION of keys across a bulk upsert and sends NULL for
- * any row missing one — it does not fall back to the column default. So the old
- * "omit source on known rows" approach sent `source: NULL` the moment one row in
- * the batch carried the key, and the NOT NULL constraint rejected the whole
- * statement (23502, YouTube, 2026-08-16 — 2 of 12 posts already known).
+ * EVERY row must carry the key: PostgREST takes the UNION of keys across a bulk
+ * upsert and sends NULL for any row missing one — it does not fall back to the
+ * column default. The old "omit source on known rows" approach sent
+ * `source: NULL` the moment one row in the batch carried the key, and the NOT
+ * NULL constraint rejected the whole statement (23502, YouTube, 2026-08-16 —
+ * 2 of 12 posts already known).
  *
- * Setting every row explicitly satisfies both: known rows echo their stored
- * value back unchanged, new rows get 'owned'.
+ * A known row used to echo its STORED source back instead, so a post the
+ * keyword gather found first stayed 'discovered' for life. That was for metric
+ * continuity: share of voice counted the discovered layer, so moving a row out
+ * of it would have faked a share decline. Share has counted everything BY and
+ * ABOUT a brand since 2026-09-10 (`6ccca80`), so the continuity argument is
+ * spent, and what was left was a column that lied — and one reader,
+ * `passALane`, that acts on the lie by putting a brand's own fans' comments
+ * through the audience lane. Every post here came off this entity's own
+ * profile read; identity is not in doubt, so the row says so.
+ * `scripts/reconcile-video-source.ts` is the same correction for history.
  */
 export function stampOwnedSource<T extends { video_id: string }>(
   posts: T[],
-  existing: { video_id: string; source: string | null }[],
   fresh: 'owned' | 'competitor_owned' = 'owned',
 ): (T & { source: string })[] {
-  const stored = new Map(existing.map((r) => [r.video_id, r.source]))
-  return posts.map((p) => ({ ...p, source: stored.get(p.video_id) ?? fresh }))
+  return posts.map((p) => ({ ...p, source: fresh }))
 }
 
 /**
@@ -273,9 +277,10 @@ const norm = normAccount
  * its rows carry the channel's title).
  *
  * That second half also fixes the undercount `source = 'owned'` alone would
- * cause: a post the keyword gather discovered first keeps source 'discovered'
- * forever (metric continuity, stampOwnedSource), and it is still a post that
- * account published.
+ * cause: a post the keyword gather discovered first carried source
+ * 'discovered' until it was next re-read or reconciled (2026-09-11), and rows
+ * from an account own_handles does not name are never re-read at all — each is
+ * still a post that account published.
  *
  * Undated rows are excluded: a census is a count, and a post we cannot date
  * cannot be counted into a window.
@@ -301,9 +306,12 @@ export function buildOwnedCensus(
 
 /** The account names that ARE this entity, per platform: the configured handle
  *  plus every account name the owned read itself stored for it. That second
- *  half is the bridge to rows the keyword gather found FIRST and therefore left
- *  on source 'discovered' forever (stampOwnedSource keeps source stable for
- *  metric continuity). Identity, not source, is what makes a post the brand's.
+ *  half is the bridge to rows the keyword gather found FIRST. Since 2026-09-11
+ *  the owned read corrects those rows' source and
+ *  scripts/reconcile-video-source.ts corrects the history, but the bridge
+ *  stays: it also catches an account the owned read has never visited (a
+ *  regional or sub-brand handle that is not in own_handles). Identity, not
+ *  source, is what makes a post the brand's.
  *
  *  Exported so every surface that asks "is this ours" asks it the same way.
  *  Three different answers used to exist — a source string, a brand-keyword
@@ -549,8 +557,8 @@ async function ytProfile(channelId: string, ctx: Ctx, since: string | null): Pro
       if (!pageToken || stopUploadsWalk(pageDates, since, videoIds.length)) break
     }
     // videos.list takes 50 ids a call and costs 1 unit each.
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${videoIds.slice(i, i + 50).join(',')}&key=${key}`)
+    for (const part of chunk(videoIds, 50)) {
+      const vRes = await fetch(`${base}/videos?part=snippet,statistics,contentDetails&id=${part.join(',')}&key=${key}`)
       if (!vRes.ok) continue
       const vs = (await vRes.json()) as { items?: RawItem[] }
       for (const v of vs.items ?? []) {
@@ -747,8 +755,9 @@ export function ownedCommentRefs(
 
 /**
  * Weekly own-post ingestion for one platform (pipeline step body): profile
- * read → upsert recent posts stamped source:'owned' (sticky — a discovered
- * re-gather never touches the column) → return the refs worth a comment
+ * read → upsert recent posts stamped source:'owned' (the account's own read is
+ * the authority, so a row the keyword gather found first is corrected) → return
+ * the refs worth a comment
  * scrape this window. YouTube's comment fetch is quota-cheap, so it takes
  * every commented post; TT/IG apply the paid-scrape threshold.
  */
@@ -798,22 +807,11 @@ export async function ingestOwnedPosts(opts: {
   }
   if (profile.recentPosts.length) {
     const admin = createAdminClient()
-    // A client post the keyword gather ALREADY discovered stays 'discovered' —
-    // it has been part of the SoV series since it was found, and flipping it
-    // out would fake a share decline (metric continuity beats layer purity).
-    // Only posts new to us get source:'owned'.
-    const { data: existing, error: exErr } = await admin
-      .from('videos')
-      .select('video_id, source')
-      .eq('client_id', opts.clientId)
-      .eq('platform', opts.platform)
-      .in('video_id', profile.recentPosts.map((p) => p.video_id))
-    if (exErr) throw new Error(`owned posts existing check (${opts.platform}): ${exErr.message}`)
-    const rows = stampOwnedSource(
-      profile.recentPosts,
-      (existing ?? []) as { video_id: string; source: string | null }[],
-      identity.source,
-    )
+    // Every post here came off THIS account's profile, so every row takes this
+    // entity's source — including one the keyword gather found first and left
+    // on 'discovered' (which used to be kept forever; see stampOwnedSource).
+    // The read that used to fetch those stored values is gone with the rule.
+    const rows = stampOwnedSource(profile.recentPosts, identity.source)
     const { error } = await admin
       .from('videos')
       .upsert(rows, { onConflict: 'client_id,platform,video_id' })

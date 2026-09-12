@@ -9,7 +9,7 @@ import { loadBrandClaims, shapeBrandVoice } from '../lib/pipeline/claims'
 import { persistThemes } from '../lib/pipeline/themes'
 import { writeRunSummary } from '../lib/pipeline/run-summary'
 import { resolveGatherWindow, inWindow } from '../lib/gather/gather'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, periodSince } from '../lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, OSSUR_CLIENT_ID as OSSUR, periodSince } from '../lib/config'
 import { buildOwnedCensus } from '../lib/gather/owned'
 import type { ClusterMethod } from '../lib/pipeline/cluster'
 import type { CommentRow, SynthesisVideoRow } from '../lib/pipeline/types'
@@ -30,7 +30,6 @@ import { SYNTHESIS_VIDEO_COLUMNS } from '../lib/pipeline/types'
 //   --dry-run         assemble everything, no GPT calls / writes
 //   --no-persist      run GPT calls but don't write C/D results to DB
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 interface Args {
   clientId: string

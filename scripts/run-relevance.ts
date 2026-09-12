@@ -1,6 +1,6 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { classifyRelevance, type RelevanceMethod, type RelevanceCandidate } from '../lib/gather/relevance'
-import { COMMENT_THRESHOLD } from '../lib/config'
+import { COMMENT_THRESHOLD, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 import type { GatherConfig } from '../lib/gather/types'
 
 // Inspector for the relevance gate — runs it over videos ALREADY in the DB so the
@@ -14,7 +14,6 @@ import type { GatherConfig } from '../lib/gather/types'
 //   --method <mode>    heuristic | gpt (default: gpt)
 //   --min-comments <n> only judge videos with >= n comments_count (default: COMMENT_THRESHOLD)
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 interface Args { clientId: string; platform?: string; method: RelevanceMethod; minComments: number; prune: boolean }
 

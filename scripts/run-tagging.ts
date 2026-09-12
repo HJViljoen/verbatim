@@ -1,7 +1,7 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { tagVideo, matchEntities, type VideoTags } from '../lib/gather/tagging'
 import { attributeVideos, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
-import { COMMENT_THRESHOLD } from '../lib/config'
+import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 import type { GatherConfig } from '../lib/gather/types'
 
 // Re-tag inspector — recomputes entity tags (is_client / is_competitor /
@@ -21,7 +21,6 @@ import type { GatherConfig } from '../lib/gather/types'
 //
 // A2 derives buckets live from these flags, so after --write only A2/C/D re-run.
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
 
 interface Args { clientId: string; platform?: string; method: AttributionMethod; write: boolean }
 

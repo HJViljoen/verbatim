@@ -5,12 +5,23 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
+import { chunk } from './chunk'
+import { VIDEO_QUOTE_BONUS } from './config'
+import type { EvidenceSource } from './pipeline/pass-a'
+
 export interface QuoteRow {
   quote: string
   rank: number
   /** insight_evidence.id — the ref a snapshot keeps in place of the words
    *  (Reports & Exports, 2026-08-29). */
   evidenceId: string
+  /** insight_evidence.source, carried through as itself. 'video' means a
+   *  creator said it on camera rather than typing it (WP7a); 'video_text' is
+   *  words printed on the cover frame (WP7b) — neither is a comment, and
+   *  relabelling one as 'comment' made fetchQuoteCitationsByAudience emit a
+   *  citation with no comment behind it. Absent on rows read before the
+   *  pickers scored it. Only onCameraBonus reads this, and only for 'video'. */
+  source?: EvidenceSource
 }
 
 /** A quote plus what it can be traced back to. The agent's grounded register
@@ -22,6 +33,12 @@ export interface QuoteCitation extends QuoteRow {
 }
 
 export const cleanQuote = (q: string) => q.replace(/\s+/g, ' ').trim()
+
+/** insight_evidence.source as the pipeline wrote it. Anything unknown — and a
+ *  NULL on a row written before the column was scored — reads as a comment,
+ *  which is what it was. */
+const evidenceSource = (s: string | null): EvidenceSource =>
+  s === 'video' || s === 'video_text' ? s : 'comment'
 
 // Common English function words. The corpus is heavily multilingual and full of
 // Latin-script transliterations that aren't English, so a latin-character ratio
@@ -95,6 +112,14 @@ function quoteScore(q: string, keywords: Set<string>): number {
   s += rel * 3 // strongly prefer quotes that touch the claim's own words
   return s
 }
+
+/** A verbatim someone said ON CAMERA edges an equally good typed comment
+ *  (WP7a — the costly-signal thesis, already live in the Pass A prompt).
+ *  quoteScore and the theme bonus move in whole numbers, so VIDEO_QUOTE_BONUS
+ *  can only break a tie: any comment that scores even one point better still
+ *  leads the card. `=== 'video'` on purpose: nobody SAID a title card, so
+ *  'video_text' earns no on-camera bonus. */
+const onCameraBonus = (source: QuoteRow['source']): number => (source === 'video' ? VIDEO_QUOTE_BONUS : 0)
 
 /** Theme-slug overlap with a claim — surfaces the on-topic audience insights
  *  before the generic, high-volume ones (an "access" claim reaches insurance/cost). */
@@ -177,10 +202,8 @@ interface EvidenceClient {
  *  here — each one, after an idle spell, at the DB's wake-up price. Chunks
  *  are disjoint by id, so processing the results in chunk order gives the
  *  same per-id ordering the serial loop did. */
-async function fetchChunks<R>(ids: string[], fetch: (chunk: string[]) => Rows, size = 120): Promise<R[]> {
-  const chunks: string[][] = []
-  for (let i = 0; i < ids.length; i += size) chunks.push(ids.slice(i, i + size))
-  const results = await Promise.all(chunks.map((chunk) => fetch(chunk)))
+async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
+  const results = await Promise.all(chunk(ids, size).map((part) => fetch(part)))
   return results.flatMap((r) => (r.data ?? []) as R[])
 }
 
@@ -195,14 +218,14 @@ export async function fetchQuotesByAudience(
   // redacted = false: demographic_signal evidence cites but never quotes
   // (counts-not-quotes, 2026-08-22); its rows carry quote '' and must never
   // reach a picker.
-  const rows = await fetchChunks<{ id: string; audience_insight_id: string; quote: string | null; relevance_rank: number | null }>(
+  const rows = await fetchChunks<{ id: string; audience_insight_id: string; quote: string | null; relevance_rank: number | null; source: string | null }>(
     audienceIds,
-    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank').in('audience_insight_id', chunk).eq('redacted', false),
+    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, source').in('audience_insight_id', chunk).eq('redacted', false),
   )
   for (const r of rows) {
     if (!r.quote) continue
     const arr = byAudience.get(r.audience_insight_id) ?? []
-    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id })
+    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: evidenceSource(r.source) })
     byAudience.set(r.audience_insight_id, arr)
   }
   return byAudience
@@ -230,9 +253,10 @@ export async function fetchQuoteCitationsByAudience(
     relevance_rank: number | null
     comment_id: string | null
     source_video_id: string | null
+    source: string | null
   }>(
     audienceIds,
-    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id').in('audience_insight_id', chunk).eq('redacted', false),
+    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', chunk).eq('redacted', false),
   )
   for (const r of rows) {
     if (!r.quote) continue
@@ -245,6 +269,7 @@ export async function fetchQuoteCitationsByAudience(
       quote: r.quote,
       rank: r.relevance_rank ?? 99,
       evidenceId: r.id,
+      source: evidenceSource(r.source),
       commentId: r.comment_id,
       videoId: r.source_video_id,
     })
@@ -491,13 +516,13 @@ export function createQuotePicker(
     const cand: { q: string; score: number; rank: number }[] = []
     for (const aid of audienceIds) {
       const themeBonus = themeRelevance(aid, keywords, themeSlugById) * 2
-      for (const { quote, rank } of quotesByAudience.get(aid) ?? []) {
+      for (const { quote, rank, source } of quotesByAudience.get(aid) ?? []) {
         const q = cleanQuote(quote)
         const key = q.toLowerCase()
         if (used.has(key) || localKeys.has(key)) continue
         const base = quoteScore(q, keywords)
         if (base <= 0) continue
-        cand.push({ q, score: base + themeBonus, rank })
+        cand.push({ q, score: base + themeBonus + onCameraBonus(source), rank })
       }
     }
     cand.sort((a, b) => b.score - a.score || a.rank - b.rank)
@@ -560,13 +585,13 @@ export function createCitedQuotePicker(
     const cand: { q: string; ref: string; score: number; rank: number }[] = []
     for (const aid of audienceIds) {
       const themeBonus = themeRelevance(aid, keywords, themeSlugById) * 2
-      for (const { quote, rank, evidenceId } of quotesByAudience.get(aid) ?? []) {
+      for (const { quote, rank, evidenceId, source } of quotesByAudience.get(aid) ?? []) {
         const q = cleanQuote(quote)
         const key = q.toLowerCase()
         if (used.has(key) || localKeys.has(key)) continue
         const base = quoteScore(q, keywords)
         if (base <= 0) continue
-        cand.push({ q, ref: `e:${evidenceId}`, score: base + themeBonus, rank })
+        cand.push({ q, ref: `e:${evidenceId}`, score: base + themeBonus + onCameraBonus(source), rank })
       }
     }
     cand.sort((a, b) => b.score - a.score || a.rank - b.rank)

@@ -19,7 +19,7 @@ import type { GatherConfig } from '../lib/gather/types'
 // delete. Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/regate-corpus.ts [--client <uuid>] [--apply]
 
-const SEALAND = 'ac16988e-c4f3-4baf-b388-73895852a554'
+import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
 function parseArgs(argv: string[]): { clientId: string; apply: boolean } {
   const args = { clientId: SEALAND as string, apply: false }
@@ -62,6 +62,7 @@ async function main() {
     competitor_keywords: tc.competitor_keywords ?? [],
     competitor_names: tc.competitor_names ?? [],
     industry_keywords: tc.industry_keywords ?? [],
+    exclude_terms: tc.exclude_terms ?? [],
     platforms: tc.platforms ?? ['tiktok', 'youtube', 'instagram'],
     max_videos: tc.max_videos ?? 25,
     comment_depth: tc.comment_depth ?? 50,

@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { fold, str } from './util'
-import { matchEntities, tagVideo, type EntityMatches, type TagCandidate, type VideoTags } from './tagging'
+import { matchEntities, tagVideo, tagAfterExclusions, type EntityMatches, type TagCandidate, type VideoTags } from './tagging'
 import type { GatherConfig } from './types'
 
 // Content attribution — decides which entity (brand / a competitor / none) a
@@ -38,15 +39,24 @@ const verdictSchema = z.object({
 })
 const batchSchema = z.object({ verdicts: z.array(verdictSchema) })
 
-function chunk<T>(arr: T[], n: number): T[][] {
-  const out: T[][] = []
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n))
-  return out
-}
-
 function buildSystemPrompt(config: GatherConfig): string {
   const brand = config.brand_keywords?.[0] ?? 'the brand'
   const category = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
+  // The client's own homonym list (tracking_configs.exclude_terms). This is the
+  // one prompt whose whole job is homonym disambiguation, so it is where a
+  // client's "Cotopaxi the volcano" / "Sealand the shipping line" belongs —
+  // rendered the same way relevance.ts does, as senses rather than banned
+  // words, because a video can name the other sense and still be about the
+  // company. `excludedTag` below is the deterministic half of the same rule.
+  const excluded = (config.exclude_terms ?? []).map((t) => `${t}`.trim()).filter(Boolean)
+  const exclusionLines = excluded.length > 0
+    ? [
+        '',
+        `For THIS client, matches about any of these are NOT about the brand: ${excluded.join(', ')}.`,
+        'They name other senses of the names, not banned words — a video genuinely about the company',
+        'or its products stays attributed even if one of them appears in it.',
+      ]
+    : []
   return [
     `You attribute social videos to a brand ("${brand}") or its competitors for a consumer-intelligence report.`,
     `The brand and its competitors make: ${category}.`,
@@ -62,6 +72,7 @@ function buildSystemPrompt(config: GatherConfig): string {
     '',
     'If the brand is genuinely featured, prefer BRAND. Otherwise return the exact competitor name it is about.',
     'Return exactly one of the candidate labels listed for that video, or NONE.',
+    ...exclusionLines,
   ].join('\n')
 }
 
@@ -89,6 +100,12 @@ function resolveTag(entity: string, matches: EntityMatches): VideoTags {
   // Unknown / hallucinated label → industry (don't trust a non-candidate).
   return { is_client: false, is_competitor: false, competitor_name: null }
 }
+
+// The client's exclusions have the last word over the model's answer. The
+// prompt above asks GPT to respect them, but a prompt is a request;
+// tagAfterExclusions (lib/gather/tagging.ts) is the deterministic half, and it
+// runs on the path a real run takes (gather.ts: `opts.attribution ?? 'gpt'`),
+// not only on the operator CLI's substring path.
 
 /**
  * Attribute each video to an entity. method='substring' is the naive first-match
@@ -136,7 +153,7 @@ export async function attributeVideos(
       }
       for (const v of completion.choices[0]?.message?.parsed?.verdicts ?? []) {
         const f = batch[v.index]
-        if (f) tags.set(f.cand.video_id, resolveTag(v.entity, f.matches))
+        if (f) tags.set(f.cand.video_id, tagAfterExclusions(f.cand, resolveTag(v.entity, f.matches), opts.config))
       }
     } catch {
       // fail to substring for this batch (keep recall rather than crash).

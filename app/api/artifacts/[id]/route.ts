@@ -39,7 +39,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
       const { count, error: quotaErr } = await admin.from('export_events').select('id', { count: 'exact', head: true })
         .eq('client_id', session.clientId).in('action', ['export', 'rerender']).gte('created_at', dayStartIso(new Date()))
       if (quotaErr) return NextResponse.json({ error: 'Could not fetch this export just now. Try again shortly.' }, { status: 503 })
-      if ((count ?? 0) >= EXPORT_DAILY_LIMIT) return NextResponse.json({ error: `That is ${EXPORT_DAILY_LIMIT} renders today, which is the daily limit. It resets tomorrow.` }, { status: 429 })
+      if ((count ?? 0) >= EXPORT_DAILY_LIMIT) return NextResponse.json({ error: `That is ${EXPORT_DAILY_LIMIT} exports today, which is the daily limit. It resets tomorrow.` }, { status: 429 })
       const baseUrl = renderBaseUrl(await getBaseUrl())
       const { buffer, ms } = await renderArtifact({ baseUrl, snapshotId: artifact.snapshot_id, format: artifact.format, tileKey: artifact.tile_key })
       artifact = await replaceArtifactFile(admin, artifact, { buffer, renderMs: ms })

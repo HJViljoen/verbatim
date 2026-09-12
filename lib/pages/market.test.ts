@@ -43,12 +43,12 @@ const fixture: MarketData = {
   rail: { recs: 4, insights: 12, claims: 6, about: 2, newsTotal: 9 },
   list: {
     group: 'recs', total: 4, filterCounts: { strong: 2, early: 1 },
-    rows: [{ id: 'rec-1', rank: 0, title: 'Launch an access pathway', reasoning: 'Because.', type: 'campaign', tier: 'confirmed', conversations: 12 }],
+    rows: [{ id: 'rec-1', rank: 0, title: 'Launch an access pathway', reasoning: 'Because.', type: 'campaign', tier: 'confirmed', conversations: 12, status: 'new' }],
   },
   detail: {
-    kind: 'rec', id: 'rec-1', rank: 0, total: 4, title: 'Launch an access pathway', reasoning: 'Because.', type: 'campaign', tier: 'confirmed', conversations: 12,
+    kind: 'rec', id: 'rec-1', rank: 0, total: 4, title: 'Launch an access pathway', reasoning: 'Because.', type: 'campaign', tier: 'confirmed', conversations: 12, status: 'acknowledged',
     voices: 5, platforms: [{ label: 'TikTok', count: 3 }],
-    themes: ['comfort'],
+    themes: [{ slug: 'comfort_in_daily_wear', label: 'Comfort in daily wear' }],
     quotes: [{ ref: 'h:recommendations:rec-1', text: 'What a brilliant attitude' }, { ref: 'e:ev-2', text: 'where are you from I need this' }],
   },
   shortRead: [{ key: 'top_unmet_needs', items: ['Comfort in daily wear'] }],

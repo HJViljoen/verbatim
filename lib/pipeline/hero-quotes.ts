@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { chunk } from '../chunk'
 import { normForMatch } from './quote-match'
 import { selectAll } from '../supabase-admin'
 
@@ -52,11 +53,10 @@ export async function nullHeroQuotes(admin: SupabaseClient, matches: { table: He
   let n = 0
   for (const table of HERO_QUOTE_TABLES) {
     const ids = matches.filter((m) => m.table === table).map((m) => m.id)
-    for (let i = 0; i < ids.length; i += 200) {
-      const chunk = ids.slice(i, i + 200)
-      const { error } = await admin.from(table).update({ hero_quote: null }).in('id', chunk)
+    for (const part of chunk(ids, 200)) {
+      const { error } = await admin.from(table).update({ hero_quote: null }).in('id', part)
       if (error) throw new Error(`null hero_quote ${table}: ${error.message}`)
-      n += chunk.length
+      n += part.length
     }
   }
   return n

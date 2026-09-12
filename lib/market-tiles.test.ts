@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   insightTiers, confirmedCompetitiveIds, recEvidenceTier, orderAgenda, openAgendaId, priorityDot, distinctVideos,
   claimVerdict, claimCounts, claimCountsLine, ledgerRows, truncateWords, quadrantBullets, tierCounts, newsRingChip,
+  labelsBySlug, themeChips,
 } from './market-tiles'
 
 const mi = (id: string, score: number | null, themes: number, comp = 0) => ({
@@ -58,6 +59,15 @@ describe('agenda ordering', () => {
     expect(out[0].tier).toBe('confirmed')
     expect(out[3].tier).toBe('early_signal')
     expect(out[4].tier).toBe('archive')
+  })
+
+  it('a dismissed recommendation sinks below every live one, however well grounded', () => {
+    const out = orderAgenda([
+      { ...rec('bestButDismissed', 'high', ['conf', 'compX']), status: 'dismissed' },
+      { ...rec('worstButLive', 'low', ['arch']), status: 'new' },
+      { ...rec('doneStaysPut', 'high', ['conf']), status: 'acted_on' },
+    ], tiers, comp)
+    expect(out.map((a) => a.rec.id)).toEqual(['doneStaysPut', 'worstButLive', 'bestButDismissed'])
   })
 
   it('handles an empty list', () => {
@@ -134,5 +144,62 @@ describe('tier counts + news chips', () => {
     expect(newsRingChip(0)).toEqual({ label: 'Your brand', tone: 'positive' })
     expect(newsRingChip(1)).toEqual({ label: 'Competitor', tone: 'clay' })
     expect(newsRingChip(2)).toEqual({ label: 'Category', tone: 'sand' })
+  })
+})
+
+describe('grounding chips', () => {
+  const themes = [
+    { label: 'Comfort in daily wear', member_themes: ['comfort_fit', 'all_day_comfort'], evidence_count: 12, rank_score: 4 },
+    { label: 'Durability in the field', member_themes: ['strap_wear'], evidence_count: 9, rank_score: 3 },
+    // Same slug in a second theme — a slug can be cited from more than one
+    // bucket; the chip must read as the card that leads Voice.
+    { label: 'Sizing confusion', member_themes: ['comfort_fit'], evidence_count: 4, rank_score: 9 },
+    { label: '  ', member_themes: ['blank_label'], evidence_count: 40, rank_score: 9 },
+  ]
+
+  it('labels a slug with the theme Voice leads with, not the strongest', () => {
+    // The keys Voice orders by are evidence_count then rank_score — NOT
+    // strength_score, which is what this used to sort on. On the live corpora
+    // the two disagreed for 30 of Össur's 123 multi-theme slugs and 25 of
+    // Sealand's 84, and every one of those chips named a card other than the
+    // one the chip opened.
+    const m = labelsBySlug([
+      { label: 'Heard by more people', member_themes: ['s'], evidence_count: 20, rank_score: 1 },
+      { label: 'Ranked higher, heard less', member_themes: ['s'], evidence_count: 5, rank_score: 99 },
+    ])
+    expect(m.get('s')).toBe('Heard by more people')
+    const tied = labelsBySlug([
+      { label: 'Bravo', member_themes: ['s'], evidence_count: 7, rank_score: 2 },
+      { label: 'Alpha', member_themes: ['s'], evidence_count: 7, rank_score: 2 },
+    ])
+    expect(tied.get('s')).toBe('Alpha') // label asc is the last tie-break
+  })
+
+  it('labels a slug with the theme that holds it', () => {
+    const m = labelsBySlug(themes)
+    expect(m.get('comfort_fit')).toBe('Comfort in daily wear')
+    expect(m.get('all_day_comfort')).toBe('Comfort in daily wear')
+    expect(m.get('strap_wear')).toBe('Durability in the field')
+    expect(m.has('blank_label')).toBe(false) // an empty label is not a label
+  })
+
+  it('carries the slug for the deep link and the label for the reader', () => {
+    const chips = themeChips(['strap_wear'], labelsBySlug(themes))
+    expect(chips).toEqual([{ slug: 'strap_wear', label: 'Durability in the field' }])
+  })
+
+  it('leaves the label null when this update has no theme for the slug', () => {
+    expect(themeChips(['orphan_slug'], labelsBySlug(themes))).toEqual([{ slug: 'orphan_slug', label: null }])
+  })
+
+  it('dedupes on what the reader sees, not on the slug', () => {
+    const chips = themeChips(['comfort_fit', 'all_day_comfort', 'strap_wear'], labelsBySlug(themes))
+    expect(chips.map((c) => c.label)).toEqual(['Comfort in daily wear', 'Durability in the field'])
+  })
+
+  it('caps the row', () => {
+    const m = labelsBySlug([])
+    expect(themeChips(['a', 'b', 'c', 'd', 'e'], m)).toHaveLength(4)
+    expect(themeChips(['a', 'b', 'c'], m, 2)).toHaveLength(2)
   })
 })

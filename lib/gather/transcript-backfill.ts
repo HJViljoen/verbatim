@@ -1,4 +1,5 @@
 import { createAdminClient } from '../supabase-admin'
+import { chunk } from '../chunk'
 import {
   BACKFILL_BATCH,
   BACKFILL_BATCH_YOUTUBE,
@@ -118,10 +119,10 @@ export function planBackfillBatches(
   const batches: BackfillBatch[] = []
   for (const [platform, list] of [...byPlatform.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
     const size = platform === 'youtube' ? ytBatchSize : batchSize
-    for (let i = 0; i < list.length; i += size) {
+    for (const part of chunk(list, size)) {
       batches.push({
         platform: platform as Platform,
-        videos: list.slice(i, i + size).map((v) => ({ id: v.id, video_id: v.video_id, video_url: v.video_url! })),
+        videos: part.map((v) => ({ id: v.id, video_id: v.video_id, video_url: v.video_url! })),
       })
     }
   }
@@ -151,12 +152,12 @@ export interface BackfillPlan {
 export async function planTranscriptBackfill(clientId: string, videoIds: string[]): Promise<BackfillPlan> {
   const admin = createAdminClient()
   const rows: BackfillCandidate[] = []
-  for (let i = 0; i < videoIds.length; i += 100) {
+  for (const part of chunk(videoIds, 100)) {
     const { data, error } = await admin
       .from('videos')
       .select('id, platform, video_id, video_url, comments_count, transcript_status, transcript_attempts')
       .eq('client_id', clientId)
-      .in('id', videoIds.slice(i, i + 100))
+      .in('id', part)
     if (error) throw new Error(`plan transcript backfill: ${error.message}`)
     rows.push(...((data ?? []) as BackfillCandidate[]))
   }

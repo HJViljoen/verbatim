@@ -121,7 +121,12 @@ export const GLOSSARY = {
   sentiment: ['Strongly positive → Strongly negative', 'fixed cutoffs on the measured share of rated conversations; Polarized = both sides above 30%'],
   say_vs_hear: ['Say vs hear', "what your own videos claim (from their transcripts), set against what the tracked conversation actually says — 'not talked about yet' means the audience doesn't engage with the claim, not that it's wrong"],
   news: ['In the news', 'published coverage matched to your tracked names by headline — shown as context beside the conversation, never claimed as the cause of anything measured'],
+  initiative: ['Initiative', 'something you told us you are trying to move, and the themes it is measured on — your statement, not ours; we only report whether the conversation followed'],
+  moving: ['Moving / not moving', 'the change in a theme’s share of the conversation since the day you started tracking it, in share points; under a point either way reads "holding steady", and two updates are the least that can say anything'],
+  on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment — filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],
   about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you — their words, never yours, and never counted as your audience"],
+  search_terms: ['Search terms', 'the words we look for on every platform, in three groups — your brand, your competitors, your category. Changing them changes what the next update finds, and nothing before it'],
+  term_value: ['Worth reviewing', 'across three or more updates — pooled, or on one platform on its own — this term found at least 100 posts, kept under 5% of them, and has led to no insight yet. A suggestion to look, never a change we make for you'],
 } as const
 
 export type GlossaryKey = keyof typeof GLOSSARY
@@ -168,3 +173,26 @@ export function shareFootnoteLead(ownedPosts: number | null, clientVideos: numbe
   const tracked = clientVideos ?? 0
   return `You published ${plural(ownedPosts, 'post')} this update · ${plural(tracked, 'video')} by and about you ${tracked === 1 ? 'was' : 'were'} tracked`
 }
+
+// ---- Ladder 5 · The recommendation lifecycle -------------------------------
+// The one ladder the CLIENT sets, not code: whether they have done anything
+// about a recommendation. The DB vocabulary is older than the UI (the column
+// and its tenant grant date from 2026-08-18 and were never written), so the
+// stored words stay and the display words are assigned here — `acted_on`
+// reads "Done", `in_progress` reads "Working on it".
+
+export const REC_STATUSES = ['new', 'acknowledged', 'in_progress', 'acted_on', 'dismissed'] as const
+export type RecStatus = (typeof REC_STATUSES)[number]
+
+export const REC_STATUS_LABEL: Record<RecStatus, string> = {
+  new: 'New',
+  acknowledged: 'Acknowledged',
+  in_progress: 'Working on it',
+  acted_on: 'Done',
+  dismissed: 'Dismissed',
+}
+
+/** A stored status, or 'new' for a row written before the lifecycle had a UI
+ *  (status has a DB default but is nullable). */
+export const recStatus = (value: string | null | undefined): RecStatus =>
+  (REC_STATUSES as readonly string[]).includes(value ?? '') ? (value as RecStatus) : 'new'

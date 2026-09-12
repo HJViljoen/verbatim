@@ -9,9 +9,9 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { hydrateSnapshot, loadSnapshot, loadSnapshotWorkings } from '@/lib/snapshots'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { documentSettings, isDocumentData, type DocumentWorkings } from '@/lib/reports/documents/types'
-import { documentTemplate } from '@/lib/reports/documents/templates'
+import { CUSTOM_KEY, documentTemplate, resolveTemplate } from '@/lib/reports/documents/templates'
 import { BUILD_ACTIVE, type ReportRow } from '@/lib/reports/types'
-import { latestBuild } from '@/lib/reports/documents/builds'
+import { buildBlockedReason, latestBuild } from '@/lib/reports/documents/builds'
 import { BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
 
 // The document editor (T8c, 2026-08-31): settings on the left, the built
@@ -22,8 +22,13 @@ const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'n
 
 export async function DocumentStudioPage({ report, clientId }: { report: ReportRow; clientId: string }) {
   const admin = createAdminClient()
-  const template = documentTemplate(report.template_key)
+  const declared = documentTemplate(report.template_key)
   const settings = documentSettings(report.settings)
+  // What this report actually prints: the declared template composed with its
+  // own settings (WP7d), so the page count, the competitor picker and the
+  // description describe the document a build would produce, not the
+  // template it started from.
+  const template = declared ? resolveTemplate(declared, settings) : null
   const [{ data: cfg }, build, snapshot] = await Promise.all([
     admin.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle(),
     latestBuild(admin, report.id),
@@ -32,6 +37,10 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
   const tracked = ((cfg?.competitor_names ?? []) as string[]).filter(Boolean)
   const inFlight = build && BUILD_ACTIVE.includes(build.status) ? { id: build.id, status: build.status, startedAt: build.started_at } : null
 
+  // Why the latest build asked to be read, when it did (WP7d): the self-check
+  // writes its reason into the workings, and this is the only place a person
+  // sees it before they send.
+  let reviewNote: string | null = null
   let editor: React.ReactNode = null
   if (snapshot && snapshot.client_id === clientId) {
     const raw = await hydrateSnapshot(admin, snapshot)
@@ -42,6 +51,14 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
         loadSnapshotWorkings<DocumentWorkings>(admin, snapshot.id, clientId),
       ])
       const data = applyEdits(raw, edits)
+      if (build?.needs_review) {
+        const brief = workings?.brief
+        reviewNote = brief && !brief.answered
+          ? `the brief went unanswered: nothing here takes up ${brief.missed.slice(0, 4).join(', ')}`
+          : workings?.dropped.length
+            ? `a finding was dropped after a check: ${workings.dropped[0].reason}`
+            : 'a check flagged this build'
+      }
       const built = new Date(data.generatedAt)
       const date = Number.isNaN(built.getTime()) ? undefined : built.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
       editor = (
@@ -54,9 +71,9 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
   const pageCount = snapshot && isDocumentData(snapshot.data) ? snapshot.data.pages.length + 1 : null
   return (
     <PageFrame className="min-h-0 flex-1">
-      <PageBar title={report.title} context={`Written report · ${template?.name ?? 'document'}${pageCount ? ` · ${pageCount} pages` : ''}${build ? ` · ${build.status === 'done' ? `built ${fmtWhen(build.finished_at ?? build.started_at)}` : BUILD_PHASE_WORDS[build.status].toLowerCase()}` : ''}`}>
+      <PageBar title={report.title} context={`Written report · ${template?.name ?? 'document'}${pageCount ? ` · ${pageCount} pages` : ''}${build ? ` · ${build.status === 'done' ? `built ${fmtWhen(build.finished_at ?? build.started_at)}` : BUILD_PHASE_WORDS[build.status].toLowerCase()}` : ''}${reviewNote ? ` · read before sending: ${reviewNote}` : ''}`}>
         <Link href={`/dashboard/studio?item=${report.id}`}><BarPill>Back to the Studio</BarPill></Link>
-        <DocumentBuildControl reportId={report.id} inFlight={inFlight} />
+        <DocumentBuildControl reportId={report.id} inFlight={inFlight} blocked={buildBlockedReason(report)} />
       </PageBar>
       <EditorLayout
         settings={<SettingsPane
@@ -64,11 +81,12 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
           readerHint={template?.writtenFor ?? 'the sales team'}
           competitorsUsed={!!template?.skeleton.some((p) => p.kind === 'competitor') || !!template?.anchors.some((a) => a.perCompetitor)}
           findingsMax={template?.findingsMax ?? 4}
+          custom={declared?.key === CUSTOM_KEY}
         />}
         page={editor ?? (
           <div className="flex flex-1 flex-col items-start justify-center gap-3 px-8">
             <p className="text-[14px] font-medium">{inFlight ? 'Writing the first draft.' : 'Build to write the first draft.'}</p>
-            <p className="max-w-[48ch] text-[12.5px] text-muted-foreground">{template?.description ?? ''} A build reads the update, asks the data, writes for its reader and prints the PDF; three to five minutes. Then every block on the page can be edited here before it goes out.</p>
+            <p className="max-w-[48ch] text-[12.5px] text-muted-foreground">{declared?.key === CUSTOM_KEY && settings.brief ? `This brief answers: ${settings.brief}` : template?.description ?? ''} A build reads the update, asks the data, writes for its reader and prints the PDF; three to five minutes. Then every block on the page can be edited here before it goes out.</p>
             {build?.status === 'failed' && build.error && <p className="text-[12.5px] text-negative">The last build failed: {build.error}</p>}
           </div>
         )}

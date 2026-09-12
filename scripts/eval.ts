@@ -27,6 +27,7 @@
  *
  * Usage:  npx tsx scripts/eval.ts [--client <uuid>] [--floor 0.95] [--json]
  */
+import { chunk } from '../lib/chunk'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { reportGrounding, type EvidenceRow } from '../lib/eval/grounding'
 import { cadenceReliability, formatCadence } from '../lib/pipeline/cadence'
@@ -96,9 +97,9 @@ async function main() {
     )
     const commentIds = [...new Set(evidence.map((e) => e.comment_id).filter((x): x is string => Boolean(x)))]
     const textById = new Map<string, string>()
-    for (let i = 0; i < commentIds.length; i += 200) {
+    for (const part of chunk(commentIds, 200)) {
       const rows = await selectAll<{ id: string; text: string | null }>(() =>
-        admin.from('comments').select('id, text').in('id', commentIds.slice(i, i + 200)).order('id'),
+        admin.from('comments').select('id, text').in('id', part).order('id'),
       )
       for (const r of rows) if (r.text) textById.set(r.id, r.text)
     }
@@ -139,14 +140,16 @@ async function main() {
         admin.from('pipeline_runs').select('id, status, options, completed_at')
           .eq('client_id', client.id).order('id', { ascending: true }),
       ),
-      selectAll<{ run_id: string | null; sent_at: string | null }>(() =>
-        admin.from('report_sends').select('run_id, sent_at')
-          .eq('client_id', client.id).eq('status', 'sent').order('sent_at', { ascending: true }),
+      selectAll<{ run_id: string | null; sent_at: string | null; status: string }>(() =>
+        // Every status, not just 'sent': cadenceReliability decides which ones
+        // settle a run (a review hold and a recipient-less schedule are not misses).
+        admin.from('report_sends').select('run_id, sent_at, status')
+          .eq('client_id', client.id).order('claimed_at', { ascending: true }),
       ),
     ])
     const cadence = cadenceReliability(
       runRows.map((r) => ({ id: r.id, status: r.status, options: r.options, completedAt: r.completed_at })),
-      reportRows.map((r) => ({ runId: r.run_id, sentAt: r.sent_at })),
+      reportRows.map((r) => ({ runId: r.run_id, sentAt: r.sent_at, status: r.status })),
     )
 
     // ---- 4. Gate verdicts ---------------------------------------------------

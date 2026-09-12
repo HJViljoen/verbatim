@@ -7,7 +7,9 @@ import type { ExecutiveBrief } from '../pipeline/schemas'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToClientVoices, cleanQuote, type ThemeBucketRow } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
-import { sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey } from '../calibration'
+import { recStatus, sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey, type RecStatus } from '../calibration'
+import { loadInitiatives } from '../initiatives/read'
+import type { InitiativesData } from '../initiatives/types'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
 import {
   themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,
@@ -16,6 +18,8 @@ import {
 import type { MethodNoteData } from '../../components/print/method-note'
 import { ownedCensusTotal, type OwnedCensus } from '../gather/owned'
 import { fetchThemedRunId } from './themed-run'
+import { row, rows } from './read'
+import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 
 // Dashboard loader — the data half of app/dashboard/page.tsx (split 2026-08-29,
 // Reports & Exports T3). Everything below the session line of the old page,
@@ -52,6 +56,7 @@ interface RecRow {
   priority: string | null
   based_on: { insight_ids?: string[] } | null
   hero_quote: string | null
+  status: string | null
 }
 
 export const BUCKET_COLOR: Record<Bucket, string> = { client: 'var(--you)', category: 'var(--cat)', competitor: 'var(--comp)' }
@@ -129,11 +134,12 @@ export interface DashboardData {
     headline: string
     beats: ResolvedBeat[]
     fallback: boolean
-    oneThing: { id: string; title: string; reasoning: string; priority: string | null } | null
+    oneThing: { id: string; title: string; reasoning: string; priority: string | null; status: RecStatus } | null
     quotes: Quote[]
     voices: number
     platforms: { label: string; count: number }[]
   }
+  initiatives: InitiativesData
   sentiment: {
     positivePct: number
     judged: number
@@ -180,7 +186,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   // Anchor on the newest run WITH DATA; an in-flight run has no analysis rows
   // yet, so anchoring on it would blank the page for the duration of every run.
   const SUMMARY_COLS = 'run_id, run_date, owned_census, total_videos, total_comments, period_videos, period_comments, share_of_voice, period_share_of_voice, period_sentiment_positive, audience_sentiment, period_audience_sentiment'
-  const [{ data: client }, { data: tc }, { data: latestRun }, runningRes, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
+  const [clientRes, tcRes, latestRunRes, runningIds, registryRes, historyRaw, snapRows, tierRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs')
       .select('brand_keywords, competitor_keywords, industry_keywords, platforms, report_day, report_period')
@@ -188,7 +194,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId, 'dashboard'),
     supabase.from('theme_registry').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     selectAll<SummaryRow>(() =>
       supabase.from('run_summary').select(`${SUMMARY_COLS}, executive_brief`).eq('client_id', clientId).order('run_date', { ascending: true }),
@@ -202,8 +208,17 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       supabase.from('themes').select('run_id, single_source, strength_score').eq('client_id', clientId).order('run_id').order('id'),
     ),
   ])
-  const runningIds = ((runningRes.data ?? []) as { id: string }[]).map((r) => r.id)
   const notRunning = runningIds.length ? `(${runningIds.join(',')})` : null
+  const client = row<{ company_name: string | null }>(clientRes, 'dashboard.client')
+  const tc = row<{
+    brand_keywords: string[] | null
+    competitor_keywords: string[] | null
+    industry_keywords: string[] | null
+    platforms: string[] | null
+    report_day: string | null
+    report_period: string | null
+  }>(tcRes, 'dashboard.trackingConfig')
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'dashboard.latestRun')
   const brand = client?.company_name ?? 'Your brand'
   const brandShort = brand.split(/\s[—–-]\s/)[0].trim() || brand
   const runId = latestRun?.id as string | undefined
@@ -221,41 +236,45 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   if (!runId) return { empty: true, brand, nextUpdate }
 
   // ── everything keyed on the anchored run, in one wave ──────────────────
-  let latestVidQ = supabase.from('videos').select('run_id').eq('client_id', clientId)
-  if (notRunning) latestVidQ = latestVidQ.not('run_id', 'in', notRunning)
   let earlierThemesQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) earlierThemesQ = earlierThemesQ.not('run_id', 'in', notRunning)
-  const [recRes, themedRunId, miRes, latestVidRes, eventsRes] = await Promise.all([
-    supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
+  const [recRes, themedRunId, miRes, latestVideoRun, eventsRes] = await Promise.all([
+    supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote, status').eq('client_id', clientId).eq('run_id', runId),
     // Themes come from the newest update that produced any — normally this
     // update, but a failed theme pass must not blank the theme tiles.
-    fetchThemedRunId(supabase, clientId, runningIds),
+    fetchThemedRunId(supabase, clientId, runningIds, 'dashboard'),
     supabase.from('market_insights').select('id, evidence').eq('client_id', clientId).eq('run_id', runId),
     // The newest update that gathered videos (an analysis-only update re-reads
     // old videos and gathers none) — anchors the platform split below.
-    latestVidQ.order('scraped_at', { ascending: false }).limit(1).maybeSingle(),
+    fetchLatestVideoRun(supabase, clientId, runningIds, 'dashboard'),
     supabase.from('account_events').select('platform, severity, explained, magnitude_label, explanation')
       .eq('client_id', clientId).eq('run_id', runId).order('severity', { ascending: false }).limit(3),
   ])
 
   // ── the third wave: what depends on the second ─────────────────────────
-  const videoRunId = (latestVidRes.data?.run_id as string | undefined) ?? runId
-  const recs = (recRes.data ?? []) as RecRow[]
+  const videoRunId = latestVideoRun?.runId ?? runId
+  const recs = rows<RecRow>(recRes, 'dashboard.recommendations')
   const oneThing = topRecommendation(recs)
-  const marketInsights = (miRes.data ?? []) as { id: string; evidence: { supporting_theme_ids?: string[] } | null }[]
+  const marketInsights = rows<{ id: string; evidence: { supporting_theme_ids?: string[] } | null }>(miRes, 'dashboard.marketInsights')
   const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
-  const [platformRows, themeRowsRes, earlierRes, supportInsights, bucketRes] = await Promise.all([
+  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows, initiatives] = await Promise.all([
     selectAll<{ platform: string | null }>(() =>
       supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
     ),
+    // selectAll: one update's themes cross the 1000-row cap (Sealand's latest
+    // is at 936), and this read is unordered, so a silent cap would hand
+    // topThemes an arbitrary 1000 of them and the tiles would rank the wrong
+    // eight without saying so.
     themedRunId
-      ? supabase.from('themes')
-          .select('label, description, category, bucket, member_themes, evidence_count, strength_score, rank_score, first_seen')
-          .eq('client_id', clientId).eq('run_id', themedRunId)
-      : Promise.resolve({ data: null }),
-    themedRunId ? earlierThemesQ.neq('run_id', themedRunId).limit(1) : Promise.resolve({ data: null }),
+      ? selectAll<ThemeRankRow>(() =>
+          supabase.from('themes')
+            .select('label, description, category, bucket, member_themes, evidence_count, strength_score, rank_score, first_seen')
+            .eq('client_id', clientId).eq('run_id', themedRunId).order('id'),
+        )
+      : Promise.resolve([] as ThemeRankRow[]),
+    themedRunId ? earlierThemesQ.neq('run_id', themedRunId).limit(1) : Promise.resolve({ data: null, error: null }),
     oneThing ? fetchInsightsByIds<{ id: string; theme: string; platform: string | null }>(supabase, supportIds, 'id, theme, platform') : Promise.resolve([]),
     // Theme buckets for scoping the recommendation's voices. Keyed on the run
     // that actually produced themes, like the tiles above: keyed on `runId` it
@@ -263,8 +282,17 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     // scopeToClientVoices fails open on an empty map — competitor voices under
     // a claim about the client. Moved into this wave when themedRunId became
     // available, which costs no extra round trip.
-    supabase.from('themes').select('bucket, supporting_insight_ids')
-      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
+    // selectAll for the same reason, and a sharper one: a capped bucket map
+    // leaves cited insight ids unmapped, and scopeToClientVoices fails open on
+    // a miss — a competitor's customers quoted under a claim about the client.
+    selectAll<ThemeBucketRow>(() =>
+      supabase.from('themes').select('bucket, supporting_insight_ids')
+        .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
+    ),
+    // Declared initiatives, measured (WP7c). Its own reads, but in this wave so
+    // it costs no extra round trip; it returns { rows: [], total: 0 } for the
+    // tenants — today, all of them — that have declared nothing.
+    loadInitiatives(supabase, clientId),
   ])
 
   // The latest update = the run we anchored on; everything before it is history.
@@ -349,7 +377,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   let themes: TopTheme[] = []
   let analysedConversations = 0
   if (themedRunId) {
-    themes = topThemes((themeRowsRes.data ?? []) as ThemeRankRow[], 8, (earlierRes.data?.length ?? 0) > 0)
+    themes = topThemes(themeRows, 8, rows(earlierRes, 'dashboard.earlierThemes').length > 0)
     analysedConversations = Object.values(summary?.share_of_voice ?? {}).reduce((t, e) => t + Number(e?.analysed_videos ?? 0), 0)
   }
 
@@ -358,7 +386,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   let oneThingVoices = 0
   let oneThingPlatforms: { label: string; count: number }[] = []
   if (oneThing) {
-    const bucketById = bucketByAudienceId((bucketRes.data ?? []) as ThemeBucketRow[])
+    const bucketById = bucketByAudienceId(bucketRows)
     const themeSlugById = new Map(supportInsights.map((a) => [a.id, a.theme]))
     const scopedIds = scopeToClientVoices(supportIds, bucketById)
     oneThingVoices = scopedIds.length
@@ -399,7 +427,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
 
   // ── your accounts ──────────────────────────────────────────────────────
   const accounts = accountSeries(snapRows, 30)
-  const events = (eventsRes.data ?? []) as { platform: string; severity: number; explained: boolean; magnitude_label: string; explanation: string | null }[]
+  const events = rows<{ platform: string; severity: number; explained: boolean; magnitude_label: string; explanation: string | null }>(eventsRes, 'dashboard.accountEvents')
   const topEvent = events.find((e) => e.explained && e.severity >= 2) ?? null
 
   // ── overlays ───────────────────────────────────────────────────────────
@@ -428,9 +456,10 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     },
     hero: {
       show: showHero, headline: narrative.headline, beats: narrative.beats, fallback: narrative.fallback,
-      oneThing: oneThing ? { id: oneThing.id, title: oneThing.title, reasoning: oneThing.reasoning, priority: oneThing.priority } : null,
+      oneThing: oneThing ? { id: oneThing.id, title: oneThing.title, reasoning: oneThing.reasoning, priority: oneThing.priority, status: recStatus(oneThing.status) } : null,
       quotes: oneThingQuotes, voices: oneThingVoices, platforms: oneThingPlatforms,
     },
+    initiatives,
     sentiment: sent ? {
       positivePct: sent.positivePct, judged: sent.judged, deltaText: verdictDelta(sentimentVerdict),
       tierLabel: sentTier ? SENTIMENT_TIER_LABEL[sentTier] : null, segments: sentimentSegments,

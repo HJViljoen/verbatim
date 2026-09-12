@@ -9,9 +9,15 @@ import { Button } from '@/components/ui/button'
 import { SettingsCard } from '@/components/settings-frame'
 
 // Facts vs knobs (Redesign Spec §9): clients edit the facts only they know —
-// competitor names and how reports reach them. Keywords, platforms, and scrape
-// depth (max_videos / comment_depth) are operator levers: they drive cost and
-// output quality, so they're managed platform-side and have no client UI.
+// competitor names, the terms we search for (search-terms-form.tsx, 2026-09-11)
+// and how reports reach them.
+//
+// Search terms used to be an operator lever here, "because they drive cost and
+// output quality". Cost is bounded below the UI now — the tracking_configs
+// CHECK constraints cap each bucket at 15 and GATHER_MAX_SEARCHES_PER_RUN caps
+// a run at 120 searches — and quality is what the performance table beside the
+// editor is for. max_videos, comment_depth and platforms stay operator knobs:
+// they move cost directly, and the client never sees them.
 
 export interface TrackingConfig {
   competitor_names: string[] | null
@@ -45,7 +51,7 @@ export function SettingsForm({ cfg, canEdit }: { cfg: TrackingConfig; canEdit: b
       <fieldset disabled={!canEdit || pending} className="space-y-6">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <SettingsCard title="Competitors" description="The brands we compare you against. Comma-separated.">
-            <Labeled label="Competitor names" hint="Used to tag competitor content.">
+            <Labeled label="Competitor names" hint="What we tag their content by. What we search for to find it is below, under “What we search for”.">
               <Input name="competitor_names" defaultValue={join(cfg.competitor_names)} placeholder="Ottobock, Blatchford" />
             </Labeled>
           </SettingsCard>

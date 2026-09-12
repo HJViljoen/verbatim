@@ -7,6 +7,7 @@ import { INTENT_LABEL } from '../../lib/content-tiles'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
+import { initiativesOf } from '../../lib/initiatives/types'
 import { EMAIL, FONT, tokenHex } from '../../lib/email/theme'
 import { Badge, Bar, Columns, DeltaText, Img, Quote, RankedRow, Stat, text } from './primitives'
 
@@ -180,6 +181,31 @@ const accounts: E<DashboardData> = ({ accounts: a }, ctx) => {
   )
 }
 
+const initiatives: E<DashboardData> = ({ initiatives }, ctx) => {
+  // Optional for the same reason the app renderer is: an email re-rendered from
+  // a snapshot frozen before this tile existed has no key for it.
+  const t = initiativesOf({ initiatives })
+  // Null, not an empty state. The email does not go through `slides()`, so the
+  // gate that keeps this tile off the print deck for a tenant tracking nothing
+  // does not reach here — and a weekly email that says "Track a theme from
+  // Voice of Customer…" forever is an advert, not an update. DigestEmail drops
+  // a section whose renderer returns null, heading and all.
+  if (!t.rows.length) return null
+  return (
+    <div>
+      {table(t.rows.map((r) => row(
+        [r.title, <span key="v" style={{ ...text.mono, fontWeight: 600 }}>{r.latestShare != null ? `${r.latestShare.toFixed(1)}%` : '—'}</span>, <span key="l" style={{ ...text.small, fontSize: 11 }}>{r.line}</span>],
+        { aligns: ['left', 'right', 'right'], widths: [undefined, 56, 190] },
+      )))}
+      <div style={{ marginTop: 6 }}>
+        <a href={`${ctx.appUrl}/dashboard/settings/initiatives`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+          {t.total > t.rows.length ? `${t.total - t.rows.length} more you are tracking` : 'Manage what you track'} →
+        </a>
+      </div>
+    </div>
+  )
+}
+
 export const dashboardEmail: Record<string, E<DashboardData>> = {
   'dashboard.strip': strip,
   'dashboard.hero': hero,
@@ -189,6 +215,7 @@ export const dashboardEmail: Record<string, E<DashboardData>> = {
   'dashboard.movement': movement,
   'dashboard.recommendation': recommendation,
   'dashboard.accounts': accounts,
+  'dashboard.initiatives': initiatives,
 }
 
 // ── content: worth a reply ─────────────────────────────────────────────────

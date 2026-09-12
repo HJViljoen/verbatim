@@ -1,4 +1,5 @@
 import { openai } from '../openai'
+import { chunk } from '../chunk'
 import { EMBEDDING_MODEL, CLUSTER_SIMILARITY_THRESHOLD } from '../config'
 import type { InsightRow } from './types'
 
@@ -48,11 +49,10 @@ const EMBED_BATCH = 512
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
   const out: number[][] = []
-  for (let i = 0; i < texts.length; i += EMBED_BATCH) {
-    const chunk = texts.slice(i, i + EMBED_BATCH)
-    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: chunk })
-    if (res.data.length !== chunk.length) {
-      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${chunk.length} inputs`)
+  for (const part of chunk(texts, EMBED_BATCH)) {
+    const res = await openai.embeddings.create({ model: EMBEDDING_MODEL, input: part })
+    if (res.data.length !== part.length) {
+      throw new Error(`embedTexts: ${EMBEDDING_MODEL} returned ${res.data.length} vectors for ${part.length} inputs`)
     }
     // The API returns items with an `index`; sort to be order-safe. The index
     // is per-REQUEST, so sort within the chunk and append — never across.
@@ -96,42 +96,121 @@ export function embedInput(ins: Pick<InsightRow, 'theme' | 'description'>): stri
  *  "theme" that led the dashboard and inflated grounding counts. Average
  *  linkage is the standard chaining fix: one bridge pair can no longer fuse
  *  two unrelated groups. Cluster-cluster similarities update exactly via the
- *  size-weighted mean, so no pair is ever recomputed. O(n³) worst case —
- *  fine at Step A2's per-bucket sizes (≤ a few hundred insights).
+ *  size-weighted mean, so no pair is ever recomputed.
+ *
+ *  Nearest-neighbour chain (2026-09-11), replacing the O(n³) "scan every pair
+ *  for the global best, merge, repeat" loop: grow a chain of nearest active
+ *  neighbours until the last two are each other's nearest, then merge that pair
+ *  — for a REDUCIBLE linkage (a merged cluster is never more similar to a third
+ *  than the more similar of its two halves was, which the size-weighted mean
+ *  guarantees) that pair is one the global-max loop would also have merged, so
+ *  the clusters are identical, in O(n²) instead of O(n³).
+ *  A reciprocal pair BELOW the threshold retires both: each one's best possible
+ *  similarity is already under the line, and every later similarity involving
+ *  it is a weighted mean of values ≤ that, so neither can ever clear it again.
+ *
+ *  "Identical to the old loop" holds for a TIE-FREE similarity matrix. Under
+ *  exact ties the two break them differently (this one takes the lowest index,
+ *  the old loop's `>=` took the last max pair), and both are valid average
+ *  linkages — a constructed binary-vector case does diverge. The realistic tie
+ *  source is duplicate insight text embedding identically, and 1200 seeded
+ *  cases at dim 16 with 15% exact duplicates produced no divergence.
  */
 export function averageLinkageClusters(vecs: number[][], threshold: number): number[][] {
   const n = vecs.length
-  const active: number[][] = vecs.map((_, i) => [i]) // member indices per cluster
-  // sim[a][b] = average cross-pair similarity between clusters a and b.
-  const sim: number[][] = vecs.map((vi) => vecs.map((vj) => cosine(vi, vj)))
+  if (n === 0) return []
 
-  for (;;) {
-    let bestA = -1
-    let bestB = -1
-    let bestSim = threshold
-    for (let a = 0; a < active.length; a++) {
-      for (let b = a + 1; b < active.length; b++) {
-        if (sim[a][b] >= bestSim) {
-          bestA = a
-          bestB = b
-          bestSim = sim[a][b]
-        }
+  // sim[a * n + b] = average cross-pair similarity between clusters a and b.
+  // Flat and Float64 so a 2283-insight bucket is one 42MB buffer, not 2283
+  // heap arrays. Only indices flagged active are meaningful.
+  const sim = new Float64Array(n * n)
+  for (let a = 0; a < n; a++) {
+    for (let b = a + 1; b < n; b++) {
+      const s = cosine(vecs[a], vecs[b])
+      sim[a * n + b] = s
+      sim[b * n + a] = s
+    }
+  }
+
+  const members: number[][] = vecs.map((_, i) => [i])
+  const size = new Int32Array(n).fill(1)
+  const active = new Uint8Array(n).fill(1)
+  const done: number[][] = []
+  const chain: number[] = []
+  let remaining = n
+
+  while (remaining > 0) {
+    if (chain.length === 0) {
+      let start = 0
+      while (!active[start]) start++
+      chain.push(start)
+    }
+    const a = chain[chain.length - 1]
+
+    // Nearest active neighbour of the chain's head. Ties go to the lowest
+    // index — a fixed rule, so the chain cannot cycle between equal pairs.
+    let best = -1
+    let bestSim = -Infinity
+    const rowA = a * n
+    for (let b = 0; b < n; b++) {
+      if (b === a || !active[b]) continue
+      const s = sim[rowA + b]
+      if (s > bestSim) {
+        bestSim = s
+        best = b
       }
     }
-    if (bestA < 0) return active
-
-    // Merge B into A; update average similarity by size-weighted mean.
-    const sizeA = active[bestA].length
-    const sizeB = active[bestB].length
-    for (let c = 0; c < active.length; c++) {
-      if (c === bestA || c === bestB) continue
-      sim[bestA][c] = sim[c][bestA] = (sizeA * sim[bestA][c] + sizeB * sim[bestB][c]) / (sizeA + sizeB)
+    if (best < 0) {
+      // Last cluster standing.
+      active[a] = 0
+      remaining--
+      done.push(members[a])
+      chain.pop()
+      continue
     }
-    active[bestA] = active[bestA].concat(active[bestB])
-    active.splice(bestB, 1)
-    sim.splice(bestB, 1)
-    for (const row of sim) row.splice(bestB, 1)
+    if (chain.length < 2 || chain[chain.length - 2] !== best) {
+      chain.push(best)
+      continue
+    }
+
+    // a and best are reciprocal nearest neighbours: merge or retire the pair.
+    chain.pop()
+    chain.pop()
+    if (bestSim < threshold) {
+      active[a] = 0
+      active[best] = 0
+      remaining -= 2
+      done.push(members[a], members[best])
+      continue
+    }
+    // Merge `best` into `a`; update average similarity by size-weighted mean.
+    const sizeA = size[a]
+    const sizeB = size[best]
+    const rowB = best * n
+    for (let c = 0; c < n; c++) {
+      if (c === a || c === best || !active[c]) continue
+      const s = (sizeA * sim[rowA + c] + sizeB * sim[rowB + c]) / (sizeA + sizeB)
+      sim[rowA + c] = s
+      sim[c * n + a] = s
+    }
+    members[a] = members[a].concat(members[best])
+    size[a] = sizeA + sizeB
+    active[best] = 0
+    remaining--
   }
+
+  // Deterministic output: members ascending, groups by smallest member. The
+  // GROUP order is what the old loop also produced; the member order is not —
+  // it emitted merge history ([0,5] merged with [2,3] came out [0,5,2,3]).
+  // Member order is read downstream: step-a2's `aggregate` builds
+  // `supportingInsightIds` and `memberThemes` in it (the first names the
+  // theme's working slug, and Voice draws its ribbon quotes off the first few
+  // insight ids), so those move once, on the next run, and are stable after.
+  // The one place it could have moved a client-facing WORD — Pass B's label
+  // prompt, which shows the top two descriptions by strength — no longer
+  // depends on it: `aggregate` breaks that tie on insight id.
+  for (const g of done) g.sort((x, y) => x - y)
+  return done.sort((x, y) => x[0] - y[0])
 }
 
 /** Pairwise similarity matrix for a homogeneous group (debug/threshold tuning). */

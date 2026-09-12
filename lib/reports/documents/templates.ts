@@ -1,5 +1,7 @@
 import type { Audience } from '../types'
-import type { DocLens, DocPageKind, SellsTo } from './types'
+import { COMPETITOR_QUESTIONS_MAX, DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTION_USD, DOCUMENT_WRITE_CHECK_USD } from '../../config'
+import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS } from './types'
+import type { DocLens, DocPageKind, DocumentBlockKey, DocumentSettings, SellsTo } from './types'
 
 /**
  * Document templates: a ROLE the agent writes as, a standing BRIEF, the fixed
@@ -67,6 +69,10 @@ export interface DocumentTemplate {
   anchors: AnchorQuestion[]
   /** Findings pages the skeleton prints when settings allow; the writer may fill fewer. */
   findingsMax: 3 | 4
+  /** Topic blocks this template includes by default, when the report's own
+   *  settings name none. The four fixed templates declare none: their
+   *  skeleton is their skeleton. */
+  blocks?: DocumentBlockKey[]
 }
 
 /** The prompt is versioned per template: a change to one template's words
@@ -228,10 +234,253 @@ export const CONTENT_BRIEF: DocumentTemplate = {
   findingsMax: 4,
 }
 
+// ── topic blocks and the custom brief (WP7d, 2026-09-12) ───────────────────
+
+/**
+ * What a BLOCK is, settled here (Heinrich, 2026-08-30: "the operator's own
+ * brief plus selectable topic blocks that must be included, never parts of
+ * pages"): a research question set plus the skeleton pages that answer it,
+ * written by the same writer in the same role. Not a tile, not half a page.
+ *
+ * Every block is CUT from the four templates above: its anchors are their
+ * anchors, by id, and its pages are pages those templates already print. A
+ * block therefore adds no new prose machinery, no new page kind and no new
+ * writer field. The four templates are untouched by all of this; a block only
+ * ever reaches a report whose settings ask for it.
+ */
+export interface DocumentBlock {
+  key: DocumentBlockKey
+  /** The block's name in the picker and in the operator's head. */
+  title: string
+  /** One line, for the picker. */
+  description: string
+  /** The researcher's questions, cut from the template this block came from. */
+  anchors: AnchorQuestion[]
+  /** The pages that answer them, in print order. */
+  skeleton: SkeletonPage[]
+}
+
+/** An anchor lifted from a template by id, so a block cannot drift from the
+ *  template it was cut from: renaming an anchor there fails here, loudly,
+ *  rather than quietly dropping a question from a custom brief. */
+const cut = (t: DocumentTemplate, ...ids: string[]): AnchorQuestion[] =>
+  ids.map((id) => {
+    const a = t.anchors.find((x) => x.id === id)
+    if (!a) throw new Error(`document blocks: ${t.key} has no anchor "${id}"`)
+    return a
+  })
+
+export const DOCUMENT_BLOCKS: Record<DocumentBlockKey, DocumentBlock> = {
+  competitive_analysis: {
+    key: 'competitive_analysis',
+    title: 'Competitive analysis',
+    description: 'A page per competitor: what they pitch in their own videos, what their users praise, where their users hurt, and the read when both names come up.',
+    anchors: cut(SALES_BRIEF, 'competitor'),
+    skeleton: [{ kind: 'competitor', repeat: 'competitors' }],
+  },
+  consumer_profiles: {
+    key: 'consumer_profiles',
+    title: 'Consumer profiles',
+    description: 'Who is in the conversation: the profiles the update found, what they want, what they are stuck on, and what each means for this reader.',
+    anchors: cut(SALES_BRIEF, 'owners', 'trigger'),
+    skeleton: [{ kind: 'personas', repeat: 'personas' }],
+  },
+  content_performance: {
+    key: 'content_performance',
+    title: 'Content performance',
+    description: 'What the audience came for and what it asks that nobody answers, with the words and claims that draw pushback.',
+    anchors: cut(CONTENT_BRIEF, 'unanswered', 'watch', 'more'),
+    skeleton: [{ kind: 'asked' }, { kind: 'language' }],
+  },
+  market_movement: {
+    key: 'market_movement',
+    title: 'Market movement',
+    description: 'Where the company sits in the conversation and what moved since last time, and what comes back when the company makes a claim.',
+    anchors: [...cut(LEADERSHIP_BRIEF, 'shifting', 'switch'), ...cut(MARKET_BRIEF, 'doubt')],
+    skeleton: [{ kind: 'standing' }, { kind: 'say_hear' }],
+  },
+}
+
+export const CUSTOM_KEY = 'custom'
+
+/**
+ * The custom brief: the operator's own instruction plus the blocks it must
+ * include. Its skeleton here is the FIXED OPENING and CLOSING every template
+ * shares (the overview, the findings, the method page); the blocks' pages go
+ * between them, in the operator's order (composeSkeleton). Its role, brief,
+ * lens and reader are borrowed at build time from whichever of the four
+ * templates the operator picked as the role (resolveTemplate), so a custom
+ * document is written by an existing voice pointed at a new question, never
+ * by a voice nobody has read.
+ */
+export const CUSTOM_BRIEF: DocumentTemplate = {
+  key: CUSTOM_KEY,
+  name: 'Custom brief',
+  audience: 'general',
+  description: 'Your own instruction, plus the topic blocks it must include: the same writer and the same research as the four briefs, pointed at the question you actually have.',
+  role: LEADERSHIP_BRIEF.role,
+  brief: LEADERSHIP_BRIEF.brief,
+  lens: LEADERSHIP_BRIEF.lens,
+  readerNoun: LEADERSHIP_BRIEF.readerNoun,
+  writtenFor: LEADERSHIP_BRIEF.writtenFor,
+  skeleton: [{ kind: 'in_short' }, { kind: 'finding', repeat: 'findings' }, { kind: 'method' }],
+  anchors: [],
+  findingsMax: LEADERSHIP_BRIEF.findingsMax,
+}
+
+/** Research questions the operator's own brief is worth, at most. */
+export const BRIEF_ANCHORS_MAX = 3
+
+/** Questions this block's anchors turn into when it is included: a
+ *  per-competitor anchor is asked once per competitor, two at most. */
+export const blockQuestions = (b: DocumentBlock): number =>
+  b.anchors.reduce((sum, a) => sum + (a.perCompetitor ? COMPETITOR_QUESTIONS_MAX : 1), 0)
+
+/**
+ * The most topic blocks a custom brief may offer: a block that "must be
+ * included" has every one of its questions asked (questions.ts raises the
+ * question cap to fit them rather than cutting them), so the picker may only
+ * offer as many blocks as the build's research budget can pay for. Measured
+ * on the 2026-09-12 Sealand custom build: a question costs ~$0.05 and the
+ * writing and self-check took $0.155 of the same budget.
+ */
+export function affordableBlocks(budgetUsd = DOCUMENT_BUILD_BUDGET_USD): number {
+  const room = budgetUsd - DOCUMENT_WRITE_CHECK_USD
+  let questions = BRIEF_ANCHORS_MAX
+  let n = 0
+  for (const key of DOCUMENT_BLOCK_KEYS) {
+    const asks = blockQuestions(DOCUMENT_BLOCKS[key])
+    if ((questions + asks) * DOCUMENT_QUESTION_USD > room) break
+    questions += asks
+    n++
+  }
+  return n
+}
+
+/** How many blocks the picker offers, at today's budget. */
+export const DOCUMENT_BLOCKS_MAX = affordableBlocks()
+
+/** The blocks a report actually gets: its own settings first, the template's
+ *  defaults when it names none, deduplicated and in order. */
+export function blockKeysFor(t: DocumentTemplate, settings: Pick<DocumentSettings, 'blocks'>): DocumentBlockKey[] {
+  const keys = settings.blocks?.length ? settings.blocks : t.blocks ?? []
+  return keys.filter((k, i, a) => a.indexOf(k) === i)
+}
+
+/**
+ * The skeleton a build prints: the template's own, with the selected blocks'
+ * pages inserted before the method page (the closing) in the chosen order. A
+ * page kind the template already prints is never added twice, so a block
+ * cannot change a template's own shape, only extend it. With no blocks the
+ * template's skeleton is returned UNCHANGED, by identity.
+ */
+export function composeSkeleton(t: DocumentTemplate, settings: Pick<DocumentSettings, 'blocks'>): SkeletonPage[] {
+  const { extra } = blockPages(t, blockKeysFor(t, settings))
+  if (!extra.length) return t.skeleton
+  const at = t.skeleton.findIndex((p) => p.kind === 'method')
+  const cutAt = at < 0 ? t.skeleton.length : at
+  return [...t.skeleton.slice(0, cutAt), ...extra, ...t.skeleton.slice(cutAt)]
+}
+
+/** The pages the selected blocks add, and which blocks actually added one. A
+ *  block whose every page the template already prints contributes nothing, so
+ *  its questions are not asked either: a paid research question whose page
+ *  never prints is money spent on nothing. */
+function blockPages(t: DocumentTemplate, keys: DocumentBlockKey[]): { extra: SkeletonPage[]; adding: Set<DocumentBlockKey> } {
+  const adding = new Set<DocumentBlockKey>()
+  const extra: SkeletonPage[] = []
+  if (!keys.length) return { extra, adding }
+  const have = new Set<DocPageKind>(t.skeleton.map((p) => p.kind))
+  for (const key of keys) {
+    for (const page of DOCUMENT_BLOCKS[key].skeleton) {
+      if (have.has(page.kind)) continue
+      have.add(page.kind)
+      extra.push(page)
+      adding.add(key)
+    }
+  }
+  return { extra, adding }
+}
+
+/** The operator's brief as researcher questions: its sentences, in order, at
+ *  most three, each asked of the conversation. Pure and free: no model turns
+ *  the brief into questions, so what the researcher asks is exactly what the
+ *  operator wrote. */
+export function briefAnchors(brief: string | null | undefined): AnchorQuestion[] {
+  // One line: the brief goes into a question the researcher asks, and its own
+  // line breaks would split the question rather than the sentences do.
+  const text = (brief ?? '').replace(/\s+/g, ' ').trim()
+  if (!text) return []
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((x) => x.trim())
+    .filter((x) => x.length >= 8)
+    .slice(0, BRIEF_ANCHORS_MAX)
+    .map((sentence, i) => ({
+      id: `brief${i + 1}`,
+      text: `The reader asked for this: ${/[.!?]$/.test(sentence) ? sentence : `${sentence}.`} What does the conversation show about that, and what changed?`,
+    }))
+}
+
+/** The anchors a build asks: the operator's brief first (a custom brief's
+ *  question is the point of it), then the template's own, then each selected
+ *  block's, deduplicated by id. Only a block that actually ADDS a page is
+ *  asked about: its questions pay for its pages. Unchanged, by identity, when
+ *  there is neither a brief nor a block that adds anything. */
+export function composeAnchors(t: DocumentTemplate, settings: Pick<DocumentSettings, 'blocks' | 'brief'>, briefQuestions?: AnchorQuestion[]): AnchorQuestion[] {
+  const first = briefQuestions ?? briefAnchors(settings.brief)
+  const { adding } = blockPages(t, blockKeysFor(t, settings))
+  if (!first.length && !adding.size) return t.anchors
+  const out = [...first, ...t.anchors]
+  const seen = new Set(out.map((a) => a.id))
+  for (const key of blockKeysFor(t, settings)) {
+    if (!adding.has(key)) continue
+    for (const a of DOCUMENT_BLOCKS[key].anchors) {
+      if (seen.has(a.id)) continue
+      seen.add(a.id)
+      out.push(a)
+    }
+  }
+  return out
+}
+
+/**
+ * The template a build actually runs on: the composed skeleton and anchors,
+ * and for a custom brief the role, lens and reader of whichever template the
+ * operator chose to write it. The KEY stays 'custom', so the snapshot and the
+ * prompt version still say what this document is. Everything downstream
+ * (questions, the writer's schema, the composer) reads a template and needs
+ * no knowledge of blocks at all.
+ */
+export function resolveTemplate(t: DocumentTemplate, settings: DocumentSettings): DocumentTemplate {
+  const skeleton = composeSkeleton(t, settings)
+  const anchors = composeAnchors(t, settings)
+  if (t.key !== CUSTOM_KEY) return skeleton === t.skeleton && anchors === t.anchors ? t : { ...t, skeleton, anchors }
+  const base = DOCUMENT_TEMPLATES.find((x) => x.key === (settings.role ?? DEFAULT_DOCUMENT_ROLE)) ?? LEADERSHIP_BRIEF
+  return {
+    ...t,
+    audience: base.audience,
+    role: base.role,
+    brief: base.brief,
+    lens: base.lens,
+    readerNoun: base.readerNoun,
+    writtenFor: base.writtenFor,
+    findingsMax: base.findingsMax,
+    skeleton,
+    anchors,
+  }
+}
+
 export const DOCUMENT_TEMPLATES: DocumentTemplate[] = [SALES_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, CONTENT_BRIEF]
 
+/** Everything the Studio may start a written report from: the four fixed
+ *  templates and the custom brief beside them. DOCUMENT_TEMPLATES stays the
+ *  four: they are the fixed skeletons, and the custom brief has none of its
+ *  own until its settings are read. */
+export const DOCUMENT_STARTERS: DocumentTemplate[] = [...DOCUMENT_TEMPLATES, CUSTOM_BRIEF]
+
 export const documentTemplate = (key: string | null | undefined): DocumentTemplate | null =>
-  DOCUMENT_TEMPLATES.find((t) => t.key === key) ?? null
+  DOCUMENT_STARTERS.find((t) => t.key === key) ?? null
 
 /** The fields each page kind carries, in print order. The composer and the
  *  writer schema both read this, so a page cannot gain a field in one place. */

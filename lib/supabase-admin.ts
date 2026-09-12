@@ -39,3 +39,21 @@ export async function selectAll<T>(
   }
   return out
 }
+
+/** Is this PostgREST error "that column does not exist"? Postgres raises 42703
+ *  (undefined_column) and PostgREST passes the code through, but a schema-cache
+ *  miss can surface as PGRST204 with the column named in the message instead —
+ *  so the column name is checked either way. Narrow on purpose: the point is to
+ *  survive a deploy that lands before its migration, not to swallow write
+ *  failures.
+ *
+ *  Lives here rather than beside its first caller (classify-meta, 2026-09-11)
+ *  because it is now the shape of every "the migration has not landed yet"
+ *  guard in the pipeline — a second one arrived within the day (Pass D-b's
+ *  `lineage_id`, WP7c). */
+export function isMissingColumnError(error: unknown, column: string): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: string; message?: string }
+  const named = (message ?? '').includes(column)
+  return (code === '42703' && named) || (code === 'PGRST204' && named)
+}

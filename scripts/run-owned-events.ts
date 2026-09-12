@@ -13,7 +13,7 @@ import { createAdminClient } from '../lib/supabase-admin'
 //   --client <uuid>   client_id (default: the demo tenant)
 //   --no-persist      detect + explain but don't store account_events
 
-const DEMO_CLIENT_ID = 'de300055-0000-4000-8000-000000000001'
+import { DEMO_CLIENT_ID } from '../lib/config'
 
 interface Args {
   clientId: string

@@ -1,4 +1,5 @@
 import { inngest } from '@/inngest/client'
+import { chunk } from '../../lib/chunk'
 import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import {
   retentionEnabled,
@@ -157,11 +158,10 @@ export const retentionDaily = inngest.createFunction(
       // selectAll, not a bare select: one comment can carry several evidence
       // rows, so 200 comments can be well past the silent 1000-row cap, and a
       // cited comment missed here is classed uncited and DELETED.
-      for (let i = 0; i < staleIds.length; i += 200) {
-        const chunk = staleIds.slice(i, i + 200)
+      for (const part of chunk(staleIds, 200)) {
         const [ev, ls] = await Promise.all([
-          selectAll<{ comment_id: string | null }>(() => admin.from('insight_evidence').select('comment_id').in('comment_id', chunk).order('comment_id', { ascending: true })),
-          selectAll<{ comment_id: string | null }>(() => admin.from('language_samples').select('comment_id').in('comment_id', chunk).order('comment_id', { ascending: true })),
+          selectAll<{ comment_id: string | null }>(() => admin.from('insight_evidence').select('comment_id').in('comment_id', part).order('comment_id', { ascending: true })),
+          selectAll<{ comment_id: string | null }>(() => admin.from('language_samples').select('comment_id').in('comment_id', part).order('comment_id', { ascending: true })),
         ])
         for (const r of ev) if (r.comment_id) cited.add(r.comment_id)
         for (const r of ls) if (r.comment_id) cited.add(r.comment_id)
@@ -182,14 +182,13 @@ export const retentionDaily = inngest.createFunction(
       // Cited rows: drop the identity, keep the sentence.
       const citedIds = [...cited]
       let pseudonymised = 0
-      for (let i = 0; i < citedIds.length; i += 200) {
-        const chunk = citedIds.slice(i, i + 200)
+      for (const part of chunk(citedIds, 200)) {
         const { error } = await admin.from('comments')
           .update({ author: null })
-          .in('id', chunk)
+          .in('id', part)
           .not('author', 'is', null)
         if (error) throw new Error(`pseudonymise youtube comments: ${error.message}`)
-        pseudonymised += chunk.length
+        pseudonymised += part.length
       }
       return { deleted, pseudonymised, artifactsStaled: del.artifactsStaled, remaining }
     })

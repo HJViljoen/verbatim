@@ -1,4 +1,5 @@
 import type { PlatformAdapter, GatherConfig, VideoRef, RawItem, FetchedTranscript, RefreshedComment, RefreshedVideoStats } from '../types'
+import { chunk } from '../../chunk'
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
 import { runActor } from '../apify'
@@ -53,8 +54,8 @@ function isoDurationToSeconds(iso: string): number {
  *  a failure just leaves those channels at 0 followers, never fails the gather. */
 async function fetchSubscribers(channelIds: string[], key: string): Promise<Map<string, number>> {
   const out = new Map<string, number>()
-  for (let i = 0; i < channelIds.length; i += 50) {
-    const params = new URLSearchParams({ part: 'statistics', id: channelIds.slice(i, i + 50).join(','), key })
+  for (const part of chunk(channelIds, 50)) {
+    const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
     try {
       for (const ch of itemsOf(await ytGet('channels', params))) {
         const id = str(getPath(ch, ['id']))
@@ -110,6 +111,14 @@ export function parseTranscriptItems(items: RawItem[]): Map<string, FetchedTrans
   return out
 }
 
+/** The durable cover frame for a YouTube video id. hqdefault exists for every
+ *  video on the platform and is served straight off i.ytimg.com with no
+ *  signature and no expiry — the one platform whose cover survives its raw
+ *  item. */
+export function youtubeCoverUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+}
+
 export const youtube: PlatformAdapter = {
   platform: 'youtube',
 
@@ -141,9 +150,9 @@ export const youtube: PlatformAdapter = {
 
     // 2) videos.list → snippet + statistics + contentDetails (batched, 50/call).
     const items: RawItem[] = []
-    for (let i = 0; i < ids.length; i += 50) {
+    for (const part of chunk(ids, 50)) {
       const params = new URLSearchParams({
-        part: 'snippet,statistics,contentDetails', id: ids.slice(i, i + 50).join(','), key,
+        part: 'snippet,statistics,contentDetails', id: part.join(','), key,
       })
       items.push(...itemsOf(await ytGet('videos', params)))
     }
@@ -197,11 +206,39 @@ export const youtube: PlatformAdapter = {
     }
   },
 
+  // Cover frame (WP7b, 2026-09-12). Verified on real video_raw rows: the Data
+  // API item carries `snippet.thumbnails` with default/medium/high/standard/
+  // maxres variants, all on i.ytimg.com. `high` (hqdefault, 480x360) is the one
+  // every video has — maxres and standard are absent on plenty of uploads — and
+  // OCR reads the image at detail 'low' (a 512px square), so nothing is gained
+  // by asking for 1280x720.
+  //
+  // Unlike TikTok's and Instagram's, this URL never expires: it is derivable
+  // from the video id alone, which is what makes YouTube — and only YouTube —
+  // backfillable over the historical corpus.
+  coverUrl(raw) {
+    const t = getPath(raw, ['snippet', 'thumbnails'])
+    const pick = str(
+      first(
+        getPath(t, ['high', 'url']),
+        getPath(t, ['standard', 'url']),
+        getPath(t, ['maxres', 'url']),
+        getPath(t, ['medium', 'url']),
+        getPath(t, ['default', 'url']),
+      ),
+    )
+    if (pick) return pick
+    const id = str(getPath(raw, ['id']))
+    return id ? youtubeCoverUrl(id) : null
+  },
+
+  coverUrlById: youtubeCoverUrl,
+
   async fetchCommentCounts(videoIds: string[]): Promise<Map<string, number>> {
     const key = apiKey()
     const out = new Map<string, number>()
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const params = new URLSearchParams({ part: 'statistics', id: videoIds.slice(i, i + 50).join(','), key })
+    for (const part of chunk(videoIds, 50)) {
+      const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
       for (const v of itemsOf(await ytGet('videos', params))) {
         const id = str(getPath(v, ['id']))
         if (id) out.set(id, num(getPath(v, ['statistics', 'commentCount'])))
@@ -257,7 +294,7 @@ export const youtube: PlatformAdapter = {
         })
       }
     }
-    for (let i = 0; i < commentIds.length; i += 50) await fetchBatch(commentIds.slice(i, i + 50))
+    for (const part of chunk(commentIds, 50)) await fetchBatch(part)
     return { found, missing: commentIds.filter((id) => !seen.has(id)) }
   },
 
@@ -266,8 +303,8 @@ export const youtube: PlatformAdapter = {
   async refreshVideoStats(videoIds: string[]): Promise<{ found: Map<string, RefreshedVideoStats>; missing: string[] }> {
     const key = apiKey()
     const found = new Map<string, RefreshedVideoStats>()
-    for (let i = 0; i < videoIds.length; i += 50) {
-      const params = new URLSearchParams({ part: 'statistics', id: videoIds.slice(i, i + 50).join(','), key })
+    for (const part of chunk(videoIds, 50)) {
+      const params = new URLSearchParams({ part: 'statistics', id: part.join(','), key })
       for (const v of itemsOf(await ytGet('videos', params))) {
         const id = str(getPath(v, ['id']))
         if (!id) continue

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
@@ -73,6 +74,19 @@ function buildSystemPrompt(config: GatherConfig): string {
   const brand = config.brand_keywords?.[0] ?? 'the brand'
   const competitors = (config.competitor_names ?? []).join(', ') || '(none given)'
   const industry = (config.industry_keywords ?? []).join(', ') || 'the brand’s category'
+  // The client's own homonyms (tracking_configs.exclude_terms). Hints, not a
+  // denylist: they name the WRONG SENSES of the name, so the gate can recognise
+  // "Cotopaxi" the volcano or "Sealand" the container line without dropping a
+  // comment that merely says "not the volcano, the jacket".
+  const excluded = (config.exclude_terms ?? []).map((t) => `${t}`.trim()).filter(Boolean)
+  const exclusionLines = excluded.length > 0
+    ? [
+        '',
+        `For THIS client, matches about any of these are NOT about the brand: ${excluded.join(', ')}.`,
+        'These name other senses of the name, not banned words — a video that is genuinely about',
+        'the brand or its products stays relevant even if one of them appears in it.',
+      ]
+    : []
   return [
     'You screen social videos for a consumer-intelligence report about a brand’s market.',
     'KEEP a video if its COMMENTS would plausibly carry signal about the brand’s PRODUCT CATEGORY:',
@@ -102,6 +116,7 @@ function buildSystemPrompt(config: GatherConfig): string {
     'When unsure, KEEP.',
     '',
     `Brand: ${brand}. Competitors: ${competitors}. Category (brand’s framing): ${industry}.`,
+    ...exclusionLines,
   ].join('\n')
 }
 
@@ -155,8 +170,7 @@ export async function classifyRelevance(
   // run sent ~460 videos in ONE call — judgment quality degrades at that size,
   // and if the structured output hits the completion cap the verdict array
   // truncates, silently KEEPING every unjudged video via the fail-open default.
-  for (let i = 0; i < undecided.length; i += GPT_BATCH) {
-    const batch = undecided.slice(i, i + GPT_BATCH)
+  for (const batch of chunk(undecided, GPT_BATCH)) {
     try {
       const completion = await openai.chat.completions.parse({
         model: ANALYSIS_MODEL,

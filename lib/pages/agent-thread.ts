@@ -6,6 +6,7 @@ import type { Quote, Scope, Slide } from '../renderables/types'
 import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { ASK_THEMES_PER_CLAIM } from '../config'
 import { weekdayDate } from '../format'
+import { row, rows as readRows } from './read'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import type { AgentAnswer } from '../agent/types'
 import type { MethodNoteData } from '../../components/print/method-note'
@@ -78,16 +79,18 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const id = (scope.params as AgentParams).thread
   if (!id) return null
 
-  const [{ data: thread }, { data: rows }, { data: client }] = await Promise.all([
+  const [threadRes, messagesRes, clientRes] = await Promise.all([
     // RLS already scopes to the tenant; the explicit client_id filter makes a
     // cross-tenant id a miss rather than an empty page.
     supabase.from('agent_threads').select('id, kind, title, plan_check_id, created_at').eq('id', id).eq('client_id', clientId).maybeSingle(),
     supabase.from('agent_messages').select('id, role, content, result, outcome, created_at').eq('thread_id', id).order('created_at', { ascending: true }),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
+  const thread = row<{ id: string; kind: string; title: string; plan_check_id: string | null; created_at: string }>(threadRes, 'agentThread.thread')
   if (!thread) return null
   type MessageRow = { id: string; role: string; content: string; result: AgentAnswer | null; outcome: string | null; created_at: string }
-  const messages = (rows ?? []) as MessageRow[]
+  const messages = readRows<MessageRow>(messagesRes, 'agentThread.messages')
+  const client = row<{ company_name: string | null }>(clientRes, 'agentThread.client')
   const brand = client?.company_name ?? 'Your brand'
 
   // Words for the stored comment ids, through insight_evidence (see header).
@@ -105,12 +108,18 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   // insight ids — no quote text is kept in either table.
   let document: DocumentCheck | null = null
   if (thread.kind === 'document' && thread.plan_check_id) {
-    const { data: check } = await supabase
+    const check = row<{
+      claims: ClaimResult[] | null
+      summary: AskSummary | null
+      judgement: Judgement[] | null
+      input_text: string | null
+      source_filename: string | null
+    }>(await supabase
       .from('plan_checks')
       .select('claims, summary, judgement, input_text, source_filename')
       .eq('id', thread.plan_check_id as string)
       .eq('client_id', clientId)
-      .maybeSingle()
+      .maybeSingle(), 'agentThread.planCheck')
     if (check) {
       const claims = (check.claims ?? []) as ClaimResult[]
       const allIds = [...new Set(claims.flatMap((c) => (c.insightIds ?? []).slice(0, ASK_THEMES_PER_CLAIM)))]

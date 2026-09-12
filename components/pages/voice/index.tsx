@@ -7,10 +7,12 @@ import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, t
 
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid, PageBar, BarPill } from '@/components/shell/page-grid'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { DetailDrawer } from '@/components/shell/detail-drawer'
 import { DrawerLink } from '@/components/shell/drawer-link'
+import { TrackThisButton } from '@/components/initiative-sheet'
 import { Sparkline } from '@/components/charts/sparkline'
 import { RankedBar } from '@/components/charts/ranked-bar'
 import { Mover } from '@/components/charts/mover'
@@ -111,6 +113,9 @@ function ThemeBody({ t, showNew }: { t: ThemeDetail; showNew: boolean }) {
           <div className="flex items-baseline gap-1.5">
             <span className="font-mono text-[22px] font-semibold tabular-nums leading-none" style={{ color: EDGE[t.kind] }}>{fmtInt(t.count)}</span>
             <span className="text-[11.5px] text-muted-foreground">of {fmtInt(t.denom)} {t.groupName} conversations</span>
+            {t.onCamera && (
+              <span title={glossaryRule('on_camera')} className="text-[11.5px] text-muted-foreground">· {t.onCamera}</span>
+            )}
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-inner" aria-hidden>
             <div className="h-full rounded-full" style={{ width: `${Math.max(3, t.pct)}%`, background: EDGE[t.kind] }} />
@@ -151,6 +156,7 @@ const theme: R = (d, mode) => {
       meta={t ? `${t.bucketName} · ${categoryLabel(t.category)}` : undefined}
       bodyClassName="overflow-y-auto pr-1"
       footer={mode === 'app' && t && t.memberThemes.length > 0 ? <Link href={`/dashboard/videos?themes=${encodeURIComponent(t.memberThemes.join(','))}`}>Videos behind this theme →</Link> : undefined}
+      footerNote={mode === 'app' && t?.registryId ? <TrackThisButton registryId={t.registryId} themeLabel={t.label} /> : undefined}
     >
       {t ? <ThemeBody t={t} showNew={d.showNew} /> : <TileEmpty>Select a block on the map to read the theme in full.</TileEmpty>}
     </Tile>
@@ -375,7 +381,7 @@ export const voicePage: PageModule<D> = {
 }
 
 /** The app page: page bar, the grid, the drawers. */
-export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; detail?: string; params: Record<string, string | undefined> }) {
+export function VoicePage({ data: d, detail, params }: { data: VoiceData | VoiceEmpty; detail?: string; params: Record<string, string | undefined> }) {
   const showLegend = detail === 'legend'
   if (isVoiceEmpty(d)) {
     return (
@@ -394,10 +400,15 @@ export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; d
   const f = d.filters
   const closeHref = voiceHref(f, { detail: null })
   const themeHref = (id: string) => voiceHref(f, { theme: id })
+  // The export carries the seed the reader is looking at, so the file shows
+  // these five voices, not a fresh draw.
+  const exportParams = { ...params, seed: String(f.seed) }
   return (
+    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
     <PageFrame>
       <PageBar title="Voice of Customer" context={`What are they saying? · ${weekdayDate(d.runDate)}`}>
         {d.pillsInBar && <EntityPills d={d} />}
+        <ExportMenu />
         <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/voice" />
       </PageBar>
 
@@ -447,5 +458,6 @@ export function VoicePage({ data: d, detail }: { data: VoiceData | VoiceEmpty; d
         {d.phrases.total > d.phrases.all.length && <p className="mt-3 text-[11px] text-muted-foreground">showing {fmtInt(d.phrases.all.length)} of {fmtInt(d.phrases.total)}</p>}
       </DetailDrawer>
     </PageFrame>
+    </ExportScope>
   )
 }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CURATION_GATE, type GateTier } from '../curation'
-import { type GlossaryKey } from '../calibration'
+import { recStatus, type GlossaryKey, type RecStatus } from '../calibration'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToClientVoices, cleanQuote, type ThemeBucketRow, type CitedQuote } from '../quotes'
 import { quoteRef, type HeroTable } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
@@ -9,11 +9,15 @@ import type { BrandVoiceSnapshot } from '../pipeline/claims'
 import { weekdayDate, platformLabel } from '../format'
 import {
   insightTiers, confirmedCompetitiveIds, orderAgenda, distinctVideos, claimCounts, ledgerRows, tierCounts,
-  type AgendaItem,
+  labelsBySlug, themeChips,
+  type AgendaItem, type GroundingThemeRow, type ThemeChip,
 } from '../market-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { fetchThemedRunId } from './themed-run'
+import { row, rows } from './read'
+import { selectAll } from '../supabase-admin'
+import { fetchRunningRunIds } from './latest-video-run'
 
 // Market Intelligence loader — the data half of the old app/dashboard/market/
 // page.tsx (split 2026-08-29, Reports & Exports T5). "What should we do?": a
@@ -68,13 +72,13 @@ export function parseMarketSelection(sp: MarketParams): { group: Group; filter: 
 
 // ── row/detail shapes, one pair per rail group ─────────────────────────────
 
-export interface RecRow { id: string; rank: number; title: string; reasoning: string; type: string; tier: GateTier; conversations: number }
+export interface RecRow { id: string; rank: number; title: string; reasoning: string; type: string; tier: GateTier; conversations: number; status: RecStatus }
 export interface RecDetail extends RecRow {
   kind: 'rec'
   total: number
   voices: number
   platforms: { label: string; count: number }[]
-  themes: string[]
+  themes: ThemeChip[]
   quotes: Quote[]
 }
 
@@ -83,12 +87,12 @@ export interface InsightDetail extends InsightRow {
   kind: 'insight'
   voices: number
   platforms: { label: string; count: number }[]
-  themes: string[]
+  themes: ThemeChip[]
   quotes: Quote[]
 }
 
 export interface ClaimRow { id: string; youSay: string; yourQuote: string; theySay: string | null; gap: string; audience: string }
-export interface ClaimDetail extends ClaimRow { kind: 'claim'; themes: string[] }
+export interface ClaimDetail extends ClaimRow { kind: 'claim'; themes: ThemeChip[] }
 
 /** `quote` is a creator's own words about the brand, quoted from their video
  *  (run_summary.brand_voice.about[n]). It travels as a Quote with a
@@ -153,6 +157,7 @@ interface Recommendation {
   priority: string | null
   based_on: { insight_ids?: string[] } | null
   hero_quote: string | null
+  status: string | null
 }
 interface CompetitiveRef { id: string; evidence: { supporting_theme_ids?: string[] } | null; impact_level: string | null }
 interface SingleSourceTheme { label: string; description: string | null }
@@ -167,7 +172,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
 
   // Latest COMPLETED update — an in-flight one has no synthesis rows yet, so
   // the page keeps serving the previous read until the new one closes.
-  const [{ data: client }, { data: latestRun }, newsRes, { data: runningRuns }] = await Promise.all([
+  const [clientRes, latestRunRes, newsRes, runningIds] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
@@ -181,8 +186,10 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .order('published_at', { ascending: false, nullsFirst: false })
       .limit(NEWS_SHOWN),
     // In-flight updates, so the themed-run lookup below can exclude them.
-    supabase.from('pipeline_runs').select('id').eq('client_id', clientId).eq('status', 'running'),
+    fetchRunningRunIds(supabase, clientId, 'market'),
   ])
+  const client = row<{ company_name: string | null }>(clientRes, 'market.client')
+  const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market.latestRun')
   const brand = client?.company_name ?? 'Your brand'
 
   if (!latestRun) return { empty: true, brand, legendItems: LEGEND_ITEMS }
@@ -200,16 +207,15 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // keyed to a run whose insight ids the page never cites — which empties the
   // map and makes scopeToClientVoices fail open. That is the exact hole this
   // page's quote scoping exists to close.
-  const runningIds = ((runningRuns ?? []) as { id: string }[]).map((r) => r.id)
-  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds)
+  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'market')
 
-  const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRes] = await Promise.all([
+  const [miRes, recRes, ciRes, summaryRes, ssRes, bucketRows] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score, hero_quote')
       .eq('client_id', clientId).eq('run_id', runId)
       .order('opportunity_score', { ascending: false }),
     supabase.from('recommendations')
-      .select('id, type, title, reasoning, priority, based_on, hero_quote')
+      .select('id, type, title, reasoning, priority, based_on, hero_quote, status')
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('competitive_insights').select('id, evidence, impact_level')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -224,23 +230,41 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .order('strength_score', { ascending: false }).limit(SINGLE_SOURCE_SHOWN),
     // Entity buckets per audience insight — quote pools on this page are
     // client-facing claims, so competitor-audience voices are scoped out.
-    supabase.from('themes')
-      .select('bucket, supporting_insight_ids')
-      .eq('client_id', clientId).eq('run_id', themedRunId ?? runId),
+    // `label`, `member_themes` and the Voice ordering keys ride along for the
+    // grounding chips: the chip must name the theme Voice LEADS with for that
+    // slug, and the two have said different things about the same theme since
+    // the chips were built off the raw slug.
+    //
+    // selectAll, not a bare select: one run's themes cross the 1000-row cap
+    // (Sealand's latest is at 936 and every update adds), and a silent cap here
+    // would drop chip labels AND empty part of the bucket map, which makes
+    // scopeToClientVoices fail open — a competitor's customers quoted under a
+    // claim about the client, with nothing in the log.
+    selectAll<ThemeBucketRow & GroundingThemeRow>(() =>
+      supabase.from('themes')
+        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, video_evidence_count, rank_score')
+        .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
+    ),
   ])
 
-  const insights = (miRes.data ?? []) as MarketInsight[]
-  const recommendations = (recRes.data ?? []) as Recommendation[]
-  const competitive = (ciRes.data ?? []) as CompetitiveRef[]
-  const ciSummary = (summaryRes.data?.consumer_intelligence_summary ?? null) as CiSummary | null
-  const sayVsHear = ((summaryRes.data?.say_vs_hear ?? null) as SayVsHearEntry[] | null) ?? null
-  const brandVoice = (summaryRes.data?.brand_voice ?? null) as BrandVoiceSnapshot | null
+  const insights = rows<MarketInsight>(miRes, 'market.marketInsights')
+  const recommendations = rows<Recommendation>(recRes, 'market.recommendations')
+  const competitive = rows<CompetitiveRef>(ciRes, 'market.competitiveInsights')
+  const summary = row<{
+    consumer_intelligence_summary: CiSummary | null
+    say_vs_hear: SayVsHearEntry[] | null
+    brand_voice: BrandVoiceSnapshot | null
+    run_date: string | null
+  }>(summaryRes, 'market.runSummary')
+  const ciSummary = summary?.consumer_intelligence_summary ?? null
+  const sayVsHear = summary?.say_vs_hear ?? null
+  const brandVoice = summary?.brand_voice ?? null
   const aboutYou = brandVoice?.about ?? []
-  const singleSourceThemes = (ssRes.data ?? []) as SingleSourceTheme[]
+  const singleSourceThemes = rows<SingleSourceTheme>(ssRes, 'market.singleSourceThemes')
   const singleSourceTotal = ssRes.count ?? singleSourceThemes.length
-  const news = (newsRes.data ?? []) as NewsRow[]
+  const news = rows<NewsRow>(newsRes, 'market.news')
   const newsTotal = newsRes.count ?? news.length
-  const runDate = (summaryRes.data?.run_date as string | undefined) ?? (latestRun.started_at as string)
+  const runDate = summary?.run_date ?? (latestRun.started_at as string)
 
   const miById = new Map(insights.map((mi) => [mi.id, mi]))
   const competitiveById = new Map(competitive.map((c) => [c.id, c]))
@@ -248,7 +272,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // base table (fetchInsightsByIds), not the current view (incremental Pass A).
   const citedIds = new Set<string>()
   for (const mi of insights) for (const id of mi.evidence?.supporting_theme_ids ?? []) citedIds.add(id)
-  for (const t of (bucketRes.data ?? []) as ThemeBucketRow[]) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
+  for (const t of bucketRows) for (const id of t.supporting_insight_ids ?? []) citedIds.add(id)
   const audienceRows = await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null; platform: string | null }>(
     supabase, [...citedIds], 'id, theme, source_video_id, platform',
   )
@@ -259,10 +283,11 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   // ── curation gate over the insights (already in opportunity order) ──────
   const tierById = insightTiers(insights)
   const tiers = tierCounts(tierById)
-  const slugsOf = (ids: Iterable<string>): string[] => {
+  const chipLabels = labelsBySlug(bucketRows)
+  const slugsOf = (ids: Iterable<string>): ThemeChip[] => {
     const slugs = new Set<string>()
     for (const id of ids) { const s = themeSlugById.get(id); if (s) slugs.add(s) }
-    return [...slugs].slice(0, 4)
+    return themeChips(slugs, chipLabels)
   }
   const insightIds = (mi: MarketInsight) => mi.evidence?.supporting_theme_ids ?? []
 
@@ -276,14 +301,14 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     }
     return ids
   }
-  const bucketById = bucketByAudienceId((bucketRes.data ?? []) as ThemeBucketRow[])
+  const bucketById = bucketByAudienceId(bucketRows)
   const recVoiceIds = (rec: Recommendation) => scopeToClientVoices(recSupportIds(rec), bucketById)
   const insightVoiceIds = (mi: MarketInsight) => scopeToClientVoices(insightIds(mi), bucketById)
 
   function recDetail(a: AgendaItem<Recommendation>, rank: number, total: number, voices: number, platforms: { label: string; count: number }[], quotes: Quote[]): RecDetail {
     const { rec, tier } = a
     return {
-      kind: 'rec', id: rec.id, rank, total, title: rec.title, reasoning: rec.reasoning, type: rec.type, tier,
+      kind: 'rec', id: rec.id, rank, total, title: rec.title, reasoning: rec.reasoning, type: rec.type, tier, status: recStatus(rec.status),
       conversations: distinctVideos(recSupportIds(rec), videoByInsight), voices, platforms, themes: slugsOf(recSupportIds(rec)), quotes,
     }
   }
@@ -375,7 +400,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       filterCounts: { strong: agenda.filter((a) => a.tier === 'confirmed').length, early: agenda.filter((a) => a.tier === 'early_signal').length },
       rows: agendaShown.map((a) => ({
         id: a.rec.id, rank: agenda.findIndex((x) => x.rec.id === a.rec.id), title: a.rec.title, reasoning: a.rec.reasoning, type: a.rec.type,
-        tier: a.tier, conversations: distinctVideos(recSupportIds(a.rec), videoByInsight),
+        tier: a.tier, conversations: distinctVideos(recSupportIds(a.rec), videoByInsight), status: recStatus(a.rec.status),
       })),
     }
   } else if (group === 'insights') {

@@ -5,8 +5,12 @@
  *
  *   node --env-file=.env.local --import tsx scripts/build-document.ts --client <id> [--template sales_brief]
  *     [--sells-to professionals] [--signals] [--questions] [--research] [--out scratch/document]
+ *     [--brief "..."] [--blocks competitive_analysis,consumer_profiles] [--role market_brief]
  *
  *   --signals    read the update and print the researcher's signals, no model calls
+ *   --brief/--blocks/--role  WP7d: a custom brief (--template custom). The brief becomes the
+ *                first researcher questions and the writer's top instruction; the blocks add their
+ *                pages between the findings and the method page. --questions prints both without paying.
  *   --questions  also print the questions the researcher would ask (no calls)
  *   --research   ask them (agent calls, billed) and write answers.json
  *   (default)    the whole build: research, write, snapshot, PDF into --out
@@ -19,12 +23,12 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createAdminClient } from '../lib/supabase-admin'
-import { documentSettings, type SellsTo } from '../lib/reports/documents/types'
-import { documentTemplate, promptVersion } from '../lib/reports/documents/templates'
+import { documentSettings, type DocumentBlockKey, type DocumentRole, type SellsTo } from '../lib/reports/documents/types'
+import { documentTemplate, promptVersion, resolveTemplate } from '../lib/reports/documents/templates'
 import { loadSignals } from '../lib/reports/documents/signals'
 import { composeQuestions } from '../lib/reports/documents/questions'
 import { runResearch } from '../lib/reports/documents/research'
-import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX } from '../lib/config'
+import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from '../lib/reports/documents/compose'
 import { generateDocument, DOCUMENT_WRITER_MODEL } from '../lib/reports/documents/write-model'
 import { periodOf } from '../lib/reports/documents/build'
@@ -35,7 +39,6 @@ import { createSnapshot } from '../lib/snapshots'
 import { renderArtifact, renderUrl } from '../lib/render/render'
 import { withBrowser } from '../lib/render/chromium'
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 const args = process.argv.slice(2)
 const flag = (name: string): string | undefined => {
@@ -45,7 +48,7 @@ const flag = (name: string): string | undefined => {
 const has = (name: string) => args.includes(`--${name}`)
 for (const a of args) {
   if (!a.startsWith('--')) continue
-  if (!['client', 'template', 'sells-to', 'signals', 'questions', 'research', 'out', 'run', 'keep', 'no-check', 'reader', 'reuse', 'reuse-write', 'png', 'report'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
+  if (!['client', 'template', 'sells-to', 'signals', 'questions', 'research', 'out', 'run', 'keep', 'no-check', 'reader', 'reuse', 'reuse-write', 'png', 'report', 'brief', 'blocks', 'role'].includes(a.slice(2))) throw new Error(`unknown flag: ${a}`)
 }
 
 async function buildReportRow(reportId: string) {
@@ -72,9 +75,21 @@ async function buildReportRow(reportId: string) {
 async function main() {
   if (flag('report')) return buildReportRow(flag('report')!)
   const clientId = flag('client') ?? OSSUR
-  const template = documentTemplate(flag('template') ?? 'sales_brief')
-  if (!template) throw new Error(`unknown template: ${flag('template')}`)
-  const settings = documentSettings({ sellsTo: (flag('sells-to') as SellsTo | undefined) ?? 'consumers' })
+  const declared = documentTemplate(flag('template') ?? 'sales_brief')
+  if (!declared) throw new Error(`unknown template: ${flag('template')}`)
+  const settings = documentSettings({
+    sellsTo: (flag('sells-to') as SellsTo | undefined) ?? 'consumers',
+    brief: flag('brief'),
+    blocks: flag('blocks')?.split(',').map((b) => b.trim()).filter(Boolean) as DocumentBlockKey[] | undefined,
+    role: flag('role') as DocumentRole | undefined,
+  })
+  // The template a build runs on: the declared one composed with these
+  // settings (the blocks' pages and questions, a custom brief's role).
+  const template = resolveTemplate(declared, settings)
+  if (template !== declared) {
+    console.log(`template: ${template.key}${template.key === 'custom' ? ` in the ${settings.role ?? 'leadership_brief'} role` : ''} · pages ${template.skeleton.map((p) => p.kind).join(', ')} · blocks ${settings.blocks?.join(', ') || 'none'}`)
+    if (settings.brief) console.log(`brief: ${settings.brief}`)
+  }
   const out = flag('out') ?? 'scratch/document'
   mkdirSync(out, { recursive: true })
   const admin = createAdminClient()

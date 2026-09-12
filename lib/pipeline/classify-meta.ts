@@ -1,9 +1,11 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
+import { chunk } from '../chunk'
 import { openai } from '../openai'
-import { createAdminClient, selectAll } from '../supabase-admin'
+import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
-import { usableTranscript } from './transcript-input'
+import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
+import { hookSource } from './hook-source'
 import {
   CLASSIFIED_TYPES,
   CLASSIFIED_TYPE_DEFS,
@@ -28,7 +30,14 @@ import {
 // Pure planning/prompt/validation logic up top (tested in
 // classify-meta.test.ts); the I/O runner for the Inngest step below.
 
-export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v1'
+/** Bumped to v2 on 2026-09-11 with the label DEFINITIONS (bfe485f): the enum
+ *  values mean something different now than when the model was handed bare
+ *  names. Bumping is free here, unlike Pass A's — classify-meta selects on
+ *  `classified_type IS NULL` and nothing else, so no already-classified row is
+ *  re-read. The version rides onto each row it writes
+ *  (videos.classified_prompt_version) so the two regimes stop being
+ *  indistinguishable; rows written before today stay null. */
+export const CLASSIFY_META_PROMPT_VERSION = 'classify_meta_v2'
 export const CLASSIFY_META_BATCH = 25
 
 export interface ClassifyInput {
@@ -39,7 +48,15 @@ export interface ClassifyInput {
   hashtags: string[] | null
   transcript: string | null
   transcript_status: string | null
+  transcript_en: string | null
+  ocr_text: string | null
+  ocr_status: string | null
 }
+
+// The "deploy landed before its migration" guard now has two callers (this one
+// and Pass D-b's lineage_id), so it lives in lib/supabase-admin.ts. Re-exported
+// here for the test and the readers who found it at this address first.
+export { isMissingColumnError }
 
 /** Ids of videos still unclassified, chunked into call-sized batches. */
 export function planClassifyBatches(
@@ -47,19 +64,17 @@ export function planClassifyBatches(
   batchSize = CLASSIFY_META_BATCH,
 ): string[][] {
   const pending = videos.filter((v) => v.classified_type == null).map((v) => v.id)
-  const batches: string[][] = []
-  for (let i = 0; i < pending.length; i += batchSize) batches.push(pending.slice(i, i + batchSize))
-  return batches
+  return chunk(pending, batchSize)
 }
 
 export function buildClassifySystemPrompt(): string {
   return [
-    'You classify social videos for a consumer-intelligence platform, from METADATA ONLY (caption, hashtags, and a speech transcript when one exists). You never see the footage.',
+    'You classify social videos for a consumer-intelligence platform, from METADATA ONLY (caption, hashtags, a speech transcript when one exists, and the text printed on the cover frame when it carries any). You never see the footage.',
     '',
     'For each numbered video block, return one entry with its "ref" (e.g. "v1") and:',
     '- classified_type: one of the types defined below — or null if the metadata is too thin to tell.',
     '- hook_style: one of the hook styles defined below — how the video OPENS. Null if you cannot tell.',
-    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook.',
+    '- hook_text: the verbatim opening hook, copied from the start of the transcript, the "on-screen text" line, or the caption. Never invent or paraphrase; null if none shows a real hook. On short-form video the hook is very often TYPED on the cover rather than spoken — when the on-screen text carries the opening claim, that IS the hook. But a watermark, a platform name, a channel name or an @handle is NEVER the hook, however prominent: skip those and take the next line, or return null if nothing else is there. When a block shows both a "transcript" and a "transcript (English)", copy the hook from the "transcript" line — the original words, in their own language. The English is there to help you understand, and is never the hook.',
     '- topics: 1-4 short lowercase topics the video is about. Empty array if unknowable.',
     `- sentiment: one of ${VIDEO_SENTIMENTS.join(', ')} for the video's own framing — or null.`,
     '',
@@ -81,8 +96,25 @@ export function buildClassifyUserPrompt(videos: ClassifyInput[]): string {
         `caption: ${v.caption?.trim() || '(none)'}`,
       ]
       if (v.hashtags?.length) lines.push(`hashtags: ${v.hashtags.join(' ')}`)
+      // Both lines when there is a translation, never one instead of the other
+      // (2026-09-12). This step's judgments — type, hook style, framing
+      // sentiment — read better in English, but hook_text is a VERBATIM column,
+      // and feeding only the English made every translated video's hook an
+      // English rendering stored as the video's own words. The original stays
+      // first and stays labelled `transcript:`, which is what the prompt tells
+      // the model to copy the hook from.
       const transcript = usableTranscript(v)
       if (transcript) lines.push(`transcript: ${transcript}`)
+      const translation = transcript ? usableTranslation(v) : null
+      if (translation) lines.push(`transcript (English, for understanding only — never copy the hook from this line): ${translation}`)
+      // The cover frame's text (WP7b, 2026-09-12), AFTER the transcript — the
+      // order the hook_text rule lists them in. It led the block for a day, and
+      // that quietly biased the model toward the first thing on the frame, which
+      // on TikTok is as often the platform watermark as the hook. Newlines
+      // flattened to " / " so one video stays one prompt block, with a separator
+      // that stops two cards reading as one sentence.
+      const ocr = usableOcr(v)
+      if (ocr) lines.push(`on-screen text (cover frame): ${ocr.split('\n').join(' / ')}`)
       return lines.join('\n')
     })
     .join('\n\n')
@@ -150,14 +182,33 @@ export async function runClassifyMetaBatch(
   callIndex: number,
 ): Promise<ClassifyMetaResult> {
   const admin = createAdminClient()
-  const videos = await selectAll<ClassifyInput & { classified_type: string | null }>(() =>
-    admin
-      .from('videos')
-      .select('id, platform, account_name, caption, hashtags, transcript, transcript_status, classified_type')
-      .eq('client_id', clientId)
-      .in('id', videoIds)
-      .order('id'),
-  )
+  type Row = ClassifyInput & { classified_type: string | null }
+  // The OCR columns are asked for separately so a deploy that lands before its
+  // migration degrades to "classify without on-screen text" instead of failing
+  // the batch — the same tolerance isMissingColumnError already gives
+  // classified_prompt_version below.
+  let videos: Row[]
+  try {
+    videos = await selectAll<Row>(() =>
+      admin
+        .from('videos')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type')
+        .eq('client_id', clientId)
+        .in('id', videoIds)
+        .order('id'),
+    )
+  } catch (e) {
+    if (!(e instanceof Error) || !/ocr_(text|status)/.test(e.message) || !/does not exist|schema cache/i.test(e.message)) throw e
+    console.warn('[classify-meta] videos.ocr_text/ocr_status do not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Classifying without on-screen text.')
+    videos = (await selectAll<Omit<Row, 'ocr_text' | 'ocr_status'>>(() =>
+      admin
+        .from('videos')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
+        .eq('client_id', clientId)
+        .in('id', videoIds)
+        .order('id'),
+    )).map((v) => ({ ...v, ocr_text: null, ocr_status: null }))
+  }
   // Re-check the null guard at write-distance: a resumed run may have
   // classified some of these since the plan step.
   const pending = videos.filter((v) => v.classified_type == null)
@@ -200,28 +251,61 @@ export async function runClassifyMetaBatch(
   if (!parsed) return { requested: videoIds.length, classified: 0, nulls: 0, costUsd, error: msg?.refusal ?? 'no parsed output' }
 
   const byId = validateClassifyResponse(parsed, batchIds)
+  const byVideoId = new Map(videos.map((v) => [v.id, v]))
   let classified = 0
   let nulls = 0
+  let versionColumnMissing = false
+  let hookSourceColumnMissing = false
   for (const [id, item] of byId) {
     if (item.classified_type == null && item.hook_style == null && item.topics.length === 0) {
       nulls++
       continue
     }
-    const { error } = await admin
-      .from('videos')
-      .update({
-        classified_type: item.classified_type,
-        hook_style: item.hook_style,
-        hook_text: item.hook_text,
-        topics: item.topics.length ? item.topics : null,
-        // Framing sentiment (caption + transcript, no comments). Provenance is
-        // stamped so run_summary never blends it with Pass A's audience read
-        // (T0-8): the two families are different measurements.
-        sentiment: item.sentiment,
-        sentiment_source: item.sentiment == null ? null : 'framing',
-      })
-      .eq('id', id)
-      .is('classified_type', null)
+    const src = byVideoId.get(id)
+    const labels = {
+      classified_type: item.classified_type,
+      hook_style: item.hook_style,
+      hook_text: item.hook_text,
+      // Derived, not asked for — see lib/pipeline/hook-source.ts.
+      hook_source: src
+        ? hookSource(item.hook_text, {
+            transcript: usableTranscript(src),
+            ocr: usableOcr(src),
+            caption: src.caption,
+          })
+        : null,
+      topics: item.topics.length ? item.topics : null,
+      // Framing sentiment (caption + transcript, no comments). Provenance is
+      // stamped so run_summary never blends it with Pass A's audience read
+      // (T0-8): the two families are different measurements.
+      sentiment: item.sentiment,
+      sentiment_source: item.sentiment == null ? null : 'framing',
+    }
+    // Which regime chose these labels (null on every row written before
+    // 2026-09-11 — see the column's comment).
+    const write = (withVersion: boolean, withHookSource: boolean) => {
+      const { hook_source: derivedHookSource, ...rest } = labels
+      const patch: Record<string, unknown> = withHookSource ? { ...rest, hook_source: derivedHookSource } : { ...rest }
+      if (withVersion) patch.classified_prompt_version = CLASSIFY_META_PROMPT_VERSION
+      return admin.from('videos').update(patch).eq('id', id).is('classified_type', null)
+    }
+
+    let { error } = await write(!versionColumnMissing, !hookSourceColumnMissing)
+    // The model call is already billed by the time we get here. If this deploy
+    // landed ahead of its migration, the bookkeeping column is the only thing
+    // missing — write the labels without it rather than throw the batch away,
+    // re-bill it on every Inngest retry and close the run `partial`. Once one
+    // row says the column is absent, the rest of the batch skips the attempt.
+    if (error && isMissingColumnError(error, 'classified_prompt_version')) {
+      versionColumnMissing = true
+      console.warn(`[classify-meta] videos.classified_prompt_version does not exist — apply supabase/migrations/20260911120000_classified_prompt_version.sql. Writing labels without it; those rows will read as the pre-2026-09-11 regime.`)
+      ;({ error } = await write(false, !hookSourceColumnMissing))
+    }
+    if (error && isMissingColumnError(error, 'hook_source')) {
+      hookSourceColumnMissing = true
+      console.warn(`[classify-meta] videos.hook_source does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Writing labels without it; those rows will not say where their hook came from.`)
+      ;({ error } = await write(!versionColumnMissing, false))
+    }
     if (error) throw new Error(`classify-meta persist: ${error.message}`)
     classified++
   }

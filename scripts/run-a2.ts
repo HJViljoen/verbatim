@@ -1,6 +1,6 @@
 import { runStepA2, loadGroupedInsights } from '../lib/pipeline/step-a2'
 import { similarityMatrix, type ClusterMethod } from '../lib/pipeline/cluster'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 
 // CLI inspector for Step A2 (theme aggregation). Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/run-a2.ts --run <id> [flags]
@@ -16,7 +16,6 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR } from '../lib/config'
 //   --debug              print the per-group pairwise similarity matrix and exit
 //                        (use this to tune --threshold against real data)
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
 
 interface Args {
   clientId: string

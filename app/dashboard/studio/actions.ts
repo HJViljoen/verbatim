@@ -6,9 +6,9 @@ import { z } from 'zod'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { instantiate, starterTemplate } from '@/lib/reports/templates'
-import { documentTemplate } from '@/lib/reports/documents/templates'
-import { DEFAULT_DOCUMENT_SETTINGS, documentSettings } from '@/lib/reports/documents/types'
-import { documentSettingsPatch, reportPatchSchema, tidySections } from '@/lib/reports/validate'
+import { CUSTOM_KEY, documentTemplate } from '@/lib/reports/documents/templates'
+import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
+import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSAGE, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
 import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
 import { markSnapshotsStale } from '@/lib/artifacts'
@@ -41,9 +41,18 @@ export async function createReport(formData: FormData): Promise<void> {
   if (documentKey) {
     const t = documentTemplate(documentKey)
     if (!t) throw new Error('unknown document template')
+    // A custom brief starts in a role, and is filed as what that role writes:
+    // a brief written in the marketing role is a marketing report, not a
+    // general one (the same rule the settings action applies on a change).
+    const seed = applyDocumentSettingsPatch({
+      templateKey: t.key,
+      current: DEFAULT_DOCUMENT_SETTINGS,
+      patch: t.key === CUSTOM_KEY ? { role: DEFAULT_DOCUMENT_ROLE } : {},
+    })
+    const register = seed.audience ?? t.audience
     const { data, error } = await admin
       .from('reports')
-      .insert({ client_id: clientId, kind: 'document', template_key: t.key, title: t.name, audience: t.audience, sections: [], cover: { register: t.audience }, settings: DEFAULT_DOCUMENT_SETTINGS, created_by: userId })
+      .insert({ client_id: clientId, kind: 'document', template_key: t.key, title: t.name, audience: register, sections: [], cover: { register }, settings: seed.settings, created_by: userId })
       .select('id')
       .single()
     if (error || !data) throw new Error(`create report: ${error?.message ?? 'no row'}`)
@@ -240,7 +249,9 @@ export async function restoreBlock(args: { snapshotId: string; blockId: string }
 // ── document settings (2026-08-31) ────────────────────────────────────────
 // The few choices a written report has: its title, who it is written for,
 // who the reader sells to, which tracked competitors it covers, how many
-// findings. Any member. The built snapshot stands; the next build uses them.
+// findings, and on a custom brief the operator's own instruction, its topic
+// blocks and the role that writes it. Any member. The built snapshot stands;
+// the next build uses them.
 
 const settingsArgs = z.object({ id: z.uuid(), patch: documentSettingsPatch })
 
@@ -249,22 +260,28 @@ export async function updateDocumentSettings(args: { id: string; patch: z.infer<
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
   const { clientId } = await getSessionContext()
   const admin = createAdminClient()
-  const { data: current } = await admin.from('reports').select('id, kind, cover, settings').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
+  const { data: current } = await admin.from('reports').select('id, kind, template_key, cover, settings').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
   if (!current || current.kind !== 'document') return { ok: false, message: 'No such report.' }
   const p = parsed.data.patch
   const cover = { ...((current.cover as CoverSpec) ?? {}) } as CoverSpec
   if (p.reader !== undefined) { if (p.reader) cover.reader = p.reader; else delete cover.reader }
-  const settings = documentSettings({
-    ...(current.settings as Record<string, unknown>),
-    ...(p.sellsTo !== undefined ? { sellsTo: p.sellsTo } : {}),
-    ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
-    ...(p.findings !== undefined ? { findings: p.findings } : {}),
+  // The brief, its topic blocks and its role belong to a custom brief; on one
+  // of the four they are stripped here, not stored (lib/reports/validate.ts).
+  const { settings, audience, ignored } = applyDocumentSettingsPatch({
+    templateKey: current.template_key as string | null,
+    current: current.settings as Partial<typeof settings>,
+    patch: p,
   })
+  // A custom brief is filed and rendered as what it is written as: the role
+  // sets the register the Studio list, the cover and the share shell read.
+  if (audience) cover.register = audience
   const row: Record<string, unknown> = { cover, settings, updated_at: new Date().toISOString() }
+  if (audience) row.audience = audience
   if (p.title !== undefined) row.title = p.title
   const { error } = await admin.from('reports').update(row).eq('id', parsed.data.id).eq('client_id', clientId)
   if (error) return { ok: false, message: 'Could not save that. Try again.' }
   revalidatePath(`${STUDIO}/edit/${parsed.data.id}`)
   revalidatePath(STUDIO)
+  if (ignored.length) return { ok: false, message: IGNORED_FIELDS_MESSAGE }
   return { ok: true, message: 'Saved' }
 }

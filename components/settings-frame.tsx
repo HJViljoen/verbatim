@@ -7,10 +7,11 @@ import { PaneHeader, PaneBody, RailGroup, RailLink } from '@/components/shell/ma
 // owner/admin-editable and member-readable, as before; Team holds the
 // member-level pages. Two panes, not resizable — settings don't need it.
 
-export type SettingsSection = 'tracking' | 'connections' | 'billing' | 'team' | 'guide'
+export type SettingsSection = 'tracking' | 'initiatives' | 'connections' | 'billing' | 'team' | 'guide'
 
 const RAIL: { key: SettingsSection; href: string; label: string; group: 'Workspace' | 'Help' }[] = [
   { key: 'tracking', href: '/dashboard/settings', label: 'Tracking & reports', group: 'Workspace' },
+  { key: 'initiatives', href: '/dashboard/settings/initiatives', label: 'Initiatives', group: 'Workspace' },
   { key: 'connections', href: '/dashboard/settings/connections', label: 'Connections', group: 'Workspace' },
   { key: 'billing', href: '/dashboard/billing', label: 'Plan & billing', group: 'Workspace' },
   { key: 'team', href: '/dashboard/team', label: 'Team', group: 'Workspace' },

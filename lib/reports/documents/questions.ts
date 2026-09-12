@@ -1,3 +1,4 @@
+import { COMPETITOR_QUESTIONS_MAX } from '../../config'
 import type { DocumentTemplate } from './templates'
 import type { DocumentSettings } from './types'
 import type { MergedConcern } from './merge'
@@ -9,6 +10,15 @@ import type { MergedConcern } from './merge'
  * Anchors outnumber the data-driven questions on purpose: the brief reads
  * the same way each week because it asks the same things each week, and the
  * week's own concerns add to that, they do not replace it.
+ *
+ * The cap RISES to fit the anchors (WP7d, 2026-09-12). `max` sized the four
+ * fixed templates, whose anchors have always fitted inside it; a composed
+ * template asks its selected topic blocks' questions too, and a block "that
+ * must be included" (Heinrich, 2026-08-30) is not included if its questions
+ * are sliced off the end. So no anchor is ever dropped: the update's own
+ * concerns are what yields, as they already did. The real ceiling stays the
+ * build's dollar budget, which the picker is sized against
+ * (templates.affordableBlocks).
  */
 
 export interface ResearchQuestion {
@@ -53,11 +63,13 @@ export function composeQuestions(
   const perCompetitor = template.anchors.find((a) => a.perCompetitor)
   if (perCompetitor) {
     // Two at most: a third competitor's card is written from the signals alone.
-    for (const c of s.competitors.slice(0, 2)) {
+    for (const c of s.competitors.slice(0, COMPETITOR_QUESTIONS_MAX)) {
       out.push({ id: `${perCompetitor.id}:${slug(c.name)}`, text: fill(perCompetitor.text, c.name), purpose: 'competitor', competitor: c.name })
     }
   }
-  const room = Math.max(0, Math.min(3, max - out.length))
+  // Every anchor asked, then the update's concerns in whatever room is left.
+  const cap = Math.max(max, out.length)
+  const room = Math.max(0, Math.min(3, cap - out.length))
   // The loudest concerns, but not one that an anchor already covers head on:
   // the anchors ask about cost and hesitation; a concern literally about
   // price would spend a question twice.
@@ -73,7 +85,7 @@ export function composeQuestions(
       concernId: c.id,
     })
   }
-  return out.slice(0, max)
+  return out.slice(0, cap)
 }
 
 const lower = (label: string) => label.replace(/^([A-Z])/, (m) => m.toLowerCase())

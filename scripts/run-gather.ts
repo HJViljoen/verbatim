@@ -21,7 +21,7 @@ import type { Platform } from '../lib/gather/types'
 //   --attribution <mode> content tag disambiguation: gpt (default) | substring
 //   --dry-run            run Apify + normalise, write nothing, no run row
 
-const OSSUR = 'e52cac94-30e1-426a-9a36-31b11e0b30b6'
+import { OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 
 interface Args {
   clientId: string

@@ -16,7 +16,8 @@ import { join } from 'node:path'
 import type { Page } from 'puppeteer-core'
 import { createAdminClient } from '../lib/supabase-admin'
 import { withBrowser } from '../lib/render/chromium'
-import { DOCUMENT_TEMPLATES } from '../lib/reports/documents/templates'
+import { CUSTOM_KEY, DOCUMENT_STARTERS, documentTemplate } from '../lib/reports/documents/templates'
+import { DEFAULT_DOCUMENT_ROLE } from '../lib/reports/documents/types'
 
 const args = process.argv.slice(2)
 const flag = (name: string, dflt: string) => { const i = args.indexOf(`--${name}`); return i >= 0 && args[i + 1] ? args[i + 1] : dflt }
@@ -25,7 +26,7 @@ const out = flag('out', 'scratch/document-templates-smoke')
 const base = flag('base', process.env.RENDER_BASE_URL ?? 'http://localhost:3000')
 const email = process.env.SHOT_EMAIL ?? 'demo@verbatimintel.com'
 const password = process.env.SHOT_PASSWORD ?? process.env.DEMO_PASSWORD ?? ''
-const DEMO = 'de300055-0000-4000-8000-000000000001'
+import { DEMO_CLIENT_ID as DEMO } from '../lib/config'
 
 const checks: { name: string; ok: boolean; note?: string }[] = []
 const check = (name: string, ok: boolean, note?: string) => { checks.push({ name, ok, note }); console.log(`${ok ? '✓' : '✗'} ${name}${note ? ` (${note})` : ''}`) }
@@ -61,13 +62,13 @@ async function main() {
       // 1. Every written template is offered, and none of them says a dash.
       await goto('/dashboard/studio/new')
       const t = await text(page)
-      for (const tpl of DOCUMENT_TEMPLATES) check(`"${tpl.name}" is offered`, t.includes(tpl.name))
+      for (const tpl of DOCUMENT_STARTERS) check(`"${tpl.name}" is offered`, t.includes(tpl.name))
       check('no em dash on the picker', !t.replace(/Össur — Demo/gi, '').includes('—'))
       await shot('01-new')
 
       // 2. Each template makes a report of its own kind, and its settings
       //    pane offers only the controls that do something on that brief.
-      for (const tpl of DOCUMENT_TEMPLATES) {
+      for (const tpl of DOCUMENT_STARTERS) {
         await goto('/dashboard/studio/new')
         const [btn] = await page.$$(`xpath/.//button[@name="document"][@value="${tpl.key}"]`)
         if (!btn) { check(`${tpl.key}: a button to use it`, false); continue }
@@ -77,16 +78,24 @@ async function main() {
         check(`${tpl.key}: lands in the editor`, !!id, url.replace(base, ''))
         if (!id) continue
         made.push(id)
-        const { data: row } = await admin.from('reports').select('kind, template_key, audience').eq('id', id).maybeSingle()
-        const r = row as { kind: string; template_key: string; audience: string } | null
-        check(`${tpl.key}: stored as a document of this template`, r?.kind === 'document' && r?.template_key === tpl.key && r?.audience === tpl.audience, `${r?.kind}/${r?.template_key}/${r?.audience}`)
+        const { data: row } = await admin.from('reports').select('kind, template_key, audience, settings').eq('id', id).maybeSingle()
+        const r = row as { kind: string; template_key: string; audience: string; settings: { role?: string } } | null
+        // A custom brief is filed under the ROLE it is written in, never as a
+        // general report (review H3): its own audience is not the register.
+        const custom = tpl.key === CUSTOM_KEY
+        const wantAudience = custom ? (documentTemplate(r?.settings?.role ?? DEFAULT_DOCUMENT_ROLE)?.audience ?? null) : tpl.audience
+        check(`${tpl.key}: stored as a document of this template`, r?.kind === 'document' && r?.template_key === tpl.key && r?.audience === wantAudience, `${r?.kind}/${r?.template_key}/${r?.audience}`)
+        if (custom) check(`${tpl.key}: starts in the default role`, r?.settings?.role === DEFAULT_DOCUMENT_ROLE, String(r?.settings?.role))
 
         await settle()
         const pane = await text(page)
         const wantsCompetitors = tpl.skeleton.some((p) => p.kind === 'competitor') || tpl.anchors.some((a) => a.perCompetitor)
         check(`${tpl.key}: the competitors picker is ${wantsCompetitors ? 'offered' : 'hidden'}`,
           pane.toLowerCase().includes('competitors to include') === wantsCompetitors)
-        check(`${tpl.key}: findings offers at most ${tpl.findingsMax}`,
+        check(`${tpl.key}: the brief and its topics are ${custom ? 'offered' : 'hidden'}`,
+          pane.toLowerCase().includes('topics this brief must cover') === custom)
+        if (custom) check(`${tpl.key}: will not build without a brief`, pane.toLowerCase().includes('write the brief first'))
+        else check(`${tpl.key}: findings offers at most ${tpl.findingsMax}`,
           tpl.findingsMax === 4 ? pane.toLowerCase().includes('up to four') : !pane.toLowerCase().includes('up to four') && pane.toLowerCase().includes('up to three'))
         check(`${tpl.key}: says what it is before it is built`, pane.includes(tpl.description.slice(0, 40)))
         await shot(`02-${tpl.key}`)
@@ -104,7 +113,7 @@ async function main() {
       // 4. The Studio lists them all, each named and readable.
       await goto('/dashboard/studio')
       const studio = await text(page)
-      for (const tpl of DOCUMENT_TEMPLATES) check(`Studio lists "${tpl.name}"`, studio.includes(tpl.name))
+      for (const tpl of DOCUMENT_STARTERS) check(`Studio lists "${tpl.name}"`, studio.includes(tpl.name))
       await shot('03-studio')
     })
   } finally {

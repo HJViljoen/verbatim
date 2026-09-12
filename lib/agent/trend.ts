@@ -1,4 +1,5 @@
 import { selectAll } from '../supabase-admin'
+import { chunk } from '../chunk'
 import { AGENT_TREND_MAX_RUNS, AGENT_TREND_MIN_POINTS, AGENT_TREND_MIN_EVIDENCE } from '../config'
 
 // Cross-run context for the Verbatim Agent — the honest answer to "has this
@@ -168,22 +169,22 @@ export async function loadTrendContext(
   let themes: ThemeSeries[] = []
   if (registryIds.length > 0) {
     const registry: RegistryRow[] = []
-    for (let i = 0; i < registryIds.length; i += 120) {
+    for (const part of chunk(registryIds, 120)) {
       const { data } = await admin
         .from('theme_registry')
         .select('id, canonical_label, bucket')
         .eq('client_id', clientId)
-        .in('id', registryIds.slice(i, i + 120))
+        .in('id', part)
       registry.push(...((data ?? []) as RegistryRow[]))
     }
 
     const observations: ObservationRow[] = []
-    for (let i = 0; i < registryIds.length; i += 120) {
+    for (const part of chunk(registryIds, 120)) {
       const { data } = await admin
         .from('theme_observations')
         .select('theme_id, run_date, evidence_count, label')
         .eq('client_id', clientId)
-        .in('theme_id', registryIds.slice(i, i + 120))
+        .in('theme_id', part)
         .order('run_date', { ascending: true })
       observations.push(...((data ?? []) as ObservationRow[]))
     }

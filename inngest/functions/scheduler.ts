@@ -1,7 +1,8 @@
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { cadenceReliability } from '@/lib/pipeline/cadence'
+import { localDate, isWeeklyDue, isMonthlyDue } from '@/lib/pipeline/schedule-due'
+import { touchHeartbeat } from '@/lib/ops/heartbeat'
 import { sendAlertEmail } from '@/lib/email'
 
 // Daily cron that decides which clients are due a run today and dispatches one
@@ -11,28 +12,37 @@ import { sendAlertEmail } from '@/lib/email'
 // report_day; monthly runs fire on the 1st. Evaluated in Africa/Johannesburg so
 // report_day matches the user's local week. Runs 06:00 SAST.
 
-const WEEKDAYS = [
-  'sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
-] as const
-
-function localToday(tz = 'Africa/Johannesburg') {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz, weekday: 'long', day: 'numeric',
-  }).formatToParts(new Date())
-  const weekday = (parts.find((p) => p.type === 'weekday')?.value ?? '').toLowerCase()
-  const dayOfMonth = Number(parts.find((p) => p.type === 'day')?.value ?? '0')
-  return { weekday, dayOfMonth }
-}
-
 export const scheduledPipelineDispatcher = inngest.createFunction(
   {
     id: 'scheduled-pipeline-dispatcher',
     triggers: [{ cron: 'TZ=Africa/Johannesburg 0 6 * * *' }],
+    // This function had no failure handler: if find-due-clients threw its way
+    // out of retries, the morning's dispatch simply did not happen and the only
+    // trace was a red row in Inngest's dashboard that nobody watches (WP2).
+    onFailure: async ({ event }) => {
+      const message = (event.data as { error?: { message?: string } }).error?.message ?? 'dispatcher failed'
+      await sendAlertEmail(
+        'Verbatim ops — dispatcher FAILED',
+        `The 06:00 SAST scheduled-pipeline-dispatcher failed after retries, so no client was dispatched today.\n\n` +
+        `Error: ${message}\n\n` +
+        `Run a client by hand: POST /api/admin/trigger-run {"clientId":"…","options":{"sendReport":true}}\n` +
+        `Inngest dashboard: https://app.inngest.com`,
+      )
+    },
   },
   async ({ step }) => {
+    // Liveness beacon FIRST, before anything that can fail: the ops check
+    // outside Inngest reads this row to tell "the dispatcher ran and something
+    // went wrong" from "the dispatcher was never called" — the 2026-09-06
+    // failure mode. Its own failure is swallowed (touchHeartbeat never throws).
+    await step.run('heartbeat', async () => {
+      const { weekday, dayOfMonth } = localDate()
+      return touchHeartbeat(createAdminClient, 'dispatcher', { weekday, dayOfMonth })
+    })
+
     const dueClientIds = await step.run('find-due-clients', async () => {
       const admin = createAdminClient()
-      const { weekday, dayOfMonth } = localToday()
+      const today = localDate()
 
       const [{ data: clients }, { data: configs }] = await Promise.all([
         admin.from('clients')
@@ -54,62 +64,18 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
           console.log(`[scheduler] skipping ${client.id}: no access (${access.reason})`)
           continue
         }
-        const isWeeklyDue = cfg.report_period === 'weekly' && cfg.report_day === weekday
-        const isMonthlyDue = cfg.report_period === 'monthly' && dayOfMonth === 1
-        if (isWeeklyDue || isMonthlyDue) due.push(client.id)
+        if (isWeeklyDue(cfg, today) || isMonthlyDue(cfg, today)) due.push(client.id)
       }
       return due
     })
 
-    // Cadence check (Tier 2). The product is sold as a weekly update and
-    // nothing measured whether the update arrived: on the live corpus Össur had
-    // 10 reportable runs and 2 emailed reports. A run that finishes and emails
-    // nobody is indistinguishable, in every dashboard and every log, from one
-    // that delivers — so this runs each morning, before today's dispatch, and
-    // names yesterday's silent misses.
-    //
-    // Only runs dispatched WITH sendReport are counted: Sealand is the internal
-    // iteration tenant and the demo is seeded, and both finish runs and email
-    // nobody entirely on purpose. An alert that cannot tell those from a real
-    // miss is an alert nobody reads.
-    await step
-      .run('check-cadence', async () => {
-        const admin = createAdminClient()
-        const since = new Date(Date.now() - 36 * 3600_000).toISOString()
-        const [{ data: runs }, { data: reports }] = await Promise.all([
-          admin.from('pipeline_runs')
-            .select('id, client_id, status, options, completed_at')
-            .gte('completed_at', since),
-          // Stage 3: a send is a report_sends row; one sent schedule means the
-          // update reached someone.
-          admin.from('report_sends').select('run_id, sent_at').eq('status', 'sent').gte('sent_at', since),
-        ])
-        const stats = cadenceReliability(
-          ((runs ?? []) as { id: string; status: string; options: { sendReport?: boolean } | null; completed_at: string | null }[])
-            .map((r) => ({ id: r.id, status: r.status, options: r.options, completedAt: r.completed_at })),
-          ((reports ?? []) as { run_id: string | null; sent_at: string | null }[])
-            .map((r) => ({ runId: r.run_id, sentAt: r.sent_at })),
-        )
-        if (!stats.missed) return { missed: 0 }
-        const byClient = new Map(
-          ((runs ?? []) as { id: string; client_id: string }[]).map((r) => [r.id, r.client_id]),
-        )
-        const names = await admin.from('clients').select('id, company_name')
-          .in('id', [...new Set(stats.missedRunIds.map((id) => byClient.get(id)).filter(Boolean) as string[])])
-        const nameById = new Map(((names.data ?? []) as { id: string; company_name: string }[]).map((c) => [c.id, c.company_name]))
-        const lines = stats.missedRunIds.map((id) => `  ${nameById.get(byClient.get(id) ?? '') ?? '?'} — run ${id}`)
-        await sendAlertEmail(
-          `Verbatim: ${stats.missed} scheduled update${stats.missed === 1 ? '' : 's'} did not reach anyone`,
-          `A run finished and no report was emailed. The client's week produced nothing they can see.\n\n${lines.join('\n')}\n\n` +
-          `Delivered on schedule: ${stats.delivered}/${stats.owed}.\n` +
-          `Re-send: POST /api/admin/send-report {"clientId":"...","runId":"..."} (the default schedule; add scheduleId for another)`,
-        )
-        return { missed: stats.missed }
-      })
-      .catch((e) => {
-        console.error(`[scheduler] cadence check failed: ${e instanceof Error ? e.message : String(e)}`)
-        return { missed: 0 }
-      })
+    // The cadence check that used to live here as a `check-cadence` step moved
+    // OUT of this function (WP2). It ran inside the very cron it was meant to
+    // vouch for, so it could not report the one failure that matters — Inngest
+    // never calling us — and it duplicated the ops check's report_missed
+    // finding, turning one genuine miss into an email from here plus a daily
+    // email from there. /api/cron/ops-check owns delivery reliability now, over
+    // a 48-hour window, and it runs on Vercel Cron where Inngest cannot silence it.
 
     if (dueClientIds.length > 0) {
       await step.sendEvent(

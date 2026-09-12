@@ -7,6 +7,7 @@ import type { PlatformRow, ShareSeries } from '../../components/profile-stats'
 import type { MethodNoteData } from '../../components/print/method-note'
 import { EXPORT_FULL_MAX_ITEMS } from '../config'
 import { latestPerDay } from '../dashboard-tiles'
+import { row, rows as readRows } from './read'
 
 // Consumer Profile loader — the data half of the old app/dashboard/profile/page.tsx
 // (split 2026-08-29, Reports & Exports T7). "Who is actually talking?" — a few
@@ -84,7 +85,7 @@ export async function loadProfile(scope: Scope): Promise<ProfileData | ProfileEm
   // the first requests after idle, and every sequential wave pays it again).
   // `client` (company name, for the method note) is new here — the old page
   // never fetched it, because it never printed one.
-  const [{ data: client }, { data: latestRun }, { data: profileRow }, { data: historyRows }] = await Promise.all([
+  const [clientRes, latestRunRes, profileRes, historyRes] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     // Latest closed run, same anchor as every other page — an in-flight run has
     // no profile yet, so the previous one keeps serving.
@@ -115,11 +116,13 @@ export async function loadProfile(scope: Scope): Promise<ProfileData | ProfileEm
       .limit(12),
   ])
 
+  const client = row<{ company_name: string | null }>(clientRes, 'profile.client')
+  const latestRun = row<{ id: string }>(latestRunRes, 'profile.latestRun')
   const brand = client?.company_name ?? 'your brand'
 
   if (!latestRun) return { empty: true, reason: 'no-run' }
 
-  const profile = profileRow as { headline: string | null; personas: Partial<Persona>[]; run_date: string; run_id: string } | null
+  const profile = row<{ headline: string | null; personas: Partial<Persona>[]; run_date: string; run_id: string }>(profileRes, 'profile.consumerProfile')
   const personas = (profile?.personas ?? [])
     .map((p) => normalisePersona(p as Partial<Persona>))
     .filter((p): p is Persona => Boolean(p))
@@ -172,7 +175,7 @@ export async function loadProfile(scope: Scope): Promise<ProfileData | ProfileEm
   // How the mix has moved (rows fetched in the first wave above). Two updates
   // on the same calendar day collapse to the later one (latestPerDay) so the
   // chart never draws two points with the same date label.
-  const history = latestPerDay((historyRows ?? []) as { run_date: string; personas: Partial<Persona>[] }[])
+  const history = latestPerDay(readRows<{ run_date: string; personas: Partial<Persona>[] }>(historyRes, 'profile.profileHistory'))
   const shareDates = history.map((h) => h.run_date)
   const series = shareSeries(personas, history)
 
