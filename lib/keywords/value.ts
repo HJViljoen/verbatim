@@ -206,7 +206,10 @@ export function summariseTerms(rows: KeywordPerfRow[], by: 'term' | 'platform-te
           : [...lines, 'everywhere else it is doing better — this is one platform’s problem, not the term’s'],
       }
     })
-    .sort(byWorstRelevance)
+    // Flagged first here, unlike the CLI: a term flagged only on one platform
+    // has healthy pooled numbers, so worst-relevance order buries the one row
+    // the reader is meant to act on at the bottom of the table.
+    .sort((a, b) => Number(b.worthReviewing) - Number(a.worthReviewing) || byWorstRelevance(a, b))
 }
 
 /** Worst relevance first, then the biggest spender among equals. */

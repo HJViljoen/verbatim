@@ -123,7 +123,7 @@ export const GLOSSARY = {
   news: ['In the news', 'published coverage matched to your tracked names by headline — shown as context beside the conversation, never claimed as the cause of anything measured'],
   about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you — their words, never yours, and never counted as your audience"],
   search_terms: ['Search terms', 'the words we look for on every platform, in three groups — your brand, your competitors, your category. Changing them changes what the next update finds, and nothing before it'],
-  term_value: ['Worth reviewing', 'this term has found at least 100 posts across three or more updates, under 5% of them were about your market, and none has led to an insight yet — a suggestion to look, never a change we make for you'],
+  term_value: ['Worth reviewing', 'across three or more updates — pooled, or on one platform on its own — this term found at least 100 posts, kept under 5% of them, and has led to no insight yet. A suggestion to look, never a change we make for you'],
 } as const
 
 export type GlossaryKey = keyof typeof GLOSSARY
