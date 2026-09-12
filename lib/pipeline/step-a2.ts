@@ -242,6 +242,12 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
   //     question asked here is "does this insight carry at least one video
   //     citation". Filtered server-side to source='video', which is a small
   //     minority of the table, so the payload is ids only and stays tiny.
+  //     NO `redacted = false` filter, deliberately, unlike every quote reader:
+  //     this counts CITATIONS, not words — nothing is rendered from it — and
+  //     `redacted` blanks a quote without removing the citation, so filtering
+  //     it would make videoEvidenceCount disagree with the evidenceCount
+  //     computed over the same insights. Do not "fix" this: it would silently
+  //     change every rank_score on every tenant.
   const onCameraInsightIds = new Set<string>()
   const insightIds = insightsBase.map((i) => i.id)
   if (insightIds.length) {

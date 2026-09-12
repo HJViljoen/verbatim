@@ -57,6 +57,21 @@ export const MEGA_CLUSTER_SHARE = 0.25
  * every theme tilts toward creator subject matter; at 1.5 an on-camera video
  * breaks ties and lifts a theme past a marginally larger comment-only one
  * without overturning volume.
+ *
+ * SCOPE, so nobody hunts for a bug that isn't there: this only ever moves
+ * `industry-other` themes. Pass A never cites source='video' on a client or
+ * competitor video — their transcripts are brand messaging and become
+ * `video_claims`, never audience evidence (pass-a.ts, "NEVER insight
+ * evidence") — so `videoEvidenceCount` is structurally 0 in the `client` and
+ * `competitor:*` buckets and no client-audience card can show "said on
+ * camera". That is the brand-voice/customer-voice split working as designed.
+ *
+ * Two honest limits. On-camera evidence exists only where a transcript does,
+ * and much of the corpus has none, so the signal is partly a proxy for "we had
+ * a transcript" — a platform and language artefact. And the flag is coarse:
+ * one transcript citation among five comment citations marks the whole video
+ * on camera, which is the common case, because Pass A is told to fold
+ * transcript signal into a matching comment insight.
  */
 export const VIDEO_EVIDENCE_WEIGHT = 1.5
 
