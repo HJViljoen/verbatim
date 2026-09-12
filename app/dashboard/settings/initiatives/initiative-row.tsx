@@ -41,8 +41,7 @@ export function InitiativeRowForm({
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium">{initiative.title}</p>
           <p className="text-[11.5px] text-muted-foreground">
-            {INITIATIVE_DIRECTION_LABEL[initiative.direction].toLowerCase()} · {themeNames.join(' · ')}
-            {initiative.competitorName ? ` · vs ${initiative.competitorName}` : ''} · since {startedLabel}
+            {INITIATIVE_DIRECTION_LABEL[initiative.direction].toLowerCase()} · {themeNames.join(' · ')} · since {startedLabel}
           </p>
           {initiative.goal && <p className="mt-0.5 text-[11.5px] text-muted-foreground/80">{initiative.goal}</p>}
         </div>

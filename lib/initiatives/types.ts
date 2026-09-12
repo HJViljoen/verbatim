@@ -38,7 +38,6 @@ export interface Initiative {
   title: string
   goal: string | null
   registryIds: string[]
-  competitorName: string | null
   direction: InitiativeDirection
   startedAt: string
   status: InitiativeStatus
@@ -51,7 +50,6 @@ export interface InitiativeDbRow {
   title: string
   goal: string | null
   registry_ids: string[] | null
-  competitor_name: string | null
   direction: string | null
   started_at: string
   status: string | null
@@ -67,7 +65,6 @@ export function toInitiative(row: InitiativeDbRow): Initiative {
     title: row.title,
     goal: row.goal,
     registryIds: row.registry_ids ?? [],
-    competitorName: row.competitor_name,
     direction: oneOf(INITIATIVE_DIRECTIONS, row.direction, 'up'),
     startedAt: row.started_at,
     status: oneOf(INITIATIVE_STATUSES, row.status, 'active'),
@@ -79,7 +76,6 @@ export interface InitiativeTileRow {
   id: string
   title: string
   direction: InitiativeDirection
-  competitorName: string | null
   startedLabel: string
   /** Share per update since it was declared — the sparkline. */
   series: number[]

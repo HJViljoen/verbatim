@@ -60,10 +60,9 @@ create table if not exists public.initiatives (
   -- WHAT is measured: theme_registry ids (the cross-update identity — never a
   -- label, which churns ~88% update to update). 1–5, so an initiative stays a
   -- thing you can point at.
-  registry_ids uuid[] not null default '{}'::uuid[],
-  -- Optional scope note ("vs Ottobock") — copy only. Competitor themes carry
-  -- their own registry ids, so scoping is done by picking those ids.
-  competitor_name text,
+  -- No default: the CHECK below requires 1–5, so an empty array could never be
+  -- written anyway and a default of '{}' only reads as though it could.
+  registry_ids uuid[] not null,
   -- Which way counts as progress. There is no "good" direction in the data:
   -- growing share of a pain-point theme is a loss, growing share of a
   -- capability theme is a win, and only the client knows which they declared.
@@ -75,7 +74,6 @@ create table if not exists public.initiatives (
   updated_at timestamptz default now() not null,
   constraint initiatives_title_len_check check (char_length(title) between 1 and 120),
   constraint initiatives_goal_len_check check (goal is null or char_length(goal) <= 400),
-  constraint initiatives_competitor_len_check check (competitor_name is null or char_length(competitor_name) <= 80),
   constraint initiatives_registry_ids_check
     check (cardinality(registry_ids) between 1 and 5)
 );
@@ -116,9 +114,13 @@ create policy "Users update their own initiatives" on public.initiatives
 -- and never updatable — an initiative cannot be moved between workspaces.
 revoke all on public.initiatives from authenticated, anon;
 grant select on public.initiatives to authenticated;
-grant insert (client_id, title, goal, registry_ids, competitor_name, direction, started_at, created_by)
+grant insert (client_id, title, goal, registry_ids, direction, started_at, created_by)
   on public.initiatives to authenticated;
-grant update (title, goal, registry_ids, competitor_name, direction, status, updated_at)
+-- `registry_ids` and `started_at` are NOT updatable. They are what the
+-- measurement means: change either and every point already reported becomes a
+-- point about something else. The product never edits them, so the browser's
+-- client is not given the chance to — the invariant is the grant's, not the UI's.
+grant update (title, goal, direction, status, updated_at)
   on public.initiatives to authenticated;
 
 -- Post-apply check (run by hand):

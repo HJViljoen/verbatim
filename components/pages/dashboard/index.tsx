@@ -342,7 +342,7 @@ const initiatives: R = ({ initiatives }, mode) => {
         <div className="flex flex-col gap-[3px]">
           {t.rows.map((r) => (
             <div key={r.id} className="flex items-center gap-3 text-[12px]">
-              <span className="min-w-0 flex-[2] truncate font-medium">{r.title}{r.competitorName ? <span className="text-muted-foreground"> · vs {r.competitorName}</span> : null}</span>
+              <span className="min-w-0 flex-[2] truncate font-medium">{r.title}</span>
               {r.series.length > 1
                 ? <Sparkline values={r.series} color={r.theirWay === false ? 'var(--comp)' : 'var(--you)'} width={64} height={16} />
                 : <span className="w-16" />}

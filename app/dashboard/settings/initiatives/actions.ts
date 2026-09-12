@@ -26,7 +26,6 @@ const uuid = z.string().uuid()
 const createSchema = z.object({
   title: z.string().trim().min(1, 'give it a name').max(120, 'keep the name under 120 characters'),
   goal: z.string().trim().max(400, 'keep the note under 400 characters').optional(),
-  competitor_name: z.string().trim().max(80, 'keep the competitor name short').optional(),
   direction: z.enum(INITIATIVE_DIRECTIONS),
   registry_ids: z.array(uuid).min(1, 'pick at least one theme').max(INITIATIVE_MAX_THEMES, `track at most ${INITIATIVE_MAX_THEMES} themes`),
 })
@@ -60,7 +59,6 @@ export async function createInitiative(
   const parsed = createSchema.safeParse({
     title: formData.get('title'),
     goal: blankToUndefined(formData.get('goal')),
-    competitor_name: blankToUndefined(formData.get('competitor_name')),
     direction: formData.get('direction'),
     registry_ids: csvIds(formData.get('registry_ids')),
   })
@@ -87,7 +85,6 @@ export async function createInitiative(
       client_id: clientId,
       title: parsed.data.title,
       goal: parsed.data.goal ?? null,
-      competitor_name: parsed.data.competitor_name ?? null,
       direction: parsed.data.direction,
       registry_ids: parsed.data.registry_ids,
       // started_at is the DB's current_date: the line is drawn where the

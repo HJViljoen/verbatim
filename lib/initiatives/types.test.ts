@@ -22,7 +22,7 @@ describe('initiativesOf — a snapshot that predates the tile', () => {
 
   it('passes live data straight through', () => {
     const live: { initiatives?: InitiativesData } = {
-      initiatives: { rows: [{ id: 'i1', title: 'Comfort', direction: 'up', competitorName: null, startedLabel: '1 Aug', series: [1, 2], line: 'Up 1.0 points since 1 Aug · 2 updates', verdict: 'moving_up', theirWay: true, latestShare: 2, sentimentDelta: null }], total: 1 },
+      initiatives: { rows: [{ id: 'i1', title: 'Comfort', direction: 'up', startedLabel: '1 Aug', series: [1, 2], line: 'Up 1.0 points since 1 Aug · 2 updates', verdict: 'moving_up', theirWay: true, latestShare: 2, sentimentDelta: null }], total: 1 },
     }
     expect(initiativesOf(live).total).toBe(1)
     expect(isTrackingSomething(live)).toBe(true)
@@ -39,7 +39,7 @@ describe('initiativesOf — a snapshot that predates the tile', () => {
 
 describe('toInitiative', () => {
   const row: InitiativeDbRow = {
-    id: 'i1', title: 'Comfort', goal: null, registry_ids: ['reg-1'], competitor_name: null,
+    id: 'i1', title: 'Comfort', goal: null, registry_ids: ['reg-1'],
     direction: 'down', started_at: '2026-08-01', status: 'done', created_at: '2026-08-01T00:00:00Z',
   }
 

@@ -61,7 +61,8 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
             <SheetTitle className="text-[15px] font-semibold">Track this theme</SheetTitle>
             <SheetDescription className="text-[12px]">
               Tell us what you are trying to move. Every update from today on says whether this
-              conversation grew or shrank — it never says whether you succeeded.
+              theme grew or shrank as a share of its own group&rsquo;s conversation — never
+              whether you succeeded.
             </SheetDescription>
           </SheetHeader>
           <form action={formAction} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
@@ -79,9 +80,6 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
               </Field>
               <Field label="Why (optional)" hint="A line for whoever reads the update in six weeks.">
                 <Input name="goal" maxLength={400} placeholder="Campaign starts Monday" />
-              </Field>
-              <Field label="Against a competitor (optional)">
-                <Input name="competitor_name" maxLength={80} placeholder="Ottobock" />
               </Field>
               <div className="flex items-center gap-3 pt-1">
                 <Button type="submit" size="sm" disabled={pending}>{pending ? 'Saving…' : 'Track it'}</Button>

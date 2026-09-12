@@ -18,7 +18,7 @@ export default async function InitiativesSettingsPage() {
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase
       .from('initiatives')
-      .select('id, title, goal, registry_ids, competitor_name, direction, started_at, status, created_at')
+      .select('id, title, goal, registry_ids, direction, started_at, status, created_at')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false }),
   ])
