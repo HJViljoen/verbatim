@@ -122,7 +122,7 @@ export async function updateInitiative(
   // registry_ids and started_at are deliberately not editable: they are what
   // the measurement means. Change either and every point already reported
   // silently becomes a point about something else.
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('initiatives')
     .update({
       title: parsed.data.title,
@@ -132,7 +132,12 @@ export async function updateInitiative(
     })
     .eq('id', parsed.data.id)
     .eq('client_id', clientId)
+    .select('id')
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
+  // RLS filters, it does not error: a foreign or deleted id reaches here as a
+  // success that changed nothing. Saying "Saved." to that is a lie the reader
+  // has no way to catch.
+  if ((data ?? []).length === 0) return { ok: false, message: 'That initiative is no longer here.' }
 
   revalidateInitiatives()
   return { ok: true, message: 'Saved.' }
@@ -144,12 +149,14 @@ export async function setInitiativeStatus(id: string, status: string): Promise<I
     return { ok: false, message: 'Unknown status.' }
   }
   const { supabase, clientId } = await getSessionContext()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('initiatives')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('client_id', clientId)
+    .select('id')
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
+  if ((data ?? []).length === 0) return { ok: false, message: 'That initiative is no longer here.' }
 
   revalidateInitiatives()
   return { ok: true, message: '' }

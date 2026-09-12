@@ -16,6 +16,11 @@ import {
 
 const initialState: InitiativeFormState = { ok: false, message: '' }
 
+// Quiet text buttons still need a visible focus ring (MASTER pre-delivery
+// checklist) — hover alone leaves a keyboard reader with nothing.
+const LINK_BUTTON =
+  'rounded-[3px] text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-50'
+
 const selectCls =
   'h-8 w-full rounded-[4px] border border-input bg-tile px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -49,16 +54,16 @@ export function InitiativeRowForm({
       </div>
 
       <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[11.5px]">
-        <button type="button" className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => setOpen((v) => !v)}>
+        <button type="button" className={LINK_BUTTON} onClick={() => setOpen((v) => !v)}>
           {open ? 'Close' : 'Edit'}
         </button>
         {status === 'active' ? (
           <>
-            <button type="button" disabled={statusPending} className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => move('done')}>Finish</button>
-            <button type="button" disabled={statusPending} className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => move('dropped')}>Stop tracking</button>
+            <button type="button" disabled={statusPending} className={LINK_BUTTON} onClick={() => move('done')}>Finish</button>
+            <button type="button" disabled={statusPending} className={LINK_BUTTON} onClick={() => move('dropped')}>Stop tracking</button>
           </>
         ) : (
-          <button type="button" disabled={statusPending} className="text-muted-foreground hover:text-foreground hover:underline" onClick={() => move('active')}>Track again</button>
+          <button type="button" disabled={statusPending} className={LINK_BUTTON} onClick={() => move('active')}>Track again</button>
         )}
         {statusError && <span className="text-negative" aria-live="polite">{statusError}</span>}
       </div>

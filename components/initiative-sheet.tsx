@@ -56,7 +56,7 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
         type="button"
         data-print-hide
         onClick={() => setOpen(true)}
-        className="text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline"
+        className="rounded-[3px] text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         Track this theme →
       </button>

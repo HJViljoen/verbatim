@@ -348,10 +348,13 @@ const initiatives: R = ({ initiatives }, mode) => {
                 : <span className="w-16" />}
               <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
               <span className="min-w-0 flex-[2] truncate text-[11.5px] text-muted-foreground">{r.line}</span>
-              <span className="w-16 text-right">
+              {/* Labelled, because it sits one column from a percentage and a
+                  bare "+0.3" reads as share points. Mood is a −1…+1 scale. */}
+              <span className="flex w-[104px] items-baseline justify-end gap-1">
+                <span className="text-[10.5px] text-muted-foreground">mood</span>
                 {r.sentimentDelta != null && r.sentimentDelta !== 0
                   ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
-                  : <span className="text-[11px] text-muted-foreground">mood flat</span>}
+                  : <span className="text-[11px] text-muted-foreground">unchanged</span>}
               </span>
             </div>
           ))}
