@@ -283,11 +283,18 @@ export function ocrEnabled(): boolean {
 }
 
 /** Model for the cover-frame read. gpt-4.1-mini takes image input and is the
- *  cheapest vision-capable model already priced in MODEL_PRICING; at
- *  `detail: 'low'` the image is a fixed ~85-token square, so a call is a
- *  fraction of a cent. Transcribing text off a still is not a reasoning task —
- *  the failure mode to guard against is the model DESCRIBING the picture, and
- *  that is a prompt problem, not a model-size one. */
+ *  cheapest vision-capable model already priced in MODEL_PRICING. Measured
+ *  2026-09-12 on real covers: $0.0003 to $0.0035 a call, depending on the
+ *  image's pixel size (see OCR_IMAGE_DETAIL — this model family ignores the
+ *  low/high detail flag). Transcribing text off a still is not a reasoning task
+ *  — the failure mode to guard against is the model DESCRIBING the picture, and
+ *  that is a prompt problem, not a model-size one.
+ *
+ *  IMAGE FORMAT: the vision input takes PNG, JPEG, WEBP and non-animated GIF
+ *  only. HEIC — which TikTok serves for about 9% of its covers — is rejected,
+ *  and no url rewrite gets a JPEG instead (verified live: the tplv transform is
+ *  inside the signed path). lib/pipeline/ocr.ts sniffs the magic bytes and
+ *  records those as 'no_image' rather than as a failed read. */
 export const OCR_MODEL = 'gpt-4.1-mini'
 
 /** Image detail level. Sent as 'low' — but measured live on 2026-09-12,
@@ -368,8 +375,11 @@ export const OCR_PARALLEL = 4
  * cap):
  *
  *   OCR_CAP 1200 + OCR_BACKFILL_CAP 300 = 1,500 images per run per tenant
- *   → $0.45 (all YouTube) to $5.25 (all full-resolution) per run, worst case
- *   → at most 8.8% of RUN_MODEL_BUDGET_USD
+ *   → $0.37 (all YouTube) to $4.36 (all full-resolution) per run, worst case
+ *   → at most 7.3% of RUN_MODEL_BUDGET_USD
+ *
+ * (scripts/ocr-videos.ts prints that same line from the same constants, so the
+ * two cannot drift.)
  *
  * Steady state is nothing like that: a week's new videos is a few hundred
  * covers, i.e. cents. The cap exists so a pathological run cannot spend

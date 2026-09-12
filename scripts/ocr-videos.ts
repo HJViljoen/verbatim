@@ -6,7 +6,7 @@ import {
   buildOcrPrompt, canBackfillOcr, canOcr, ocrBackfillBatch, ocrBatch, needsOcr,
 } from '../lib/pipeline/ocr'
 import {
-  MODEL_PRICING, OCR_BACKFILL_CAP, OCR_BATCH, OCR_MODEL, SEALAND_CLIENT_ID,
+  MODEL_PRICING, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_MODEL, SEALAND_CLIENT_ID,
 } from '../lib/config'
 
 // On-screen-text inspector and YouTube backfill (WP7b, 2026-09-12).
@@ -249,6 +249,14 @@ async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> 
       console.log(`  → expired, as designed. ${platform} covers are only readable during the run that gathered them; the wave does that from now on.`)
     }
   }
+
+  // The PER-RUN ceiling, so the number nobody derives is written down (H2).
+  const perRun = estPerCall('instagram')
+  const ytPerRun = estPerCall('youtube')
+  console.log(
+    `\nper-run ceiling: OCR_CAP ${OCR_CAP} (shared across platforms) + OCR_BACKFILL_CAP ${OCR_BACKFILL_CAP} = ${OCR_CAP + OCR_BACKFILL_CAP} images ` +
+    `→ $${((OCR_CAP + OCR_BACKFILL_CAP) * ytPerRun.lo).toFixed(2)} (all youtube) to $${((OCR_CAP + OCR_BACKFILL_CAP) * perRun.hi).toFixed(2)} (all full-resolution), worst case. Steady state is a few hundred covers a week.`,
+  )
 
   const yt = pending.get('youtube') ?? []
   if (yt.length) {
