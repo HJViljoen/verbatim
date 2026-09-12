@@ -69,11 +69,18 @@ import { normForMatch } from './quote-match'
 // run of lag, not a permanent split — unlike the classified_type case above.
 //
 // ALSO DELIBERATELY NOT BUMPED for the 2026-09-12 on-screen-text change (WP7b),
-// for exactly the same reason and with exactly the same mechanism. The v4 system
-// prompt gains an ON-SCREEN TEXT rules block and the user prompt gains a labelled
-// [o] block — but ONLY for a video whose cover frame actually carried legible
-// text. For every other video the assembled user prompt is byte-identical and
-// the extra system rules are inert: they describe a block that is not there.
+// for exactly the same reason and with exactly the same mechanism — but here
+// the claim is PROVEN rather than judged. Both halves of the prompt gain their
+// block ONLY for a video whose cover frame actually carried legible text: the
+// user prompt gets the [o] block, and buildSystemPrompt takes a `withOcr`
+// argument so the ON-SCREEN TEXT rules are emitted only alongside it. For every
+// other video — most of the corpus, and all of it before the first OCR wave —
+// the bytes sent are identical to what 'pass_a_v4.1' has always meant on BOTH
+// sides, and two frozen-fixture tests in pass-a.test.ts pin it.
+//
+// (The translation change above did NOT do this: its one extra system sentence
+// goes to every transcripts-enabled call, so 'pass_a_v4.1' already names two
+// system prompts. That was judged inert. This one did not need judging.)
 // The per-video re-read is the 'ocr' SelectReason, bookkept in
 // videos.analyzed_with_ocr. Cost of not bumping: a video analysed before its
 // cover was read keeps insights drawn from speech and comments alone until the
@@ -272,7 +279,7 @@ export function passALane(
 
 /** Exported for tests — the v4 line rewrites are exact-string-matched against
  *  the base prompt, so a test pins them against silent reversion. */
-export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): string {
+export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false, withOcr = false): string {
   const brand = (tc.brand_keywords ?? []).join(', ') || '(none provided)'
   const competitors = (tc.competitor_names ?? []).join(', ') || '(none provided)'
   const industry = (tc.industry_keywords ?? []).join(', ') || '(none provided)'
@@ -342,7 +349,7 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
       return '- Insights must come from the comments or (on industry/other videos) the transcript — never from the caption/hashtags alone.'
     return line
   })
-  return [
+  const v4Lines = [
     ...v4Base,
     '',
     'TRANSCRIPT rules — a TRANSCRIPT block, labelled "t", may be present: the words actually spoken in the video.',
@@ -353,6 +360,10 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
     '- CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.',
     '- claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.',
     '- Audience insights still come from the comments first; transcript evidence supplements them. Video sentiment stays comment-derived.',
+  ]
+  if (!withOcr) return v4Lines.join('\n')
+  return [
+    ...v4Lines,
     '',
     'ON-SCREEN TEXT rules — an ON-SCREEN TEXT block, labelled "o", may be present: the words printed on the video\'s COVER FRAME, one text block per line, exactly as they appear.',
     '- This is the creator\'s own words too, typed rather than spoken. On short-form video the hook is very often TYPED on screen and never said out loud, so treat this block as first-class material, not decoration.',
@@ -361,6 +372,7 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
     '- CLIENT or COMPETITOR videos: this is brand messaging. Never cite "o" on these.',
     '- It is ONE FRAME, not the whole video: a cover often shows a fragment, a channel name, or a caption someone else wrote. Do not extrapolate a story from it, and never treat it as a summary of what the video says.',
     '- Never merge two lines of the block into one quote. They are separate text blocks that happen to sit on the same frame, and a sentence made by joining them is a sentence nobody wrote.',
+    '- Watermarks, platform UI, channel names and @handles are not the hook and are not evidence. Transcribe them if they are legible, but never make one hook_text and never cite one as an insight.',
   ].join('\n')
 }
 
@@ -697,7 +709,23 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     .eq('client_id', clientId)
     .maybeSingle()
   const trackingConfig: TrackingConfig = tc ?? { brand_keywords: null, competitor_names: null, industry_keywords: null }
-  const systemPrompt = buildSystemPrompt(trackingConfig, useTranscripts)
+  // Per VIDEO, not once per run (WP7b M1): the ON-SCREEN TEXT rules are emitted
+  // only for a video that actually carries an [o] block, so the prompt a video
+  // without cover text receives is byte-identical — SYSTEM side as well as user
+  // side — to what 'pass_a_v4.1' has always meant. That is what makes "not
+  // bumping the prompt version" a demonstrated fact rather than a judgement
+  // call, and it stops every call carrying ~150 tokens of rules about a block
+  // that is not there. Two cached strings; assembling one is a string join.
+  const systemPromptFor = (() => {
+    const cache = new Map<boolean, string>()
+    return (withOcr: boolean) => {
+      const hit = cache.get(withOcr)
+      if (hit !== undefined) return hit
+      const built = buildSystemPrompt(trackingConfig, useTranscripts, withOcr)
+      cache.set(withOcr, built)
+      return built
+    }
+  })()
 
   // 2. Videos (most-commented first so samples hit the richest content).
   //    Paginated past the 1000-row cap unless an explicit --limit caps the run.
@@ -885,6 +913,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // is a title card is exactly the case this feature was built for.
     const ocr = useTranscripts ? usableOcr(v) : null
     const userPrompt = buildUserPrompt(v, refs, transcript, translation, ocr)
+    const systemPrompt = systemPromptFor(ocr !== null)
 
     if (dryRun) {
       const estInputTokens = Math.ceil((systemPrompt.length + userPrompt.length) / 4)

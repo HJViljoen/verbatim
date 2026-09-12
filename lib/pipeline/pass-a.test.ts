@@ -194,7 +194,7 @@ describe('on-screen text from the cover frame (WP7b, 2026-09-12)', () => {
   const OCR = 'I TRIED 6 PROSTHETIC LEGS\nthis one actually fit'
 
   it('the v4 prompt says what the block is, and that it is one frame', () => {
-    const p = buildSystemPrompt(tc, true)
+    const p = buildSystemPrompt(tc, true, true)
     expect(p).toContain('ON-SCREEN TEXT rules')
     expect(p).toContain("the words printed on the video's COVER FRAME")
     expect(p).toContain('the hook is very often TYPED on screen and never said out loud')
@@ -204,11 +204,29 @@ describe('on-screen text from the cover frame (WP7b, 2026-09-12)', () => {
   })
 
   it('brand videos may never cite it — the transcript rule, unchanged', () => {
-    expect(buildSystemPrompt(tc, true)).toContain('CLIENT or COMPETITOR videos: this is brand messaging. Never cite "o" on these.')
+    expect(buildSystemPrompt(tc, true, true)).toContain('CLIENT or COMPETITOR videos: this is brand messaging. Never cite "o" on these.')
   })
 
   it('the rules are inert on v3 (no video-evidence machinery at all)', () => {
-    expect(buildSystemPrompt(tc, false)).not.toContain('ON-SCREEN TEXT')
+    expect(buildSystemPrompt(tc, false, true)).not.toContain('ON-SCREEN TEXT')
+  })
+
+  it('WITHOUT on-screen text the SYSTEM prompt is byte-identical to v4 as it stood', () => {
+    // The pair to the user-prompt fixture below. Together they make "the prompt
+    // version is deliberately not bumped" a demonstrated fact rather than a
+    // judgement: a video whose cover carried no text — most of the corpus, and
+    // all of it before the first OCR wave — receives exactly the bytes
+    // 'pass_a_v4.1' has always meant, on both sides of the call. It also means
+    // such a call does not carry ~150 tokens of rules about an absent block.
+    expect(buildSystemPrompt(tc, true, false)).not.toContain('ON-SCREEN TEXT')
+    expect(buildSystemPrompt(tc, true, false)).toBe(buildSystemPrompt(tc, true))
+    // …and the OCR variant is strictly the same prompt plus the block.
+    expect(buildSystemPrompt(tc, true, true).startsWith(buildSystemPrompt(tc, true, false))).toBe(true)
+  })
+
+  it('tells the model a watermark or handle is never the hook and never evidence', () => {
+    expect(buildSystemPrompt(tc, true, true))
+      .toContain('Watermarks, platform UI, channel names and @handles are not the hook and are not evidence')
   })
 
   it('the block is labelled [o], says "cover frame", and sits ABOVE the transcript', () => {
