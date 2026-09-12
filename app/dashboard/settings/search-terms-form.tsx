@@ -3,7 +3,8 @@
 import { useActionState, useState, useTransition } from 'react'
 import { Plus, Sparkles, X } from 'lucide-react'
 import { updateSearchTerms, suggestMoreTerms, type SettingsFormState, type SuggestState } from './actions'
-import { MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET, cleanTerms } from '@/lib/onboarding-config'
+import { MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET, cleanTerms } from '@/lib/onboarding-config'
+import { glossaryRule } from '@/lib/calibration'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { SettingsCard } from '@/components/settings-frame'
@@ -142,6 +143,9 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
   const [state, formAction, saving] = useActionState(updateSearchTerms, idleSave)
   const [suggest, setSuggest] = useState<SuggestState>(idleSuggest)
   const [suggesting, startSuggest] = useTransition()
+  // useActionState keeps its last result forever, so "Saved." would sit under
+  // a list the reader has since changed. The first edit after a save retires it.
+  const [edited, setEdited] = useState(false)
 
   const [terms, setTerms] = useState<Record<Bucket, string[]>>({
     brand_keywords: cleanTerms(cfg.brand_keywords ?? []),
@@ -154,15 +158,18 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
   function addTerm(bucket: Bucket, raw: string): string | null {
     const term = raw.trim().replace(/\s+/g, ' ')
     if (term.length < MIN_KEYWORD_CHARS) return `Terms need at least ${MIN_KEYWORD_CHARS} characters — a shorter word finds the whole internet.`
+    if (term.length > MAX_TERM_CHARS) return `Keep a term under ${MAX_TERM_CHARS} characters — a search box does not read a sentence.`
     const list = terms[bucket]
     if (list.length >= MAX_TERMS_PER_BUCKET) return `That list is full at ${MAX_TERMS_PER_BUCKET}. Remove one first.`
     if (list.some((t) => t.toLowerCase() === term.toLowerCase())) return 'That term is already in the list.'
     setTerms((prev) => ({ ...prev, [bucket]: [...prev[bucket], term] }))
+    setEdited(true)
     return null
   }
 
   function removeTerm(bucket: Bucket, term: string) {
     setTerms((prev) => ({ ...prev, [bucket]: prev[bucket].filter((t) => t !== term) }))
+    setEdited(true)
   }
 
   /** A suggestion already in the list is not a suggestion. */
@@ -175,10 +182,10 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
 
   return (
     <SettingsCard
-      title="What we search for"
+      title={<span title={glossaryRule('search_terms')}>What we search for</span>}
       description="The terms we look for on every platform. Change them and the next update searches the new ones — nothing already gathered changes."
     >
-      <form action={formAction} className="space-y-4">
+      <form action={formAction} onSubmit={() => setEdited(false)} className="space-y-4">
         <fieldset disabled={disabled} className="space-y-4">
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-3">
             <TermList
@@ -225,8 +232,8 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
               <Sparkles className="size-3.5" aria-hidden />
               {suggesting ? 'Thinking…' : 'Suggest more'}
             </Button>
-            {state.message && <span className={`text-[12px] ${state.ok ? 'text-positive' : 'text-destructive'}`} role="status">{state.message}</span>}
-            {!state.message && suggest.message && (
+            {state.message && !edited && <span className={`text-[12px] ${state.ok ? 'text-positive' : 'text-destructive'}`} role="status">{state.message}</span>}
+            {(edited || !state.message) && suggest.message && (
               <span className={`text-[12px] ${suggest.ok ? 'text-muted-foreground' : 'text-destructive'}`} role="status">{suggest.message}</span>
             )}
           </div>

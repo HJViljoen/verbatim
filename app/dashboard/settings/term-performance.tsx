@@ -37,8 +37,11 @@ function Row({ t }: { t: TermSummary }) {
           // nothing can be clipped by the table's own scroller, and it works
           // with a keyboard and on paper without a line of JavaScript.
           <details className="min-w-[168px]">
+            {/* A claim you can open, not a coloured badge (MASTER rule 5).
+                The amber pill this replaced read ~1.9:1 on white, under any
+                contrast floor, and rules 1-2 keep hue for data anyway. */}
             <summary
-              className="inline-flex cursor-pointer list-none items-center rounded-full bg-warning/15 px-2 py-px text-[10.5px] font-medium text-warning marker:content-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              className="inline-flex cursor-pointer list-none items-center text-[11px] text-secondary-foreground underline decoration-dotted decoration-1 underline-offset-[3px] marker:content-none hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               title={glossaryRule('term_value')}
             >
               Worth reviewing
@@ -72,14 +75,16 @@ export function TermPerformance({ rows, updates }: { rows: TermSummary[]; update
           <table className="w-full min-w-[720px] text-[11.5px]">
             <thead>
               <tr className="text-[10px] uppercase tracking-[0.06em] text-muted-foreground">
-                {([['Term', 'str'], ['Group', 'str'], ['Where', null], ['Found', 'num'], ['Kept', 'num'], ['With comments', 'num'], ['Insights', 'num'], ['', 'num']] as [string, string | null][]).map(([h, sort], i) => (
+                {([['Term', 'str'], ['Group', 'str'], ['Where', null], ['Found', 'num'], ['Kept', 'num'], ['With comments', 'num'], ['Insights', 'num'], ['Worth reviewing', 'num']] as [string, string | null][]).map(([h, sort], i) => (
                   <th
-                    key={h || 'flag'}
+                    key={h}
                     data-sort={sort ?? undefined}
                     scope="col"
                     className={`pb-1.5 pr-3 font-semibold ${i >= 3 && i <= 6 ? 'text-right' : 'text-left'}`}
                   >
-                    {h}
+                    {/* The flag column's heading is a sort control, so it needs
+                        a name even though the column reads better unlabelled. */}
+                    {i === 7 ? <span className="sr-only">{h}</span> : h}
                   </th>
                 ))}
               </tr>

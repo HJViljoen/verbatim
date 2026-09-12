@@ -1,3 +1,5 @@
+import { platformLabel } from '../format'
+
 /**
  * Search-term value — the rule that says a term is worth a second look.
  *
@@ -40,8 +42,11 @@ export interface TermSummary {
   insights: number
   /** kept / found over every update, 0-1. The number the table shows. */
   keptRate: number
-  /** True when the term meets the review rule below. */
+  /** True when the term meets the review rule — pooled, or on any one platform. */
   worthReviewing: boolean
+  /** Platforms where the term meets the rule on its own. Pooling across
+   *  platforms hides a term that is dead on one and alive on another. */
+  reviewPlatforms: string[]
   /** Evidence for `worthReviewing`, in client language. Empty when false. */
   because: string[]
 }
@@ -119,6 +124,7 @@ export function termValue(rows: KeywordPerfRow[], insightBearing: ReadonlySet<st
     insights,
     keptRate: found > 0 ? kept / found : 0,
     worthReviewing,
+    reviewPlatforms: [],
     because,
   }
 }
@@ -137,20 +143,71 @@ export function recentUpdates<T extends { run_id: string; created_at: string }>(
 }
 
 /**
- * Every term, worst relevance first. `by` picks the grouping: 'term' pools a
- * term across platforms (Settings), 'platform-term' keeps them apart (the CLI,
- * where a term can be dropped on one platform and kept on another).
+ * Every term, worst relevance first.
+ *
+ * `by` picks the grouping: 'platform-term' keeps a term's platforms apart (the
+ * operator CLI, where a term is dropped per platform), 'term' pools them — a
+ * client reads terms, not actors, and 45 terms across four platforms would be
+ * 180 rows in a settings card.
+ *
+ * Pooling alone would hide the only thing worth telling a client, though: a
+ * term can be dead on Instagram and carry the whole category on YouTube, and
+ * the pooled numbers wash that out (Sealand's "freitag" — 182 found and 3 kept
+ * on Instagram, healthy everywhere else). So the pooled row keeps its pooled
+ * numbers and ALSO inherits the flag from any single platform that meets the
+ * rule, with that platform named in the evidence.
  */
 export function summariseTerms(rows: KeywordPerfRow[], by: 'term' | 'platform-term' = 'term'): TermSummary[] {
   const insightBearing = insightBearingUpdates(rows)
-  const groups = new Map<string, KeywordPerfRow[]>()
-  for (const r of rows) {
-    const key = by === 'term' ? r.keyword : `${r.platform}::${r.keyword}`
-    const g = groups.get(key)
-    if (g) g.push(r)
-    else groups.set(key, [r])
+  // Fold the key: `Ossur` and `ossur` from two eras of one config are one term.
+  const termKey = (r: KeywordPerfRow) => r.keyword.trim().toLowerCase()
+  const group = (keyOf: (r: KeywordPerfRow) => string): [string, KeywordPerfRow[]][] => {
+    const out = new Map<string, KeywordPerfRow[]>()
+    for (const r of rows) {
+      const k = keyOf(r)
+      const g = out.get(k)
+      if (g) g.push(r)
+      else out.set(k, [r])
+    }
+    return [...out]
   }
-  return [...groups]
-    .map(([key, g]) => ({ ...termValue(g, insightBearing), key }))
-    .sort((a, b) => a.keptRate - b.keptRate || b.found - a.found)
+
+  if (by === 'platform-term') {
+    return group((r) => `${r.platform}::${termKey(r)}`)
+      .map(([key, g]) => ({ ...termValue(g, insightBearing), key }))
+      .sort(byWorstRelevance)
+  }
+
+  // Per (term, platform) first, so the pooled row can inherit a flag one
+  // platform earned. Same rule, same function — only the grouping differs.
+  const perPlatform = new Map<string, TermSummary[]>()
+  for (const [, g] of group((r) => `${r.platform}::${termKey(r)}`)) {
+    const s = termValue(g, insightBearing)
+    const list = perPlatform.get(termKey(g[0]))
+    if (list) list.push(s)
+    else perPlatform.set(termKey(g[0]), [s])
+  }
+
+  return group(termKey)
+    .map(([key, g]) => {
+      const pooled = { ...termValue(g, insightBearing), key }
+      const flagged = (perPlatform.get(key) ?? []).filter((p) => p.worthReviewing)
+      if (flagged.length === 0) return pooled
+      const lines = flagged.map((p) => {
+        const where = platformLabel(p.platforms[0] ?? '')
+        return `on ${where} it found ${p.found.toLocaleString('en-US')} posts and kept ${p.kept.toLocaleString('en-US')} (${pct(p.kept, p.found)}%), with no insights`
+      })
+      return {
+        ...pooled,
+        worthReviewing: true,
+        reviewPlatforms: flagged.map((p) => p.platforms[0] ?? '').filter(Boolean),
+        because: pooled.worthReviewing
+          ? [...pooled.because, ...lines]
+          : [...lines, 'everywhere else it is doing better — this is one platform’s problem, not the term’s'],
+      }
+    })
+    .sort(byWorstRelevance)
 }
+
+/** Worst relevance first, then the biggest spender among equals. */
+const byWorstRelevance = (a: TermSummary, b: TermSummary) => a.keptRate - b.keptRate || b.found - a.found

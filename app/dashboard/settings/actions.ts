@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
+import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
@@ -139,11 +139,17 @@ export async function updateTrackingConfig(
 // the tenant role (20260911140000_exclude_terms.sql) and goes through the
 // session client, so RLS is the last word on it.
 
+// Bounds the count AND the length of a term. Every term becomes an Apify
+// search query, so an owner POSTing fifteen megabyte-long "terms" is exactly
+// the cost hole the comment above claims cannot exist.
 const termList = (what: string) =>
   z.array(z.string())
     .max(MAX_TERMS_PER_BUCKET, `keep at most ${MAX_TERMS_PER_BUCKET} ${what}`)
     .refine((xs) => xs.every((x) => x.trim().length >= MIN_KEYWORD_CHARS), {
       message: `each term needs at least ${MIN_KEYWORD_CHARS} characters — shorter words find the whole internet`,
+    })
+    .refine((xs) => xs.every((x) => x.trim().length <= MAX_TERM_CHARS), {
+      message: `keep each term under ${MAX_TERM_CHARS} characters — a search box does not read a sentence`,
     })
 
 const termsSchema = z.object({

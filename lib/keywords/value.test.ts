@@ -152,3 +152,41 @@ describe('recentUpdates', () => {
     expect(recentUpdates(rows, 2).map((r) => r.run_id)).toEqual(['b', 'a'])
   })
 })
+
+describe('summariseTerms — a term that is dead on one platform only', () => {
+  // Sealand's real case: "freitag" finds 182 and keeps 3 on Instagram while
+  // earning insights on YouTube. Pooled, it looks fine; the client should
+  // still hear about Instagram.
+  const rows = [
+    ...Array.from({ length: 5 }, (_, i) => row({ run_id: `r${i}`, platform: 'instagram', keyword: 'freitag', bucket: 'competitor', videos_found: 40, gate_survived: 1, insights_contributed: 0 })),
+    ...Array.from({ length: 5 }, (_, i) => row({ run_id: `r${i}`, platform: 'youtube', keyword: 'freitag', bucket: 'competitor', videos_found: 40, gate_survived: 30, insights_contributed: 6 })),
+  ]
+
+  it('flags the pooled row and names the platform that earned the flag', () => {
+    const [freitag] = summariseTerms(rows)
+    expect(freitag.worthReviewing).toBe(true)
+    expect(freitag.reviewPlatforms).toEqual(['instagram'])
+    expect(freitag.because[0]).toContain('on Instagram it found 200 posts and kept 5')
+    expect(freitag.because[1]).toContain('one platform')
+  })
+
+  it('keeps the pooled numbers pooled — the columns do not change', () => {
+    const [freitag] = summariseTerms(rows)
+    expect(freitag).toMatchObject({ found: 400, kept: 155, insights: 30 })
+  })
+
+  it('says nothing when every platform is healthy', () => {
+    const healthy = rows.filter((r) => r.platform === 'youtube')
+    expect(summariseTerms(healthy)[0].worthReviewing).toBe(false)
+  })
+
+  it('folds the term key, so two spellings of one term are one row', () => {
+    const mixed = [
+      row({ run_id: 'a', keyword: 'Ossur', bucket: 'brand', videos_found: 10, gate_survived: 5 }),
+      row({ run_id: 'a', keyword: 'ossur', bucket: 'brand', videos_found: 10, gate_survived: 5 }),
+    ]
+    const out = summariseTerms(mixed)
+    expect(out).toHaveLength(1)
+    expect(out[0].found).toBe(20)
+  })
+})

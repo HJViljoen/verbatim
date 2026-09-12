@@ -21,6 +21,12 @@ export const MIN_KEYWORD_CHARS = 4
 /** The tracking_configs cardinality ceiling, per bucket (T0-2 CHECK). */
 export const MAX_TERMS_PER_BUCKET = 15
 
+/** Longest a single term may be. The DB CHECK bounds how MANY terms a bucket
+ *  holds and nothing bounds how long one is, but every term becomes an Apify
+ *  search query — so "cost is bounded below the UI" needs this too. Far above
+ *  any real term ("urban adventure backpacks" is 25). */
+export const MAX_TERM_CHARS = 40
+
 /**
  * Tidy a list of search terms: trim, collapse inner whitespace, drop anything
  * under MIN_KEYWORD_CHARS, de-dupe case-insensitively, cap at the DB ceiling.
