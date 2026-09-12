@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyCheck } from './check'
+import { applyCheck, briefAnswered, briefSubjects } from './check'
 import type { WriterOutput } from './write'
 
 const finding = (headline: string): WriterOutput['findings'][number] => ({
@@ -26,5 +26,46 @@ describe('applyCheck', () => {
     const out = applyCheck(written, written.findings.map((f) => ({ headline: f.headline, verdict: 'silent' as const, theySay: null })))
     expect(out.written.findings).toHaveLength(3)
     expect(out.flagged).toBe(false)
+  })
+})
+
+describe('briefAnswered', () => {
+  const brief = 'Review how the conversation about comfort and fit moved this month, for the marketing lead'
+
+  it('reads the brief for what it is about, not for how it asks', () => {
+    expect(briefSubjects(brief)).toEqual(['conversation', 'comfort', 'fit', 'moved', 'marketing', 'lead'])
+    expect(briefSubjects('')).toEqual([])
+    expect(briefSubjects(null)).toEqual([])
+  })
+
+  it('passes a document that takes the brief up, and names what a document missed', () => {
+    const answered = briefAnswered(brief, {
+      ...written,
+      findings: [{ ...written.findings[0], headline: 'Comfort decides the long-term user', saw: 'Owners describe the fit changing by evening.' }],
+    })
+    expect(answered.answered).toBe(true)
+    expect(answered.missed).not.toContain('comfort')
+    expect(answered.missed).toContain('marketing')
+  })
+
+  it('fails only the document that went somewhere else entirely', () => {
+    const elsewhere = briefAnswered('Review the athlete campaign and what the sponsorship did for the brand.', {
+      ...written,
+      findings: [{ ...written.findings[0], headline: 'Insurance decides who gets a device', saw: 'Coverage rules are the barrier people describe.' }],
+      in_short: { summary: 'Coverage and cost lead again.' },
+    })
+    expect(elsewhere.answered).toBe(false)
+    expect(elsewhere.missed).toContain('athlete')
+  })
+
+  it('has nothing to say about a brief nobody wrote', () => {
+    expect(briefAnswered('', written)).toEqual({ answered: true, subjects: [], missed: [] })
+    expect(briefAnswered(null, written).answered).toBe(true)
+  })
+
+  it('reads the whole document, not only the findings, and the plural of a word it holds', () => {
+    const out = briefAnswered('Say what the audience asks about batteries.', { ...written, asked: ['How long does the battery last: nobody answers it.'] })
+    expect(out.subjects).toEqual(['audience', 'asks', 'batteries'])
+    expect(out.answered).toBe(true)
   })
 })

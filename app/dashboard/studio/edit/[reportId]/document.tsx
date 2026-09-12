@@ -9,7 +9,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { hydrateSnapshot, loadSnapshot, loadSnapshotWorkings } from '@/lib/snapshots'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { documentSettings, isDocumentData, type DocumentWorkings } from '@/lib/reports/documents/types'
-import { documentTemplate } from '@/lib/reports/documents/templates'
+import { CUSTOM_KEY, documentTemplate, resolveTemplate } from '@/lib/reports/documents/templates'
 import { BUILD_ACTIVE, type ReportRow } from '@/lib/reports/types'
 import { latestBuild } from '@/lib/reports/documents/builds'
 import { BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
@@ -22,8 +22,13 @@ const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'n
 
 export async function DocumentStudioPage({ report, clientId }: { report: ReportRow; clientId: string }) {
   const admin = createAdminClient()
-  const template = documentTemplate(report.template_key)
+  const declared = documentTemplate(report.template_key)
   const settings = documentSettings(report.settings)
+  // What this report actually prints: the declared template composed with its
+  // own settings (WP7d), so the page count, the competitor picker and the
+  // description describe the document a build would produce, not the
+  // template it started from.
+  const template = declared ? resolveTemplate(declared, settings) : null
   const [{ data: cfg }, build, snapshot] = await Promise.all([
     admin.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle(),
     latestBuild(admin, report.id),
@@ -64,11 +69,12 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
           readerHint={template?.writtenFor ?? 'the sales team'}
           competitorsUsed={!!template?.skeleton.some((p) => p.kind === 'competitor') || !!template?.anchors.some((a) => a.perCompetitor)}
           findingsMax={template?.findingsMax ?? 4}
+          custom={declared?.key === CUSTOM_KEY}
         />}
         page={editor ?? (
           <div className="flex flex-1 flex-col items-start justify-center gap-3 px-8">
             <p className="text-[14px] font-medium">{inFlight ? 'Writing the first draft.' : 'Build to write the first draft.'}</p>
-            <p className="max-w-[48ch] text-[12.5px] text-muted-foreground">{template?.description ?? ''} A build reads the update, asks the data, writes for its reader and prints the PDF; three to five minutes. Then every block on the page can be edited here before it goes out.</p>
+            <p className="max-w-[48ch] text-[12.5px] text-muted-foreground">{declared?.key === CUSTOM_KEY && settings.brief ? `This brief answers: ${settings.brief}` : template?.description ?? ''} A build reads the update, asks the data, writes for its reader and prints the PDF; three to five minutes. Then every block on the page can be edited here before it goes out.</p>
             {build?.status === 'failed' && build.error && <p className="text-[12.5px] text-negative">The last build failed: {build.error}</p>}
           </div>
         )}

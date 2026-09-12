@@ -7,7 +7,7 @@ import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { instantiate, starterTemplate } from '@/lib/reports/templates'
 import { documentTemplate } from '@/lib/reports/documents/templates'
-import { DEFAULT_DOCUMENT_SETTINGS, documentSettings } from '@/lib/reports/documents/types'
+import { DEFAULT_DOCUMENT_SETTINGS, documentSettings, type DocumentBlockKey, type DocumentRole } from '@/lib/reports/documents/types'
 import { documentSettingsPatch, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
 import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
@@ -240,7 +240,9 @@ export async function restoreBlock(args: { snapshotId: string; blockId: string }
 // ── document settings (2026-08-31) ────────────────────────────────────────
 // The few choices a written report has: its title, who it is written for,
 // who the reader sells to, which tracked competitors it covers, how many
-// findings. Any member. The built snapshot stands; the next build uses them.
+// findings, and on a custom brief the operator's own instruction, its topic
+// blocks and the role that writes it. Any member. The built snapshot stands;
+// the next build uses them.
 
 const settingsArgs = z.object({ id: z.uuid(), patch: documentSettingsPatch })
 
@@ -259,6 +261,11 @@ export async function updateDocumentSettings(args: { id: string; patch: z.infer<
     ...(p.sellsTo !== undefined ? { sellsTo: p.sellsTo } : {}),
     ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
     ...(p.findings !== undefined ? { findings: p.findings } : {}),
+    // A custom brief's own three (WP7d). An empty string or an empty array is
+    // how the Studio clears one; documentSettings drops both.
+    ...(p.brief !== undefined ? { brief: p.brief } : {}),
+    ...(p.blocks !== undefined ? { blocks: p.blocks as DocumentBlockKey[] } : {}),
+    ...(p.role !== undefined ? { role: p.role as DocumentRole } : {}),
   })
   const row: Record<string, unknown> = { cover, settings, updated_at: new Date().toISOString() }
   if (p.title !== undefined) row.title = p.title

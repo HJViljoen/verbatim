@@ -44,7 +44,7 @@ export interface BuildContext {
 
 export interface ResearchOut { questions: ResearchQuestion[]; answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean; timings: Record<string, number> }
 export interface WriteOut { written: WriterOutput; previous: PreviousBrief | null; costUsd: number; timings: Record<string, number> }
-export interface CheckOut { written: WriterOutput; verdicts: FindingVerdict[]; dropped: { headline: string; reason: string }[]; flagged: boolean; costUsd: number; timings: Record<string, number> }
+export interface CheckOut { written: WriterOutput; verdicts: FindingVerdict[]; dropped: { headline: string; reason: string }[]; flagged: boolean; brief: { answered: boolean; subjects: string[]; missed: string[] } | null; costUsd: number; timings: Record<string, number> }
 export interface FreezeOut { snapshotId: string; title: string; evidenceIds: string[]; costUsd: number }
 export interface RenderOut { artifactId: string; bytes: number; ms: number; url: string }
 
@@ -139,10 +139,12 @@ export async function checkStep(admin: SupabaseClient, ctx: BuildContext, w: Pic
   const runId = ctx.runId ?? (await latestRunId(admin, ctx.clientId))
   if (!runId) throw new DocumentBuildError('No finished run to check against.')
   const t0 = Date.now()
-  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written })
+  // The operator's own brief is checked here too (WP7d): a custom brief that
+  // was not answered flags the build for review, like a dropped finding.
+  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written, brief: ctx.settings.brief })
   await spend(admin, ctx, priorCostUsd + out.costUsd)
   if (out.flagged) await mark(admin, ctx, 'checking', { needs_review: true })
-  return { written: out.written, verdicts: out.verdicts, dropped: out.dropped, flagged: out.flagged, costUsd: out.costUsd, timings: { check: Date.now() - t0 } }
+  return { written: out.written, verdicts: out.verdicts, dropped: out.dropped, flagged: out.flagged, brief: out.brief, costUsd: out.costUsd, timings: { check: Date.now() - t0 } }
 }
 
 export async function freezeStep(
@@ -223,7 +225,7 @@ export async function runBuildInProcess(
     const write = await writeStep(admin, ctx, research)
     log(`write: ${write.written.findings.length} findings · $${write.costUsd.toFixed(3)} · ${write.timings.write} ms`)
     const check = opts.check === false ? null : await checkStep(admin, ctx, write, research.costUsd + write.costUsd)
-    if (check) log(`check: ${check.verdicts.map((v) => v.verdict).join(', ') || 'nothing to check'} · dropped ${check.dropped.length} · $${check.costUsd.toFixed(3)} · ${check.timings.check} ms`)
+    if (check) log(`check: ${check.verdicts.map((v) => v.verdict).join(', ') || 'nothing to check'} · dropped ${check.dropped.length}${check.brief ? ` · brief ${check.brief.answered ? 'answered' : `UNANSWERED (nothing on ${check.brief.missed.join(', ')})`}` : ''} · $${check.costUsd.toFixed(3)} · ${check.timings.check} ms`)
     const costUsd = research.costUsd + write.costUsd + (check?.costUsd ?? 0)
     const timings = { ...research.timings, ...write.timings, ...(check?.timings ?? {}) }
     const freeze = await freezeStep(admin, ctx, { answers: research.answers, written: check?.written ?? write.written, check, costUsd, timings })

@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { PageFrame, PageBar, BarPill } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody } from '@/components/shell/master-list'
 import { STARTER_TEMPLATES } from '@/lib/reports/templates'
-import { DOCUMENT_TEMPLATES } from '@/lib/reports/documents/templates'
+import { CUSTOM_KEY, DOCUMENT_STARTERS } from '@/lib/reports/documents/templates'
 import { AUDIENCES } from '@/lib/reports/types'
 import { catalogueTitle } from '@/lib/reports/catalogue'
 import { createReport } from '@/app/dashboard/studio/actions'
@@ -12,7 +12,9 @@ import { createReport } from '@/app/dashboard/studio/actions'
 // and suggests who it is written for; both are yours to change in the editor.
 // Written reports (2026-08-31): the agent writes the document from the
 // update in a role, inside a fixed skeleton; you set who it is for and edit
-// the words before they go out.
+// the words before they go out. The custom brief (WP7d, 2026-09-12) stands
+// beside the four: your own instruction plus the topic blocks it must
+// include, written by the same agent in one of the same roles.
 
 export const dynamic = 'force-dynamic'
 
@@ -31,16 +33,20 @@ export default function NewReportPage() {
             <div className="flex flex-col gap-3">
               <p className="px-1 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">Written from the update</p>
               <ul className="grid gap-3 md:grid-cols-2">
-                {DOCUMENT_TEMPLATES.map((t) => (
+                {DOCUMENT_STARTERS.map((t) => (
                   <li key={t.key} className="flex flex-col gap-2 rounded-lg bg-tile p-4 shadow-tile">
                     <div>
                       <p className="text-[14px] font-semibold">{t.name}</p>
-                      <p className="font-mono text-[10.5px] text-muted-foreground">for {audienceLabel(t.audience)} · written by Verbatim · {t.skeleton.length} kinds of page</p>
+                      <p className="font-mono text-[10.5px] text-muted-foreground">
+                        {t.key === CUSTOM_KEY
+                          ? 'for whoever you name · written by Verbatim · your brief and the blocks you pick'
+                          : `for ${audienceLabel(t.audience)} · written by Verbatim · ${t.skeleton.length} kinds of page`}
+                      </p>
                     </div>
                     <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{t.description}</p>
                     <button type="submit" name="document" value={t.key}
                       className="mt-1 inline-flex h-[26px] w-fit items-center rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground hover:bg-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      Use this template
+                      {t.key === CUSTOM_KEY ? 'Write your own brief' : 'Use this template'}
                     </button>
                   </li>
                 ))}
