@@ -188,14 +188,33 @@ export async function runClassifyMetaBatch(
   callIndex: number,
 ): Promise<ClassifyMetaResult> {
   const admin = createAdminClient()
-  const videos = await selectAll<ClassifyInput & { classified_type: string | null }>(() =>
-    admin
-      .from('videos')
-      .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type')
-      .eq('client_id', clientId)
-      .in('id', videoIds)
-      .order('id'),
-  )
+  type Row = ClassifyInput & { classified_type: string | null }
+  // The OCR columns are asked for separately so a deploy that lands before its
+  // migration degrades to "classify without on-screen text" instead of failing
+  // the batch — the same tolerance isMissingColumnError already gives
+  // classified_prompt_version below.
+  let videos: Row[]
+  try {
+    videos = await selectAll<Row>(() =>
+      admin
+        .from('videos')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type')
+        .eq('client_id', clientId)
+        .in('id', videoIds)
+        .order('id'),
+    )
+  } catch (e) {
+    if (!(e instanceof Error) || !/ocr_(text|status)/.test(e.message) || !/does not exist|schema cache/i.test(e.message)) throw e
+    console.warn('[classify-meta] videos.ocr_text/ocr_status do not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Classifying without on-screen text.')
+    videos = (await selectAll<Omit<Row, 'ocr_text' | 'ocr_status'>>(() =>
+      admin
+        .from('videos')
+        .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
+        .eq('client_id', clientId)
+        .in('id', videoIds)
+        .order('id'),
+    )).map((v) => ({ ...v, ocr_text: null, ocr_status: null }))
+  }
   // Re-check the null guard at write-distance: a resumed run may have
   // classified some of these since the plan step.
   const pending = videos.filter((v) => v.classified_type == null)

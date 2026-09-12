@@ -337,13 +337,38 @@ export const OCR_BATCH = 8
 /** OCR steps dispatched per parallel wave (the transcribe wave pattern). */
 export const OCR_PARALLEL = 4
 
-/** Runaway BACKSTOP on the gather-time OCR wave, in videos per run — like
- *  TRANSCRIBE_CAP, not a budget. Measured 2026-09-12, a cover costs $0.0003
- *  (YouTube's 480x360 thumbnail) to $0.0035 (a full-resolution Instagram
- *  still), so even 1200 images is at worst a few dollars against a run whose
- *  Apify bill is an order of magnitude more; the cap exists so a pathological
- *  run cannot spend unbounded, not to ration a real one. */
+/**
+ * Runaway BACKSTOP on the gather-time OCR wave, in videos PER RUN — shared
+ * across platforms, not per platform.
+ *
+ * TRANSCRIBE_CAP's precedent is per-platform, and this deliberately is not.
+ * `plan-ocr` runs inside the gather loop, so a per-platform cap would have made
+ * the real ceiling 3 x 1200 + OCR_BACKFILL_CAP = 3,900 images a run, three
+ * times the number written here. An unstated 3x is exactly the kind of number
+ * that turns up on a bill. The plan step is handed the REMAINDER instead, so
+ * the three platforms share one budget in gather order.
+ *
+ * Worst case, stated so nobody has to derive it — measured 2026-09-12, a cover
+ * costs $0.0003 (YouTube's 480x360 hqdefault, a flat 576 prompt tokens) to
+ * $0.0035 (a full-resolution Instagram still, ~5,700 tokens, at OpenAI's patch
+ * cap):
+ *
+ *   OCR_CAP 1200 + OCR_BACKFILL_CAP 300 = 1,500 images per run per tenant
+ *   → $0.45 (all YouTube) to $5.25 (all full-resolution) per run, worst case
+ *   → at most 8.8% of RUN_MODEL_BUDGET_USD
+ *
+ * Steady state is nothing like that: a week's new videos is a few hundred
+ * covers, i.e. cents. The cap exists so a pathological run cannot spend
+ * unbounded, not to ration a real one.
+ */
 export const OCR_CAP = 1200
+
+/** Attempts a cover read gets before 'failed'/'no_image' becomes terminal, on
+ *  the platforms where retrying can help at all (see needsOcr). Three, matching
+ *  TRANSCRIPT_MAX_ATTEMPTS: enough that a CDN blip or an OpenAI 5xx cannot
+ *  permanently remove a video whose cover is still there, few enough that a
+ *  weekly run stops chasing a genuine dead end. */
+export const OCR_MAX_ATTEMPTS = 3
 
 /** Runaway backstop on the YouTube OCR BACKFILL — the second wave, over
  *  historical rows whose cover is still reachable because it is derived from

@@ -15,7 +15,7 @@ import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
-import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult } from '@/lib/pipeline/ocr'
+import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
@@ -33,7 +33,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -385,9 +385,15 @@ export const runPipeline = inngest.createFunction(
     // summary carries one number per verdict rather than one per platform.
     const ocr = {
       ok: 0, none: 0, noImage: 0, failed: 0, cost: 0, rateLimited: false, batchesFailed: 0,
-      backfilled: 0, backfillNeeding: 0, backfillDeferred: 0,
+      backfilled: 0, backfillNeeding: 0, backfillDeferred: 0, planned: 0,
       firstError: undefined as string | undefined,
     }
+    // OCR_CAP is a PER-RUN budget shared by the platforms, not one each (H2):
+    // plan-ocr runs inside this loop, so a per-platform cap would have made the
+    // real ceiling 3x the documented number. Each plan step is handed what is
+    // left. Derived only from memoised step results, so a replay recomputes the
+    // same remainder.
+    let ocrRemaining = OCR_CAP
     for (const platform of gatherPlatforms) {
       try {
         // Searches dispatch in parallel waves (transcribe-fan-out precedent):
@@ -564,8 +570,10 @@ export const runPipeline = inngest.createFunction(
         if (flags.ocr && flags.transcripts) {
           try {
             const ocrBatches = await step.run(`plan-ocr:${platform}`, () =>
-              planOcrBatches(clientId, runId, platform as Platform),
+              planOcrBatches(clientId, runId, platform as Platform, ocrRemaining),
             )
+            ocr.planned += ocrBatches.flat().length
+            ocrRemaining = Math.max(0, ocrRemaining - ocrBatches.flat().length)
             for (let w = 0; w < ocrBatches.length; w += OCR_PARALLEL) {
               const wave = await Promise.all(
                 ocrBatches.slice(w, w + OCR_PARALLEL).map((videoIds, j) =>
@@ -1398,17 +1406,37 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   // full lane (their fans' comments would contaminate audience themes; Step 2c
   // is their consumer) — passALane admits them to the claims lane only, when
   // they carry a usable transcript (Brand Voice, 2026-08-16).
-  const videos = await selectAll<{
+  type PlanVideo = {
     id: string; platform: string; video_id: string; is_client: boolean | null; is_competitor: boolean | null
     transcript_status: string | null; source: string | null; run_id: string | null
     analyzed_run_id: string | null; analyzed_comment_count: number | null; analyzed_prompt_version: string | null
     analyzed_lane: string | null; analyzed_with_transcript: boolean | null
     analyzed_with_translation: boolean | null; analyzed_with_ocr: boolean | null
-  }>(() =>
-    admin.from('videos')
-      .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr')
-      .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
-  )
+  }
+  const PLAN_COLS = 'id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript, analyzed_with_translation'
+  // analyzed_with_ocr is asked for separately so a deploy that lands before the
+  // migration degrades instead of taking the run down: this select failing is
+  // plan-pass-a failing, which is the whole run, for every tenant.
+  let videos: PlanVideo[]
+  try {
+    videos = await selectAll<PlanVideo>(() =>
+      admin.from('videos')
+        .select(`${PLAN_COLS}, analyzed_with_ocr`)
+        .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
+    )
+  } catch (e) {
+    if (!mentionsMissingColumn(e, 'analyzed_with_ocr')) throw e
+    console.warn('[plan-pass-a] videos.analyzed_with_ocr does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Planning without it.')
+    videos = (await selectAll<Omit<PlanVideo, 'analyzed_with_ocr'>>(() =>
+      admin.from('videos')
+        .select(PLAN_COLS)
+        .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
+    )).map((v) => ({ ...v, analyzed_with_ocr: true }))
+    // `true`, not null: with no column there is no on-screen text either, and
+    // reading it as false would make the 'ocr' rule fire on every video the
+    // moment ocrUsableNow could be true. It cannot be — withOcrText is empty on
+    // this path — but the two must not depend on each other to stay safe.
+  }
   // WHICH videos carry a translation, as an id set — deliberately NOT a
   // `transcript_en` column in the read above. That column is transcript-sized,
   // and a corpus-wide read of transcript text once hung Postgres for eight
@@ -1431,14 +1459,32 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   // the translation is one: ocr_text is prompt-sized and the plan only needs its
   // null-ness. usableOcr's exact rule — status 'ok' AND non-blank text — so a
   // row this query calls read and Pass A does not cannot re-select forever.
-  const withOcrText = new Set(
-    (await selectAll<{ id: string }>(() =>
-      admin.from('videos').select('id')
-        .eq('client_id', clientId).eq('ocr_status', 'ok')
-        .not('ocr_text', 'is', null).neq('ocr_text', '')
-        .order('id', { ascending: true }),
-    )).map((r) => r.id),
-  )
+  //
+  // Wrapped: a deploy that lands before the migration makes this raise 42703,
+  // and plan-pass-a failing takes the WHOLE RUN down, for every tenant. An
+  // empty set is the correct degraded answer — no video is re-read for
+  // on-screen text it cannot have yet.
+  //
+  // NOTE the one way this differs from usableOcr: that helper trims before
+  // deciding, this query cannot. A whitespace-only ocr_text would be called
+  // "read" here and "not read" by Pass A, and the video would re-select as
+  // 'ocr' every run forever. normaliseOcrLines cannot produce such a row (it
+  // trims and stores null for empty), so this is unreachable through the wave —
+  // a hand-edit is the only way in.
+  let withOcrText = new Set<string>()
+  try {
+    withOcrText = new Set(
+      (await selectAll<{ id: string }>(() =>
+        admin.from('videos').select('id')
+          .eq('client_id', clientId).eq('ocr_status', 'ok')
+          .not('ocr_text', 'is', null).neq('ocr_text', '')
+          .order('id', { ascending: true }),
+      )).map((r) => r.id),
+    )
+  } catch (e) {
+    if (!mentionsMissingColumn(e, 'ocr_status')) throw e
+    console.warn('[plan-pass-a] videos.ocr_status does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Planning without on-screen text.')
+  }
   const counts = new Map<string, number>()
   const comments = await selectAll<{ platform: string; video_id: string }>(() =>
     admin.from('comments').select('platform, video_id').eq('client_id', clientId).order('id', { ascending: true }),

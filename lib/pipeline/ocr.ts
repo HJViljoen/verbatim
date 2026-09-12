@@ -6,10 +6,11 @@ import { openai } from '../openai'
 import { adapters } from '../gather/platforms'
 import type { Platform, PlatformAdapter, RawItem } from '../gather/types'
 import {
-  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_FETCH_TIMEOUT_MS, OCR_IMAGE_DETAIL,
+  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_FETCH_TIMEOUT_MS, OCR_IMAGE_DETAIL, OCR_MAX_ATTEMPTS,
   OCR_MAX_IMAGE_BYTES, OCR_MAX_CHARS, OCR_MODEL, estimateCost,
 } from '../config'
 import { logAiCall } from './ai-log'
+import { isMissingColumnError } from './classify-meta'
 
 // On-screen text from the COVER FRAME (WP7b, 2026-09-12).
 //
@@ -54,19 +55,51 @@ export type OcrStatus = 'ok' | 'none' | 'no_image' | 'failed'
 /** The columns the selection rule reads. */
 export interface OcrableVideo {
   ocr_status: string | null
+  /** Reads that have been attempted and did not produce a verdict about the
+   *  FRAME ('failed' / 'no_image'). Null on rows written before the column. */
+  ocr_attempts?: number | null
+}
+
+/** A row of the selection query. */
+export interface OcrSelectionRow extends OcrableVideo {
+  video_id: string
 }
 
 /**
- * The selection rule, stated once: a video is a candidate until it has an
- * answer of any kind.
+ * The selection rule, stated once.
  *
- * Every terminal status stays terminal, 'failed' included — a weekly run must
- * not re-pay for the same failure forever, and 'none' is a verdict the frame
- * already gave. Clearing the column is the deliberate retry
- * (scripts/ocr-videos.ts prints the counts).
+ * Never read → candidate. `ok` and `none` are FINAL: both are verdicts the
+ * frame itself gave, and a weekly run must not re-pay to be told the same thing
+ * ("none" — the model looked and there was no legible text — is an answer, not
+ * a miss).
+ *
+ * `failed` and `no_image` are different: neither says anything about the frame.
+ * A fetch timeout, a CDN 5xx, an OpenAI 5xx or a format we cannot decode is a
+ * fact about the attempt. Whether retrying is worth anything depends entirely on
+ * whether the image is still THERE:
+ *
+ *  - **Durable cover (YouTube)** — `https://i.ytimg.com/vi/<id>/hqdefault.jpg`
+ *    never expires, so one bad eight-second fetch must not remove a video from
+ *    the backfill for good. Retry until OCR_MAX_ATTEMPTS.
+ *  - **Signed cover (TikTok/Instagram) that still answers** — same argument
+ *    while it lasts: the caller checked, the image is reachable, retry.
+ *  - **Signed cover that is gone** — retrying buys nothing, so it is terminal.
+ *    This is the common case within days.
+ *
+ * That budget is what stops ~9% of TikTok (the HEIC covers) and any transient
+ * blip being tombstoned permanently by the first run that touches them. Above
+ * the budget it IS terminal — a weekly run cannot chase the same failure
+ * forever. Clearing ocr_status is still the deliberate manual retry.
  */
-export function needsOcr(v: OcrableVideo): boolean {
-  return v.ocr_status == null
+export function needsOcr(
+  v: OcrableVideo,
+  opts: { durableCover?: boolean; coverStillAnswers?: boolean } = {},
+): boolean {
+  if (v.ocr_status == null) return true
+  if (v.ocr_status === 'ok' || v.ocr_status === 'none') return false
+  const retryable = opts.durableCover === true || opts.coverStillAnswers === true
+  if (!retryable) return false
+  return (v.ocr_attempts ?? 0) < OCR_MAX_ATTEMPTS
 }
 
 /** A platform can be OCR'd at gather time when its adapter can pull a cover out
@@ -144,6 +177,66 @@ export interface OcrOutcome {
   prompt: { system: string; user: string }
 }
 
+/** A cover we cannot use, as opposed to a read that went wrong. Unsupported
+ *  format, disallowed host, empty or oversized body: all facts about OUR
+ *  fetcher, not about the frame, so they must never be recorded as 'failed'
+ *  (see ocrOne). */
+export class UnusableCoverError extends Error {}
+
+/** The image formats OpenAI's vision input accepts: PNG, JPEG, WEBP and
+ *  non-animated GIF. Anything else — HEIC above all — is rejected by the API. */
+export type AllowedImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'
+
+/**
+ * The real format, from the MAGIC BYTES rather than the Content-Type header.
+ *
+ * The header is third-party data and is only as good as the CDN feels like
+ * being; the first bytes of the body are the file. Returns null for anything
+ * OpenAI will not accept — most importantly HEIC/HEIF, which TikTok serves for
+ * a real share of its covers (measured 2026-09-12: 125 of 1,422 stored TikTok
+ * cover urls end `.heic`, and the ones that are still live really do return
+ * `image/heic` bytes).
+ *
+ * Pure; exported for tests.
+ */
+export function sniffImageType(bytes: Buffer): AllowedImageType | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg'
+  if (bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png'
+  if (bytes.length >= 12 && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp'
+  if (bytes.length >= 6 && /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString('ascii'))) return 'image/gif'
+  return null
+}
+
+/**
+ * Hosts a cover may be fetched from.
+ *
+ * The URL comes out of an Apify actor's output — third-party data — and is then
+ * fetched server-side, so it is worth naming the four CDNs that actually serve
+ * covers rather than letting an actor point the fetcher anywhere. Low
+ * exploitability (the response must sniff as an image and nothing is echoed
+ * back), and it costs nothing. A rejection is an UnusableCoverError, not a
+ * failure, so a new CDN hostname degrades to "no image" and shows up in the
+ * counts instead of tombstoning a platform.
+ *
+ * Pure; exported for tests.
+ */
+const COVER_HOST_SUFFIXES = [
+  '.ytimg.com',          // youtube (i.ytimg.com)
+  '.tiktokcdn.com',      // tiktok, and its regional siblings below
+  '.tiktokcdn-us.com',
+  '.tiktokcdn-eu.com',
+  '.tiktokcdn-va.com',
+  '.cdninstagram.com',   // instagram
+  '.fbcdn.net',
+]
+export function isAllowedCoverHost(url: string): boolean {
+  let u: URL
+  try { u = new URL(url) } catch { return false }
+  if (u.protocol !== 'https:') return false
+  const host = u.hostname.toLowerCase()
+  return COVER_HOST_SUFFIXES.some((suffix) => host === suffix.slice(1) || host.endsWith(suffix))
+}
+
 /**
  * Fetch a cover and return it as a data URI.
  *
@@ -152,20 +245,47 @@ export interface OcrOutcome {
  * GET comes back to OpenAI's image fetcher as `400 Error while downloading
  * file. Upstream status code: 403`: the CDN serves us and blocks them. Passing
  * the url straight through would have made the Instagram half of the wave fail
- * on every single video, and — because every ocr_status is terminal — written
- * that failure permanently across the corpus before anyone looked.
+ * on every single video.
  *
  * One path for all three platforms rather than a URL shortcut for YouTube: a
  * cover is tens of kilobytes, and a second code path exists only to break.
+ *
+ * ON HEIC, and why there is no format rewrite here. TikTok serves a real share
+ * of its covers as HEIC, which the vision API rejects outright. The obvious fix
+ * — rewrite the `~tplv-…:q70.heic` transform suffix to `.jpeg`, since the tplv
+ * path encodes the output format — DOES NOT WORK, verified read-only on two
+ * live HEIC covers on 2026-09-12: the transform is inside the SIGNED path, so
+ * changing a character of it returns 403, and `&format=jpeg` / `&x-format=jpeg`
+ * are ignored (still `image/heic`, byte-identical). Dropping the transform
+ * entirely is 403 too. Converting would mean decoding HEIC ourselves, which
+ * needs an image library this repo does not declare. So a HEIC cover is
+ * honestly unusable, and says so: UnusableCoverError → 'no_image', which is
+ * retryable while the url still answers (see needsOcr) rather than a permanent
+ * tombstone on ~9% of TikTok.
  */
 async function fetchCoverAsDataUri(imageUrl: string): Promise<string> {
+  if (!isAllowedCoverHost(imageUrl)) throw new UnusableCoverError('cover host not allowed')
   const res = await fetch(imageUrl, { signal: AbortSignal.timeout(OCR_FETCH_TIMEOUT_MS) })
   if (!res.ok) throw new Error(`cover fetch ${res.status}`)
-  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim()
-  if (!type.startsWith('image/')) throw new Error(`cover is not an image (${type || 'no content-type'})`)
+  // Check the declared length BEFORE reading the body: eight 10MB images in one
+  // batch step is 80MB of transient heap in a serverless function, spent only to
+  // reject them. The post-read check stays for chunked responses that declare
+  // nothing.
+  const declared = Number(res.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > OCR_MAX_IMAGE_BYTES) {
+    throw new UnusableCoverError(`cover too large (${declared} bytes declared)`)
+  }
   const bytes = Buffer.from(await res.arrayBuffer())
-  if (!bytes.length) throw new Error('cover fetch returned no bytes')
-  if (bytes.length > OCR_MAX_IMAGE_BYTES) throw new Error(`cover too large (${bytes.length} bytes)`)
+  if (!bytes.length) throw new UnusableCoverError('cover fetch returned no bytes')
+  if (bytes.length > OCR_MAX_IMAGE_BYTES) throw new UnusableCoverError(`cover too large (${bytes.length} bytes)`)
+  // The FILE, not the header: a CDN that mislabels its own bytes would otherwise
+  // send the model something it cannot decode and we would book that as a
+  // failure of the frame.
+  const type = sniffImageType(bytes)
+  if (!type) {
+    const declaredType = (res.headers.get('content-type') ?? '').split(';')[0].trim()
+    throw new UnusableCoverError(`cover format not supported by the vision api (${declaredType || 'unknown'})`)
+  }
   return `data:${type};base64,${bytes.toString('base64')}`
 }
 
@@ -209,12 +329,13 @@ export async function ocrCoverFrame(imageUrl: string): Promise<OcrOutcome> {
  *  Inngest-step-sized batches. orderAndChunkPending's shape, on ocr_status.
  *  Exported for tests. */
 export function orderAndChunkOcrPending(
-  rows: { video_id: string; comments_count: number | null; ocr_status: string | null }[],
+  rows: (OcrSelectionRow & { comments_count: number | null })[],
   batchSize = OCR_BATCH,
   cap = OCR_CAP,
+  opts: { durableCover?: boolean; coverStillAnswers?: boolean } = {},
 ): string[][] {
   const ids = rows
-    .filter(needsOcr)
+    .filter((r) => needsOcr(r, opts))
     .sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
     .slice(0, cap)
     .map((r) => r.video_id)
@@ -225,10 +346,20 @@ export function orderAndChunkOcrPending(
  *  for one platform, minus videos that already have an answer, signal-first,
  *  chunked. planTranscribeBatches' shape — the status check is scoped to
  *  exactly these candidates (chunked .in), never a platform-wide unbounded
- *  read. */
-export async function planOcrBatches(clientId: string, runId: string, platform: Platform): Promise<string[][]> {
+ *  read.
+ *
+ *  `cap` is the run's REMAINING budget, not a per-platform one: the caller
+ *  subtracts what each platform planned so the three share OCR_CAP between them
+ *  (H2). Pass 0 and nothing is planned. */
+export async function planOcrBatches(
+  clientId: string,
+  runId: string,
+  platform: Platform,
+  cap = OCR_CAP,
+): Promise<string[][]> {
   const admin = createAdminClient()
   if (!canOcr(adapters[platform])) return []
+  if (!(await hasOcrColumns(admin))) return []
   const rawIds = (
     await selectAll<{ video_id: string }>(() =>
       admin
@@ -242,18 +373,21 @@ export async function planOcrBatches(clientId: string, runId: string, platform: 
   ).map((r) => r.video_id)
   if (!rawIds.length) return []
 
-  const rows: { video_id: string; comments_count: number | null; ocr_status: string | null }[] = []
+  const rows: (OcrSelectionRow & { comments_count: number | null })[] = []
   for (const part of chunk(rawIds, 100)) {
     const { data, error } = await admin
       .from('videos')
-      .select('video_id, comments_count, ocr_status')
+      .select('video_id, comments_count, ocr_status, ocr_attempts')
       .eq('client_id', clientId)
       .eq('platform', platform)
       .in('video_id', part)
     if (error) throw new Error(`plan ocr: ${error.message}`)
     rows.push(...((data ?? []) as typeof rows))
   }
-  return orderAndChunkOcrPending(rows)
+  // Gather time: this run just fetched these items, so a signed cover is live by
+  // definition. A previous run's 'failed' or 'no_image' therefore gets another
+  // attempt here — which is the only chance it will ever get on TikTok/Instagram.
+  return orderAndChunkOcrPending(rows, OCR_BATCH, cap, { coverStillAnswers: true })
 }
 
 export interface OcrResult {
@@ -269,10 +403,14 @@ export interface OcrResult {
   /** True when a 429 was seen — a fact about the account, not the corpus. */
   rateLimited: boolean
   errors: string[]
+  /** Per-video detail lines, populated ONLY on a dry run. The pipeline's step
+   *  results stay small; scripts/ocr-videos.ts --probe needs to show what each
+   *  cover actually read so it can be compared against the image. */
+  samples: string[]
 }
 
 export function emptyOcrResult(): OcrResult {
-  return { ok: 0, none: 0, noImage: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [] }
+  return { ok: 0, none: 0, noImage: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [], samples: [] }
 }
 
 /** One video's cover through the model and into the row. Shared by the
@@ -286,6 +424,8 @@ async function ocrOne(
     platform: Platform
     videoId: string
     imageUrl: string | null
+    /** Attempts recorded on the row before this one. */
+    attempts: number
     callIndex: number
     dryRun?: boolean
   },
@@ -306,7 +446,8 @@ async function ocrOne(
   // the video is not re-planned every run for a frame that was never there.
   if (!opts.imageUrl) {
     out.noImage++
-    const err = await write({ ocr_text: null, ocr_status: 'no_image', ocr_error: null })
+    if (opts.dryRun) out.samples.push(`- ${opts.platform} ${opts.videoId}\n  no_image (no cover url on the stored item)`)
+    const err = await write({ ocr_text: null, ocr_status: 'no_image', ocr_error: null, ocr_attempts: opts.attempts + 1 })
     if (err) { out.errors.push(`ocr write (${opts.videoId}): ${err}`); out.noImage--; out.failed++ }
     return
   }
@@ -316,14 +457,26 @@ async function ocrOne(
     r = await ocrCoverFrame(opts.imageUrl)
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
+    // A cover WE cannot use — HEIC, a host off the allowlist, an empty or
+    // oversized body — is not a failed read. It is a fact about our fetcher, and
+    // calling it 'failed' would blame the frame and (before H1's attempt budget)
+    // permanently tombstone ~9% of TikTok for a format we chose not to decode.
+    // 'no_image' is the honest verdict: there was no image we could show a model.
+    if (e instanceof UnusableCoverError) {
+      out.noImage++
+      if (opts.dryRun) out.samples.push(`- ${opts.platform} ${opts.videoId}\n  cover: ${opts.imageUrl}\n  no_image — ${msg}`)
+      const err = await write({ ocr_text: null, ocr_status: 'no_image', ocr_error: msg.slice(0, 300), ocr_attempts: opts.attempts + 1 })
+      if (err) { out.errors.push(`ocr write (${opts.videoId}): ${err}`); out.noImage--; out.failed++ }
+      return
+    }
     out.failed++
     if (isRateLimited(msg)) out.rateLimited = true
+    if (opts.dryRun) out.samples.push(`- ${opts.platform} ${opts.videoId}\n  cover: ${opts.imageUrl}\n  failed — ${msg.slice(0, 200)}`)
     out.errors.push(`ocr (${opts.videoId}): ${msg.slice(0, 200)}`)
-    // Tombstone, so the next run does not re-pay for the same failure. A rate
-    // limit is the exception (translateBatch's rule): it says nothing about this
-    // video, and stamping it would permanently exclude a whole batch a retry
+    // A rate limit is never recorded (translateBatch's rule): it says nothing
+    // about this video, and stamping it would exclude a whole batch a retry
     // would have read fine.
-    if (!isRateLimited(msg)) await write({ ocr_status: 'failed', ocr_error: msg.slice(0, 300) })
+    if (!isRateLimited(msg)) await write({ ocr_status: 'failed', ocr_error: msg.slice(0, 300), ocr_attempts: opts.attempts + 1 })
     return
   }
 
@@ -335,7 +488,17 @@ async function ocrOne(
   const status: OcrStatus = text ? 'ok' : 'none'
   if (status === 'ok') out.ok++
   else out.none++
-  const writeErr = await write({ ocr_text: text || null, ocr_status: status, ocr_error: null })
+  if (opts.dryRun) {
+    out.samples.push(
+      [
+        `- ${opts.platform} ${opts.videoId}`,
+        `  cover: ${opts.imageUrl}`,
+        `  ${status} · ${r.usage.prompt_tokens}+${r.usage.completion_tokens} tok · $${cost.toFixed(5)} · ${r.durationMs}ms`,
+        text ? text.split('\n').map((l) => `    | ${l}`).join('\n') : '    (no legible text)',
+      ].join('\n'),
+    )
+  }
+  const writeErr = await write({ ocr_text: text || null, ocr_status: status, ocr_error: null, ocr_attempts: opts.attempts + 1 })
   if (writeErr) {
     out.errors.push(`ocr write (${opts.videoId}): ${writeErr}`)
     out.failed++
@@ -386,6 +549,11 @@ export async function ocrBatch(opts: {
   const out = emptyOcrResult()
   const adapter = adapters[opts.platform]
   if (!canOcr(adapter) || !opts.videoIds.length) return out
+  // The guard protects WRITES (and paying for reads with nowhere to store them).
+  // A dry run stores nothing by design, so it is free to exercise the real fetch
+  // and model path before the migration lands — which is exactly what the
+  // bounded live check needs.
+  if (!opts.dryRun && !(await hasOcrColumns(admin))) return out
 
   // The raw items this run stored — the only place a live cover URL exists.
   const rawRows = await selectAll<{ video_id: string; raw: RawItem }>(() =>
@@ -401,19 +569,27 @@ export async function ocrBatch(opts: {
   if (!rawRows.length) return out
 
   const done = new Set<string>()
+  const attempts = new Map<string, number>()
   for (const part of chunk(rawRows.map((r) => r.video_id), 100)) {
     const { data, error } = await admin
       .from('videos')
-      .select('video_id, ocr_status')
+      .select('video_id, ocr_status, ocr_attempts')
       .eq('client_id', opts.clientId)
       .eq('platform', opts.platform)
       .in('video_id', part)
     if (error) {
+      // No column yet: on a dry run every video simply reads as unread, which
+      // is true. On a real run hasOcrColumns already returned above.
+      if (isMissingColumnError(error, 'ocr_status') && opts.dryRun) continue
       out.errors.push(`ocr done-check: ${error.message}`)
       return out
     }
-    for (const r of (data ?? []) as { video_id: string; ocr_status: string | null }[]) {
-      if (!needsOcr(r)) done.add(r.video_id)
+    for (const r of (data ?? []) as OcrSelectionRow[]) {
+      attempts.set(r.video_id, r.ocr_attempts ?? 0)
+      // At gather time the signed cover is live by definition (this run fetched
+      // the item), so a previous non-verdict is retried here while its budget
+      // lasts — the only chance TikTok/Instagram will ever get.
+      if (!needsOcr(r, { coverStillAnswers: true })) done.add(r.video_id)
     }
   }
 
@@ -427,6 +603,7 @@ export async function ocrBatch(opts: {
       platform: opts.platform,
       videoId: row.video_id,
       imageUrl: adapter.coverUrl!(row.raw),
+      attempts: attempts.get(row.video_id) ?? 0,
       callIndex,
       dryRun: opts.dryRun,
     }, out)
@@ -453,17 +630,23 @@ export async function planOcrBackfill(clientId: string, cap = OCR_BACKFILL_CAP):
   const admin = createAdminClient()
   const platform: Platform = 'youtube'
   if (!canBackfillOcr(adapters[platform])) return { batches: [], needing: 0, deferred: 0 }
-  const rows = await selectAll<{ video_id: string; comments_count: number | null; ocr_status: string | null }>(() =>
+  if (!(await hasOcrColumns(admin))) return { batches: [], needing: 0, deferred: 0 }
+  // Unread rows PLUS rows whose only answer was a non-verdict ('failed' /
+  // 'no_image') and that still have attempts left. YouTube's cover is durable,
+  // so a transient blip must not remove a video from the backfill forever
+  // (H1) — the attempt budget is what keeps that from becoming an endless retry.
+  const rows = await selectAll<OcrSelectionRow & { comments_count: number | null }>(() =>
     admin
       .from('videos')
-      .select('video_id, comments_count, ocr_status')
+      .select('video_id, comments_count, ocr_status, ocr_attempts')
       .eq('client_id', clientId)
       .eq('platform', platform)
-      .is('ocr_status', null)
+      .or('ocr_status.is.null,ocr_status.in.(failed,no_image)')
       .order('video_id', { ascending: true }),
   )
-  const batches = orderAndChunkOcrPending(rows, OCR_BATCH, cap)
-  return { batches, needing: rows.length, deferred: Math.max(0, rows.length - cap) }
+  const pending = rows.filter((r) => needsOcr(r, { durableCover: true }))
+  const batches = orderAndChunkOcrPending(pending, OCR_BATCH, cap, { durableCover: true })
+  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap) }
 }
 
 /** One backfill batch: the same read and the same writes as ocrBatch, with the
@@ -480,16 +663,21 @@ export async function ocrBackfillBatch(opts: {
   const platform: Platform = 'youtube'
   const adapter = adapters[platform]
   if (!canBackfillOcr(adapter) || !opts.videoIds.length) return out
+  if (!opts.dryRun && !(await hasOcrColumns(admin))) return out
 
-  const rows: { video_id: string; ocr_status: string | null }[] = []
+  const rows: OcrSelectionRow[] = []
   for (const part of chunk(opts.videoIds, 100)) {
     const { data, error } = await admin
       .from('videos')
-      .select('video_id, ocr_status')
+      .select('video_id, ocr_status, ocr_attempts')
       .eq('client_id', opts.clientId)
       .eq('platform', platform)
       .in('video_id', part)
     if (error) {
+      if (isMissingColumnError(error, 'ocr_status') && opts.dryRun) {
+        rows.push(...part.map((video_id) => ({ video_id, ocr_status: null, ocr_attempts: 0 })))
+        continue
+      }
       out.errors.push(`ocr backfill read: ${error.message}`)
       return out
     }
@@ -498,7 +686,7 @@ export async function ocrBackfillBatch(opts: {
 
   let callIndex = (opts.batchNo ?? 1) * 1000
   for (const row of rows) {
-    if (!needsOcr(row)) { out.skipped++; continue }
+    if (!needsOcr(row, { durableCover: true })) { out.skipped++; continue }
     callIndex++
     await ocrOne(admin, {
       clientId: opts.clientId,
@@ -506,6 +694,7 @@ export async function ocrBackfillBatch(opts: {
       platform,
       videoId: row.video_id,
       imageUrl: adapter.coverUrlById!(row.video_id),
+      attempts: row.ocr_attempts ?? 0,
       callIndex,
       dryRun: opts.dryRun,
     }, out)
@@ -517,4 +706,46 @@ export async function ocrBackfillBatch(opts: {
  *  about the account, not about the video (pass-a.ts isRateLimitError). */
 function isRateLimited(msg: string): boolean {
   return /\b429\b|rate limit|insufficient_quota|no credits/i.test(msg)
+}
+
+/**
+ * "That column does not exist", by MESSAGE.
+ *
+ * classify-meta's isMissingColumnError reads the PostgrestError's `code`, which
+ * is the right check where the raw error is in hand. selectAll rewraps errors as
+ * plain Errors and drops the code, so the surviving signal is the text — and
+ * Postgres names the column in it ("column videos.ocr_status does not exist").
+ */
+export function mentionsMissingColumn(e: unknown, column: string): boolean {
+  const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : (e as { message?: string })?.message ?? ''
+  return msg.includes(column) && /does not exist|schema cache/i.test(msg)
+}
+
+/**
+ * Are the WP7b columns actually on `videos` yet?
+ *
+ * A deploy can land before its migration, and when it does every OCR read and
+ * write raises 42703. Without this the plan step throws, the wave's catch turns
+ * it into a run error, and — worse for the two paths that are not isolated —
+ * plan-pass-a takes the whole run down for every tenant. classify-meta already
+ * carries this exact pattern for `classified_prompt_version`; WP7b carried none
+ * of it, and the T6 probe hit it live.
+ *
+ * Checked once per plan step (one row, one column, index-free but trivial) and
+ * cached for the life of the process, so the fan-out does not re-ask.
+ */
+let ocrColumnsReady: boolean | null = null
+export async function hasOcrColumns(admin: ReturnType<typeof createAdminClient>): Promise<boolean> {
+  if (ocrColumnsReady !== null) return ocrColumnsReady
+  const { error } = await admin.from('videos').select('ocr_status').limit(1)
+  ocrColumnsReady = !(error && isMissingColumnError(error, 'ocr_status'))
+  if (!ocrColumnsReady) {
+    console.warn('[ocr] videos.ocr_status does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. The OCR waves are skipped until it lands; nothing is spent and nothing is lost (every video simply stays unread).')
+  }
+  return ocrColumnsReady
+}
+
+/** Test seam: the cache is process-lifetime, which a test must be able to clear. */
+export function resetOcrColumnCache(): void {
+  ocrColumnsReady = null
 }

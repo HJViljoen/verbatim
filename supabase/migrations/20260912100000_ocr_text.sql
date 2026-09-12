@@ -25,9 +25,17 @@
 --                     model saw the frame and there was no legible text on it,
 --                     and re-reading those every week would pay forever for the
 --                     same no. Every status is terminal; NULL means not yet read.
---   ocr_error         last failure. A tombstone, exactly like
---                     transcript_en_error: needsOcr skips any row that has a
---                     status, so clearing the columns is the deliberate retry.
+--   ocr_error         message from the last attempt that produced no verdict.
+--   ocr_attempts      reads attempted. 'ok' and 'none' are final — the frame
+--                     answered. 'failed' and 'no_image' say nothing about the
+--                     frame, so they are RETRIED while the image is still there
+--                     (YouTube's cover url is derived from the id and never
+--                     expires; a signed TikTok/Instagram cover only during the
+--                     run that fetched it) and only up to OCR_MAX_ATTEMPTS.
+--                     Without this one eight-second fetch timeout removed a
+--                     YouTube video from the backfill permanently, and every
+--                     HEIC TikTok cover — about 9% of them — was tombstoned by
+--                     the first run that touched it.
 --   analyzed_with_ocr incremental Pass A bookkeeping, parallel to
 --                     analyzed_with_transcript / analyzed_with_translation.
 
@@ -35,6 +43,7 @@ alter table public.videos
   add column if not exists ocr_text text,
   add column if not exists ocr_status text,
   add column if not exists ocr_error text,
+  add column if not exists ocr_attempts integer not null default 0,
   add column if not exists analyzed_with_ocr boolean not null default false;
 
 -- NULL passes a CHECK, which is what "not read yet" needs to mean.
@@ -48,10 +57,13 @@ comment on column public.videos.ocr_text is
   'Text read off the video''s COVER FRAME (OCR_MODEL, lib/config.ts), one text block per line, in reading order. Not a full-video read: the cover is the only frame we can reach. The creator''s own words, so Pass A may cite it verbatim with the label [o] on industry/other videos — read through transcript-input.usableOcr.';
 
 comment on column public.videos.ocr_status is
-  '''ok'' text found · ''none'' the frame was read and carried no legible text (a verdict, not a miss) · ''no_image'' the item had no cover handle · ''failed'' the fetch or model call errored. NULL = not read. Every non-null value is terminal; clear the column to retry.';
+  '''ok'' text found · ''none'' the frame was read and carried no legible text (a verdict, not a miss) · ''no_image'' no cover handle, or a cover we cannot use (HEIC, oversized, host off the allowlist) · ''failed'' the fetch or model call errored. NULL = not read. ''ok'' and ''none'' are FINAL; the other two are retried while the cover is still reachable and ocr_attempts < OCR_MAX_ATTEMPTS. Clearing ocr_status is the manual retry.';
 
 comment on column public.videos.ocr_error is
-  'Message from the LAST failed cover-frame read, and a tombstone: needsOcr (lib/pipeline/ocr.ts) skips any row that already has an ocr_status. Clear ocr_status to retry.';
+  'Message from the LAST cover-frame read that produced no verdict about the frame. See needsOcr (lib/pipeline/ocr.ts) for when that is retried.';
+
+comment on column public.videos.ocr_attempts is
+  'Cover-frame reads attempted, from any wave. Bounds the retry of ''failed''/''no_image'' at OCR_MAX_ATTEMPTS (lib/config.ts) so a genuine dead end stops costing a call every week.';
 
 comment on column public.videos.analyzed_with_ocr is
   'Did Pass A''s current analysis of this video see an ON-SCREEN TEXT block? Drives the ''ocr'' re-read in lib/pipeline/pass-a-plan.ts — the per-video alternative to a corpus-wide prompt-version bump.';
@@ -63,7 +75,7 @@ comment on column public.videos.analyzed_with_ocr is
 -- backlog clears, the answer is "none".
 create index if not exists videos_ocr_pending_idx
   on public.videos (client_id, platform)
-  where ocr_status is null;
+  where ocr_status is null or ocr_status in ('failed', 'no_image');
 
 -- ---------------------------------------------------------------------------
 -- A typed line is NOT something said on camera (WP7b B1, 2026-09-12).

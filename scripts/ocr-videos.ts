@@ -3,7 +3,7 @@ import { chunk } from '../lib/chunk'
 import { adapters } from '../lib/gather/platforms'
 import type { Platform, RawItem } from '../lib/gather/types'
 import {
-  buildOcrPrompt, canBackfillOcr, canOcr, normaliseOcrLines, ocrBackfillBatch, ocrCoverFrame, needsOcr,
+  buildOcrPrompt, canBackfillOcr, canOcr, ocrBackfillBatch, ocrBatch, needsOcr,
 } from '../lib/pipeline/ocr'
 import {
   MODEL_PRICING, OCR_BACKFILL_CAP, OCR_BATCH, OCR_MODEL, SEALAND_CLIENT_ID,
@@ -122,6 +122,7 @@ interface VideoRowLite {
   video_url: string | null
   comments_count: number | null
   ocr_status: string | null
+  ocr_attempts: number | null
 }
 
 /** True once the migration has been applied. Until then every video is
@@ -135,7 +136,7 @@ async function loadVideos(clientId: string): Promise<VideoRowLite[]> {
   try {
     return await selectAll<VideoRowLite>(() =>
       admin.from('videos')
-        .select('id, platform, video_id, video_url, comments_count, ocr_status')
+        .select('id, platform, video_id, video_url, comments_count, ocr_status, ocr_attempts')
         .eq('client_id', clientId)
         .in('platform', PLATFORMS)
         .order('id', { ascending: true }),
@@ -144,14 +145,14 @@ async function loadVideos(clientId: string): Promise<VideoRowLite[]> {
     if (!/ocr_status/.test(e instanceof Error ? e.message : String(e))) throw e
     ocrColumnExists = false
     console.log('\nNOTE: videos.ocr_status does not exist yet — the migration has not been applied. Every video counts as unread below.')
-    const rows = await selectAll<Omit<VideoRowLite, 'ocr_status'>>(() =>
+    const rows = await selectAll<Omit<VideoRowLite, 'ocr_status' | 'ocr_attempts'>>(() =>
       admin.from('videos')
         .select('id, platform, video_id, video_url, comments_count')
         .eq('client_id', clientId)
         .in('platform', PLATFORMS)
         .order('id', { ascending: true }),
     )
-    return rows.map((v) => ({ ...v, ocr_status: null }))
+    return rows.map((v) => ({ ...v, ocr_status: null, ocr_attempts: 0 }))
   }
 }
 
@@ -212,12 +213,15 @@ async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> 
     const est = estPerCall(platform)
     const rows = videos.filter((v) => v.platform === platform)
     const by = (s: string) => rows.filter((v) => v.ocr_status === s).length
-    const unread = rows.filter(needsOcr)
+    // Durability decides whether a non-verdict ('failed'/'no_image') is still
+    // worth an attempt — YouTube's cover never expires, the other two are gone.
+    const durable = canBackfillOcr(adapters[platform])
+    const unread = rows.filter((v) => needsOcr(v, { durableCover: durable }))
     // Richest-first, the order the plan steps use, so --probe/--apply take the
     // same videos a run would.
     unread.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
     pending.set(platform, unread)
-    const backfillable = canBackfillOcr(adapters[platform]) ? 'yes (durable url)' : 'no (signed url)'
+    const backfillable = durable ? 'yes (durable url)' : 'no (signed url)'
     loTotal += unread.length * est.lo
     hiTotal += unread.length * est.hi
     console.log(
@@ -256,47 +260,103 @@ async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> 
 /** Read covers through the model and print what came back. Writes NOTHING —
  *  not the videos row, not ai_call_log — so it can be pointed at a live tenant
  *  to judge quality before anything is stored. */
+/** Does this cover url still answer? The signed TikTok/Instagram urls die in
+ *  days, and a probe spent on a 403 measures nothing about read quality. */
+async function alive(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(10_000) })
+    return res.ok
+  } catch { return false }
+}
+
+/**
+ * Read covers through the model and print what came back. Writes NOTHING.
+ *
+ * It goes through the REAL pipeline path — `ocrBatch` / `ocrBackfillBatch` with
+ * `dryRun`, the same fetch, the same format sniff, the same prompt — rather than
+ * calling `ocrCoverFrame` itself. An earlier version did the latter, and that is
+ * exactly how the HEIC problem survived a "live check": the check exercised code
+ * the pipeline does not run. `dryRun` skips the `videos` update and the
+ * `ai_call_log` insert, so nothing is written either way.
+ */
 async function probe(clientId: string, unread: VideoRowLite[], platform: Platform, limit: number): Promise<void> {
   const adapter = adapters[platform]
-  // Only videos that actually HAVE a cover are worth a probe: this is a quality
-  // check on what the model reads, and spending the limit on rows whose signed
-  // url expired months ago measures nothing. The dry-run table above is where
-  // "how much of the backlog is unreachable" is already answered.
-  const window = canBackfillOcr(adapter) ? unread.slice(0, limit) : unread.slice(0, PROBE_WINDOW)
-  const covers = canBackfillOcr(adapter)
-    ? new Map(window.map((v) => [v.video_id, adapter.coverUrlById!(v.video_id)]))
-    : await loadCovers(clientId, platform, window.map((v) => v.video_id))
-  const rows = window.filter((v) => covers.has(v.video_id)).slice(0, limit)
-  if (!rows.length) {
-    console.log(`\nprobe ${platform}: none of the ${window.length} richest unread videos still has a stored cover url.`)
-    return
+  const durable = canBackfillOcr(adapter)
+  let rows: VideoRowLite[]
+  let runId = ''
+  if (durable) {
+    rows = unread.slice(0, limit)
+  } else {
+    // Only videos whose stored cover STILL ANSWERS are worth a probe: this
+    // measures read quality, and the dry-run table above already answers "how
+    // much of the backlog is unreachable". Restricted to ONE run's raw rows
+    // because ocrBatch is run-scoped exactly as the gather wave is — probing
+    // across runs would be a different code path again, which is the mistake
+    // this rewrite exists to stop making.
+    // Ordered by MOST RECENTLY CAPTURED, not richest-first: a signed cover lives
+    // for about two days, so the newest run's raw rows are the only place a
+    // live url exists at all — and they are also exactly what the gather wave
+    // sees. Richest-first is the right order for the wave's cap; it is the
+    // wrong order for finding a url that still answers.
+    const recent = await recentRawByPlatform(clientId, platform, PROBE_WINDOW)
+    const unreadIds = new Set(unread.map((v) => v.video_id))
+    const byId = new Map(unread.map((v) => [v.video_id, v]))
+    rows = []
+    let checked = 0
+    for (const { video_id, run_id, cover } of recent) {
+      if (rows.length >= limit) break
+      if (!unreadIds.has(video_id) || !cover) continue
+      // ocrBatch reads video_raw for ONE run, exactly as the gather wave does.
+      if (runId && run_id !== runId) continue
+      checked++
+      if (!(await alive(cover))) continue
+      runId = run_id
+      rows.push(byId.get(video_id)!)
+    }
+    if (!rows.length) {
+      console.log(`\nprobe ${platform}: checked ${checked} of the ${recent.length} most recently captured covers; none still answers.`)
+      return
+    }
   }
 
-  console.log(`\nPROBE ${platform}: ${rows.length} cover(s) through ${OCR_MODEL}. Real money, no writes.\n`)
-  const price = MODEL_PRICING[OCR_MODEL]!
-  let spent = 0
-  for (const v of rows) {
-    const url = covers.get(v.video_id) ?? null
-    if (!url) {
-      console.log(`- ${platform} ${v.video_id} · ${v.video_url ?? ''}\n  status: no_image (no stored cover url)\n`)
-      continue
-    }
-    try {
-      const r = await ocrCoverFrame(url)
-      const text = normaliseOcrLines(r.lines)
-      const usd = (r.usage.prompt_tokens / 1e6) * price.inputPer1M + (r.usage.completion_tokens / 1e6) * price.outputPer1M
-      spent += usd
-      console.log(`- ${platform} ${v.video_id} · ${v.video_url ?? ''}`)
-      console.log(`  cover: ${url}`)
-      console.log(`  status: ${text ? 'ok' : 'none'} · ${r.usage.prompt_tokens}+${r.usage.completion_tokens} tok · $${usd.toFixed(5)} · ${r.durationMs}ms`)
-      console.log(text ? text.split('\n').map((l) => `    | ${l}`).join('\n') : '    (no legible text)')
-      console.log('')
-    } catch (e) {
-      console.log(`- ${platform} ${v.video_id}\n  status: failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}\n`)
-    }
-  }
-  const est = estPerCall(platform)
-  console.log(`probe total: $${spent.toFixed(5)} · estimated range was $${(est.lo * rows.length).toFixed(5)}-$${(est.hi * rows.length).toFixed(5)} for ${rows.length}`)
+  console.log(`\nPROBE ${platform}: ${rows.length} cover(s) through ${OCR_MODEL}, via the real pipeline path. Real money, no writes.\n`)
+  const before = await snapshot(clientId, platform, rows.map((v) => v.video_id))
+  const r = durable
+    ? await ocrBackfillBatch({ clientId, runId: null, videoIds: rows.map((v) => v.video_id), dryRun: true })
+    : await ocrBatch({ clientId, runId, platform, videoIds: rows.map((v) => v.video_id), dryRun: true })
+  for (const line of r.samples) console.log(line)
+  console.log(
+    `\n${platform}: ${r.ok} with text · ${r.none} no legible text · ${r.noImage} unusable cover · ${r.failed} failed · $${r.costUsd.toFixed(5)}`,
+  )
+  const after = await snapshot(clientId, platform, rows.map((v) => v.video_id))
+  console.log(`  rows unchanged: ${before === after ? 'yes' : 'NO — a dry run wrote something, this is a bug'}`)
+  for (const e of r.errors) console.log(`  ! ${e}`)
+}
+
+/** The most recently captured raw items for a platform, newest first, with the
+ *  cover url the adapter pulls out of each. */
+async function recentRawByPlatform(
+  clientId: string, platform: Platform, limit: number,
+): Promise<{ video_id: string; run_id: string; cover: string | null }[]> {
+  const admin = createAdminClient()
+  const { data, error } = await admin.from('video_raw')
+    .select('video_id, run_id, raw')
+    .eq('client_id', clientId).eq('platform', platform)
+    .order('id', { ascending: false }).limit(limit)
+  if (error) throw new Error(`recent raw: ${error.message}`)
+  const adapter = adapters[platform]
+  return ((data ?? []) as { video_id: string; run_id: string; raw: RawItem }[])
+    .map((r) => ({ video_id: r.video_id, run_id: r.run_id, cover: adapter.coverUrl?.(r.raw) ?? null }))
+}
+
+/** Fingerprint of the OCR columns for the probed rows, so the "writes nothing"
+ *  claim is checked rather than asserted. */
+async function snapshot(clientId: string, platform: Platform, videoIds: string[]): Promise<string> {
+  const admin = createAdminClient()
+  const { data } = await admin.from('videos')
+    .select('video_id, ocr_status, ocr_text, ocr_error')
+    .eq('client_id', clientId).eq('platform', platform).in('video_id', videoIds).order('video_id')
+  return JSON.stringify(data ?? [])
 }
 
 async function main() {

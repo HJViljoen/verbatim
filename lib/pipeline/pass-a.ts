@@ -7,6 +7,7 @@ import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
 import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
+import { isMissingColumnError } from './classify-meta'
 import type { VideoRow, CommentRow } from './types'
 import { normForMatch } from './quote-match'
 
@@ -92,6 +93,30 @@ const MAX_CLAIMS_PER_VIDEO = 3
  *  once on the next run (incremental Pass A, 2026-08-17). */
 export function passAPromptVersion(useTranscripts: boolean): string {
   return useTranscripts ? PROMPT_VERSION_V4 : PROMPT_VERSION
+}
+
+/**
+ * Write a videos bookkeeping patch, dropping `analyzed_with_ocr` if the column
+ * is not there yet.
+ *
+ * A deploy can land before its migration (classify-meta carries the same
+ * pattern for classified_prompt_version). Without this, EVERY Pass A video
+ * errors on the bookkeeping write after a deploy-first, which loses the whole
+ * run's analysis pointer — a far worse outcome than one missing boolean.
+ */
+async function updateBookkeeping(
+  admin: ReturnType<typeof createAdminClient>,
+  videoId: string,
+  patch: Record<string, unknown>,
+): Promise<{ error: { message: string } | null }> {
+  const { error } = await admin.from('videos').update(patch).eq('id', videoId)
+  if (error && isMissingColumnError(error, 'analyzed_with_ocr')) {
+    console.warn('[pass-a] videos.analyzed_with_ocr does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Bookkeeping without it; those rows re-read once when it lands.')
+    const { analyzed_with_ocr: _dropped, ...rest } = patch
+    void _dropped
+    return admin.from('videos').update(rest).eq('id', videoId)
+  }
+  return { error }
 }
 
 /** Parsed model output — v3 shape, with v4's claims present when the v4 schema ran. */
@@ -829,7 +854,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       // re-load this video every run until its comments actually grow — the
       // pointer moves to this run, so any older rows become stale and prune.
       if (persist && trackAnalysis && runId) {
-        await admin.from('videos').update({
+        await updateBookkeeping(admin, v.id, {
           analyzed_at: new Date().toISOString(),
           analyzed_run_id: runId,
           analyzed_comment_count: all.length,
@@ -838,7 +863,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
           analyzed_with_transcript: useTranscripts && usableTranscript(v) !== null,
           analyzed_with_translation: useTranscripts && usableTranscript(v) !== null && usableTranslation(v) !== null,
           analyzed_with_ocr: useTranscripts && usableOcr(v) !== null,
-        }).eq('id', v.id)
+        })
       }
       continue
     }
@@ -1155,7 +1180,7 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
   // analysis. If this update fails the old pointer stands, this run's rows are
   // stale-but-newer, and the retried step redoes the video — never a half state.
   if (!bookkeeping) return
-  const { error: bkErr } = await admin.from('videos').update({
+  const { error: bkErr } = await updateBookkeeping(admin, video.id, {
     analyzed_at: new Date().toISOString(),
     analyzed_run_id: runId,
     analyzed_comment_count: bookkeeping.storedComments,
@@ -1164,7 +1189,7 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
     analyzed_with_transcript: bookkeeping.withTranscript,
     analyzed_with_translation: bookkeeping.withTranslation,
     analyzed_with_ocr: bookkeeping.withOcr,
-  }).eq('id', video.id)
+  })
   if (bkErr) throw new Error(`update video analysis bookkeeping: ${bkErr.message}`)
 }
 
