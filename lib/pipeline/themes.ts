@@ -301,7 +301,14 @@ export async function persistThemes(
       supporting_insight_ids: t.supportingInsightIds,
       supporting_video_ids: t.supportingVideoIds,
       evidence_count: t.evidenceCount,
-      video_evidence_count: t.videoEvidenceCount,
+      // `?? 0`, though the field is declared required: `themes:{bucket}` is a
+      // MEMOISED Inngest step whose payload is AggregatedTheme[], so a run that
+      // completed its bucket steps BEFORE this deploy and resumes after it
+      // replays untyped JSON with no videoEvidenceCount. JSON.stringify drops
+      // undefined, and PostgREST rejects a bulk insert whose objects have
+      // differing keys (PGRST102) — the whole persist step would fail. 0 is
+      // also the honest value: that theme's rank_score was computed unweighted.
+      video_evidence_count: t.videoEvidenceCount ?? 0,
       strength_score: t.strengthScore,
       rank_score: t.rankScore,
       mean_strength: t.meanStrength,
