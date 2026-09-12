@@ -1,8 +1,8 @@
 import { selectAll } from '../supabase-admin'
 import { rows as readRows } from '../pages/read'
 import { shortDate } from '../format'
-import { measureInitiative, initiativeLine, wentTheirWay, type InitiativeVerdict, type ObservationPoint, type RunInWindow } from './measure'
-import { toInitiative, type InitiativeDbRow, type InitiativeDirection } from './types'
+import { measureInitiative, initiativeLine, wentTheirWay, type ObservationPoint, type RunInWindow } from './measure'
+import { toInitiative, INITIATIVE_ROWS_SHOWN, type InitiativeDbRow, type InitiativesData } from './types'
 
 // The read behind the Dashboard's initiatives tile (WP7c). Tile-ready by the
 // time it leaves here — a snapshot stores what the renderer consumes, so an
@@ -13,32 +13,6 @@ import { toInitiative, type InitiativeDbRow, type InitiativeDirection } from './
 // denominator's read as well as the numerator's — share is measured against
 // ALL of an update's theme evidence, so the totals have to come from the same
 // query, not from a second one that could be scoped differently.
-
-export interface InitiativeTileRow {
-  id: string
-  title: string
-  direction: InitiativeDirection
-  competitorName: string | null
-  startedLabel: string
-  /** Share per update since it was declared — the sparkline. */
-  series: number[]
-  /** The calibrated sentence ("Up 2.3 points since 12 Aug · 4 updates"). */
-  line: string
-  verdict: InitiativeVerdict
-  /** Whether the movement went the way they said they wanted. Null on flat/too early. */
-  theirWay: boolean | null
-  latestShare: number | null
-  sentimentDelta: number | null
-}
-
-export interface InitiativesData {
-  rows: InitiativeTileRow[]
-  /** Active initiatives in all — `rows` is capped for the tile. */
-  total: number
-}
-
-/** Rows on the tile; the rest are counted in the meta line. */
-export const INITIATIVE_ROWS_SHOWN = 4
 
 interface ObservationRow {
   theme_id: string

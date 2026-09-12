@@ -8,7 +8,8 @@ import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuot
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { recStatus, sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey, type RecStatus } from '../calibration'
-import { loadInitiatives, type InitiativesData } from '../initiatives/read'
+import { loadInitiatives } from '../initiatives/read'
+import type { InitiativesData } from '../initiatives/types'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
 import {
   themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,

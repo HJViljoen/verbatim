@@ -21,6 +21,7 @@ import { dashboardEmail } from '@/components/email/tiles'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '@/lib/format'
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
+import { initiativesOf, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
 // Dashboard renderers — the JSX half of the old app/dashboard/page.tsx
@@ -323,8 +324,15 @@ const accounts: R = ({ accounts: a }, mode) => (
 // The one tile whose subject the CLIENT chose. It reports the conversation,
 // never the initiative: "up 2.3 points" is a fact about share, "working" would
 // be a claim about cause, and nothing here measures cause.
-const initiatives: R = ({ initiatives: t }, mode) => {
+const initiatives: R = ({ initiatives }, mode) => {
   const app = mode === 'app'
+  // Optional, always: `slides()` and every renderer are called with HYDRATED
+  // SNAPSHOT data as often as with live data (the render route, the report
+  // deck, a share link, the "email as sent" re-render). A snapshot frozen
+  // before this tile existed has no `initiatives` key at all, and reaching
+  // through it would 500 the reports list, the Studio, the share link and the
+  // PDF build. Frozen data renders forever — that is the contract.
+  const t = initiativesOf({ initiatives })
   return (
     <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
       meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
@@ -465,7 +473,7 @@ const GRID_ORDER = ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 
  *  scroll. The renderable exists either way, so an export or an arranged
  *  report that asks for it gets the tile — empty state and all. */
 export const gridOrder = (d: D): string[] =>
-  d.initiatives.total > 0 ? [...GRID_ORDER, 'dashboard.initiatives'] : GRID_ORDER
+  isTrackingSomething(d) ? [...GRID_ORDER, 'dashboard.initiatives'] : GRID_ORDER
 
 export function dashboardSlides(tracking = false): Slide[] {
   return [
@@ -483,7 +491,7 @@ export const dashboardPage: PageModule<D> = {
     const d = await loadDashboard(scope)
     return isDashboardEmpty(d) ? null : d
   },
-  slides: (d) => dashboardSlides(d.initiatives.total > 0),
+  slides: (d) => dashboardSlides(isTrackingSomething(d)),
   renderables,
   snapshotTitle: (d) => `Dashboard · ${d.brand} · ${weekdayDate(d.runDate)}`,
 }

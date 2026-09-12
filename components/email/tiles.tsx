@@ -7,6 +7,7 @@ import { INTENT_LABEL } from '../../lib/content-tiles'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
+import { initiativesOf } from '../../lib/initiatives/types'
 import { EMAIL, FONT, tokenHex } from '../../lib/email/theme'
 import { Badge, Bar, Columns, DeltaText, Img, Quote, RankedRow, Stat, text } from './primitives'
 
@@ -180,7 +181,10 @@ const accounts: E<DashboardData> = ({ accounts: a }, ctx) => {
   )
 }
 
-const initiatives: E<DashboardData> = ({ initiatives: t }, ctx) => {
+const initiatives: E<DashboardData> = ({ initiatives }, ctx) => {
+  // Optional for the same reason the app renderer is: an email re-rendered from
+  // a snapshot frozen before this tile existed has no key for it.
+  const t = initiativesOf({ initiatives })
   if (!t.rows.length) return empty('Track a theme from Voice of Customer to see whether the conversation is moving.')
   return (
     <div>

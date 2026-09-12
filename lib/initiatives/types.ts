@@ -1,3 +1,4 @@
+import type { InitiativeVerdict } from './measure'
 // Initiatives (WP7c, 2026-09-11) — the shapes the table, the actions and the
 // measurement all agree on.
 //
@@ -73,3 +74,53 @@ export function toInitiative(row: InitiativeDbRow): Initiative {
     createdAt: row.created_at,
   }
 }
+
+export interface InitiativeTileRow {
+  id: string
+  title: string
+  direction: InitiativeDirection
+  competitorName: string | null
+  startedLabel: string
+  /** Share per update since it was declared — the sparkline. */
+  series: number[]
+  /** The calibrated sentence ("Up 2.3 points since 12 Aug · 4 updates"). */
+  line: string
+  verdict: InitiativeVerdict
+  /** Whether the movement went the way they said they wanted. Null on flat/too early. */
+  theirWay: boolean | null
+  latestShare: number | null
+  sentimentDelta: number | null
+}
+
+export interface InitiativesData {
+  rows: InitiativeTileRow[]
+  /** Active initiatives in all — `rows` is capped for the tile. */
+  total: number
+}
+
+/** Rows on the tile; the rest are counted in the meta line. */
+export const INITIATIVE_ROWS_SHOWN = 4
+
+/** What a reader gets when the data has no initiatives at all — including a
+ *  snapshot frozen before this tile existed, which has no key for it. Exported
+ *  so every renderer defaults to the same shape rather than its own literal. */
+export const EMPTY_INITIATIVES: InitiativesData = { rows: [], total: 0 }
+
+/**
+ * The initiatives block of some dashboard data — live, or hydrated from a
+ * snapshot frozen before this tile existed and therefore missing the key
+ * entirely.
+ *
+ * Every renderer goes through this rather than reaching into the field. A
+ * snapshot renders forever (AGENTS.md): the render route, the report deck, a
+ * share link, the Studio editor and the "email as sent" re-render all call
+ * `slides()` and the tile renderers with STORED data, so one `.total` on an
+ * absent key 500s five surfaces at once.
+ */
+export const initiativesOf = (data: { initiatives?: InitiativesData }): InitiativesData =>
+  data.initiatives ?? EMPTY_INITIATIVES
+
+/** Whether this data has anything to show — the gate on the app grid, the
+ *  print slide and the email section. */
+export const isTrackingSomething = (data: { initiatives?: InitiativesData }): boolean =>
+  initiativesOf(data).total > 0
