@@ -21,7 +21,7 @@ import {
   resolveTemplate,
   skeletonOrder,
 } from './templates'
-import { DEFAULT_DOCUMENT_SETTINGS, DOCUMENT_BLOCK_KEYS, documentSettings, type DocumentSettings } from './types'
+import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS, DOCUMENT_BLOCK_KEYS, documentSettings, type DocumentSettings } from './types'
 import { applyDocumentSettingsPatch, documentSettingsPatch, CUSTOM_ONLY_FIELDS } from '../validate'
 import { DOCUMENT_BRIEF_MAX } from '../../config'
 
@@ -231,6 +231,22 @@ describe('applyDocumentSettingsPatch', () => {
     expect(out.settings).toEqual({ ...DEFAULT_DOCUMENT_SETTINGS, findings: 3, brief: 'Review the athlete campaign.', blocks: ['consumer_profiles'], role: 'market_brief' })
     expect(out.audience).toBe('marketing')
     expect(applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: null, patch: {} }).audience).toBe('leadership')
+  })
+
+  it('seeds a new custom brief in the default role and files it under that role', () => {
+    // The Studio's create path: a fresh custom report, no patch but its role.
+    const out = applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: DEFAULT_DOCUMENT_SETTINGS, patch: { role: DEFAULT_DOCUMENT_ROLE } })
+    expect(out.settings.role).toBe(DEFAULT_DOCUMENT_ROLE)
+    expect(out.audience).toBe(LEADERSHIP_BRIEF.audience)
+    expect(out.audience).not.toBe(CUSTOM_BRIEF.audience)
+    // And a role change carries the register with it.
+    expect(applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: out.settings, patch: { role: 'content_brief' } }).audience).toBe(CONTENT_BRIEF.audience)
+    // The four are seeded as themselves.
+    for (const t of DOCUMENT_TEMPLATES) {
+      const seeded = applyDocumentSettingsPatch({ templateKey: t.key, current: DEFAULT_DOCUMENT_SETTINGS, patch: {} })
+      expect(seeded.audience, t.key).toBeNull()
+      expect(seeded.settings, t.key).toEqual(DEFAULT_DOCUMENT_SETTINGS)
+    }
   })
 
   it('strips them on a fixed template and says which, while saving the rest', () => {

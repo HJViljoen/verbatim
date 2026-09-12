@@ -6,8 +6,8 @@ import { z } from 'zod'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { instantiate, starterTemplate } from '@/lib/reports/templates'
-import { documentTemplate } from '@/lib/reports/documents/templates'
-import { DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
+import { CUSTOM_KEY, documentTemplate } from '@/lib/reports/documents/templates'
+import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
 import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSAGE, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
 import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
@@ -41,9 +41,18 @@ export async function createReport(formData: FormData): Promise<void> {
   if (documentKey) {
     const t = documentTemplate(documentKey)
     if (!t) throw new Error('unknown document template')
+    // A custom brief starts in a role, and is filed as what that role writes:
+    // a brief written in the marketing role is a marketing report, not a
+    // general one (the same rule the settings action applies on a change).
+    const seed = applyDocumentSettingsPatch({
+      templateKey: t.key,
+      current: DEFAULT_DOCUMENT_SETTINGS,
+      patch: t.key === CUSTOM_KEY ? { role: DEFAULT_DOCUMENT_ROLE } : {},
+    })
+    const register = seed.audience ?? t.audience
     const { data, error } = await admin
       .from('reports')
-      .insert({ client_id: clientId, kind: 'document', template_key: t.key, title: t.name, audience: t.audience, sections: [], cover: { register: t.audience }, settings: DEFAULT_DOCUMENT_SETTINGS, created_by: userId })
+      .insert({ client_id: clientId, kind: 'document', template_key: t.key, title: t.name, audience: register, sections: [], cover: { register }, settings: seed.settings, created_by: userId })
       .select('id')
       .single()
     if (error || !data) throw new Error(`create report: ${error?.message ?? 'no row'}`)
