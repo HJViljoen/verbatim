@@ -56,7 +56,10 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
         type="button"
         data-print-hide
         onClick={() => setOpen(true)}
-        className="rounded-[3px] text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        // font-sans: Tile renders footerNote inside a font-mono span (ids and
+        // counts live there), and an action reading "Track this theme →" in
+        // JetBrains Mono beside a sans footer link is two typefaces on one row.
+        className="rounded-[3px] font-sans text-[12.5px] font-medium text-muted-foreground transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         Track this theme →
       </button>

@@ -72,17 +72,21 @@ const chipText = (t: ThemeChip): string => t.label ?? prettyType(t.slug)
 const voiceHref = (themes: Grounding[]) => `/dashboard/voice?themes=${encodeURIComponent(themes.map((t) => asChip(t).slug).join(','))}#grounding`
 
 /** Cross-page link to Voice of Customer — a link in the app, a plain chip row
- *  on paper (nothing there can be clicked). */
+ *  on paper (nothing there can be clicked).
+ *
+ *  Fixed radius, not `rounded-full`: since 2026-09-11 the chip carries the
+ *  curated theme LABEL, which is a phrase, not a slug — on a phone a long one
+ *  wraps, and a two-line pill renders as an oval (MASTER, 2026-08-22). */
 function ThemeChips({ themes, mode }: { themes: Grounding[]; mode: RenderMode }) {
   if (themes.length === 0) return null
   return (
     <div className="flex flex-wrap gap-1">
       {themes.map(asChip).map((t) => mode === 'app' ? (
-        <Link key={t.slug} href={`/dashboard/voice?themes=${encodeURIComponent(t.slug)}`} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
+        <Link key={t.slug} href={`/dashboard/voice?themes=${encodeURIComponent(t.slug)}`} className="rounded-[10px] bg-inner px-2 py-px text-[10.5px] text-muted-foreground transition-colors hover:text-foreground">
           {chipText(t)}
         </Link>
       ) : (
-        <span key={t.slug} className="rounded-full bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{chipText(t)}</span>
+        <span key={t.slug} className="rounded-[10px] bg-inner px-2 py-px text-[10.5px] text-muted-foreground">{chipText(t)}</span>
       ))}
     </div>
   )

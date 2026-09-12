@@ -226,7 +226,10 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
           <div className="flex flex-wrap items-center gap-3">
             <Button type="submit" size="sm" disabled={disabled}>{saving ? 'Saving…' : 'Save search terms'}</Button>
             <Button
-              type="button" variant="secondary" size="sm" disabled={disabled || suggesting}
+              // ring-1: `secondary` is the same grey as the card it sits on
+              // (bg-secondary === bg-inner), so with no edge the button reads
+              // as a line of text rather than something to press.
+              type="button" variant="secondary" size="sm" className="ring-1 ring-border" disabled={disabled || suggesting}
               onClick={() => startSuggest(async () => setSuggest(await suggestMoreTerms(idleSuggest, new FormData())))}
             >
               <Sparkles className="size-3.5" aria-hidden />
