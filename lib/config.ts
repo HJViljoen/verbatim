@@ -810,6 +810,12 @@ export const ASK_PDF_MIN_CHARS_PER_PAGE = 200
  *  rather than a bill. A real rate limiter belongs with the self-serve motion. */
 export const ASK_DAILY_LIMIT = 25
 
+/** Search-term suggestion calls per USER per rolling hour (WP5). One
+ *  gpt-4.1-mini call each, ~$0.001 — small, but the onboarding one is reachable
+ *  by any signed-in account before it has a tenant, so it needs a ceiling that
+ *  is per person rather than per tenant. Counted in `suggestion_calls`. */
+export const SUGGEST_HOURLY_LIMIT = 5
+
 /** Master switch for the Ask surface. OFF unless set, so merging changes
  *  nothing: the route refuses, the nav item is hidden. Shares the flag with the
  *  consumer profile — one feature, and its weekly re-read runs in that step. */

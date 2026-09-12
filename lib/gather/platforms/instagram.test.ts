@@ -13,6 +13,7 @@ const config: GatherConfig = {
   competitor_keywords: [],
   competitor_names: ['Cotopaxi'],
   industry_keywords: ['upcycled bag'],
+  exclude_terms: [],
   platforms: ['instagram'],
   max_videos: 100,
   comment_depth: 100,

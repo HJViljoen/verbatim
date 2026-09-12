@@ -4,12 +4,21 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
-import { deriveCompetitorKeywords } from '@/lib/onboarding-config'
+import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
+import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
+import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
 
 export interface SettingsFormState {
   ok: boolean
   message: string
+}
+
+export interface SuggestState {
+  ok: boolean
+  message: string
+  /** Candidates only — nothing is stored until the client keeps them and saves. */
+  suggestions: { brand: string[]; competitors: string[]; category: string[] } | null
 }
 
 // Comma-separated text field -> trimmed, de-blanked string[].
@@ -80,30 +89,188 @@ export async function updateTrackingConfig(
     return { ok: false, message: `Could not save: ${error.message}` }
   }
 
-  // competitor_keywords follows competitor_names unless an operator curated it
-  // (T0-7): gather searches from the keywords while tagging matches on the
-  // names, and no app surface ever wrote the keywords, so a self-serve tenant
-  // gathered nothing about the competitors it just named. Written with the
-  // admin client on purpose: T0-2 revoked the column from `authenticated`, so
-  // it stays unreachable from a crafted POST and moves only through this
-  // derivation. Authorization already passed (role check + the RLS update
-  // above). Non-fatal: the four facts are saved either way.
+  // competitor_keywords follows competitor_names (T0-7): gather searches from
+  // the keywords while tagging matches on the names, and no app surface ever
+  // wrote the keywords, so a self-serve tenant gathered nothing about the
+  // competitors it just named. Written with the admin client on purpose: T0-2
+  // revoked the column from `authenticated`, so it stays unreachable from a
+  // crafted POST and moves only through this derivation. Authorization already
+  // passed (role check + the RLS update above). Non-fatal: the four facts are
+  // saved either way.
+  //
+  // A UNION, not a replacement (2026-09-12). The old rule skipped the write
+  // entirely whenever the stored list diverged from the derivation, on the
+  // assumption that divergence meant an operator had hand-curated it. Now that
+  // the client can edit the term list itself, the first edit made that true
+  // forever: adding a competitor name would silently stop adding a search term
+  // for it — the exact T0-7 bug, reachable by ordinary use. So the derived
+  // terms are topped up onto whatever is stored, the way onboarding already
+  // merges them. Curation is respected for what it can express — the union
+  // never REMOVES a term anyone added.
   const storedKeywords = (current?.competitor_keywords ?? []) as string[]
-  const previousDerived = deriveCompetitorKeywords((current?.competitor_names ?? []) as string[])
   const sameSet = (a: string[], b: string[]) =>
     JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
-  const operatorCurated = storedKeywords.length > 0 && !sameSet(storedKeywords, previousDerived)
-  if (!operatorCurated) {
-    const next = deriveCompetitorKeywords(parsed.data.competitor_names)
-    if (!sameSet(storedKeywords, next)) {
-      const { error: kwErr } = await createAdminClient()
-        .from('tracking_configs')
-        .update({ competitor_keywords: next })
-        .eq('client_id', clientId)
-      if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
-    }
+  const next = mergeCompetitorKeywords(storedKeywords, parsed.data.competitor_names)
+  if (!sameSet(storedKeywords, next)) {
+    const { error: kwErr } = await createAdminClient()
+      .from('tracking_configs')
+      .update({ competitor_keywords: next })
+      .eq('client_id', clientId)
+    if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
   }
 
   revalidatePath('/dashboard/settings')
   return { ok: true, message: 'Settings saved.' }
+}
+
+// ---- Search terms (WP5, 2026-09-11) ----------------------------------------
+//
+// The "facts vs knobs" line moved. Keywords are a fact the client owns — only
+// they know that "Cotopaxi" is also a volcano, or which two words their buyers
+// actually type. What made keywords an operator lever was cost and quality:
+// cost is now bounded below the UI (the CHECK constraints cap each bucket at
+// 15, GATHER_MAX_SEARCHES_PER_RUN caps a run at 120 searches), and quality is
+// what the performance table beside the editor is for. max_videos,
+// comment_depth and platforms stay operator knobs and are still absent here.
+//
+// Three of the four columns are REVOKEd from `authenticated` (T0-2), so they
+// are written with the admin client — the same route competitor_keywords
+// already takes above, after the same role check. exclude_terms is granted to
+// the tenant role (20260911140000_exclude_terms.sql) and goes through the
+// session client, so RLS is the last word on it.
+
+// Bounds the count AND the length of a term. Every term becomes an Apify
+// search query, so an owner POSTing fifteen megabyte-long "terms" is exactly
+// the cost hole the comment above claims cannot exist.
+const termList = (what: string) =>
+  z.array(z.string())
+    .max(MAX_TERMS_PER_BUCKET, `keep at most ${MAX_TERMS_PER_BUCKET} ${what}`)
+    .refine((xs) => xs.every((x) => x.trim().length >= MIN_KEYWORD_CHARS), {
+      message: `each term needs at least ${MIN_KEYWORD_CHARS} characters — shorter words find the whole internet`,
+    })
+    .refine((xs) => xs.every((x) => x.trim().length <= MAX_TERM_CHARS), {
+      message: `keep each term under ${MAX_TERM_CHARS} characters — a search box does not read a sentence`,
+    })
+
+const termsSchema = z.object({
+  brand_keywords: termList('terms for your brand').min(1, 'keep at least one term for your brand'),
+  competitor_keywords: termList('competitor terms'),
+  industry_keywords: termList('category terms'),
+  exclude_terms: termList('exclusions'),
+})
+
+export async function updateSearchTerms(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const { supabase, clientId, role } = await getSessionContext()
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change search terms.' }
+  }
+
+  const list = (name: string) => formData.getAll(name).map(String)
+  const parsed = termsSchema.safeParse({
+    brand_keywords: list('brand_keywords'),
+    competitor_keywords: list('competitor_keywords'),
+    industry_keywords: list('industry_keywords'),
+    exclude_terms: list('exclude_terms'),
+  })
+  if (!parsed.success) {
+    const first = parsed.error.issues[0]
+    return { ok: false, message: `Could not save: ${first?.message ?? 'check your terms.'}` }
+  }
+
+  // Tidy once more on the server: the same trim/de-dupe/cap the form applies,
+  // so a crafted POST cannot store a list the UI could never produce.
+  const terms = {
+    brand_keywords: cleanTerms(parsed.data.brand_keywords),
+    competitor_keywords: cleanTerms(parsed.data.competitor_keywords),
+    industry_keywords: cleanTerms(parsed.data.industry_keywords),
+    updated_at: new Date().toISOString(),
+  }
+  if (terms.brand_keywords.length === 0) {
+    return { ok: false, message: 'Could not save: keep at least one term for your brand.' }
+  }
+
+  // Terms FIRST, exclusions last. The exclusions column arrives with a
+  // migration that may not have been applied yet, and when it hasn't, Postgres
+  // rejects the whole statement — so writing them together would lose a brand
+  // and category edit to a column the client never touched.
+  const { error, count } = await createAdminClient()
+    .from('tracking_configs')
+    .update(terms, { count: 'exact' })
+    .eq('client_id', clientId)
+  if (error) {
+    console.error(`[settings] search terms not saved for ${clientId}: ${error.message}`)
+    return { ok: false, message: 'Could not save your search terms. Try again, and tell us if it keeps happening.' }
+  }
+  // An UPDATE that matched nothing is not an error — no config row, or RLS
+  // declining silently. Reporting "Saved." on a write that did nothing is the
+  // failure mode this catches.
+  if (count === 0) {
+    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
+  }
+
+  const { error: exclErr } = await supabase
+    .from('tracking_configs')
+    .update({ exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() })
+    .eq('client_id', clientId)
+
+  revalidatePath('/dashboard/settings')
+  if (exclErr) {
+    console.error(`[settings] exclude_terms not saved for ${clientId}: ${exclErr.code ?? '?'} ${exclErr.message}`)
+    // The one failure the client is allowed to hear about in plain words: the
+    // column does not exist yet. Everything else is ours to chase, not theirs.
+    return isMissingColumn(exclErr, 'exclude_terms')
+      ? { ok: true, message: 'Saved. Exclusions need a database update that hasn’t shipped yet.' }
+      : { ok: true, message: 'Saved — except the “Not this” list, which we could not store. Try that part again.' }
+  }
+  return { ok: true, message: 'Saved. Your next update searches these terms.' }
+}
+
+/** PostgREST's two ways of saying "that column isn't there": Postgres 42703
+ *  from a statement it forwarded, PGRST204 from its own schema cache. */
+function isMissingColumn(err: { code?: string | null; message?: string | null }, column: string): boolean {
+  const code = err.code ?? ''
+  return (code === '42703' || code === 'PGRST204') && (err.message ?? '').includes(column)
+}
+
+/** Ask the model for more terms. Offers only — nothing is written here. */
+export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData): Promise<SuggestState> {
+  const { supabase, clientId, role, userId } = await getSessionContext()
+  if (!canManageTenant(role)) {
+    return { ok: false, message: 'You don’t have permission to change search terms.', suggestions: null }
+  }
+
+  const [{ data: client }, { data: cfg }] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    supabase.from('tracking_configs').select('competitor_names, industry_keywords').eq('client_id', clientId).maybeSingle(),
+  ])
+  const companyName = (client?.company_name as string | undefined) ?? ''
+  if (!companyName) {
+    return { ok: false, message: 'We need your company name first.', suggestions: null }
+  }
+
+  // Metered per user, on the same counter as the onboarding suggester. This
+  // one's inputs come from the tenant's own row rather than a POST, so it was
+  // never the cost hole — but a limiter with a way around it is not one.
+  const slot = await takeSuggestionSlot(userId, clientId)
+  if (!slot.ok) return { ok: false, message: slot.message, suggestions: null }
+
+  try {
+    const s = await suggestSearchTerms({
+      company_name: companyName,
+      competitor_names: (cfg?.competitor_names ?? []) as string[],
+      industry_keywords: (cfg?.industry_keywords ?? []) as string[],
+    })
+    console.log(`[settings] search-term suggestions for ${clientId}: $${s.costUsd.toFixed(4)}`)
+    const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
+    const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
+    if (total === 0) {
+      return { ok: false, message: 'Nothing worth suggesting — add a competitor or a category word and try again.', suggestions: null }
+    }
+    return { ok: true, message: `${total} to consider. Keep the ones that sound like your buyers.`, suggestions }
+  } catch (e) {
+    return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
+  }
 }

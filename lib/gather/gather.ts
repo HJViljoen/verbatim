@@ -124,6 +124,7 @@ const DEFAULT_CONFIG: Omit<GatherConfig, 'platforms'> = {
   competitor_keywords: [],
   competitor_names: [],
   industry_keywords: [],
+  exclude_terms: [],
   max_videos: 25,
   comment_depth: 50,
   report_period: 'weekly',
@@ -150,6 +151,7 @@ async function loadConfig(admin: Admin, clientId: string): Promise<GatherConfig>
     competitor_keywords: data.competitor_keywords ?? [],
     competitor_names: data.competitor_names ?? [],
     industry_keywords: data.industry_keywords ?? [],
+    exclude_terms: data.exclude_terms ?? [],
     platforms: data.platforms ?? ['tiktok', 'youtube', 'instagram'],
     // Clamped, not trusted (T0-2). The CHECK constraints bound what a tenant
     // can write; this bounds what a run will act on whatever the row says.
@@ -296,6 +298,17 @@ export function buildPlatformTasks(config: GatherConfig, platform: Platform): Se
 export async function planGatherSearches(clientId: string, platforms?: Platform[]): Promise<SearchTask[]> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, clientId)
+  // Loud, because the terms are the client's now (WP5): tracking_configs is
+  // read fresh here on every run and never cached or pinned, so a term edited
+  // on Tuesday is searched on Wednesday. Printing the counts is how anyone can
+  // tell from the log alone whether a plan moved when someone says they changed
+  // it — the same reason capSearchPlan below shouts about what it dropped.
+  const ex = config.exclude_terms.length
+  console.log(
+    `[plan-gather] ${clientId} config: ${config.brand_keywords.length} brand · ` +
+    `${config.competitor_keywords.length} competitor · ${config.industry_keywords.length} category terms · ` +
+    `${ex} exclusion${ex === 1 ? '' : 's'}`,
+  )
   const wanted = platforms ?? (config.platforms as Platform[])
   const tasks: SearchTask[] = []
   for (const platform of wanted) tasks.push(...buildPlatformTasks(config, platform))

@@ -26,6 +26,10 @@ export interface GatherConfig {
   competitor_keywords: string[]
   competitor_names: string[]
   industry_keywords: string[]
+  /** Senses of the names that are NOT this client ("Cotopaxi the volcano").
+   *  Hints for the relevance gate, and the only thing that unpicks a bare-name
+   *  substring tag. Empty = no homonym problem declared. */
+  exclude_terms: string[]
   platforms: string[]
   max_videos: number
   comment_depth: number
