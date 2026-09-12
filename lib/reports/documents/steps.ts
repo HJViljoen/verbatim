@@ -5,7 +5,7 @@ import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables
 import { fetchQuoteTextsByRefs } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
-import { documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
+import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
 import { documentSettings, isDocumentData, type DocumentSettings } from './types'
 import { loadSignals } from './signals'
 import { composeQuestions, type ResearchQuestion } from './questions'
@@ -141,7 +141,10 @@ export async function checkStep(admin: SupabaseClient, ctx: BuildContext, w: Pic
   const t0 = Date.now()
   // The operator's own brief is checked here too (WP7d): a custom brief that
   // was not answered flags the build for review, like a dropped finding.
-  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written, brief: ctx.settings.brief })
+  // Only a custom brief has an operator brief to answer: a fixed template's
+  // brief is the template's own, and must never flag its build.
+  const brief = ctx.template.key === CUSTOM_KEY ? ctx.settings.brief : undefined
+  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written, brief })
   await spend(admin, ctx, priorCostUsd + out.costUsd)
   if (out.flagged) await mark(admin, ctx, 'checking', { needs_review: true })
   return { written: out.written, verdicts: out.verdicts, dropped: out.dropped, flagged: out.flagged, brief: out.brief, costUsd: out.costUsd, timings: { check: Date.now() - t0 } }

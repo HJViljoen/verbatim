@@ -2,7 +2,9 @@ import { z } from 'zod'
 import { isStaticKey } from './compose'
 import { REPORT_FRAMING_MAX, REPORT_TITLE_MAX, SECTION_PAGES, type ReportSection } from './types'
 import { DOCUMENT_BRIEF_MAX, EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
-import { DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES } from './documents/types'
+import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES, documentSettings, type DocumentBlockKey, type DocumentRole, type DocumentSettings } from './documents/types'
+import { CUSTOM_KEY, documentTemplate } from './documents/templates'
+import type { Audience } from './types'
 
 /** What a browser may put into a report: shared by the server actions and the
  *  routes, so a crafted POST meets the same caps as the Studio. */
@@ -61,3 +63,44 @@ export function tidySections(sections: z.infer<typeof sectionsSchema>): ReportSe
     return out
   })
 }
+
+/** The three fields that belong to a custom brief and to nothing else. */
+export const CUSTOM_ONLY_FIELDS = ['brief', 'blocks', 'role'] as const
+
+/**
+ * A settings patch applied to the row it lands on (WP7d, 2026-09-12). The
+ * server action is the contract, not the Studio's hidden controls: a crafted
+ * POST must not put a brief, a topic block or a role on one of the four fixed
+ * templates, whose skeleton is fixed on purpose. Those fields are stripped
+ * there and named back to the caller.
+ *
+ * On a custom brief the ROLE also sets the register: the report is filed and
+ * rendered as what it is written as (a custom brief in the marketing role is
+ * a marketing report), so the audience is returned with the settings.
+ */
+export function applyDocumentSettingsPatch(args: {
+  templateKey: string | null | undefined
+  current: Partial<DocumentSettings> | null | undefined
+  patch: DocumentSettingsPatch
+}): { settings: DocumentSettings; audience: Audience | null; ignored: string[] } {
+  const custom = args.templateKey === CUSTOM_KEY
+  const p = args.patch
+  const ignored = custom ? [] : CUSTOM_ONLY_FIELDS.filter((f) => p[f] !== undefined)
+  const settings = documentSettings({
+    ...(args.current ?? {}),
+    ...(p.sellsTo !== undefined ? { sellsTo: p.sellsTo } : {}),
+    ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
+    ...(p.findings !== undefined ? { findings: p.findings } : {}),
+    ...(custom && p.brief !== undefined ? { brief: p.brief } : {}),
+    ...(custom && p.blocks !== undefined ? { blocks: p.blocks as DocumentBlockKey[] } : {}),
+    ...(custom && p.role !== undefined ? { role: p.role as DocumentRole } : {}),
+    // A fixed template never carries them, whatever an older row stored.
+    ...(custom ? {} : { brief: undefined, blocks: undefined, role: undefined }),
+  })
+  const audience = custom ? (documentTemplate(settings.role ?? DEFAULT_DOCUMENT_ROLE)?.audience ?? null) : null
+  return { settings, audience, ignored }
+}
+
+/** What the operator is told when a patch tried to set a custom brief's own
+ *  fields on a fixed template. */
+export const IGNORED_FIELDS_MESSAGE = 'A brief, its topics and its role belong to a custom brief. Nothing else in this report changed.'

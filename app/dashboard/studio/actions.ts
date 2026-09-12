@@ -7,8 +7,8 @@ import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { instantiate, starterTemplate } from '@/lib/reports/templates'
 import { documentTemplate } from '@/lib/reports/documents/templates'
-import { DEFAULT_DOCUMENT_SETTINGS, documentSettings, type DocumentBlockKey, type DocumentRole } from '@/lib/reports/documents/types'
-import { documentSettingsPatch, reportPatchSchema, tidySections } from '@/lib/reports/validate'
+import { DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
+import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSAGE, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
 import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
 import { markSnapshotsStale } from '@/lib/artifacts'
@@ -251,27 +251,28 @@ export async function updateDocumentSettings(args: { id: string; patch: z.infer<
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
   const { clientId } = await getSessionContext()
   const admin = createAdminClient()
-  const { data: current } = await admin.from('reports').select('id, kind, cover, settings').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
+  const { data: current } = await admin.from('reports').select('id, kind, template_key, cover, settings').eq('id', parsed.data.id).eq('client_id', clientId).maybeSingle()
   if (!current || current.kind !== 'document') return { ok: false, message: 'No such report.' }
   const p = parsed.data.patch
   const cover = { ...((current.cover as CoverSpec) ?? {}) } as CoverSpec
   if (p.reader !== undefined) { if (p.reader) cover.reader = p.reader; else delete cover.reader }
-  const settings = documentSettings({
-    ...(current.settings as Record<string, unknown>),
-    ...(p.sellsTo !== undefined ? { sellsTo: p.sellsTo } : {}),
-    ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
-    ...(p.findings !== undefined ? { findings: p.findings } : {}),
-    // A custom brief's own three (WP7d). An empty string or an empty array is
-    // how the Studio clears one; documentSettings drops both.
-    ...(p.brief !== undefined ? { brief: p.brief } : {}),
-    ...(p.blocks !== undefined ? { blocks: p.blocks as DocumentBlockKey[] } : {}),
-    ...(p.role !== undefined ? { role: p.role as DocumentRole } : {}),
+  // The brief, its topic blocks and its role belong to a custom brief; on one
+  // of the four they are stripped here, not stored (lib/reports/validate.ts).
+  const { settings, audience, ignored } = applyDocumentSettingsPatch({
+    templateKey: current.template_key as string | null,
+    current: current.settings as Partial<typeof settings>,
+    patch: p,
   })
+  // A custom brief is filed and rendered as what it is written as: the role
+  // sets the register the Studio list, the cover and the share shell read.
+  if (audience) cover.register = audience
   const row: Record<string, unknown> = { cover, settings, updated_at: new Date().toISOString() }
+  if (audience) row.audience = audience
   if (p.title !== undefined) row.title = p.title
   const { error } = await admin.from('reports').update(row).eq('id', parsed.data.id).eq('client_id', clientId)
   if (error) return { ok: false, message: 'Could not save that. Try again.' }
   revalidatePath(`${STUDIO}/edit/${parsed.data.id}`)
   revalidatePath(STUDIO)
+  if (ignored.length) return { ok: false, message: IGNORED_FIELDS_MESSAGE }
   return { ok: true, message: 'Saved' }
 }

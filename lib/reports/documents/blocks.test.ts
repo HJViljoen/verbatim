@@ -22,7 +22,7 @@ import {
   skeletonOrder,
 } from './templates'
 import { DEFAULT_DOCUMENT_SETTINGS, DOCUMENT_BLOCK_KEYS, documentSettings, type DocumentSettings } from './types'
-import { documentSettingsPatch } from '../validate'
+import { applyDocumentSettingsPatch, documentSettingsPatch, CUSTOM_ONLY_FIELDS } from '../validate'
 import { DOCUMENT_BRIEF_MAX } from '../../config'
 
 const settings = (patch: Partial<DocumentSettings> = {}): DocumentSettings => ({ ...DEFAULT_DOCUMENT_SETTINGS, ...patch })
@@ -219,5 +219,36 @@ describe('documentSettings, with a brief and blocks', () => {
     expect(documentSettingsPatch.safeParse({ brief: 'Review the campaign.', blocks: ['consumer_profiles'], role: 'sales_brief' }).success).toBe(true)
     expect(documentSettingsPatch.safeParse({ blocks: ['not_a_block'] }).success).toBe(false)
     expect(documentSettingsPatch.safeParse({ role: 'custom' }).success).toBe(false)
+  })
+})
+
+describe('applyDocumentSettingsPatch', () => {
+  const patch = { brief: 'Review the athlete campaign.', blocks: ['consumer_profiles'], role: 'market_brief' as const, findings: 3 as const }
+
+  it('keeps a custom brief\'s own three, and files it under the role that writes it', () => {
+    const out = applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: DEFAULT_DOCUMENT_SETTINGS, patch })
+    expect(out.ignored).toEqual([])
+    expect(out.settings).toEqual({ ...DEFAULT_DOCUMENT_SETTINGS, findings: 3, brief: 'Review the athlete campaign.', blocks: ['consumer_profiles'], role: 'market_brief' })
+    expect(out.audience).toBe('marketing')
+    expect(applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: null, patch: {} }).audience).toBe('leadership')
+  })
+
+  it('strips them on a fixed template and says which, while saving the rest', () => {
+    const out = applyDocumentSettingsPatch({ templateKey: 'sales_brief', current: DEFAULT_DOCUMENT_SETTINGS, patch })
+    expect(out.ignored).toEqual([...CUSTOM_ONLY_FIELDS])
+    expect(out.settings).toEqual({ ...DEFAULT_DOCUMENT_SETTINGS, findings: 3 })
+    expect(out.audience).toBeNull()
+  })
+
+  it('drops what an older row stored on a fixed template', () => {
+    const out = applyDocumentSettingsPatch({
+      templateKey: 'market_brief',
+      current: { ...DEFAULT_DOCUMENT_SETTINGS, brief: 'stored before the guard', blocks: ['market_movement'], role: 'sales_brief' },
+      patch: {},
+    })
+    expect(out.settings).toEqual(DEFAULT_DOCUMENT_SETTINGS)
+    expect(out.ignored).toEqual([])
+    // And the template it composes to is its own, untouched.
+    expect(resolveTemplate(SALES_BRIEF, out.settings)).toBe(SALES_BRIEF)
   })
 })
