@@ -79,7 +79,10 @@ export function OnboardingForm() {
                 {suggest.suggestions ? suggest.message : 'The words we look for. We can propose them from what you just typed.'}
               </p>
             </div>
-            <Button type="button" variant="secondary" size="sm" disabled={suggesting} onClick={ask}>
+            {/* ring-1: `secondary` is the same grey as the block it sits on
+                (bg-secondary === bg-inner), so with no edge the button reads
+                as a line of text rather than something to press. */}
+            <Button type="button" variant="secondary" size="sm" className="ring-1 ring-border" disabled={suggesting} onClick={ask}>
               <Sparkles className="size-3.5" aria-hidden />
               {suggesting ? 'Thinking…' : suggest.suggestions ? 'Suggest again' : 'Suggest search terms'}
             </Button>
