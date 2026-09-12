@@ -315,7 +315,11 @@ async function ocrOne(
     if (status === 'ok') out.ok--; else out.none--
   }
   // Logged either way, write error included: ai_call_log is the ledger of record
-  // for what was SPENT, and the call was spent.
+  // for what was SPENT, and the call was spent. Not on a dry run, though —
+  // translateBatch's rule: a dry run must leave the tenant's tables exactly as
+  // it found them, ai_call_log included, so the read-only check in
+  // scripts/ocr-videos.ts really does write nothing.
+  if (opts.dryRun) return
   await logAiCall(admin, {
     clientId: opts.clientId,
     runId: opts.runId,
