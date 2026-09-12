@@ -23,7 +23,7 @@ type State =
 
 const POLL_MS = 3000
 
-export function DocumentBuildControl({ reportId, inFlight = null, primary = true, className = '' }: { reportId: string; inFlight?: { id: string; status: Status; startedAt: string } | null; primary?: boolean; className?: string }) {
+export function DocumentBuildControl({ reportId, inFlight = null, primary = true, className = '', blocked = null }: { reportId: string; inFlight?: { id: string; status: Status; startedAt: string } | null; primary?: boolean; className?: string; /** Why this report cannot be built yet, in the operator's words. */ blocked?: string | null }) {
   const router = useRouter()
   const [state, setState] = useState<State>(() => (inFlight && !['done', 'failed'].includes(inFlight.status) ? { phase: 'busy', buildId: inFlight.id, started: new Date(inFlight.startedAt).getTime(), words: 'Picking up the build' } : { phase: 'idle' }))
   const [now, setNow] = useState(() => Date.now())
@@ -81,17 +81,18 @@ export function DocumentBuildControl({ reportId, inFlight = null, primary = true
     : 'bg-tile text-secondary-foreground ring-1 ring-border hover:bg-inner'
   return (
     <div className={`flex flex-col items-end gap-1 ${className}`}>
-      <button type="button" onClick={start} disabled={busy}
+      <button type="button" onClick={start} disabled={busy || Boolean(blocked)} title={blocked ?? undefined}
         className={`inline-flex h-[26px] items-center gap-1.5 rounded-full px-3 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70 ${cls}`}>
         {busy && <LoaderCircle className="size-3.5 animate-spin" aria-hidden />}
         {busy ? `Building · ${mm}:${ss}` : state.phase === 'done' ? 'Build again' : 'Build'}
       </button>
+      {!busy && blocked && <p className="max-w-[38ch] text-right text-[11.5px] text-muted-foreground">{blocked}</p>}
       {busy && <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite">{state.phase === 'busy' ? state.words : 'Starting'}. A build takes three to five minutes.</p>}
       {state.phase === 'done' && (
         <p className="text-right text-[11.5px] text-muted-foreground" aria-live="polite">
           Built.{' '}
           {state.artifactId && <a href={`/api/artifacts/${state.artifactId}`} className="font-medium text-foreground underline underline-offset-2">Download the PDF</a>}
-          {state.needsReview && <span className="block text-warning">A finding was dropped after a check against the data. Read before sending.</span>}
+          {state.needsReview && <span className="block text-warning">A check flagged this build. Read it before sending.</span>}
         </p>
       )}
       {state.phase === 'error' && <p className="text-right text-[11.5px] text-negative" aria-live="polite">{state.message}</p>}

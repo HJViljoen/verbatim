@@ -11,7 +11,7 @@ import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { documentSettings, isDocumentData, type DocumentWorkings } from '@/lib/reports/documents/types'
 import { CUSTOM_KEY, documentTemplate, resolveTemplate } from '@/lib/reports/documents/templates'
 import { BUILD_ACTIVE, type ReportRow } from '@/lib/reports/types'
-import { latestBuild } from '@/lib/reports/documents/builds'
+import { buildBlockedReason, latestBuild } from '@/lib/reports/documents/builds'
 import { BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
 
 // The document editor (T8c, 2026-08-31): settings on the left, the built
@@ -73,7 +73,7 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
     <PageFrame className="min-h-0 flex-1">
       <PageBar title={report.title} context={`Written report · ${template?.name ?? 'document'}${pageCount ? ` · ${pageCount} pages` : ''}${build ? ` · ${build.status === 'done' ? `built ${fmtWhen(build.finished_at ?? build.started_at)}` : BUILD_PHASE_WORDS[build.status].toLowerCase()}` : ''}${reviewNote ? ` · read before sending: ${reviewNote}` : ''}`}>
         <Link href={`/dashboard/studio?item=${report.id}`}><BarPill>Back to the Studio</BarPill></Link>
-        <DocumentBuildControl reportId={report.id} inFlight={inFlight} />
+        <DocumentBuildControl reportId={report.id} inFlight={inFlight} blocked={buildBlockedReason(report)} />
       </PageBar>
       <EditorLayout
         settings={<SettingsPane

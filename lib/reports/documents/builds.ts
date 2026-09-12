@@ -1,6 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { DOCUMENT_BUILD_STALE_MS } from '../../config'
-import { BUILD_ACTIVE, type ReportBuildRow, type ReportBuildStatus } from '../types'
+import { BUILD_ACTIVE, type ReportBuildRow, type ReportBuildStatus, type ReportRow } from '../types'
+import { CUSTOM_KEY } from './templates'
+import { documentSettings } from './types'
 
 /**
  * The build row of a document report (T7, 2026-08-31). One build at a time
@@ -10,6 +12,17 @@ import { BUILD_ACTIVE, type ReportBuildRow, type ReportBuildStatus } from '../ty
  */
 
 export const BUILD_COLS = 'id, client_id, report_id, schedule_id, send_id, run_id, status, needs_review, error, snapshot_id, artifact_id, cost_usd, requested_by, started_at, finished_at'
+
+/** Why this document report cannot be built yet, in the operator's words, or
+ *  null when it can (WP7d, 2026-09-12). A custom brief with no brief written
+ *  is a leadership brief with a custom title: the research has nothing of the
+ *  operator's to ask and the writer has nothing to answer. */
+export function buildBlockedReason(report: Pick<ReportRow, 'template_key' | 'settings'>): string | null {
+  if (report.template_key !== CUSTOM_KEY) return null
+  const s = documentSettings(report.settings)
+  if (s.brief) return null
+  return 'Write the brief first: a custom brief is written to answer your own instruction, and this one has none yet.'
+}
 
 export type InFlightDecision = 'busy' | 'takeover' | 'free'
 
