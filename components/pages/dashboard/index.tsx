@@ -338,19 +338,22 @@ const initiatives: R = ({ initiatives }, mode) => {
       meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
       footer={app && t.total > 0 ? <Link href="/dashboard/settings/initiatives">Manage what you track →</Link> : undefined}
     >
+      {/* Five columns on a laptop; on a phone the title takes its own line and
+          the rest wraps under it. Held on one row, a 400px screen cut every
+          title to "C…" and every sentence to "Up…". */}
       {t.rows.length > 0 ? (
-        <div className="flex flex-col gap-[3px]">
+        <div className="flex flex-col gap-2 md:gap-[3px]">
           {t.rows.map((r) => (
-            <div key={r.id} className="flex items-center gap-3 text-[12px]">
-              <span className="min-w-0 flex-[2] truncate font-medium">{r.title}</span>
+            <div key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] md:flex-nowrap">
+              <span className="w-full min-w-0 truncate font-medium md:w-auto md:flex-[2]">{r.title}</span>
               {r.series.length > 1
                 ? <Sparkline values={r.series} color={r.theirWay === false ? 'var(--comp)' : 'var(--you)'} width={64} height={16} />
                 : <span className="w-16" />}
               <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
-              <span className="min-w-0 flex-[2] truncate text-[11.5px] text-muted-foreground">{r.line}</span>
+              <span className="order-last w-full min-w-0 text-[11.5px] text-muted-foreground md:order-none md:w-auto md:flex-[2] md:truncate">{r.line}</span>
               {/* Labelled, because it sits one column from a percentage and a
                   bare "+0.3" reads as share points. Mood is a −1…+1 scale. */}
-              <span className="flex w-[104px] items-baseline justify-end gap-1">
+              <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
                 <span className="text-[10.5px] text-muted-foreground">mood</span>
                 {r.sentimentDelta != null && r.sentimentDelta !== 0
                   ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
