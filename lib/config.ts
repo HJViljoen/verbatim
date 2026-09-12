@@ -194,6 +194,71 @@ export const TRANSCRIPT_PROMPT_CHARS = 2400
  *  quotes (D-b pools, cards) holds. */
 export const PASS_A_VIDEO_QUOTE_MAX = 200
 
+// --- Transcript translation (`transcript_en`, WP6 2026-09-11) ----------------
+// Pass A reads ~27% of transcripts in their original language ("read it as-is",
+// 2026-08-08). That held while nobody could show a loss, but the decision it
+// rested on was "build translation only if measurement demands it" and the
+// standing instruction since is accuracy first. So every non-English transcript
+// now also carries an English rendering, and Pass A is given BOTH: it reasons
+// from the translation and quotes only from the original, which is what keeps
+// the verbatim-evidence invariant (and the quote validator) intact.
+
+/** Master switch for the translation wave. Default ON — unlike every other
+ *  flag here, which defaults off because it gates spend on a path that did not
+ *  exist before. This one gates a path whose whole purpose is that analysis
+ *  stops silently degrading on a quarter of the corpus, so the safe default is
+ *  "on" and the switch exists to turn it OFF in a hurry (TRANSLATION_ENABLED=0)
+ *  if a run ever needs the pennies or the wall-time back. Read at call time so
+ *  it works in serverless; frozen per run by captureRunFlags. */
+export function translationEnabled(): boolean {
+  const v = process.env.TRANSLATION_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the translation call. Deliberately the FULL gpt-4.1, not mini:
+ *  this is the text Pass A reasons from for a quarter of the corpus, and a
+ *  mistranslated complaint becomes a wrong insight that nothing downstream can
+ *  catch (the quote validator checks the ORIGINAL, so it cannot). ~$0.012 per
+ *  non-English video at the 2400-char prompt budget — a 300-video backlog is
+ *  ~$3, one
+ *  run's worth of Apify is four times that. Quality over pennies. */
+export const TRANSLATE_MODEL = 'gpt-4.1'
+
+// There is no separate translation input budget on purpose. The span sent for
+// translation is exactly TRANSCRIPT_PROMPT_CHARS of the original — the span
+// Pass A can actually quote from — so the two blocks in the prompt describe the
+// SAME speech. An independent budget (this was 4000 for a day) does not achieve
+// that: characters are not content. Measured 2026-09-12 on a Traditional
+// Chinese sample, 2051 source chars became 6508 English chars, so a translation
+// clipped to the original's 2400 covered ~37% of what the original block said
+// and Pass A read the other 63% "as-is" — the degradation this feature exists
+// to remove. Hence: clip the INPUT, never the output (usableTranslation returns
+// the English whole). If TRANSCRIPT_PROMPT_CHARS ever rises, that is a
+// deliberate act that re-translates.
+
+/** Videos per translate Inngest step. Latency tracks OUTPUT tokens, not source
+ *  length, and CJK/Indic sources generate 2-3x the output per source character:
+ *  measured 2026-09-12, a 4000-char Bengali source took 7.3s and a 2051-char
+ *  Traditional Chinese one 21.2s. At 4 per step even a pathological batch —
+ *  every call the 21s worst case, rounded up to 25s — is 100s, a third of the
+ *  300s Inngest step cap. (8 would have been 200s at that rate, and the
+ *  now-removed 4000-char input budget would have pushed it past 300s.) */
+export const TRANSLATE_BATCH = 4
+
+/** Translate steps dispatched per parallel wave (the transcribe wave pattern). */
+export const TRANSLATE_PARALLEL = 4
+
+/** Runaway BACKSTOP on translation, in videos per run — like BACKFILL_CAP, not
+ *  a quality budget. The first run after this ships faces the whole historical
+ *  non-English backlog at once; 400 caps that at ~$5 and the rest come on the
+ *  next run. Steady state is a handful of new videos a week.
+ *
+ *  400 now covers more ground than it did: since the language-detection change
+ *  (2026-09-12) the unknown-language rows are candidates too, which on Sealand
+ *  is 249 videos on top of its 290 known non-English ones. The first two runs
+ *  clear the backlog instead of the first one. */
+export const TRANSLATE_CAP = 400
+
 /**
  * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
  * pre-approved fallback when string-match clustering fails, which the first real
@@ -562,6 +627,8 @@ export const COMPETITIVE_MIN_VIDEOS = 10
  */
 export interface RunFlags {
   transcripts: boolean
+  /** Default ON (translationEnabled) — see the translation block above. */
+  translation: boolean
   incrementalPassA: boolean
   themeRegistry: boolean
   redditDiscovery: boolean
@@ -571,6 +638,7 @@ export interface RunFlags {
 export function captureRunFlags(): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
+    translation: translationEnabled(),
     incrementalPassA: incrementalPassAEnabled(),
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),

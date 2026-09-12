@@ -16,6 +16,7 @@ const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => 
   caption: 'A day with my new running blade',
   hashtags: ['#runningblade'],
   transcript: null,
+  transcript_en: null,
   transcript_status: null,
   ...over,
 })
@@ -100,5 +101,40 @@ describe('isMissingColumnError — surviving a deploy that lands before its migr
     expect(isMissingColumnError({ message: 'classified_prompt_version' }, 'classified_prompt_version')).toBe(false)
     expect(isMissingColumnError(null, 'classified_prompt_version')).toBe(false)
     expect(isMissingColumnError('42703', 'classified_prompt_version')).toBe(false)
+  })
+})
+
+describe('transcript blocks — English to understand, original to copy (2026-09-12)', () => {
+  it('shows BOTH, original first and labelled `transcript:`', () => {
+    // hook_text is a verbatim column. Feeding only the English made every
+    // translated video's stored hook an English rendering of its own words.
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: 'Hola, probé esta mochila', transcript_en: 'Hi, I tried this backpack', transcript_status: 'ok' }),
+    ])
+    expect(p).toContain('transcript: Hola, probé esta mochila')
+    expect(p).toContain('Hi, I tried this backpack')
+    expect(p.indexOf('Hola')).toBeLessThan(p.indexOf('Hi, I tried'))
+  })
+
+  it('tells the model which line the hook comes from', () => {
+    expect(buildClassifySystemPrompt()).toContain('copy the hook from the "transcript" line')
+    expect(buildClassifyUserPrompt([
+      input('a', { transcript: 'Hola', transcript_en: 'Hi', transcript_status: 'ok' }),
+    ])).toContain('never copy the hook from this line')
+  })
+
+  it('falls back to the original when nothing was translated — the shape it has always had', () => {
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: 'Hola, probé esta mochila', transcript_en: null, transcript_status: 'ok' }),
+    ])
+    expect(p).toContain('transcript: Hola, probé esta mochila')
+  })
+
+  it('a translation cannot smuggle past the content gate', () => {
+    const p = buildClassifyUserPrompt([
+      input('a', { transcript: '♪♪ ♪♪', transcript_en: 'la la la', transcript_status: 'lyrics' }),
+    ])
+    expect(p).not.toContain('transcript:')
+    expect(p).not.toContain('la la la')
   })
 })

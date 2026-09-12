@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -44,6 +44,7 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     process.env.THEME_REGISTRY = saved.THEME_REGISTRY
     process.env.REDDIT_DISCOVERY_ENABLED = saved.REDDIT_DISCOVERY_ENABLED
     process.env.CONSUMER_PROFILE = saved.CONSUMER_PROFILE
+    process.env.TRANSLATION_ENABLED = saved.TRANSLATION_ENABLED
   })
 
   it('reads every flag the run branches on', () => {
@@ -52,10 +53,26 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     process.env.THEME_REGISTRY = '0'
     process.env.REDDIT_DISCOVERY_ENABLED = '1'
     process.env.CONSUMER_PROFILE = '1'
+    process.env.TRANSLATION_ENABLED = '1'
     expect(captureRunFlags()).toEqual({
       transcripts: true, incrementalPassA: true, themeRegistry: false, redditDiscovery: true,
-      consumerProfile: true,
+      consumerProfile: true, translation: true,
     })
+  })
+
+  it('translation is the one flag that defaults ON — unset means on, only 0/false turn it off', () => {
+    // Every other flag here gates a path that did not exist; this one gates
+    // analysis silently degrading on a quarter of the corpus, so the switch is
+    // an OFF switch. An unset env (a fresh deploy, a local script) must not
+    // quietly drop back to reading Telugu as-is.
+    delete process.env.TRANSLATION_ENABLED
+    expect(translationEnabled()).toBe(true)
+    process.env.TRANSLATION_ENABLED = '1'
+    expect(translationEnabled()).toBe(true)
+    process.env.TRANSLATION_ENABLED = '0'
+    expect(translationEnabled()).toBe(false)
+    process.env.TRANSLATION_ENABLED = 'false'
+    expect(translationEnabled()).toBe(false)
   })
 
   it('is a SNAPSHOT: flipping the environment afterwards cannot change it', () => {

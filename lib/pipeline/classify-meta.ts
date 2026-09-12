@@ -4,7 +4,7 @@ import { openai } from '../openai'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
-import { usableTranscript } from './transcript-input'
+import { usableTranscript, usableTranslation } from './transcript-input'
 import {
   CLASSIFIED_TYPES,
   CLASSIFIED_TYPE_DEFS,
@@ -47,6 +47,7 @@ export interface ClassifyInput {
   hashtags: string[] | null
   transcript: string | null
   transcript_status: string | null
+  transcript_en: string | null
 }
 
 /** Is this PostgREST error "that column does not exist"? Postgres raises 42703
@@ -78,7 +79,7 @@ export function buildClassifySystemPrompt(): string {
     'For each numbered video block, return one entry with its "ref" (e.g. "v1") and:',
     '- classified_type: one of the types defined below — or null if the metadata is too thin to tell.',
     '- hook_style: one of the hook styles defined below — how the video OPENS. Null if you cannot tell.',
-    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook.',
+    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook. When a block shows both a "transcript" and a "transcript (English)", copy the hook from the "transcript" line — the original words, in their own language. The English is there to help you understand, and is never the hook.',
     '- topics: 1-4 short lowercase topics the video is about. Empty array if unknowable.',
     `- sentiment: one of ${VIDEO_SENTIMENTS.join(', ')} for the video's own framing — or null.`,
     '',
@@ -100,8 +101,17 @@ export function buildClassifyUserPrompt(videos: ClassifyInput[]): string {
         `caption: ${v.caption?.trim() || '(none)'}`,
       ]
       if (v.hashtags?.length) lines.push(`hashtags: ${v.hashtags.join(' ')}`)
+      // Both lines when there is a translation, never one instead of the other
+      // (2026-09-12). This step's judgments — type, hook style, framing
+      // sentiment — read better in English, but hook_text is a VERBATIM column,
+      // and feeding only the English made every translated video's hook an
+      // English rendering stored as the video's own words. The original stays
+      // first and stays labelled `transcript:`, which is what the prompt tells
+      // the model to copy the hook from.
       const transcript = usableTranscript(v)
       if (transcript) lines.push(`transcript: ${transcript}`)
+      const translation = transcript ? usableTranslation(v) : null
+      if (translation) lines.push(`transcript (English, for understanding only — never copy the hook from this line): ${translation}`)
       return lines.join('\n')
     })
     .join('\n\n')
@@ -172,7 +182,7 @@ export async function runClassifyMetaBatch(
   const videos = await selectAll<ClassifyInput & { classified_type: string | null }>(() =>
     admin
       .from('videos')
-      .select('id, platform, account_name, caption, hashtags, transcript, transcript_status, classified_type')
+      .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
       .eq('client_id', clientId)
       .in('id', videoIds)
       .order('id'),

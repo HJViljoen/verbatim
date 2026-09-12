@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, passALane } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane } from './pass-a'
 import { usableTranscript } from './transcript-input'
 import { PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
@@ -128,6 +128,59 @@ describe('buildSystemPrompt v4 line rewrites', () => {
     const v3 = buildSystemPrompt(tc, false)
     expect(v3).toContain('- Insights must come from the comments, not the metadata.')
     expect(v3).not.toContain('TRANSCRIPT')
+  })
+})
+
+describe('the ORIGINAL stays the evidence (WP6 translation, 2026-09-11)', () => {
+  const tc = { brand_keywords: ['sealand'], competitor_names: [], industry_keywords: [] }
+  const v = {
+    platform: 'tiktok', account_name: 'acc', caption: 'probando la mochila', hashtags: ['#mochila'],
+    content_format: 'reel', transcript_lang: 'es', is_client: false, is_competitor: false,
+  } as unknown as Parameters<typeof buildUserPrompt>[0]
+  const refs = [{ label: 'c1', realId: 'id-1', text: 'me encanta' }]
+
+  it('v4 tells the model to reason from the translation and quote only the original', () => {
+    const p = buildSystemPrompt(tc, true)
+    expect(p).toContain('ENGLISH TRANSLATION block is present')
+    expect(p).toContain('comes ONLY from the ORIGINAL transcript, verbatim')
+    // hook_text is named explicitly — it is a verbatim field that does not go
+    // through validateInsights, so the prompt is the only thing holding it.
+    expect(p).toContain('hook_text')
+  })
+
+  it('the sentence is inert on v3 (no transcripts at all)', () => {
+    expect(buildSystemPrompt(tc, false)).not.toContain('ENGLISH TRANSLATION')
+  })
+
+  it('both blocks appear, labelled, original first', () => {
+    const p = buildUserPrompt(v, refs, 'probé esta mochila', 'I tried this backpack')
+    expect(p).toContain('TRANSCRIPT [t] (lang: es) — ORIGINAL, quote from this verbatim:')
+    expect(p).toContain('probé esta mochila')
+    expect(p).toContain('ENGLISH TRANSLATION (read this to understand; never quote from it):')
+    expect(p).toContain('I tried this backpack')
+    expect(p.indexOf('probé esta mochila')).toBeLessThan(p.indexOf('I tried this backpack'))
+  })
+
+  it('WITHOUT a translation the USER prompt is byte-identical to the pre-change build', () => {
+    // Frozen output of buildUserPrompt as it stood at the merge base c7731b2,
+    // captured by running that exact function body (git show
+    // c7731b2:lib/pipeline/pass-a.ts) on this same video and refs. Comparing
+    // the new builder against itself — which an earlier version of this test
+    // did, since the 4th parameter defaults to null — pins the default, not the
+    // pre-change output. This pins the output.
+    //
+    // NOTE the scope of the claim: the USER prompt is byte-identical. The
+    // SYSTEM prompt is NOT — v4 gains one sentence about the ENGLISH
+    // TRANSLATION block for every transcripts-enabled call, translated or not.
+    // It is inert (it describes a block that is absent) but it is a change, and
+    // 'pass_a_v4.1' therefore names two system prompts. See the comment at the
+    // top of pass-a.ts for why that is the deliberate economic call.
+    const PRE_CHANGE = 'VIDEO\n- platform: tiktok\n- account: acc\n- owner: an industry/other account\n- caption: probando la mochila\n- hashtags: #mochila\n- format: reel\n\nTRANSCRIPT [t] (lang: es)\nprobé esta mochila\n\nCOMMENTS (1)\n[c1] me encanta'
+    expect(buildUserPrompt(v, refs, 'probé esta mochila', null)).toBe(PRE_CHANGE)
+  })
+
+  it('a translation alone adds nothing — no transcript, no blocks', () => {
+    expect(buildUserPrompt(v, refs, null, 'I tried this backpack')).not.toContain('TRANSLATION')
   })
 })
 
