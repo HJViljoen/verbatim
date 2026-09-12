@@ -45,6 +45,11 @@ export interface VideoRow {
    *  non-English videos (WP6, 2026-09-11). A reading aid for Pass A, never
    *  evidence — read through transcript-input.usableTranslation. */
   transcript_en?: string | null
+  /** Text read off the video's COVER FRAME (WP7b, 2026-09-12). The creator's
+   *  own words, quotable with the label [o] under the transcript's rules — read
+   *  through transcript-input.usableOcr. */
+  ocr_text?: string | null
+  ocr_status?: string | null
   /** Incremental Pass A pointer: the run whose rows are this video's current
    *  analysis (see AGENTS.md). Read by runPassA for step-retry idempotency. */
   analyzed_run_id?: string | null

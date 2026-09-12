@@ -1,5 +1,5 @@
 import { clipText } from '../gather/transcript'
-import { TRANSCRIPT_PROMPT_CHARS } from '../config'
+import { OCR_PROMPT_CHARS, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { VideoRow } from './types'
 
 // The single door transcript text enters analysis through: only content-gated
@@ -35,4 +35,30 @@ export function usableTranslation(
 ): string | null {
   if (v.transcript_status !== 'ok' || !v.transcript_en) return null
   return v.transcript_en.trim() || null
+}
+
+/** On-screen text read off the video's COVER FRAME (WP7b, 2026-09-12).
+ *
+ *  The one door this text enters analysis through, and the same shape as
+ *  usableTranscript: only a resolved 'ok' is readable — 'none' (the frame
+ *  carried no legible text), 'no_image' and 'failed' all read as "no on-screen
+ *  text". Clipped code-point-safe to the prompt budget, and the validator checks
+ *  [o] quotes against exactly this clipped string, so the model can never be
+ *  credited with a quote from text it was not shown.
+ *
+ *  It is EVIDENCE, unlike a translation: these are the creator's own words,
+ *  typed rather than spoken, which is precisely the material the 2026-09-02
+ *  benchmark found every incumbent missing. It is not a full-video read — the
+ *  cover is the only frame we can reach, and every surface must say exactly
+ *  that. */
+export function usableOcr(v: Pick<VideoRow, 'ocr_text' | 'ocr_status'>): string | null {
+  if (v.ocr_status !== 'ok' || !v.ocr_text) return null
+  // NOT clipText: that collapses every run of whitespace, and the newlines here
+  // are the reading order — one text block per line. Flattening them would join
+  // two unrelated cards into one sentence the frame never showed, and the
+  // validator would then happily accept that sentence as a verbatim quote.
+  // Code-point-safe, like clipText, so an emoji is never split in half.
+  const points = [...v.ocr_text.trim()]
+  const text = points.length <= OCR_PROMPT_CHARS ? points.join('') : points.slice(0, OCR_PROMPT_CHARS).join('').trimEnd()
+  return text || null
 }

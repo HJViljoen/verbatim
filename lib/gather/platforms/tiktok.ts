@@ -113,6 +113,26 @@ export const tiktok: PlatformAdapter = {
     return { mediaUrl, subtitleTracks: tracks.length ? tracks : null }
   },
 
+  // Cover frame (WP7b, 2026-09-12). Verified on real video_raw rows: the actor
+  // returns the cover twice under `video` — `cover` and an identical
+  // `thumbnail` — and nowhere else. The plan's guesses (`covers`,
+  // `videoMeta.coverUrl`) do not exist in this actor's output; the
+  // originCover/dynamicCover fallbacks are drift tolerance only, never observed.
+  // Signed and expiring, like every other URL in here.
+  coverUrl(raw) {
+    const v = raw as Record<string, unknown>
+    return (
+      str(
+        first(
+          getPath(v, ['video', 'cover']),
+          getPath(v, ['video', 'thumbnail']),
+          getPath(v, ['video', 'originCover']),
+          getPath(v, ['video', 'dynamicCover']),
+        ),
+      ) || null
+    )
+  },
+
   commentScrape(video, config) {
     return {
       actor: APIFY_ACTORS.tiktok.comment,

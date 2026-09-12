@@ -298,6 +298,148 @@ export const TRANSLATE_PARALLEL = 4
  *  clear the backlog instead of the first one. */
 export const TRANSLATE_CAP = 400
 
+// --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------
+// The 2026-09-02 blind benchmark found, independently and twice, that every
+// incumbent listening tool misses on-screen text on TikTok/YouTube — and that
+// TikTok hooks are very often TYPED, never spoken. This reads the text on the
+// one frame we can actually get: the cover.
+//
+// What it is NOT, and the copy must never say otherwise (standing rule,
+// v5-Ideas.md): scene understanding, thumbnail analysis, or "we analyse the
+// visuals". It is on-screen text from the cover frame. Full-frame sampling needs
+// a video download plus ffmpeg, which Vercel serverless does not have, and the
+// media URLs expire in days regardless.
+
+/** Master switch for the OCR wave. Default ON, for the translation flag's
+ *  reason: it gates a path whose absence is a known, measured hole in the
+ *  analysis, so the safe default is "on" and the switch exists to turn it OFF
+ *  in a hurry (OCR_ENABLED=0) if a run needs the pennies or the wall-time back.
+ *  Read at call time so it works in serverless; frozen per run by
+ *  captureRunFlags. */
+export function ocrEnabled(): boolean {
+  const v = process.env.OCR_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the cover-frame read. gpt-4.1-mini takes image input and is the
+ *  cheapest vision-capable model already priced in MODEL_PRICING. Measured
+ *  2026-09-12 on real covers: $0.0003 to $0.0035 a call, depending on the
+ *  image's pixel size (see OCR_IMAGE_DETAIL — this model family ignores the
+ *  low/high detail flag). Transcribing text off a still is not a reasoning task
+ *  — the failure mode to guard against is the model DESCRIBING the picture, and
+ *  that is a prompt problem, not a model-size one.
+ *
+ *  IMAGE FORMAT: the vision input takes PNG, JPEG, WEBP and non-animated GIF
+ *  only. HEIC — which TikTok serves for about 9% of its covers — is rejected,
+ *  and no url rewrite gets a JPEG instead (verified live: the tplv transform is
+ *  inside the signed path). lib/pipeline/ocr.ts sniffs the magic bytes and
+ *  records those as 'no_image' rather than as a failed read. */
+export const OCR_MODEL = 'gpt-4.1-mini'
+
+/** Image detail level. Sent as 'low' — but measured live on 2026-09-12,
+ *  gpt-4.1-mini IGNORES it: this model family prices an image by its pixel
+ *  dimensions (a patch count), not by the 85/170-token low/high scheme the 4o
+ *  family uses. Eight real covers billed 576 prompt tokens for a YouTube
+ *  hqdefault (480x360) and up to 5,676 for a full-resolution Instagram still —
+ *  $0.00024 to $0.0024 of input, a 10x spread the flag does not close.
+ *
+ *  Left set deliberately: it costs nothing, it is honoured by every other
+ *  vision model, and if OCR_MODEL ever moves back to the 4o family it starts
+ *  working again. What actually bounds the cost is OpenAI's own patch cap, so
+ *  even a pathological image lands under ~$0.004 — see scripts/ocr-videos.ts
+ *  for the measured per-platform ranges. Downscaling before the call would
+ *  close the spread properly, but it needs an image library
+ *  (`sharp` is only a transitive dependency here, not one this repo declares),
+ *  and $0.0035 a worst-case image does not justify taking one on. */
+export const OCR_IMAGE_DETAIL = 'low' as const
+
+/** Cap on a cover image we will fetch and inline, in bytes. OpenAI's limit is
+ *  20MB of REQUEST, and base64 inflates by 4/3, so 8MB of source is a wide
+ *  margin. Real covers measured 2026-09-12: 30KB (YouTube hqdefault) to 2.4MB
+ *  (a full-resolution Instagram still). */
+export const OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/** Wall-clock budget for fetching one cover before the read is called failed.
+ *  Eight seconds keeps a batch of 8 inside the 300s step cap even if every
+ *  fetch times out. */
+export const OCR_FETCH_TIMEOUT_MS = 8_000
+
+/** Max characters of extracted text STORED per video. A cover frame carries a
+ *  hook card, not an essay; 600 is a generous ceiling that bounds a runaway
+ *  model output before it reaches the DB. */
+export const OCR_MAX_CHARS = 600
+
+/**
+ * Shortest an on-screen-text quote may be to count as evidence.
+ *
+ * A bare single token off a cover frame is a logo, a watermark, a handle or a
+ * price — never an insight, and it is also where the OCR model's per-token
+ * guessing is worst: measured 2026-09-12, a 480x360 YouTube thumbnail whose
+ * chest logo is genuinely illegible came back as "RB". The validator cannot
+ * catch that (it matches the quote against the model's own output), so the only
+ * defence is refusing to build a finding out of a fragment. A quote clears the
+ * bar by containing whitespace — i.e. being more than one word — or by being at
+ * least this long.
+ */
+export const PASS_A_OCR_MIN_QUOTE_CHARS = 12
+
+/** Max characters of on-screen text injected into the Pass A prompt. Same
+ *  number as OCR_MAX_CHARS deliberately — the stored text is already bounded to
+ *  prompt scale, so the two clips are the same clip and the quote validator
+ *  matches against exactly what the model saw. */
+export const OCR_PROMPT_CHARS = 600
+
+/** Videos per OCR Inngest step. One image call is ~2s; 8 is ~16s, far inside
+ *  the 300s step cap, and matches TRANSCRIBE_BATCH so the two gather-time waves
+ *  chunk the same corpus the same way. */
+export const OCR_BATCH = 8
+
+/** OCR steps dispatched per parallel wave (the transcribe wave pattern). */
+export const OCR_PARALLEL = 4
+
+/**
+ * Runaway BACKSTOP on the gather-time OCR wave, in videos PER RUN — shared
+ * across platforms, not per platform.
+ *
+ * TRANSCRIBE_CAP's precedent is per-platform, and this deliberately is not.
+ * `plan-ocr` runs inside the gather loop, so a per-platform cap would have made
+ * the real ceiling 3 x 1200 + OCR_BACKFILL_CAP = 3,900 images a run, three
+ * times the number written here. An unstated 3x is exactly the kind of number
+ * that turns up on a bill. The plan step is handed the REMAINDER instead, so
+ * the three platforms share one budget in gather order.
+ *
+ * Worst case, stated so nobody has to derive it — measured 2026-09-12, a cover
+ * costs $0.0003 (YouTube's 480x360 hqdefault, a flat 576 prompt tokens) to
+ * $0.0035 (a full-resolution Instagram still, ~5,700 tokens, at OpenAI's patch
+ * cap):
+ *
+ *   OCR_CAP 1200 + OCR_BACKFILL_CAP 300 = 1,500 images per run per tenant
+ *   → $0.37 (all YouTube) to $4.36 (all full-resolution) per run, worst case
+ *   → at most 7.3% of RUN_MODEL_BUDGET_USD
+ *
+ * (scripts/ocr-videos.ts prints that same line from the same constants, so the
+ * two cannot drift.)
+ *
+ * Steady state is nothing like that: a week's new videos is a few hundred
+ * covers, i.e. cents. The cap exists so a pathological run cannot spend
+ * unbounded, not to ration a real one.
+ */
+export const OCR_CAP = 1200
+
+/** Attempts a cover read gets before 'failed'/'no_image' becomes terminal, on
+ *  the platforms where retrying can help at all (see needsOcr). Three, matching
+ *  TRANSCRIPT_MAX_ATTEMPTS: enough that a CDN blip or an OpenAI 5xx cannot
+ *  permanently remove a video whose cover is still there, few enough that a
+ *  weekly run stops chasing a genuine dead end. */
+export const OCR_MAX_ATTEMPTS = 3
+
+/** Runaway backstop on the YouTube OCR BACKFILL — the second wave, over
+ *  historical rows whose cover is still reachable because it is derived from
+ *  the video id rather than a signed URL. Smaller than OCR_CAP because it is
+ *  paying down a backlog that has no deadline: a few hundred a run clears it
+ *  over a handful of weeks without any single run noticing. */
+export const OCR_BACKFILL_CAP = 300
+
 /**
  * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
  * pre-approved fallback when string-match clustering fails, which the first real
@@ -668,6 +810,8 @@ export interface RunFlags {
   transcripts: boolean
   /** Default ON (translationEnabled) — see the translation block above. */
   translation: boolean
+  /** Default ON (ocrEnabled) — see the on-screen-text block above. */
+  ocr: boolean
   incrementalPassA: boolean
   themeRegistry: boolean
   redditDiscovery: boolean
@@ -678,6 +822,7 @@ export function captureRunFlags(): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
     translation: translationEnabled(),
+    ocr: ocrEnabled(),
     incrementalPassA: incrementalPassAEnabled(),
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),

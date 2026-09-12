@@ -18,6 +18,8 @@ const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => 
   transcript: null,
   transcript_en: null,
   transcript_status: null,
+  ocr_text: null,
+  ocr_status: null,
   ...over,
 })
 
@@ -46,6 +48,39 @@ describe('buildClassifyUserPrompt', () => {
     expect(prompt).toContain('transcript: hello from the transcript')
     expect(prompt).not.toContain('la la la') // lyrics-status transcript excluded
     expect(prompt).toContain('caption: (none)')
+  })
+
+  it('shows the cover frame\'s text, before the transcript, only when usable', () => {
+    const prompt = buildClassifyUserPrompt([
+      input('a', { ocr_text: 'DAY 3 OF 30', ocr_status: 'ok', transcript: 'spoken words', transcript_status: 'ok' }),
+      input('b', { ocr_text: 'ignored', ocr_status: 'none' }),
+    ])
+    expect(prompt).toContain('on-screen text (cover frame): DAY 3 OF 30')
+    // AFTER the transcript, matching the order the hook_text rule lists them in.
+    // Leading with it biased the model toward the first thing on the frame,
+    // which on TikTok is as often the platform watermark as the hook.
+    expect(prompt.indexOf('transcript: spoken words')).toBeLessThan(prompt.indexOf('on-screen text'))
+    expect(prompt).not.toContain('ignored') // 'none' means the frame carried no text
+  })
+
+  it('flattens the blocks with a separator so one video stays one block', () => {
+    const prompt = buildClassifyUserPrompt([input('a', { ocr_text: 'LINE ONE\nline two', ocr_status: 'ok' })])
+    expect(prompt).toContain('on-screen text (cover frame): LINE ONE / line two')
+  })
+
+  it('a silent video with a title card still carries something to classify', () => {
+    const prompt = buildClassifyUserPrompt([input('a', { ocr_text: 'I QUIT MY JOB', ocr_status: 'ok' })])
+    expect(prompt).toContain('I QUIT MY JOB')
+    expect(prompt).not.toContain('transcript:')
+  })
+
+  it('the system prompt says a typed hook IS the hook — but never a watermark', () => {
+    const sys = buildClassifySystemPrompt()
+    expect(sys).toContain('the text printed on the cover frame')
+    expect(sys).toContain('the hook is very often TYPED on the cover rather than spoken')
+    // Sample 7673087098886376718's block is `PERSONAL OPINIONS. / TikTok /
+    // @seriouslyinez`: one real hook and two pieces of platform furniture.
+    expect(sys).toContain('a watermark, a platform name, a channel name or an @handle is NEVER the hook')
   })
 
   it('system prompt carries the enum vocabularies', () => {

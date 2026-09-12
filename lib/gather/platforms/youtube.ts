@@ -111,6 +111,14 @@ export function parseTranscriptItems(items: RawItem[]): Map<string, FetchedTrans
   return out
 }
 
+/** The durable cover frame for a YouTube video id. hqdefault exists for every
+ *  video on the platform and is served straight off i.ytimg.com with no
+ *  signature and no expiry — the one platform whose cover survives its raw
+ *  item. */
+export function youtubeCoverUrl(videoId: string): string {
+  return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+}
+
 export const youtube: PlatformAdapter = {
   platform: 'youtube',
 
@@ -197,6 +205,34 @@ export const youtube: PlatformAdapter = {
       ...tagVideo({ account_name, caption, hashtags }, ctx.config),
     }
   },
+
+  // Cover frame (WP7b, 2026-09-12). Verified on real video_raw rows: the Data
+  // API item carries `snippet.thumbnails` with default/medium/high/standard/
+  // maxres variants, all on i.ytimg.com. `high` (hqdefault, 480x360) is the one
+  // every video has — maxres and standard are absent on plenty of uploads — and
+  // OCR reads the image at detail 'low' (a 512px square), so nothing is gained
+  // by asking for 1280x720.
+  //
+  // Unlike TikTok's and Instagram's, this URL never expires: it is derivable
+  // from the video id alone, which is what makes YouTube — and only YouTube —
+  // backfillable over the historical corpus.
+  coverUrl(raw) {
+    const t = getPath(raw, ['snippet', 'thumbnails'])
+    const pick = str(
+      first(
+        getPath(t, ['high', 'url']),
+        getPath(t, ['standard', 'url']),
+        getPath(t, ['maxres', 'url']),
+        getPath(t, ['medium', 'url']),
+        getPath(t, ['default', 'url']),
+      ),
+    )
+    if (pick) return pick
+    const id = str(getPath(raw, ['id']))
+    return id ? youtubeCoverUrl(id) : null
+  },
+
+  coverUrlById: youtubeCoverUrl,
 
   async fetchCommentCounts(videoIds: string[]): Promise<Map<string, number>> {
     const key = apiKey()

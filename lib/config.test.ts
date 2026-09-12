@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -45,6 +45,7 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     process.env.REDDIT_DISCOVERY_ENABLED = saved.REDDIT_DISCOVERY_ENABLED
     process.env.CONSUMER_PROFILE = saved.CONSUMER_PROFILE
     process.env.TRANSLATION_ENABLED = saved.TRANSLATION_ENABLED
+    process.env.OCR_ENABLED = saved.OCR_ENABLED
   })
 
   it('reads every flag the run branches on', () => {
@@ -54,10 +55,22 @@ describe('captureRunFlags — a run must not change flags underneath itself (Tie
     process.env.REDDIT_DISCOVERY_ENABLED = '1'
     process.env.CONSUMER_PROFILE = '1'
     process.env.TRANSLATION_ENABLED = '1'
+    process.env.OCR_ENABLED = '1'
     expect(captureRunFlags()).toEqual({
       transcripts: true, incrementalPassA: true, themeRegistry: false, redditDiscovery: true,
-      consumerProfile: true, translation: true,
+      consumerProfile: true, translation: true, ocr: true,
     })
+  })
+
+  it('ocr defaults ON too — same reasoning, an unset env must not drop the typed hooks', () => {
+    delete process.env.OCR_ENABLED
+    expect(ocrEnabled()).toBe(true)
+    process.env.OCR_ENABLED = '1'
+    expect(ocrEnabled()).toBe(true)
+    process.env.OCR_ENABLED = '0'
+    expect(ocrEnabled()).toBe(false)
+    process.env.OCR_ENABLED = 'false'
+    expect(ocrEnabled()).toBe(false)
   })
 
   it('translation is the one flag that defaults ON — unset means on, only 0/false turn it off', () => {
