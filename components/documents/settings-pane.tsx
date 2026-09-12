@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { updateDocumentSettings } from '@/app/dashboard/studio/actions'
 import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES, SELLS_TO, type DocumentBlockKey, type DocumentRole, type DocumentSettings } from '@/lib/reports/documents/types'
-import { DOCUMENT_BLOCKS, documentTemplate } from '@/lib/reports/documents/templates'
+import { DOCUMENT_BLOCKS, DOCUMENT_BLOCKS_MAX, documentTemplate } from '@/lib/reports/documents/templates'
 import { REPORT_TITLE_MAX } from '@/lib/reports/types'
 import { DOCUMENT_BRIEF_MAX } from '@/lib/config'
 import type { DocumentSettingsPatch } from '@/lib/reports/validate'
@@ -122,7 +122,8 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
               return (
                 <div key={key} className="flex items-start gap-2">
                   <input
-                    type="checkbox" id={`block-${key}`} checked={at >= 0} className="mt-0.5 size-3.5 accent-primary"
+                    type="checkbox" id={`block-${key}`} checked={at >= 0} className="mt-0.5 size-3.5 accent-primary disabled:opacity-40"
+                    disabled={at < 0 && blocks.length >= DOCUMENT_BLOCKS_MAX}
                     onChange={(e) => saveBlocks(e.target.checked ? [...blocks, key] : blocks.filter((x) => x !== key))}
                   />
                   <label htmlFor={`block-${key}`} className="flex-1 cursor-pointer">
@@ -140,8 +141,8 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
             })}
             <span className="text-[11.5px] text-muted-foreground">
               {blocks.length
-                ? 'They print in this order, between the findings and the last page.'
-                : 'Without a block this brief is the overview, the findings and the method page. Pick the topics it must cover.'}
+                ? `They print in this order, between the findings and the last page. Every topic you tick is researched in full, so one build covers up to ${DOCUMENT_BLOCKS_MAX} of them.`
+                : `Without a topic this brief is the overview, the findings and the method page. Pick the topics it must cover, up to ${DOCUMENT_BLOCKS_MAX}.`}
             </span>
           </fieldset>
         </>

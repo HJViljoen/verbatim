@@ -1,5 +1,6 @@
 import type { Audience } from '../types'
-import { DEFAULT_DOCUMENT_ROLE } from './types'
+import { COMPETITOR_QUESTIONS_MAX, DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTION_USD, DOCUMENT_WRITE_CHECK_USD } from '../../config'
+import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS } from './types'
 import type { DocLens, DocPageKind, DocumentBlockKey, DocumentSettings, SellsTo } from './types'
 
 /**
@@ -329,6 +330,35 @@ export const CUSTOM_BRIEF: DocumentTemplate = {
 
 /** Research questions the operator's own brief is worth, at most. */
 export const BRIEF_ANCHORS_MAX = 3
+
+/** Questions this block's anchors turn into when it is included: a
+ *  per-competitor anchor is asked once per competitor, two at most. */
+export const blockQuestions = (b: DocumentBlock): number =>
+  b.anchors.reduce((sum, a) => sum + (a.perCompetitor ? COMPETITOR_QUESTIONS_MAX : 1), 0)
+
+/**
+ * The most topic blocks a custom brief may offer: a block that "must be
+ * included" has every one of its questions asked (questions.ts raises the
+ * question cap to fit them rather than cutting them), so the picker may only
+ * offer as many blocks as the build's research budget can pay for. Measured
+ * on the 2026-09-12 Sealand custom build: a question costs ~$0.05 and the
+ * writing and self-check took $0.155 of the same budget.
+ */
+export function affordableBlocks(budgetUsd = DOCUMENT_BUILD_BUDGET_USD): number {
+  const room = budgetUsd - DOCUMENT_WRITE_CHECK_USD
+  let questions = BRIEF_ANCHORS_MAX
+  let n = 0
+  for (const key of DOCUMENT_BLOCK_KEYS) {
+    const asks = blockQuestions(DOCUMENT_BLOCKS[key])
+    if ((questions + asks) * DOCUMENT_QUESTION_USD > room) break
+    questions += asks
+    n++
+  }
+  return n
+}
+
+/** How many blocks the picker offers, at today's budget. */
+export const DOCUMENT_BLOCKS_MAX = affordableBlocks()
 
 /** The blocks a report actually gets: its own settings first, the template's
  *  defaults when it names none, deduplicated and in order. */

@@ -1096,6 +1096,15 @@ export const DOCUMENT_CITED_COUNT_MIN = 3
  *  from the update's own concerns), and how many run at once. */
 export const DOCUMENT_QUESTIONS_MAX = 8
 export const DOCUMENT_RESEARCH_PARALLEL = 3
+/** Questions one per-competitor anchor turns into: a third competitor's card
+ *  is written from the signals alone. */
+export const COMPETITOR_QUESTIONS_MAX = 2
+/** What one research question costs and what the writing and the self-check
+ *  take out of the same build budget, both measured on the 2026-09-12 Sealand
+ *  custom build (8 questions, $0.378 research; $0.134 write, $0.021 check).
+ *  Used to say how many topic blocks a custom brief can afford to include. */
+export const DOCUMENT_QUESTION_USD = 0.05
+export const DOCUMENT_WRITE_CHECK_USD = 0.2
 /** A build row younger than this and not finished belongs to whoever is on
  *  it (the Studio answers 409 with its id); older, it is taken as dead
  *  (function killed, deploy mid-run) and marked failed so a new one may start. */
