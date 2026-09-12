@@ -147,3 +147,15 @@ export function assignLineage(
   }
   return out
 }
+
+/**
+ * The same rows without their `lineage_id` — the insert payload for a database
+ * that has not had `20260911140000_initiatives.sql` applied yet.
+ *
+ * A separate function so the fallback's SHAPE is testable: the retry must drop
+ * exactly one key and change nothing else, or the second insert fails for a new
+ * reason and the run dies anyway — the failure this guard exists to prevent.
+ */
+export function withoutLineageColumn<T extends { lineage_id?: unknown }>(rows: T[]): Omit<T, 'lineage_id'>[] {
+  return rows.map(({ lineage_id: _dropped, ...rest }) => rest)
+}

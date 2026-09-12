@@ -37,13 +37,17 @@ alter table public.recommendations add constraint recommendations_status_check
 comment on column public.recommendations.status is
   'new | acknowledged | in_progress | acted_on | dismissed — the client''s own lifecycle, never written by the pipeline except to inherit a prior update''s status through lineage_id. Shown as New / Acknowledged / Working on it / Done / Dismissed (lib/calibration.ts REC_STATUS_LABEL).';
 
--- `updated_at` rides along with `status`: the action that moves a
--- recommendation stamps when it moved, exactly as the settings action stamps
--- tracking_configs. Without the grant that write 403s and the column would
--- keep the insert's timestamp forever. Nothing else on the row opens up — the
--- report body stays ours to write (20260820120000).
+-- The grant is left exactly as 20260820120000 wrote it: `status`, and nothing
+-- else. It was tempting to add `updated_at` so the action could stamp when a
+-- recommendation moved, but a client-facing write must work on the schema that
+-- is DEPLOYED, and a deploy can land before its migration — with `updated_at`
+-- in the write and not yet in the grant, every status change 403s. There is no
+-- BEFORE UPDATE trigger on this table (checked live), so `updated_at` simply
+-- keeps the insert's timestamp; nothing reads it. Restated here rather than
+-- left implicit, because the revoke/grant pair below is what a reader greps
+-- for when they ask "what may a tenant write?".
 revoke update on public.recommendations from authenticated;
-grant update (status, updated_at) on public.recommendations to authenticated;
+grant update (status) on public.recommendations to authenticated;
 
 -- 2. Initiatives ---------------------------------------------------------------
 create table if not exists public.initiatives (

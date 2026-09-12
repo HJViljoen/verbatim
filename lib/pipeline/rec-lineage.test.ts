@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { assignLineage, normaliseTitle, REC_LINEAGE_THRESHOLD, type PriorRec, type NewRec } from './rec-lineage'
+import { assignLineage, normaliseTitle, withoutLineageColumn, REC_LINEAGE_THRESHOLD, type PriorRec, type NewRec } from './rec-lineage'
+import { isMissingColumnError } from '../supabase-admin'
 
 // Vectors are precomputed here on purpose: the matcher is pure and no test in
 // this repo may call an embedding API. Two-dimensional unit vectors make the
@@ -121,5 +122,32 @@ describe('assignLineage', () => {
     )
     expect(got[0]).toMatchObject({ lineageId: 'lin-1', status: 'in_progress' })
     expect(got[1].matchKind).toBe('new')
+  })
+})
+
+describe('surviving a deploy that lands before 20260911140000_initiatives.sql', () => {
+  const row = { id: 'r1', client_id: 'c1', run_id: 'run1', type: 'content', title: 'A title', lineage_id: 'r1', status: 'new' }
+
+  it('recognises the one error the retry is for, and nothing else', () => {
+    expect(isMissingColumnError({ code: '42703', message: `column "lineage_id" of relation "recommendations" does not exist` }, 'lineage_id')).toBe(true)
+    expect(isMissingColumnError({ code: 'PGRST204', message: "Could not find the 'lineage_id' column of 'recommendations' in the schema cache" }, 'lineage_id')).toBe(true)
+    // A real write failure must still kill the run rather than silently retry.
+    expect(isMissingColumnError({ code: '23514', message: 'new row violates check constraint "recommendations_status_check"' }, 'lineage_id')).toBe(false)
+    expect(isMissingColumnError({ code: '42703', message: `column "status" does not exist` }, 'lineage_id')).toBe(false)
+  })
+
+  it('the retry payload drops lineage_id and touches nothing else', () => {
+    const [fallback] = withoutLineageColumn([row])
+    expect(fallback).not.toHaveProperty('lineage_id')
+    expect(fallback).toEqual({ id: 'r1', client_id: 'c1', run_id: 'run1', type: 'content', title: 'A title', status: 'new' })
+    // The status the matcher inherited still travels — the client's word is not
+    // the bookkeeping column, and it survives the older schema.
+    expect(withoutLineageColumn([{ ...row, status: 'acted_on' }])[0].status).toBe('acted_on')
+  })
+
+  it('leaves the caller\'s rows alone', () => {
+    const rows = [{ ...row }]
+    withoutLineageColumn(rows)
+    expect(rows[0].lineage_id).toBe('r1')
   })
 })

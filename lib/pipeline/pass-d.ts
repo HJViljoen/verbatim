@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
-import { createAdminClient } from '../supabase-admin'
+import { createAdminClient, isMissingColumnError } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
 import { PassDaSchema, PassDaSchemaV5, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief, type SayVsHearItemOut, type SayVsHearEntry } from './schemas'
@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, type PriorRec } from './rec-lineage'
+import { assignLineage, withoutLineageColumn, type PriorRec } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -789,10 +789,24 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       if (error) throw new Error(`clear recommendations: ${error.message}`)
     }
     if (recRows.length) {
-      const { data: insertedRec, error } = await admin
-        .from('recommendations')
-        .insert(recRows)
-        .select('id, type, title, priority')
+      // Deploy ordering: `lineage_id` arrives with 20260911140000_initiatives.sql,
+      // and a deploy can land before its migration does (it did on 2026-09-11,
+      // one table over). A recommendation's identity across updates is
+      // bookkeeping — it must never be the reason a run dies at D-b, for every
+      // tenant, after the money is already spent on gather and Pass A. So: try
+      // with it, and on "that column does not exist" insert the row the old
+      // schema knows and say the migration is pending.
+      const insert = (withLineage: boolean) =>
+        admin
+          .from('recommendations')
+          .insert(withLineage ? recRows : withoutLineageColumn(recRows))
+          .select('id, type, title, priority')
+      let { data: insertedRec, error } = await insert(true)
+      if (error && isMissingColumnError(error, 'lineage_id')) {
+        lineageLog = { ...lineageLog, lineage_column_missing: 1 }
+        console.warn('[pass-d] recommendations.lineage_id does not exist — apply supabase/migrations/20260911140000_initiatives.sql. Inserting without it; this update starts every recommendation at New.')
+        ;({ data: insertedRec, error } = await insert(false))
+      }
       if (error) throw new Error(`persist recommendations: ${error.message}`)
       out.recommendations = (insertedRec ?? []) as RunDbCallResult['recommendations']
     }
@@ -830,11 +844,12 @@ interface LineageTarget {
  * `rows` in place; returns counters for the AI log.
  *
  * The I/O half of `rec-lineage.ts` (the matching itself is pure and tested
- * there). Everything here is best-effort: a missing previous update, a failed
- * embedding call or a lineage column that does not exist yet all leave every
- * row with the self-lineage it was minted with. Continuity is worth an
- * embedding call (a dozen short titles, ~0 cost against a run that spends
- * dollars on synthesis); it is never worth failing an update over.
+ * there). Everything here is best-effort: a missing previous update or a failed
+ * embedding call leaves every row with the self-lineage it was minted with.
+ * A lineage COLUMN that does not exist yet is the insert's problem, not this
+ * one's, and the insert handles it. Continuity is worth an embedding call (a
+ * dozen short titles, ~0 cost against a run that spends dollars on synthesis);
+ * it is never worth failing an update over.
  */
 async function applyLineage(
   admin: ReturnType<typeof createAdminClient>,
