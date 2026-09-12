@@ -232,6 +232,15 @@ describe('the skeleton walk (2026-09-02)', () => {
     expect(again.skeleton.map((p) => p.kind)).toEqual(['in_short', 'finding', 'competitor', 'personas', 'method'])
   })
 
+  it('prints the operator\'s instruction on the method page, so the reader can see what was asked', () => {
+    const settings = { ...DEFAULT_DOCUMENT_SETTINGS, brief: 'Review how comfort moved\nthis month' }
+    const { data } = compose(resolveTemplate(CUSTOM_BRIEF, settings), {}, signals, settings)
+    const method = data.pages.find((p) => p.kind === 'method')!.blocks[0].items!
+    expect(method[0]).toBe('This brief was written to answer an instruction from Ossur: "Review how comfort moved this month."')
+    const plain = compose(SALES_BRIEF).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!
+    expect(plain[0]).toContain('This brief is written from public conversation')
+  })
+
   it('freezes nothing extra on the four fixed templates', () => {
     const { data } = compose(SALES_BRIEF)
     expect(data.blocks).toBeUndefined()
