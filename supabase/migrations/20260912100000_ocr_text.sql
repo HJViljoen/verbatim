@@ -65,6 +65,47 @@ create index if not exists videos_ocr_pending_idx
   on public.videos (client_id, platform)
   where ocr_status is null;
 
+-- ---------------------------------------------------------------------------
+-- A typed line is NOT something said on camera (WP7b B1, 2026-09-12).
+--
+-- WP7a (merged on the integration branch) reads insight_evidence.source ==
+-- 'video' to mean "a creator SPOKE this in their own video" and acts on it in
+-- three places: lib/pipeline/pass-d.ts appends '(said on camera)' to the quote
+-- in the Pass B brief, lib/pipeline/step-a2.ts counts those rows into
+-- themes.video_evidence_count and the WP7a rank bonus, and lib/voice-tiles.ts
+-- renders 'N said on camera' on a client-facing tile.
+--
+-- Text typed on a cover frame is the creator's own words, so it is evidence —
+-- but nobody said it out loud, and it must earn neither the on-camera label nor
+-- the on-camera weight. Storing it as 'video' would have made every one of
+-- those three surfaces claim something the code cannot support (repo rule:
+-- copy claims about behavior must match the code).
+--
+-- So it gets its own value. WP7a's two reads stay literally unchanged and keep
+-- their exact current meaning; after the branches merge the two features are
+-- disjoint BY VALUE, not by convention. Anything that means "this citation is a
+-- video rather than a comment" keys on source_video_id being non-null — which
+-- is already how lib/quotes.ts resolves a `v:` ref, and why that file needs no
+-- change.
+alter table public.insight_evidence
+  drop constraint if exists insight_evidence_source_check;
+alter table public.insight_evidence
+  add constraint insight_evidence_source_check
+  check (source in ('comment', 'video', 'video_text'));
+
+-- The shape rule is the same for both video kinds: a source video, no comment.
+alter table public.insight_evidence
+  drop constraint if exists insight_evidence_source_shape;
+alter table public.insight_evidence
+  add constraint insight_evidence_source_shape check (
+    (source = 'comment' and comment_id is not null and source_video_id is null)
+    or
+    (source in ('video', 'video_text') and source_video_id is not null and comment_id is null)
+  );
+
+comment on column public.insight_evidence.source is
+  '''comment'' a commenter wrote it · ''video'' a creator SPOKE it in the video (WP7a weighs and labels these as "said on camera") · ''video_text'' it was TYPED on the video''s cover frame (WP7b). The last two both carry source_video_id and no comment_id; they are deliberately different values so on-screen text earns neither the on-camera label nor the on-camera weight.';
+
 -- RETENTION/ERASURE: ocr_text rides the same (non-)policy as transcript and
 -- transcript_en — nothing automated reaches any of them today
 -- (inngest/functions/retention.ts purges video_raw and ai_call_log bodies;

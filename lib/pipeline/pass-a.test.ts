@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence } from './pass-a'
 import { usableOcr, usableTranscript } from './transcript-input'
 import { OCR_PROMPT_CHARS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
@@ -249,9 +249,12 @@ describe('validateInsights — "o" evidence (WP7b)', () => {
     const parsed = mkParsed([mkInsight([{ quote: 'this one actually fit', comment_id: 'o' }])])
     const r = validateInsights(parsed, refs, undefined, ocrCtx)
     expect(r.kept).toHaveLength(1)
-    // Same source value as a transcript quote: it is still the video speaking,
-    // so insight_evidence needs no new source and its CHECK is untouched.
-    expect(r.kept[0].evidence[0]).toEqual({ realId: null, quote: 'this one actually fit', source: 'video' })
+    // NOT the transcript's 'video' (WP7b B1): WP7a reads that value as "said on
+    // camera" and weighs it — it labels the quote in the Pass B brief, counts it
+    // into themes.video_evidence_count, and renders "N said on camera" on a
+    // client tile. Nobody SAID a title card, so typed text gets its own value
+    // and earns neither.
+    expect(r.kept[0].evidence[0]).toEqual({ realId: null, quote: 'this one actually fit', source: 'video_text' })
   })
 
   it('drops "o" on client/competitor videos — a typed hook is brand messaging', () => {
@@ -286,6 +289,23 @@ describe('validateInsights — "o" evidence (WP7b)', () => {
     const long = 'x'.repeat(PASS_A_VIDEO_QUOTE_MAX + 1)
     const parsed = mkParsed([mkInsight([{ quote: long, comment_id: 'o' }])])
     expect(validateInsights(parsed, refs, undefined, { text: long, evidenceAllowed: true }).kept).toHaveLength(0)
+  })
+
+  it('a typed line never reads as "said on camera" — WP7a keys on source === video', () => {
+    const parsed = mkParsed([mkInsight([
+      { quote: 'the zipper broke', comment_id: 't' },
+      { quote: 'this one actually fit', comment_id: 'o' },
+    ])])
+    const r = validateInsights(parsed, refs, { text: TRANSCRIPT, evidenceAllowed: true }, ocrCtx)
+    const sources = r.kept[0].evidence.map((e) => e.source)
+    expect(sources).toEqual(['video', 'video_text'])
+    // The two are disjoint by VALUE, so WP7a's `.eq('source','video')` and
+    // `row.source === 'video'` keep their exact meaning across the merge.
+    expect(sources.filter((x) => x === 'video')).toHaveLength(1)
+    // Both are still "a video, not a comment" — which is what everything that
+    // resolves a `v:` quote ref keys on.
+    expect(r.kept[0].evidence.every((e) => isVideoEvidence(e.source))).toBe(true)
+    expect(r.kept[0].evidence.every((e) => e.realId === null)).toBe(true)
   })
 
   it('"t" and "o" validate independently against their own blocks', () => {

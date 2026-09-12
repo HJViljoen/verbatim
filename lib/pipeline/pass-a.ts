@@ -18,7 +18,8 @@ import { normForMatch } from './quote-match'
 //
 // v4 (transcripts on): the video's transcript grounds classification on every
 // bucket; industry-other transcripts are quotable evidence (label "t", stored
-// source='video'); client/competitor transcripts yield brand claims →
+// source='video'; WP7b's typed cover text is label "o", stored
+// source='video_text' so it never reads as "said on camera"); client/competitor transcripts yield brand claims →
 // video_claims. Brand-voice vs customer-voice — design 2026-08-08.
 //
 // Budget note: $2.40 OpenAI ceiling — iterate with `dryRun` (free) and small
@@ -404,11 +405,29 @@ export function buildUserPrompt(
  *  here so existing importers keep working. */
 export { normForMatch }
 
+/** Where a piece of evidence came from.
+ *
+ *  'video' means a creator SPOKE it. WP7a reads exactly that value as "said on
+ *  camera" — it labels the quote in the Pass B brief (pass-d.ts), counts it into
+ *  themes.video_evidence_count and the rank bonus (step-a2.ts), and renders
+ *  "N said on camera" on a client-facing tile (voice-tiles.ts).
+ *
+ *  'video_text' means it was TYPED on the cover frame (WP7b). Also the
+ *  creator's own words, also cited against a source video — but nobody said it
+ *  aloud, so it must earn neither that label nor that weight. Separate value,
+ *  deliberately: after WP7a and WP7b meet, the two are disjoint BY VALUE and
+ *  WP7a's reads need no change at all. Anything that means "a video, not a
+ *  comment" keys on source_video_id instead (lib/quotes.ts already does). */
+export type EvidenceSource = 'comment' | 'video' | 'video_text'
+
+/** True for both video kinds: carries a source_video_id and no comment_id. */
+export const isVideoEvidence = (s: EvidenceSource): boolean => s === 'video' || s === 'video_text'
+
 export interface ValidatedEvidence {
-  /** Real comment id for source 'comment'; null for source 'video'. */
+  /** Real comment id for source 'comment'; null for either video source. */
   realId: string | null
   quote: string
-  source: 'comment' | 'video'
+  source: EvidenceSource
 }
 
 export interface ValidatedInsight {
@@ -441,9 +460,18 @@ export interface TranscriptCtx {
  *  v4: the label "t" cites the transcript, and "o" the on-screen text off the
  *  cover frame (WP7b) — each validated against the same clipped text the model
  *  saw, dropped when the owner bucket may not cite it or the quote exceeds
- *  sentence scale (PASS_A_VIDEO_QUOTE_MAX). Both store source='video': it is
- *  still the video speaking, so insight_evidence needs no new source value.
- *  Exported for tests. */
+ *  sentence scale (PASS_A_VIDEO_QUOTE_MAX). "t" stores source='video' (spoken —
+ *  WP7a weighs and labels it "said on camera"); "o" stores source='video_text',
+ *  because nobody SAID a title card and it must not earn that label or that
+ *  weight. Exported for tests.
+ *
+ *  WHAT THIS CANNOT CATCH, stated plainly: an [o] quote is matched against
+ *  ocr_text, which is the OCR model's OWN OUTPUT. If that model misread a word
+ *  on the frame ("CHAMPION EMOTE" as "DIAMOND EMOTE", measured 2026-09-12), the
+ *  misread is in the haystack too and the quote validates. The validator stops
+ *  a FABRICATED SENTENCE — a description of the picture, or two cards welded
+ *  into one line — and nothing else. Per-token accuracy rests entirely on the
+ *  OCR prompt. */
 export function validateInsights(
   parsed: PassAVideoOutput,
   refs: CommentRef[],
@@ -498,7 +526,7 @@ export function validateInsights(
           evidenceDropped++
           continue
         }
-        validEvidence.push({ realId: null, quote: ev.quote, source: 'video' })
+        validEvidence.push({ realId: null, quote: ev.quote, source: 'video_text' })
         continue
       }
       const ref = byLabel.get(label)
@@ -1070,9 +1098,9 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
         claims !== null
           ? {
               audience_insight_id: insightId,
-              comment_id: e.source === 'video' ? null : e.realId,
+              comment_id: isVideoEvidence(e.source) ? null : e.realId,
               source: e.source,
-              source_video_id: e.source === 'video' ? video.id : null,
+              source_video_id: isVideoEvidence(e.source) ? video.id : null,
               quote: redact ? '' : e.quote,
               redacted: redact,
               relevance_rank: i + 1,
