@@ -292,6 +292,13 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // update crosses the 1000-row cap (Sealand's latest is at 936). A bare
   // select would drop the tail silently — the heard-once tier, and with it the
   // member_themes a grounding deep link matches on.
+  //
+  // `video_evidence_count` here is a HARD PRECONDITION on migration
+  // 20260912090000_theme_video_evidence.sql, not a seatbelted read: naming a
+  // column that does not exist raises 42703 and this page 500s for every
+  // tenant. Unlike the write in lib/pipeline/themes.ts, a read cannot degrade —
+  // dropping the column would change the row shape every caller below reads.
+  // Apply that migration before deploying.
   const themes = themedRunId
     ? await selectAll<ThemeRow>(() =>
         supabase.from('themes')

@@ -1,4 +1,4 @@
-import { createAdminClient, selectAll } from '../supabase-admin'
+import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled } from '../config'
 import { embedTexts, cosine } from './cluster'
@@ -27,7 +27,14 @@ export interface PersistThemesResult {
 /** Read a run's persisted themes back into the in-memory shape Pass C/D
  *  consume. Lets the synthesis half run in its own Inngest step, decoupled
  *  from Step A2/Pass B via the DB. sampleDescriptions aren't persisted (they
- *  only feed Pass B, which has already run by the time rows exist). */
+ *  only feed Pass B, which has already run by the time rows exist).
+ *
+ *  `video_evidence_count` in this select list — and in the Voice page's
+ *  (lib/pages/voice.ts) — is a HARD PRECONDITION, not a seatbelted one: a
+ *  select that names a missing column raises 42703 and there is nothing
+ *  sensible to retry without breaking the caller's row shape. The write below
+ *  survives a deploy that lands before 20260912090000_theme_video_evidence.sql;
+ *  the reads do not. Apply that migration before deploying. */
 export async function loadThemes(clientId: string, runId: string): Promise<AggregatedTheme[]> {
   const admin = createAdminClient()
   const rows = await selectAll<{
@@ -323,7 +330,16 @@ export async function persistThemes(
       ...(registryOn && !registryFailed ? { registry_id: registryIds[i] } : {}),
     }))
     const { error } = await admin.from('themes').insert(rows)
-    if (error) throw new Error(`persist themes: ${error.message}`)
+    // Same seatbelt Pass A's bookkeeping carries: a deploy can land before its
+    // migration, and this step is NOT .catch()-isolated — it would take the run
+    // down after Pass A, Pass B and clustering are already paid for, the most
+    // expensive possible place to fail. Losing the column costs the on-camera
+    // weighting for one run; losing the run costs the run.
+    if (error && isMissingColumnError(error, 'video_evidence_count')) {
+      console.warn('[themes] themes.video_evidence_count does not exist — apply supabase/migrations/20260912090000_theme_video_evidence.sql. Persisting without it; on-camera counts read as none until it lands.')
+      const { error: retryErr } = await admin.from('themes').insert(rows.map(({ video_evidence_count: _dropped, ...rest }) => rest))
+      if (retryErr) throw new Error(`persist themes: ${retryErr.message}`)
+    } else if (error) throw new Error(`persist themes: ${error.message}`)
   }
 
   return {
