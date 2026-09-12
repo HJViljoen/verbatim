@@ -207,7 +207,7 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
           <div className="border-t border-border/70 pt-4">
             <TermList
               name="exclude_terms" label="Not this"
-              hint="Senses of your name that are not you — Cotopaxi the volcano, Sealand the shipping line. A post that is really about one of these is not about you."
+              hint="Senses of your name that are not you — Cotopaxi the volcano, Sealand the shipping line. One of these only counts against a post that carries none of your other terms, so the richer your lists above, the safer this is."
               terms={terms.exclude_terms} suggestions={[]}
               disabled={disabled}
               onAdd={(t) => addTerm('exclude_terms', t)} onRemove={(t) => removeTerm('exclude_terms', t)}
