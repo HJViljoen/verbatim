@@ -290,11 +290,33 @@ export function ocrEnabled(): boolean {
  *  that is a prompt problem, not a model-size one. */
 export const OCR_MODEL = 'gpt-4.1-mini'
 
-/** Image detail level. 'low' downsamples to a 512px square before the model
- *  sees it: enough for the large, high-contrast hook type that is the whole
- *  point, and it makes the per-image cost fixed and knowable instead of scaling
- *  with the platform's thumbnail resolution. */
+/** Image detail level. Sent as 'low' — but measured live on 2026-09-12,
+ *  gpt-4.1-mini IGNORES it: this model family prices an image by its pixel
+ *  dimensions (a patch count), not by the 85/170-token low/high scheme the 4o
+ *  family uses. Eight real covers billed 576 prompt tokens for a YouTube
+ *  hqdefault (480x360) and up to 5,676 for a full-resolution Instagram still —
+ *  $0.00024 to $0.0024 of input, a 10x spread the flag does not close.
+ *
+ *  Left set deliberately: it costs nothing, it is honoured by every other
+ *  vision model, and if OCR_MODEL ever moves back to the 4o family it starts
+ *  working again. What actually bounds the cost is OpenAI's own patch cap, so
+ *  even a pathological image lands under ~$0.004 — see scripts/ocr-videos.ts
+ *  for the measured per-platform ranges. Downscaling before the call would
+ *  close the spread properly, but it needs an image library
+ *  (`sharp` is only a transitive dependency here, not one this repo declares),
+ *  and $0.0035 a worst-case image does not justify taking one on. */
 export const OCR_IMAGE_DETAIL = 'low' as const
+
+/** Cap on a cover image we will fetch and inline, in bytes. OpenAI's limit is
+ *  20MB of REQUEST, and base64 inflates by 4/3, so 8MB of source is a wide
+ *  margin. Real covers measured 2026-09-12: 30KB (YouTube hqdefault) to 2.4MB
+ *  (a full-resolution Instagram still). */
+export const OCR_MAX_IMAGE_BYTES = 8 * 1024 * 1024
+
+/** Wall-clock budget for fetching one cover before the read is called failed.
+ *  Eight seconds keeps a batch of 8 inside the 300s step cap even if every
+ *  fetch times out. */
+export const OCR_FETCH_TIMEOUT_MS = 8_000
 
 /** Max characters of extracted text STORED per video. A cover frame carries a
  *  hook card, not an essay; 600 is a generous ceiling that bounds a runaway
@@ -316,9 +338,11 @@ export const OCR_BATCH = 8
 export const OCR_PARALLEL = 4
 
 /** Runaway BACKSTOP on the gather-time OCR wave, in videos per run — like
- *  TRANSCRIBE_CAP, not a budget. At ~$0.0004 a call even 1200 images is under a
- *  dollar; the cap exists so a pathological run cannot spend unbounded, not to
- *  ration a real one. */
+ *  TRANSCRIBE_CAP, not a budget. Measured 2026-09-12, a cover costs $0.0003
+ *  (YouTube's 480x360 thumbnail) to $0.0035 (a full-resolution Instagram
+ *  still), so even 1200 images is at worst a few dollars against a run whose
+ *  Apify bill is an order of magnitude more; the cap exists so a pathological
+ *  run cannot spend unbounded, not to ration a real one. */
 export const OCR_CAP = 1200
 
 /** Runaway backstop on the YouTube OCR BACKFILL — the second wave, over

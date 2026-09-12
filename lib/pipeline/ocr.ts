@@ -6,7 +6,8 @@ import { openai } from '../openai'
 import { adapters } from '../gather/platforms'
 import type { Platform, PlatformAdapter, RawItem } from '../gather/types'
 import {
-  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_IMAGE_DETAIL, OCR_MAX_CHARS, OCR_MODEL, estimateCost,
+  ANALYSIS_TEMPERATURE, OCR_BACKFILL_CAP, OCR_BATCH, OCR_CAP, OCR_FETCH_TIMEOUT_MS, OCR_IMAGE_DETAIL,
+  OCR_MAX_IMAGE_BYTES, OCR_MAX_CHARS, OCR_MODEL, estimateCost,
 } from '../config'
 import { logAiCall } from './ai-log'
 
@@ -143,11 +144,37 @@ export interface OcrOutcome {
   prompt: { system: string; user: string }
 }
 
+/**
+ * Fetch a cover and return it as a data URI.
+ *
+ * WE fetch it, rather than handing OpenAI the URL — measured 2026-09-12, and
+ * this is load-bearing. An Instagram `displayUrl` that answers 200 to our own
+ * GET comes back to OpenAI's image fetcher as `400 Error while downloading
+ * file. Upstream status code: 403`: the CDN serves us and blocks them. Passing
+ * the url straight through would have made the Instagram half of the wave fail
+ * on every single video, and — because every ocr_status is terminal — written
+ * that failure permanently across the corpus before anyone looked.
+ *
+ * One path for all three platforms rather than a URL shortcut for YouTube: a
+ * cover is tens of kilobytes, and a second code path exists only to break.
+ */
+async function fetchCoverAsDataUri(imageUrl: string): Promise<string> {
+  const res = await fetch(imageUrl, { signal: AbortSignal.timeout(OCR_FETCH_TIMEOUT_MS) })
+  if (!res.ok) throw new Error(`cover fetch ${res.status}`)
+  const type = (res.headers.get('content-type') ?? '').split(';')[0].trim()
+  if (!type.startsWith('image/')) throw new Error(`cover is not an image (${type || 'no content-type'})`)
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (!bytes.length) throw new Error('cover fetch returned no bytes')
+  if (bytes.length > OCR_MAX_IMAGE_BYTES) throw new Error(`cover too large (${bytes.length} bytes)`)
+  return `data:${type};base64,${bytes.toString('base64')}`
+}
+
 /** One cover frame through the model. Returns the text blocks it read and what
  *  the call cost; throws only on a failure the caller should record per video. */
 export async function ocrCoverFrame(imageUrl: string): Promise<OcrOutcome> {
   const prompt = buildOcrPrompt()
   const startedAt = Date.now()
+  const dataUri = await fetchCoverAsDataUri(imageUrl)
   const completion = await openai.chat.completions.parse({
     model: OCR_MODEL,
     temperature: ANALYSIS_TEMPERATURE,
@@ -157,7 +184,7 @@ export async function ocrCoverFrame(imageUrl: string): Promise<OcrOutcome> {
         role: 'user',
         content: [
           { type: 'text', text: prompt.user },
-          { type: 'image_url', image_url: { url: imageUrl, detail: OCR_IMAGE_DETAIL } },
+          { type: 'image_url', image_url: { url: dataUri, detail: OCR_IMAGE_DETAIL } },
         ],
       },
     ],

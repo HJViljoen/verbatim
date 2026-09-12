@@ -39,6 +39,11 @@ import {
  *  which is the only question being asked, and it keeps the check free. */
 const REACH_SAMPLE = 20
 
+/** How deep --probe looks for videos that still have a cover, on the platforms
+ *  whose urls expire. The probe judges READ QUALITY; unreachable rows are the
+ *  dry-run table's subject, not its. */
+const PROBE_WINDOW = 400
+
 const PLATFORMS: Platform[] = ['tiktok', 'instagram', 'youtube']
 
 export function parseArgs(argv: string[]): {
@@ -74,22 +79,40 @@ export function parseArgs(argv: string[]): {
   return args
 }
 
-/** Estimated PROMPT tokens for one call: the fixed system+user text plus the
- *  image. At detail 'low' an image is a fixed 85 base tokens, and gpt-4.1-mini
- *  bills image tokens at 1.62x base — so the per-call cost is knowable in
- *  advance and does not move with the platform's thumbnail resolution. The live
- *  check (--probe) prints the tokens actually billed beside this estimate. */
-const IMAGE_TOKENS_LOW = Math.round(85 * 1.62)
-/** Rough output size: a cover carries a few short lines, wrapped in JSON. */
-const EST_COMPLETION_TOKENS = 40
+// Cost is a RANGE, not a number, and deliberately so (translate-transcripts.ts's
+// rule). gpt-4.1-mini prices an image by its PIXEL DIMENSIONS — it ignores
+// `detail: 'low'`, measured live 2026-09-12 — so what a cover costs depends on
+// what resolution the platform serves, and that varies 10x within Instagram
+// alone. Quoting one number would understate the corpus this script exists to
+// price. Billing is the truth; these are bounds, taken from eight real covers:
+//
+//   youtube hqdefault 480x360   576 prompt tokens        $0.00024 - $0.00029
+//   instagram p360x360          673 prompt tokens        $0.00030
+//   instagram e15 cover frame  4121 prompt tokens        $0.00165
+//   instagram full-resolution  5676 prompt tokens        $0.00241 - $0.00341
+//
+// OpenAI's own patch cap is what bounds the top end; nothing here can exceed it.
+const IMAGE_TOKENS: Record<Platform, { lo: number; hi: number }> = {
+  // Every YouTube cover is the same hqdefault, so its range is a point.
+  youtube: { lo: 311, hi: 311 },
+  // The two scraped platforms serve whatever the poster uploaded.
+  instagram: { lo: 400, hi: 5400 },
+  tiktok: { lo: 400, hi: 5400 },
+  reddit: { lo: 0, hi: 0 },
+}
+/** Output: a few short lines wrapped in JSON, but a cover dense with body copy
+ *  measured 714 completion tokens, so the high end allows for one. */
+const COMPLETION_TOKENS = { lo: 10, hi: 400 }
 
-function estPerCall(): { promptTokens: number; completionTokens: number; usd: number } {
+function estPerCall(platform: Platform): { lo: number; hi: number } {
   const price = MODEL_PRICING[OCR_MODEL]
   if (!price) throw new Error(`no MODEL_PRICING for ${OCR_MODEL}`)
   const { system, user } = buildOcrPrompt()
-  const promptTokens = Math.ceil((system.length + user.length) / 4) + IMAGE_TOKENS_LOW
-  const usd = (promptTokens / 1e6) * price.inputPer1M + (EST_COMPLETION_TOKENS / 1e6) * price.outputPer1M
-  return { promptTokens, completionTokens: EST_COMPLETION_TOKENS, usd }
+  const textTokens = Math.ceil((system.length + user.length) / 4)
+  const img = IMAGE_TOKENS[platform]
+  const usd = (imgTokens: number, out: number) =>
+    ((textTokens + imgTokens) / 1e6) * price.inputPer1M + (out / 1e6) * price.outputPer1M
+  return { lo: usd(img.lo, COMPLETION_TOKENS.lo), hi: usd(img.hi, COMPLETION_TOKENS.hi) }
 }
 
 interface VideoRowLite {
@@ -178,13 +201,15 @@ async function reachable(urls: string[]): Promise<{ tried: number; alive: number
 
 async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> {
   const videos = await loadVideos(clientId)
-  const est = estPerCall()
   const pending = new Map<Platform, VideoRowLite[]>()
+  let loTotal = 0
+  let hiTotal = 0
 
   console.log(`\nclient ${clientId}`)
-  console.log(`model ${OCR_MODEL} · detail low · ~${est.promptTokens} prompt + ~${est.completionTokens} completion tokens ≈ $${est.usd.toFixed(5)} per cover\n`)
-  console.log('platform     videos      ok    none  no_img  failed   unread   est $   backfillable')
+  console.log(`model ${OCR_MODEL} · cost per cover is a RANGE: this model prices an image by its pixel size, so it moves with what the platform serves\n`)
+  console.log('platform     videos      ok    none  no_img  failed   unread    est $ low   est $ high   backfillable')
   for (const platform of PLATFORMS) {
+    const est = estPerCall(platform)
     const rows = videos.filter((v) => v.platform === platform)
     const by = (s: string) => rows.filter((v) => v.ocr_status === s).length
     const unread = rows.filter(needsOcr)
@@ -193,14 +218,16 @@ async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> 
     unread.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0) || a.video_id.localeCompare(b.video_id))
     pending.set(platform, unread)
     const backfillable = canBackfillOcr(adapters[platform]) ? 'yes (durable url)' : 'no (signed url)'
+    loTotal += unread.length * est.lo
+    hiTotal += unread.length * est.hi
     console.log(
       `${platform.padEnd(11)}${String(rows.length).padStart(7)}${String(by('ok')).padStart(8)}` +
       `${String(by('none')).padStart(8)}${String(by('no_image')).padStart(8)}${String(by('failed')).padStart(8)}` +
-      `${String(unread.length).padStart(9)}${('$' + (unread.length * est.usd).toFixed(2)).padStart(8)}   ${backfillable}`,
+      `${String(unread.length).padStart(9)}${('$' + (unread.length * est.lo).toFixed(2)).padStart(12)}${('$' + (unread.length * est.hi).toFixed(2)).padStart(13)}   ${backfillable}`,
     )
   }
   const totalUnread = [...pending.values()].reduce((n, r) => n + r.length, 0)
-  console.log(`${'total'.padEnd(11)}${String(videos.length).padStart(7)}${''.padStart(32)}${String(totalUnread).padStart(9)}${('$' + (totalUnread * est.usd).toFixed(2)).padStart(8)}`)
+  console.log(`${'total'.padEnd(11)}${String(videos.length).padStart(7)}${''.padStart(32)}${String(totalUnread).padStart(9)}${('$' + loTotal.toFixed(2)).padStart(12)}${('$' + hiTotal.toFixed(2)).padStart(13)}`)
 
   // Reachability, for the two platforms whose covers expire. This is the number
   // that decides whether their backlog is worth anything at all.
@@ -229,11 +256,21 @@ async function report(clientId: string): Promise<Map<Platform, VideoRowLite[]>> 
 /** Read covers through the model and print what came back. Writes NOTHING —
  *  not the videos row, not ai_call_log — so it can be pointed at a live tenant
  *  to judge quality before anything is stored. */
-async function probe(clientId: string, rows: VideoRowLite[], platform: Platform): Promise<void> {
+async function probe(clientId: string, unread: VideoRowLite[], platform: Platform, limit: number): Promise<void> {
   const adapter = adapters[platform]
+  // Only videos that actually HAVE a cover are worth a probe: this is a quality
+  // check on what the model reads, and spending the limit on rows whose signed
+  // url expired months ago measures nothing. The dry-run table above is where
+  // "how much of the backlog is unreachable" is already answered.
+  const window = canBackfillOcr(adapter) ? unread.slice(0, limit) : unread.slice(0, PROBE_WINDOW)
   const covers = canBackfillOcr(adapter)
-    ? new Map(rows.map((v) => [v.video_id, adapter.coverUrlById!(v.video_id)]))
-    : await loadCovers(clientId, platform, rows.map((v) => v.video_id))
+    ? new Map(window.map((v) => [v.video_id, adapter.coverUrlById!(v.video_id)]))
+    : await loadCovers(clientId, platform, window.map((v) => v.video_id))
+  const rows = window.filter((v) => covers.has(v.video_id)).slice(0, limit)
+  if (!rows.length) {
+    console.log(`\nprobe ${platform}: none of the ${window.length} richest unread videos still has a stored cover url.`)
+    return
+  }
 
   console.log(`\nPROBE ${platform}: ${rows.length} cover(s) through ${OCR_MODEL}. Real money, no writes.\n`)
   const price = MODEL_PRICING[OCR_MODEL]!
@@ -258,7 +295,8 @@ async function probe(clientId: string, rows: VideoRowLite[], platform: Platform)
       console.log(`- ${platform} ${v.video_id}\n  status: failed — ${e instanceof Error ? e.message.slice(0, 200) : String(e)}\n`)
     }
   }
-  console.log(`probe total: $${spent.toFixed(5)} · estimate was $${(estPerCall().usd * rows.length).toFixed(5)} for ${rows.length}`)
+  const est = estPerCall(platform)
+  console.log(`probe total: $${spent.toFixed(5)} · estimated range was $${(est.lo * rows.length).toFixed(5)}-$${(est.hi * rows.length).toFixed(5)} for ${rows.length}`)
 }
 
 async function main() {
@@ -268,8 +306,8 @@ async function main() {
 
   if (doProbe) {
     for (const p of targets) {
-      const rows = (pending.get(p) ?? []).slice(0, limit!)
-      if (rows.length) await probe(clientId, rows, p)
+      const unread = pending.get(p) ?? []
+      if (unread.length) await probe(clientId, unread, p, limit!)
       else console.log(`\nprobe ${p}: nothing unread.`)
     }
     console.log('\nnothing written — probe reads the model, not the database.')
