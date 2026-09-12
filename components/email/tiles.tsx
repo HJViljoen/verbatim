@@ -185,7 +185,12 @@ const initiatives: E<DashboardData> = ({ initiatives }, ctx) => {
   // Optional for the same reason the app renderer is: an email re-rendered from
   // a snapshot frozen before this tile existed has no key for it.
   const t = initiativesOf({ initiatives })
-  if (!t.rows.length) return empty('Track a theme from Voice of Customer to see whether the conversation is moving.')
+  // Null, not an empty state. The email does not go through `slides()`, so the
+  // gate that keeps this tile off the print deck for a tenant tracking nothing
+  // does not reach here — and a weekly email that says "Track a theme from
+  // Voice of Customer…" forever is an advert, not an update. DigestEmail drops
+  // a section whose renderer returns null, heading and all.
+  if (!t.rows.length) return null
   return (
     <div>
       {table(t.rows.map((r) => row(

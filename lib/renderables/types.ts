@@ -72,7 +72,11 @@ export interface EmailContext {
 
 export interface Renderable<D> {
   /** Table-based, inline-styled markup for an email body (Stage 3). A tile
-   *  without one is simply not in the email — it is still on the paper. */
+   *  without one is simply not in the email — it is still on the paper. A tile
+   *  that HAS one may return null for "not this week": DigestEmail then drops
+   *  the section, heading and framing line included. Use that only where the
+   *  empty state would be noise to the reader; a tile with something honest to
+   *  say when empty should say it. */
   email?: (data: D, ctx: EmailContext) => ReactNode
   /** `<page>.<tile>`, e.g. 'dashboard.strip'. Stable: it names PNG exports and
    *  registry entries; renaming one orphans stored artifacts' tile_key. */
