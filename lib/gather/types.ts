@@ -254,6 +254,30 @@ export interface PlatformAdapter {
    */
   extractMedia?(raw: RawItem): MediaRef
   /**
+   * The video's COVER FRAME — the still the platform shows before playback —
+   * from the raw item, for on-screen-text extraction (WP7b, 2026-09-12).
+   * `null` = this item carries no cover handle.
+   *
+   * Field paths VERIFIED against real `video_raw.raw` rows on 2026-09-12 (three
+   * per platform, read-only): TikTok `video.cover` (with an identical
+   * `video.thumbnail`), Instagram `displayUrl`. There is no `covers` array, no
+   * `videoMeta.coverUrl` and no `thumbnailUrl` in what these actors actually
+   * return. Like every media URL in a raw item these are SIGNED and EXPIRING,
+   * which is why OCR runs at gather time — see lib/pipeline/ocr.ts.
+   *
+   * YouTube is the exception: its cover is derivable from the id and never
+   * expires (`coverUrlById`), so it can also be read from history.
+   * Reddit is text-native and implements neither.
+   */
+  coverUrl?(raw: RawItem): string | null
+  /**
+   * The cover frame from the platform VIDEO ID alone — no raw item, no expiry.
+   * Only YouTube has one (`https://i.ytimg.com/vi/<id>/hqdefault.jpg`), which is
+   * what makes the OCR backfill over historical rows possible for that platform
+   * and impossible for the others.
+   */
+  coverUrlById?(videoId: string): string
+  /**
    * Transcript resolvable from the raw item ALONE — no media fetch, no Whisper,
    * no cost. Reddit uses it: a post's selftext is the OP's own words, which is
    * exactly what a transcript is on the video platforms, so it flows through the
