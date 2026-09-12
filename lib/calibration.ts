@@ -121,6 +121,7 @@ export const GLOSSARY = {
   sentiment: ['Strongly positive → Strongly negative', 'fixed cutoffs on the measured share of rated conversations; Polarized = both sides above 30%'],
   say_vs_hear: ['Say vs hear', "what your own videos claim (from their transcripts), set against what the tracked conversation actually says — 'not talked about yet' means the audience doesn't engage with the claim, not that it's wrong"],
   news: ['In the news', 'published coverage matched to your tracked names by headline — shown as context beside the conversation, never claimed as the cause of anything measured'],
+  on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment — filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],
   about_you: ['About you', "what other people's videos say about your brand, quoted verbatim from their transcripts and shown only when they name you — their words, never yours, and never counted as your audience"],
 } as const
 

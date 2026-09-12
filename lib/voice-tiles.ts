@@ -223,6 +223,22 @@ export function byThemeLead(a: ThemeLeadRow, b: ThemeLeadRow): number {
   return b.evidence_count - a.evidence_count || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0)
 }
 
+/** "3 said on camera" — the on-camera share of a theme's conversations, or
+ *  null when there is nothing to say (WP7a). A creator who filmed an opinion
+ *  put more into it than a commenter, which is why the count is worth printing
+ *  beside the total and why rank weighs it higher.
+ *
+ *  Null, not "0 said on camera": a theme heard only in comments is the normal
+ *  case and a zero on every card would be noise. Null too when the count is
+ *  missing (an update themed before this was recorded) — silence beats a
+ *  guess. Clamped to the total, because a card must never say more videos
+ *  spoke than the card counts. */
+export function onCameraNote(videoEvidenceCount: number | null | undefined, evidenceCount: number): string | null {
+  const n = Math.min(Math.trunc(Number(videoEvidenceCount ?? 0)), Math.max(0, evidenceCount))
+  if (!Number.isFinite(n) || n <= 0) return null
+  return `${n} said on camera`
+}
+
 export interface VoiceTierRow { single_source: boolean | null; strength_score: number | null }
 
 /** Voice's three tiers as lists: confirmed = heard in more than one

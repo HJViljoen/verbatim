@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone, categoryChip, shortPhrases, type ThemeHistoryRow, moverDirection } from './voice-tiles'
+import { squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone, categoryChip, shortPhrases, type ThemeHistoryRow, moverDirection, onCameraNote } from './voice-tiles'
 
 describe('squarify', () => {
   const area = (r: { w: number; h: number }) => r.w * r.h
@@ -210,5 +210,26 @@ describe('moverDirection — colour follows the visible slope', () => {
     expect(moverDirection('fading', 0)).toBe('down')
     expect(moverDirection('gaining', null)).toBe('up')
     expect(moverDirection('steady', null)).toBe('up')
+  })
+})
+
+describe('onCameraNote — the Voice card says how much was said out loud (WP7a)', () => {
+  it('prints the count when a creator said it on camera', () => {
+    expect(onCameraNote(3, 12)).toBe('3 said on camera')
+    expect(onCameraNote(1, 1)).toBe('1 said on camera')
+  })
+
+  it('says nothing for a comment-only theme, rather than printing a zero', () => {
+    expect(onCameraNote(0, 12)).toBeNull()
+  })
+
+  it('says nothing when the update predates the count', () => {
+    expect(onCameraNote(null, 12)).toBeNull()
+    expect(onCameraNote(undefined, 12)).toBeNull()
+  })
+
+  it('never claims more spoke than the card counts', () => {
+    expect(onCameraNote(9, 4)).toBe('4 said on camera')
+    expect(onCameraNote(2, 0)).toBeNull()
   })
 })

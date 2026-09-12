@@ -8,7 +8,7 @@ import { prevalenceTier, type GlossaryKey, type PrevalenceTier } from '../calibr
 import { fmtCompact, weekdayDate, platformLabel } from '../format'
 import { latestPerDay } from '../dashboard-tiles'
 import {
-  themeTrajectories, themeMovers, voiceTiers, byThemeLead, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind,
+  themeTrajectories, themeMovers, voiceTiers, byThemeLead, pickVoiceCards, categoryTabs, categoryLabel, shortPhrases, topEmotions, bucketKind, onCameraNote,
   type ThemeHistoryRow, type Trajectory, type Bucket,
 } from '../voice-tiles'
 import { pickThemedRunId } from './themed-run'
@@ -42,6 +42,9 @@ export interface ThemeRow {
   supporting_insight_ids: string[]
   supporting_video_ids: string[]
   evidence_count: number
+  /** Of evidence_count, the conversations where it was said on camera (WP7a).
+   *  Null on an update themed before the column existed. */
+  video_evidence_count: number | null
   strength_score: number | null
   rank_score: number | null
   dominant_emotion: string | null
@@ -125,6 +128,8 @@ export interface ThemeDetail {
   count: number
   denom: number
   pct: number
+  /** "3 said on camera", or null when the theme is comment-only / unrecorded. */
+  onCamera: string | null
   history: { evidence: number[]; dates: string[] } | null
   quotes: Quote[]
   withheld: number
@@ -286,7 +291,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const themes = themedRunId
     ? await selectAll<ThemeRow>(() =>
         supabase.from('themes')
-          .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
+          .select('id, registry_id, bucket, category, label, description, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, video_evidence_count, strength_score, rank_score, dominant_emotion, dominant_sentiment_impact, single_source, first_seen')
           .eq('client_id', clientId).eq('run_id', themedRunId)
           .order('evidence_count', { ascending: false })
           .order('rank_score', { ascending: false, nullsFirst: false })
@@ -482,6 +487,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       id: t.id, label: t.label, bucket: t.bucket, bucketName: bucketName(t.bucket), groupName: groupName(t.bucket), kind: bucketKind(t.bucket),
       category: t.category, prevalence: prevalenceTier(t.evidence_count, denom), emotion: t.dominant_emotion, isNew: showNew && t.first_seen,
       description: t.description, count: t.evidence_count, denom, pct: denom > 0 ? Math.min(100, Math.round((t.evidence_count / denom) * 100)) : 0,
+      onCamera: onCameraNote(t.video_evidence_count, t.evidence_count),
       history: h && h.evidence.length >= 2 ? { evidence: h.evidence, dates: h.dates } : null,
       quotes, withheld, memberThemes: t.member_themes,
     }
