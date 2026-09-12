@@ -698,6 +698,8 @@ export interface RunFlags {
   transcripts: boolean
   /** Default ON (translationEnabled) — see the translation block above. */
   translation: boolean
+  /** Default ON (ocrEnabled) — see the on-screen-text block above. */
+  ocr: boolean
   incrementalPassA: boolean
   themeRegistry: boolean
   redditDiscovery: boolean
@@ -708,6 +710,7 @@ export function captureRunFlags(): RunFlags {
   return {
     transcripts: transcriptsEnabled(),
     translation: translationEnabled(),
+    ocr: ocrEnabled(),
     incrementalPassA: incrementalPassAEnabled(),
     themeRegistry: themeRegistryEnabled(),
     redditDiscovery: redditDiscoveryEnabled(),
