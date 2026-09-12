@@ -63,6 +63,23 @@ describe('the topic blocks', () => {
   })
 })
 
+describe('the four fixed templates', () => {
+  // L2 (review): the identity assertions prove composition does not COPY the
+  // four; this proves WP7d did not change a word of them. A deliberate change
+  // to one of the four updates the number here, on purpose, in its own commit.
+  const fnv1a = (text: string) => {
+    let h = 0x811c9dc5
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+    return h.toString(16)
+  }
+
+  it('are word for word what they were before the topic blocks existed', () => {
+    // Verified against `git show bc1fa51:lib/reports/documents/templates.ts`,
+    // the merge WP7d was branched from: the same string, the same hash.
+    expect(fnv1a(JSON.stringify(DOCUMENT_TEMPLATES))).toBe('12113f56')
+  })
+})
+
 describe('the custom brief', () => {
   it('opens and closes like every other brief and declares nothing in between', () => {
     expect(skeletonOrder(CUSTOM_BRIEF)).toEqual(['in_short', 'finding', 'method'])
@@ -236,7 +253,7 @@ describe('documentSettings, with a brief and blocks', () => {
 })
 
 describe('applyDocumentSettingsPatch', () => {
-  const patch = { brief: 'Review the athlete campaign.', blocks: ['consumer_profiles'], role: 'market_brief' as const, findings: 3 as const }
+  const patch = { brief: 'Review the athlete campaign.', blocks: ['consumer_profiles' as const], role: 'market_brief' as const, findings: 3 as const }
 
   it('keeps a custom brief\'s own three, and files it under the role that writes it', () => {
     const out = applyDocumentSettingsPatch({ templateKey: CUSTOM_KEY, current: DEFAULT_DOCUMENT_SETTINGS, patch })

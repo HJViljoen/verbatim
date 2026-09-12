@@ -44,11 +44,11 @@ export const documentSettingsPatch = z.object({
    *  blocks it must include in their print order, and whose voice writes it.
    *  Empty string and empty array are how the Studio clears them. */
   brief: z.string().trim().max(DOCUMENT_BRIEF_MAX, `a brief runs to ${DOCUMENT_BRIEF_MAX} characters at most`).optional(),
-  blocks: z.array(z.enum(DOCUMENT_BLOCK_KEYS as [string, ...string[]]))
+  blocks: z.array(z.enum(DOCUMENT_BLOCK_KEYS as [DocumentBlockKey, ...DocumentBlockKey[]]))
     .max(DOCUMENT_BLOCK_KEYS.length)
     .refine((b) => new Set(b).size === b.length, 'a block can only be included once')
     .optional(),
-  role: z.enum(DOCUMENT_ROLES as [string, ...string[]]).optional(),
+  role: z.enum(DOCUMENT_ROLES as [DocumentRole, ...DocumentRole[]]).optional(),
 })
 export type DocumentSettingsPatch = z.infer<typeof documentSettingsPatch>
 
@@ -92,8 +92,8 @@ export function applyDocumentSettingsPatch(args: {
     ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
     ...(p.findings !== undefined ? { findings: p.findings } : {}),
     ...(custom && p.brief !== undefined ? { brief: p.brief } : {}),
-    ...(custom && p.blocks !== undefined ? { blocks: p.blocks as DocumentBlockKey[] } : {}),
-    ...(custom && p.role !== undefined ? { role: p.role as DocumentRole } : {}),
+    ...(custom && p.blocks !== undefined ? { blocks: p.blocks } : {}),
+    ...(custom && p.role !== undefined ? { role: p.role } : {}),
     // A fixed template never carries them, whatever an older row stored.
     ...(custom ? {} : { brief: undefined, blocks: undefined, role: undefined }),
   })

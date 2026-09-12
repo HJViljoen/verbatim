@@ -115,7 +115,7 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
             <span className="text-[11.5px] text-muted-foreground">Whose voice writes it, and what the consequence of a finding is called.</span>
           </label>
           <fieldset className="flex flex-col gap-1.5">
-            <legend className={labelCls}>Topic blocks to include</legend>
+            <legend className={labelCls}>Topics this brief must cover</legend>
             {listed.map((key) => {
               const b = DOCUMENT_BLOCKS[key]
               const at = blocks.indexOf(key)
