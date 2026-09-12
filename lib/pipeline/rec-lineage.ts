@@ -19,15 +19,30 @@ import { cosine } from './cluster'
 // question" are different actions however similarly phrased) AND either an
 // exact normalised title or a title embedding above REC_LINEAGE_THRESHOLD.
 //
-// The threshold is deliberately high. A false match silently transfers a
-// client's "Done" onto an action they have never seen; an unmatched pair costs
-// only a recommendation that reads New for one more update. When in doubt this
-// starts a new lineage.
+// The asymmetry that sets the threshold: a false match silently transfers a
+// client's "Done" onto an action they have never seen, while a missed one costs
+// only a recommendation that reads New for one more update — which is exactly
+// today's behaviour. When in doubt this starts a new lineage.
 //
 // Pure: the caller embeds (or, in tests, supplies vectors). No I/O here.
 
-/** Cosine at or above which two same-type titles are the same recommendation. */
-export const REC_LINEAGE_THRESHOLD = 0.82
+/**
+ * Cosine at or above which two same-type titles are the same recommendation.
+ *
+ * MEASURED, not guessed (calibration 2026-09-12, `scratch/rec-lineage-calibration.md`):
+ * the last three updates of both live tenants, 29 titles embedded with the
+ * pipeline's own `text-embedding-3-small`, every new recommendation's best
+ * same-type candidate labelled by hand. Nine pairs were the same recommendation
+ * reworded (0.433 – 0.796); eight were different actions (0.087 – 0.472). The
+ * bands OVERLAP, so no value separates them cleanly; 0.55 sits in the only real
+ * gap (0.472 → 0.605), keeping 7 of the 9 true pairs and admitting 0 of the 8
+ * false ones, biased to the safe side of that gap.
+ *
+ * The first guess was 0.82. Not one of the nine true pairs clears it — titles
+ * are re-rolled as completely as theme labels are, and lineage would never have
+ * carried a single status. Re-measure if the D-b prompt's title style changes.
+ */
+export const REC_LINEAGE_THRESHOLD = 0.55
 
 /** A recommendation as the previous update left it. */
 export interface PriorRec {

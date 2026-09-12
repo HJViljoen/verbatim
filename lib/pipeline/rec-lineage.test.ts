@@ -10,8 +10,8 @@ const unit = (deg: number): number[] => {
 }
 /** cos 20° ≈ 0.940 — a paraphrase, above the bar. */
 const NEAR = 20
-/** cos 60° = 0.5 — a different recommendation, well below it. */
-const FAR = 60
+/** cos 75° ≈ 0.259 — a different recommendation, well below it. */
+const FAR = 75
 
 const prior = (over: Partial<PriorRec> = {}): PriorRec => ({
   id: 'prior-1',
