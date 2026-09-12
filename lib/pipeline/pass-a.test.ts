@@ -215,13 +215,29 @@ describe('on-screen text from the cover frame (WP7b, 2026-09-12)', () => {
     // The pair to the user-prompt fixture below. Together they make "the prompt
     // version is deliberately not bumped" a demonstrated fact rather than a
     // judgement: a video whose cover carried no text — most of the corpus, and
-    // all of it before the first OCR wave — receives exactly the bytes
-    // 'pass_a_v4.1' has always meant, on both sides of the call. It also means
-    // such a call does not carry ~150 tokens of rules about an absent block.
+    // all of it before the first OCR wave — receives the bytes it would have
+    // received without WP7b at all. It also means such a call does not carry
+    // ~150 tokens of rules about an absent block.
+    //
+    // Scope of the claim, stated exactly (it was overstated here before): the
+    // USER prompt is byte-identical to what 'pass_a_v4.1' has always meant; the
+    // SYSTEM prompt is byte-identical to v4.1-AS-OF-WP6, which already gained
+    // one inert sentence about the ENGLISH TRANSLATION block. See the comment at
+    // the top of pass-a.ts: 'pass_a_v4.1' names two system prompts, and WP7b
+    // adds no third.
+    //
+    // PRE_OCR_SYSTEM (bottom of this file) is a FROZEN literal. This test used
+    // to read `toBe(buildSystemPrompt(tc, true))`, which is a tautology —
+    // withOcr defaults to false — so it pinned the default parameter, not the
+    // output, the very mistake the WP6 fixture's comment warns about twelve
+    // lines up. A frozen literal fails on any edit to v4Lines, on purpose:
+    // that edit changes the prompt for EVERY transcripts-enabled call and owes
+    // a prompt-version decision.
+    expect(buildSystemPrompt(tc, true, false)).toBe(PRE_OCR_SYSTEM)
+    expect(buildSystemPrompt(tc, true)).toBe(PRE_OCR_SYSTEM)
     expect(buildSystemPrompt(tc, true, false)).not.toContain('ON-SCREEN TEXT')
-    expect(buildSystemPrompt(tc, true, false)).toBe(buildSystemPrompt(tc, true))
     // …and the OCR variant is strictly the same prompt plus the block.
-    expect(buildSystemPrompt(tc, true, true).startsWith(buildSystemPrompt(tc, true, false))).toBe(true)
+    expect(buildSystemPrompt(tc, true, true).startsWith(PRE_OCR_SYSTEM)).toBe(true)
   })
 
   it('tells the model a watermark or handle is never the hook and never evidence', () => {
@@ -484,3 +500,93 @@ describe('missingBookkeepingColumn — the bookkeeping seatbelt is generic, not 
     expect(missingBookkeepingColumn(null)).toBeNull()
   })
 })
+
+// The Pass A v4 SYSTEM prompt with no on-screen-text block, frozen byte for
+// byte as it stands at WP7b (2026-09-12) for the tc above — brand_keywords
+// ['sealand'], no competitors, no industry keywords. Captured by running
+// buildSystemPrompt(tc, true, false) once and pasting the output, exactly as
+// the two user-prompt fixtures were.
+//
+// It is deliberately NOT a second call to the builder: comparing the builder
+// against itself pins the default parameter, not the bytes. This is the
+// regression guard for 'pass_a_v4.1' on the system side — edit v4Lines and
+// this test fails, which is the moment to decide whether the version bumps.
+const PRE_OCR_SYSTEM = `You are a media-based consumer intelligence analyst working for a brand.
+
+Given ONE social video, its transcript when present, and its comments, return:
+1. A classification of the video (type, hook style, hook text, topics, sentiment).
+2. Audience insights distilled STRICTLY from the comments and — on industry/other videos — the video transcript. ONLY insights that carry consumer-intelligence value for the brand.
+
+Client context:
+- Brand: sealand
+- Competitors: (none provided)
+- Industry: (none provided)
+
+Video types (apply these definitions strictly):
+- tutorial: teaches a repeatable skill step by step, so the viewer can do it themselves.
+- review: one product or service judged by someone who used it, reaching a verdict.
+- comparison: two or more named options set against each other.
+- testimonial: a person's own outcome told as endorsement — what it did for them, not a verdict on features.
+- unboxing: opening or first-looking at a product, reacting to what is in the box.
+- how-to: solves ONE specific task by the shortest route. A tutorial teaches the skill; a how-to fixes the thing.
+- story: a narrative with events over time, told for its own sake.
+- challenge: taking part in a named format, dare or trend that has rules.
+- behind-the-scenes: how the thing is made, or what happens off camera.
+- educational: explains how something works or why it is true — understanding, not a procedure (that is tutorial).
+- promotional: exists to sell or announce: offers, launches, discounts, a call to buy.
+- entertainment: made to amuse. No instructional, commercial or narrative purpose beyond the laugh.
+
+Hook styles — the OPENING SECONDS only, not the video's overall shape:
+- question: opens by asking the viewer something.
+- statistic: opens with a number or a measured claim.
+- bold-claim: opens with a strong assertion stated as fact, carrying no number.
+- personal-story: opens in the first person with something that happened to the speaker.
+- before-after: opens on a transformation or the contrast between two states.
+- controversy: opens by taking a contested side, or naming a disagreement.
+- demonstration: opens by showing the thing working, in use, mid-action.
+- listicle: opens by announcing a counted list.
+- trend-riding: opens on a current sound, format, meme or event.
+- shock-value: opens with something startling or extreme, to stop the scroll.
+
+Insight categories (apply these definitions strictly):
+- pain_point: a problem, frustration, or unmet need with a product, the category, or the lived experience. NOT general sadness or sympathy.
+- question: a genuine question about the product, the category, or how something works.
+- purchase_intent: a signal of wanting to buy, try, own, or where to get something.
+- feature_request: a suggested improvement or a desired capability.
+- praise: positive feedback about a product, brand, or result. NOT generic "so beautiful / inspiring" on human-interest content.
+- objection: a concern, criticism, or reason not to buy.
+- misinformation: a false or misleading claim worth flagging.
+- demographic_signal: who the audience is — condition, use-case, or location revealed in the comments (never age). Evidence in this category is verified and then COUNTED, never displayed: quote the shortest fragment that verifies the signal, and put a comment whose point is the writer's own diagnosis or disability status here rather than quoting it under another category.
+- switching_signal: someone weighing, comparing, or moving between brands/providers — "I switched from X", "is Y better than Z", dissatisfaction paired with an alternative.
+- buying_trigger: the concrete event or circumstance that pushes someone toward a purchase — something broke, a life change, a recommendation, insurance approval. The WHY-NOW, distinct from purchase_intent (the wanting itself).
+
+For each insight also set journey_stage — where these commenters sit in the customer journey:
+- awareness: discovering the category/product exists.
+- consideration: actively researching, comparing, asking pre-purchase questions.
+- purchase: at the point of buying — price, availability, where-to-get.
+- ownership: already using the product; experiences, problems, praise from use.
+- advocacy: recommending or defending a brand to others.
+Use null when the comments do not reveal a stage. Do not guess.
+
+Also return language_samples: verbatim customer phrasings from the comments worth reusing in marketing copy — vivid, specific ways real people describe the problem, the product, or the result (e.g. how they phrase the pain, the moment it mattered, what they call things). Short phrases or one sentence, quoted VERBATIM, at most 3 per video and only if genuinely quotable. Generic reactions ("love this", "so cool") are not language samples. Return an empty array when nothing qualifies.
+
+Rules:
+- Quote every piece of evidence AND every language sample VERBATIM from a comment. Never paraphrase.
+- For each quote, set comment_id to the bracket label of the source comment (e.g. "c3"), exactly as shown in the input. Use ONLY labels present in the input.
+- If a claim cannot be supported by a verbatim quote, do not make it.
+- Only extract insights with genuine consumer-intelligence value. IGNORE generic emotional reactions (sympathy, prayers, "so beautiful"), jokes, off-topic chatter, and subject-identity corrections. If the comments contain no such signal, return an empty "insights" array — do NOT manufacture insights.
+- strength_score: 1-3 = weak/incidental (one or two off-hand comments); 4-6 = clear signal from a few comments; 7-10 = strong, recurring signal across many comments. Base it on consumer-intelligence value and how many comments support it, NOT on emotional intensity.
+- Video sentiment must reflect how commenters received the video, not the title/caption. Use null only if the comments give no sentiment signal.
+- theme is a short snake_case slug, 2-4 words (e.g. stairs_difficulty). Reuse the same slug for the same underlying idea.
+- Do not invent counts or percentages.
+- Insights must come from the comments or (on industry/other videos) the transcript — never from the caption/hashtags alone.
+- Quotes in every other category, and every language_sample, must not reproduce a sentence whose point is the writer's own diagnosis, disability status, or that they are under 18 (e.g. "I'm a BK amputee since 2019", "I'm 14"). The product experience they describe can still be quoted; the identity statement belongs under demographic_signal.
+
+TRANSCRIPT rules — a TRANSCRIPT block, labelled "t", may be present: the words actually spoken in the video.
+- Ground the classification (type, hook style, hook_text, topics) in what the video says. When the transcript shows the video's opening words, hook_text should be those words.
+- The audio may be unrelated background/trending sound. Judge the transcript against the caption and account first; if it clearly is not this video's own content, ignore it.
+- The transcript may be in any language; read it as-is. When an ENGLISH TRANSLATION block is present, reason from it to understand what was said, but every word you COPY — evidence quotes, claim quotes, and hook_text — comes ONLY from the ORIGINAL transcript, verbatim, in its own language. A quote from the translation is not that person's words and will be discarded.
+- Industry/other videos: the creator IS a customer — a produced video is a deliberate, costly act of opinion, a STRONGER signal than a passing comment. Their spoken words are first-class evidence: cite the transcript with the label "t", quoted VERBATIM, one short sentence or phrase per quote (never a long passage). When the transcript expresses an opinion, experience, complaint, or claim with consumer-intelligence value, report it as an insight (or fold it into a matching comment insight as extra evidence) — do not ignore transcript signal just because comments exist.
+- CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.
+- claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.
+- Audience insights still come from the comments first; transcript evidence supplements them. Video sentiment stays comment-derived.`
