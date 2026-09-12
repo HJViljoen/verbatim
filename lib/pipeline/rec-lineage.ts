@@ -148,6 +148,31 @@ export function assignLineage(
   return out
 }
 
+/** A `pipeline_runs` row, as the lineage read hands it over. */
+export interface RunRow {
+  id: string
+  status: string | null
+  started_at: string | null
+}
+
+/**
+ * Which update counts as "the previous one" for carrying a status forward.
+ *
+ * It has to be the update the CLIENT saw, because what travels is a status they
+ * set on that page — so it is the newest run with `status in ('completed',
+ * 'partial')`, the same anchor `lib/pages/dashboard.ts` and `lib/pages/market.ts`
+ * use to decide what a tenant is looking at, ordered by `started_at` as they
+ * order it. An `analyzing` run already holds recommendations and a `failed` one
+ * can too; neither has ever been shown to anyone, and either as the match pool
+ * would silently drop every status set on the last visible update.
+ */
+export function previousRunId(runs: RunRow[], currentRunId: string): string | null {
+  const visible = runs
+    .filter((r) => r.id !== currentRunId && (r.status === 'completed' || r.status === 'partial'))
+    .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
+  return visible[0]?.id ?? null
+}
+
 /**
  * The same rows without their `lineage_id` — the insert payload for a database
  * that has not had `20260911140000_initiatives.sql` applied yet.

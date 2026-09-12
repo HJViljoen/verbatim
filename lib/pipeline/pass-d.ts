@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, withoutLineageColumn, type PriorRec } from './rec-lineage'
+import { assignLineage, previousRunId, withoutLineageColumn, type PriorRec, type RunRow } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -858,21 +858,37 @@ async function applyLineage(
   rows: LineageTarget[],
 ): Promise<Record<string, number>> {
   try {
-    // The previous update's set: newest rows for this client that are not this
-    // update's, narrowed to the single run they came from. `recommendations`
-    // holds a handful of rows per update, so this never approaches the 1000-row
-    // cap that would need selectAll.
+    // "The previous update" has to mean the update the CLIENT saw, because what
+    // is being carried across is a status the client set on that page. So it is
+    // the newest run with `status in ('completed','partial')` — the same anchor
+    // every client-facing loader uses (lib/pages/dashboard.ts, lib/pages/market.ts,
+    // the schedule send) — and never an `analyzing` or `failed` run.
+    //
+    // Two ways the old rule (newest recommendation by created_at) was wrong:
+    // a run still analysing already holds recommendations, so a set nobody has
+    // seen would have become the only match pool and every status set on the
+    // last visible update would have been silently dropped; and `rerunPassDb`
+    // re-stamps an old run's rows, which would make an old run look like the
+    // most recent one.
+    const { data: runRows, error: runError } = await admin
+      .from('pipeline_runs')
+      .select('id, status, started_at')
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false })
+      .limit(20)
+    if (runError) throw new Error(runError.message)
+    const prevRunId = previousRunId((runRows ?? []) as RunRow[], runId)
+    if (!prevRunId) return { lineage_priors: 0 }
+
+    // `recommendations` holds a handful of rows per update, so this never
+    // approaches the 1000-row cap that would need selectAll.
     const { data, error } = await admin
       .from('recommendations')
-      .select('id, lineage_id, type, title, status, run_id, created_at')
+      .select('id, lineage_id, type, title, status')
       .eq('client_id', clientId)
-      .neq('run_id', runId)
-      .order('created_at', { ascending: false })
-      .limit(60)
+      .eq('run_id', prevRunId)
     if (error) throw new Error(error.message)
-    const recent = (data ?? []) as (PriorRec & { run_id: string })[]
-    const prevRunId = recent[0]?.run_id
-    const priors = recent.filter((r) => r.run_id === prevRunId)
+    const priors = (data ?? []) as PriorRec[]
     if (priors.length === 0) return { lineage_priors: 0 }
 
     let newVectors: number[][] = []

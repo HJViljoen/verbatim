@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assignLineage, normaliseTitle, withoutLineageColumn, REC_LINEAGE_THRESHOLD, type PriorRec, type NewRec } from './rec-lineage'
+import { assignLineage, normaliseTitle, previousRunId, withoutLineageColumn, REC_LINEAGE_THRESHOLD, type PriorRec, type NewRec, type RunRow } from './rec-lineage'
 import { isMissingColumnError } from '../supabase-admin'
 
 // Vectors are precomputed here on purpose: the matcher is pure and no test in
@@ -149,5 +149,38 @@ describe('surviving a deploy that lands before 20260911140000_initiatives.sql', 
     const rows = [{ ...row }]
     withoutLineageColumn(rows)
     expect(rows[0].lineage_id).toBe('r1')
+  })
+})
+
+describe('previousRunId — the update the client actually saw', () => {
+  const r = (id: string, status: string, started_at: string): RunRow => ({ id, status, started_at })
+
+  it('is the newest completed or partial update, never this one', () => {
+    const runs = [r('now', 'completed', '2026-09-06'), r('prev', 'completed', '2026-08-30'), r('older', 'partial', '2026-08-23')]
+    expect(previousRunId(runs, 'now')).toBe('prev')
+    expect(previousRunId(runs, 'prev')).toBe('now')
+  })
+
+  it('skips a run still analysing — it already holds recommendations nobody has seen', () => {
+    // Prod on 2026-09-12 held exactly this: one `analyzing` run with 4 recs.
+    const runs = [r('inflight', 'analyzing', '2026-09-12'), r('now', 'completed', '2026-09-06'), r('prev', 'completed', '2026-08-30')]
+    expect(previousRunId(runs, 'now')).toBe('prev')
+  })
+
+  it('skips failed runs', () => {
+    expect(previousRunId([r('now', 'completed', '2026-09-06'), r('bad', 'failed', '2026-09-01'), r('prev', 'partial', '2026-08-30')], 'now')).toBe('prev')
+  })
+
+  it('orders by the run, not by whatever was written last', () => {
+    // A rerunPassDb re-stamps an old run's recommendation rows; ordering on the
+    // RUN keeps that from making an old update look like the newest.
+    const runs = [r('prev', 'completed', '2026-08-30'), r('ancient', 'completed', '2026-06-01'), r('now', 'completed', '2026-09-06')]
+    expect(previousRunId(runs, 'now')).toBe('prev')
+  })
+
+  it('is null on a first update, and on a client whose only other runs failed', () => {
+    expect(previousRunId([r('now', 'completed', '2026-09-06')], 'now')).toBeNull()
+    expect(previousRunId([r('now', 'completed', '2026-09-06'), r('bad', 'failed', '2026-09-01')], 'now')).toBeNull()
+    expect(previousRunId([], 'now')).toBeNull()
   })
 })
