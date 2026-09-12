@@ -59,7 +59,7 @@ export function buildClassifySystemPrompt(): string {
     'For each numbered video block, return one entry with its "ref" (e.g. "v1") and:',
     '- classified_type: one of the types defined below — or null if the metadata is too thin to tell.',
     '- hook_style: one of the hook styles defined below — how the video OPENS. Null if you cannot tell.',
-    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook.',
+    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook. When a block shows both a "transcript" and a "transcript (English)", copy the hook from the "transcript" line — the original words, in their own language. The English is there to help you understand, and is never the hook.',
     '- topics: 1-4 short lowercase topics the video is about. Empty array if unknowable.',
     `- sentiment: one of ${VIDEO_SENTIMENTS.join(', ')} for the video's own framing — or null.`,
     '',
@@ -81,12 +81,17 @@ export function buildClassifyUserPrompt(videos: ClassifyInput[]): string {
         `caption: ${v.caption?.trim() || '(none)'}`,
       ]
       if (v.hashtags?.length) lines.push(`hashtags: ${v.hashtags.join(' ')}`)
-      // English where there is one: this step judges hook, format and framing
-      // sentiment, and none of that is served by the original language the way
-      // Pass A's verbatim evidence is. Falls back to the original, which is
-      // what it has always read (WP6, 2026-09-11).
-      const transcript = usableTranslation(v) ?? usableTranscript(v)
+      // Both lines when there is a translation, never one instead of the other
+      // (2026-09-12). This step's judgments — type, hook style, framing
+      // sentiment — read better in English, but hook_text is a VERBATIM column,
+      // and feeding only the English made every translated video's hook an
+      // English rendering stored as the video's own words. The original stays
+      // first and stays labelled `transcript:`, which is what the prompt tells
+      // the model to copy the hook from.
+      const transcript = usableTranscript(v)
       if (transcript) lines.push(`transcript: ${transcript}`)
+      const translation = transcript ? usableTranslation(v) : null
+      if (translation) lines.push(`transcript (English, for understanding only — never copy the hook from this line): ${translation}`)
       return lines.join('\n')
     })
     .join('\n\n')

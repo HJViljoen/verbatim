@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, type TranslatableVideo } from './translate'
-import { TRANSLATE_MAX_CHARS } from '../config'
+import { TRANSCRIPT_PROMPT_CHARS } from '../config'
 
 // Translation selection (WP6, 2026-09-11). The rule is stated ONCE, here, and
 // the Inngest plan step's SQL is only an index-friendly pre-filter over it —
@@ -56,12 +56,13 @@ describe('needsTranslation', () => {
     expect(needsTranslation(video({ transcript_lang: 'english' }))).toBe(false)
   })
 
-  it('never translates an unknown language', () => {
-    // A null lang means the provider did not say. Translating blind is the one
-    // case where the model has to guess what it is reading, which is exactly
-    // the failure mode translation exists to remove.
-    expect(needsTranslation(video({ transcript_lang: null }))).toBe(false)
-    expect(needsTranslation(video({ transcript_lang: '' }))).toBe(false)
+  it('INCLUDES an unknown language — the model reports what it detected', () => {
+    // Excluded for a day, wrongly: the review found Sealand's two largest
+    // unknown-language rows are 38,000-char Chinese transcripts, its single
+    // biggest untranslated block, and a live call with no language label
+    // translated Traditional Chinese faithfully. The model is asked, not told.
+    expect(needsTranslation(video({ transcript_lang: null }))).toBe(true)
+    expect(needsTranslation(video({ transcript_lang: '' }))).toBe(true)
   })
 
   it('only reads content-gated speech — the usableTranscript rule', () => {
@@ -116,11 +117,22 @@ describe('buildTranslatePrompt', () => {
     expect(p.system).toMatch(/brand|product name/i)
   })
 
-  it('clips the input to the translation budget, code-point-safe', () => {
-    const long = 'ñ'.repeat(TRANSLATE_MAX_CHARS + 500)
+  it('clips the input to the span Pass A can quote from, code-point-safe', () => {
+    const long = 'ñ'.repeat(TRANSCRIPT_PROMPT_CHARS + 500)
     const clipped = buildTranslatePrompt(long, 'es')
-    expect([...clipped.user].length).toBeLessThan(TRANSLATE_MAX_CHARS + 500)
+    expect([...clipped.user].length).toBeLessThan(TRANSCRIPT_PROMPT_CHARS + 500)
     expect(clipped.user).toContain('ñ')
+  })
+
+  it('asks for the detected language and for null on English', () => {
+    expect(p.system).toMatch(/ISO 639-1/)
+    expect(p.system).toMatch(/trust the text/i)
+    expect(p.system).toMatch(/set language to "en" and translation to null/)
+  })
+
+  it('presents the provider label as a guess, not a fact', () => {
+    expect(buildTranslatePrompt('x', null).user).toContain('not stated')
+    expect(p.user).toContain('language as the provider labelled it: es')
   })
 })
 

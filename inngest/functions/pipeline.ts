@@ -718,8 +718,13 @@ export const runPipeline = inngest.createFunction(
     //
     //     Non-fatal throughout: a video without a translation is analysed
     //     without one, exactly as before this existed.
-    const translate = { batches: 0, needing: 0, deferred: 0, translated: 0, failed: 0, skipped: 0, cost: 0 }
-    if (flags.translation) {
+    const translate = { batches: 0, needing: 0, deferred: 0, translated: 0, english: 0, failed: 0, skipped: 0, cost: 0, rateLimited: false, batchesFailed: 0 }
+    // Gated on BOTH flags, like the backfill above it. With transcripts off,
+    // Pass A cannot read a transcript at all (`useTranscripts ? … : null`), so
+    // translating would pay for up to TRANSLATE_CAP gpt-4.1 calls producing
+    // text nothing reads — the off-switch has to switch this off too.
+    if (flags.translation && flags.transcripts) {
+      let firstTranslateError: string | undefined
       const plan = await step
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
@@ -740,23 +745,45 @@ export const runPipeline = inngest.createFunction(
               // out of retries must not abandon the rest, and its videos simply
               // stay untranslated and re-plan next run.
               .catch((e: unknown) => ({
-                translated: 0, skipped: 0, failed: 0, costUsd: 0,
+                translated: 0, english: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false,
                 errors: [`translate step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+                stepFailed: true,
               })),
           ),
         )
         for (const r of wave) {
           translate.translated += r.translated
+          translate.english += r.english
           translate.failed += r.failed
           translate.skipped += r.skipped
           translate.cost += r.costUsd
-          for (const err of r.errors) noteError('translate', err)
+          if (r.rateLimited) translate.rateLimited = true
+          if ('stepFailed' in r) {
+            // A batch out of retries IS a run error: its videos got no attempt
+            // at all and nothing recorded why (the per-video path tombstones).
+            translate.batchesFailed++
+            for (const err of r.errors) noteError('translate', err)
+          } else if (r.errors.length && !firstTranslateError) {
+            firstTranslateError = r.errors[0]
+          }
         }
       }
+      // Per-video failures are ratio-gated, exactly as Pass A's are (Tier 0,
+      // 2026-08-18): a handful of content-filter refusals across a 400-video
+      // backlog must not close an otherwise clean run 'partial' and fire the
+      // alert email. Each one is already tombstoned on its own row, so nothing
+      // is lost by not shouting. A 429 still degrades the run — that is a fact
+      // about the account, not about a video.
+      const translateDegraded = passADegradation(
+        { attempted: translate.translated + translate.english + translate.failed, errored: translate.failed, rateLimited: translate.rateLimited, firstError: firstTranslateError },
+        PASS_A_ERROR_RATIO,
+      )
+      if (translateDegraded && translate.batchesFailed === 0) noteError('translate', translateDegraded)
+      else if (translate.failed > 0) console.warn(`[translate] ${translate.failed} translation(s) failed${translate.batchesFailed ? ' (batch steps already recorded)' : ` under the ${PASS_A_ERROR_RATIO * 100}% ratio`}. First: ${firstTranslateError ?? ''}`)
       if (plan.needing) {
         const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
         console.log(
-          `[translate] ${plan.needing} needed · ${translate.translated} translated · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `[translate] ${plan.needing} needed · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
@@ -1224,7 +1251,13 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     (await selectAll<{ id: string }>(() =>
       admin.from('videos').select('id')
         .eq('client_id', clientId).eq('transcript_status', 'ok')
-        .not('transcript_en', 'is', null).order('id', { ascending: true }),
+        // .neq('') as well as .not(is null): usableTranslation reads a
+        // whitespace-only column as "no translation", so a row this query
+        // called translated and Pass A did not would book
+        // analyzed_with_translation false and re-select as 'translated' every
+        // run forever. The wave cannot create such a row; a hand-edit can.
+        .not('transcript_en', 'is', null).neq('transcript_en', '')
+        .order('id', { ascending: true }),
     )).map((r) => r.id),
   )
   const counts = new Map<string, number>()

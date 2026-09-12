@@ -142,7 +142,10 @@ describe('the ORIGINAL stays the evidence (WP6 translation, 2026-09-11)', () => 
   it('v4 tells the model to reason from the translation and quote only the original', () => {
     const p = buildSystemPrompt(tc, true)
     expect(p).toContain('ENGLISH TRANSLATION block is present')
-    expect(p).toContain('quote ONLY from the ORIGINAL transcript, verbatim')
+    expect(p).toContain('comes ONLY from the ORIGINAL transcript, verbatim')
+    // hook_text is named explicitly — it is a verbatim field that does not go
+    // through validateInsights, so the prompt is the only thing holding it.
+    expect(p).toContain('hook_text')
   })
 
   it('the sentence is inert on v3 (no transcripts at all)', () => {
@@ -158,13 +161,22 @@ describe('the ORIGINAL stays the evidence (WP6 translation, 2026-09-11)', () => 
     expect(p.indexOf('probé esta mochila')).toBeLessThan(p.indexOf('I tried this backpack'))
   })
 
-  it('WITHOUT a translation the prompt is byte-identical to what v4 has always sent', () => {
-    // This is what buys not bumping PROMPT_VERSION_V4: for every English video
-    // — and for the whole corpus before the first translate wave — the model
-    // sees exactly the bytes it saw before this change.
-    expect(buildUserPrompt(v, refs, 'probé esta mochila', null))
-      .toBe(buildUserPrompt(v, refs, 'probé esta mochila'))
-    expect(buildUserPrompt(v, refs, 'probé esta mochila')).toContain('TRANSCRIPT [t] (lang: es)\nprobé esta mochila')
+  it('WITHOUT a translation the USER prompt is byte-identical to the pre-change build', () => {
+    // Frozen output of buildUserPrompt as it stood at the merge base c7731b2,
+    // captured by running that exact function body (git show
+    // c7731b2:lib/pipeline/pass-a.ts) on this same video and refs. Comparing
+    // the new builder against itself — which an earlier version of this test
+    // did, since the 4th parameter defaults to null — pins the default, not the
+    // pre-change output. This pins the output.
+    //
+    // NOTE the scope of the claim: the USER prompt is byte-identical. The
+    // SYSTEM prompt is NOT — v4 gains one sentence about the ENGLISH
+    // TRANSLATION block for every transcripts-enabled call, translated or not.
+    // It is inert (it describes a block that is absent) but it is a change, and
+    // 'pass_a_v4.1' therefore names two system prompts. See the comment at the
+    // top of pass-a.ts for why that is the deliberate economic call.
+    const PRE_CHANGE = 'VIDEO\n- platform: tiktok\n- account: acc\n- owner: an industry/other account\n- caption: probando la mochila\n- hashtags: #mochila\n- format: reel\n\nTRANSCRIPT [t] (lang: es)\nprobé esta mochila\n\nCOMMENTS (1)\n[c1] me encanta'
+    expect(buildUserPrompt(v, refs, 'probé esta mochila', null)).toBe(PRE_CHANGE)
   })
 
   it('a translation alone adds nothing — no transcript, no blocks', () => {

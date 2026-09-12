@@ -5,8 +5,9 @@ import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { clipText } from '../gather/transcript'
 import {
-  ANALYSIS_TEMPERATURE, TRANSLATE_BATCH, TRANSLATE_CAP, TRANSLATE_MAX_CHARS, TRANSLATE_MODEL, estimateCost,
+  ANALYSIS_TEMPERATURE, TRANSCRIPT_PROMPT_CHARS, TRANSLATE_BATCH, TRANSLATE_CAP, TRANSLATE_MODEL, estimateCost,
 } from '../config'
+import { normaliseLang } from '../gather/transcript'
 import { logAiCall } from './ai-log'
 
 // Transcript translation — the `transcript_en` wave (WP6, 2026-09-11).
@@ -53,15 +54,22 @@ export function isEnglishLang(lang: string | null | undefined): boolean {
 /**
  * The selection rule, stated once.
  *
- * A video is translated when it has content-gated speech (the usableTranscript
- * rule — 'ok' is the only readable status), the provider said what language
- * that speech is in, that language is not English, and nothing has been written
- * to transcript_en / transcript_en_error yet.
+ * A video is a candidate when it has content-gated speech (the usableTranscript
+ * rule — 'ok' is the only readable status), it is not already KNOWN to be
+ * English, and nothing has been written to transcript_en / transcript_en_error
+ * yet.
  *
- * Unknown language is NOT translated. A null lang means the provider declined
- * to say, and asking the model to translate text of unstated origin is the one
- * case where it has to guess what it is reading — the exact failure mode this
- * feature exists to remove. Those rows keep reading as-is, as they do today.
+ * Unknown language IS a candidate (2026-09-12). It was excluded for a day on
+ * the reasoning that a model asked to translate text of unstated origin has to
+ * guess what it is reading. That was wrong twice over: the review found the 317
+ * unknown-language rows are not a homogeneous bucket — Sealand's two largest
+ * are 38,000-character Chinese transcripts, its single biggest untranslated
+ * block — and a live call with no language label translated a Traditional
+ * Chinese video faithfully, brand names and place names intact. The model does
+ * not need to be told; it needs to be ASKED. So it now returns the language it
+ * detected alongside the translation, and says so instead of guessing: an
+ * English video comes back `translation: null` and only its language is
+ * written.
  *
  * A recorded transcript_en_error is a tombstone, not a retry queue: a weekly
  * run must not re-pay for the same failure forever. Clearing the column is the
@@ -70,7 +78,6 @@ export function isEnglishLang(lang: string | null | undefined): boolean {
 export function needsTranslation(v: TranslatableVideo): boolean {
   if (v.transcript_status !== 'ok') return false
   if (!v.transcript || !v.transcript.trim()) return false
-  if (!v.transcript_lang || !v.transcript_lang.trim()) return false
   if (isEnglishLang(v.transcript_lang)) return false
   if (v.transcript_en !== null || v.transcript_en_error !== null) return false
   return true
@@ -82,13 +89,23 @@ export function needsTranslation(v: TranslatableVideo): boolean {
 // the source does not say — the exact failure mode this feature exists to
 // remove, arriving by a different door. The sharper rule returns the same
 // passage marked [unintelligible], and re-running two clean samples (pt, de)
-// under it produced translations indistinguishable in quality from v1's. The
-// version string is diagnostic only (ai_call_log.prompt_version); nothing
+// under it produced translations indistinguishable in quality from v1's.
+//
+// v2 (2026-09-12): the model reports the language it detected, and returns
+// `translation: null` when the text is already English. That is what lets the
+// 317 unknown-language transcripts in (see needsTranslation) without ever
+// paying to translate English into English or storing a redundant block.
+//
+// The version string is diagnostic only (ai_call_log.prompt_version); nothing
 // re-reads on it.
-const TRANSLATE_PROMPT_VERSION = 'translate_v1.1'
+const TRANSLATE_PROMPT_VERSION = 'translate_v2'
 
 const translationSchema = z.object({
-  translation: z.string(),
+  /** ISO 639-1 of the language actually detected in the text, or 'und' when it
+   *  genuinely cannot be told (a transcript of pure non-words). */
+  language: z.string(),
+  /** null — and ONLY null — when the detected language is English. */
+  translation: z.string().nullable(),
 })
 
 /** System + user prompt for one transcript. Pure — the live call and the dry
@@ -103,11 +120,16 @@ export function buildTranslatePrompt(text: string, lang: string | null): { syste
     '- Keep brand names, product names, model numbers, handles and hashtags exactly as written in the source. Do not translate or localise them.',
     '- These transcripts are MACHINE-MADE and often wrong: mis-heard words, non-words, missing punctuation, sentences that cut off mid-word. Translate what is actually there. NEVER repair a passage into something that makes sense — a plausible English sentence over a garbled source is a fabrication, and downstream it becomes a false finding. Where a word or passage is not intelligible, write [unintelligible] in its place. A short transcript that is mostly non-words should come back mostly [unintelligible]; that is the correct answer, not a failure.',
     '- No commentary, no notes, no preamble, no labels. Return only the translation.',
-    '- If the text is already English, return it unchanged.',
+    '',
+    'Also report the language you actually detected in the text, as an ISO 639-1 code ("es", "zh", "hi"). The label in the input is what a speech-to-text provider guessed and is sometimes missing and sometimes wrong — trust the text. Use "und" only when the text is too garbled for any language to be identified.',
+    'If the text is ALREADY ENGLISH, set language to "en" and translation to null. Do not echo English text back as a translation.',
   ].join('\n')
+  // The input is clipped to exactly the span Pass A can quote from, so the
+  // ORIGINAL and ENGLISH TRANSLATION blocks in that prompt describe the same
+  // speech. Anything past this cut is not translated because it is not read.
   const user = [
-    `TRANSCRIPT (language: ${lang ?? 'unknown'})`,
-    clipText(text, TRANSLATE_MAX_CHARS),
+    `TRANSCRIPT (language as the provider labelled it: ${lang ?? 'not stated'})`,
+    clipText(text, TRANSCRIPT_PROMPT_CHARS),
   ].join('\n')
   return { system, user }
 }
@@ -131,18 +153,31 @@ export function planTranslation(
 
 export interface TranslateResult {
   translated: number
+  /** Detected as English: language written, no translation stored, no re-read. */
+  english: number
   skipped: number
   failed: number
   costUsd: number
+  /** True when a 429 was seen — a fact about the account, not the corpus, and
+   *  the one condition that degrades a run regardless of the failure ratio. */
+  rateLimited: boolean
   errors: string[]
 }
 
-/** One transcript through the model. Returns the translation and what it cost;
- *  throws only on a transport failure the caller should record per video. */
-export async function translateTranscript(
-  text: string,
-  lang: string | null,
-): Promise<{ translation: string; usage: { prompt_tokens: number; completion_tokens: number }; durationMs: number; prompt: { system: string; user: string } }> {
+export interface TranslateOutcome {
+  /** Detected language, ISO 639-1 (or 'und'). Never null. */
+  language: string
+  /** null when the detected language is English — nothing to store. */
+  translation: string | null
+  usage: { prompt_tokens: number; completion_tokens: number }
+  durationMs: number
+  prompt: { system: string; user: string }
+}
+
+/** One transcript through the model. Returns the detected language and the
+ *  translation (null when the text was already English) and what it cost;
+ *  throws only on a failure the caller should record per video. */
+export async function translateTranscript(text: string, lang: string | null): Promise<TranslateOutcome> {
   const prompt = buildTranslatePrompt(text, lang)
   const startedAt = Date.now()
   const completion = await openai.chat.completions.parse({
@@ -157,10 +192,16 @@ export async function translateTranscript(
   const msg = completion.choices[0]?.message
   const parsed = msg?.parsed
   if (!parsed) throw new Error(msg?.refusal ?? 'no parsed translation')
-  const translation = parsed.translation.trim()
-  if (!translation) throw new Error('empty translation')
+  const language = normaliseLang(parsed.language) ?? 'und'
+  const translation = parsed.translation?.trim() || null
+  // A null translation means one thing only: "this is already English". Any
+  // other language with nothing to show is a failed call, not a verdict —
+  // treated as an error so the row is tombstoned rather than left in a state
+  // that re-selects it every run forever.
+  if (!translation && !isEnglishLang(language)) throw new Error(`no translation returned (detected ${language})`)
   return {
-    translation,
+    language,
+    translation: isEnglishLang(language) ? null : translation,
     usage: {
       prompt_tokens: completion.usage?.prompt_tokens ?? 0,
       completion_tokens: completion.usage?.completion_tokens ?? 0,
@@ -192,15 +233,16 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
       .select('id, transcript_lang, comments_count')
       .eq('client_id', clientId)
       .eq('transcript_status', 'ok')
-      .not('transcript_lang', 'is', null)
       .is('transcript_en', null)
       .is('transcript_en_error', null)
       .order('id', { ascending: true }),
   )
-  const pending = rows.filter((r) => !isEnglishLang(r.transcript_lang) && (r.transcript_lang ?? '').trim() !== '')
+  // Unknown-language rows are candidates: the model reports what it detected,
+  // and an English one costs one call and stores only its language.
+  const pending = rows.filter((r) => !isEnglishLang(r.transcript_lang))
   const byLang: Record<string, number> = {}
   for (const r of pending) {
-    const k = (r.transcript_lang ?? 'unknown').toLowerCase()
+    const k = (r.transcript_lang ?? '').trim().toLowerCase() || 'unknown'
     byLang[k] = (byLang[k] ?? 0) + 1
   }
   // Richest-first, so a capped first run takes the videos whose analysis
@@ -227,7 +269,7 @@ export async function translateBatch(opts: {
   dryRun?: boolean
 }): Promise<TranslateResult> {
   const admin = createAdminClient()
-  const out: TranslateResult = { translated: 0, skipped: 0, failed: 0, costUsd: 0, errors: [] }
+  const out: TranslateResult = { translated: 0, english: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [] }
   if (!opts.videoIds.length) return out
 
   const rows: (TranslatableVideo & { id: string })[] = []
@@ -248,34 +290,13 @@ export async function translateBatch(opts: {
   for (const v of rows) {
     if (!needsTranslation(v)) { out.skipped++; continue }
     callIndex++
+    let r: Awaited<ReturnType<typeof translateTranscript>>
     try {
-      const r = await translateTranscript(v.transcript!, v.transcript_lang)
-      const cost = estimateCost(TRANSLATE_MODEL, r.usage.prompt_tokens, r.usage.completion_tokens)
-      out.costUsd += cost
-      if (opts.dryRun) { out.translated++; continue }
-      const { error } = await admin.from('videos')
-        .update({ transcript_en: r.translation, transcript_en_error: null })
-        .eq('id', v.id)
-      if (error) { out.errors.push(`translate write (${v.id}): ${error.message}`); out.failed++; continue }
-      out.translated++
-      await logAiCall(admin, {
-        clientId: opts.clientId,
-        runId: opts.runId,
-        pass: 'translate',
-        callIndex,
-        model: TRANSLATE_MODEL,
-        promptVersion: TRANSLATE_PROMPT_VERSION,
-        systemPrompt: r.prompt.system,
-        userPrompt: r.prompt.user,
-        response: { lang: v.transcript_lang, chars: r.translation.length },
-        error: null,
-        usage: r.usage,
-        durationMs: r.durationMs,
-        validationStatus: 'ok',
-      })
+      r = await translateTranscript(v.transcript!, v.transcript_lang)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       out.failed++
+      if (isRateLimited(msg)) out.rateLimited = true
       out.errors.push(`translate (${v.id}): ${msg.slice(0, 200)}`)
       // Stamp the tombstone so the next run does not re-pay for the same
       // failure. A rate limit is the exception: it says nothing about this
@@ -284,7 +305,51 @@ export async function translateBatch(opts: {
       if (!opts.dryRun && !isRateLimited(msg)) {
         await admin.from('videos').update({ transcript_en_error: msg.slice(0, 300) }).eq('id', v.id)
       }
+      continue
     }
+    // Spend happened the moment the call returned (transcribeBatch's rule):
+    // account for it before the write can fail, or the ledger under-counts.
+    const cost = estimateCost(TRANSLATE_MODEL, r.usage.prompt_tokens, r.usage.completion_tokens)
+    out.costUsd += cost
+    // The language the model actually read is written when the provider gave
+    // none, and when the model says English — that second case is what closes
+    // the loop on a mislabelled row: without it a video the provider called
+    // 'es' and the model reads as English would carry no translation, no error
+    // and no English label, and be re-selected every run forever.
+    const detected = r.language
+    const relabel = !v.transcript_lang?.trim() || (isEnglishLang(detected) && !isEnglishLang(v.transcript_lang))
+    if (r.translation === null) out.english++
+    else out.translated++
+    if (opts.dryRun) continue
+    const { error } = await admin.from('videos')
+      .update({
+        ...(r.translation === null ? {} : { transcript_en: r.translation }),
+        transcript_en_error: null,
+        ...(relabel ? { transcript_lang: detected } : {}),
+      })
+      .eq('id', v.id)
+    if (error) {
+      out.errors.push(`translate write (${v.id}): ${error.message}`)
+      out.failed++
+      if (r.translation === null) out.english--; else out.translated--
+    }
+    // Logged either way, write error included: ai_call_log is the ledger of
+    // record for what was SPENT, and the call was spent.
+    await logAiCall(admin, {
+      clientId: opts.clientId,
+      runId: opts.runId,
+      pass: 'translate',
+      callIndex,
+      model: TRANSLATE_MODEL,
+      promptVersion: TRANSLATE_PROMPT_VERSION,
+      systemPrompt: r.prompt.system,
+      userPrompt: r.prompt.user,
+      response: { labelled: v.transcript_lang, detected, chars: r.translation?.length ?? 0, english: r.translation === null },
+      error: error?.message ?? null,
+      usage: r.usage,
+      durationMs: r.durationMs,
+      validationStatus: error ? 'write_failed' : 'ok',
+    })
   }
   return out
 }

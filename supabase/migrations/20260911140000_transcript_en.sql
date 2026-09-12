@@ -47,6 +47,15 @@ alter table public.videos
 comment on column public.videos.transcript_en is
   'English rendering of transcript, for non-English videos (TRANSLATE_MODEL, lib/config.ts). A reading aid for Pass A and classify-meta — never evidence, never displayed, never frozen into a snapshot. The original transcript is what a quote is validated against.';
 
+-- One existing column changes meaning slightly: `transcript_lang` is now also
+-- WRITTEN by the translate wave, not only by the transcription providers. The
+-- model reports the language it actually read, and that value is stored when
+-- the provider gave none (317 such rows across the two tenants at time of
+-- writing, including Sealand's two largest transcripts, both Chinese) or when
+-- the provider's label said non-English and the text is plainly English. A
+-- provider label that merely disagrees about WHICH non-English language is left
+-- alone — the translation is written either way, so nothing depends on it.
+
 comment on column public.videos.transcript_en_error is
   'Message from the LAST failed translation attempt, and a tombstone: needsTranslation (lib/pipeline/translate.ts) skips any row that has one. Clear it to retry.';
 
