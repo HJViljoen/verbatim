@@ -62,6 +62,13 @@ export interface InitiativeMeasure {
 const round1 = (n: number) => Math.round(n * 10) / 10
 const day = (s: string) => s.slice(0, 10)
 
+/** An update in the window, whether or not it observed the initiative's themes. */
+export interface RunInWindow {
+  runId: string
+  runDate: string
+  createdAt: string
+}
+
 /**
  * Collapse a set of observations into the initiative's line.
  *
@@ -71,6 +78,14 @@ const day = (s: string) => s.slice(0, 10)
  * update, the denominator. `startedAt` is the day the client declared it:
  * anything earlier is not this initiative's, however tempting a longer line is.
  *
+ * `runs` is every update in the window. It matters because `theme_observations`
+ * has no row for a theme an update did not hear — so without it, an update in
+ * which the tracked conversation VANISHED contributes no point at all, and a
+ * theme that fell to nothing reads "holding steady, 2 updates". Total
+ * disappearance is the strongest thing this feature could ever report, and it
+ * was the one thing it could not. An update with no observation is a real
+ * zero: `share 0`, `evidence 0`, sentiment unknown.
+ *
  * Two updates on one calendar day collapse to the later one (the `latestPerDay`
  * rule the charts already follow) — two points printing the same date is a
  * chart that lies about its x-axis.
@@ -79,6 +94,7 @@ export function measureInitiative(
   rows: ObservationPoint[],
   totalByRun: Record<string, number>,
   startedAt: string,
+  runs: RunInWindow[] = [],
 ): InitiativeMeasure {
   const from = day(startedAt)
 
@@ -94,6 +110,14 @@ export function measureInitiative(
     else if (r.sentiment === 'neutral') { e.rated += Math.max(0, r.evidenceCount) }
     if (r.createdAt > e.createdAt) e.createdAt = r.createdAt
     byRun.set(r.runId, e)
+  }
+
+  // Silence is a measurement. Every update in the window that heard none of the
+  // initiative's themes gets its own zero-evidence entry.
+  for (const run of runs) {
+    const date = day(run.runDate)
+    if (!date || date < from || byRun.has(run.runId)) continue
+    byRun.set(run.runId, { date, createdAt: run.createdAt, evidence: 0, pos: 0, neg: 0, rated: 0 })
   }
 
   // One point per calendar day: the later update of a doubled-up day wins.

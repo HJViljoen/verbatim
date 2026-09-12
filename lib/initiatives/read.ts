@@ -1,7 +1,7 @@
 import { selectAll } from '../supabase-admin'
 import { rows as readRows } from '../pages/read'
 import { shortDate } from '../format'
-import { measureInitiative, initiativeLine, wentTheirWay, type InitiativeVerdict, type ObservationPoint } from './measure'
+import { measureInitiative, initiativeLine, wentTheirWay, type InitiativeVerdict, type ObservationPoint, type RunInWindow } from './measure'
 import { toInitiative, type InitiativeDbRow, type InitiativeDirection } from './types'
 
 // The read behind the Dashboard's initiatives tile (WP7c). Tile-ready by the
@@ -86,10 +86,17 @@ export async function loadInitiatives(
   )
 
   const totalByRun: Record<string, number> = {}
+  const runsInWindow = new Map<string, RunInWindow>()
   const byTheme = new Map<string, ObservationPoint[]>()
   for (const o of observations) {
     if (!o.run_id || !o.run_date) continue
     totalByRun[o.run_id] = (totalByRun[o.run_id] ?? 0) + Math.max(0, o.evidence_count ?? 0)
+    // Every update that produced ANY theme — the list an initiative's zeroes
+    // are drawn from. An update whose theme pass produced nothing at all is
+    // absent on purpose: "we heard nothing from anyone" is not evidence that
+    // this conversation stopped.
+    const held = runsInWindow.get(o.run_id)
+    if (!held || o.created_at > held.createdAt) runsInWindow.set(o.run_id, { runId: o.run_id, runDate: o.run_date, createdAt: o.created_at })
     const point: ObservationPoint = {
       runId: o.run_id,
       runDate: o.run_date,
@@ -104,7 +111,7 @@ export async function loadInitiatives(
 
   const rows = initiatives.map((i) => {
     const mine = i.registryIds.flatMap((id) => byTheme.get(id) ?? [])
-    const m = measureInitiative(mine, totalByRun, i.startedAt)
+    const m = measureInitiative(mine, totalByRun, i.startedAt, [...runsInWindow.values()])
     const startedLabel = shortDate(i.startedAt)
     return {
       id: i.id,
