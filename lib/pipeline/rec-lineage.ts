@@ -31,12 +31,13 @@ import { cosine } from './cluster'
  *
  * MEASURED, not guessed (calibration 2026-09-12, `scratch/rec-lineage-calibration.md`):
  * the last three updates of both live tenants, 29 titles embedded with the
- * pipeline's own `text-embedding-3-small`, every new recommendation's best
- * same-type candidate labelled by hand. Nine pairs were the same recommendation
- * reworded (0.433 – 0.796); eight were different actions (0.087 – 0.472). The
- * bands OVERLAP, so no value separates them cleanly; 0.55 sits in the only real
- * gap (0.472 → 0.605), keeping 7 of the 9 true pairs and admitting 0 of the 8
- * false ones, biased to the safe side of that gap.
+ * pipeline's own `text-embedding-3-small`. That yields **13** best same-type
+ * candidates, labelled by hand: 9 the same recommendation reworded (0.433 –
+ * 0.796) and 4 different actions (0.351 – 0.472). The bands OVERLAP, so no
+ * value separates them cleanly; 0.55 sits in the only real gap (0.472 → 0.605),
+ * keeping 7 of the 9 true pairs and admitting 0 of the 4 false ones, biased to
+ * the safe side of that gap. Thirteen pairs is a thin base — treat the number
+ * as the best available reading, not a settled constant.
  *
  * The first guess was 0.82. Not one of the nine true pairs clears it — titles
  * are re-rolled as completely as theme labels are, and lineage would never have

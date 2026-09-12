@@ -13,6 +13,10 @@ const unit = (deg: number): number[] => {
 const NEAR = 20
 /** cos 75° ≈ 0.259 — a different recommendation, well below it. */
 const FAR = 75
+/** cos 52° ≈ 0.616 — the lowest TRUE pair the calibration keeps. */
+const LOWEST_KEPT_TRUE = 52
+/** cos 62° ≈ 0.470 — the highest FALSE pair the calibration saw (0.472). */
+const HIGHEST_FALSE = 62
 
 const prior = (over: Partial<PriorRec> = {}): PriorRec => ({
   id: 'prior-1',
@@ -182,5 +186,40 @@ describe('previousRunId — the update the client actually saw', () => {
     expect(previousRunId([r('now', 'completed', '2026-09-06')], 'now')).toBeNull()
     expect(previousRunId([r('now', 'completed', '2026-09-06'), r('bad', 'failed', '2026-09-01')], 'now')).toBeNull()
     expect(previousRunId([], 'now')).toBeNull()
+  })
+})
+
+describe('the calibrated bar itself', () => {
+  // The one number this WP measured, pinned. Before this, any threshold in
+  // (0.26, 0.94) left every test green — the suite exercised nothing near the
+  // decision boundary, so the measurement defended itself with nothing.
+  it('is 0.55', () => {
+    expect(REC_LINEAGE_THRESHOLD).toBe(0.55)
+  })
+
+  const pairAt = (deg: number) =>
+    assignLineage(
+      [next({ id: 'new-1', title: 'A reworded action' })],
+      [prior({ status: 'acted_on' })],
+      [unit(0)],
+      [unit(deg)],
+    )[0]
+
+  it('keeps a pair at 0.616 — the lowest true pair in the calibration', () => {
+    expect(Math.cos((LOWEST_KEPT_TRUE * Math.PI) / 180)).toBeGreaterThan(REC_LINEAGE_THRESHOLD)
+    expect(pairAt(LOWEST_KEPT_TRUE)).toMatchObject({ matchKind: 'similar', lineageId: 'lin-1', status: 'acted_on' })
+  })
+
+  it('refuses a pair at 0.470 — the highest false pair in the calibration', () => {
+    // "Add a Know Before You Buy standard to every bag page" vs "Turn every
+    // product touchpoint into a buy-now page": same surface, different action.
+    // Carrying a client's "Done" across that is the failure this bar exists for.
+    expect(Math.cos((HIGHEST_FALSE * Math.PI) / 180)).toBeLessThan(REC_LINEAGE_THRESHOLD)
+    expect(pairAt(HIGHEST_FALSE)).toMatchObject({ matchKind: 'new', lineageId: 'new-1', status: null })
+  })
+
+  it('sits between them — moving the bar past either end breaks a test above', () => {
+    expect(REC_LINEAGE_THRESHOLD).toBeGreaterThan(Math.cos((HIGHEST_FALSE * Math.PI) / 180))
+    expect(REC_LINEAGE_THRESHOLD).toBeLessThan(Math.cos((LOWEST_KEPT_TRUE * Math.PI) / 180))
   })
 })
