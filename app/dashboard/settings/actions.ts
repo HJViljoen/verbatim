@@ -173,29 +173,53 @@ export async function updateSearchTerms(
     brand_keywords: cleanTerms(parsed.data.brand_keywords),
     competitor_keywords: cleanTerms(parsed.data.competitor_keywords),
     industry_keywords: cleanTerms(parsed.data.industry_keywords),
+    updated_at: new Date().toISOString(),
   }
   if (terms.brand_keywords.length === 0) {
     return { ok: false, message: 'Could not save: keep at least one term for your brand.' }
+  }
+
+  // Terms FIRST, exclusions last. The exclusions column arrives with a
+  // migration that may not have been applied yet, and when it hasn't, Postgres
+  // rejects the whole statement — so writing them together would lose a brand
+  // and category edit to a column the client never touched.
+  const { error, count } = await createAdminClient()
+    .from('tracking_configs')
+    .update(terms, { count: 'exact' })
+    .eq('client_id', clientId)
+  if (error) {
+    console.error(`[settings] search terms not saved for ${clientId}: ${error.message}`)
+    return { ok: false, message: 'Could not save your search terms. Try again, and tell us if it keeps happening.' }
+  }
+  // An UPDATE that matched nothing is not an error — no config row, or RLS
+  // declining silently. Reporting "Saved." on a write that did nothing is the
+  // failure mode this catches.
+  if (count === 0) {
+    return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
   const { error: exclErr } = await supabase
     .from('tracking_configs')
     .update({ exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() })
     .eq('client_id', clientId)
-  if (exclErr) {
-    return { ok: false, message: `Could not save: ${exclErr.message}` }
-  }
-
-  const { error } = await createAdminClient()
-    .from('tracking_configs')
-    .update(terms)
-    .eq('client_id', clientId)
-  if (error) {
-    return { ok: false, message: `Could not save your search terms: ${error.message}` }
-  }
 
   revalidatePath('/dashboard/settings')
+  if (exclErr) {
+    console.error(`[settings] exclude_terms not saved for ${clientId}: ${exclErr.code ?? '?'} ${exclErr.message}`)
+    // The one failure the client is allowed to hear about in plain words: the
+    // column does not exist yet. Everything else is ours to chase, not theirs.
+    return isMissingColumn(exclErr, 'exclude_terms')
+      ? { ok: true, message: 'Saved. Exclusions need a database update that hasn’t shipped yet.' }
+      : { ok: true, message: 'Saved — except the “Not this” list, which we could not store. Try that part again.' }
+  }
   return { ok: true, message: 'Saved. Your next update searches these terms.' }
+}
+
+/** PostgREST's two ways of saying "that column isn't there": Postgres 42703
+ *  from a statement it forwarded, PGRST204 from its own schema cache. */
+function isMissingColumn(err: { code?: string | null; message?: string | null }, column: string): boolean {
+  const code = err.code ?? ''
+  return (code === '42703' || code === 'PGRST204') && (err.message ?? '').includes(column)
 }
 
 /** Ask the model for more terms. Offers only — nothing is written here. */
