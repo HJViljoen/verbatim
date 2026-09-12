@@ -5,7 +5,7 @@ import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables
 import { fetchQuoteTextsByRefs } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
-import { documentTemplate, promptVersion, type DocumentTemplate } from './templates'
+import { documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
 import { documentSettings, isDocumentData, type DocumentSettings } from './types'
 import { loadSignals } from './signals'
 import { composeQuestions, type ResearchQuestion } from './questions'
@@ -49,16 +49,22 @@ export interface FreezeOut { snapshotId: string; title: string; evidenceIds: str
 export interface RenderOut { artifactId: string; bytes: number; ms: number; url: string }
 
 export function contextFor(args: { clientId: string; userId: string | null; report: ReportRow; company: string; runId?: string | null; buildId?: string | null }): BuildContext {
-  const template = documentTemplate(args.report.template_key)
-  if (!template) throw new DocumentBuildError(`Not a document template: ${args.report.template_key ?? 'none'}`)
+  const declared = documentTemplate(args.report.template_key)
+  if (!declared) throw new DocumentBuildError(`Not a document template: ${args.report.template_key ?? 'none'}`)
+  const settings = documentSettings(args.report.settings)
+  // The template a build runs on is the DECLARED one composed with this
+  // report's own settings (WP7d): the selected topic blocks' pages and
+  // questions, and for a custom brief the role it is written in. The four
+  // templates come back unchanged, by identity. Every step below reads
+  // ctx.template and knows nothing about blocks.
   return {
     buildId: args.buildId ?? null,
     clientId: args.clientId,
     userId: args.userId,
     runId: args.runId ?? null,
     report: args.report,
-    template,
-    settings: documentSettings(args.report.settings),
+    template: resolveTemplate(declared, settings),
+    settings,
     company: args.company,
   }
 }

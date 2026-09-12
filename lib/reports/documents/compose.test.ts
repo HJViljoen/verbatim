@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
 import { buildWriterPrompts, deltaInWords, writerSchema, type WriterOutput } from './write'
-import { CONTENT_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, type DocumentTemplate } from './templates'
+import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
@@ -95,6 +95,24 @@ describe('buildWriterPrompts', () => {
     expect(system).toContain('at most 3 findings')
     expect(user).toContain('finished partially')
     expect(system).toContain('This is the first brief')
+  })
+
+  it('puts the operator\'s own brief at the top, above the role it is written in', () => {
+    const settings = { ...DEFAULT_DOCUMENT_SETTINGS, brief: 'Review how the conversation about comfort and fit moved this month, for the marketing lead', role: 'market_brief' as const, blocks: ['competitive_analysis' as const] }
+    const template = resolveTemplate(CUSTOM_BRIEF, settings)
+    const { system } = buildWriterPrompts({ template, settings, company: 'Ossur', period: 'p', reader: null, figures: {}, signals, answers: [], previous: null, thin: false })
+    const asked = 'The reader asked for this: Review how the conversation about comfort and fit moved this month, for the marketing lead.'
+    expect(system.startsWith(asked)).toBe(true)
+    expect(system.indexOf(asked)).toBeLessThan(system.indexOf(MARKET_BRIEF.role))
+    expect(system).toContain('every finding must serve it')
+    expect(system).toContain('for the message')
+    expect(system).not.toMatch(/[—–]/)
+  })
+
+  it('says nothing about a brief on the four templates', () => {
+    const { system } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals, answers: [], previous: null, thin: false })
+    expect(system).not.toContain('The reader asked for this')
+    expect(system.startsWith(SALES_BRIEF.role)).toBe(true)
   })
 })
 
@@ -282,6 +300,16 @@ describe('writerSchema', () => {
     expect(keys(LEADERSHIP_BRIEF)).toEqual(['findings', 'in_short', 'not_sure_yet', 'standing'])
     expect(keys(MARKET_BRIEF)).toEqual(['care', 'competitors', 'findings', 'in_short', 'not_sure_yet', 'persona_lines', 'say_hear'])
     expect(keys(CONTENT_BRIEF)).toEqual(['asked', 'care', 'findings', 'in_short', 'not_sure_yet'])
+  })
+
+  it('asks a custom brief for exactly the pages its blocks add', () => {
+    const bare = resolveTemplate(CUSTOM_BRIEF, DEFAULT_DOCUMENT_SETTINGS)
+    expect(keys(bare)).toEqual(['findings', 'in_short', 'not_sure_yet'])
+    const blocked = resolveTemplate(CUSTOM_BRIEF, { ...DEFAULT_DOCUMENT_SETTINGS, blocks: ['competitive_analysis', 'content_performance'] })
+    expect(keys(blocked)).toEqual(['asked', 'care', 'competitors', 'findings', 'in_short', 'not_sure_yet'])
+    // Schema order is the skeleton's order, and the skeleton's order is the
+    // operator's: the blocks come between the findings and what is not settled.
+    expect(Object.keys(writerSchema(blocked).shape)).toEqual(['in_short', 'findings', 'competitors', 'asked', 'care', 'not_sure_yet'])
   })
 
   // Under strict structured output the model writes the properties in schema
