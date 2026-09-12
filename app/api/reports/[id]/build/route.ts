@@ -8,7 +8,7 @@ import { dayStartIso } from '@/lib/ask/quota'
 import { EXPORT_DAILY_LIMIT } from '@/lib/config'
 import { BuildEmptyError, buildReport } from '@/lib/reports/build'
 import type { ReportRow } from '@/lib/reports/types'
-import { latestRunId } from '@/lib/reports/documents/builds'
+import { buildBlockedReason, latestRunId } from '@/lib/reports/documents/builds'
 import { enqueueDocumentBuild } from '@/lib/reports/documents/enqueue'
 
 // POST /api/reports/[id]/build — freeze the report as it is now and print it.
@@ -51,6 +51,9 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   }
 
   if ((report as ReportRow).kind === 'document') {
+    // A custom brief with no brief has nothing to write to (WP7d).
+    const blocked = buildBlockedReason(report as ReportRow)
+    if (blocked) return NextResponse.json({ error: blocked }, { status: 409 })
     return startDocumentBuild(admin, { clientId, userId, reportId: id })
   }
 

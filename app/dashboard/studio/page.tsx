@@ -224,7 +224,7 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
                           <li key={b.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-[4px] bg-inner px-4 py-2.5 text-[12.5px]">
                             <span className="font-mono text-[10.5px] text-muted-foreground">{fmtWhen(b.started_at)}</span>
                             <span className={b.status === 'failed' ? 'text-negative' : b.status === 'done' ? '' : 'text-secondary-foreground'}>{b.status === 'done' ? 'Built' : BUILD_PHASE_WORDS[b.status]}{b.status === 'failed' && b.error ? `: ${b.error}` : ''}</span>
-                            {b.needs_review && <span className="text-warning">a finding was dropped after a check, read before sending</span>}
+                            {b.needs_review && <span className="text-warning">a check flagged this one, read it before sending</span>}
                             {b.snapshot_id && editedSnapshots.has(b.snapshot_id) && <span className="font-mono text-[10.5px] text-muted-foreground">edited</span>}
                             {Number(b.cost_usd) > 0 && <span className="font-mono text-[10.5px] text-muted-foreground">${Number(b.cost_usd).toFixed(2)}</span>}
                             {b.snapshot_id && b.status === 'done' && <Link href={openViewer(b.snapshot_id)} scroll={false} className="font-medium underline underline-offset-2">Open</Link>}

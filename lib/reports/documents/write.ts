@@ -152,7 +152,15 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const t = a.template
   const has = (kind: string) => t.skeleton.some((p) => p.kind === kind)
   const findingsMax = a.thin ? Math.min(Math.min(a.settings.findings, t.findingsMax), 3) : Math.min(a.settings.findings, t.findingsMax)
+  // The operator's own brief, where there is one (WP7d): the top instruction,
+  // before the role, because a custom brief exists to answer it. The role and
+  // the standing brief below are the chosen template's and say HOW to write;
+  // this says what to write about.
+  // Whitespace is collapsed first: the brief is operator text on one line of a
+  // newline-joined prompt, and its own newlines would read as new rules.
+  const asked = a.settings.brief?.replace(/\s+/g, ' ').trim()
   const system = [
+    asked ? `The reader asked for this: ${/[.!?]$/.test(asked) ? asked : `${asked}.`} That instruction governs this brief: every finding must serve it, and where the conversation cannot answer it, say so plainly rather than answering a question nobody asked. The brief chooses the subject; the rules below still apply.` : '',
     t.role,
     t.brief,
     `The reader sells to: ${registerLine(a.settings)}.${a.reader ? ` Written for: ${a.reader}.` : ''} Write for that reader.`,

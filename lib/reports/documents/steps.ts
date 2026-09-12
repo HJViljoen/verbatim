@@ -5,7 +5,7 @@ import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables
 import { fetchQuoteTextsByRefs } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
-import { documentTemplate, promptVersion, type DocumentTemplate } from './templates'
+import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
 import { documentSettings, isDocumentData, type DocumentSettings } from './types'
 import { loadSignals } from './signals'
 import { composeQuestions, type ResearchQuestion } from './questions'
@@ -44,21 +44,27 @@ export interface BuildContext {
 
 export interface ResearchOut { questions: ResearchQuestion[]; answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean; timings: Record<string, number> }
 export interface WriteOut { written: WriterOutput; previous: PreviousBrief | null; costUsd: number; timings: Record<string, number> }
-export interface CheckOut { written: WriterOutput; verdicts: FindingVerdict[]; dropped: { headline: string; reason: string }[]; flagged: boolean; costUsd: number; timings: Record<string, number> }
+export interface CheckOut { written: WriterOutput; verdicts: FindingVerdict[]; dropped: { headline: string; reason: string }[]; flagged: boolean; brief: { answered: boolean; subjects: string[]; missed: string[] } | null; costUsd: number; timings: Record<string, number> }
 export interface FreezeOut { snapshotId: string; title: string; evidenceIds: string[]; costUsd: number }
 export interface RenderOut { artifactId: string; bytes: number; ms: number; url: string }
 
 export function contextFor(args: { clientId: string; userId: string | null; report: ReportRow; company: string; runId?: string | null; buildId?: string | null }): BuildContext {
-  const template = documentTemplate(args.report.template_key)
-  if (!template) throw new DocumentBuildError(`Not a document template: ${args.report.template_key ?? 'none'}`)
+  const declared = documentTemplate(args.report.template_key)
+  if (!declared) throw new DocumentBuildError(`Not a document template: ${args.report.template_key ?? 'none'}`)
+  const settings = documentSettings(args.report.settings)
+  // The template a build runs on is the DECLARED one composed with this
+  // report's own settings (WP7d): the selected topic blocks' pages and
+  // questions, and for a custom brief the role it is written in. The four
+  // templates come back unchanged, by identity. Every step below reads
+  // ctx.template and knows nothing about blocks.
   return {
     buildId: args.buildId ?? null,
     clientId: args.clientId,
     userId: args.userId,
     runId: args.runId ?? null,
     report: args.report,
-    template,
-    settings: documentSettings(args.report.settings),
+    template: resolveTemplate(declared, settings),
+    settings,
     company: args.company,
   }
 }
@@ -133,16 +139,21 @@ export async function checkStep(admin: SupabaseClient, ctx: BuildContext, w: Pic
   const runId = ctx.runId ?? (await latestRunId(admin, ctx.clientId))
   if (!runId) throw new DocumentBuildError('No finished run to check against.')
   const t0 = Date.now()
-  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written })
+  // The operator's own brief is checked here too (WP7d): a custom brief that
+  // was not answered flags the build for review, like a dropped finding.
+  // Only a custom brief has an operator brief to answer: a fixed template's
+  // brief is the template's own, and must never flag its build.
+  const brief = ctx.template.key === CUSTOM_KEY ? ctx.settings.brief : undefined
+  const out = await checkDocument(admin, { clientId: ctx.clientId, runId, companyName: ctx.company, written: w.written, brief })
   await spend(admin, ctx, priorCostUsd + out.costUsd)
   if (out.flagged) await mark(admin, ctx, 'checking', { needs_review: true })
-  return { written: out.written, verdicts: out.verdicts, dropped: out.dropped, flagged: out.flagged, costUsd: out.costUsd, timings: { check: Date.now() - t0 } }
+  return { written: out.written, verdicts: out.verdicts, dropped: out.dropped, flagged: out.flagged, brief: out.brief, costUsd: out.costUsd, timings: { check: Date.now() - t0 } }
 }
 
 export async function freezeStep(
   admin: SupabaseClient,
   ctx: BuildContext,
-  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped'> | null; costUsd: number; timings: Record<string, number> },
+  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped' | 'brief'> | null; costUsd: number; timings: Record<string, number> },
 ): Promise<FreezeOut> {
   // A retried step must not freeze twice: the row already names its snapshot.
   if (ctx.buildId) {
@@ -165,6 +176,8 @@ export async function freezeStep(
     ? {
         verdicts: Object.fromEntries(args.check.verdicts.filter((v) => v.verdict !== 'contradicts').map((v) => [v.headline, v.verdict as 'echoes' | 'silent'])),
         dropped: args.check.dropped,
+        // Why a build asks to be read, when no finding was dropped (WP7d).
+        brief: args.check.brief ?? null,
       }
     : null
   const { data, workings } = composeDocument({
@@ -217,7 +230,7 @@ export async function runBuildInProcess(
     const write = await writeStep(admin, ctx, research)
     log(`write: ${write.written.findings.length} findings · $${write.costUsd.toFixed(3)} · ${write.timings.write} ms`)
     const check = opts.check === false ? null : await checkStep(admin, ctx, write, research.costUsd + write.costUsd)
-    if (check) log(`check: ${check.verdicts.map((v) => v.verdict).join(', ') || 'nothing to check'} · dropped ${check.dropped.length} · $${check.costUsd.toFixed(3)} · ${check.timings.check} ms`)
+    if (check) log(`check: ${check.verdicts.map((v) => v.verdict).join(', ') || 'nothing to check'} · dropped ${check.dropped.length}${check.brief ? ` · brief ${check.brief.answered ? 'answered' : `UNANSWERED (nothing on ${check.brief.missed.join(', ')})`}` : ''} · $${check.costUsd.toFixed(3)} · ${check.timings.check} ms`)
     const costUsd = research.costUsd + write.costUsd + (check?.costUsd ?? 0)
     const timings = { ...research.timings, ...write.timings, ...(check?.timings ?? {}) }
     const freeze = await freezeStep(admin, ctx, { answers: research.answers, written: check?.written ?? write.written, check, costUsd, timings })

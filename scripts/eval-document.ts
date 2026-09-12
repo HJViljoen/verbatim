@@ -11,25 +11,31 @@
 
 import { createAdminClient } from '../lib/supabase-admin'
 import { DOCUMENT_BLOCK_MAX } from '../lib/config'
-import { isDocumentData, type DocPageKind, type DocumentSnapshotData, type DocumentWorkings } from '../lib/reports/documents/types'
-import { documentTemplate, skeletonOrder } from '../lib/reports/documents/templates'
+import { DEFAULT_DOCUMENT_SETTINGS, isDocumentData, type DocPageKind, type DocumentSnapshotData, type DocumentWorkings } from '../lib/reports/documents/types'
+import { documentTemplate, resolveTemplate, skeletonOrder } from '../lib/reports/documents/templates'
 import { FIGURE_KEY_RE } from '../lib/reports/cover'
 import { collectQuoteRefs } from '../lib/renderables/quotes-freeze'
 
 const args = process.argv.slice(2)
 const ids = args.filter((a) => !a.startsWith('--'))
-if (!ids.length) { console.error('give at least one snapshot id'); process.exit(2) }
 
 interface Finding { ok: boolean; name: string; note?: string }
 
-function evaluate(data: DocumentSnapshotData, workings: DocumentWorkings | null, evidenceIds: string[] = []): Finding[] {
+export function evaluate(data: DocumentSnapshotData, workings: DocumentWorkings | null, evidenceIds: string[] = []): Finding[] {
   const out: Finding[] = []
   const f = (name: string, ok: boolean, note?: string) => out.push({ name, ok, note })
   const kinds = data.pages.map((p) => p.kind)
   // The order is the TEMPLATE's own skeleton, not one hard-coded list: a
   // leadership brief prints a standing page where a sales brief prints
   // competitors, and both are in order.
-  const template = documentTemplate(data.template)
+  // The skeleton is the template's COMPOSED with what this document was made
+  // from (WP7d): a custom brief's pages are its blocks', and its findings
+  // ceiling is its role's. A document frozen before those were recorded
+  // composes to the bare opening and closing, which is what it was.
+  const declared = documentTemplate(data.template)
+  const template = declared
+    ? resolveTemplate(declared, { ...DEFAULT_DOCUMENT_SETTINGS, ...(data.blocks ? { blocks: data.blocks } : {}), ...(data.role ? { role: data.role } : {}), ...(data.brief ? { brief: data.brief } : {}) })
+    : null
   f('the template is one we know', template != null, data.template)
   const order = template ? skeletonOrder(template) : (['in_short', 'finding', 'competitor', 'personas', 'language', 'method'] as DocPageKind[])
   f('every page kind belongs to the skeleton', kinds.every((k) => order.includes(k)), kinds.filter((k) => !order.includes(k)).join(', ') || 'all')
@@ -86,6 +92,7 @@ function evaluate(data: DocumentSnapshotData, workings: DocumentWorkings | null,
 }
 
 async function main() {
+  if (!ids.length) { console.error('give at least one snapshot id'); process.exit(2) }
   const admin = createAdminClient()
   let failed = 0
   for (const id of ids) {
@@ -98,4 +105,5 @@ async function main() {
   if (args.includes('--json')) console.log(JSON.stringify({ failed }))
   process.exit(failed ? 1 : 0)
 }
-main().catch((e) => { console.error(e); process.exit(1) })
+// `evaluate` is imported elsewhere (a rebuild check); only the CLI run evaluates.
+if (process.argv[1]?.endsWith('eval-document.ts')) main().catch((e) => { console.error(e); process.exit(1) })

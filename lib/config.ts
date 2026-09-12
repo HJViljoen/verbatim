@@ -1135,12 +1135,25 @@ export const DOCUMENT_CITED_COUNT_MIN = 3
  *  from the update's own concerns), and how many run at once. */
 export const DOCUMENT_QUESTIONS_MAX = 8
 export const DOCUMENT_RESEARCH_PARALLEL = 3
+/** Questions one per-competitor anchor turns into: a third competitor's card
+ *  is written from the signals alone. */
+export const COMPETITOR_QUESTIONS_MAX = 2
+/** What one research question costs and what the writing and the self-check
+ *  take out of the same build budget, both measured on the 2026-09-12 Sealand
+ *  custom build (8 questions, $0.378 research; $0.134 write, $0.021 check).
+ *  Used to say how many topic blocks a custom brief can afford to include. */
+export const DOCUMENT_QUESTION_USD = 0.05
+export const DOCUMENT_WRITE_CHECK_USD = 0.2
 /** A build row younger than this and not finished belongs to whoever is on
  *  it (the Studio answers 409 with its id); older, it is taken as dead
  *  (function killed, deploy mid-run) and marked failed so a new one may start. */
 export const DOCUMENT_BUILD_STALE_MS = 30 * 60_000
 /** Characters an operator's edit of one block may hold (a long paragraph is ~1,200). */
 export const DOCUMENT_EDIT_MAX = 4000
+/** Characters an operator's own brief may hold on a custom document (2026-09-12):
+ *  one instruction, long enough to name the question and the reader, short
+ *  enough that it stays an instruction rather than a draft. */
+export const DOCUMENT_BRIEF_MAX = 1200
 /** Characters per block field: pages look alike every week because the
  *  writer cannot run long. Enforced in the schema description and by scrub. */
 export const DOCUMENT_BLOCK_MAX: Record<string, number> = {

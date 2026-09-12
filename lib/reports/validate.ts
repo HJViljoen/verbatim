@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { isStaticKey } from './compose'
 import { REPORT_FRAMING_MAX, REPORT_TITLE_MAX, SECTION_PAGES, type ReportSection } from './types'
-import { EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
+import { DOCUMENT_BRIEF_MAX, EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
+import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES, documentSettings, type DocumentBlockKey, type DocumentRole, type DocumentSettings } from './documents/types'
+import { CUSTOM_KEY, documentTemplate } from './documents/templates'
+import type { Audience } from './types'
 
 /** What a browser may put into a report: shared by the server actions and the
  *  routes, so a crafted POST meets the same caps as the Studio. */
@@ -37,6 +40,15 @@ export const documentSettingsPatch = z.object({
   /** null = every tracked competitor. */
   competitors: z.array(z.string().trim().min(1).max(60)).max(10).nullable().optional(),
   findings: z.union([z.literal(3), z.literal(4)]).optional(),
+  /** Custom briefs (2026-09-12): the operator's own instruction, the topic
+   *  blocks it must include in their print order, and whose voice writes it.
+   *  Empty string and empty array are how the Studio clears them. */
+  brief: z.string().trim().max(DOCUMENT_BRIEF_MAX, `a brief runs to ${DOCUMENT_BRIEF_MAX} characters at most`).optional(),
+  blocks: z.array(z.enum(DOCUMENT_BLOCK_KEYS as [DocumentBlockKey, ...DocumentBlockKey[]]))
+    .max(DOCUMENT_BLOCK_KEYS.length)
+    .refine((b) => new Set(b).size === b.length, 'a block can only be included once')
+    .optional(),
+  role: z.enum(DOCUMENT_ROLES as [DocumentRole, ...DocumentRole[]]).optional(),
 })
 export type DocumentSettingsPatch = z.infer<typeof documentSettingsPatch>
 
@@ -51,3 +63,44 @@ export function tidySections(sections: z.infer<typeof sectionsSchema>): ReportSe
     return out
   })
 }
+
+/** The three fields that belong to a custom brief and to nothing else. */
+export const CUSTOM_ONLY_FIELDS = ['brief', 'blocks', 'role'] as const
+
+/**
+ * A settings patch applied to the row it lands on (WP7d, 2026-09-12). The
+ * server action is the contract, not the Studio's hidden controls: a crafted
+ * POST must not put a brief, a topic block or a role on one of the four fixed
+ * templates, whose skeleton is fixed on purpose. Those fields are stripped
+ * there and named back to the caller.
+ *
+ * On a custom brief the ROLE also sets the register: the report is filed and
+ * rendered as what it is written as (a custom brief in the marketing role is
+ * a marketing report), so the audience is returned with the settings.
+ */
+export function applyDocumentSettingsPatch(args: {
+  templateKey: string | null | undefined
+  current: Partial<DocumentSettings> | null | undefined
+  patch: DocumentSettingsPatch
+}): { settings: DocumentSettings; audience: Audience | null; ignored: string[] } {
+  const custom = args.templateKey === CUSTOM_KEY
+  const p = args.patch
+  const ignored = custom ? [] : CUSTOM_ONLY_FIELDS.filter((f) => p[f] !== undefined)
+  const settings = documentSettings({
+    ...(args.current ?? {}),
+    ...(p.sellsTo !== undefined ? { sellsTo: p.sellsTo } : {}),
+    ...(p.competitors !== undefined ? { competitors: p.competitors } : {}),
+    ...(p.findings !== undefined ? { findings: p.findings } : {}),
+    ...(custom && p.brief !== undefined ? { brief: p.brief } : {}),
+    ...(custom && p.blocks !== undefined ? { blocks: p.blocks } : {}),
+    ...(custom && p.role !== undefined ? { role: p.role } : {}),
+    // A fixed template never carries them, whatever an older row stored.
+    ...(custom ? {} : { brief: undefined, blocks: undefined, role: undefined }),
+  })
+  const audience = custom ? (documentTemplate(settings.role ?? DEFAULT_DOCUMENT_ROLE)?.audience ?? null) : null
+  return { settings, audience, ignored }
+}
+
+/** What the operator is told when a patch tried to set a custom brief's own
+ *  fields on a fixed template. */
+export const IGNORED_FIELDS_MESSAGE = 'A brief, its topics and its role belong to a custom brief. Nothing else in this report changed.'
