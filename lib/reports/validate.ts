@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { isStaticKey } from './compose'
 import { REPORT_FRAMING_MAX, REPORT_TITLE_MAX, SECTION_PAGES, type ReportSection } from './types'
-import { EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
+import { DOCUMENT_BRIEF_MAX, EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, REPORT_MAX_SECTIONS } from '../config'
+import { DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES } from './documents/types'
 
 /** What a browser may put into a report: shared by the server actions and the
  *  routes, so a crafted POST meets the same caps as the Studio. */
@@ -37,6 +38,15 @@ export const documentSettingsPatch = z.object({
   /** null = every tracked competitor. */
   competitors: z.array(z.string().trim().min(1).max(60)).max(10).nullable().optional(),
   findings: z.union([z.literal(3), z.literal(4)]).optional(),
+  /** Custom briefs (2026-09-12): the operator's own instruction, the topic
+   *  blocks it must include in their print order, and whose voice writes it.
+   *  Empty string and empty array are how the Studio clears them. */
+  brief: z.string().trim().max(DOCUMENT_BRIEF_MAX, `a brief runs to ${DOCUMENT_BRIEF_MAX} characters at most`).optional(),
+  blocks: z.array(z.enum(DOCUMENT_BLOCK_KEYS as [string, ...string[]]))
+    .max(DOCUMENT_BLOCK_KEYS.length)
+    .refine((b) => new Set(b).size === b.length, 'a block can only be included once')
+    .optional(),
+  role: z.enum(DOCUMENT_ROLES as [string, ...string[]]).optional(),
 })
 export type DocumentSettingsPatch = z.infer<typeof documentSettingsPatch>
 

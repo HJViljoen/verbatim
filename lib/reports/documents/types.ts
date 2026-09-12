@@ -1,3 +1,4 @@
+import { DOCUMENT_BRIEF_MAX } from '../../config'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -31,6 +32,27 @@ export const SELLS_TO: { key: SellsTo; label: string; hint: string }[] = [
 ]
 export const isSellsTo = (v: unknown): v is SellsTo => SELLS_TO.some((s) => s.key === v)
 
+/** A topic block a brief may include (WP7d, 2026-09-12). A block is not a
+ *  tile and not part of a page: it is a research question set plus the
+ *  skeleton pages that answer it, cut from the four templates (Heinrich,
+ *  2026-08-30: "selectable topic blocks that must be included ... never parts
+ *  of pages"). The keys are stored in reports.settings, so they never change
+ *  spelling. What each one holds is in documents/templates.ts. */
+export type DocumentBlockKey = 'competitive_analysis' | 'consumer_profiles' | 'content_performance' | 'market_movement'
+
+export const DOCUMENT_BLOCK_KEYS: DocumentBlockKey[] = ['competitive_analysis', 'consumer_profiles', 'content_performance', 'market_movement']
+export const isDocumentBlockKey = (v: unknown): v is DocumentBlockKey => DOCUMENT_BLOCK_KEYS.includes(v as DocumentBlockKey)
+
+/** Which of the four written roles a custom brief is written in: a custom
+ *  document invents no new voice, it points an existing one at the operator's
+ *  own question. The value is that template's key. */
+export type DocumentRole = 'sales_brief' | 'leadership_brief' | 'market_brief' | 'content_brief'
+
+export const DOCUMENT_ROLES: DocumentRole[] = ['leadership_brief', 'sales_brief', 'market_brief', 'content_brief']
+export const isDocumentRole = (v: unknown): v is DocumentRole => DOCUMENT_ROLES.includes(v as DocumentRole)
+/** The role a custom brief takes when the operator picks none. */
+export const DEFAULT_DOCUMENT_ROLE: DocumentRole = 'leadership_brief'
+
 export interface DocumentSettings {
   sellsTo: SellsTo
   /** Tracked competitors to include; null = every tracked competitor. */
@@ -39,17 +61,33 @@ export interface DocumentSettings {
   language: 'en'
   /** Finding pages the writer may fill. */
   findings: 3 | 4
+  /** Custom briefs (template_key 'custom'): the operator's own instruction,
+   *  the top line of the writer's prompt. Absent on the four templates, whose
+   *  brief is the template's own. */
+  brief?: string
+  /** Custom briefs: the topic blocks to include, in the order they print. */
+  blocks?: DocumentBlockKey[]
+  /** Custom briefs: whose voice writes it. */
+  role?: DocumentRole
 }
 
 export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettings = { sellsTo: 'consumers', competitors: null, language: 'en', findings: 4 }
 
 export function documentSettings(raw: Partial<DocumentSettings> | null | undefined): DocumentSettings {
   const s = raw ?? {}
+  // brief, blocks and role are ABSENT rather than empty when unset: the four
+  // templates store none of them, and a stored `blocks: []` would read as a
+  // deliberately empty custom brief.
+  const brief = typeof s.brief === 'string' ? s.brief.trim().slice(0, DOCUMENT_BRIEF_MAX) : ''
+  const blocks = Array.isArray(s.blocks) ? s.blocks.filter(isDocumentBlockKey).filter((b, i, a) => a.indexOf(b) === i) : []
   return {
     sellsTo: isSellsTo(s.sellsTo) ? s.sellsTo : DEFAULT_DOCUMENT_SETTINGS.sellsTo,
     competitors: Array.isArray(s.competitors) ? s.competitors.filter((c): c is string => typeof c === 'string' && c.trim().length > 0).slice(0, 10) : null,
     language: 'en',
     findings: s.findings === 3 ? 3 : 4,
+    ...(brief ? { brief } : {}),
+    ...(blocks.length ? { blocks } : {}),
+    ...(isDocumentRole(s.role) ? { role: s.role } : {}),
   }
 }
 

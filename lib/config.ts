@@ -1102,6 +1102,10 @@ export const DOCUMENT_RESEARCH_PARALLEL = 3
 export const DOCUMENT_BUILD_STALE_MS = 30 * 60_000
 /** Characters an operator's edit of one block may hold (a long paragraph is ~1,200). */
 export const DOCUMENT_EDIT_MAX = 4000
+/** Characters an operator's own brief may hold on a custom document (2026-09-12):
+ *  one instruction, long enough to name the question and the reader, short
+ *  enough that it stays an instruction rather than a draft. */
+export const DOCUMENT_BRIEF_MAX = 1200
 /** Characters per block field: pages look alike every week because the
  *  writer cannot run long. Enforced in the schema description and by scrub. */
 export const DOCUMENT_BLOCK_MAX: Record<string, number> = {
