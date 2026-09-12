@@ -56,6 +56,9 @@ export async function loadThemes(clientId: string, runId: string): Promise<Aggre
     supportingVideoIds: r.supporting_video_ids,
     supportingInsightIds: r.supporting_insight_ids,
     evidenceCount: r.evidence_count,
+    // Persisted from WP7a on (see persistThemes); a run written before the
+    // column existed reads as "nothing on camera", not as unknown.
+    videoEvidenceCount: 0,
     strengthScore: r.strength_score ?? 0,
     meanStrength: r.mean_strength ?? r.strength_score ?? 0,
     rankScore: r.rank_score ?? 0,

@@ -77,7 +77,7 @@ describe('stripThemeRefs — S#/C# leak coverage (Step 2b)', () => {
 describe('D-a v5 prompt blocks', () => {
   const theme: AggregatedTheme = {
     bucket: 'client', category: 'praise', theme: 'upcycled_craftsmanship', memberThemes: [],
-    supportingVideoIds: ['v1'], supportingInsightIds: ['i1'], evidenceCount: 3, strengthScore: 7,
+    supportingVideoIds: ['v1'], supportingInsightIds: ['i1'], evidenceCount: 3, videoEvidenceCount: 0, strengthScore: 7,
     meanStrength: 6.5, rankScore: 1.5,
     dominantEmotion: 'excited', dominantSentimentImpact: 'positive', singleSource: false, sampleDescriptions: [],
   }

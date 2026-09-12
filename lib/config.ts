@@ -45,6 +45,30 @@ export const EVIDENCE_FLOOR = 2
 export const MEGA_CLUSTER_MIN = 40
 export const MEGA_CLUSTER_SHARE = 0.25
 
+/**
+ * Video-as-signal weight (WP7a, 2026-09-12). A creator who filmed an opinion
+ * counts as one and a half comment-videos when a theme is ranked: the video is
+ * a deliberate, costly act of opinion, which is exactly what the Pass A prompt
+ * already tells the extraction model — and what nothing downstream read until
+ * now (`insight_evidence.source` existed, no ranking function queried it).
+ *
+ * 1.5 and not 2: creator corpora skew to tutorials, unboxings and feature
+ * walk-throughs, so an on-camera line is over-represented on product talk. At 2
+ * every theme tilts toward creator subject matter; at 1.5 an on-camera video
+ * breaks ties and lifts a theme past a marginally larger comment-only one
+ * without overturning volume.
+ */
+export const VIDEO_EVIDENCE_WEIGHT = 1.5
+
+/**
+ * Quote-picker bonus for a verbatim spoken on camera (WP7a). `quoteScore` and
+ * the theme bonus are whole numbers (English hits capped at 5, +2 for card
+ * length, +3 per on-topic word, theme overlap x2), so 0.15 is a tie-break and
+ * nothing more: two equally good quotes go to the one someone said out loud,
+ * and any comment that scores even one point better still wins.
+ */
+export const VIDEO_QUOTE_BONUS = 0.15
+
 /** Sampling temperature for analysis calls. 0 for reproducible iteration. */
 export const ANALYSIS_TEMPERATURE = 0
 

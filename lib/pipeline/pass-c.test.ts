@@ -16,6 +16,7 @@ const theme = (over: Partial<AggregatedTheme> = {}): AggregatedTheme => ({
   rankScore: 1,
   supportingInsightIds: ['i1'],
   evidenceCount: 3,
+  videoEvidenceCount: 0,
   strengthScore: 7,
   dominantEmotion: 'excited',
   dominantSentimentImpact: 'positive',

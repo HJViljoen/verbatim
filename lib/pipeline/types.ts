@@ -132,6 +132,12 @@ export interface InsightRow {
   is_client: boolean
   is_competitor: boolean
   competitor_name: string | null
+  /** At least one of this insight's citations is `insight_evidence.source =
+   *  'video'` — the creator said it on camera rather than typing it in a
+   *  comment. Derived in loadGroupedInsights, never stored on the insight
+   *  (same rule as the entity flags, invariant 7). Absent on rows read by
+   *  callers that predate WP7a. */
+  hasVideoEvidence?: boolean
 }
 
 /** One clustered theme produced by Step A2, labelled by Pass B, persisted via
@@ -147,6 +153,11 @@ export interface AggregatedTheme {
   supportingVideoIds: string[]
   supportingInsightIds: string[]
   evidenceCount: number
+  /** Of `evidenceCount`, the distinct supporting videos where the finding was
+   *  spoken on camera (at least one citation with `insight_evidence.source =
+   *  'video'`). Weighted at VIDEO_EVIDENCE_WEIGHT in rankScore (WP7a): a
+   *  produced video is a costlier act of opinion than a passing comment. */
+  videoEvidenceCount: number
   /** Strongest single member insight. Says how sharp the best evidence is, and
    *  NOTHING about how widely the theme was heard — so it must never be the
    *  ordering key (Tier 1, 2026-08-18). Kept for display and tie-breaks. */
