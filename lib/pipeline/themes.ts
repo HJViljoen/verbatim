@@ -33,13 +33,13 @@ export async function loadThemes(clientId: string, runId: string): Promise<Aggre
   const rows = await selectAll<{
     label: string; description: string | null; bucket: string; category: string
     member_themes: string[]; supporting_insight_ids: string[]; supporting_video_ids: string[]
-    evidence_count: number; strength_score: number | null
+    evidence_count: number; video_evidence_count: number | null; strength_score: number | null
     rank_score: number | null; mean_strength: number | null
     dominant_emotion: string | null; dominant_sentiment_impact: string | null; single_source: boolean
   }>(() =>
     admin
       .from('themes')
-      .select('label, description, bucket, category, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, mean_strength, dominant_emotion, dominant_sentiment_impact, single_source')
+      .select('label, description, bucket, category, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, video_evidence_count, strength_score, rank_score, mean_strength, dominant_emotion, dominant_sentiment_impact, single_source')
       .eq('client_id', clientId).eq('run_id', runId)
       // Most salient first: this order IS Pass C/D's only cue to what matters.
       // nullsFirst false keeps pre-2026-08-18 rows (no rank) at the back rather
@@ -56,9 +56,10 @@ export async function loadThemes(clientId: string, runId: string): Promise<Aggre
     supportingVideoIds: r.supporting_video_ids,
     supportingInsightIds: r.supporting_insight_ids,
     evidenceCount: r.evidence_count,
-    // Persisted from WP7a on (see persistThemes); a run written before the
-    // column existed reads as "nothing on camera", not as unknown.
-    videoEvidenceCount: 0,
+    // Null on a run aggregated before WP7a — read as "nothing on camera"
+    // rather than as unknown, which is what every consumer of this shape
+    // already assumed and what the pre-WP7a rank_score was computed from.
+    videoEvidenceCount: r.video_evidence_count ?? 0,
     strengthScore: r.strength_score ?? 0,
     meanStrength: r.mean_strength ?? r.strength_score ?? 0,
     rankScore: r.rank_score ?? 0,
@@ -300,6 +301,7 @@ export async function persistThemes(
       supporting_insight_ids: t.supportingInsightIds,
       supporting_video_ids: t.supportingVideoIds,
       evidence_count: t.evidenceCount,
+      video_evidence_count: t.videoEvidenceCount,
       strength_score: t.strengthScore,
       rank_score: t.rankScore,
       mean_strength: t.meanStrength,
