@@ -259,6 +259,75 @@ export const TRANSLATE_PARALLEL = 4
  *  clear the backlog instead of the first one. */
 export const TRANSLATE_CAP = 400
 
+// --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------
+// The 2026-09-02 blind benchmark found, independently and twice, that every
+// incumbent listening tool misses on-screen text on TikTok/YouTube — and that
+// TikTok hooks are very often TYPED, never spoken. This reads the text on the
+// one frame we can actually get: the cover.
+//
+// What it is NOT, and the copy must never say otherwise (standing rule,
+// v5-Ideas.md): scene understanding, thumbnail analysis, or "we analyse the
+// visuals". It is on-screen text from the cover frame. Full-frame sampling needs
+// a video download plus ffmpeg, which Vercel serverless does not have, and the
+// media URLs expire in days regardless.
+
+/** Master switch for the OCR wave. Default ON, for the translation flag's
+ *  reason: it gates a path whose absence is a known, measured hole in the
+ *  analysis, so the safe default is "on" and the switch exists to turn it OFF
+ *  in a hurry (OCR_ENABLED=0) if a run needs the pennies or the wall-time back.
+ *  Read at call time so it works in serverless; frozen per run by
+ *  captureRunFlags. */
+export function ocrEnabled(): boolean {
+  const v = process.env.OCR_ENABLED
+  return v !== '0' && v !== 'false'
+}
+
+/** Model for the cover-frame read. gpt-4.1-mini takes image input and is the
+ *  cheapest vision-capable model already priced in MODEL_PRICING; at
+ *  `detail: 'low'` the image is a fixed ~85-token square, so a call is a
+ *  fraction of a cent. Transcribing text off a still is not a reasoning task —
+ *  the failure mode to guard against is the model DESCRIBING the picture, and
+ *  that is a prompt problem, not a model-size one. */
+export const OCR_MODEL = 'gpt-4.1-mini'
+
+/** Image detail level. 'low' downsamples to a 512px square before the model
+ *  sees it: enough for the large, high-contrast hook type that is the whole
+ *  point, and it makes the per-image cost fixed and knowable instead of scaling
+ *  with the platform's thumbnail resolution. */
+export const OCR_IMAGE_DETAIL = 'low' as const
+
+/** Max characters of extracted text STORED per video. A cover frame carries a
+ *  hook card, not an essay; 600 is a generous ceiling that bounds a runaway
+ *  model output before it reaches the DB. */
+export const OCR_MAX_CHARS = 600
+
+/** Max characters of on-screen text injected into the Pass A prompt. Same
+ *  number as OCR_MAX_CHARS deliberately — the stored text is already bounded to
+ *  prompt scale, so the two clips are the same clip and the quote validator
+ *  matches against exactly what the model saw. */
+export const OCR_PROMPT_CHARS = 600
+
+/** Videos per OCR Inngest step. One image call is ~2s; 8 is ~16s, far inside
+ *  the 300s step cap, and matches TRANSCRIBE_BATCH so the two gather-time waves
+ *  chunk the same corpus the same way. */
+export const OCR_BATCH = 8
+
+/** OCR steps dispatched per parallel wave (the transcribe wave pattern). */
+export const OCR_PARALLEL = 4
+
+/** Runaway BACKSTOP on the gather-time OCR wave, in videos per run — like
+ *  TRANSCRIBE_CAP, not a budget. At ~$0.0004 a call even 1200 images is under a
+ *  dollar; the cap exists so a pathological run cannot spend unbounded, not to
+ *  ration a real one. */
+export const OCR_CAP = 1200
+
+/** Runaway backstop on the YouTube OCR BACKFILL — the second wave, over
+ *  historical rows whose cover is still reachable because it is derived from
+ *  the video id rather than a signed URL. Smaller than OCR_CAP because it is
+ *  paying down a backlog that has no deadline: a few hundred a run clears it
+ *  over a handful of weeks without any single run noticing. */
+export const OCR_BACKFILL_CAP = 300
+
 /**
  * Embedding model for Step A2 theme clustering (Analysis-Passes §Step A2 — the
  * pre-approved fallback when string-match clustering fails, which the first real
