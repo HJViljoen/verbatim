@@ -8,6 +8,7 @@ import { ensureDefaultSchedule } from '@/lib/schedules/default'
 import { SELECTABLE_PLATFORMS } from '@/app/dashboard/settings/constants'
 import { deriveCompetitorKeywords, cleanTerms, ONBOARDING_MAX_VIDEOS } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
+import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 
 // State shape (a type) — idle value lives in the client form; a 'use server'
 // module may only export async functions.
@@ -53,9 +54,23 @@ const TRIAL_DAYS = 14
  * shows the terms as chips and only the kept ones reach tracking_configs.
  */
 export async function suggestTerms(_prev: SuggestTermsState, formData: FormData): Promise<SuggestTermsState> {
-  await requireUser()
+  const { user } = await requireUser()
+  const admin = createAdminClient()
+
+  // This is the onboarding session or nothing. A user who already has a
+  // workspace has no business here — createWorkspace redirects them, and
+  // without the same guard this action was the one signed-in, model-spending
+  // endpoint any account could call for a tenant it does not belong to.
+  const { data: existing } = await admin.from('users').select('id').eq('id', user.id).maybeSingle()
+  if (existing) return { ok: false, message: 'Your workspace is already set up — change search terms in Settings.', suggestions: null }
+
   const companyName = String(formData.get('company_name') ?? '').trim()
   if (!companyName) return { ok: false, message: 'Enter your company name first.', suggestions: null }
+
+  // Metered per user, and the inputs are bounded inside suggestSearchTerms
+  // (boundSuggestInput) because everything here comes straight off a form POST.
+  const slot = await takeSuggestionSlot(user.id, null)
+  if (!slot.ok) return { ok: false, message: slot.message, suggestions: null }
 
   try {
     const s = await suggestSearchTerms({

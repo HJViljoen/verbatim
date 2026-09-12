@@ -6,6 +6,7 @@ import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
+import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
 
 export interface SettingsFormState {
@@ -230,7 +231,7 @@ function isMissingColumn(err: { code?: string | null; message?: string | null },
 
 /** Ask the model for more terms. Offers only — nothing is written here. */
 export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData): Promise<SuggestState> {
-  const { supabase, clientId, role } = await getSessionContext()
+  const { supabase, clientId, role, userId } = await getSessionContext()
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change search terms.', suggestions: null }
   }
@@ -243,6 +244,12 @@ export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData)
   if (!companyName) {
     return { ok: false, message: 'We need your company name first.', suggestions: null }
   }
+
+  // Metered per user, on the same counter as the onboarding suggester. This
+  // one's inputs come from the tenant's own row rather than a POST, so it was
+  // never the cost hole — but a limiter with a way around it is not one.
+  const slot = await takeSuggestionSlot(userId, clientId)
+  if (!slot.ok) return { ok: false, message: slot.message, suggestions: null }
 
   try {
     const s = await suggestSearchTerms({

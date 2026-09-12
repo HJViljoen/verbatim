@@ -19,11 +19,36 @@ const PER_GROUP = 6
 /** Bounds the spend of one call to fractions of a cent whatever the model does. */
 const MAX_OUTPUT_TOKENS = 700
 
+// Prompt-side bounds. MAX_OUTPUT_TOKENS caps only the completion; the fields
+// below are POSTed by the caller and pasted straight into the user prompt, so
+// without these the "~$0.001 a call" figure holds only for well-behaved input.
+// Every real value is far under them — Össur's whole config is ~120 characters.
+const MAX_NAME_CHARS = 80
+const MAX_TERM_CHARS = 40
+const MAX_LIST = 15
+
 export interface SuggestInput {
   company_name: string
   competitor_names: string[]
   industry_keywords: string[]
   website?: string
+}
+
+/**
+ * Cut the caller's input down to something a prompt can safely hold. Pure, so
+ * both callers (onboarding and Settings) bound identically and a test can pin
+ * it — the settings action's inputs come from the DB and are already bounded by
+ * the CHECK constraints, but the onboarding one comes from a form POST.
+ */
+export function boundSuggestInput(input: SuggestInput): SuggestInput {
+  const clip = (s: string, n: number) => `${s}`.trim().replace(/\s+/g, ' ').slice(0, n)
+  const list = (xs: string[]) => (xs ?? []).map((x) => clip(x, MAX_TERM_CHARS)).filter(Boolean).slice(0, MAX_LIST)
+  return {
+    company_name: clip(input.company_name, MAX_NAME_CHARS),
+    competitor_names: list(input.competitor_names),
+    industry_keywords: list(input.industry_keywords),
+    ...(input.website ? { website: clip(input.website, MAX_NAME_CHARS) } : {}),
+  }
 }
 
 export interface TermSuggestions {
@@ -50,9 +75,12 @@ function systemPrompt(): string {
     'write in a caption, a hashtag or a comment about this market.',
     '',
     'Return three groups:',
-    `- brand: up to ${PER_GROUP} ways people write THIS company's name — the name itself, common`,
-    '  misspellings, the name plus its main product word. Never a generic word on its own.',
-    `- competitors: for EACH competitor named, up to ${PER_GROUP} terms the same way.`,
+    `- brand: up to ${PER_GROUP} DISTINCTIVE ways people write THIS company's name. Never the bare`,
+    '  one-word name on its own, and never a name that is also a place, a weekday or an ordinary',
+    '  noun unless it is paired with a product word. Prefer two- and three-word forms',
+    '  ("<name> backpack", "<name> review") and real misspellings. If a name has no distinctive',
+    '  form, return fewer terms rather than the bare name.',
+    `- competitors: for EACH competitor named, up to ${PER_GROUP} terms under the same rule.`,
     `- category: up to ${PER_GROUP} phrases for what the company SELLS, in buyers' words, not`,
     '  marketing words — what someone types when they are shopping for or discussing this kind',
     '  of product.',
@@ -62,6 +90,8 @@ function systemPrompt(): string {
     '- Lowercase unless the word is a proper name.',
     '- No single common English word that means something else too ("gear", "seal", "pole") —',
     '  a term like that returns the whole internet, not this market.',
+    '- Skip anything that is a common English word, a place name, or a day of the week, even when',
+    '  it is spelled the way the company spells it ("Cotopaxi" is a volcano, "Freitag" is Friday).',
     '- Two to four words is the useful length for a category phrase.',
     '- Suggest nothing you are not reasonably confident about. Fewer, better terms.',
   ].join('\n')
@@ -82,7 +112,8 @@ function userPrompt(input: SuggestInput): string {
  */
 export async function suggestSearchTerms(input: SuggestInput): Promise<TermSuggestions> {
   const empty: TermSuggestions = { brand: [], competitors: {}, category: [], costUsd: 0 }
-  if (!input.company_name.trim()) return empty
+  const bounded = boundSuggestInput(input)
+  if (!bounded.company_name) return empty
 
   const completion = await openai.chat.completions.parse({
     model: ANALYSIS_MODEL,
@@ -90,7 +121,7 @@ export async function suggestSearchTerms(input: SuggestInput): Promise<TermSugge
     max_completion_tokens: MAX_OUTPUT_TOKENS,
     messages: [
       { role: 'system', content: systemPrompt() },
-      { role: 'user', content: userPrompt(input) },
+      { role: 'user', content: userPrompt(bounded) },
     ],
     response_format: zodResponseFormat(schema, 'search_terms'),
   })
@@ -103,7 +134,7 @@ export async function suggestSearchTerms(input: SuggestInput): Promise<TermSugge
 
   // Key the competitor lists by the names the caller gave, so a model that
   // rewrites "Ottobock" as "Otto Bock" still lands in the right group.
-  const byName = new Map(input.competitor_names.map((n) => [n.toLowerCase().trim(), n]))
+  const byName = new Map(bounded.competitor_names.map((n) => [n.toLowerCase().trim(), n]))
   const competitors: Record<string, string[]> = {}
   for (const c of parsed.competitors) {
     const name = byName.get(`${c.name}`.toLowerCase().trim())
