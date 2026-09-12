@@ -7,6 +7,7 @@
 
 import { chunk } from './chunk'
 import { VIDEO_QUOTE_BONUS } from './config'
+import type { EvidenceSource } from './pipeline/pass-a'
 
 export interface QuoteRow {
   quote: string
@@ -14,10 +15,13 @@ export interface QuoteRow {
   /** insight_evidence.id — the ref a snapshot keeps in place of the words
    *  (Reports & Exports, 2026-08-29). */
   evidenceId: string
-  /** insight_evidence.source — 'video' means a creator said it on camera
-   *  rather than typing it (WP7a). Absent on rows read before the pickers
-   *  scored it; treated as a comment. */
-  source?: 'comment' | 'video'
+  /** insight_evidence.source, carried through as itself. 'video' means a
+   *  creator said it on camera rather than typing it (WP7a); 'video_text' is
+   *  words printed on the cover frame (WP7b) — neither is a comment, and
+   *  relabelling one as 'comment' made fetchQuoteCitationsByAudience emit a
+   *  citation with no comment behind it. Absent on rows read before the
+   *  pickers scored it. Only onCameraBonus reads this, and only for 'video'. */
+  source?: EvidenceSource
 }
 
 /** A quote plus what it can be traced back to. The agent's grounded register
@@ -29,6 +33,12 @@ export interface QuoteCitation extends QuoteRow {
 }
 
 export const cleanQuote = (q: string) => q.replace(/\s+/g, ' ').trim()
+
+/** insight_evidence.source as the pipeline wrote it. Anything unknown — and a
+ *  NULL on a row written before the column was scored — reads as a comment,
+ *  which is what it was. */
+const evidenceSource = (s: string | null): EvidenceSource =>
+  s === 'video' || s === 'video_text' ? s : 'comment'
 
 // Common English function words. The corpus is heavily multilingual and full of
 // Latin-script transliterations that aren't English, so a latin-character ratio
@@ -107,7 +117,8 @@ function quoteScore(q: string, keywords: Set<string>): number {
  *  (WP7a — the costly-signal thesis, already live in the Pass A prompt).
  *  quoteScore and the theme bonus move in whole numbers, so VIDEO_QUOTE_BONUS
  *  can only break a tie: any comment that scores even one point better still
- *  leads the card. */
+ *  leads the card. `=== 'video'` on purpose: nobody SAID a title card, so
+ *  'video_text' earns no on-camera bonus. */
 const onCameraBonus = (source: QuoteRow['source']): number => (source === 'video' ? VIDEO_QUOTE_BONUS : 0)
 
 /** Theme-slug overlap with a claim — surfaces the on-topic audience insights
@@ -214,7 +225,7 @@ export async function fetchQuotesByAudience(
   for (const r of rows) {
     if (!r.quote) continue
     const arr = byAudience.get(r.audience_insight_id) ?? []
-    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: r.source === 'video' ? 'video' : 'comment' })
+    arr.push({ quote: r.quote, rank: r.relevance_rank ?? 99, evidenceId: r.id, source: evidenceSource(r.source) })
     byAudience.set(r.audience_insight_id, arr)
   }
   return byAudience
@@ -258,7 +269,7 @@ export async function fetchQuoteCitationsByAudience(
       quote: r.quote,
       rank: r.relevance_rank ?? 99,
       evidenceId: r.id,
-      source: r.source === 'video' ? 'video' : 'comment',
+      source: evidenceSource(r.source),
       commentId: r.comment_id,
       videoId: r.source_video_id,
     })
