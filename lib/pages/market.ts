@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { CURATION_GATE, type GateTier } from '../curation'
-import { type GlossaryKey } from '../calibration'
+import { recStatus, type GlossaryKey, type RecStatus } from '../calibration'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToClientVoices, cleanQuote, type ThemeBucketRow, type CitedQuote } from '../quotes'
 import { quoteRef, type HeroTable } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
@@ -72,7 +72,7 @@ export function parseMarketSelection(sp: MarketParams): { group: Group; filter: 
 
 // ── row/detail shapes, one pair per rail group ─────────────────────────────
 
-export interface RecRow { id: string; rank: number; title: string; reasoning: string; type: string; tier: GateTier; conversations: number }
+export interface RecRow { id: string; rank: number; title: string; reasoning: string; type: string; tier: GateTier; conversations: number; status: RecStatus }
 export interface RecDetail extends RecRow {
   kind: 'rec'
   total: number
@@ -157,6 +157,7 @@ interface Recommendation {
   priority: string | null
   based_on: { insight_ids?: string[] } | null
   hero_quote: string | null
+  status: string | null
 }
 interface CompetitiveRef { id: string; evidence: { supporting_theme_ids?: string[] } | null; impact_level: string | null }
 interface SingleSourceTheme { label: string; description: string | null }
@@ -214,7 +215,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       .eq('client_id', clientId).eq('run_id', runId)
       .order('opportunity_score', { ascending: false }),
     supabase.from('recommendations')
-      .select('id, type, title, reasoning, priority, based_on, hero_quote')
+      .select('id, type, title, reasoning, priority, based_on, hero_quote, status')
       .eq('client_id', clientId).eq('run_id', runId),
     supabase.from('competitive_insights').select('id, evidence, impact_level')
       .eq('client_id', clientId).eq('run_id', runId),
@@ -307,7 +308,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
   function recDetail(a: AgendaItem<Recommendation>, rank: number, total: number, voices: number, platforms: { label: string; count: number }[], quotes: Quote[]): RecDetail {
     const { rec, tier } = a
     return {
-      kind: 'rec', id: rec.id, rank, total, title: rec.title, reasoning: rec.reasoning, type: rec.type, tier,
+      kind: 'rec', id: rec.id, rank, total, title: rec.title, reasoning: rec.reasoning, type: rec.type, tier, status: recStatus(rec.status),
       conversations: distinctVideos(recSupportIds(rec), videoByInsight), voices, platforms, themes: slugsOf(recSupportIds(rec)), quotes,
     }
   }
@@ -399,7 +400,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
       filterCounts: { strong: agenda.filter((a) => a.tier === 'confirmed').length, early: agenda.filter((a) => a.tier === 'early_signal').length },
       rows: agendaShown.map((a) => ({
         id: a.rec.id, rank: agenda.findIndex((x) => x.rec.id === a.rec.id), title: a.rec.title, reasoning: a.rec.reasoning, type: a.rec.type,
-        tier: a.tier, conversations: distinctVideos(recSupportIds(a.rec), videoByInsight),
+        tier: a.tier, conversations: distinctVideos(recSupportIds(a.rec), videoByInsight), status: recStatus(a.rec.status),
       })),
     }
   } else if (group === 'insights') {

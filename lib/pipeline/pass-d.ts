@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
-import { createAdminClient } from '../supabase-admin'
+import { createAdminClient, isMissingColumnError } from '../supabase-admin'
 import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
 import { PassDaSchema, PassDaSchemaV5, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief, type SayVsHearItemOut, type SayVsHearEntry } from './schemas'
@@ -12,6 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
+import { assignLineage, previousRunId, withoutLineageColumn, type PriorRec, type RunRow } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -752,7 +754,12 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
         rejectedRefs++
       }
     }
+    // Minted here, not by the column default, so a row that starts its own
+    // lineage carries `lineage_id = id` in ONE insert — and so a lineage read
+    // that fails still leaves every row with a valid identity of its own.
+    const id = randomUUID()
     return {
+      id,
       client_id: clientId,
       run_id: runId,
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
@@ -761,8 +768,19 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
       hero_quote: validateQuote(rec.hero_quote),
+      lineage_id: id,
+      status: 'new',
     }
   })
+
+  // ---- lineage: carry the client's status across the replace ----------------
+  // Pass D-b deletes and reinserts every recommendation, so without this a
+  // status the client set on Monday is gone by Sunday. Best-effort by design:
+  // continuity is worth an embedding call, never worth a failed update.
+  let lineageLog: Record<string, number> = {}
+  if (persist && recRows.length) {
+    lineageLog = await applyLineage(admin, clientId, runId, recRows)
+  }
 
   if (persist) {
     // Replace only after a successful parse — a failed call leaves the old rows.
@@ -771,10 +789,24 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       if (error) throw new Error(`clear recommendations: ${error.message}`)
     }
     if (recRows.length) {
-      const { data: insertedRec, error } = await admin
-        .from('recommendations')
-        .insert(recRows)
-        .select('id, type, title, priority')
+      // Deploy ordering: `lineage_id` arrives with 20260911140000_initiatives.sql,
+      // and a deploy can land before its migration does (it did on 2026-09-11,
+      // one table over). A recommendation's identity across updates is
+      // bookkeeping — it must never be the reason a run dies at D-b, for every
+      // tenant, after the money is already spent on gather and Pass A. So: try
+      // with it, and on "that column does not exist" insert the row the old
+      // schema knows and say the migration is pending.
+      const insert = (withLineage: boolean) =>
+        admin
+          .from('recommendations')
+          .insert(withLineage ? recRows : withoutLineageColumn(recRows))
+          .select('id, type, title, priority')
+      let { data: insertedRec, error } = await insert(true)
+      if (error && isMissingColumnError(error, 'lineage_id')) {
+        lineageLog = { ...lineageLog, lineage_column_missing: 1 }
+        console.warn('[pass-d] recommendations.lineage_id does not exist — apply supabase/migrations/20260911140000_initiatives.sql. Inserting without it; this update starts every recommendation at New.')
+        ;({ data: insertedRec, error } = await insert(false))
+      }
       if (error) throw new Error(`persist recommendations: ${error.message}`)
       out.recommendations = (insertedRec ?? []) as RunDbCallResult['recommendations']
     }
@@ -785,7 +817,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB,
-      response: { recommendations: recRows.length, rejected_refs: rejectedRefs },
+      response: { recommendations: recRows.length, rejected_refs: rejectedRefs, ...lineageLog },
       error: null, usage: b.usage, durationMs: b.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
@@ -795,6 +827,99 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
 
   out.rejectedRefs = rejectedRefs
   return out
+}
+
+/** Rows carried by `applyLineage` — the insert shape's lineage half. */
+interface LineageTarget {
+  id: string
+  type: string
+  title: string
+  lineage_id: string
+  status: string
+}
+
+/**
+ * Read the previous update's recommendations and carry their identity — and
+ * any status the client set — onto the rows about to be inserted. Mutates
+ * `rows` in place; returns counters for the AI log.
+ *
+ * The I/O half of `rec-lineage.ts` (the matching itself is pure and tested
+ * there). Everything here is best-effort: a missing previous update or a failed
+ * embedding call leaves every row with the self-lineage it was minted with.
+ * A lineage COLUMN that does not exist yet is the insert's problem, not this
+ * one's, and the insert handles it. Continuity is worth an embedding call (a
+ * dozen short titles, ~0 cost against a run that spends dollars on synthesis);
+ * it is never worth failing an update over.
+ */
+async function applyLineage(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  runId: string,
+  rows: LineageTarget[],
+): Promise<Record<string, number>> {
+  try {
+    // "The previous update" has to mean the update the CLIENT saw, because what
+    // is being carried across is a status the client set on that page. So it is
+    // the newest run with `status in ('completed','partial')` — the same anchor
+    // every client-facing loader uses (lib/pages/dashboard.ts, lib/pages/market.ts,
+    // the schedule send) — and never an `analyzing` or `failed` run.
+    //
+    // Two ways the old rule (newest recommendation by created_at) was wrong:
+    // a run still analysing already holds recommendations, so a set nobody has
+    // seen would have become the only match pool and every status set on the
+    // last visible update would have been silently dropped; and `rerunPassDb`
+    // re-stamps an old run's rows, which would make an old run look like the
+    // most recent one.
+    const { data: runRows, error: runError } = await admin
+      .from('pipeline_runs')
+      .select('id, status, started_at')
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false })
+      .limit(20)
+    if (runError) throw new Error(runError.message)
+    const prevRunId = previousRunId((runRows ?? []) as RunRow[], runId)
+    if (!prevRunId) return { lineage_priors: 0 }
+
+    // `recommendations` holds a handful of rows per update, so this never
+    // approaches the 1000-row cap that would need selectAll.
+    const { data, error } = await admin
+      .from('recommendations')
+      .select('id, lineage_id, type, title, status')
+      .eq('client_id', clientId)
+      .eq('run_id', prevRunId)
+    if (error) throw new Error(error.message)
+    const priors = (data ?? []) as PriorRec[]
+    if (priors.length === 0) return { lineage_priors: 0 }
+
+    let newVectors: number[][] = []
+    let priorVectors: number[][] = []
+    try {
+      const vecs = await embedTexts([...rows.map((r) => r.title), ...priors.map((r) => r.title)])
+      newVectors = vecs.slice(0, rows.length)
+      priorVectors = vecs.slice(rows.length)
+    } catch {
+      // Exact-title matching still works without vectors.
+    }
+
+    const assigned = assignLineage(rows, priors, newVectors, priorVectors)
+    let inheritedStatus = 0
+    assigned.forEach((a, i) => {
+      rows[i].lineage_id = a.lineageId
+      if (a.status) {
+        rows[i].status = a.status
+        inheritedStatus++
+      }
+    })
+    return {
+      lineage_priors: priors.length,
+      lineage_matched: assigned.filter((a) => a.matchKind !== 'new').length,
+      lineage_status_carried: inheritedStatus,
+    }
+  } catch {
+    // Logged as a counter rather than thrown: the update ships, every
+    // recommendation reads New for one more week.
+    return { lineage_error: 1 }
+  }
 }
 
 /**

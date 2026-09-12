@@ -46,10 +46,18 @@ export function DigestEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
     for (const k of keys) {
       const r = mod.renderables[k]
       if (!r?.email) continue
+      // A renderer may return null to say "not this week" — the section header
+      // and its framing line go with it. Without this, a tile whose empty state
+      // is meaningless to the reader still arrives every week under a heading
+      // (WP7c: "What you told us you are trying to move" for a tenant who has
+      // told us nothing). A tile that HAS something honest to say when empty
+      // still returns its empty state and is printed, as before.
+      const body = r.email(sec.data, ctx)
+      if (body == null) continue
       tiles.push(
         <Section key={`${sec.section.id}:${k}`} title={r.title}>
           {first && sec.section.framing ? <div style={{ ...text.small, fontStyle: 'italic', marginBottom: 8 }}>{sec.section.framing}</div> : null}
-          {r.email(sec.data, ctx)}
+          {body}
         </Section>,
       )
       first = false

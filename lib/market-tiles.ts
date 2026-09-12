@@ -14,6 +14,9 @@ export interface RecLike {
   id: string
   priority: string | null
   based_on: { insight_ids?: string[] } | null
+  /** The client's own lifecycle word (WP7c). Absent on rows read before the
+   *  lifecycle had a UI — treated as untouched. */
+  status?: string | null
 }
 
 export interface InsightLike {
@@ -67,16 +70,20 @@ export interface AgendaItem<T extends RecLike> {
   tier: GateTier
 }
 
-/** The agenda order: gate-passed recommendations first (by stored priority,
- *  then by how many insights ground them), then the rest in the same order —
- *  so "ordered by evidence" is literally true and #1 is the best-grounded
- *  action, never merely the model's favourite. */
+/** The agenda order: anything the client dismissed sinks to the bottom (it is
+ *  never deleted — they said "not this", not "I never saw this"), then
+ *  gate-passed recommendations by stored priority, then by how many insights
+ *  ground them — so "ordered by evidence" is literally true and #1 is the
+ *  best-grounded action the client has not already waved off, never merely the
+ *  model's favourite. */
 export function orderAgenda<T extends RecLike>(recs: T[], tierById: Map<string, GateTier>, confirmedCompetitive: Set<string>): AgendaItem<T>[] {
   const TIER_RANK: Record<GateTier, number> = { confirmed: 0, early_signal: 1, archive: 2 }
+  const dismissed = (r: RecLike) => (r.status === 'dismissed' ? 1 : 0)
   return recs
     .map((rec) => ({ rec, tier: recEvidenceTier(rec, tierById, confirmedCompetitive) }))
     .sort(
       (a, b) =>
+        dismissed(a.rec) - dismissed(b.rec) ||
         TIER_RANK[a.tier] - TIER_RANK[b.tier] ||
         (PRIORITY_RANK[a.rec.priority ?? 'low'] ?? 3) - (PRIORITY_RANK[b.rec.priority ?? 'low'] ?? 3) ||
         (b.rec.based_on?.insight_ids?.length ?? 0) - (a.rec.based_on?.insight_ids?.length ?? 0),

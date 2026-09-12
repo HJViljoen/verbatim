@@ -7,7 +7,9 @@ import type { ExecutiveBrief } from '../pipeline/schemas'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToClientVoices, cleanQuote, type ThemeBucketRow } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
-import { sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey } from '../calibration'
+import { recStatus, sentimentTier, SENTIMENT_TIER_LABEL, type GlossaryKey, type RecStatus } from '../calibration'
+import { loadInitiatives } from '../initiatives/read'
+import type { InitiativesData } from '../initiatives/types'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '../format'
 import {
   themeTiers, topThemes, platformSplit, sentimentSplit, shareBreakdown, pointDelta, movement, accountSeries, topRecommendation, latestPerDay,
@@ -54,6 +56,7 @@ interface RecRow {
   priority: string | null
   based_on: { insight_ids?: string[] } | null
   hero_quote: string | null
+  status: string | null
 }
 
 export const BUCKET_COLOR: Record<Bucket, string> = { client: 'var(--you)', category: 'var(--cat)', competitor: 'var(--comp)' }
@@ -131,11 +134,12 @@ export interface DashboardData {
     headline: string
     beats: ResolvedBeat[]
     fallback: boolean
-    oneThing: { id: string; title: string; reasoning: string; priority: string | null } | null
+    oneThing: { id: string; title: string; reasoning: string; priority: string | null; status: RecStatus } | null
     quotes: Quote[]
     voices: number
     platforms: { label: string; count: number }[]
   }
+  initiatives: InitiativesData
   sentiment: {
     positivePct: number
     judged: number
@@ -235,7 +239,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   let earlierThemesQ = supabase.from('themes').select('run_id').eq('client_id', clientId)
   if (notRunning) earlierThemesQ = earlierThemesQ.not('run_id', 'in', notRunning)
   const [recRes, themedRunId, miRes, latestVideoRun, eventsRes] = await Promise.all([
-    supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote').eq('client_id', clientId).eq('run_id', runId),
+    supabase.from('recommendations').select('id, title, reasoning, priority, based_on, hero_quote, status').eq('client_id', clientId).eq('run_id', runId),
     // Themes come from the newest update that produced any — normally this
     // update, but a failed theme pass must not blank the theme tiles.
     fetchThemedRunId(supabase, clientId, runningIds, 'dashboard'),
@@ -255,7 +259,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const miEvidenceById = new Map(marketInsights.map((m) => [m.id, m.evidence]))
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
-  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows] = await Promise.all([
+  const [platformRows, themeRows, earlierRes, supportInsights, bucketRows, initiatives] = await Promise.all([
     selectAll<{ platform: string | null }>(() =>
       supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
     ),
@@ -285,6 +289,10 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       supabase.from('themes').select('bucket, supporting_insight_ids')
         .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
     ),
+    // Declared initiatives, measured (WP7c). Its own reads, but in this wave so
+    // it costs no extra round trip; it returns { rows: [], total: 0 } for the
+    // tenants — today, all of them — that have declared nothing.
+    loadInitiatives(supabase, clientId),
   ])
 
   // The latest update = the run we anchored on; everything before it is history.
@@ -448,9 +456,10 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
     },
     hero: {
       show: showHero, headline: narrative.headline, beats: narrative.beats, fallback: narrative.fallback,
-      oneThing: oneThing ? { id: oneThing.id, title: oneThing.title, reasoning: oneThing.reasoning, priority: oneThing.priority } : null,
+      oneThing: oneThing ? { id: oneThing.id, title: oneThing.title, reasoning: oneThing.reasoning, priority: oneThing.priority, status: recStatus(oneThing.status) } : null,
       quotes: oneThingQuotes, voices: oneThingVoices, platforms: oneThingPlatforms,
     },
+    initiatives,
     sentiment: sent ? {
       positivePct: sent.positivePct, judged: sent.judged, deltaText: verdictDelta(sentimentVerdict),
       tierLabel: sentTier ? SENTIMENT_TIER_LABEL[sentTier] : null, segments: sentimentSegments,

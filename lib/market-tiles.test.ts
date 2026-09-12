@@ -61,6 +61,15 @@ describe('agenda ordering', () => {
     expect(out[4].tier).toBe('archive')
   })
 
+  it('a dismissed recommendation sinks below every live one, however well grounded', () => {
+    const out = orderAgenda([
+      { ...rec('bestButDismissed', 'high', ['conf', 'compX']), status: 'dismissed' },
+      { ...rec('worstButLive', 'low', ['arch']), status: 'new' },
+      { ...rec('doneStaysPut', 'high', ['conf']), status: 'acted_on' },
+    ], tiers, comp)
+    expect(out.map((a) => a.rec.id)).toEqual(['doneStaysPut', 'worstButLive', 'bestButDismissed'])
+  })
+
   it('handles an empty list', () => {
     expect(orderAgenda([], tiers, comp)).toEqual([])
   })

@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { chunk } from '../chunk'
 import { openai } from '../openai'
-import { createAdminClient, selectAll } from '../supabase-admin'
+import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
 import { usableTranscript, usableTranslation } from './transcript-input'
@@ -50,18 +50,10 @@ export interface ClassifyInput {
   transcript_en: string | null
 }
 
-/** Is this PostgREST error "that column does not exist"? Postgres raises 42703
- *  (undefined_column) and PostgREST passes the code through, but a schema-cache
- *  miss can surface as PGRST204 with the column named in the message instead —
- *  so the column name is checked either way. Narrow on purpose: the point is to
- *  survive a deploy that lands before its migration, not to swallow write
- *  failures. */
-export function isMissingColumnError(error: unknown, column: string): boolean {
-  if (!error || typeof error !== 'object') return false
-  const { code, message } = error as { code?: string; message?: string }
-  const named = (message ?? '').includes(column)
-  return (code === '42703' && named) || (code === 'PGRST204' && named)
-}
+// The "deploy landed before its migration" guard now has two callers (this one
+// and Pass D-b's lineage_id), so it lives in lib/supabase-admin.ts. Re-exported
+// here for the test and the readers who found it at this address first.
+export { isMissingColumnError }
 
 /** Ids of videos still unclassified, chunked into call-sized batches. */
 export function planClassifyBatches(
