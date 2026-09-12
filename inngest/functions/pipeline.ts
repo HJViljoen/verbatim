@@ -557,7 +557,11 @@ export const runPipeline = inngest.createFunction(
         //
         // Non-fatal throughout: a video without on-screen text is analysed
         // without it, exactly as before this existed.
-        if (flags.ocr) {
+        // Gated on BOTH flags, like the translation wave. Pass A reads the
+        // on-screen text only on the v4 (transcripts) prompt, so with transcripts
+        // off this would pay for up to OCR_CAP vision calls producing text
+        // nothing reads — the off-switch has to switch this off too.
+        if (flags.ocr && flags.transcripts) {
           try {
             const ocrBatches = await step.run(`plan-ocr:${platform}`, () =>
               planOcrBatches(clientId, runId, platform as Platform),
@@ -886,7 +890,7 @@ export const runPipeline = inngest.createFunction(
     //
     //     Bounded by OCR_BACKFILL_CAP: a few hundred a run clears the backlog
     //     over a handful of weeks without any single run noticing.
-    if (flags.ocr) {
+    if (flags.ocr && flags.transcripts) {
       const plan = await step
         .run('plan-ocr-backfill', () => planOcrBackfill(clientId))
         .catch((e) => {
@@ -937,7 +941,7 @@ export const runPipeline = inngest.createFunction(
     // flaky for a handful of videos is not a degraded run — each of those rows
     // carries its own tombstone. A 429 still degrades: that is a fact about the
     // account, not about a frame.
-    if (flags.ocr) {
+    if (flags.ocr && flags.transcripts) {
       const ocrDegraded = passADegradation(
         { attempted: ocr.ok + ocr.none + ocr.noImage + ocr.failed, errored: ocr.failed, rateLimited: ocr.rateLimited, firstError: ocr.firstError },
         PASS_A_ERROR_RATIO,
@@ -1399,10 +1403,10 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     transcript_status: string | null; source: string | null; run_id: string | null
     analyzed_run_id: string | null; analyzed_comment_count: number | null; analyzed_prompt_version: string | null
     analyzed_lane: string | null; analyzed_with_transcript: boolean | null
-    analyzed_with_translation: boolean | null
+    analyzed_with_translation: boolean | null; analyzed_with_ocr: boolean | null
   }>(() =>
     admin.from('videos')
-      .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript, analyzed_with_translation')
+      .select('id, platform, video_id, is_client, is_competitor, transcript_status, source, run_id, analyzed_run_id, analyzed_comment_count, analyzed_prompt_version, analyzed_lane, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr')
       .eq('client_id', clientId).in('source', ['discovered', 'owned', 'competitor_owned']).order('id', { ascending: true }),
   )
   // WHICH videos carry a translation, as an id set — deliberately NOT a
@@ -1420,6 +1424,18 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
         // analyzed_with_translation false and re-select as 'translated' every
         // run forever. The wave cannot create such a row; a hand-edit can.
         .not('transcript_en', 'is', null).neq('transcript_en', '')
+        .order('id', { ascending: true }),
+    )).map((r) => r.id),
+  )
+  // WHICH videos carry usable on-screen text, as an id set, for the same reason
+  // the translation is one: ocr_text is prompt-sized and the plan only needs its
+  // null-ness. usableOcr's exact rule — status 'ok' AND non-blank text — so a
+  // row this query calls read and Pass A does not cannot re-select forever.
+  const withOcrText = new Set(
+    (await selectAll<{ id: string }>(() =>
+      admin.from('videos').select('id')
+        .eq('client_id', clientId).eq('ocr_status', 'ok')
+        .not('ocr_text', 'is', null).neq('ocr_text', '')
         .order('id', { ascending: true }),
     )).map((r) => r.id),
   )
@@ -1457,12 +1473,16 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
     // text in English), so it cannot re-select a video the transcripts flag has
     // already taken the transcript away from.
     const translationUsableNow = transcriptUsableNow && translated.has(v.id)
+    // On-screen text needs no transcript — a silent video whose whole argument
+    // is a title card is the case this exists for — but it IS read only on the
+    // v4 prompt, so the transcripts flag still governs whether Pass A sees it.
+    const ocrUsableNow = withTranscripts && withOcrText.has(v.id)
     const lane = passALane({ ...v, transcript_status: withTranscripts ? v.transcript_status : null }, n)
     if (lane === 'skip') continue
     considered++
     if (!incremental && lane === 'claims_only' && v.run_id !== runId) { reasons.unchanged++; continue }
     const d = decideAnalysis({
-      state: v, laneNow: lane, storedComments: n, transcriptUsableNow, translationUsableNow, promptVersion, incremental, force, runId,
+      state: v, laneNow: lane, storedComments: n, transcriptUsableNow, translationUsableNow, ocrUsableNow, promptVersion, incremental, force, runId,
     })
     reasons[d.reason]++
     if (d.select) eligible.push({ id: v.id, n })

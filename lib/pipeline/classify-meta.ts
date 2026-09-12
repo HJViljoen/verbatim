@@ -4,7 +4,7 @@ import { openai } from '../openai'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
 import { logAiCall } from './ai-log'
-import { usableTranscript, usableTranslation } from './transcript-input'
+import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
 import {
   CLASSIFIED_TYPES,
   CLASSIFIED_TYPE_DEFS,
@@ -48,6 +48,8 @@ export interface ClassifyInput {
   transcript: string | null
   transcript_status: string | null
   transcript_en: string | null
+  ocr_text: string | null
+  ocr_status: string | null
 }
 
 /** Is this PostgREST error "that column does not exist"? Postgres raises 42703
@@ -74,12 +76,12 @@ export function planClassifyBatches(
 
 export function buildClassifySystemPrompt(): string {
   return [
-    'You classify social videos for a consumer-intelligence platform, from METADATA ONLY (caption, hashtags, and a speech transcript when one exists). You never see the footage.',
+    'You classify social videos for a consumer-intelligence platform, from METADATA ONLY (caption, hashtags, a speech transcript when one exists, and the text printed on the cover frame when it carries any). You never see the footage.',
     '',
     'For each numbered video block, return one entry with its "ref" (e.g. "v1") and:',
     '- classified_type: one of the types defined below — or null if the metadata is too thin to tell.',
     '- hook_style: one of the hook styles defined below — how the video OPENS. Null if you cannot tell.',
-    '- hook_text: the verbatim opening hook, copied from the start of the transcript or the caption. Never invent or paraphrase; null if neither shows a real hook. When a block shows both a "transcript" and a "transcript (English)", copy the hook from the "transcript" line — the original words, in their own language. The English is there to help you understand, and is never the hook.',
+    '- hook_text: the verbatim opening hook, copied from the start of the transcript, the "on-screen text" line, or the caption. Never invent or paraphrase; null if none shows a real hook. On short-form video the hook is very often TYPED on the cover rather than spoken — when the on-screen text carries the opening claim, that IS the hook. When a block shows both a "transcript" and a "transcript (English)", copy the hook from the "transcript" line — the original words, in their own language. The English is there to help you understand, and is never the hook.',
     '- topics: 1-4 short lowercase topics the video is about. Empty array if unknowable.',
     `- sentiment: one of ${VIDEO_SENTIMENTS.join(', ')} for the video's own framing — or null.`,
     '',
@@ -108,6 +110,13 @@ export function buildClassifyUserPrompt(videos: ClassifyInput[]): string {
       // English rendering stored as the video's own words. The original stays
       // first and stays labelled `transcript:`, which is what the prompt tells
       // the model to copy the hook from.
+      // The cover frame's text (WP7b, 2026-09-12), before the transcript: hook
+      // detection is exactly what a typed hook affects, and a silent video whose
+      // whole claim is a title card has nothing else to classify on. Newlines
+      // flattened to " / " so one video stays one prompt block — the separator
+      // keeps the reader from running two cards into one sentence.
+      const ocr = usableOcr(v)
+      if (ocr) lines.push(`on-screen text (cover frame): ${ocr.split('\n').join(' / ')}`)
       const transcript = usableTranscript(v)
       if (transcript) lines.push(`transcript: ${transcript}`)
       const translation = transcript ? usableTranslation(v) : null
@@ -182,7 +191,7 @@ export async function runClassifyMetaBatch(
   const videos = await selectAll<ClassifyInput & { classified_type: string | null }>(() =>
     admin
       .from('videos')
-      .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, classified_type')
+      .select('id, platform, account_name, caption, hashtags, transcript, transcript_en, transcript_status, ocr_text, ocr_status, classified_type')
       .eq('client_id', clientId)
       .in('id', videoIds)
       .order('id'),

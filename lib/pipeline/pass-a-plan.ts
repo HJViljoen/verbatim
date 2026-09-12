@@ -24,6 +24,10 @@ export interface VideoAnalysisState {
    *  written before the column existed — read as false, so the historical
    *  non-English corpus is re-read once when its translation lands. */
   analyzed_with_translation: boolean | null
+  /** WP7b: did the last read see an ON-SCREEN TEXT block? Null on rows written
+   *  before the column existed — read as false, so a video whose cover is read
+   *  later is re-read once. */
+  analyzed_with_ocr: boolean | null
 }
 
 /** Why a video was (or wasn't) selected — surfaced in the plan-pass-a step
@@ -35,6 +39,7 @@ export type SelectReason =
   | 'grew'       // stored comment rows grew past the growth rule
   | 'transcript' // a usable transcript exists now and wasn't in the last read
   | 'translated' // an English translation of that transcript exists now and wasn't in the last read
+  | 'ocr'        // on-screen text from the cover frame exists now and wasn't in the last read
   | 'lane'       // lane changed (e.g. claims_only → full after crossing the floor)
   | 'version'    // Pass A prompt version bumped → one-off full re-read
   | 'unchanged'  // nothing the prompt sees has changed → reuse the stored analysis
@@ -49,6 +54,10 @@ export interface DecideAnalysisArgs {
   /** A usable ENGLISH TRANSLATION exists NOW (usableTranslation). False for
    *  English and untranslatable videos, so it can never re-select those. */
   translationUsableNow: boolean
+  /** Usable ON-SCREEN TEXT exists NOW (usableOcr). False for a cover with no
+   *  legible text, no cover at all, or a failed read — so none of those can
+   *  ever re-select a video. */
+  ocrUsableNow: boolean
   /** Current Pass A prompt version (v3/v4 by the transcripts flag). */
   promptVersion: string
   incremental: boolean
@@ -88,6 +97,11 @@ export function decideAnalysis(a: DecideAnalysisArgs): { select: boolean; reason
   // sentence — only the videos that actually gained an English rendering are
   // re-read, instead of the whole corpus on the next run.
   if (a.translationUsableNow && !s.analyzed_with_translation) return { select: true, reason: 'translated' }
+  // WP7b (2026-09-12): the third text a video can gain, on the same mechanism.
+  // This is what buys NOT bumping the Pass A prompt version for the on-screen
+  // text block — only the videos whose cover actually carried text are re-read,
+  // instead of the whole corpus on the next run.
+  if (a.ocrUsableNow && !s.analyzed_with_ocr) return { select: true, reason: 'ocr' }
   // Comment growth only matters to the full lane — the claims lane sends zero
   // comments, so growth below the floor changes nothing it sees (crossing the
   // floor is a lane change, caught above).
@@ -120,5 +134,5 @@ export function staleInsightIds(
 
 /** Tally helper for the plan-pass-a step result. */
 export function emptyReasonTally(): Record<SelectReason, number> {
-  return { flag_off: 0, forced: 0, new: 0, grew: 0, transcript: 0, translated: 0, lane: 0, version: 0, unchanged: 0 }
+  return { flag_off: 0, forced: 0, new: 0, grew: 0, transcript: 0, translated: 0, ocr: 0, lane: 0, version: 0, unchanged: 0 }
 }

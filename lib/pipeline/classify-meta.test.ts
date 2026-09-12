@@ -18,6 +18,8 @@ const input = (id: string, over: Partial<ClassifyInput> = {}): ClassifyInput => 
   transcript: null,
   transcript_en: null,
   transcript_status: null,
+  ocr_text: null,
+  ocr_status: null,
   ...over,
 })
 
@@ -46,6 +48,33 @@ describe('buildClassifyUserPrompt', () => {
     expect(prompt).toContain('transcript: hello from the transcript')
     expect(prompt).not.toContain('la la la') // lyrics-status transcript excluded
     expect(prompt).toContain('caption: (none)')
+  })
+
+  it('shows the cover frame\'s text, before the transcript, only when usable', () => {
+    const prompt = buildClassifyUserPrompt([
+      input('a', { ocr_text: 'DAY 3 OF 30', ocr_status: 'ok', transcript: 'spoken words', transcript_status: 'ok' }),
+      input('b', { ocr_text: 'ignored', ocr_status: 'none' }),
+    ])
+    expect(prompt).toContain('on-screen text (cover frame): DAY 3 OF 30')
+    expect(prompt.indexOf('on-screen text')).toBeLessThan(prompt.indexOf('transcript: spoken words'))
+    expect(prompt).not.toContain('ignored') // 'none' means the frame carried no text
+  })
+
+  it('flattens the blocks with a separator so one video stays one block', () => {
+    const prompt = buildClassifyUserPrompt([input('a', { ocr_text: 'LINE ONE\nline two', ocr_status: 'ok' })])
+    expect(prompt).toContain('on-screen text (cover frame): LINE ONE / line two')
+  })
+
+  it('a silent video with a title card still carries something to classify', () => {
+    const prompt = buildClassifyUserPrompt([input('a', { ocr_text: 'I QUIT MY JOB', ocr_status: 'ok' })])
+    expect(prompt).toContain('I QUIT MY JOB')
+    expect(prompt).not.toContain('transcript:')
+  })
+
+  it('the system prompt says a typed hook IS the hook', () => {
+    const sys = buildClassifySystemPrompt()
+    expect(sys).toContain('the text printed on the cover frame')
+    expect(sys).toContain('the hook is very often TYPED on the cover rather than spoken')
   })
 
   it('system prompt carries the enum vocabularies', () => {

@@ -6,7 +6,7 @@ import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_VIDEO_QUOTE_MAX, estimateC
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
-import { usableTranscript, usableTranslation } from './transcript-input'
+import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
 import type { VideoRow, CommentRow } from './types'
 import { normForMatch } from './quote-match'
 
@@ -65,6 +65,17 @@ import { normForMatch } from './quote-match'
 // its translation landed keeps insights the model drew from text it read in
 // the original, until the next run re-reads it via 'translated'. That is one
 // run of lag, not a permanent split — unlike the classified_type case above.
+//
+// ALSO DELIBERATELY NOT BUMPED for the 2026-09-12 on-screen-text change (WP7b),
+// for exactly the same reason and with exactly the same mechanism. The v4 system
+// prompt gains an ON-SCREEN TEXT rules block and the user prompt gains a labelled
+// [o] block — but ONLY for a video whose cover frame actually carried legible
+// text. For every other video the assembled user prompt is byte-identical and
+// the extra system rules are inert: they describe a block that is not there.
+// The per-video re-read is the 'ocr' SelectReason, bookkept in
+// videos.analyzed_with_ocr. Cost of not bumping: a video analysed before its
+// cover was read keeps insights drawn from speech and comments alone until the
+// next run re-reads it — one run of lag, not a permanent split.
 //
 // To re-label deliberately: bump BOTH constants below (a transcripts-disabled
 // tenant books against PROMPT_VERSION, so bumping only the v4 one would leave
@@ -316,6 +327,14 @@ export function buildSystemPrompt(tc: TrackingConfig, withTranscripts = false): 
     '- CLIENT or COMPETITOR videos: the transcript is brand messaging, NEVER insight evidence — never cite "t" on these. Instead return claims: up to 3 assertions the brand makes about itself, its products, or the market — {claim: the assertion in your words, quote: the VERBATIM transcript line making it}.',
     '- claims come ONLY from CLIENT/COMPETITOR transcripts. Return an empty claims array in every other case.',
     '- Audience insights still come from the comments first; transcript evidence supplements them. Video sentiment stays comment-derived.',
+    '',
+    'ON-SCREEN TEXT rules — an ON-SCREEN TEXT block, labelled "o", may be present: the words printed on the video\'s COVER FRAME, one text block per line, exactly as they appear.',
+    '- This is the creator\'s own words too, typed rather than spoken. On short-form video the hook is very often TYPED on screen and never said out loud, so treat this block as first-class material, not decoration.',
+    '- Ground the classification in it: when the cover carries the opening claim, hook_text should be that text.',
+    '- Industry/other videos: cite it as evidence with the label "o", quoted VERBATIM from the block, one short line or phrase per quote. Same bar as the transcript — an opinion, experience, complaint or claim with consumer-intelligence value.',
+    '- CLIENT or COMPETITOR videos: this is brand messaging. Never cite "o" on these.',
+    '- It is ONE FRAME, not the whole video: a cover often shows a fragment, a channel name, or a caption someone else wrote. Do not extrapolate a story from it, and never treat it as a summary of what the video says.',
+    '- Never merge two lines of the block into one quote. They are separate text blocks that happen to sit on the same frame, and a sentence made by joining them is a sentence nobody wrote.',
   ].join('\n')
 }
 
@@ -327,7 +346,13 @@ interface CommentRef {
 
 /** Exported for tests and for eyeballing the assembled block shape without
  *  spending a call (scripts/translate-transcripts.ts --prompt). */
-export function buildUserPrompt(v: VideoRow, refs: CommentRef[], transcript: string | null = null, translation: string | null = null): string {
+export function buildUserPrompt(
+  v: VideoRow,
+  refs: CommentRef[],
+  transcript: string | null = null,
+  translation: string | null = null,
+  ocr: string | null = null,
+): string {
   const lines: string[] = [
     'VIDEO',
     `- platform: ${v.platform}`,
@@ -337,6 +362,13 @@ export function buildUserPrompt(v: VideoRow, refs: CommentRef[], transcript: str
     `- hashtags: ${(v.hashtags ?? []).join(' ') || '(none)'}`,
     `- format: ${v.content_format ?? '(unknown)'}`,
   ]
+  if (ocr) {
+    // Above the transcript deliberately (WP7b, 2026-09-12): on short-form video
+    // the typed hook is what the viewer reads first, and the label says exactly
+    // what the text is — the COVER FRAME, not the video. A video with no
+    // on-screen text sends the same bytes it always did.
+    lines.push('', 'ON-SCREEN TEXT [o] (cover frame) — quote from this verbatim, one line per text block:', ocr)
+  }
   if (transcript) {
     // Two blocks, and the labels carry the rule (WP6, 2026-09-11): the ORIGINAL
     // is the evidence — it is what the quote validator matches against, and
@@ -394,7 +426,9 @@ interface ValidationResult {
 
 /** v4 transcript context for validation: the exact clipped text the model saw,
  *  and whether this video's transcript may be cited as evidence (industry-other
- *  only — brand-voice vs customer-voice, design 2026-08-08). */
+ *  only — brand-voice vs customer-voice, design 2026-08-08). The on-screen-text
+ *  block (WP7b) takes the same shape and the same rule: it is the creator's own
+ *  words, so a brand's typed hook is brand messaging, not audience evidence. */
 export interface TranscriptCtx {
   text: string
   evidenceAllowed: boolean
@@ -404,12 +438,27 @@ export interface TranscriptCtx {
  *  don't appear (normalisation-tolerant) in the referenced comment. Drop any
  *  insight left with no valid evidence (invariant 3). Language samples get the
  *  same verbatim check — a sample that isn't really in its comment is dropped.
- *  v4: the label "t" cites the transcript — validated against the same clipped
- *  text the model saw, dropped when the owner bucket may not cite it or the
- *  quote exceeds sentence scale (PASS_A_VIDEO_QUOTE_MAX). Exported for tests. */
-export function validateInsights(parsed: PassAVideoOutput, refs: CommentRef[], transcript?: TranscriptCtx): ValidationResult {
+ *  v4: the label "t" cites the transcript, and "o" the on-screen text off the
+ *  cover frame (WP7b) — each validated against the same clipped text the model
+ *  saw, dropped when the owner bucket may not cite it or the quote exceeds
+ *  sentence scale (PASS_A_VIDEO_QUOTE_MAX). Both store source='video': it is
+ *  still the video speaking, so insight_evidence needs no new source value.
+ *  Exported for tests. */
+export function validateInsights(
+  parsed: PassAVideoOutput,
+  refs: CommentRef[],
+  transcript?: TranscriptCtx,
+  ocr?: TranscriptCtx,
+): ValidationResult {
   const byLabel = new Map(refs.map((r) => [r.label.toLowerCase(), r]))
   const transcriptNorm = transcript ? normForMatch(transcript.text) : ''
+  // PER LINE, not one haystack (2026-09-12). normForMatch collapses every run
+  // of whitespace, newlines included, so matching against the joined block would
+  // accept a quote welded out of two separate text blocks that merely share a
+  // frame — a sentence nobody wrote, presented as the creator's own words. One
+  // text block per line is the format the OCR prompt produces, so a real quote
+  // never spans two.
+  const ocrLines = ocr ? ocr.text.split('\n').map((l) => normForMatch(l)).filter(Boolean) : []
   const kept: ValidatedInsight[] = []
   let evidenceDropped = 0
   let insightsDropped = 0
@@ -426,6 +475,25 @@ export function validateInsights(parsed: PassAVideoOutput, refs: CommentRef[], t
           needle.length === 0 ||
           ev.quote.length > PASS_A_VIDEO_QUOTE_MAX ||
           !transcriptNorm.includes(needle)
+        ) {
+          evidenceDropped++
+          continue
+        }
+        validEvidence.push({ realId: null, quote: ev.quote, source: 'video' })
+        continue
+      }
+      if (label === 'o') {
+        // Same gate as "t", against the on-screen text instead. A quote the
+        // block does not contain is the failure this whole feature has to not
+        // have — a model describing a picture, or joining two cards into a
+        // sentence nobody wrote, is caught right here.
+        const needle = normForMatch(ev.quote)
+        if (
+          !ocr?.evidenceAllowed ||
+          ocrLines.length === 0 ||
+          needle.length === 0 ||
+          ev.quote.length > PASS_A_VIDEO_QUOTE_MAX ||
+          !ocrLines.some((line) => line.includes(needle))
         ) {
           evidenceDropped++
           continue
@@ -741,6 +809,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
           analyzed_lane: 'skip',
           analyzed_with_transcript: useTranscripts && usableTranscript(v) !== null,
           analyzed_with_translation: useTranscripts && usableTranscript(v) !== null && usableTranslation(v) !== null,
+          analyzed_with_ocr: useTranscripts && usableOcr(v) !== null,
         }).eq('id', v.id)
       }
       continue
@@ -754,7 +823,15 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     const refs: CommentRef[] = claimsOnly ? [] : kept.map((c, i) => ({ label: `c${i + 1}`, realId: c.id, text: c.text ?? '' }))
     const transcript = useTranscripts ? usableTranscript(v) : null
     const translation = transcript ? usableTranslation(v) : null
-    const userPrompt = buildUserPrompt(v, refs, transcript, translation)
+    // On-screen text rides the v4 (transcripts) prompt: the [o] rules are stated
+    // inside the transcript addendum, and with transcripts off Pass A gets the
+    // v3 prompt, which has no video-evidence machinery at all. That is also why
+    // the OCR waves are gated on flags.transcripts — paying to read covers
+    // nothing would read is the trap the translation wave already avoided.
+    // NOT gated on the transcript existing: a silent video whose whole argument
+    // is a title card is exactly the case this feature was built for.
+    const ocr = useTranscripts ? usableOcr(v) : null
+    const userPrompt = buildUserPrompt(v, refs, transcript, translation, ocr)
 
     if (dryRun) {
       const estInputTokens = Math.ceil((systemPrompt.length + userPrompt.length) / 4)
@@ -829,7 +906,12 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
     // Brand-voice vs customer-voice: only industry-other videos may cite the
     // transcript as evidence; client/competitor transcripts yield claims.
     const ownerIndustry = !v.is_client && !v.is_competitor
-    const validation = validateInsights(parsed, refs, transcript ? { text: transcript, evidenceAllowed: ownerIndustry } : undefined)
+    const validation = validateInsights(
+      parsed,
+      refs,
+      transcript ? { text: transcript, evidenceAllowed: ownerIndustry } : undefined,
+      ocr ? { text: ocr, evidenceAllowed: ownerIndustry } : undefined,
+    )
     const claims = !useTranscripts
       ? null
       : ownerIndustry
@@ -871,7 +953,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
         claims: claims?.kept ?? null,
         claimsOnly,
         bookkeeping: trackAnalysis
-          ? { storedComments: all.length, promptVersion, lane: claimsOnly ? 'claims_only' : 'full', withTranscript: transcript !== null, withTranslation: translation !== null }
+          ? { storedComments: all.length, promptVersion, lane: claimsOnly ? 'claims_only' : 'full', withTranscript: transcript !== null, withTranslation: translation !== null, withOcr: ocr !== null }
           : null,
       })
       await logCall(admin, {
@@ -921,7 +1003,7 @@ interface PersistArgs {
   /** Incremental Pass A (2026-08-17): what this read saw, written onto the
    *  video LAST so the pointer only moves once every row is in. Null = harness
    *  run (trackAnalysis:false): rows are written, the pointer is not moved. */
-  bookkeeping: { storedComments: number; promptVersion: string; lane: 'full' | 'claims_only'; withTranscript: boolean; withTranslation: boolean } | null
+  bookkeeping: { storedComments: number; promptVersion: string; lane: 'full' | 'claims_only'; withTranscript: boolean; withTranslation: boolean; withOcr: boolean } | null
 }
 
 async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: PersistArgs): Promise<void> {
@@ -1053,6 +1135,7 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
     analyzed_lane: bookkeeping.lane,
     analyzed_with_transcript: bookkeeping.withTranscript,
     analyzed_with_translation: bookkeeping.withTranslation,
+    analyzed_with_ocr: bookkeeping.withOcr,
   }).eq('id', video.id)
   if (bkErr) throw new Error(`update video analysis bookkeeping: ${bkErr.message}`)
 }
