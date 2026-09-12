@@ -39,10 +39,15 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
   // Adjusted during render (React's own pattern for "state derived from a prop
   // that just changed") rather than in an effect, which would render the sheet
   // once more before closing it.
-  const [settled, setSettled] = useState(false)
-  if (state.ok !== settled) {
-    setSettled(state.ok)
-    if (state.ok && open) setOpen(false)
+  //
+  // Keyed on the created id, not on `state.ok`: `ok` latches true after the
+  // first create and never changes again, so a second initiative declared from
+  // the same theme card left the sheet open with the first one's "Tracking it
+  // from today." still showing. Every create returns a new id.
+  const [lastCreated, setLastCreated] = useState<string | undefined>(undefined)
+  if (state.ok && state.id && state.id !== lastCreated) {
+    setLastCreated(state.id)
+    if (open) setOpen(false)
   }
 
   return (
@@ -83,7 +88,10 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
               </Field>
               <div className="flex items-center gap-3 pt-1">
                 <Button type="submit" size="sm" disabled={pending}>{pending ? 'Saving…' : 'Track it'}</Button>
-                {state.message && (
+                {/* A success message the sheet has already closed on is stale
+                    by the time anyone reopens it — say nothing rather than
+                    "Tracking it from today." about last week's initiative. */}
+                {state.message && !(state.ok && state.id === lastCreated) && (
                   <span className={`text-[11.5px] ${state.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">{state.message}</span>
                 )}
               </div>
