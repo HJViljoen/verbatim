@@ -512,11 +512,16 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   if (full) {
     const wanted = [...tiers.confirmed].sort((a, b) => b.evidence_count - a.evidence_count).slice(0, EXPORT_FULL_MAX_ITEMS)
     const ids = wanted.flatMap((t) => t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME))
+    // selectAll per chunk, not a bare select: evidence rows per insight are
+    // unbounded, and a chunk of 120 insights at ~9 rows each is already past
+    // the 1000-row cap — which truncates silently, so quotes would just be
+    // missing from an exported deck with nothing saying so. `.order('id')` is
+    // the stable tiebreaker range paging needs (relevance_rank is not unique).
     const rows: EvidenceRow[] = []
     for (const part of chunk(ids, 120)) {
-      const res = await supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
-        .in('audience_insight_id', part).order('relevance_rank', { ascending: true })
-      rows.push(...readRows<EvidenceRow>(res, 'voice.allThemesEvidence'))
+      rows.push(...await selectAll<EvidenceRow>(() =>
+        supabase.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, redacted')
+          .in('audience_insight_id', part).order('relevance_rank', { ascending: true }).order('id')))
     }
     const byInsight = new Map<string, EvidenceRow[]>()
     for (const r of rows) byInsight.set(r.audience_insight_id, [...(byInsight.get(r.audience_insight_id) ?? []), r])
