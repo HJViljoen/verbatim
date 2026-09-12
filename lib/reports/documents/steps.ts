@@ -153,7 +153,7 @@ export async function checkStep(admin: SupabaseClient, ctx: BuildContext, w: Pic
 export async function freezeStep(
   admin: SupabaseClient,
   ctx: BuildContext,
-  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped'> | null; costUsd: number; timings: Record<string, number> },
+  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped' | 'brief'> | null; costUsd: number; timings: Record<string, number> },
 ): Promise<FreezeOut> {
   // A retried step must not freeze twice: the row already names its snapshot.
   if (ctx.buildId) {
@@ -176,6 +176,8 @@ export async function freezeStep(
     ? {
         verdicts: Object.fromEntries(args.check.verdicts.filter((v) => v.verdict !== 'contradicts').map((v) => [v.headline, v.verdict as 'echoes' | 'silent'])),
         dropped: args.check.dropped,
+        // Why a build asks to be read, when no finding was dropped (WP7d).
+        brief: args.check.brief ?? null,
       }
     : null
   const { data, workings } = composeDocument({

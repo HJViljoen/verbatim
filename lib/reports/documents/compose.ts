@@ -131,7 +131,7 @@ export interface ComposeArgs {
   timings: Record<string, number>
   /** The self-check's outcome, when it ran: a verdict per surviving finding
    *  headline and the findings it dropped (lib/reports/documents/check.ts). */
-  check?: { verdicts: Record<string, 'echoes' | 'silent'>; dropped: { headline: string; reason: string }[] } | null
+  check?: { verdicts: Record<string, 'echoes' | 'silent'>; dropped: { headline: string; reason: string }[]; brief?: { answered: boolean; subjects: string[]; missed: string[] } | null } | null
 }
 
 export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; workings: DocumentWorkings } {
@@ -423,6 +423,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     blocks: blocksW,
     concerns: s.concerns.map((c) => ({ label: c.label, buckets: c.buckets.map((b) => ({ bucket: b.bucket, label: b.label, evidenceCount: b.evidenceCount })), total: c.total, trajectory: c.trajectory })),
     dropped,
+    ...(a.check?.brief ? { brief: a.check.brief } : {}),
     heldBack: s.heldBackPhrases,
     costUsd: a.costUsd,
     timings: a.timings,

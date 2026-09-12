@@ -57,25 +57,29 @@ export function briefSubjects(brief: string | null | undefined): string[] {
  * look at, never dropped. It is deliberately a floor and not a grade: a
  * faithful answer may paraphrase every word of the brief, and this test
  * cannot see that, so it only catches the writer that went somewhere else
- * entirely.
+ * entirely. Whole words only, and the brief's first words decide: a
+ * substring test passed "fit" on "benefit" and never fired.
  */
 export function briefAnswered(brief: string | null | undefined, written: WriterOutput): { answered: boolean; subjects: string[]; missed: string[] } {
   const subjects = briefSubjects(brief)
   if (!subjects.length) return { answered: true, subjects, missed: [] }
   const haystack = writtenText(written)
-  const hit = (w: string) => haystack.includes(w) || haystack.includes(singular(w))
+  // Whole words only: substring matching passed "fit" on "benefit" and
+  // "profit", which made the test inert. A regular plural in the document
+  // still answers a singular in the brief ("strap" / "straps"); an irregular
+  // one does not, and that is the price of not guessing.
+  const hit = (w: string) => new RegExp(`\\b${escapeRe(w)}(?:s|es)?\\b`).test(haystack)
   const missed = subjects.filter((w) => !hit(w))
-  return { answered: missed.length < subjects.length, subjects, missed }
+  // The FIRST words of a brief are its subject; the tail is usually the
+  // reader ("for the marketing lead"). A document that answers none of the
+  // first three is not writing about what was asked.
+  return { answered: subjects.slice(0, BRIEF_DECIDING_SUBJECTS).some((w) => !missed.includes(w)), subjects, missed }
 }
 
-/** Enough of a stemmer for one job: the brief says "batteries" and the brief
- *  writer wrote "battery". */
-function singular(w: string): string {
-  if (w.endsWith('ies') && w.length > 4) return `${w.slice(0, -3)}y`
-  if (w.endsWith('es') && w.length > 4) return w.slice(0, -2)
-  if (w.endsWith('s') && !w.endsWith('ss')) return w.slice(0, -1)
-  return w
-}
+/** How many of the brief's own words decide whether it was answered. */
+export const BRIEF_DECIDING_SUBJECTS = 3
+
+const escapeRe = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** Every word the writer wrote, in one lowercase string. */
 function writtenText(w: WriterOutput): string {

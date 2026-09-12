@@ -234,6 +234,10 @@ export interface DocumentWorkings {
   concerns: { label: string; buckets: { bucket: string; label: string; evidenceCount: number }[]; total: number; trajectory: string }[]
   /** Findings the self-check dropped, with the contradicting read. */
   dropped: { headline: string; reason: string }[]
+  /** Custom briefs: whether the operator's own brief was answered, and the
+   *  words of it the document never took up. This is WHY a build that
+   *  dropped nothing can still ask to be read before it is sent. */
+  brief?: { answered: boolean; subjects: string[]; missed: string[] } | null
   heldBack: number
   costUsd: number
   timings: Record<string, number>
