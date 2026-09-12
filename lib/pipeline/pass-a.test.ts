@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence } from './pass-a'
+import { validateInsights, validateClaims, buildSystemPrompt, buildUserPrompt, passALane, isVideoEvidence, missingBookkeepingColumn } from './pass-a'
 import { usableOcr, usableTranscript } from './transcript-input'
 import { OCR_PROMPT_CHARS, PASS_A_VIDEO_QUOTE_MAX, TRANSCRIPT_PROMPT_CHARS } from '../config'
 import type { PassAVideoOutput, PassAInsight } from './schemas'
@@ -456,5 +456,31 @@ describe('passALane — the comment floor vs the Wave 4 claims lane', () => {
     const theirs = { ...yt({ is_competitor: true, transcript_status: 'ok' }), source: 'competitor_owned' }
     expect(passALane(theirs, 200)).toBe('claims_only')
     expect(passALane({ ...theirs, transcript_status: 'no_media' }, 200)).toBe('skip')
+  })
+})
+
+describe('missingBookkeepingColumn — the bookkeeping seatbelt is generic, not per-column', () => {
+  const pgrst = (column: string) => ({ code: '42703', message: `column "${column}" of relation "videos" does not exist` })
+
+  it('names either optional flag, so a deploy that lands before either migration still moves the pointer', () => {
+    expect(missingBookkeepingColumn(pgrst('analyzed_with_ocr'))?.column).toBe('analyzed_with_ocr')
+    expect(missingBookkeepingColumn(pgrst('analyzed_with_translation'))?.column).toBe('analyzed_with_translation')
+  })
+
+  it('points at the migration to apply', () => {
+    expect(missingBookkeepingColumn(pgrst('analyzed_with_translation'))?.migration).toBe('20260911141000_transcript_en.sql')
+    expect(missingBookkeepingColumn(pgrst('analyzed_with_ocr'))?.migration).toBe('20260912100000_ocr_text.sql')
+  })
+
+  it('reads a schema-cache miss (PGRST204) the same way', () => {
+    expect(missingBookkeepingColumn({ code: 'PGRST204', message: "Could not find the 'analyzed_with_translation' column of 'videos' in the schema cache" })?.column)
+      .toBe('analyzed_with_translation')
+  })
+
+  it('does not swallow a real write failure — only these two columns, only 42703/PGRST204', () => {
+    expect(missingBookkeepingColumn(pgrst('analyzed_lane'))).toBeNull()
+    expect(missingBookkeepingColumn({ code: '23514', message: 'new row violates check constraint "videos_analyzed_lane_check"' })).toBeNull()
+    expect(missingBookkeepingColumn({ message: 'analyzed_with_ocr' })).toBeNull()
+    expect(missingBookkeepingColumn(null)).toBeNull()
   })
 })

@@ -103,28 +103,49 @@ export function passAPromptVersion(useTranscripts: boolean): string {
   return useTranscripts ? PROMPT_VERSION_V4 : PROMPT_VERSION
 }
 
+/** Bookkeeping flags whose migration may not have landed yet, and the file that
+ *  adds each. Both arrived in the same batch (2026-09-11/12), so a deploy-first
+ *  can be missing either or both. */
+const OPTIONAL_BOOKKEEPING_COLUMNS: readonly { column: string; migration: string }[] = [
+  { column: 'analyzed_with_translation', migration: '20260911141000_transcript_en.sql' },
+  { column: 'analyzed_with_ocr', migration: '20260912100000_ocr_text.sql' },
+]
+
+/** Which optional bookkeeping flag, if any, this write error says is missing.
+ *  Pure so the branching is tested without a DB. */
+export function missingBookkeepingColumn(error: unknown): { column: string; migration: string } | null {
+  return OPTIONAL_BOOKKEEPING_COLUMNS.find((c) => isMissingColumnError(error, c.column)) ?? null
+}
+
 /**
- * Write a videos bookkeeping patch, dropping `analyzed_with_ocr` if the column
- * is not there yet.
+ * Write a videos bookkeeping patch, dropping any optional flag whose column is
+ * not there yet.
  *
  * A deploy can land before its migration (classify-meta carries the same
  * pattern for classified_prompt_version). Without this, EVERY Pass A video
  * errors on the bookkeeping write after a deploy-first, which loses the whole
  * run's analysis pointer — a far worse outcome than one missing boolean.
+ *
+ * Generic over the flags rather than one of them: an error names ONE column, so
+ * guarding `analyzed_with_ocr` alone left `analyzed_with_translation` beside it
+ * to throw the whole run away. The loop is bounded by the flag list, which is
+ * also how a deploy missing both migrations still gets its pointer moved.
  */
 async function updateBookkeeping(
   admin: ReturnType<typeof createAdminClient>,
   videoId: string,
   patch: Record<string, unknown>,
 ): Promise<{ error: { message: string } | null }> {
-  const { error } = await admin.from('videos').update(patch).eq('id', videoId)
-  if (error && isMissingColumnError(error, 'analyzed_with_ocr')) {
-    console.warn('[pass-a] videos.analyzed_with_ocr does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Bookkeeping without it; those rows re-read once when it lands.')
-    const { analyzed_with_ocr: _dropped, ...rest } = patch
-    void _dropped
-    return admin.from('videos').update(rest).eq('id', videoId)
+  const attempt: Record<string, unknown> = { ...patch }
+  let result: { error: { message: string } | null } = await admin.from('videos').update(attempt).eq('id', videoId)
+  for (let i = 0; i < OPTIONAL_BOOKKEEPING_COLUMNS.length && result.error; i++) {
+    const missing = missingBookkeepingColumn(result.error)
+    if (!missing || !(missing.column in attempt)) break
+    console.warn(`[pass-a] videos.${missing.column} does not exist — apply supabase/migrations/${missing.migration}. Bookkeeping without it; those rows re-read once when it lands.`)
+    delete attempt[missing.column]
+    result = await admin.from('videos').update(attempt).eq('id', videoId)
   }
-  return { error }
+  return { error: result.error }
 }
 
 /** Parsed model output — v3 shape, with v4's claims present when the v4 schema ran. */
@@ -891,7 +912,7 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
       // re-load this video every run until its comments actually grow — the
       // pointer moves to this run, so any older rows become stale and prune.
       if (persist && trackAnalysis && runId) {
-        await updateBookkeeping(admin, v.id, {
+        const { error: skipBkErr } = await updateBookkeeping(admin, v.id, {
           analyzed_at: new Date().toISOString(),
           analyzed_run_id: runId,
           analyzed_comment_count: all.length,
@@ -901,6 +922,11 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
           analyzed_with_translation: useTranscripts && usableTranscript(v) !== null && usableTranslation(v) !== null,
           analyzed_with_ocr: useTranscripts && usableOcr(v) !== null,
         })
+        // Logged, not thrown: a skip produced no rows, so there is no pointer to
+        // strand and failing the batch over it would throw away the videos that
+        // DID analyse. But it was silent before, and a silent failure here means
+        // the video re-plans every run forever with nothing to show for it.
+        if (skipBkErr) console.error(`[pass-a] skip bookkeeping failed for video ${v.id} (${v.platform} ${v.video_id}, run ${runId}) — it will be re-planned next run: ${skipBkErr.message}`)
       }
       continue
     }
