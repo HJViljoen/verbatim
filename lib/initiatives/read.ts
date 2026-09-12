@@ -1,4 +1,5 @@
 import { selectAll } from '../supabase-admin'
+import { rows as readRows } from '../pages/read'
 import { shortDate } from '../format'
 import { measureInitiative, initiativeLine, wentTheirWay, type InitiativeVerdict, type ObservationPoint } from './measure'
 import { toInitiative, type InitiativeDbRow, type InitiativeDirection } from './types'
@@ -56,14 +57,17 @@ export async function loadInitiatives(
   supabase: any,
   clientId: string,
 ): Promise<InitiativesData> {
-  const { data: declared } = await supabase
+  // Through `rows()`: a failed read and "nothing declared" are the same empty
+  // tile, and only the server log can tell them apart. The tile degrades, the
+  // failure is said out loud.
+  const declared = await supabase
     .from('initiatives')
     .select('id, title, goal, registry_ids, competitor_name, direction, started_at, status, created_at')
     .eq('client_id', clientId)
     .eq('status', 'active')
     .order('created_at', { ascending: true })
 
-  const initiatives = ((declared ?? []) as InitiativeDbRow[]).map(toInitiative).filter((i) => i.registryIds.length > 0)
+  const initiatives = readRows<InitiativeDbRow>(declared, 'initiatives.declared').map(toInitiative).filter((i) => i.registryIds.length > 0)
   if (initiatives.length === 0) return { rows: [], total: 0 }
 
   const earliest = initiatives.map((i) => i.startedAt).sort()[0]

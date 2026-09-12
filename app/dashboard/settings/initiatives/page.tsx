@@ -3,6 +3,7 @@ import { SettingsFrame, SettingsCard } from '@/components/settings-frame'
 import { InitiativeRowForm } from './initiative-row'
 import { getSessionContext } from '@/lib/auth'
 import { weekdayDate } from '@/lib/format'
+import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 
 // Settings › Initiatives — the list of what this workspace declared it is
@@ -13,7 +14,7 @@ import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
 export default async function InitiativesSettingsPage() {
   const { supabase, clientId } = await getSessionContext()
 
-  const [{ data: client }, { data: rows }] = await Promise.all([
+  const [clientRes, initiativesRes] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase
       .from('initiatives')
@@ -22,16 +23,17 @@ export default async function InitiativesSettingsPage() {
       .order('created_at', { ascending: false }),
   ])
 
-  const initiatives = ((rows ?? []) as InitiativeDbRow[]).map(toInitiative)
+  const client = row<{ company_name: string | null }>(clientRes, 'initiatives.client')
+  const initiatives = readRows<InitiativeDbRow>(initiativesRes, 'initiatives.list').map(toInitiative)
   const active = initiatives.filter((i) => i.status === 'active')
 
   // Theme names for the rows — read once, by identity. A label is display only:
   // it is the registry id that the measurement follows.
   const registryIds = [...new Set(initiatives.flatMap((i) => i.registryIds))]
-  const { data: registry } = registryIds.length
+  const registryRes = registryIds.length
     ? await supabase.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', registryIds)
-    : { data: [] }
-  const labelById = new Map(((registry ?? []) as { id: string; canonical_label: string }[]).map((r) => [r.id, r.canonical_label]))
+    : { data: [], error: null }
+  const labelById = new Map(readRows<{ id: string; canonical_label: string }>(registryRes, 'initiatives.registry').map((r) => [r.id, r.canonical_label]))
 
   return (
     <SettingsFrame
