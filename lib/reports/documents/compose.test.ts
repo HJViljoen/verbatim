@@ -204,11 +204,30 @@ describe('pickQuote and thinWeek', () => {
 })
 
 describe('the skeleton walk (2026-09-02)', () => {
-  const compose = (template: DocumentTemplate, w: Partial<WriterOutput> = {}, s: Signals = signals) =>
+  const compose = (template: DocumentTemplate, w: Partial<WriterOutput> = {}, s: Signals = signals, settings = DEFAULT_DOCUMENT_SETTINGS) =>
     composeDocument({
-      template, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 't', period: 'Update of 30 Aug 2026',
+      template, settings, reportId: 'rep', title: 't', period: 'Update of 30 Aug 2026',
       signals: s, answers, written: { ...written, ...w }, figures: documentFigures(s, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
     })
+
+  it('freezes what the document was composed from, so the skeleton can be rebuilt', () => {
+    const settings = { ...DEFAULT_DOCUMENT_SETTINGS, brief: 'Review how comfort moved.', role: 'market_brief' as const, blocks: ['competitive_analysis' as const, 'consumer_profiles' as const] }
+    const { data } = compose(resolveTemplate(CUSTOM_BRIEF, settings), {}, signals, settings)
+    expect(data.template).toBe('custom')
+    expect(data.blocks).toEqual(['competitive_analysis', 'consumer_profiles'])
+    expect(data.role).toBe('market_brief')
+    expect(data.brief).toBe('Review how comfort moved.')
+    // Rebuilding from what was frozen gives back the skeleton that was printed.
+    const again = resolveTemplate(CUSTOM_BRIEF, { ...DEFAULT_DOCUMENT_SETTINGS, blocks: data.blocks, role: data.role, brief: data.brief })
+    expect(again.skeleton.map((p) => p.kind)).toEqual(['in_short', 'finding', 'competitor', 'personas', 'method'])
+  })
+
+  it('freezes nothing extra on the four fixed templates', () => {
+    const { data } = compose(SALES_BRIEF)
+    expect(data.blocks).toBeUndefined()
+    expect(data.role).toBeUndefined()
+    expect(data.brief).toBeUndefined()
+  })
 
   it('prints the pages the template asks for and no others', () => {
     const kinds = (t: DocumentTemplate, w: Partial<WriterOutput> = {}) => [...new Set(compose(t, w).data.pages.map((p) => p.kind))]

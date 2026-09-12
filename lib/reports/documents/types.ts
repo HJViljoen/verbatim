@@ -176,6 +176,16 @@ export interface DocumentSnapshotData {
   figures: FigureTable
   delta: RunDelta | null
   pages: DocPage[]
+  /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
+   *  the template key so a later reader (the structural eval, a rebuild, a
+   *  person) can put the same skeleton back together. Absent on the four
+   *  fixed templates, whose skeleton is the template's own, and on any
+   *  document built before this was frozen. */
+  blocks?: DocumentBlockKey[]
+  role?: DocumentRole
+  /** The operator's own instruction, as they wrote it. Operator prose, never
+   *  a comment's words. */
+  brief?: string
   /** How this template names a finding's consequence, frozen with the
    *  document so the deck and the email read the snapshot rather than a
    *  template that may have been renamed since (templates.ts Lens). */

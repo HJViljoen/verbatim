@@ -395,6 +395,11 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     figures,
     delta: s.delta,
     pages,
+    // What the skeleton above was composed from, so it can be composed again
+    // (WP7d): the eval and any rebuild read these, not the picker.
+    ...(a.settings.blocks?.length ? { blocks: a.settings.blocks } : {}),
+    ...(a.settings.role ? { role: a.settings.role } : {}),
+    ...(a.settings.brief ? { brief: a.settings.brief } : {}),
     lens: { means: a.template.lens.means, short: a.template.lens.short },
     method: {
       conversations: s.run.conversations,
