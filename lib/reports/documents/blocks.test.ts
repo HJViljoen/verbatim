@@ -163,6 +163,19 @@ describe('composeAnchors', () => {
     expect(composeAnchors(SALES_BRIEF, s).map((a) => a.id)).toEqual(SALES_BRIEF.anchors.map((a) => a.id))
   })
 
+  it('asks nothing for a block whose pages the template already prints', () => {
+    // The market brief prints personas pages of its own, so the consumer
+    // profiles block adds no page and must cost no research question.
+    const s = settings({ blocks: ['consumer_profiles'] })
+    expect(composeSkeleton(MARKET_BRIEF, s)).toBe(MARKET_BRIEF.skeleton)
+    expect(composeAnchors(MARKET_BRIEF, s)).toBe(MARKET_BRIEF.anchors)
+    expect(resolveTemplate(MARKET_BRIEF, s)).toBe(MARKET_BRIEF)
+    // A block that does add a page is still asked about, in the same patch.
+    const both = settings({ blocks: ['consumer_profiles', 'content_performance'] })
+    expect(composeAnchors(MARKET_BRIEF, both).map((a) => a.id))
+      .toEqual([...MARKET_BRIEF.anchors.map((a) => a.id), 'unanswered', 'watch', 'more'])
+  })
+
   it('takes the caller\'s brief questions when it is given them', () => {
     const s = settings({ brief: 'ignored because the caller asked its own' })
     const ids = composeAnchors(CUSTOM_BRIEF, s, [{ id: 'brief1', text: 'A question the caller wrote.' }]).map((a) => a.id)

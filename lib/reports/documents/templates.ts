@@ -375,21 +375,31 @@ export function blockKeysFor(t: DocumentTemplate, settings: Pick<DocumentSetting
  * template's skeleton is returned UNCHANGED, by identity.
  */
 export function composeSkeleton(t: DocumentTemplate, settings: Pick<DocumentSettings, 'blocks'>): SkeletonPage[] {
-  const keys = blockKeysFor(t, settings)
-  if (!keys.length) return t.skeleton
-  const have = new Set<DocPageKind>(t.skeleton.map((p) => p.kind))
+  const { extra } = blockPages(t, blockKeysFor(t, settings))
+  if (!extra.length) return t.skeleton
+  const at = t.skeleton.findIndex((p) => p.kind === 'method')
+  const cutAt = at < 0 ? t.skeleton.length : at
+  return [...t.skeleton.slice(0, cutAt), ...extra, ...t.skeleton.slice(cutAt)]
+}
+
+/** The pages the selected blocks add, and which blocks actually added one. A
+ *  block whose every page the template already prints contributes nothing, so
+ *  its questions are not asked either: a paid research question whose page
+ *  never prints is money spent on nothing. */
+function blockPages(t: DocumentTemplate, keys: DocumentBlockKey[]): { extra: SkeletonPage[]; adding: Set<DocumentBlockKey> } {
+  const adding = new Set<DocumentBlockKey>()
   const extra: SkeletonPage[] = []
+  if (!keys.length) return { extra, adding }
+  const have = new Set<DocPageKind>(t.skeleton.map((p) => p.kind))
   for (const key of keys) {
     for (const page of DOCUMENT_BLOCKS[key].skeleton) {
       if (have.has(page.kind)) continue
       have.add(page.kind)
       extra.push(page)
+      adding.add(key)
     }
   }
-  if (!extra.length) return t.skeleton
-  const at = t.skeleton.findIndex((p) => p.kind === 'method')
-  const cutAt = at < 0 ? t.skeleton.length : at
-  return [...t.skeleton.slice(0, cutAt), ...extra, ...t.skeleton.slice(cutAt)]
+  return { extra, adding }
 }
 
 /** The operator's brief as researcher questions: its sentences, in order, at
@@ -414,15 +424,17 @@ export function briefAnchors(brief: string | null | undefined): AnchorQuestion[]
 
 /** The anchors a build asks: the operator's brief first (a custom brief's
  *  question is the point of it), then the template's own, then each selected
- *  block's, deduplicated by id. Unchanged, by identity, when there is neither
- *  a brief nor a block. */
+ *  block's, deduplicated by id. Only a block that actually ADDS a page is
+ *  asked about: its questions pay for its pages. Unchanged, by identity, when
+ *  there is neither a brief nor a block that adds anything. */
 export function composeAnchors(t: DocumentTemplate, settings: Pick<DocumentSettings, 'blocks' | 'brief'>, briefQuestions?: AnchorQuestion[]): AnchorQuestion[] {
   const first = briefQuestions ?? briefAnchors(settings.brief)
-  const keys = blockKeysFor(t, settings)
-  if (!first.length && !keys.length) return t.anchors
+  const { adding } = blockPages(t, blockKeysFor(t, settings))
+  if (!first.length && !adding.size) return t.anchors
   const out = [...first, ...t.anchors]
   const seen = new Set(out.map((a) => a.id))
-  for (const key of keys) {
+  for (const key of blockKeysFor(t, settings)) {
+    if (!adding.has(key)) continue
     for (const a of DOCUMENT_BLOCKS[key].anchors) {
       if (seen.has(a.id)) continue
       seen.add(a.id)
