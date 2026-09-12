@@ -9,6 +9,7 @@
 //     its 0–10 scale) but is never shown — what the page prints is conversations
 //     (evidence_count), a real count.
 
+import { VIDEO_EVIDENCE_WEIGHT } from './config'
 import { CURATION_GATE } from './curation'
 import { bucketKind, type Bucket } from './dashboard-tiles'
 
@@ -217,10 +218,21 @@ export function themeMovers(trajectories: Trajectory[]): Trajectory[] {
  *  same winner — a chip that says one thing and opens a card saying another is
  *  the mismatch the chips were fixed to end (A1) — and two copies of an
  *  ordering rule drift. */
-export interface ThemeLeadRow { evidence_count: number; rank_score?: number | null }
+export interface ThemeLeadRow { evidence_count: number; video_evidence_count?: number | null; rank_score?: number | null }
+
+/** Conversations, counting one where a creator said it ON CAMERA as
+ *  VIDEO_EVIDENCE_WEIGHT of one (WP7a) — the same weighted count `themeRank`
+ *  scores with, and clamped the same way, so the theme a page leads with and
+ *  the theme the pipeline ranked highest cannot disagree. Without this the
+ *  weight moved nothing a client sees: `evidence_count` is unchanged by it and
+ *  it decided the lead outright, with rank_score only a tie-break. */
+export function themeLeadCount(t: ThemeLeadRow): number {
+  const onCamera = Math.min(Math.max(0, Number(t.video_evidence_count ?? 0)), t.evidence_count)
+  return t.evidence_count + (VIDEO_EVIDENCE_WEIGHT - 1) * onCamera
+}
 
 export function byThemeLead(a: ThemeLeadRow, b: ThemeLeadRow): number {
-  return b.evidence_count - a.evidence_count || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0)
+  return themeLeadCount(b) - themeLeadCount(a) || Number(b.rank_score ?? 0) - Number(a.rank_score ?? 0)
 }
 
 /** "3 said on camera" — the on-camera share of a theme's conversations, or

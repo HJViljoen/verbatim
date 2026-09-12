@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone, categoryChip, shortPhrases, type ThemeHistoryRow, moverDirection, onCameraNote } from './voice-tiles'
+import { squarify, themeTrajectories, themeMovers, movementOf, voiceTiers, pickVoiceCards, categoryTabs, topEmotions, emotionTone, categoryChip, shortPhrases, type ThemeHistoryRow, moverDirection, onCameraNote, byThemeLead, themeLeadCount, type ThemeLeadRow } from './voice-tiles'
 
 describe('squarify', () => {
   const area = (r: { w: number; h: number }) => r.w * r.h
@@ -231,5 +231,32 @@ describe('onCameraNote — the Voice card says how much was said out loud (WP7a)
   it('never claims more spoke than the card counts', () => {
     expect(onCameraNote(9, 4)).toBe('4 said on camera')
     expect(onCameraNote(2, 0)).toBeNull()
+  })
+})
+
+describe('byThemeLead — the lead theme counts an on-camera conversation for more (WP7a)', () => {
+  const t = (label: string, evidence_count: number, video_evidence_count = 0, rank_score = 0): ThemeLeadRow & { label: string } =>
+    ({ label, evidence_count, video_evidence_count, rank_score })
+  const order = (rows: (ThemeLeadRow & { label: string })[]) => [...rows].sort(byThemeLead).map((r) => r.label)
+
+  it('three comment conversations plus one on camera lead a flat four, and trail a flat five', () => {
+    expect(order([t('flat4', 4), t('mixed', 4, 1)])).toEqual(['mixed', 'flat4'])
+    expect(order([t('flat5', 5), t('mixed', 4, 1)])).toEqual(['flat5', 'mixed'])
+  })
+
+  it('two on camera lift a theme a whole conversation, matching themeRank\u2019s weighting', () => {
+    expect(themeLeadCount(t('x', 4, 2))).toBe(5)
+    expect(order([t('flat5', 5), t('mixed', 5, 2)])).toEqual(['mixed', 'flat5'])
+  })
+
+  it('leaves a comment-only page exactly as it ordered before', () => {
+    expect(order([t('small', 3), t('big', 40), t('mid', 12)])).toEqual(['big', 'mid', 'small'])
+    expect(order([t('a', 7, 0, 2), t('b', 7, 0, 9)])).toEqual(['b', 'a'])
+  })
+
+  it('treats a missing count as comment-only and never lets it outrun the total', () => {
+    expect(themeLeadCount({ evidence_count: 6 })).toBe(6)
+    expect(themeLeadCount({ evidence_count: 6, video_evidence_count: null })).toBe(6)
+    expect(themeLeadCount({ evidence_count: 4, video_evidence_count: 99 })).toBe(themeLeadCount({ evidence_count: 4, video_evidence_count: 4 }))
   })
 })
