@@ -56,7 +56,10 @@ describe('buildClassifyUserPrompt', () => {
       input('b', { ocr_text: 'ignored', ocr_status: 'none' }),
     ])
     expect(prompt).toContain('on-screen text (cover frame): DAY 3 OF 30')
-    expect(prompt.indexOf('on-screen text')).toBeLessThan(prompt.indexOf('transcript: spoken words'))
+    // AFTER the transcript, matching the order the hook_text rule lists them in.
+    // Leading with it biased the model toward the first thing on the frame,
+    // which on TikTok is as often the platform watermark as the hook.
+    expect(prompt.indexOf('transcript: spoken words')).toBeLessThan(prompt.indexOf('on-screen text'))
     expect(prompt).not.toContain('ignored') // 'none' means the frame carried no text
   })
 
@@ -71,10 +74,13 @@ describe('buildClassifyUserPrompt', () => {
     expect(prompt).not.toContain('transcript:')
   })
 
-  it('the system prompt says a typed hook IS the hook', () => {
+  it('the system prompt says a typed hook IS the hook — but never a watermark', () => {
     const sys = buildClassifySystemPrompt()
     expect(sys).toContain('the text printed on the cover frame')
     expect(sys).toContain('the hook is very often TYPED on the cover rather than spoken')
+    // Sample 7673087098886376718's block is `PERSONAL OPINIONS. / TikTok /
+    // @seriouslyinez`: one real hook and two pieces of platform furniture.
+    expect(sys).toContain('a watermark, a platform name, a channel name or an @handle is NEVER the hook')
   })
 
   it('system prompt carries the enum vocabularies', () => {

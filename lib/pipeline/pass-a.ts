@@ -2,12 +2,13 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
 import { openai } from '../openai'
-import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
+import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, PASS_A_OCR_MIN_QUOTE_CHARS, PASS_A_VIDEO_QUOTE_MAX, estimateCost, passAMinComments, transcriptsEnabled } from '../config'
 import { PassAVideoSchema, PassAVideoSchemaV4, CLASSIFIED_TYPES, CLASSIFIED_TYPE_DEFS, HOOK_STYLES, HOOK_STYLE_DEFS, enumDefLines, type PassAVideoOutput, type PassAInsight, type PassAClaim } from './schemas'
 import { filterComments } from './spam-filter'
 import { computeQualityScore } from './metrics'
 import { usableOcr, usableTranscript, usableTranslation } from './transcript-input'
 import { isMissingColumnError } from './classify-meta'
+import { hookSource } from './hook-source'
 import type { VideoRow, CommentRow } from './types'
 import { normForMatch } from './quote-match'
 
@@ -553,10 +554,18 @@ export function validateInsights(
         // have — a model describing a picture, or joining two cards into a
         // sentence nobody wrote, is caught right here.
         const needle = normForMatch(ev.quote)
+        // A bare one-word fragment is refused (WP7b M2): on a cover frame that
+        // can only be a logo, a watermark or a handle, and it is exactly where
+        // the OCR model's guessing is worst — a genuinely illegible chest logo
+        // came back as "RB" in the live check. The validator cannot detect a
+        // misread (it matches against the model's own output), so the defence is
+        // to not build a finding out of a fragment in the first place.
+        const tooShort = !/\s/.test(ev.quote.trim()) && ev.quote.trim().length < PASS_A_OCR_MIN_QUOTE_CHARS
         if (
           !ocr?.evidenceAllowed ||
           ocrLines.length === 0 ||
           needle.length === 0 ||
+          tooShort ||
           ev.quote.length > PASS_A_VIDEO_QUOTE_MAX ||
           !ocrLines.some((line) => line.includes(needle))
         ) {
@@ -1034,6 +1043,8 @@ export async function runPassA(opts: RunPassAOptions): Promise<RunPassASummary> 
         qualityScore: computeQualityScore(all),
         claims: claims?.kept ?? null,
         claimsOnly,
+        transcript,
+        ocr,
         bookkeeping: trackAnalysis
           ? { storedComments: all.length, promptVersion, lane: claimsOnly ? 'claims_only' : 'full', withTranscript: transcript !== null, withTranslation: translation !== null, withOcr: ocr !== null }
           : null,
@@ -1086,6 +1097,9 @@ interface PersistArgs {
    *  video LAST so the pointer only moves once every row is in. Null = harness
    *  run (trackAnalysis:false): rows are written, the pointer is not moved. */
   bookkeeping: { storedComments: number; promptVersion: string; lane: 'full' | 'claims_only'; withTranscript: boolean; withTranslation: boolean; withOcr: boolean } | null
+  /** The exact blocks the model was shown, for deriving hook_source. */
+  transcript: string | null
+  ocr: string | null
 }
 
 async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: PersistArgs): Promise<void> {
@@ -1101,20 +1115,33 @@ async function persistVideo(admin: ReturnType<typeof createAdminClient>, args: P
   await admin.from('language_samples').delete().eq('client_id', video.client_id).eq('run_id', runId).eq('source_video_id', video.id)
 
   // Classification onto the video row.
-  await admin
-    .from('videos')
-    .update({
+  const classification: Record<string, unknown> = {
       classified_type: c.classified_type,
       hook_style: c.hook_style,
       hook_text: c.hook_text,
+      // Where that hook actually came from, derived from the blocks the model
+      // was shown (lib/pipeline/hook-source.ts) rather than asked of it — a new
+      // schema field would change every Pass A call's response format and force
+      // the corpus-wide re-read this WP avoids.
+      hook_source: hookSource(c.hook_text, { transcript: args.transcript, ocr: args.ocr, caption: video.caption }),
       topics: c.topics,
       // Claims lane: LEAVE the column alone rather than null it — classify-meta
       // owns framing sentiment for below-floor videos (it can't revisit once
       // classified_type is set) and run_summary's shares read this column.
       ...(claimsOnly ? {} : { sentiment: c.sentiment, sentiment_source: 'audience' }),
       comment_quality_score: qualityScore,
-    })
-    .eq('id', video.id)
+  }
+  {
+    const { error } = await admin.from('videos').update(classification).eq('id', video.id)
+    // Deploy-before-migration: write the labels without the provenance rather
+    // than lose the whole classification (classify-meta's precedent).
+    if (error && isMissingColumnError(error, 'hook_source')) {
+      console.warn('[pass-a] videos.hook_source does not exist — apply supabase/migrations/20260912100000_ocr_text.sql. Writing the classification without it.')
+      const { hook_source: _dropped, ...rest } = classification
+      void _dropped
+      await admin.from('videos').update(rest).eq('id', video.id)
+    }
+  }
 
   // Insights + evidence.
   for (const { insight, evidence } of validated) {

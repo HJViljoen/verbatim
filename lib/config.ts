@@ -323,6 +323,20 @@ export const OCR_FETCH_TIMEOUT_MS = 8_000
  *  model output before it reaches the DB. */
 export const OCR_MAX_CHARS = 600
 
+/**
+ * Shortest an on-screen-text quote may be to count as evidence.
+ *
+ * A bare single token off a cover frame is a logo, a watermark, a handle or a
+ * price — never an insight, and it is also where the OCR model's per-token
+ * guessing is worst: measured 2026-09-12, a 480x360 YouTube thumbnail whose
+ * chest logo is genuinely illegible came back as "RB". The validator cannot
+ * catch that (it matches the quote against the model's own output), so the only
+ * defence is refusing to build a finding out of a fragment. A quote clears the
+ * bar by containing whitespace — i.e. being more than one word — or by being at
+ * least this long.
+ */
+export const PASS_A_OCR_MIN_QUOTE_CHARS = 12
+
 /** Max characters of on-screen text injected into the Pass A prompt. Same
  *  number as OCR_MAX_CHARS deliberately — the stored text is already bounded to
  *  prompt scale, so the two clips are the same clip and the quote validator

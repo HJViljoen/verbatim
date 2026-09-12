@@ -303,6 +303,24 @@ describe('validateInsights — "o" evidence (WP7b)', () => {
     expect(r.kept).toHaveLength(0)
   })
 
+  it('drops a bare one-word fragment — a logo is not a finding (M2)', () => {
+    // "RB" off an illegible chest logo is the measured case. The validator
+    // cannot tell a misread from a read (it matches the model's own output), so
+    // a fragment must not be allowed to become evidence at all.
+    const parsed = mkParsed([mkInsight([{ quote: 'RAREFORM', comment_id: 'o' }])])
+    expect(validateInsights(parsed, refs, undefined, { text: 'RAREFORM', evidenceAllowed: true }).kept).toHaveLength(0)
+  })
+
+  it('keeps a short quote that is more than one word', () => {
+    const parsed = mkParsed([mkInsight([{ quote: 'I GOT ALL', comment_id: 'o' }])])
+    expect(validateInsights(parsed, refs, undefined, { text: 'I GOT ALL', evidenceAllowed: true }).kept).toHaveLength(1)
+  })
+
+  it('keeps a long single word — the bar is "a fragment", not "one token"', () => {
+    const parsed = mkParsed([mkInsight([{ quote: 'unputdownable-quality', comment_id: 'o' }])])
+    expect(validateInsights(parsed, refs, undefined, { text: 'unputdownable-quality', evidenceAllowed: true }).kept).toHaveLength(1)
+  })
+
   it('drops an over-long "o" quote at the same sentence-scale cap as "t"', () => {
     const long = 'x'.repeat(PASS_A_VIDEO_QUOTE_MAX + 1)
     const parsed = mkParsed([mkInsight([{ quote: long, comment_id: 'o' }])])

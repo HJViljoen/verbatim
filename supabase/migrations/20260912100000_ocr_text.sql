@@ -65,6 +65,23 @@ comment on column public.videos.ocr_error is
 comment on column public.videos.ocr_attempts is
   'Cover-frame reads attempted, from any wave. Bounds the retry of ''failed''/''no_image'' at OCR_MAX_ATTEMPTS (lib/config.ts) so a genuine dead end stops costing a call every week.';
 
+-- Where hook_text came from, now that a line typed on the cover is eligible to
+-- be it (WP7b M4). DERIVED in code (lib/pipeline/hook-source.ts) by looking the
+-- returned hook up in the blocks the model was shown — not asked of the model,
+-- because a new output field would change the response format of every Pass A
+-- call and force the corpus-wide re-read this WP is built to avoid.
+alter table public.videos
+  add column if not exists hook_source text;
+
+alter table public.videos
+  drop constraint if exists videos_hook_source_check;
+alter table public.videos
+  add constraint videos_hook_source_check
+  check (hook_source is null or hook_source in ('spoken', 'typed', 'caption'));
+
+comment on column public.videos.hook_source is
+  'Which block hook_text was copied out of: ''spoken'' the transcript · ''typed'' the cover frame''s on-screen text · ''caption''. NULL = written before this column, or the hook matched none of them (a paraphrase). Ties go to ''spoken'': a hook both said and printed is common, and ''typed'' is only awarded when the words appear nowhere else, so it stays a strong signal. Exists so a shift in hook_style distributions can be explained instead of guessed at.';
+
 comment on column public.videos.analyzed_with_ocr is
   'Did Pass A''s current analysis of this video see an ON-SCREEN TEXT block? Drives the ''ocr'' re-read in lib/pipeline/pass-a-plan.ts — the per-video alternative to a corpus-wide prompt-version bump.';
 
