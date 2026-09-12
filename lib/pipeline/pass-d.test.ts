@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateSayVsHear, buildSystemPromptA, buildUserPromptA } from './pass-d'
+import { validateSayVsHear, buildSystemPromptA, buildUserPromptA, buildSystemPromptB, buildUserPromptB, stripOnCameraLabel, ON_CAMERA_LABEL } from './pass-d'
 import { stripThemeRefs } from './prose-rules'
 import { indexThemes } from './pass-c'
 import type { AggregatedTheme } from './types'
@@ -77,7 +77,7 @@ describe('stripThemeRefs — S#/C# leak coverage (Step 2b)', () => {
 describe('D-a v5 prompt blocks', () => {
   const theme: AggregatedTheme = {
     bucket: 'client', category: 'praise', theme: 'upcycled_craftsmanship', memberThemes: [],
-    supportingVideoIds: ['v1'], supportingInsightIds: ['i1'], evidenceCount: 3, strengthScore: 7,
+    supportingVideoIds: ['v1'], supportingInsightIds: ['i1'], evidenceCount: 3, videoEvidenceCount: 0, strengthScore: 7,
     meanStrength: 6.5, rankScore: 1.5,
     dominantEmotion: 'excited', dominantSentimentImpact: 'positive', singleSource: false, sampleDescriptions: [],
   }
@@ -101,5 +101,45 @@ describe('D-a v5 prompt blocks', () => {
     expect(withClaims).toContain('WHAT THE BRAND SAYS IN ITS OWN VIDEOS')
     expect(withClaims).toContain('[S1] Upcycled materials — "materials that would have been thrown away"')
     expect(buildUserPromptA(idx, new Map(), undefined, [])).toBe(buildUserPromptA(idx, new Map(), undefined))
+  })
+})
+
+describe('D-b — the brief knows who is speaking (WP7a)', () => {
+  const insight = {
+    index: 'M1',
+    title: 'Sizing is a coin toss',
+    description: 'Buyers cannot tell which size to order.',
+    quotes: [
+      { text: 'I ordered a medium and it swam on me', spokenOnVideo: false },
+      { text: 'I sized up after measuring twice and it still runs long', spokenOnVideo: true },
+    ],
+    competitorQuotes: [],
+  }
+
+  it('labels the spoken voice and leaves the typed one bare', () => {
+    const prompt = buildUserPromptB([insight], new Map(), undefined)
+    expect(prompt).toContain(`"I sized up after measuring twice and it still runs long" ${ON_CAMERA_LABEL}`)
+    expect(prompt).toContain('"I ordered a medium and it swam on me"\n')
+    expect(prompt).not.toContain(`"I ordered a medium and it swam on me" ${ON_CAMERA_LABEL}`)
+  })
+
+  it('keeps the label outside the quotation marks, so a copied verbatim is only the words', () => {
+    const line = buildUserPromptB([insight], new Map(), undefined)
+      .split('\n')
+      .find((l) => l.includes('sized up'))!
+    expect(line.trim()).toBe(`· "I sized up after measuring twice and it still runs long" ${ON_CAMERA_LABEL}`)
+  })
+
+  it('tells the model what the label means and that it is never part of a quote', () => {
+    const sys = buildSystemPromptB('Sealand')
+    expect(sys).toContain(ON_CAMERA_LABEL)
+    expect(sys).toContain('never copy it into a quote')
+  })
+
+  it('strips the label off a hero quote the model echoed it with', () => {
+    expect(stripOnCameraLabel('I sized up after measuring twice (said on camera)')).toBe('I sized up after measuring twice')
+    expect(stripOnCameraLabel('I sized up after measuring twice')).toBe('I sized up after measuring twice')
+    // Only a trailing label goes — a verbatim that really contains the words is left alone.
+    expect(stripOnCameraLabel('He literally (said on camera) that it broke')).toBe('He literally (said on camera) that it broke')
   })
 })

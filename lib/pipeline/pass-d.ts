@@ -250,7 +250,7 @@ export function buildUserPromptA(
 // consumer intelligence (trigger: buyer-persona feedback, see vault Strategy
 // §Retention risk). The category list must never appear as the menu of what to
 // produce; it exists only for the tag-after step.
-function buildSystemPromptB(brandName?: string): string {
+export function buildSystemPromptB(brandName?: string): string {
   const name = brandName?.trim() || 'the brand'
   return [
     `You advise ${name}'s leadership on what the business should do — not just its social media team.`,
@@ -279,6 +279,9 @@ function buildSystemPromptB(brandName?: string): string {
     '  what customers are saying in plain English instead (translating where needed). The product shows the real',
     '  quotes behind every recommendation via its evidence link, so your prose never needs to reproduce them.',
     '  (Hooks, titles, or example questions you AUTHOR yourself may of course be quoted.)',
+    `- A quote followed by ${ON_CAMERA_LABEL} was SPOKEN by a creator in their own video, not typed in a comment.`,
+    '  Filming an opinion costs time and reputation, so treat those voices as the stronger evidence when two readings compete.',
+    '  The suffix is our label, never part of what the person said — never copy it into a quote.',
     '- EXCEPTION — the hero_quote fields are the ONE place a raw verbatim belongs, because the card leads with it.',
     '  For EACH recommendation, set hero_quote to the single most representative real customer quote behind it,',
     '  copied EXACTLY (word for word) from the quotes shown under the market insights it follows from. Choose the',
@@ -300,18 +303,37 @@ function buildSystemPromptB(brandName?: string): string {
   ].join('\n')
 }
 
+/** A hero-eligible voice, plus whether its speaker said it on camera. The words
+ *  are the quote; `spokenOnVideo` is a LABEL the prompt renders beside them and
+ *  never part of the text (WP7a). */
+export interface QuoteForB {
+  text: string
+  spokenOnVideo: boolean
+}
+
 interface MarketInsightForB {
   index: string
   title: string
   description: string
   /** Hero-eligible voices: client + category audience. The hero validation map
    *  is built from these ONLY. */
-  quotes: string[]
+  quotes: QuoteForB[]
   /** Competitor-audience voices, shown labelled for context — never heroes. */
   competitorQuotes: { audience: string; quote: string }[]
 }
 
-function buildUserPromptB(
+/** The suffix that tells the brief a voice was spoken aloud in a video rather
+ *  than typed in a comment. Outside the quotation marks, so a model copying the
+ *  verbatim back copies only the words. */
+export const ON_CAMERA_LABEL = '(said on camera)'
+
+/** Remove the label if the model copied it back anyway. Without this a hero
+ *  quote the model echoed WITH its suffix fails the "did we show you this?"
+ *  check and the card silently loses its lead voice. */
+export const stripOnCameraLabel = (q: string): string =>
+  q.replace(/\s*\(said on camera\)\s*$/i, '').trim()
+
+export function buildUserPromptB(
   insights: MarketInsightForB[],
   ciIndex: Map<string, PersistedCompetitiveInsight>,
   sov: Record<string, SovEntry> | undefined,
@@ -325,7 +347,7 @@ function buildUserPromptB(
   lines.push(`MARKET INSIGHTS (${insights.length})`)
   for (const mi of insights) {
     lines.push(`[${mi.index}] ${mi.title} — ${mi.description}`)
-    for (const q of mi.quotes) lines.push(`    · "${q}"`)
+    for (const q of mi.quotes) lines.push(`    · "${q.text}"${q.spokenOnVideo ? ` ${ON_CAMERA_LABEL}` : ''}`)
     for (const cq of mi.competitorQuotes) lines.push(`    · [${cq.audience}'s audience] "${cq.quote}"`)
   }
   if (ciIndex.size) {
@@ -345,15 +367,15 @@ async function retrieveQuotes(
   admin: ReturnType<typeof createAdminClient>,
   insightIds: string[],
   cap: number,
-): Promise<{ quote: string; audienceId: string }[]> {
+): Promise<{ quote: string; audienceId: string; spokenOnVideo: boolean }[]> {
   if (insightIds.length === 0 || cap === 0) return []
-  const quotes: { quote: string; audienceId: string }[] = []
+  const quotes: { quote: string; audienceId: string; spokenOnVideo: boolean }[] = []
   const CHUNK = 100
   for (const part of chunk(insightIds, CHUNK)) {
     if (quotes.length >= cap) break
     const { data, error } = await admin
       .from('insight_evidence')
-      .select('quote, audience_insight_id')
+      .select('quote, audience_insight_id, source')
       .in('audience_insight_id', part)
       // Counts-not-quotes (2026-08-22): demographic_signal evidence cites but
       // never quotes. Filtered here, not just by the empty-string check below,
@@ -365,7 +387,7 @@ async function retrieveQuotes(
     if (error) throw new Error(`retrieve evidence: ${error.message}`)
     for (const row of data ?? []) {
       const q = (row.quote ?? '').trim()
-      if (q) quotes.push({ quote: q, audienceId: row.audience_insight_id as string })
+      if (q) quotes.push({ quote: q, audienceId: row.audience_insight_id as string, spokenOnVideo: row.source === 'video' })
     }
   }
   return quotes
@@ -410,7 +432,7 @@ async function buildInsightForB(
     index,
     title,
     description,
-    quotes: heroPool.slice(0, QUOTES_PER_INSIGHT).map((r) => r.quote),
+    quotes: heroPool.slice(0, QUOTES_PER_INSIGHT).map((r) => ({ text: r.quote, spokenOnVideo: r.spokenOnVideo })),
     competitorQuotes: competitor.map((r) => ({
       audience: (bucketById.get(r.audienceId) ?? 'competitor:another brand').slice('competitor:'.length),
       quote: r.quote,
@@ -716,9 +738,9 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
   // hero_quote validation: the model must copy back a quote we actually showed
   // it — never surface a line the customer didn't say. Match on normalised text,
   // store the canonical original. A non-match is dropped (null).
-  const norm = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
+  const norm = (s: string) => stripOnCameraLabel(s).replace(/\s+/g, ' ').trim().toLowerCase()
   const shownByNorm = new Map<string, string>()
-  for (const mi of insightsForB) for (const q of mi.quotes) shownByNorm.set(norm(q), q)
+  for (const mi of insightsForB) for (const q of mi.quotes) shownByNorm.set(norm(q.text), q.text)
   const validateQuote = (q: string | null | undefined): string | null => (q ? shownByNorm.get(norm(q)) ?? null : null)
 
   // Market-insight hero quotes → written onto the already-inserted rows (M# → id).

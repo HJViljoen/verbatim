@@ -1,6 +1,6 @@
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD, MEGA_CLUSTER_MIN, MEGA_CLUSTER_SHARE } from '../config'
+import { EVIDENCE_FLOOR, CLUSTER_SIMILARITY_THRESHOLD, MEGA_CLUSTER_MIN, MEGA_CLUSTER_SHARE, VIDEO_EVIDENCE_WEIGHT } from '../config'
 import { clusterInsights, type ClusterMethod } from './cluster'
 import { mergeClusterLabels } from './theme-merge'
 import type { InsightRow, AggregatedTheme } from './types'
@@ -8,6 +8,10 @@ import { COMPETITIVE_MIN_VIDEOS } from '../config'
 
 /** Ids per `.in()` filter — keeps the request URL under the PostgREST/gateway cap. */
 const VIDEO_ID_CHUNK = 100
+
+/** Same cap, for the insight-id set (an order of magnitude larger than the
+ *  video set — one video yields several insights). */
+const INSIGHT_ID_CHUNK = 100
 
 // Step A2 — theme aggregation (Architecture/Analysis-Passes §Step A2). No new
 // GPT call (one cheap embeddings call inside the clustering seam). Buckets Pass A
@@ -104,16 +108,23 @@ function mode(values: string[]): string {
  * What it replaces: the strongest single member insight's score, which is
  * blind to how many people said it.
  */
-export function themeRank(evidenceCount: number, bucketVideoCount: number): number {
+export function themeRank(evidenceCount: number, bucketVideoCount: number, videoEvidenceCount = 0): number {
   if (evidenceCount <= 0) return 0
+  // Video as signal (WP7a, 2026-09-12): a supporting video where someone said
+  // it ON CAMERA counts VIDEO_EVIDENCE_WEIGHT comment-videos, so the weighted
+  // count replaces the raw one in BOTH terms — the volume and the share. The
+  // thesis was already in the Pass A prompt ("a produced video is a deliberate,
+  // costly act of opinion") and read nowhere else. Default 0 keeps every
+  // pre-WP7a caller and every memoised run on the exact old number.
+  const weighted = evidenceCount + (VIDEO_EVIDENCE_WEIGHT - 1) * Math.min(videoEvidenceCount, evidenceCount)
   // The denominator is floored at COMPETITIVE_MIN_VIDEOS. A bucket thinner than
   // that is one we have already declared too thin to draw a comparison from
   // (lib/pipeline/pass-c thinBuckets), so it must not also earn a share bonus
   // as though it were a whole bucket: without this, 3 of 8 edges 10 of 299.
   // Tying the two constants together keeps one definition of "not enough
   // conversation" instead of two that disagree.
-  const share = Math.min(1, evidenceCount / Math.max(bucketVideoCount, COMPETITIVE_MIN_VIDEOS))
-  return Math.round(evidenceCount * Math.sqrt(share) * 1000) / 1000
+  const share = Math.min(1, weighted / Math.max(bucketVideoCount, COMPETITIVE_MIN_VIDEOS))
+  return Math.round(weighted * Math.sqrt(share) * 1000) / 1000
 }
 
 /** Order themes by salience: rank, then mean strength, then a stable name. */
@@ -132,6 +143,11 @@ export function aggregate(cluster: InsightRow[], bucket: string): AggregatedThem
   // legitimately merge across categories).
   const canonical = cluster.reduce((a, b) => (b.strength_score > a.strength_score ? b : a))
   const supportingVideoIds = [...new Set(cluster.map((i) => i.source_video_id))]
+  // Counted over VIDEOS, not insights, for the same reason evidenceCount is:
+  // one creator repeating themselves in three insights off one transcript is
+  // one video's worth of opinion, and weighting it three times would make a
+  // single talkative video outrank a bucket of people.
+  const onCameraVideoIds = new Set(cluster.filter((i) => i.hasVideoEvidence).map((i) => i.source_video_id))
   // Ties break on id, not on the order the clusterer happened to emit members
   // in. strength_score is a small integer, so ties are common and Array.sort is
   // stable — without the id the top two here would follow member order, and
@@ -147,6 +163,7 @@ export function aggregate(cluster: InsightRow[], bucket: string): AggregatedThem
     supportingVideoIds,
     supportingInsightIds: cluster.map((i) => i.id),
     evidenceCount: supportingVideoIds.length,
+    videoEvidenceCount: onCameraVideoIds.size,
     strengthScore: canonical.strength_score,
     meanStrength: Math.round((cluster.reduce((sum, i) => sum + i.strength_score, 0) / cluster.length) * 100) / 100,
     // Filled in by processGroup, which knows the bucket's video denominator.
@@ -219,9 +236,39 @@ export async function loadGroupedInsights(clientId: string, runId: string): Prom
     }
   }
 
+  // 2b. Which insights were spoken on camera (WP7a). `insight_evidence.source`
+  //     is the only place the comment/video discriminator lives, and it is per
+  //     CITATION — one insight can mix a transcript line and comments — so the
+  //     question asked here is "does this insight carry at least one video
+  //     citation". Filtered server-side to source='video', which is a small
+  //     minority of the table, so the payload is ids only and stays tiny.
+  //     NO `redacted = false` filter, deliberately, unlike every quote reader:
+  //     this counts CITATIONS, not words — nothing is rendered from it — and
+  //     `redacted` blanks a quote without removing the citation, so filtering
+  //     it would make videoEvidenceCount disagree with the evidenceCount
+  //     computed over the same insights. Do not "fix" this: it would silently
+  //     change every rank_score on every tenant.
+  const onCameraInsightIds = new Set<string>()
+  const insightIds = insightsBase.map((i) => i.id)
+  if (insightIds.length) {
+    const pages = await Promise.all(
+      chunk(insightIds, INSIGHT_ID_CHUNK).map((part) =>
+        selectAll<{ audience_insight_id: string }>(() =>
+          admin
+            .from('insight_evidence')
+            .select('audience_insight_id')
+            .eq('source', 'video')
+            .in('audience_insight_id', part)
+            .order('audience_insight_id', { ascending: true }),
+        ),
+      ),
+    )
+    for (const r of pages.flat()) onCameraInsightIds.add(r.audience_insight_id)
+  }
+
   const insights: InsightRow[] = insightsBase.map((i) => {
     const ent = videoEntity.get(i.source_video_id) ?? { is_client: false, is_competitor: false, competitor_name: null }
-    return { ...i, ...ent } as InsightRow
+    return { ...i, ...ent, hasVideoEvidence: onCameraInsightIds.has(i.id) } as InsightRow
   })
 
   // 3. Group by bucket (Spec §8: bucket-level clustering, categories merge).
@@ -299,7 +346,7 @@ async function processGroup(
   const themes: AggregatedTheme[] = []
   for (const cluster of clusters) {
     const theme = aggregate(cluster, grp.bucket)
-    theme.rankScore = themeRank(theme.evidenceCount, bucketVideoCount)
+    theme.rankScore = themeRank(theme.evidenceCount, bucketVideoCount, theme.videoEvidenceCount)
     // Grab-bag tripwire: no genuine single consumer concern spans this share
     // of the corpus. A hit means the clustering is chaining again (the
     // 119-video run-1 blob) — investigate, don't ship quietly.

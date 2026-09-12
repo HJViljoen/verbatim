@@ -180,6 +180,50 @@ describe('createQuotePicker', () => {
   })
 })
 
+describe('the on-camera quote bonus (WP7a)', () => {
+  // Two quotes the scorer cannot separate: same length band, same English
+  // hits, neither touches the claim's words, same relevance rank.
+  const tie = (over: Partial<QuoteRow> = {}): QuoteRow =>
+    ({ quote: 'x', rank: 1, evidenceId: 'e', ...over })
+  const A = 'I have been using it every single day and it just works'
+  const B = 'I have been using it every single week and it just works'
+
+  it('breaks a tie in favour of the voice that said it on camera', () => {
+    const pool = new Map<string, QuoteRow[]>([
+      ['c1', [tie({ quote: A, evidenceId: 'ev1' })]],
+      ['c2', [tie({ quote: B, evidenceId: 'ev2', source: 'video' })]],
+    ])
+    const pick = createQuotePicker(pool, new Map())
+    expect(pick(['c1', 'c2'], 1, 'unrelated claim wording')).toEqual([B])
+    // …and the comment wins the same tie when nothing was said on camera.
+    const flat = new Map<string, QuoteRow[]>([
+      ['c1', [tie({ quote: A, evidenceId: 'ev1' })]],
+      ['c2', [tie({ quote: B, evidenceId: 'ev2' })]],
+    ])
+    expect(createQuotePicker(flat, new Map())(['c1', 'c2'], 1, 'unrelated claim wording')).toEqual([A])
+  })
+
+  it('never beats a clearly better-reading comment', () => {
+    // The comment speaks to the claim (+3 per on-topic word); the on-camera
+    // line does not. A tie-break must not overturn that.
+    const pool = new Map<string, QuoteRow[]>([
+      ['c1', [tie({ quote: 'The straps hurt my shoulders after an hour of use', evidenceId: 'ev1' })]],
+      ['c2', [tie({ quote: 'I have been using it every single day and it works', evidenceId: 'ev2', source: 'video' })]],
+    ])
+    const pick = createQuotePicker(pool, new Map())
+    expect(pick(['c1', 'c2'], 1, 'straps hurt shoulders')).toEqual(['The straps hurt my shoulders after an hour of use'])
+  })
+
+  it('applies the same bonus in the cited picker, with the same refs', () => {
+    const pool = new Map<string, QuoteRow[]>([
+      ['c1', [tie({ quote: A, evidenceId: 'ev1' })]],
+      ['c2', [tie({ quote: B, evidenceId: 'ev2', source: 'video' })]],
+    ])
+    const pick = createCitedQuotePicker(pool, new Map())
+    expect(pick(['c1', 'c2'], 1, 'unrelated claim wording')).toEqual([{ ref: 'e:ev2', text: B }])
+  })
+})
+
 describe('createCitedQuotePicker', () => {
   const pool = new Map<string, QuoteRow[]>([
     ['c1', [{ quote: 'I love this bag so much, it is my daily carry now', rank: 1, evidenceId: 'ev1' }]],

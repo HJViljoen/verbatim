@@ -242,7 +242,7 @@ export async function loadMarket(scope: Scope): Promise<MarketData | MarketEmpty
     // claim about the client, with nothing in the log.
     selectAll<ThemeBucketRow & GroundingThemeRow>(() =>
       supabase.from('themes')
-        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, rank_score')
+        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, video_evidence_count, rank_score')
         .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
     ),
   ])

@@ -28,7 +28,7 @@ describe('voice quotes freeze', () => {
   it('strips ribbon and theme-pane voices to refs and restores them', () => {
     const theme: ThemeDetail = {
       id: 't1', registryId: 'reg-1', label: 'Comfort', bucket: 'client', bucketName: 'Your audience', groupName: 'Sealand', kind: 'client', category: 'pain_point', prevalence: 'recurring',
-      emotion: 'frustration', isNew: false, description: null, count: 12, denom: 100, pct: 12, history: null,
+      emotion: 'frustration', isNew: false, description: null, count: 12, denom: 100, pct: 12, onCamera: null, history: null,
       quotes: [{ ref: 'e:ev-1', text: 'the straps hurt' }, { ref: 'e:ev-2', text: 'too heavy after an hour' }], withheld: 1, memberThemes: ['comfort'],
     }
     const cards: VoiceCardData[] = [{ themeId: 't1', themeLabel: 'Comfort', themeCategory: 'pain_point', quote: { ref: 'e:ev-3', text: 'I need this' }, who: 'TikTok' }]

@@ -113,6 +113,9 @@ function ThemeBody({ t, showNew }: { t: ThemeDetail; showNew: boolean }) {
           <div className="flex items-baseline gap-1.5">
             <span className="font-mono text-[22px] font-semibold tabular-nums leading-none" style={{ color: EDGE[t.kind] }}>{fmtInt(t.count)}</span>
             <span className="text-[11.5px] text-muted-foreground">of {fmtInt(t.denom)} {t.groupName} conversations</span>
+            {t.onCamera && (
+              <span title={glossaryRule('on_camera')} className="text-[11.5px] text-muted-foreground">· {t.onCamera}</span>
+            )}
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-inner" aria-hidden>
             <div className="h-full rounded-full" style={{ width: `${Math.max(3, t.pct)}%`, background: EDGE[t.kind] }} />

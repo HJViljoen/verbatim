@@ -33,13 +33,13 @@ export async function loadThemes(clientId: string, runId: string): Promise<Aggre
   const rows = await selectAll<{
     label: string; description: string | null; bucket: string; category: string
     member_themes: string[]; supporting_insight_ids: string[]; supporting_video_ids: string[]
-    evidence_count: number; strength_score: number | null
+    evidence_count: number; video_evidence_count: number | null; strength_score: number | null
     rank_score: number | null; mean_strength: number | null
     dominant_emotion: string | null; dominant_sentiment_impact: string | null; single_source: boolean
   }>(() =>
     admin
       .from('themes')
-      .select('label, description, bucket, category, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, strength_score, rank_score, mean_strength, dominant_emotion, dominant_sentiment_impact, single_source')
+      .select('label, description, bucket, category, member_themes, supporting_insight_ids, supporting_video_ids, evidence_count, video_evidence_count, strength_score, rank_score, mean_strength, dominant_emotion, dominant_sentiment_impact, single_source')
       .eq('client_id', clientId).eq('run_id', runId)
       // Most salient first: this order IS Pass C/D's only cue to what matters.
       // nullsFirst false keeps pre-2026-08-18 rows (no rank) at the back rather
@@ -56,6 +56,10 @@ export async function loadThemes(clientId: string, runId: string): Promise<Aggre
     supportingVideoIds: r.supporting_video_ids,
     supportingInsightIds: r.supporting_insight_ids,
     evidenceCount: r.evidence_count,
+    // Null on a run aggregated before WP7a — read as "nothing on camera"
+    // rather than as unknown, which is what every consumer of this shape
+    // already assumed and what the pre-WP7a rank_score was computed from.
+    videoEvidenceCount: r.video_evidence_count ?? 0,
     strengthScore: r.strength_score ?? 0,
     meanStrength: r.mean_strength ?? r.strength_score ?? 0,
     rankScore: r.rank_score ?? 0,
@@ -297,6 +301,14 @@ export async function persistThemes(
       supporting_insight_ids: t.supportingInsightIds,
       supporting_video_ids: t.supportingVideoIds,
       evidence_count: t.evidenceCount,
+      // `?? 0`, though the field is declared required: `themes:{bucket}` is a
+      // MEMOISED Inngest step whose payload is AggregatedTheme[], so a run that
+      // completed its bucket steps BEFORE this deploy and resumes after it
+      // replays untyped JSON with no videoEvidenceCount. JSON.stringify drops
+      // undefined, and PostgREST rejects a bulk insert whose objects have
+      // differing keys (PGRST102) — the whole persist step would fail. 0 is
+      // also the honest value: that theme's rank_score was computed unweighted.
+      video_evidence_count: t.videoEvidenceCount ?? 0,
       strength_score: t.strengthScore,
       rank_score: t.rankScore,
       mean_strength: t.meanStrength,

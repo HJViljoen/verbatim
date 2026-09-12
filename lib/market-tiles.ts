@@ -213,6 +213,7 @@ export interface GroundingThemeRow {
   label: string | null
   member_themes: string[] | null
   evidence_count: number
+  video_evidence_count?: number | null
   rank_score?: number | null
 }
 
