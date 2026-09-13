@@ -61,11 +61,16 @@ export interface KeywordCandidate {
   competitor_videos: number
 }
 
-/** Shortest configured term allowed to exclude by SUBSTRING rather than by
- *  equality. Without a floor, one two-character exclude_term ("ai") would
- *  silently delete every candidate containing it ("sustainability"). Equality
- *  still applies at any length. */
-const SUBSTRING_MIN = 3
+/** Shortest term allowed to exclude by SUBSTRING rather than by equality —
+ *  applied to whichever side is the NEEDLE, in either direction.
+ *
+ *  Without a floor, one short exclude_term silently deletes every candidate
+ *  containing it, and three characters is not a floor: "ai" would take
+ *  "sustainability" and "art" takes "smartphone", "heartfelt" and "cartoon"
+ *  just as blindly. Five is the length at which a fragment stops being a
+ *  coincidence in ordinary words. Equality still applies at any length, so a
+ *  short configured term still covers itself exactly. */
+const SUBSTRING_MIN = 5
 
 const STOP = new Set(DISCOVERY_STOP_TERMS.map(fold))
 
@@ -133,8 +138,10 @@ function isCovered(folded: string, configured: Configured): boolean {
   for (const cand of variants(folded)) {
     for (const term of configured.tagged) {
       if (term === cand) return true
-      if (term.length < SUBSTRING_MIN) continue
-      if (cand.includes(term) || term.includes(cand)) return true
+      // The floor belongs to the needle, not the haystack: a configured
+      // "#sealandgear" must not delete the candidate "gea" either.
+      if (term.length >= SUBSTRING_MIN && cand.includes(term)) return true
+      if (cand.length >= SUBSTRING_MIN && term.includes(cand)) return true
     }
     for (const term of configured.phrases) {
       if (term === cand) return true

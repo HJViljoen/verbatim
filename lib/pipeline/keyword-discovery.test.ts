@@ -108,13 +108,24 @@ describe('computeKeywordCandidates', () => {
 
   it('excludes exclude_terms, but a short one only by equality (no substring wipeout)', () => {
     const rows = computeKeywordCandidates(
-      many(3, { topics: ['ai', 'sustainability', 'giveaway'] }),
+      many(3, { topics: ['ai', 'art', 'smartphone', 'heartfelt', 'cartoon', 'sustainability', 'giveaway'] }),
       new Map(),
-      { exclude_terms: ['ai', 'giveaway'] },
+      { exclude_terms: ['ai', 'art', 'giveaway'] },
     )
-    // 'ai' is dropped (1-2 chars and an exact exclude); 'sustainability'
-    // contains "ai" and must survive.
-    expect(byTerm(rows)).toEqual(['sustainability'])
+    // 'ai' goes on the 1-2 char rule, 'art' and 'giveaway' on exact exclusion.
+    // Everything merely CONTAINING a sub-floor exclude survives: 'ai' in
+    // 'sustainability', 'art' in 'smartphone' / 'heartfelt' / 'cartoon'.
+    expect(byTerm(rows)).toEqual(['cartoon', 'heartfelt', 'smartphone', 'sustainability'])
+  })
+
+  it('does not let a long configured term delete a short candidate fragment', () => {
+    const rows = computeKeywordCandidates(
+      many(3, { topics: ['gea', 'land'] }),
+      new Map(),
+      { brand_keywords: ['#sealandgear'] },
+    )
+    // Both are fragments OF the configured handle; neither is it.
+    expect(byTerm(rows)).toEqual(['gea', 'land'])
   })
 
   it('extracts hashtags from the caption for TikTok/YouTube, where hashtags[] is empty', () => {
