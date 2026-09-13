@@ -22,7 +22,11 @@ interface CandidateRow {
   owned_videos: number
   client_videos: number
   competitor_videos: number
-  created_at: string
+}
+
+interface RunRow {
+  id: string
+  started_at: string | null
 }
 
 function parseArgs(argv: string[]): { clientId: string; runs: number; kind: string | null; limit: number } {
@@ -45,26 +49,43 @@ async function main() {
   const { clientId, runs, kind, limit } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
 
-  const rows = await selectAll<CandidateRow>(() =>
-    admin
-      .from('keyword_candidates')
-      .select('run_id, term, kind, videos, comments, insights, platforms, found_by, owned_videos, client_videos, competitor_videos, created_at')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false }),
-  )
-  if (rows.length === 0) {
-    console.log(`client ${clientId}: no keyword_candidates rows — run the pipeline, or scripts/backfill-keyword-candidates.ts --apply`)
+  // Pick the runs FIRST, by when they ran, then read only their rows. Ordering
+  // candidate rows by their own created_at (the previous shape) meant a
+  // --apply backfill of an old run put that run at the top of "recent", and
+  // reading every row the client has ever had to filter N runs out of it grows
+  // by ~200 rows a run, forever.
+  const { data: runData, error: runError } = await admin
+    .from('pipeline_runs')
+    .select('id, started_at')
+    .eq('client_id', clientId)
+    .in('status', ['completed', 'partial'])
+    .order('started_at', { ascending: false, nullsFirst: false })
+    .order('id', { ascending: false })
+    .limit(runs)
+  if (runError) throw new Error(`pipeline_runs: ${runError.message}`)
+  const recent = (runData ?? []) as RunRow[]
+  if (recent.length === 0) {
+    console.log(`client ${clientId}: no completed or partial run — nothing to read`)
     return
   }
 
-  // The last N runs by when their rows landed (rows come back newest first).
-  const recent: string[] = []
-  for (const r of rows) {
-    if (!recent.includes(r.run_id)) recent.push(r.run_id)
-    if (recent.length === runs) break
+  const rows = await selectAll<CandidateRow>(() =>
+    admin
+      .from('keyword_candidates')
+      .select('run_id, term, kind, videos, comments, insights, platforms, found_by, owned_videos, client_videos, competitor_videos')
+      .eq('client_id', clientId)
+      .in('run_id', recent.map((r) => r.id))
+      .order('run_id', { ascending: true })
+      .order('id', { ascending: true }),
+  )
+  if (rows.length === 0) {
+    console.log(
+      `client ${clientId}: no keyword_candidates rows in the last ${recent.length} run(s) — run the pipeline, or scripts/backfill-keyword-candidates.ts --apply`,
+    )
+    return
   }
-  const pooled = rows.filter((r) => recent.includes(r.run_id) && (!kind || r.kind === kind))
+
+  const pooled = kind ? rows.filter((r) => r.kind === kind) : rows
   if (pooled.length === 0) {
     console.log(`client ${clientId}: no ${kind} candidates in the last ${recent.length} run(s)`)
     return
@@ -102,9 +123,16 @@ async function main() {
     a.owned += r.owned_videos
   }
 
-  const dates = pooled.map((r) => r.created_at.slice(0, 10)).sort()
+  // Dated by when the runs RAN, not when their rows were written — a backfilled
+  // run still reports its own date.
+  const withRows = new Set(pooled.map((r) => r.run_id))
+  const dates = recent
+    .filter((r) => withRows.has(r.id))
+    .map((r) => (r.started_at ?? '').slice(0, 10))
+    .filter(Boolean)
+    .sort()
   console.log(
-    `client ${clientId} · ${recent.length} run${recent.length === 1 ? '' : 's'} pooled (${dates[0]} → ${dates[dates.length - 1]})` +
+    `client ${clientId} · ${withRows.size} run${withRows.size === 1 ? '' : 's'} pooled (${dates[0] ?? '?'} → ${dates[dates.length - 1] ?? '?'})` +
       `${kind ? ` · kind=${kind}` : ''} · ${agg.size} distinct term${agg.size === 1 ? '' : 's'}\n`,
   )
 
