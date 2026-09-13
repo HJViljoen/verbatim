@@ -61,10 +61,15 @@ function secretMatches(provided: string | null, expected: string): boolean {
 /** Who called: 'vercel-cron' for the scheduled run, else the user-agent (a
  *  by-hand run with X-Admin-Key). Recorded on the heartbeat because "the beat is
  *  stale" is only actionable once you know whether the scheduler stopped or a
- *  human was the last thing to touch it. */
+ *  human was the last thing to touch it.
+ *
+ *  Vercel Cron identifies itself in the USER-AGENT (`vercel-cron/1.0`) — it
+ *  sends no x-vercel-cron-schedule header, so keying on one labelled every
+ *  scheduled beat as if a human had run it. */
 function callerOf(req: Request): string {
-  if (req.headers.get('x-vercel-cron-schedule')) return 'vercel-cron'
-  return req.headers.get('user-agent') ?? 'unknown'
+  const ua = req.headers.get('user-agent') ?? ''
+  if (ua.startsWith('vercel-cron')) return 'vercel-cron'
+  return ua || 'unknown'
 }
 
 interface ClientRow {
