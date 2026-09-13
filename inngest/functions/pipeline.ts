@@ -13,6 +13,7 @@ import { runCrossReference } from '@/lib/pipeline/cross-reference'
 import { loadBrandClaims, shapeBrandVoice } from '@/lib/pipeline/claims'
 import { compareThemes } from '@/lib/pipeline/step-a2'
 import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
+import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
 import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
@@ -1142,6 +1143,24 @@ export const runPipeline = inngest.createFunction(
       .catch((e) => {
         console.error(`[keyword-attribution] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         noteError('keyword-attribution', e)
+        return null
+      })
+
+    // The other half of keyword value: terms the corpus keeps handing us that
+    // nobody configured (classifier topics + hashtags on this run's gate-kept
+    // videos, minus everything already tracked). Pure aggregation, no model
+    // call. Logged, NOT noteError'd — the consumer-profile precedent: discovery
+    // is additive operator input, and a clean run must not read 'partial'
+    // because a suggestion pass had a bad day. Repairable via
+    // scripts/backfill-keyword-candidates.ts.
+    await step
+      .run('keyword-discovery', async () => {
+        const r = await discoverRunKeywords(createAdminClient(), clientId, runId)
+        console.log(`[discovery] ${r.candidates.length} candidates (${r.topics}/${r.hashtags})`)
+        return { candidates: r.candidates.length, topics: r.topics, hashtags: r.hashtags }
+      })
+      .catch((e) => {
+        console.error(`[keyword-discovery] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 
