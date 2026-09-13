@@ -24,10 +24,14 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
     const moved = [delta.sentiment?.verdict.state, delta.share?.verdict.state].includes('moved')
     const rows = []
     if (delta.sentiment) {
+      // This figure is the PERIOD window (period_audience_sentiment, n=143 for
+      // Össur on 13 Sep); the "Audience sentiment" tile further down the same
+      // email is the all-time family (n=1,221). Each says which window it is,
+      // or the two read as one metric contradicting itself.
       const s = delta.sentiment
       rows.push(
         <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}/dashboard`} linkText="See where you stand">
-          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment read positive
+          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment this update read positive
         </Row>,
       )
     }
@@ -58,8 +62,11 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       )
     }
     if (!rows.length) return null
+    // The meta carries the comparison date, so the title must not carry it too:
+    // 'What changed since your last update' beside 'since 16 Aug' said the
+    // period twice in one header row.
     return (
-      <Section title={moved ? 'What changed since your last update' : 'Where you stand this update'} meta={`since ${shortDate(delta.prevRunDate)}`}>
+      <Section title={moved ? 'What changed' : 'Where you stand this update'} meta={`since ${shortDate(delta.prevRunDate)}`}>
         {rows}
       </Section>
     )

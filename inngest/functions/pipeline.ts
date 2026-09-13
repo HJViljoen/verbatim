@@ -23,7 +23,7 @@ import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { summariseRunErrors, partialRunAlert, passADegradation, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
+import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -33,7 +33,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -526,6 +526,7 @@ export const runPipeline = inngest.createFunction(
             const txBatches = await step.run(`plan-transcribe:${platform}`, () =>
               planTranscribeBatches(clientId, runId, platform),
             )
+            let isolatedBatches = 0
             for (let w = 0; w < txBatches.length; w += TRANSCRIBE_PARALLEL) {
               const wave = await Promise.all(
                 txBatches.slice(w, w + TRANSCRIBE_PARALLEL).map((videoIds, j) =>
@@ -539,13 +540,22 @@ export const runPipeline = inngest.createFunction(
                     // exhausting its retries must not abandon the remaining
                     // waves — hundreds of this run's videos would silently
                     // stay untranscribed and are never re-planned.
-                    .catch((e: unknown) => ({ transcribed: 0, skipped: 0, errors: [`transcribe step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`] })),
+                    .catch((e: unknown) => ({ transcribed: 0, skipped: 0, isolatedBatches: 0, errors: [`transcribe step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`] })),
                 ),
               )
               for (const t of wave) {
+                isolatedBatches += t.isolatedBatches
                 for (const err of t.errors) noteError(`transcribe:${platform}`, err)
               }
             }
+            // Run-failed caption batches that the isolation pass recovered are
+            // ratio-gated, as per-video translate/OCR failures are — on their own
+            // (looser) constant, because a recovered batch lost no data: 3 of 37
+            // on run d346b0f7 (8%) is an Apify day, not a thinner update. Past
+            // the ratio the actor itself is suspect and the run says so once.
+            const txDegraded = isolatedBatchDegradation(isolatedBatches, txBatches.length, ISOLATED_BATCH_ERROR_RATIO)
+            if (txDegraded) noteError(`transcribe:${platform}`, txDegraded)
+            else if (isolatedBatches > 0) console.warn(`[transcript] ${platform}: ${isolatedBatches} of ${txBatches.length} batches run-failed and were recovered id-by-id, under the ${ISOLATED_BATCH_ERROR_RATIO * 100}% ratio`)
           } catch (e) {
             noteError(`plan-transcribe:${platform}`, e)
           }
@@ -811,7 +821,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
           noteError('plan-translate', e)
-          return { batches: [] as string[][], needing: 0, deferred: 0, byLang: {} as Record<string, number> }
+          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, byLang: {} as Record<string, number> }
         })
       translate.batches = plan.batches.length
       translate.needing = plan.needing
@@ -865,7 +875,7 @@ export const runPipeline = inngest.createFunction(
       if (plan.needing) {
         const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
         console.log(
-          `[translate] ${plan.needing} needed · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `[translate] ${plan.needing} needed (${plan.retrying} re-attempts of a recorded failure) · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
@@ -1202,7 +1212,7 @@ export const runPipeline = inngest.createFunction(
     await step.run('close-run', async () => {
       const admin = createAdminClient()
       await admin.from('pipeline_runs').update({
-        status: totalErrors > 0 ? 'partial' : 'completed',
+        status: runCloseStatus(totalErrors),
         videos_scraped: totalVideos,
         completed_at: new Date().toISOString(),
         errors: runErrors,
@@ -1293,7 +1303,7 @@ export const runPipeline = inngest.createFunction(
         })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
+    return { runId, status: runCloseStatus(totalErrors), totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
 

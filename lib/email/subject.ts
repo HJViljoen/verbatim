@@ -2,7 +2,9 @@ import type { RunDelta } from '../report-delta'
 
 /** Carried from the weekly email: the subject names the movement when there
  *  is any, else it is simply the update. Pure — the renderer lives in
- *  digest.tsx, which pulls the page registry in and is not for unit tests. */
+ *  digest.tsx, which pulls the page registry in and is not for unit tests.
+ *  The sentiment figure is the period window (period_audience_sentiment), not
+ *  the all-time family the body's tile leads with, so it says "this update". */
 export function digestSubject(company: string, delta: RunDelta | null | undefined, cadenceWord = 'weekly'): string {
   if (!delta) return `${company}: your consumer intelligence baseline`
   const bits: string[] = []
@@ -12,7 +14,7 @@ export function digestSubject(company: string, delta: RunDelta | null | undefine
   }
   if (delta.sentiment && delta.sentiment.verdict.state === 'moved') {
     const s = delta.sentiment.verdict.change
-    bits.push(`sentiment ${s > 0 ? 'up' : 'down'} ${Math.abs(Math.round(s * 10) / 10)} pts`)
+    bits.push(`sentiment ${s > 0 ? 'up' : 'down'} ${Math.abs(Math.round(s * 10) / 10)} pts this update`)
   }
   return bits.length ? `${company}: what changed. ${bits.join(', ')}` : `${company}: your ${cadenceWord} update`
 }

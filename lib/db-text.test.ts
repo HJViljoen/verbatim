@@ -1,0 +1,55 @@
+import { describe, it, expect } from 'vitest'
+import { dbSafeText, dbSafeJson } from './db-text'
+
+// The 2026-09-13 regression in one character. A U+0000 in model output 400s the
+// PostgREST write that carries it (22P05, "unsupported Unicode escape
+// sequence") — both a text column and a jsonb one — so a paid-for gpt-4.1
+// result is lost at the last step. These are the bytes that must not survive to
+// a write, and the ones that must.
+
+const NUL = '\u0000'
+
+describe('dbSafeText', () => {
+  it('strips the character Postgres cannot store', () => {
+    expect(dbSafeText(`He said${NUL} hello`)).toBe('He said hello')
+    expect(dbSafeText(dbSafeText(`a${NUL}b`))).toBe('ab')
+    expect(dbSafeText(NUL)).toBe('')
+  })
+
+  it('strips the other C0 controls, which mean nothing in a transcript', () => {
+    expect(dbSafeText('a\u0001b\u0007c\u001Fd')).toBe('abcd')
+  })
+
+  it('keeps tab, newline and carriage return — a transcript has lines', () => {
+    expect(dbSafeText('one\ttwo\nthree\r\nfour')).toBe('one\ttwo\nthree\r\nfour')
+  })
+
+  it('strips lone surrogates, which cannot survive a JSON body either', () => {
+    expect(dbSafeText('a\uD83Db')).toBe('ab') // high with no low
+    expect(dbSafeText('a\uDE00b')).toBe('ab') // low with no high
+  })
+
+  it('leaves real text alone, astral characters included', () => {
+    const s = 'مرحبا — 안녕하세요 😀 #Össur, model 1C30!'
+    expect(dbSafeText(s)).toBe(s)
+  })
+})
+
+describe('dbSafeJson', () => {
+  it('reaches strings nested in objects, arrays and keys', () => {
+    const v = dbSafeJson({
+      [`key${NUL}`]: `a${NUL}b`,
+      list: [`c${NUL}`, { deep: `d${NUL}` }],
+      n: 7,
+      nothing: null,
+      yes: true,
+    })
+    expect(v).toEqual({ key: 'ab', list: ['c', { deep: 'd' }], n: 7, nothing: null, yes: true })
+  })
+
+  it('passes a bare string and a bare non-string through', () => {
+    expect(dbSafeJson(`x${NUL}`)).toBe('x')
+    expect(dbSafeJson(42)).toBe(42)
+    expect(dbSafeJson(null)).toBe(null)
+  })
+})

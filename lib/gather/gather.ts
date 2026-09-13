@@ -5,13 +5,13 @@ import { runActor, isActorRunFailedError } from './apify'
 import { adapters } from './platforms'
 import { parseSubreddits, activeSubreddits, subredditLabel } from './subreddits'
 import { logAiCall } from '../pipeline/ai-log'
-import { resolveTranscript, gateTranscript, normaliseLang } from './transcript'
+import { resolveTranscript, gateTranscript, normaliseLang, transcriptColumn } from './transcript'
 import { dedupeBy, round2 } from './util'
 import { loadSuppressedKeys, filterSuppressed } from './suppression'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
 import { attributeVideos, type AttributionMethod } from './attribution'
-import { splitDelta, pickRechecks, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
+import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type {
   GatherConfig,
   Platform,
@@ -475,16 +475,34 @@ export async function gatePlatform(opts: {
   // stored. Fresh videos take the full path below; resurfaced ones skip the
   // gate + attribution (they passed once — re-gated content gets deleted, so
   // presence in the DB means kept) and instead feed the growth comparison that
-  // decides which comment scrapes are worth re-paying for. Whole-platform scan
-  // + in-memory map, same URL-overflow avoidance as everywhere else.
-  const knownRows = await selectAll<KnownVideoState>(() =>
-    admin
-      .from('videos')
-      .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
-      .eq('client_id', opts.clientId)
-      .eq('platform', adapter.platform)
-      .order('id', { ascending: true }),
-  )
+  // decides which comment scrapes are worth re-paying for.
+  //
+  // Scoped to THIS run's candidate ids, chunked at 100 (chunkedIn's size, and
+  // the URL cap the whole-platform scan was avoiding). splitDelta only looks
+  // `known` up by a merged candidate's video_id, so the scan read the client's
+  // entire platform history to use a few hundred rows of it — a cost that grows
+  // every week and is served by an index lookup instead. It is also the read
+  // that took 6.9s and returned 504 at 05:15 on run d346b0f7; an exhausted
+  // retry there fails the whole run, since gate:<platform> has no .catch().
+  //
+  // The dormant re-check below needs the opposite slice — stored recent videos
+  // this run did NOT resurface — which these rows can never hold, so it runs its
+  // own bounded query instead of filtering them.
+  const knownRows = (
+    await Promise.all(
+      chunk(merged.map((v) => v.video_id), 100).map((part) =>
+        selectAll<KnownVideoState>(() =>
+          admin
+            .from('videos')
+            .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
+            .eq('client_id', opts.clientId)
+            .eq('platform', adapter.platform)
+            .in('video_id', part)
+            .order('id', { ascending: true }),
+        ),
+      ),
+    )
+  ).flat()
   const known = new Map(knownRows.map((r) => [r.video_id, r]))
   const { fresh, resurfaced } = splitDelta(merged, known)
 
@@ -558,7 +576,15 @@ export async function gatePlatform(opts: {
       )
       console.log(`[${adapter.platform}] recorded ${written} gate verdicts (${kept.length} kept, ${dropped} dropped)`)
     } catch (e) {
-      console.warn(`[${adapter.platform}] gate verdict recording failed: ${e instanceof Error ? e.message : String(e)}`)
+      // COUNTED, not merely warned. Non-fatal is right — losing the record must
+      // never lose the gather — but until 2026-09-13 the only trace was this
+      // console line, so run d346b0f7 lost tiktok's and instagram's entire gate
+      // record (269 verdicts, a 22P02 on a half-emoji caption) and still closed
+      // 'completed' with errors: []. `errors` is gatePlatform's return channel
+      // and pipeline.ts already feeds it to noteError, so one push is the fix.
+      const message = e instanceof Error ? e.message : String(e)
+      console.warn(`[${adapter.platform}] gate verdict recording failed: ${message}`)
+      errors.push(`gate verdicts not recorded: ${message}`)
     }
   }
   for (const v of kept) for (const kw of v.source_keywords ?? []) { const s = stats.get(kw); if (s) s.survived++ }
@@ -667,11 +693,22 @@ export async function gatePlatform(opts: {
   if (adapter.fetchCommentCounts) {
     const resurfacedIds = new Set(resurfaced.map((r) => r.video.video_id))
     const cutoff = new Date(Date.now() - RECHECK_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
-    const dormant = knownRows.filter(
-      (r) => !resurfacedIds.has(r.video_id) && r.upload_date != null && r.upload_date >= cutoff,
-    )
-    if (dormant.length) {
-      try {
+    try {
+      // Own read: `knownRows` is scoped to this run's candidate ids, so every row
+      // in it is resurfaced by construction and filtering it yields nothing.
+      // Bounded by the re-check window instead, and only paid for on platforms
+      // with a free count API.
+      const dormantRows = await selectAll<KnownVideoState>(() =>
+        admin
+          .from('videos')
+          .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
+          .eq('client_id', opts.clientId)
+          .eq('platform', adapter.platform)
+          .gte('upload_date', cutoff)
+          .order('id', { ascending: true }),
+      )
+      const dormant = pickDormant(dormantRows, resurfacedIds)
+      if (dormant.length) {
         const counts = await adapter.fetchCommentCounts(dormant.map((d) => d.video_id))
         for (const d of dormant) {
           const freshCount = counts.get(d.video_id)
@@ -679,10 +716,10 @@ export async function gatePlatform(opts: {
             candidates.push({ video_id: d.video_id, video_url: d.video_url, freshCount, baseline: scrapeBaseline(d) })
           }
         }
-      } catch (e) {
-        // Best-effort: a count-API hiccup must never fail the gather.
-        errors.push(`recheck counts: ${(e as Error).message}`)
       }
+    } catch (e) {
+      // Best-effort: a dormant read or count-API hiccup must never fail the gather.
+      errors.push(`recheck counts: ${(e as Error).message}`)
     }
   }
   const rechecks = pickRechecks(candidates, {
@@ -913,9 +950,17 @@ export async function fetchTranscriptsIsolating(
   ids: string[],
   batchSize: number,
   opts: { deadlineMs?: number; now?: () => number } = {},
-): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string> }> {
+): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string>; isolatedBatches: number }> {
   const fetched = new Map<string, FetchedTranscript | null>()
   const failed = new Map<string, string>()
+  // How many batches had a FAILED actor run and were isolated per id. Recovering
+  // per id is the design and it works — run d346b0f7 (2026-09-13) isolated
+  // batches 9, 13 and 29 of 37 and re-fetched all 24 ids one by one — so a
+  // recovered batch is an expected per-item failure, not a run error: the detail
+  // is in the console.warn below and the caller ratio-gates this count the way
+  // the translate and OCR waves gate theirs. A batch whose error is RETHROWN is
+  // not counted — the step fails on it and the run hears about it that way.
+  let isolatedBatches = 0
   const now = opts.now ?? Date.now
   const deadline = now() + (opts.deadlineMs ?? ISOLATION_DEADLINE_MS)
   for (const part of chunk(ids, batchSize)) {
@@ -928,6 +973,7 @@ export async function fetchTranscriptsIsolating(
       batchErr = e
     }
     console.warn(`[transcript] batch of ${part.length} run-failed, isolating per id: ${(batchErr as Error).message.slice(0, 160)}`)
+    isolatedBatches++
     const chunkFetched = new Map<string, FetchedTranscript | null>()
     const chunkFailed = new Map<string, string>()
     for (const id of part) {
@@ -944,7 +990,7 @@ export async function fetchTranscriptsIsolating(
     for (const [k, v] of chunkFetched) fetched.set(k, v)
     for (const [k, v] of chunkFailed) failed.set(k, v)
   }
-  return { fetched, failed }
+  return { fetched, failed, isolatedBatches }
 }
 
 export async function transcribeBatch(opts: {
@@ -958,11 +1004,11 @@ export async function transcribeBatch(opts: {
   /** 1-based batch number for the ai_call_log call_index (fan-out mode). */
   batchNo?: number
   dryRun?: boolean
-}): Promise<{ transcribed: number; skipped: number; errors: string[] }> {
+}): Promise<{ transcribed: number; skipped: number; isolatedBatches: number; errors: string[] }> {
   const admin = createAdminClient()
   const adapter = adapters[opts.platform]
   const errors: string[] = []
-  if (!canTranscribe(adapter)) return { transcribed: 0, skipped: 0, errors }
+  if (!canTranscribe(adapter)) return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
   const startedAt = Date.now()
   const stepDeadline = startedAt + TRANSCRIBE_STEP_DEADLINE_MS
 
@@ -976,7 +1022,7 @@ export async function transcribeBatch(opts: {
     if (opts.videoIds?.length) q = q.in('video_id', opts.videoIds)
     return q.order('id', { ascending: true })
   })
-  if (!rawRows.length) return { transcribed: 0, skipped: 0, errors }
+  if (!rawRows.length) return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
 
   // Skip videos already transcribed (idempotent re-runs / step retries).
   // Scoped to exactly the candidate ids, chunked — bounded however large the
@@ -997,7 +1043,7 @@ export async function transcribeBatch(opts: {
       .in('video_id', part)
     if (error) {
       errors.push(`transcribe done-check: ${error.message}`)
-      return { transcribed: 0, skipped: 0, errors }
+      return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
     }
     for (const r of (data ?? []) as { video_id: string; transcript_status: string | null; transcript_attempts: number | null }[]) {
       if (r.transcript_status != null) done.add(r.video_id)
@@ -1017,6 +1063,7 @@ export async function transcribeBatch(opts: {
   // so one actor call never carries hundreds of ids into a 60s timeout.
   let fetched: Map<string, FetchedTranscript | null> | null = null
   let fetchFailed = new Map<string, string>()
+  let isolatedBatches = 0
   if (adapter.fetchTranscripts && pending.length) {
     const r = await fetchTranscriptsIsolating(
       (ids) => adapter.fetchTranscripts!(ids),
@@ -1025,6 +1072,12 @@ export async function transcribeBatch(opts: {
     )
     fetched = r.fetched
     fetchFailed = r.failed
+    // A recovered batch is NOT a step error: the ids were all re-fetched, and a
+    // handful of run-failed batches is an expected Apify day (3 of 37 on run
+    // d346b0f7). Reported as a count so the caller can ratio-gate it — the
+    // translate and OCR waves' rule — instead of closing every such run
+    // 'partial' and capping the client's findings at 3.
+    isolatedBatches = r.isolatedBatches
   }
   let transcribed = 0
   let skipped = 0
@@ -1091,7 +1144,7 @@ export async function transcribeBatch(opts: {
         const { error } = await admin
           .from('videos')
           .update({
-            transcript: t.text || null,
+            transcript: transcriptColumn(t.text),
             transcript_lang: t.lang,
             transcript_source: t.source,
             transcript_status: t.status,
@@ -1153,7 +1206,7 @@ export async function transcribeBatch(opts: {
   console.log(
     `[${opts.platform}] transcripts${opts.batchNo ? ` (batch ${opts.batchNo})` : ''}: ${transcribed} ok, ${skipped} empty/no-speech, ${rawRows.length - pending.length} already-done · ${Math.round(whisperMinutes * 10) / 10} whisper-min · ${Math.round(assemblyMinutes * 10) / 10} assemblyai-min`,
   )
-  return { transcribed, skipped, errors }
+  return { transcribed, skipped, isolatedBatches, errors }
 }
 
 // ---- CLI composition ---------------------------------------------------------

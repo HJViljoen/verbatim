@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayFloor } from './report-delta'
+import { dayFloor, pickBaselines, deltaBaselineDate, type RunSummaryRow } from './report-delta'
 
 // "Previous update" has to mean a previous DAY. run_date is a timestamptz, so
 // an `.lt(run_date)` filter also matches a rerun from earlier the same
@@ -24,5 +24,65 @@ describe('dayFloor — the previous-update cut', () => {
 
   it('handles a date-only run_date', () => {
     expect(dayFloor('2026-09-13')).toBe('2026-09-13')
+  })
+})
+
+// 2026-09-13: the Össur digest reported "+12.2 pt share of voice" and "−2,152
+// comments" against the 6 Sep run — a manual `skipGather: true` catch-up
+// (pipeline_runs.options = {"runId":…,"skipGather":true}) that scraped no
+// videos and re-attributed old comments, so its period columns were not a week
+// of anything. Period metrics must step over it; cumulative ones need not.
+describe('pickBaselines — which update a delta is measured against', () => {
+  const row = (runId: string, runDate: string): RunSummaryRow =>
+    ({ run_id: runId, run_date: runDate } as RunSummaryRow)
+  // Newest first, as the query returns them: a full run, the catch-up, a full run.
+  const priors = [row('sep06', '2026-09-06T12:39:36Z'), row('aug30', '2026-08-30T09:35:54Z')]
+
+  it('period metrics skip a skipGather catch-up; cumulative ones keep the previous run', () => {
+    const picked = pickBaselines(priors, new Set(['sep06']))!
+    expect(picked.prev.run_id).toBe('sep06')
+    expect(picked.periodPrev.run_id).toBe('aug30')
+  })
+
+  it('uses the immediate previous run when it gathered', () => {
+    const picked = pickBaselines(priors, new Set())!
+    expect(picked.prev.run_id).toBe('sep06')
+    expect(picked.periodPrev.run_id).toBe('sep06')
+  })
+
+  it('steps over a run of catch-ups to the last run that gathered', () => {
+    const three = [row('sep13', '2026-09-13T06:00:00Z'), ...priors]
+    const picked = pickBaselines(three, new Set(['sep13', 'sep06']))!
+    expect(picked.prev.run_id).toBe('sep13')
+    expect(picked.periodPrev.run_id).toBe('aug30')
+  })
+
+  it('falls back to the previous run when every prior one skipped gather, and is null with no history', () => {
+    const picked = pickBaselines(priors, new Set(['sep06', 'aug30']))!
+    expect(picked.periodPrev.run_id).toBe('sep06')
+    expect(pickBaselines([], new Set())).toBeNull()
+  })
+})
+
+// The date the block prints is the baseline its figures were measured against.
+// Each family falls back to a cumulative column (compared against the previous
+// RUN) when either side lacks the period one, so only an all-period block may
+// name periodPrev — otherwise a cumulative movement is dated to a baseline it
+// was never measured against.
+describe('deltaBaselineDate — "since <date>" names the baseline actually used', () => {
+  const prev = { run_id: 'sep06', run_date: '2026-09-06' } as RunSummaryRow
+  const periodPrev = { run_id: 'aug30', run_date: '2026-08-30' } as RunSummaryRow
+
+  it('names the last run that gathered when every family is on the period layer', () => {
+    expect(deltaBaselineDate(prev, periodPrev, { sentiment: true, share: true, conversations: true })).toBe('2026-08-30')
+  })
+
+  it('names the previous update when any family fell back to a cumulative column', () => {
+    for (const layers of [
+      { sentiment: false, share: true, conversations: true },
+      { sentiment: true, share: false, conversations: true },
+      { sentiment: true, share: true, conversations: false },
+      { sentiment: false, share: false, conversations: false },
+    ]) expect(deltaBaselineDate(prev, periodPrev, layers)).toBe('2026-09-06')
   })
 })

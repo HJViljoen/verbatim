@@ -8,6 +8,7 @@ import {
   ANALYSIS_TEMPERATURE, TRANSCRIPT_PROMPT_CHARS, TRANSLATE_BATCH, TRANSLATE_CAP, TRANSLATE_MODEL, estimateCost,
 } from '../config'
 import { normaliseLang } from '../gather/transcript'
+import { dbSafeText } from '../db-text'
 import { logAiCall } from './ai-log'
 
 // Transcript translation — the `transcript_en` wave (WP6, 2026-09-11).
@@ -71,16 +72,73 @@ export function isEnglishLang(lang: string | null | undefined): boolean {
  * English video comes back `translation: null` and only its language is
  * written.
  *
- * A recorded transcript_en_error is a tombstone, not a retry queue: a weekly
- * run must not re-pay for the same failure forever. Clearing the column is the
- * deliberate retry (scripts/translate-transcripts.ts prints the count).
+ * A recorded transcript_en_error is a BOUNDED retry, not a tombstone
+ * (2026-09-13). It was a tombstone — one failure and the row was never offered
+ * again — which made every transient failure permanent and, worse, made the
+ * code's one un-tombstoned failure path (a write that 400s after the call was
+ * paid for) indistinguishable from "not attempted yet". A row is now offered
+ * again until TRANSLATE_MAX_ATTEMPTS attempts are recorded in the error itself,
+ * so a deterministic failure costs three calls across three weeks and then
+ * stops. An error string WITHOUT the attempt marker is still permanent: that is
+ * how a hand-written tombstone is spelled.
  */
 export function needsTranslation(v: TranslatableVideo): boolean {
   if (v.transcript_status !== 'ok') return false
   if (!v.transcript || !v.transcript.trim()) return false
   if (isEnglishLang(v.transcript_lang)) return false
-  if (v.transcript_en !== null || v.transcript_en_error !== null) return false
+  if (v.transcript_en !== null) return false
+  if (translateAttempts(v.transcript_en_error) >= TRANSLATE_MAX_ATTEMPTS) return false
   return true
+}
+
+/** Attempts a video gets before its failure is permanent. Three: enough to ride
+ *  out a bad afternoon at the provider, small enough that a deterministic
+ *  failure across the whole backlog costs one run's worth of calls, not every
+ *  run's, forever. */
+export const TRANSLATE_MAX_ATTEMPTS = 3
+
+const ATTEMPT_MARKER = /^attempt (\d+)\/\d+: /
+
+/** Attempts already recorded in a transcript_en_error. An error with no marker
+ *  reads as exhausted — it is either hand-written (a deliberate "never again")
+ *  or predates the counter, and neither wants re-paying for. */
+export function translateAttempts(err: string | null): number {
+  if (err === null) return 0
+  const m = ATTEMPT_MARKER.exec(err)
+  return m ? Number(m[1]) : TRANSLATE_MAX_ATTEMPTS
+}
+
+/** The transcript_en_error to write for a failure, carrying the attempt count
+ *  forward. Sanitised and truncated, and it is ONLY this string — a failure
+ *  write must not carry the bytes that may have caused the failure. */
+export function translateErrorStamp(prev: string | null, msg: string): string {
+  const n = Math.min(translateAttempts(prev) + 1, TRANSLATE_MAX_ATTEMPTS)
+  return `attempt ${n}/${TRANSLATE_MAX_ATTEMPTS}: ${dbSafeText(msg)}`.slice(0, 300)
+}
+
+/**
+ * The videos patch for a successful call.
+ *
+ * The translation is sanitised here, at the write boundary: model output that
+ * contains U+0000 cannot be written to Postgres at all, and a 400 on this PATCH
+ * is how a paid-for translation gets lost (lib/db-text.ts).
+ *
+ * The language the model actually read is written when the provider gave none,
+ * and when the model says English — that second case is what closes the loop on
+ * a mislabelled row: without it a video the provider called 'es' and the model
+ * reads as English would carry no translation, no error and no English label,
+ * and be re-selected every run until its attempts ran out.
+ */
+export function translationPatch(
+  v: Pick<TranslatableVideo, 'transcript_lang'>,
+  r: Pick<TranslateOutcome, 'language' | 'translation'>,
+): Record<string, string | null> {
+  const relabel = !v.transcript_lang?.trim() || (isEnglishLang(r.language) && !isEnglishLang(v.transcript_lang))
+  return {
+    ...(r.translation === null ? {} : { transcript_en: dbSafeText(r.translation) }),
+    transcript_en_error: null,
+    ...(relabel ? { transcript_lang: r.language } : {}),
+  }
 }
 
 // v1.1 (2026-09-11): the unintelligibility rule was rewritten after the live
@@ -225,21 +283,29 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
   batches: string[][]
   needing: number
   deferred: number
+  /** Of `needing`, how many are re-attempts of a recorded failure — the rows
+   *  that are costing a second or third call. Visible because they are spend. */
+  retrying: number
   byLang: Record<string, number>
 }> {
   const admin = createAdminClient()
-  const rows = await selectAll<{ id: string; transcript_lang: string | null; comments_count: number | null }>(() =>
+  // transcript_en_error is read, not filtered on: a failed row is a candidate
+  // again until its attempts run out (needsTranslation), which is what makes a
+  // lost write recoverable on the next run instead of permanent.
+  const rows = await selectAll<{
+    id: string; transcript_lang: string | null; comments_count: number | null; transcript_en_error: string | null
+  }>(() =>
     admin.from('videos')
-      .select('id, transcript_lang, comments_count')
+      .select('id, transcript_lang, comments_count, transcript_en_error')
       .eq('client_id', clientId)
       .eq('transcript_status', 'ok')
       .is('transcript_en', null)
-      .is('transcript_en_error', null)
       .order('id', { ascending: true }),
   )
   // Unknown-language rows are candidates: the model reports what it detected,
   // and an English one costs one call and stores only its language.
-  const pending = rows.filter((r) => !isEnglishLang(r.transcript_lang))
+  const pending = rows.filter((r) =>
+    !isEnglishLang(r.transcript_lang) && translateAttempts(r.transcript_en_error) < TRANSLATE_MAX_ATTEMPTS)
   const byLang: Record<string, number> = {}
   for (const r of pending) {
     const k = (r.transcript_lang ?? '').trim().toLowerCase() || 'unknown'
@@ -249,7 +315,8 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
   // carries the most weight and the tail comes next run.
   pending.sort((a, b) => (b.comments_count ?? 0) - (a.comments_count ?? 0))
   const batches = planTranslation(pending, { cap })
-  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap), byLang }
+  const retrying = pending.filter((r) => r.transcript_en_error !== null).length
+  return { batches, needing: pending.length, deferred: Math.max(0, pending.length - cap), retrying, byLang }
 }
 
 /**
@@ -260,6 +327,16 @@ export async function planTranslateBatches(clientId: string, cap = TRANSLATE_CAP
  * freshly-read rows, so an Inngest step retry skips what the first attempt
  * already wrote. A per-video failure is stamped into transcript_en_error and
  * counted — it never sinks the batch, and the video keeps reading as-is.
+ *
+ * EVERY failure is stamped, including a failed write and including an unexpected
+ * throw from the client (2026-09-13). Two rules come out of that run:
+ *   1. Nothing in here may throw. A thrown step is retried by Inngest, and a
+ *      retry re-CALLS the model for every row whose result did not land — so a
+ *      deterministic write failure would bill the same translation four times.
+ *      A write that cannot succeed must end the row, not the step.
+ *   2. A row never ends with no translation and no error. That pair means "not
+ *      attempted yet" to the plan step, and a paid-for call that reads as
+ *      never-attempted is a silent loss.
  */
 export async function translateBatch(opts: {
   clientId: string
@@ -267,10 +344,32 @@ export async function translateBatch(opts: {
   videoIds: string[]
   batchNo?: number
   dryRun?: boolean
+  /** Seams, for the pure-logic test of the write paths. Production passes
+   *  neither — the real client and the real model call are the defaults. */
+  admin?: ReturnType<typeof createAdminClient>
+  translate?: (text: string, lang: string | null) => Promise<TranslateOutcome>
 }): Promise<TranslateResult> {
-  const admin = createAdminClient()
+  const admin = opts.admin ?? createAdminClient()
+  const translate = opts.translate ?? translateTranscript
   const out: TranslateResult = { translated: 0, english: 0, skipped: 0, failed: 0, costUsd: 0, rateLimited: false, errors: [] }
   if (!opts.videoIds.length) return out
+
+  /** Record a failure on one row. Writes ONLY the stamped message — never the
+   *  model's bytes — so it cannot fail for the reason it is recording. */
+  const stampFailure = async (v: TranslatableVideo & { id: string }, msg: string): Promise<void> => {
+    if (opts.dryRun) return
+    try {
+      const { error } = await admin.from('videos')
+        .update({ transcript_en_error: translateErrorStamp(v.transcript_en_error, msg) })
+        .eq('id', v.id)
+      if (error) throw new Error(error.message)
+    } catch (e) {
+      // Last line: the row stays NULL/NULL and will be re-offered next run.
+      const why = e instanceof Error ? e.message : String(e)
+      out.errors.push(`translate error-write (${v.id}): ${why.slice(0, 200)}`)
+      console.warn(`[translate] could not record failure for ${v.id}: ${why}`)
+    }
+  }
 
   const rows: (TranslatableVideo & { id: string })[] = []
   for (const part of chunk(opts.videoIds, 100)) {
@@ -290,66 +389,67 @@ export async function translateBatch(opts: {
   for (const v of rows) {
     if (!needsTranslation(v)) { out.skipped++; continue }
     callIndex++
-    let r: Awaited<ReturnType<typeof translateTranscript>>
+    let r: TranslateOutcome
     try {
-      r = await translateTranscript(v.transcript!, v.transcript_lang)
+      r = await translate(v.transcript!, v.transcript_lang)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       out.failed++
       if (isRateLimited(msg)) out.rateLimited = true
       out.errors.push(`translate (${v.id}): ${msg.slice(0, 200)}`)
-      // Stamp the tombstone so the next run does not re-pay for the same
-      // failure. A rate limit is the exception: it says nothing about this
-      // video, and stamping it would permanently exclude a whole batch that a
-      // retry would have translated fine.
-      if (!opts.dryRun && !isRateLimited(msg)) {
-        await admin.from('videos').update({ transcript_en_error: msg.slice(0, 300) }).eq('id', v.id)
-      }
+      // Count the attempt so the next run does not re-pay forever. A rate limit
+      // is the exception: it says nothing about this video, and counting it
+      // would spend a whole batch's attempts on a fact about the account.
+      if (!isRateLimited(msg)) await stampFailure(v, msg)
       continue
     }
     // Spend happened the moment the call returned (transcribeBatch's rule):
     // account for it before the write can fail, or the ledger under-counts.
     const cost = estimateCost(TRANSLATE_MODEL, r.usage.prompt_tokens, r.usage.completion_tokens)
     out.costUsd += cost
-    // The language the model actually read is written when the provider gave
-    // none, and when the model says English — that second case is what closes
-    // the loop on a mislabelled row: without it a video the provider called
-    // 'es' and the model reads as English would carry no translation, no error
-    // and no English label, and be re-selected every run forever.
     const detected = r.language
-    const relabel = !v.transcript_lang?.trim() || (isEnglishLang(detected) && !isEnglishLang(v.transcript_lang))
     if (r.translation === null) out.english++
     else out.translated++
     if (opts.dryRun) continue
-    const { error } = await admin.from('videos')
-      .update({
-        ...(r.translation === null ? {} : { transcript_en: r.translation }),
-        transcript_en_error: null,
-        ...(relabel ? { transcript_lang: detected } : {}),
-      })
-      .eq('id', v.id)
-    if (error) {
-      out.errors.push(`translate write (${v.id}): ${error.message}`)
+    // The write can fail on bytes (22P05) or on anything else a client throws;
+    // either way the row gets its attempt stamped rather than being left
+    // looking un-attempted, and the step does NOT throw (see rule 1 above).
+    let writeError: string | null = null
+    try {
+      const { error } = await admin.from('videos').update(translationPatch(v, r)).eq('id', v.id)
+      writeError = error?.message ?? null
+    } catch (e) {
+      writeError = e instanceof Error ? e.message : String(e)
+    }
+    if (writeError) {
+      out.errors.push(`translate write (${v.id}): ${writeError.slice(0, 200)}`)
       out.failed++
       if (r.translation === null) out.english--; else out.translated--
+      await stampFailure(v, `write: ${writeError}`)
     }
     // Logged either way, write error included: ai_call_log is the ledger of
-    // record for what was SPENT, and the call was spent.
-    await logAiCall(admin, {
-      clientId: opts.clientId,
-      runId: opts.runId,
-      pass: 'translate',
-      callIndex,
-      model: TRANSLATE_MODEL,
-      promptVersion: TRANSLATE_PROMPT_VERSION,
-      systemPrompt: r.prompt.system,
-      userPrompt: r.prompt.user,
-      response: { labelled: v.transcript_lang, detected, chars: r.translation?.length ?? 0, english: r.translation === null },
-      error: error?.message ?? null,
-      usage: r.usage,
-      durationMs: r.durationMs,
-      validationStatus: error ? 'write_failed' : 'ok',
-    })
+    // record for what was SPENT, and the call was spent. A ledger failure is
+    // never allowed to throw out of here — that would retry the step and re-bill
+    // every call in the batch that had not landed.
+    try {
+      await logAiCall(admin, {
+        clientId: opts.clientId,
+        runId: opts.runId,
+        pass: 'translate',
+        callIndex,
+        model: TRANSLATE_MODEL,
+        promptVersion: TRANSLATE_PROMPT_VERSION,
+        systemPrompt: r.prompt.system,
+        userPrompt: r.prompt.user,
+        response: { labelled: v.transcript_lang, detected, chars: r.translation?.length ?? 0, english: r.translation === null },
+        error: writeError,
+        usage: r.usage,
+        durationMs: r.durationMs,
+        validationStatus: writeError ? 'write_failed' : 'ok',
+      })
+    } catch (e) {
+      console.warn(`[translate] ai_call_log insert threw for ${v.id}: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
   return out
 }

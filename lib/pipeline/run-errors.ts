@@ -9,6 +9,22 @@
  * persists to `pipeline_runs.errors` / `.error_message`.
  */
 
+/**
+ * How a run that reached close-run reports itself: any recorded step error
+ * demotes 'completed' to 'partial'.
+ *
+ * The rule was always this, but it lived as a bare ternary written twice in
+ * pipeline.ts (the status write and the function's return value), so "did this
+ * run close honestly?" could only be answered by reading the orchestrator. It is
+ * named and tested here because it is the load-bearing half of the 2026-09-13
+ * finding: run d346b0f7 closed 'completed' with errors: [] while six writes and
+ * three Apify batches failed inside its window — the rule was right and the
+ * catch sites simply never told it anything.
+ */
+export function runCloseStatus(totalErrors: number): 'completed' | 'partial' {
+  return totalErrors > 0 ? 'partial' : 'completed'
+}
+
 /** Hard cap on stored error strings. A pathological run (every comment batch
  *  failing) must not write an unbounded jsonb blob; the count in
  *  error_message stays honest past the cap. */
@@ -82,6 +98,21 @@ export function partialRunAlert(input: {
   ].join('\n')
 
   return { subject: `Verbatim run PARTIAL — ${clientName}`, text }
+}
+
+/**
+ * Recovered caption batches, ratio-gated the way per-video translate/OCR
+ * failures are (2026-09-13). A run-failed caption batch that the isolation pass
+ * re-fetched id-by-id cost Apify money but lost no data, and a few of them is an
+ * ordinary Apify day (3 of 37 on run d346b0f7) — closing such a run 'partial'
+ * would tell the client their update is thin when it is whole. Past `ratio` the
+ * actor itself is suspect, and that the run should say.
+ */
+export function isolatedBatchDegradation(isolated: number, total: number, ratio: number): string | null {
+  if (isolated <= 0) return null
+  const share = total > 0 ? isolated / total : 1
+  if (share <= ratio) return null
+  return `${isolated} of ${total} caption batches run-failed and were recovered id-by-id (${Math.round(share * 100)}%)`
 }
 
 /**

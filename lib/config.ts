@@ -912,6 +912,14 @@ export const GATHER_MAX_COMMENT_DEPTH = 500
  *  'completed' with errors=[]. */
 export const PASS_A_ERROR_RATIO = 0.05
 
+/** Recovered caption-batch tolerance (2026-09-13). A run-failed caption batch
+ *  whose ids the isolation pass then re-fetched one by one cost Apify a dead
+ *  actor run but lost no data, so it takes MORE of them than a per-video failure
+ *  (PASS_A_ERROR_RATIO) before a run is honestly 'partial': run d346b0f7
+ *  isolated 3 of 37 batches (8%) and produced a complete update. Past a quarter
+ *  of the batches the actor itself is the problem, not the inputs. */
+export const ISOLATED_BATCH_ERROR_RATIO = 0.25
+
 /** Theme registry (shape B-lite, 2026-08-17). OFF unless set, so merging the
  *  branch changes nothing until it is switched on in Vercel. Gates the registry
  *  write + the `first_seen`-from-registry rule only; the tables and the

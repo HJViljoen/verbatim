@@ -3,8 +3,10 @@ import type { CiSummary } from './pipeline/schemas'
 import { proportionDelta, SENTIMENT_BAND, SHARE_BAND, type DeltaVerdict } from './report-bands'
 
 // Week-over-week delta for the report's "what changed" block (Redesign Spec §7).
-// Computed from consecutive run_summary rows — no genealogy: the previous row is
-// simply the latest one dated before the current run's. Every field degrades to
+// Computed from run_summary rows — no genealogy: the previous row is simply the
+// latest one dated before the current run's, except that PERIOD metrics skip a
+// `skipGather` catch-up, which gathered no week to compare with (pickBaselines).
+// Every field degrades to
 // null independently, so a first report (no previous row) or a metric missing on
 // either side hides just that line, never the report.
 
@@ -62,6 +64,8 @@ export interface ShareSide {
 }
 
 export interface RunDelta {
+  /** The update the figures are measured against — the last one that gathered,
+   *  which is not always the last one that ran (pickBaselines). */
   prevRunDate: string
   /** Audience-sentiment share, now vs the previous update, with the verdict
    *  that decides whether it may be shown as movement (T0-8). `judged` are the
@@ -123,15 +127,68 @@ export function readShare(sov: Record<string, SovEntry> | null): ShareSide | nul
 
 /** The sentiment family a row may be reported from: audience only, period
  *  layer when both sides have it. Null when either side predates the split —
- *  those rows blended framing into the number and are not comparable. */
-function audienceSides(current: RunSummaryRow, prev: RunSummaryRow):
+ *  those rows blended framing into the number and are not comparable. The
+ *  period layer compares against `periodPrev` (the last run that gathered),
+ *  the cumulative fallback against the immediate previous — see pickBaselines. */
+function audienceSides(current: RunSummaryRow, prev: RunSummaryRow, periodPrev: RunSummaryRow, usePeriod: boolean):
   { now: SentimentFamilyRow; prev: SentimentFamilyRow } | null {
-  const usePeriod = current.period_audience_sentiment != null && prev.period_audience_sentiment != null
   const nowRow = usePeriod ? current.period_audience_sentiment : current.audience_sentiment
-  const prevRow = usePeriod ? prev.period_audience_sentiment : prev.audience_sentiment
+  const prevRow = usePeriod ? periodPrev.period_audience_sentiment : prev.audience_sentiment
   if (!nowRow || !prevRow) return null
   if (nowRow.positive == null || prevRow.positive == null) return null
   return { now: nowRow, prev: prevRow }
+}
+
+/** Prior run_summary rows to consider when choosing a baseline. Deep enough
+ *  to step over a run of catch-ups, shallow enough to stay one small query. */
+export const BASELINE_LOOKBACK = 8
+
+/**
+ * The date the delta block may name as "since <date>".
+ *
+ * Every period figure is measured against `periodPrev` (the last run that
+ * GATHERED), so when the whole block is period figures that is the honest date.
+ * But each family falls back to its cumulative column when either side lacks the
+ * period one, and those compare against `prevRow` — so a mixed block dated to
+ * periodPrev would put a cumulative movement under the wrong baseline. Mixed
+ * (or all-cumulative) therefore names the previous update, which is true of
+ * every row: the period ones simply span a little more than the label says.
+ */
+export function deltaBaselineDate(
+  prev: RunSummaryRow,
+  periodPrev: RunSummaryRow,
+  layers: { sentiment: boolean; share: boolean; conversations: boolean },
+): string {
+  const allPeriod = layers.sentiment && layers.share && layers.conversations
+  return allPeriod ? periodPrev.run_date : prev.run_date
+}
+
+/**
+ * The two baselines a delta is measured against.
+ *
+ * `prev` is simply the previous update — what the CUMULATIVE columns compare
+ * to, since a stock is a stock however the run was dispatched.
+ *
+ * `periodPrev` is the most recent prior run that actually GATHERED. A
+ * `skipGather: true` catch-up re-analyses what is already stored: it scrapes
+ * no videos and re-attributes old comments, so its period columns are not a
+ * week of anything. Össur's 6 Sep run was one (pipeline_runs.options =
+ * {"runId":…,"skipGather":true}), and measuring 13 Sep against it produced
+ * "+12.2 pt share of voice" and "−2,152 comments" — artefacts of the
+ * baseline, not movement. Falls back to `prev` when every row in the lookback
+ * skipped gather, so a client whose only history is catch-ups still gets a
+ * delta rather than none.
+ *
+ * `priorDesc` is newest-first; `skippedGather` holds the run_ids whose
+ * pipeline_runs.options set skipGather.
+ */
+export function pickBaselines(
+  priorDesc: RunSummaryRow[],
+  skippedGather: ReadonlySet<string>,
+): { prev: RunSummaryRow; periodPrev: RunSummaryRow } | null {
+  const prev = priorDesc[0]
+  if (!prev) return null
+  return { prev, periodPrev: priorDesc.find((r) => !skippedGather.has(r.run_id)) ?? prev }
 }
 
 /** The start of a run's calendar day, as the comparable prefix of its
@@ -151,21 +208,37 @@ export async function computeRunDelta(
   // measured against a few hours of the same week rather than against the last
   // one, which reads as "nothing changed". Cutting on the calendar day keeps a
   // same-day rerun out while still finding yesterday's run.
-  const { data: prev } = await admin
+  const { data: priors } = await admin
     .from('run_summary')
     .select(SUMMARY_COLS)
     .eq('client_id', clientId)
     .lt('run_date', dayFloor(current.run_date))
     .order('run_date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (!prev) return null
-  const prevRow = prev as RunSummaryRow
+    .limit(BASELINE_LOOKBACK)
+  const priorRows = (priors ?? []) as RunSummaryRow[]
+  if (!priorRows.length) return null
+
+  // Period metrics may not compare against a catch-up that gathered nothing
+  // (pickBaselines). A failed or unsupported filter leaves the set empty,
+  // which is the old behaviour — the safe direction.
+  const { data: skipped } = await admin
+    .from('pipeline_runs')
+    .select('id')
+    .in('id', priorRows.map((r) => r.run_id))
+    .eq('options->>skipGather', 'true')
+  const baselines = pickBaselines(priorRows, new Set(((skipped ?? []) as { id: string }[]).map((r) => r.id)))
+  if (!baselines) return null
+  const { prev: prevRow, periodPrev } = baselines
 
   // Sentiment: audience family only, period layer when both sides carry it.
   // A verdict, not a raw difference — floors (>= 100 judged per side) and a
   // 2xSE band keep re-judgment jitter and population changes out of the arrow.
-  const sides = audienceSides(current, prevRow)
+  // Which families compare against `periodPrev` (the last run that gathered) and
+  // which fall back to a cumulative column measured against `prevRow`. Hoisted
+  // out of audienceSides because the block's "since <date>" depends on all three
+  // (deltaBaselineDate).
+  const usePeriodSentiment = current.period_audience_sentiment != null && periodPrev.period_audience_sentiment != null
+  const sides = audienceSides(current, prevRow, periodPrev, usePeriodSentiment)
   const sentiment = sides
     ? {
         now: sides.now.positive as number,
@@ -182,9 +255,9 @@ export async function computeRunDelta(
       }
     : null
 
-  const usePeriodShare = current.period_share_of_voice != null && prevRow.period_share_of_voice != null
+  const usePeriodShare = current.period_share_of_voice != null && periodPrev.period_share_of_voice != null
   const shareNow = readShare(usePeriodShare ? current.period_share_of_voice : current.share_of_voice)
-  const sharePrev = readShare(usePeriodShare ? prevRow.period_share_of_voice : prevRow.share_of_voice)
+  const sharePrev = readShare(usePeriodShare ? periodPrev.period_share_of_voice : prevRow.share_of_voice)
 
   // "New themes" is only honest once theme identity is durable. Two gates:
   // the previous run must have had themes at all, AND the registry must hold
@@ -212,12 +285,14 @@ export async function computeRunDelta(
     newThemes = { count: rows.length, labels: rows.slice(0, 2).map((r) => r.label) }
   }
 
-  const usePeriodConv = current.period_comments != null && prevRow.period_comments != null
+  const usePeriodConv = current.period_comments != null && periodPrev.period_comments != null
   const convNow = num(usePeriodConv ? current.period_comments : current.total_comments)
-  const convPrev = num(usePeriodConv ? prevRow.period_comments : prevRow.total_comments)
+  const convPrev = num(usePeriodConv ? periodPrev.period_comments : prevRow.total_comments)
 
   return {
-    prevRunDate: prevRow.run_date,
+    prevRunDate: deltaBaselineDate(prevRow, periodPrev, {
+      sentiment: usePeriodSentiment, share: usePeriodShare, conversations: usePeriodConv,
+    }),
     sentiment,
     share:
       shareNow && sharePrev

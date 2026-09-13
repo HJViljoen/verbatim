@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitDelta, pickRechecks, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
+import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type { VideoInsert } from './types'
 
 // Delta-scraping invariants worth locking (2026-07-16):
@@ -41,6 +41,23 @@ describe('splitDelta', () => {
     const { fresh, resurfaced } = splitDelta([video('a'), video('b')], new Map())
     expect(fresh).toHaveLength(2)
     expect(resurfaced).toHaveLength(0)
+  })
+})
+
+describe('pickDormant', () => {
+  it('keeps stored in-window videos this run did not resurface', () => {
+    // Regression (2026-09-13): the dormant rows must come from their own
+    // window query, not from the ids this run searched up — scoped that way
+    // every row is resurfaced and the whole comment re-check goes silent.
+    const merged = [video('a')]
+    const rows = [state('a'), state('b')]
+    const { resurfaced } = splitDelta(merged, new Map(rows.map((r) => [r.video_id, r])))
+    const dormant = pickDormant(rows, new Set(resurfaced.map((r) => r.video.video_id)))
+    expect(dormant.map((d) => d.video_id)).toEqual(['b'])
+  })
+
+  it('is empty when the search resurfaced everything stored', () => {
+    expect(pickDormant([state('a')], new Set(['a']))).toEqual([])
   })
 })
 

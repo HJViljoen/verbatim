@@ -1,10 +1,18 @@
 import { describe, it, expect } from 'vitest'
-import { needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, type TranslatableVideo } from './translate'
+import {
+  needsTranslation, isEnglishLang, buildTranslatePrompt, planTranslation, translateAttempts,
+  translateErrorStamp, translationPatch, translateBatch, TRANSLATE_MAX_ATTEMPTS,
+  type TranslatableVideo, type TranslateOutcome,
+} from './translate'
 import { TRANSCRIPT_PROMPT_CHARS } from '../config'
 
 // Translation selection (WP6, 2026-09-11). The rule is stated ONCE, here, and
 // the Inngest plan step's SQL is only an index-friendly pre-filter over it —
 // so every edge that decides real spend is locked in this file.
+
+/** The character that cannot be written: a U+0000 in model output 400s the
+ *  PostgREST write carrying it (22P05) and loses a paid-for translation. */
+const NUL = '\u0000'
 
 const video = (over: Partial<TranslatableVideo> = {}): TranslatableVideo => ({
   transcript: 'Hola, esto es una prueba del producto.',
@@ -80,11 +88,82 @@ describe('needsTranslation', () => {
     expect(needsTranslation(video({ transcript_en: 'Hello, this is a product test.' }))).toBe(false)
   })
 
-  it('never retries a recorded failure (the error is the tombstone)', () => {
-    // Same posture as transcript_error: a stored failure means "attempted and
-    // it did not work", so a weekly run does not pay for it again and again.
-    // Clearing the column is the deliberate retry.
+  it('treats an unmarked error as a permanent tombstone', () => {
+    // A hand-written error, or one from before attempts were counted, means
+    // "never again" — clearing the column is the deliberate retry.
     expect(needsTranslation(video({ transcript_en_error: 'context_length_exceeded' }))).toBe(false)
+  })
+
+  it('RE-OFFERS a row whose failure has attempts left (2026-09-13)', () => {
+    // The regression this closes: a translation that was paid for and then lost
+    // at the write left transcript_en NULL and transcript_en_error NULL, which
+    // reads as "never attempted" — true, but only by accident. Now a failure is
+    // always recorded, and a recorded failure comes back until it has had three
+    // goes.
+    expect(needsTranslation(video({ transcript_en_error: 'attempt 1/3: write: unsupported Unicode escape sequence' }))).toBe(true)
+    expect(needsTranslation(video({ transcript_en_error: 'attempt 2/3: no parsed translation' }))).toBe(true)
+    expect(needsTranslation(video({ transcript_en_error: 'attempt 3/3: no parsed translation' }))).toBe(false)
+  })
+
+  it('still never re-translates a row that HAS a translation, error or not', () => {
+    expect(needsTranslation(video({ transcript_en: 'Hello.', transcript_en_error: 'attempt 1/3: x' }))).toBe(false)
+  })
+})
+
+describe('translateAttempts / translateErrorStamp', () => {
+  it('counts from zero and carries the count forward', () => {
+    expect(translateAttempts(null)).toBe(0)
+    const first = translateErrorStamp(null, 'no parsed translation')
+    expect(first).toBe('attempt 1/3: no parsed translation')
+    expect(translateAttempts(first)).toBe(1)
+    expect(translateErrorStamp(first, 'again')).toBe('attempt 2/3: again')
+    expect(translateAttempts(translateErrorStamp(translateErrorStamp(first, 'x'), 'y'))).toBe(TRANSLATE_MAX_ATTEMPTS)
+  })
+
+  it('never counts past the cap, so a stamped row stays stamped', () => {
+    const last = translateErrorStamp('attempt 3/3: boom', 'boom again')
+    expect(last).toBe('attempt 3/3: boom again')
+    expect(needsTranslation(video({ transcript_en_error: last }))).toBe(false)
+  })
+
+  it('records a failure the error write itself can survive', () => {
+    // The failure path must not carry the bytes that caused the failure: a
+    // U+0000 in the message would 400 the write that records it (22P05).
+    const stamp = translateErrorStamp(null, `write: bad byte ${NUL} here`)
+    expect(stamp).not.toContain('\u0000')
+    expect(translateErrorStamp(null, 'x'.repeat(500)).length).toBe(300)
+  })
+})
+
+describe('translationPatch', () => {
+  const outcome = (over: Partial<TranslateOutcome> = {}): TranslateOutcome => ({
+    language: 'es',
+    translation: 'Hello, this is a product test.',
+    usage: { prompt_tokens: 100, completion_tokens: 50 },
+    durationMs: 1200,
+    prompt: { system: 's', user: 'u' },
+    ...over,
+  })
+
+  it('strips the character that cannot be written, at the write boundary', () => {
+    const p = translationPatch({ transcript_lang: 'ar' }, outcome({ language: 'ar', translation: `He said${NUL} hello` }))
+    expect(p.transcript_en).toBe('He said hello')
+    expect(p.transcript_en).not.toContain('\u0000')
+  })
+
+  it('clears any previous error and writes nothing else when the label is right', () => {
+    const p = translationPatch({ transcript_lang: 'es' }, outcome())
+    expect(p).toEqual({ transcript_en: 'Hello, this is a product test.', transcript_en_error: null })
+  })
+
+  it('labels an unlabelled row with the language the model read', () => {
+    expect(translationPatch({ transcript_lang: null }, outcome({ language: 'zh' })).transcript_lang).toBe('zh')
+    expect(translationPatch({ transcript_lang: '  ' }, outcome({ language: 'zh' })).transcript_lang).toBe('zh')
+  })
+
+  it('stores no translation for an English video, only its corrected label', () => {
+    const p = translationPatch({ transcript_lang: 'es' }, outcome({ language: 'en', translation: null }))
+    expect(p).toEqual({ transcript_en_error: null, transcript_lang: 'en' })
   })
 })
 
@@ -157,5 +236,152 @@ describe('planTranslation', () => {
 
   it('defaults to the configured cap and batch size', () => {
     expect(planTranslation(ids(3))).toEqual([['v1', 'v2', 'v3']])
+  })
+})
+
+// The write paths of translateBatch, through its two seams (a fake client and a
+// fake model call). No network, no DB, no GPT — the point is the decisions the
+// 2026-09-13 run got wrong: a failed write must leave a recorded failure, must
+// not re-call the model, and must not throw (a thrown step is retried by
+// Inngest, which re-bills every call in the batch that had not landed).
+describe('translateBatch write paths', () => {
+  type Row = TranslatableVideo & { id: string }
+  const row = (over: Partial<Row> = {}): Row => ({
+    id: 'v1',
+    transcript: 'Hola, esto es una prueba del producto.',
+    transcript_lang: 'es',
+    transcript_status: 'ok',
+    transcript_en: null,
+    transcript_en_error: null,
+    ...over,
+  })
+
+  interface Write { table: string; op: 'update' | 'insert'; patch: Record<string, unknown>; id?: string }
+
+  /** Just the three chains translateBatch uses. `failUpdate` fails any update
+   *  that carries a transcript_en, the way a 22P05 does. */
+  const fakeAdmin = (rows: Row[], o: { failUpdate?: boolean; failInsert?: boolean } = {}) => {
+    const writes: Write[] = []
+    const admin = {
+      from(table: string) {
+        return {
+          select: () => ({
+            eq: () => ({
+              in: (_c: string, ids: string[]) =>
+                Promise.resolve({ data: rows.filter((r) => ids.includes(r.id)), error: null }),
+            }),
+          }),
+          update: (patch: Record<string, unknown>) => ({
+            eq: (_c: string, id: string) => {
+              writes.push({ table, op: 'update', patch, id })
+              const fails = o.failUpdate && 'transcript_en' in patch
+              return Promise.resolve({ error: fails ? { message: 'unsupported Unicode escape sequence' } : null })
+            },
+          }),
+          insert: (patch: Record<string, unknown>) => {
+            writes.push({ table, op: 'insert', patch })
+            return Promise.resolve({ error: o.failInsert ? { message: 'unsupported Unicode escape sequence' } : null })
+          },
+        }
+      },
+    }
+    return { admin: admin as never, writes }
+  }
+
+  const outcome = (translation: string | null, language = 'es'): TranslateOutcome => ({
+    language,
+    translation,
+    usage: { prompt_tokens: 100, completion_tokens: 50 },
+    durationMs: 1000,
+    prompt: { system: 's', user: 'u' },
+  })
+
+  it('stores model output containing U+0000 cleanly', async () => {
+    const { admin, writes } = fakeAdmin([row()])
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin,
+      translate: async () => outcome(`Hello,${NUL} this is a product test.`),
+    })
+    expect(r.translated).toBe(1)
+    expect(r.failed).toBe(0)
+    const patch = writes.find((w) => w.table === 'videos')!.patch
+    expect(patch.transcript_en).toBe('Hello, this is a product test.')
+    expect(JSON.stringify(writes)).not.toContain(NUL)
+  })
+
+  it('records transcript_en_error when the write fails, and does not re-call the model', async () => {
+    const { admin, writes } = fakeAdmin([row()], { failUpdate: true })
+    let calls = 0
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin,
+      translate: async () => { calls++; return outcome('Hello, this is a product test.') },
+    })
+    expect(calls).toBe(1)                  // paid for once, never twice
+    expect(r.failed).toBe(1)
+    expect(r.translated).toBe(0)           // not counted as stored
+    expect(r.costUsd).toBeGreaterThan(0)   // but the spend is still booked
+    const stamps = writes.filter((w) => w.table === 'videos' && 'transcript_en_error' in w.patch && w.patch.transcript_en_error !== null)
+    expect(stamps).toHaveLength(1)
+    expect(stamps[0].patch).toEqual({ transcript_en_error: 'attempt 1/3: write: unsupported Unicode escape sequence' })
+    expect(stamps[0].id).toBe('v1')
+    const log = writes.find((w) => w.table === 'ai_call_log')!
+    expect(log.patch.validation_status).toBe('write_failed')
+  })
+
+  it('stamps every failing row individually — one bad row cannot blank a batch', async () => {
+    const rows = [row({ id: 'v1' }), row({ id: 'v2' }), row({ id: 'v3' })]
+    const { admin, writes } = fakeAdmin(rows, { failUpdate: true })
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1', 'v2', 'v3'], admin,
+      translate: async () => outcome('Hello.'),
+    })
+    expect(r.failed).toBe(3)
+    const stamped = writes.filter((w) => w.patch.transcript_en_error && w.patch.transcript_en_error !== null).map((w) => w.id)
+    expect(stamped).toEqual(['v1', 'v2', 'v3'])
+  })
+
+  it('counts a failed call as an attempt, and a rate limit as nothing', async () => {
+    const { admin, writes } = fakeAdmin([row()])
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin,
+      translate: async () => { throw new Error('no parsed translation') },
+    })
+    expect(r.failed).toBe(1)
+    expect(writes[0].patch).toEqual({ transcript_en_error: 'attempt 1/3: no parsed translation' })
+
+    const limited = fakeAdmin([row()])
+    const r2 = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin: limited.admin,
+      translate: async () => { throw new Error('429 rate limit exceeded') },
+    })
+    expect(r2.rateLimited).toBe(true)
+    expect(limited.writes).toHaveLength(0) // says nothing about this video
+  })
+
+  it('survives a ledger insert failure without failing the row or the step', async () => {
+    const { admin, writes } = fakeAdmin([row()], { failInsert: true })
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1'], admin,
+      translate: async () => outcome('Hello, this is a product test.'),
+    })
+    expect(r.translated).toBe(1)
+    expect(r.failed).toBe(0)
+    expect(writes.some((w) => w.table === 'ai_call_log')).toBe(true)
+  })
+
+  it('re-reads the rule at write distance: an already-translated row is skipped, a failed one is not', async () => {
+    const { admin } = fakeAdmin([
+      row({ id: 'v1', transcript_en: 'Hello.' }),
+      row({ id: 'v2', transcript_en_error: 'attempt 1/3: write: boom' }),
+      row({ id: 'v3', transcript_en_error: 'attempt 3/3: write: boom' }),
+    ])
+    let calls = 0
+    const r = await translateBatch({
+      clientId: 'c', runId: null, videoIds: ['v1', 'v2', 'v3'], admin,
+      translate: async () => { calls++; return outcome('Hello.') },
+    })
+    expect(calls).toBe(1)       // only v2
+    expect(r.skipped).toBe(2)
+    expect(r.translated).toBe(1)
   })
 })

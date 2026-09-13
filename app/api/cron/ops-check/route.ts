@@ -3,15 +3,27 @@ import { adminKeyValid } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { sendAlertEmail } from '@/lib/email'
 import { assessPipelineHealth, formatOpsEmail, LOOKBACK_MS, type HealthInputs } from '@/lib/ops/health'
+import { touchHeartbeat } from '@/lib/ops/heartbeat'
 
 // The dead-man's switch (WP2, 2026-09-11).
 //
 // Every alert this product has ever had runs inside an Inngest function, so the
 // one failure it cannot report is Inngest not calling it — which is what
 // happened on 2026-09-06: no pipeline_runs row for Össur at all, and silence.
-// This route is a SECOND scheduler. Vercel Cron calls it, it reads Postgres
-// directly and emails through Resend directly, and it depends on Inngest for
-// nothing. If Inngest is dead, this is the thing that says so.
+// This route is a SECOND scheduler. It reads Postgres directly and emails
+// through Resend directly, and it depends on Inngest for nothing. If Inngest is
+// dead, this is the thing that says so.
+//
+// ONE thing schedules it: the Vercel Hobby cron in vercel.json. Hobby promises
+// only "within the hour", not the minute — on 2026-09-13 the 07:00 UTC slot fired
+// at 07:40:40 — so treat the beat's timestamp as "some time in the 07:00 hour".
+// That cron shares a failure domain with the thing being watched (a Hobby usage
+// cap pauses the project and takes its crons with it) and Hobby keeps about an
+// hour of runtime logs, after which a historical query answers
+// ExceedsBillingLimitError: a missed invocation leaves no trace in Vercel. Hence
+// the heartbeat row written below, which is the only durable record that this
+// route ran at all. A second, independent caller is the obvious hardening and is
+// not in place.
 //
 // Timing (vercel.json, which cannot carry a comment): 07:00 UTC = 09:00 SAST,
 // THREE hours after the 06:00 SAST dispatcher slot. The run-not-started grace is
@@ -44,6 +56,20 @@ function secretMatches(provided: string | null, expected: string): boolean {
   const a = Buffer.from(provided ?? '')
   const b = Buffer.from(`Bearer ${expected}`)
   return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/** Who called: 'vercel-cron' for the scheduled run, else the user-agent (a
+ *  by-hand run with X-Admin-Key). Recorded on the heartbeat because "the beat is
+ *  stale" is only actionable once you know whether the scheduler stopped or a
+ *  human was the last thing to touch it.
+ *
+ *  Vercel Cron identifies itself in the USER-AGENT (`vercel-cron/1.0`) — it
+ *  sends no x-vercel-cron-schedule header, so keying on one labelled every
+ *  scheduled beat as if a human had run it. */
+function callerOf(req: Request): string {
+  const ua = req.headers.get('user-agent') ?? ''
+  if (ua.startsWith('vercel-cron')) return 'vercel-cron'
+  return ua || 'unknown'
 }
 
 interface ClientRow {
@@ -143,7 +169,19 @@ export async function GET(req: Request): Promise<Response> {
         await sendAlertEmail(subject, text)
       }
     }
-    return Response.json({ ok: findings.length === 0, findings, alerting, checkedAt: now.toISOString() })
+    // The watchman's own beat, on every successful check. Vercel's cron leaves
+    // no durable trace — Hobby keeps about an hour of runtime logs, and a
+    // historical query answers ExceedsBillingLimitError — so this row is the
+    // only place the check's OWN silence is visible afterwards. Written last, so
+    // it means "the check completed", and through touchHeartbeat, which cannot
+    // throw: the beacon must never break the thing it watches.
+    // assessPipelineHealth ignores heartbeat names it does not know, so
+    // 'ops_check' can never become a finding about itself.
+    const heartbeat = await touchHeartbeat(createAdminClient, 'ops_check', {
+      findings: findings.length,
+      caller: callerOf(req),
+    })
+    return Response.json({ ok: findings.length === 0, findings, alerting, heartbeat: heartbeat.ok, checkedAt: now.toISOString() })
   } catch (e) {
     // The watchman falling over is itself an outage. Say so by email, then let
     // it through so Vercel's cron log records a failed invocation too.

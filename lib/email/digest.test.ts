@@ -5,9 +5,10 @@ import { digestSubject } from './subject'
 import { firstSentence, htmlToText } from './text'
 import { tokenHex } from './theme'
 import { DeltaBlock } from '../../components/email/delta-block'
-import { clip, dashboardEmail } from '../../components/email/tiles'
+import { clip, contentEmail, dashboardEmail } from '../../components/email/tiles'
 import type { RunDelta } from '../report-delta'
 import type { DashboardData } from '../pages/dashboard'
+import type { ContentData } from '../pages/content'
 import type { EmailContext } from '../renderables/types'
 import { EMAIL } from './theme'
 
@@ -31,7 +32,7 @@ const hygiene = (html: string) => {
 describe('digestSubject', () => {
   it('names the movement when there is any, else it is the update', () => {
     expect(digestSubject('Ossur', null)).toBe('Ossur: your consumer intelligence baseline')
-    expect(digestSubject('Ossur', delta)).toBe('Ossur: what changed. 3 new themes, sentiment up 3.4 pts')
+    expect(digestSubject('Ossur', delta)).toBe('Ossur: what changed. 3 new themes, sentiment up 3.4 pts this update')
     expect(digestSubject('Ossur', { ...delta, newThemes: null, sentiment: { ...delta.sentiment!, verdict: { state: 'no_clear_change', change: 1.1, band: 2 } } })).toBe('Ossur: your weekly update')
     expect(digestSubject('Ossur', { ...delta, newThemes: null, sentiment: null }, 'monthly')).toBe('Ossur: your monthly update')
   })
@@ -41,8 +42,15 @@ describe('the delta block', () => {
   it('leads with what changed, each proportion carrying its own verdict', () => {
     const html = renderToStaticMarkup(createElement(DeltaBlock, { delta, dashboard: null, appUrl: ctx.appUrl }))
     hygiene(html)
-    expect(html).toContain('What changed since your last update')
+    // The title says it once and the meta dates it; the two together used to
+    // read "What changed since your last update ... since 16 Aug".
+    expect(html).toContain('What changed')
+    expect(html).not.toContain('What changed since')
+    expect(html).toContain('since 16 Aug')
     expect(html).toContain('▲ 3.4 pts')
+    // The header card's sentiment is the period window; say so, or it reads as
+    // the body tile's all-time figure disagreeing with itself.
+    expect(html).toContain('conversations rated for sentiment this update read positive')
     expect(html).toContain('no clear change')
     expect(html).toContain('Ottobock <strong>15%</strong>')
     expect(html).toContain('Socket pain and poor fit · Price and access questions and 1 more')
@@ -66,6 +74,7 @@ describe('tile email renderers', () => {
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.sentiment'](d, ctx)))
     hygiene(html)
     expect(html).toContain('87%')
+    expect(html).toContain('to date · 698 conversations rated')
     expect(html).toContain(`background:${EMAIL.green}`)
     expect(html).toContain(`background:${EMAIL.down}`)
     expect(html).toContain('Positive 609 · Negative 11')
@@ -90,6 +99,31 @@ describe('tile email renderers', () => {
   })
 })
 
+describe('worth a reply', () => {
+  // 13 Sep: all three rows read "Buying signal" — the inbox is ordered
+  // intent-first, so slicing the top three took three of the same label.
+  it('shows one of each label, in priority order, when the inbox has them', () => {
+    const row = (id: string, intent: string) => ({ id, intent, platform: 'youtube', age: '1d', text: `comment ${id}`, context: 'under @x’s post', href: 'https://y.example/1', commentLevel: true, ref: `m:${id}`, insightId: 'i', category: 'x', theme: 't' })
+    const d = {
+      inbox: {
+        total: 12,
+        rows: [
+          ...Array.from({ length: 6 }, (_, i) => row(`buy${i}`, 'buying')),
+          ...Array.from({ length: 3 }, (_, i) => row(`q${i}`, 'question')),
+          ...Array.from({ length: 3 }, (_, i) => row(`obj${i}`, 'objection')),
+        ],
+      },
+    } as unknown as ContentData
+    const html = renderToStaticMarkup(createElement('div', null, contentEmail['content.inbox'](d, ctx)))
+    hygiene(html)
+    expect([...html.matchAll(/Buying signal|Question|Objection/g)].map((m) => m[0])).toEqual(['Buying signal', 'Question', 'Objection'])
+    expect(html).toContain('comment buy0')
+    expect(html).toContain('comment q0')
+    expect(html).toContain('comment obj0')
+    expect(html).toContain('9 more in the app')
+  })
+})
+
 describe('text helpers', () => {
   it('firstSentence keeps abbreviations and returns an unterminated reasoning whole', () => {
     expect(firstSentence('Launch the Access Navigator for insurance and fitter matching. People are asking.')).toBe('Launch the Access Navigator for insurance and fitter matching.')
@@ -109,6 +143,23 @@ describe('text helpers', () => {
     const text = htmlToText('<html><head><title>x</title></head><body><div>One &amp; two</div><table><tr><td>a</td><td>b</td></tr></table><a href="https://x.y/z">Open</a><p>Done&nbsp;now</p></body></html>')
     expect(text).toBe('One & two\na b\nOpen (https://x.y/z)\nDone now')
   })
+  // 2026-09-13: the Össur digest's plain-text part was reported as
+  // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. The raw MIME
+  // of that send (DKIM-pass, so these are the bytes Resend signed) carries
+  // `Content-Transfer-Encoding: quoted-printable` with the `=` correctly
+  // escaped — `rec=3D85dd4fde-…` — and decodes to the exact URL: the mangling
+  // was a second quoted-printable decode in the tool that read the mail, not
+  // ours. What IS ours is that htmlToText inlines the href verbatim, so pin
+  // that: a `=` in a query string must reach the text part untouched.
+  it('htmlToText keeps a ?rec= link exactly as the href has it', () => {
+    const id = '85dd4fde-14ef-47c9-876b-6fa86c7cf169'
+    const d = { hero: { oneThing: { id, title: 'Launch an access navigator', reasoning: 'People start with practical access questions.', priority: 'high' }, voices: 96, platforms: ['youtube', 'tiktok', 'instagram', 'reddit'] } } as unknown as DashboardData
+    const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.recommendation'](d, ctx)))
+    const text = htmlToText(html)
+    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market?rec=${id})`)
+    expect(text).not.toContain('rec=3D')
+  })
+
   it('htmlToText decodes hex entities too, so an apostrophe reads as one', () => {
     // React writes an apostrophe as &#x27;: Össur&#x27;s must not reach an inbox.
     expect(htmlToText('<p>Össur&#x27;s share &#8212; and &#x2019;s</p>')).toBe('Össur\'s share — and ’s')

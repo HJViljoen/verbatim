@@ -86,6 +86,37 @@ function matchText(t: AggregatedTheme): string {
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6
 
+/** Theme rows per INSERT statement. See insertThemesChunked: an embedding makes
+ *  each row ~14KB, so the body — not the row count — is what times out. */
+export const THEMES_INSERT_CHUNK = 100
+
+/**
+ * Insert theme rows THEMES_INSERT_CHUNK at a time, stopping at the first error.
+ *
+ * One statement carrying every theme scaled with the run and eventually stopped
+ * fitting: 757 themes on run d346b0f7 (2026-09-13) made a ~10MB request body
+ * that Postgres spent 13.4s on before killing it — 57014 `canceling statement
+ * due to statement timeout`. The Inngest retry happened to land it (all 757 rows
+ * share one created_at), so a run that should have been 'partial' closed
+ * 'completed' on a coin flip, and the next client with more themes loses them.
+ *
+ * 100 is the repo's chunk size (chunkedIn, Step A2). Stopping at the first error
+ * rather than pressing on is safe: persistThemes deletes the run's themes before
+ * inserting, so a step retry starts from empty and no chunk is written twice.
+ * Takes the insert as a callback so the chunking is testable without a database.
+ */
+export async function insertThemesChunked<E>(
+  // PromiseLike, not Promise: a PostgREST builder is thenable but not a Promise.
+  insert: (part: Record<string, unknown>[]) => PromiseLike<{ error: E | null }>,
+  rows: Record<string, unknown>[],
+): Promise<E | null> {
+  for (const part of chunk(rows, THEMES_INSERT_CHUNK)) {
+    const { error } = await insert(part)
+    if (error) return error
+  }
+  return null
+}
+
 export async function persistThemes(
   clientId: string,
   runId: string,
@@ -329,15 +360,20 @@ export async function persistThemes(
       embedding: embeddings[i].map(round6),
       ...(registryOn && !registryFailed ? { registry_id: registryIds[i] } : {}),
     }))
-    const { error } = await admin.from('themes').insert(rows)
+    // Chunked, not one statement — see insertThemesChunked for the 57014 this
+    // fixes. A theme row is dominated by its embedding (1536 floats at 6dp).
+    const insertChunked = (toInsert: Record<string, unknown>[]) =>
+      insertThemesChunked((part) => admin.from('themes').insert(part), toInsert)
+    const error = await insertChunked(rows)
     // Same seatbelt Pass A's bookkeeping carries: a deploy can land before its
     // migration, and this step is NOT .catch()-isolated — it would take the run
     // down after Pass A, Pass B and clustering are already paid for, the most
     // expensive possible place to fail. Losing the column costs the on-camera
-    // weighting for one run; losing the run costs the run.
+    // weighting for one run; losing the run costs the run. A missing column
+    // fails the FIRST chunk, so nothing is in yet and the whole set re-inserts.
     if (error && isMissingColumnError(error, 'video_evidence_count')) {
       console.warn('[themes] themes.video_evidence_count does not exist — apply supabase/migrations/20260912090000_theme_video_evidence.sql. Persisting without it; on-camera counts read as none until it lands.')
-      const { error: retryErr } = await admin.from('themes').insert(rows.map(({ video_evidence_count: _dropped, ...rest }) => rest))
+      const retryErr = await insertChunked(rows.map(({ video_evidence_count: _dropped, ...rest }) => rest))
       if (retryErr) throw new Error(`persist themes: ${retryErr.message}`)
     } else if (error) throw new Error(`persist themes: ${error.message}`)
   }

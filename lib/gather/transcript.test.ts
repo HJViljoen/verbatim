@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseWebVtt, pickTrack, speechLen, normaliseLang, clipText } from './transcript'
+import { parseWebVtt, pickTrack, speechLen, normaliseLang, clipText, transcriptColumn } from './transcript'
 import { tiktok } from './platforms/tiktok'
 import { instagram } from './platforms/instagram'
 import type { SubtitleTrack } from './types'
@@ -160,5 +160,19 @@ describe('assemblySubmission (AssemblyAI route by platform)', () => {
     expect(assemblySubmission('tiktok')).toBe('upload')
     expect(assemblySubmission('youtube')).toBe('upload')
     expect(assemblySubmission(undefined)).toBe('upload')
+  })
+})
+
+// A U+0000 in ASR output 400s the PATCH that carries it, and the paid
+// transcription is lost with the row (lib/db-text.ts, 2026-09-13).
+describe('transcriptColumn — the write boundary for ASR text', () => {
+  it('strips a control character the column cannot hold', () => {
+    expect(transcriptColumn('so I said \u0000 then nothing')).toBe('so I said  then nothing')
+    expect(transcriptColumn('clean text')).toBe('clean text')
+  })
+
+  it('keeps "nothing said" NULL, stripped-to-empty included', () => {
+    expect(transcriptColumn('')).toBeNull()
+    expect(transcriptColumn('\u0000')).toBeNull()
   })
 })

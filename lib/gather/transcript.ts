@@ -6,6 +6,7 @@ import {
   TRANSCRIBE_MAX_BYTES,
   CONTENT_GATE_MODEL,
 } from '../config'
+import { dbSafeText } from '../db-text'
 import type { MediaRef, Platform, SubtitleTrack, TranscriptResult } from './types'
 
 // Transcript resolution (Step 1 — capture only). One transcript per video,
@@ -81,6 +82,13 @@ export function clipText(s: string, max: number): string {
   const points = [...collapsed]
   return points.length <= max ? collapsed : points.slice(0, max).join('')
 }
+
+/** The `transcript` column's value for a resolved text. ASR output (Whisper,
+ *  AssemblyAI) and platform captions are as capable of carrying a U+0000 as any
+ *  model reply, and one of those 400s the PATCH that carries it — losing a paid
+ *  transcription rather than a byte (lib/db-text.ts). '' stays NULL: "nothing
+ *  was said" is the absence of a transcript, not an empty one. */
+export const transcriptColumn = (text: string): string | null => dbSafeText(text) || null
 
 // The failure modes below are the ones actually observed on the 2026-08-08
 // Sealand backfill, not hypotheticals — a bare three-way definition missed half
