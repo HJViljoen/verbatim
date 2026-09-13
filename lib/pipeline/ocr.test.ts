@@ -241,3 +241,13 @@ describe('orderAndChunkOcrPending', () => {
     expect(orderAndChunkOcrPending([], 8, 100)).toEqual([])
   })
 })
+
+// The vision model's reply is model output like any other: a U+0000 in it 400s
+// the PATCH carrying ocr_text, so nothing of the frame is stored at all
+// (lib/db-text.ts, 2026-09-13).
+describe('normaliseOcrLines — what reaches the ocr_text column', () => {
+  it('strips control characters the column cannot hold', () => {
+    expect(normaliseOcrLines(['PRICE \u000050% OFF'])).toBe('PRICE 50% OFF')
+    expect(normaliseOcrLines(['\u0000'])).toBe('')
+  })
+})

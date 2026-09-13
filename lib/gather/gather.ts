@@ -5,7 +5,7 @@ import { runActor, isActorRunFailedError } from './apify'
 import { adapters } from './platforms'
 import { parseSubreddits, activeSubreddits, subredditLabel } from './subreddits'
 import { logAiCall } from '../pipeline/ai-log'
-import { resolveTranscript, gateTranscript, normaliseLang } from './transcript'
+import { resolveTranscript, gateTranscript, normaliseLang, transcriptColumn } from './transcript'
 import { dedupeBy, round2 } from './util'
 import { loadSuppressedKeys, filterSuppressed } from './suppression'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
@@ -1144,7 +1144,7 @@ export async function transcribeBatch(opts: {
         const { error } = await admin
           .from('videos')
           .update({
-            transcript: t.text || null,
+            transcript: transcriptColumn(t.text),
             transcript_lang: t.lang,
             transcript_source: t.source,
             transcript_status: t.status,

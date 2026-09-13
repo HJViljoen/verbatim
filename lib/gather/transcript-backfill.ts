@@ -8,7 +8,7 @@ import {
   TRANSCRIPT_MAX_ATTEMPTS,
   estimateCost,
 } from '../config'
-import { gateTranscript, normaliseLang } from './transcript'
+import { gateTranscript, normaliseLang, transcriptColumn } from './transcript'
 import { speechActorFor, transcribeUrls } from './transcript-url'
 import type { Platform, TranscriptResult } from './types'
 
@@ -255,7 +255,7 @@ export async function backfillTranscriptsBatch(opts: {
     const { error } = await admin
       .from('videos')
       .update({
-        transcript: t.text || null,
+        transcript: transcriptColumn(t.text),
         transcript_lang: t.lang,
         transcript_source: t.source,
         transcript_status: t.status,

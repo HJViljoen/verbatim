@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { dbSafeText } from '../db-text'
 import { chunk } from '../chunk'
 import { openai } from '../openai'
 import { adapters } from '../gather/platforms'
@@ -150,12 +151,16 @@ export function buildOcrPrompt(): { system: string; user: string } {
 /** Model output → the stored string. Trims, drops blanks and exact repeats
  *  (a frame's text often appears twice — burnt in and in the platform overlay),
  *  joins one block per line and clips to OCR_MAX_CHARS. '' means "no text",
- *  which the caller stores as status 'none'. Pure; exported for tests. */
+ *  which the caller stores as status 'none'. Pure; exported for tests.
+ *
+ *  Also the sanitise point for `ocr_text`: this is the only producer of the
+ *  column's value, and a U+0000 in a vision-model reply 400s the PATCH that
+ *  carries it — losing the whole write, not just a byte (lib/db-text.ts). */
 export function normaliseOcrLines(lines: string[], max = OCR_MAX_CHARS): string {
   const seen = new Set<string>()
   const kept: string[] = []
   for (const raw of lines) {
-    const line = raw.replace(/\s+/g, ' ').trim()
+    const line = dbSafeText(raw).replace(/\s+/g, ' ').trim()
     if (!line) continue
     const key = line.toLowerCase()
     if (seen.has(key)) continue
