@@ -82,11 +82,15 @@ const hero: E<DashboardData> = ({ hero: h }) => {
   )
 }
 
+/** The all-time audience family — said as "to date", the qualifier the app
+ *  page carries (components/pages/dashboard/index.tsx). The digest's header
+ *  card shows this update's window instead; without both labels a reader takes
+ *  them for the same metric. */
 const sentiment: E<DashboardData> = ({ sentiment: s }) => {
   if (!s) return empty('Sentiment lands with the next update.')
   return (
     <div>
-      <Stat value={fmtPct(s.positivePct, 0)} unit="positive" note={<>{fmtInt(s.judged)} conversations rated{s.deltaText ? <> · <span style={{ color: s.deltaText.good === null ? EMAIL.muted : s.deltaText.good ? EMAIL.up : EMAIL.down }}>{s.deltaText.text}</span></> : null}{s.tierLabel ? ` · ${s.tierLabel}` : ''}</>} />
+      <Stat value={fmtPct(s.positivePct, 0)} unit="positive" note={<>to date · {fmtInt(s.judged)} conversations rated{s.deltaText ? <> · <span style={{ color: s.deltaText.good === null ? EMAIL.muted : s.deltaText.good ? EMAIL.up : EMAIL.down }}>{s.deltaText.text}</span></> : null}{s.tierLabel ? ` · ${s.tierLabel}` : ''}</>} />
       <div style={{ marginTop: 10 }}>
         <Bar segments={s.segments.map((seg) => ({ pct: seg.pct, color: tokenHex(seg.color), label: `${seg.label} ${fmtInt(seg.count)}` }))} />
       </div>

@@ -31,7 +31,7 @@ const hygiene = (html: string) => {
 describe('digestSubject', () => {
   it('names the movement when there is any, else it is the update', () => {
     expect(digestSubject('Ossur', null)).toBe('Ossur: your consumer intelligence baseline')
-    expect(digestSubject('Ossur', delta)).toBe('Ossur: what changed. 3 new themes, sentiment up 3.4 pts')
+    expect(digestSubject('Ossur', delta)).toBe('Ossur: what changed. 3 new themes, sentiment up 3.4 pts this update')
     expect(digestSubject('Ossur', { ...delta, newThemes: null, sentiment: { ...delta.sentiment!, verdict: { state: 'no_clear_change', change: 1.1, band: 2 } } })).toBe('Ossur: your weekly update')
     expect(digestSubject('Ossur', { ...delta, newThemes: null, sentiment: null }, 'monthly')).toBe('Ossur: your monthly update')
   })
@@ -43,6 +43,9 @@ describe('the delta block', () => {
     hygiene(html)
     expect(html).toContain('What changed since your last update')
     expect(html).toContain('▲ 3.4 pts')
+    // The header card's sentiment is the period window; say so, or it reads as
+    // the body tile's all-time figure disagreeing with itself.
+    expect(html).toContain('conversations rated this update read positive')
     expect(html).toContain('no clear change')
     expect(html).toContain('Ottobock <strong>15%</strong>')
     expect(html).toContain('Socket pain and poor fit · Price and access questions and 1 more')
@@ -66,6 +69,7 @@ describe('tile email renderers', () => {
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.sentiment'](d, ctx)))
     hygiene(html)
     expect(html).toContain('87%')
+    expect(html).toContain('to date · 698 conversations rated')
     expect(html).toContain(`background:${EMAIL.green}`)
     expect(html).toContain(`background:${EMAIL.down}`)
     expect(html).toContain('Positive 609 · Negative 11')
