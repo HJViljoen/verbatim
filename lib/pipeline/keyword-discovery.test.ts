@@ -169,9 +169,12 @@ describe('computeKeywordCandidates', () => {
     expect(rows.every((r) => r.term === 'thrifting')).toBe(true)
   })
 
-  it('drops the platform-noise stoplist, numeric and 1-2 char tokens', () => {
+  it('drops the platform-noise stoplist, 1-2 char tokens and anything with no letter', () => {
     const rows = computeKeywordCandidates(
-      many(3, { hashtags: ['fyp', 'fypシ', 'foryoupage', 'viral', 'reels', 'capcut', 'ad', '2026', 'xy', 'sailing'] }),
+      many(3, {
+        hashtags: ['fyp', 'fypシ', 'foryoupage', 'viral', 'reels', 'capcut', 'ad', '2026', '2026_', 'xy', 'sailing'],
+        topics: ['___', '!!!', '...'],
+      }),
       new Map(),
       SEALAND,
     )

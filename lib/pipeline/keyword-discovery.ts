@@ -138,11 +138,13 @@ function configuredTerms(config: DiscoveryConfig): Configured {
 function isCovered(folded: string, configured: Configured): boolean {
   if (!folded) return true
   if (STOP.has(folded)) return true
-  // 1-2 character tokens, bare numbers and run-on pseudo-tags are never a search
-  // term worth having (and an over-long one cannot fit the unique index at all).
+  // 1-2 character tokens, run-on pseudo-tags and anything with no letter in it
+  // are never a search term worth having (and an over-long one cannot fit the
+  // unique index at all). "No letter" covers the bare number and, because the
+  // tag regex admits '_', the likes of "___" and "2026_".
   if (folded.length < 3) return true
   if (folded.length > DISCOVERY_MAX_TERM_CHARS) return true
-  if (/^\d+$/.test(folded)) return true
+  if (!/\p{L}/u.test(folded)) return true
   for (const cand of variants(folded)) {
     for (const term of configured.tagged) {
       if (term === cand) return true
