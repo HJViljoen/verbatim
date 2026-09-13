@@ -36,14 +36,17 @@ async function main() {
   if (runId) {
     runIds = [runId]
   } else {
-    // Every completed run of this client that still owns videos. Counted head-only
-    // so a 1,200-video run costs one cheap request, not a page walk.
+    // Every finished run of this client that still owns videos. 'partial' counts:
+    // a run is partial because some OTHER step noted an error, and discovery is
+    // swallowed rather than noted — so a partial run is every bit as likely to be
+    // missing its candidates, and is exactly what this script is for. Counted
+    // head-only so a 1,200-video run costs one cheap request, not a page walk.
     const runs = await selectAll<{ id: string }>(() =>
       admin
         .from('pipeline_runs')
         .select('id')
         .eq('client_id', clientId)
-        .eq('status', 'completed')
+        .in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true })
         .order('id', { ascending: true }),
     )
@@ -60,7 +63,7 @@ async function main() {
   }
 
   if (runIds.length === 0) {
-    console.log(`client ${clientId}: no completed run with videos — nothing to discover`)
+    console.log(`client ${clientId}: no completed or partial run with videos — nothing to discover`)
     return
   }
   console.log(
