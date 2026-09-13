@@ -309,3 +309,5 @@ All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 | `retention-dry.ts` | What tonight's retention sweep would do, read-only (`--refresh-sample N` also calls YouTube for N due comment ids and reports found/missing/edited — still read-only) |
 | `erase-commenter.ts` | Erase one commenter on request: `--platform <p> --handle <h>` finds their rows across every tenant + the demo clone, the evidence/language samples the delete cascades, hero-quote copies, and prompt bodies inside 30 days; dry-run by default, `--apply` deletes and records the handle in `suppressed_commenters` so a re-scrape never brings it back. Prints the reply template. 7-day SLA per the privacy notice |
 | `keyword-roi.ts` | Keyword ROI pruning table, worst first |
+| `keyword-candidates.ts` | The add side of the same config: terms the corpus keeps showing (classifier topics + hashtags, minus everything already tracked), pooled over the last N runs. Read-only |
+| `backfill-keyword-candidates.ts` | Recompute `keyword_candidates` for one run or every completed/partial run of a client (repairs a swallowed `keyword-discovery` step). Dry-run prints the top 30; `--apply` writes |

@@ -1154,6 +1154,40 @@ export const APIFY_COST_ESTIMATES: Record<string, { search: number; perVideoComm
   reddit: { search: 0.12, perVideoComments: 0.05 },
 }
 
+// --- Keyword candidate discovery (2026-09-13) --------------------------------
+// The inverse of keyword ROI: terms the corpus keeps handing us that nobody
+// configured. Mined per run from the gate-kept videos' classifier topics and
+// hashtags (lib/pipeline/keyword-discovery.ts) — pure aggregation, no model call.
+
+/** Platform noise a hashtag carries no matter what the video is about. Folded
+ *  (lowercase, diacritics stripped) before comparison, so 'FYP' and 'fypシ'
+ *  both land here. Numeric and 1-2 character tokens are dropped by rule rather
+ *  than by list. Keep this short: the exclusion that matters is "already
+ *  configured", and over-listing hides real terms. */
+export const DISCOVERY_STOP_TERMS: string[] = [
+  'fyp', 'fypシ', 'foryou', 'foryoupage', 'fy', 'xyzbca',
+  'viral', 'trending', 'explore', 'reels', 'shorts',
+  'tiktok', 'instagram', 'youtube', 'capcut', 'ad', 'sponsored',
+]
+
+/** Distinct videos a term needs in one run to be a candidate. Three is the
+ *  repo's "more than once is not a pattern, three times is" floor (it is also
+ *  THEME_MIN_VIDEOS' and PERSONA_MIN_VIDEOS' number). */
+export const DISCOVERY_MIN_VIDEOS = 3
+
+/** Candidates stored per run. A long tail of 3-video terms is noise an operator
+ *  will never read; the cap keeps the table a shortlist. */
+export const DISCOVERY_MAX_TERMS = 200
+
+/** Longest term worth storing. Two reasons, both hard: a caption can carry a
+ *  run-on pseudo-tag (the corpus already holds a 463-character one in
+ *  `videos.hashtags`) and nobody will ever search it; and `keyword_candidates`
+ *  puts `term` in a btree unique index, whose row cannot exceed 2704 BYTES — a
+ *  long enough term is not a bad row, it is an insert that fails outright and
+ *  costs the run its candidates. 120 characters is ~30x the median tag and
+ *  drops 7 distinct tags in the whole corpus. */
+export const DISCOVERY_MAX_TERM_CHARS = 120
+
 // --- Delta-scraping (2026-07-16) ---------------------------------------------
 // Corpus measurement behind the re-check layer: ~73% of an IG video's lifetime
 // comments arrive within 7 days of upload, ~27% after — signal the one-shot
