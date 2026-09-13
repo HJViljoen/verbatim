@@ -1,5 +1,6 @@
 import type { createAdminClient } from '../supabase-admin'
 import { ANALYSIS_MODEL, estimateCost } from '../config'
+import { dbSafeJson, dbSafeText } from '../db-text'
 
 // Shared ai_call_log writer for the single-call passes (B/C/D). One row per GPT
 // call (invariant 4): request, response, tokens, cost, duration, validation
@@ -26,20 +27,28 @@ export interface AiLogArgs {
 
 export async function logAiCall(admin: ReturnType<typeof createAdminClient>, a: AiLogArgs): Promise<void> {
   const model = a.model ?? ANALYSIS_MODEL
-  await admin.from('ai_call_log').insert({
+  // The prompt and response snapshots are model-adjacent text, so they go
+  // through dbSafeJson: one U+0000 in a response 400'd this insert on the
+  // 2026-09-13 run (22P05), which silently cost the ledger a row of a call that
+  // had already been paid for. lib/db-text.ts has the full story.
+  const { error } = await admin.from('ai_call_log').insert({
     client_id: a.clientId,
     run_id: a.runId,
     pass: a.pass,
     call_index: a.callIndex,
     model,
     prompt_version: a.promptVersion,
-    request: { system: a.systemPrompt, user: a.userPrompt },
-    response: a.response,
-    error_message: a.error,
+    request: dbSafeJson({ system: a.systemPrompt, user: a.userPrompt }),
+    response: dbSafeJson(a.response),
+    error_message: a.error === null ? null : dbSafeText(a.error),
     prompt_tokens: a.usage.prompt_tokens,
     completion_tokens: a.usage.completion_tokens,
     cost_usd: estimateCost(model, a.usage.prompt_tokens, a.usage.completion_tokens),
     duration_ms: a.durationMs,
     validation_status: a.validationStatus,
   })
+  // The ledger is not allowed to fail a pass — the spend already happened and
+  // the caller's own write is the one that matters — but a swallowed 400 is how
+  // the 2026-09-13 loss stayed invisible, so it is said out loud.
+  if (error) console.warn(`[ai-log] ${a.pass} call ${a.callIndex} not logged: ${error.message}`)
 }
