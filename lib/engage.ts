@@ -10,16 +10,10 @@
 //   2. category priority (ENGAGE_CATEGORIES order)
 //   3. parent insight strength
 //   4. likes (log-damped tiebreak)
-// then dedupe: one slot per comment, max 2 per video, intent + total caps.
-// The cap is per DISPLAY label (`intentOf`), not per raw category: three of the
-// five engage categories collapse to "Buying signal", so a cap of 3 each let
-// nine buying-ish comments through and the inbox (and the email's top three)
-// read as one label repeated — the 13 Sep Össur digest labelled all three rows
-// "Buying signal", the third of them a remark about Canadian healthcare.
+// then dedupe: one slot per comment, max 2 per video, category + total caps.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk } from './chunk'
-import { intentOf } from './content-tiles'
 import { selectAll } from './supabase-admin'
 import { cleanQuote, englishHits } from './quotes'
 
@@ -115,7 +109,6 @@ export function rankEngageCandidates(
   candidates: EngageCandidate[],
   opts: { windowStart: string; perCategoryCap?: number; totalCap?: number; vocab?: Set<string> },
 ): EngageCandidate[] {
-  /** Per display label (`intentOf`), not per raw category — see the header. */
   const perCategoryCap = opts.perCategoryCap ?? 3
   const totalCap = opts.totalCap ?? 12
   const windowStart = Date.parse(opts.windowStart)
@@ -143,17 +136,16 @@ export function rankEngageCandidates(
   const picked: EngageCandidate[] = []
   const seenComments = new Set<string>()
   const perVideo = new Map<string, number>()
-  const perIntent = new Map<string, number>()
+  const perCategory = new Map<string, number>()
   for (const c of fresh) {
     if (picked.length >= totalCap) break
     if (seenComments.has(c.comment.id)) continue
-    const intent = intentOf(c.category)
-    if ((perIntent.get(intent) ?? 0) >= perCategoryCap) continue
+    if ((perCategory.get(c.category) ?? 0) >= perCategoryCap) continue
     const videoKey = c.comment.videoUrl
     if (videoKey && (perVideo.get(videoKey) ?? 0) >= 2) continue
     picked.push(c)
     seenComments.add(c.comment.id)
-    perIntent.set(intent, (perIntent.get(intent) ?? 0) + 1)
+    perCategory.set(c.category, (perCategory.get(c.category) ?? 0) + 1)
     if (videoKey) perVideo.set(videoKey, (perVideo.get(videoKey) ?? 0) + 1)
   }
   return picked

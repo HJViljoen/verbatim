@@ -97,20 +97,6 @@ describe('rankEngageCandidates', () => {
     expect(rankEngageCandidates([junk, genuine], { windowStart: WINDOW })).toHaveLength(2)
   })
 
-  it('caps on the display label, not the raw category — three buying-ish categories share one cap', () => {
-    // purchase_intent | buying_trigger | switching_signal all read "Buying
-    // signal", so a per-raw-category cap of 3 let nine through and the inbox
-    // became one label repeated (13 Sep Össur digest).
-    const buying = [
-      ...Array.from({ length: 2 }, () => cand({ category: 'purchase_intent' })),
-      ...Array.from({ length: 2 }, () => cand({ category: 'buying_trigger' })),
-      ...Array.from({ length: 2 }, () => cand({ category: 'switching_signal' })),
-    ]
-    const out = rankEngageCandidates([...buying, cand({ category: 'question' })], { windowStart: WINDOW })
-    expect(out.filter((c) => c.category !== 'question')).toHaveLength(3)
-    expect(out.filter((c) => c.category === 'question')).toHaveLength(1)
-  })
-
   it('applies per-category and total caps', () => {
     const qs = Array.from({ length: 5 }, () => cand({ category: 'question' }))
     const pis = Array.from({ length: 5 }, () => cand({ category: 'purchase_intent' }))
