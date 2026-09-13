@@ -62,6 +62,17 @@ export function splitDelta(merged: VideoInsert[], known: Map<string, KnownVideoS
   return { fresh, resurfaced }
 }
 
+/**
+ * Dormant re-check candidates: stored recent videos (the caller's query bounds
+ * the window) that this run's search did NOT resurface. They carry no free
+ * count from the search, so only platforms with a native count API check them.
+ * Kept pure and separate from `splitDelta` because the rows come from a
+ * different read — a scan of the window, not a lookup of this run's ids.
+ */
+export function pickDormant(rows: KnownVideoState[], resurfacedIds: Set<string>): KnownVideoState[] {
+  return rows.filter((r) => !resurfacedIds.has(r.video_id))
+}
+
 /** Baseline for the growth comparison — see the module note on the fallback. */
 export const scrapeBaseline = (state: Pick<KnownVideoState, 'comments_count' | 'comments_count_at_scrape'>): number =>
   state.comments_count_at_scrape ?? state.comments_count

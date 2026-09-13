@@ -11,7 +11,7 @@ import { loadSuppressedKeys, filterSuppressed } from './suppression'
 import { classifyRelevance, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
 import { attributeVideos, type AttributionMethod } from './attribution'
-import { splitDelta, pickRechecks, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
+import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
 import type {
   GatherConfig,
   Platform,
@@ -478,13 +478,16 @@ export async function gatePlatform(opts: {
   // decides which comment scrapes are worth re-paying for.
   //
   // Scoped to THIS run's candidate ids, chunked at 100 (chunkedIn's size, and
-  // the URL cap the whole-platform scan was avoiding). splitDelta only ever
-  // looks `known` up by a merged candidate's video_id, so the scan read the
-  // client's entire platform history to use a few hundred rows of it — a cost
-  // that grows every week and is served by an index lookup instead. It is also
-  // the read that took 6.9s and returned 504 at 05:15 on run d346b0f7; an
-  // exhausted retry there fails the whole run, since gate:<platform> has no
-  // .catch().
+  // the URL cap the whole-platform scan was avoiding). splitDelta only looks
+  // `known` up by a merged candidate's video_id, so the scan read the client's
+  // entire platform history to use a few hundred rows of it — a cost that grows
+  // every week and is served by an index lookup instead. It is also the read
+  // that took 6.9s and returned 504 at 05:15 on run d346b0f7; an exhausted
+  // retry there fails the whole run, since gate:<platform> has no .catch().
+  //
+  // The dormant re-check below needs the opposite slice — stored recent videos
+  // this run did NOT resurface — which these rows can never hold, so it runs its
+  // own bounded query instead of filtering them.
   const knownRows = (
     await Promise.all(
       chunk(merged.map((v) => v.video_id), 100).map((part) =>
@@ -690,11 +693,22 @@ export async function gatePlatform(opts: {
   if (adapter.fetchCommentCounts) {
     const resurfacedIds = new Set(resurfaced.map((r) => r.video.video_id))
     const cutoff = new Date(Date.now() - RECHECK_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10)
-    const dormant = knownRows.filter(
-      (r) => !resurfacedIds.has(r.video_id) && r.upload_date != null && r.upload_date >= cutoff,
-    )
-    if (dormant.length) {
-      try {
+    try {
+      // Own read: `knownRows` is scoped to this run's candidate ids, so every row
+      // in it is resurfaced by construction and filtering it yields nothing.
+      // Bounded by the re-check window instead, and only paid for on platforms
+      // with a free count API.
+      const dormantRows = await selectAll<KnownVideoState>(() =>
+        admin
+          .from('videos')
+          .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
+          .eq('client_id', opts.clientId)
+          .eq('platform', adapter.platform)
+          .gte('upload_date', cutoff)
+          .order('id', { ascending: true }),
+      )
+      const dormant = pickDormant(dormantRows, resurfacedIds)
+      if (dormant.length) {
         const counts = await adapter.fetchCommentCounts(dormant.map((d) => d.video_id))
         for (const d of dormant) {
           const freshCount = counts.get(d.video_id)
@@ -702,10 +716,10 @@ export async function gatePlatform(opts: {
             candidates.push({ video_id: d.video_id, video_url: d.video_url, freshCount, baseline: scrapeBaseline(d) })
           }
         }
-      } catch (e) {
-        // Best-effort: a count-API hiccup must never fail the gather.
-        errors.push(`recheck counts: ${(e as Error).message}`)
       }
+    } catch (e) {
+      // Best-effort: a dormant read or count-API hiccup must never fail the gather.
+      errors.push(`recheck counts: ${(e as Error).message}`)
     }
   }
   const rechecks = pickRechecks(candidates, {
