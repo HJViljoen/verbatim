@@ -24,10 +24,14 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
     const moved = [delta.sentiment?.verdict.state, delta.share?.verdict.state].includes('moved')
     const rows = []
     if (delta.sentiment) {
+      // This figure is the PERIOD window (period_audience_sentiment, n=143 for
+      // Össur on 13 Sep); the "Audience sentiment" tile further down the same
+      // email is the all-time family (n=1,221). Each says which window it is,
+      // or the two read as one metric contradicting itself.
       const s = delta.sentiment
       rows.push(
         <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}/dashboard`} linkText="See where you stand">
-          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment read positive
+          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated this update read positive
         </Row>,
       )
     }

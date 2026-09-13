@@ -128,6 +128,29 @@ export function inboxRows<T extends InboxSource>(
   )
 }
 
+/**
+ * The first `n` rows with one of each display label before a second of any —
+ * round-robin over INTENT_ORDER, then fill by rank. The email shows three of
+ * an inbox ordered intent-first, so without this the three are deterministically
+ * all one label whenever three of that label exist (13 Sep Össur: three
+ * "Buying signal" rows, the third a remark about Canadian healthcare). The app
+ * inbox keeps the plain `orderInbox` order — it lists every row, so priority
+ * order is right there and nothing is crowded out.
+ */
+export function diverseByIntent<T extends { intent: Intent }>(rows: T[], n: number): T[] {
+  const taken = new Set<number>()
+  const picked: T[] = []
+  for (const intent of INTENT_ORDER) {
+    if (picked.length >= n) break
+    const i = rows.findIndex((r, j) => r.intent === intent && !taken.has(j))
+    if (i !== -1) { taken.add(i); picked.push(rows[i]) }
+  }
+  for (let i = 0; i < rows.length && picked.length < n; i++) {
+    if (!taken.has(i)) { taken.add(i); picked.push(rows[i]) }
+  }
+  return picked
+}
+
 /** Chip counts per intent, in INTENT_ORDER, zero-count intents dropped. */
 export function intentCounts(rows: { intent: Intent }[]): { intent: Intent; count: number }[] {
   const m = new Map<Intent, number>()

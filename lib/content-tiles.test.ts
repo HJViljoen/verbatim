@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  intentOf, ageLabel, contextLine, orderInbox, inboxRows, intentCounts, shapeInbox,
+  intentOf, ageLabel, contextLine, orderInbox, inboxRows, intentCounts, shapeInbox, diverseByIntent,
   medianEngagement, perfVsMedian, fmtMultiple, bestDuration,
   fieldSentence, fieldRowLabel, ownPostsRow, topVoices, roleByAccount, initials,
   entityKey, entityScoreboard, durationPerf, entityPlaybooks, trendingSounds, durationLabel, pretty,
@@ -74,6 +74,30 @@ describe('inbox ordering', () => {
       { src: src('b', 'question', '2026-08-14T00:00:00Z'), intent: 'question', age: '2d', context: '' },
     ]
     expect(orderInbox(rows).map((r) => r.src.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('diverseByIntent', () => {
+  // The email prints three of an intent-first inbox, so the top three were
+  // deterministically all one label whenever three of it existed: the 13 Sep
+  // Össur digest labelled every row "Buying signal", the third of them a
+  // remark about the Canadian healthcare system.
+  const rows = [
+    ...Array.from({ length: 6 }, (_, i) => ({ id: `buy${i}`, intent: 'buying' as const })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `q${i}`, intent: 'question' as const })),
+    ...Array.from({ length: 3 }, (_, i) => ({ id: `obj${i}`, intent: 'objection' as const })),
+  ]
+  it('shows one of each label, in INTENT_ORDER, before a second of any', () => {
+    expect(diverseByIntent(rows, 3)).toEqual([
+      { id: 'buy0', intent: 'buying' }, { id: 'q0', intent: 'question' }, { id: 'obj0', intent: 'objection' },
+    ])
+  })
+  it('fills by rank once every label is represented', () => {
+    expect(diverseByIntent(rows, 5).map((r) => r.id)).toEqual(['buy0', 'q0', 'obj0', 'buy1', 'buy2'])
+  })
+  it('falls back to plain rank when only one label is present', () => {
+    expect(diverseByIntent(rows.slice(0, 6), 3).map((r) => r.id)).toEqual(['buy0', 'buy1', 'buy2'])
+    expect(diverseByIntent([], 3)).toEqual([])
   })
 })
 
