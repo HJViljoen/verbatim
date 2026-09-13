@@ -124,3 +124,38 @@ describe('fetchTranscriptsIsolating', () => {
     await expect(fetchTranscriptsIsolating(fetch, ['a', 'b', 'c', 'd', 'e'], 8, { deadlineMs: 150_000, now })).rejects.toThrow(/run-failed/)
   })
 })
+
+describe('fetchTranscriptsIsolating — a run-failed batch is reportable (run d346b0f7, 2026-09-13)', () => {
+  // Batches 9, 13 and 29 of 37 run-failed on Apify and were isolated per id —
+  // 24 re-fetches, the data recovered. Correct behaviour, but the only trace was
+  // a console line, so three dead (paid) actor runs left pipeline_runs saying
+  // 'completed' with errors: []. transcribeBatch now pushes `isolated` onto its
+  // errors, which pipeline.ts already routes to noteError → status 'partial'.
+  it('reports nothing for a healthy run', async () => {
+    const f = fakeFetch({})
+    const r = await fetchTranscriptsIsolating(f.fetch, ['a', 'b'], 8)
+    expect(r.isolated).toEqual([])
+  })
+
+  it('reports one line per isolated batch, naming the batch size and the actor error', async () => {
+    const f = fakeFetch({ poison: ['p1', 'p2'] })
+    // Two batches of 2, each carrying one poison id plus a healthy mate.
+    const r = await fetchTranscriptsIsolating(f.fetch, ['a', 'p1', 'b', 'p2'], 2)
+    expect(r.isolated).toHaveLength(2)
+    for (const line of r.isolated) {
+      expect(line).toContain('caption actor run-failed on a batch of 2')
+      expect(line).toMatch(/run-failed/)
+    }
+    // The recovery still holds: mates fetched, poison ids given a verdict.
+    expect([...r.fetched.keys()].sort()).toEqual(['a', 'b'])
+    expect([...r.failed.keys()].sort()).toEqual(['p1', 'p2'])
+  })
+
+  it('reports nothing when the batch error is rethrown — nothing was swallowed to report', async () => {
+    // Whole chunk poisoned: no mate resolves, so the original error propagates,
+    // the step retries, and the ids re-plan. An `isolated` line here would
+    // double-count a failure the run already fails on.
+    const f = fakeFetch({ poison: ['a', 'b'] })
+    await expect(fetchTranscriptsIsolating(f.fetch, ['a', 'b'], 8)).rejects.toThrow(/run-failed/)
+  })
+})

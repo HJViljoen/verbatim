@@ -16,6 +16,33 @@ type Admin = ReturnType<typeof createAdminClient>
 /** Enough caption to judge the judgement, not enough to duplicate the corpus. */
 const CAPTION_EXCERPT_CHARS = 200
 
+/**
+ * Drop unpaired UTF-16 surrogates so the value survives the wire as JSON.
+ *
+ * An emoji is a surrogate PAIR — two UTF-16 code units. `slice(0, 200)` counts
+ * code units, so a caption whose 200th unit is the first half of an emoji is cut
+ * between them, and the excerpt ends on a lone high surrogate. JSON.stringify
+ * dutifully emits it as `\ud83d`, PostgREST feeds that to json_to_recordset, and
+ * Postgres rejects the whole statement: 22P02 `invalid input syntax for type
+ * json` / "Unicode low surrogate must follow a high surrogate". One bad caption
+ * therefore loses a PLATFORM's entire gate record, which is exactly what
+ * happened to tiktok and instagram on run d346b0f7 (2026-09-13) — 269 verdicts
+ * gone, reddit and youtube (shorter, less emoji-dense titles) unaffected.
+ *
+ * Applied to every text field, not just the sliced one: scraped captions and
+ * account names arrive with lone surrogates of their own, and a stray half-emoji
+ * is never worth a failed write.
+ */
+export function stripLoneSurrogates(s: string): string {
+  // A high surrogate not followed by a low one, or a low one not preceded by a
+  // high one. Both forms are what Postgres refuses.
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
+/** stripLoneSurrogates over a nullable field, null-ness preserved. */
+const clean = <T extends string | null>(s: T): T =>
+  (s == null ? s : (stripLoneSurrogates(s) as T))
+
 export interface GateVerdictRow {
   client_id: string
   run_id: string | null
@@ -53,12 +80,12 @@ export function buildGateVerdictRows(
       run_id: runId,
       platform,
       video_id: c.video_id,
-      account_name: c.account_name ?? null,
-      caption_excerpt: caption ? caption.slice(0, CAPTION_EXCERPT_CHARS) : null,
-      keyword: keywordFor?.(c.video_id) ?? null,
+      account_name: clean(c.account_name ?? null),
+      caption_excerpt: caption ? clean(caption.slice(0, CAPTION_EXCERPT_CHARS)) : null,
+      keyword: clean(keywordFor?.(c.video_id) ?? null),
       // Matches the live rule at gather.ts: anything not explicitly dropped is kept.
       kept: v?.relevant !== false,
-      reason: v?.reason ?? 'no verdict returned (gate failed open)',
+      reason: clean(v?.reason ?? null) ?? 'no verdict returned (gate failed open)',
       source: v?.source ?? 'default',
     }
   })

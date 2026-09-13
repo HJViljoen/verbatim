@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { summariseRunErrors, partialRunAlert, passADegradation, RUN_ERROR_CAP, ALERT_ERROR_LIST_CAP } from './run-errors'
+import { summariseRunErrors, partialRunAlert, passADegradation, runCloseStatus, RUN_ERROR_CAP, ALERT_ERROR_LIST_CAP } from './run-errors'
 
 describe('summariseRunErrors', () => {
   it('returns null for a clean run so error_message stays NULL', () => {
@@ -95,5 +95,32 @@ describe('passADegradation — Pass A errors are errors (T0-4)', () => {
   })
   it('errors with zero attempts recorded still count as fully failed', () => {
     expect(passADegradation({ attempted: 0, errored: 2, rateLimited: false }, 0.05)).toContain('100%')
+  })
+})
+
+describe('runCloseStatus — a recorded error means partial (run d346b0f7, 2026-09-13)', () => {
+  it('a clean run closes completed', () => {
+    expect(runCloseStatus(0)).toBe('completed')
+  })
+
+  it('ONE recorded step error is enough to close partial', () => {
+    // The whole point of the 2026-09-13 fixes: the gate-verdict write, the
+    // run-failed caption batches and the themes timeout now each reach
+    // noteError, and one of them is enough to stop the run claiming 'completed'.
+    expect(runCloseStatus(1)).toBe('partial')
+  })
+
+  it('stays partial however many errors pile up, cap or no cap', () => {
+    for (const n of [2, RUN_ERROR_CAP, RUN_ERROR_CAP + 1, 269]) expect(runCloseStatus(n)).toBe('partial')
+  })
+
+  it('pairs with a non-null error_message, so status and reason never disagree', () => {
+    // run d346b0f7 wrote status 'completed', errors [] and error_message null
+    // while six writes failed. The two helpers must flip together.
+    const recorded = ['gate:tiktok: gate verdicts not recorded: invalid input syntax for type json']
+    expect(runCloseStatus(recorded.length)).toBe('partial')
+    expect(summariseRunErrors(recorded.length, recorded)).toContain('gate:tiktok')
+    expect(runCloseStatus(0)).toBe('completed')
+    expect(summariseRunErrors(0, [])).toBeNull()
   })
 })

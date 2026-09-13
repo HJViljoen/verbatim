@@ -23,7 +23,7 @@ import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
-import { summariseRunErrors, partialRunAlert, passADegradation, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
+import { summariseRunErrors, partialRunAlert, passADegradation, runCloseStatus, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
 import { writeRunCosts, runSpendSoFar } from '@/lib/pipeline/run-costs'
 import { withApifyRunContext, settleApifyRuns } from '@/lib/gather/apify-runs'
 import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATION, type RunningRow } from '@/lib/pipeline/run-guard'
@@ -1202,7 +1202,7 @@ export const runPipeline = inngest.createFunction(
     await step.run('close-run', async () => {
       const admin = createAdminClient()
       await admin.from('pipeline_runs').update({
-        status: totalErrors > 0 ? 'partial' : 'completed',
+        status: runCloseStatus(totalErrors),
         videos_scraped: totalVideos,
         completed_at: new Date().toISOString(),
         errors: runErrors,
@@ -1293,7 +1293,7 @@ export const runPipeline = inngest.createFunction(
         })
     }
 
-    return { runId, status: totalErrors > 0 ? 'partial' : 'completed', totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
+    return { runId, status: runCloseStatus(totalErrors), totalVideos, ...passA, transcriptBackfill: backfill, translation: translate, onScreenText: ocr, classifyMeta: classify, brandMentions: crossRef.mentionsFlagged, ...themedSummary, ...synth, pruned }
   },
 )
 
