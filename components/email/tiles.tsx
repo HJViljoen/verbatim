@@ -3,7 +3,7 @@ import type { EmailContext } from '../../lib/renderables/types'
 import { BUCKET_COLOR, priorityLabel, type DashboardData } from '../../lib/pages/dashboard'
 import type { ContentData } from '../../lib/pages/content'
 import type { CompetitiveData } from '../../lib/pages/competitive'
-import { INTENT_LABEL } from '../../lib/content-tiles'
+import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
@@ -228,7 +228,7 @@ const inbox: E<ContentData> = ({ inbox: ib }) => {
   if (!ib.rows.length) return empty('Nothing waiting for a reply this update.')
   return (
     <div>
-      {ib.rows.slice(0, 3).map((r) => (
+      {diverseByIntent(ib.rows, 3).map((r) => (
         <div key={r.id} style={{ marginBottom: 10 }}>
           <div style={text.eyebrow}>{INTENT_LABEL[r.intent]} · {platformLabel(r.platform)}{r.age ? ` · ${r.age}` : ''}</div>
           <Quote text={clip(r.text)} cite={<>{r.context}{r.href ? <> · <a href={r.href} style={{ color: EMAIL.link, fontWeight: 600, textDecoration: 'none' }}>Reply →</a></> : null}</>} />

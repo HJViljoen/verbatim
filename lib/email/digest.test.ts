@@ -5,9 +5,10 @@ import { digestSubject } from './subject'
 import { firstSentence, htmlToText } from './text'
 import { tokenHex } from './theme'
 import { DeltaBlock } from '../../components/email/delta-block'
-import { clip, dashboardEmail } from '../../components/email/tiles'
+import { clip, contentEmail, dashboardEmail } from '../../components/email/tiles'
 import type { RunDelta } from '../report-delta'
 import type { DashboardData } from '../pages/dashboard'
+import type { ContentData } from '../pages/content'
 import type { EmailContext } from '../renderables/types'
 import { EMAIL } from './theme'
 
@@ -91,6 +92,31 @@ describe('tile email renderers', () => {
     expect(html).toContain('−0.7 pt')
     const withImage = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.movement'](d, { ...ctx, image: (k) => (k === 'dashboard.movement' ? 'cid:dashboard-movement@verbatim' : null) })))
     expect(withImage).toContain('src="cid:dashboard-movement@verbatim"')
+  })
+})
+
+describe('worth a reply', () => {
+  // 13 Sep: all three rows read "Buying signal" — the inbox is ordered
+  // intent-first, so slicing the top three took three of the same label.
+  it('shows one of each label, in priority order, when the inbox has them', () => {
+    const row = (id: string, intent: string) => ({ id, intent, platform: 'youtube', age: '1d', text: `comment ${id}`, context: 'under @x’s post', href: 'https://y.example/1', commentLevel: true, ref: `m:${id}`, insightId: 'i', category: 'x', theme: 't' })
+    const d = {
+      inbox: {
+        total: 12,
+        rows: [
+          ...Array.from({ length: 6 }, (_, i) => row(`buy${i}`, 'buying')),
+          ...Array.from({ length: 3 }, (_, i) => row(`q${i}`, 'question')),
+          ...Array.from({ length: 3 }, (_, i) => row(`obj${i}`, 'objection')),
+        ],
+      },
+    } as unknown as ContentData
+    const html = renderToStaticMarkup(createElement('div', null, contentEmail['content.inbox'](d, ctx)))
+    hygiene(html)
+    expect([...html.matchAll(/Buying signal|Question|Objection/g)].map((m) => m[0])).toEqual(['Buying signal', 'Question', 'Objection'])
+    expect(html).toContain('comment buy0')
+    expect(html).toContain('comment q0')
+    expect(html).toContain('comment obj0')
+    expect(html).toContain('9 more in the app')
   })
 })
 
