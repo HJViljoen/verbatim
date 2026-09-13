@@ -65,12 +65,13 @@ async function loadPending(clientId: string): Promise<Row[]> {
   const admin = createAdminClient()
   // Ids first, without the text: the candidate filter is the same one
   // planTranslateBatches uses, and it answers from the partial index.
+  // No transcript_en_error filter (2026-09-13): a failed row is a candidate
+  // again until its attempts run out, and needsTranslation below is the rule.
   const ids = (await selectAll<{ id: string }>(() =>
     admin.from('videos').select('id')
       .eq('client_id', clientId)
       .eq('transcript_status', 'ok')
       .is('transcript_en', null)
-      .is('transcript_en_error', null)
       .order('id', { ascending: true }),
   )).map((r) => r.id)
   const rows: Row[] = []

@@ -811,7 +811,7 @@ export const runPipeline = inngest.createFunction(
         .run('plan-translate', () => planTranslateBatches(clientId))
         .catch((e) => {
           noteError('plan-translate', e)
-          return { batches: [] as string[][], needing: 0, deferred: 0, byLang: {} as Record<string, number> }
+          return { batches: [] as string[][], needing: 0, deferred: 0, retrying: 0, byLang: {} as Record<string, number> }
         })
       translate.batches = plan.batches.length
       translate.needing = plan.needing
@@ -865,7 +865,7 @@ export const runPipeline = inngest.createFunction(
       if (plan.needing) {
         const langs = Object.entries(plan.byLang).sort((a, b) => b[1] - a[1]).map(([l, n]) => `${l}:${n}`).join(' ')
         console.log(
-          `[translate] ${plan.needing} needed · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
+          `[translate] ${plan.needing} needed (${plan.retrying} re-attempts of a recorded failure) · ${translate.translated} translated · ${translate.english} already English · ${translate.failed} failed · ${plan.deferred} deferred by the cap · ~$${translate.cost.toFixed(3)} · ${langs}`,
         )
       }
       // A translation changes what Pass A sees on exactly those videos, and the
