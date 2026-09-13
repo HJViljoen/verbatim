@@ -79,12 +79,20 @@ const STOP = new Set(DISCOVERY_STOP_TERMS.map(fold))
  *  and `\w` would clip it to nothing useful. */
 const HASHTAG_IN_TEXT = /#([\p{L}\p{N}_]+)/gu
 
-/** A term and its space-stripped form. A hashtag cannot hold a space, so the
- *  configured "upcycled bag" reaches the corpus as #upcycledbag — without this
- *  the tag would read as a discovery when it is the keyword we already run. */
+/** A term and its compacted forms: spaces stripped, then everything that is not
+ *  a letter or a digit stripped.
+ *
+ *  A hashtag can hold neither a space nor punctuation (see HASHTAG_IN_TEXT), so
+ *  the configured "upcycled bag" reaches the corpus as #upcycledbag and a
+ *  configured "sea-land gear" as #sealandgear. Without these forms the tenant's
+ *  own keyword reads as a discovery, every run, at the top of the table.
+ *
+ *  Empty forms are dropped: "___" compacts to nothing, and an empty needle is
+ *  contained in every string. */
 function variants(folded: string): string[] {
-  const bare = folded.replace(/\s+/g, '')
-  return bare === folded ? [folded] : [folded, bare]
+  const forms = new Set([folded, folded.replace(/\s+/g, ''), folded.replace(/[^\p{L}\p{N}]+/gu, '')])
+  forms.delete('')
+  return [...forms]
 }
 
 /** Every configured term, folded and despaced, split BY SHAPE — which decides

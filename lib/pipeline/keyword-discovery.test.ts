@@ -97,6 +97,17 @@ describe('computeKeywordCandidates', () => {
     expect(byTerm(rows)).toEqual(['denim'])
   })
 
+  it('excludes a punctuation-stripped configured term ("sealandgear" vs "sea-land gear")', () => {
+    const rows = computeKeywordCandidates(
+      many(3, { hashtags: ['sealandgear', 'sailing'] }),
+      new Map(),
+      { brand_keywords: ['sea-land gear'] },
+    )
+    // A hashtag holds neither the space nor the hyphen, so the tag IS the
+    // configured keyword.
+    expect(byTerm(rows)).toEqual(['sailing'])
+  })
+
   it('excludes own_handles values and matches accent-insensitively (fold)', () => {
     const rows = computeKeywordCandidates(
       many(3, { topics: ['össur', 'prosthetics'] }),
