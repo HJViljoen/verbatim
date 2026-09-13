@@ -130,9 +130,8 @@ export function readShare(sov: Record<string, SovEntry> | null): ShareSide | nul
  *  those rows blended framing into the number and are not comparable. The
  *  period layer compares against `periodPrev` (the last run that gathered),
  *  the cumulative fallback against the immediate previous — see pickBaselines. */
-function audienceSides(current: RunSummaryRow, prev: RunSummaryRow, periodPrev: RunSummaryRow):
+function audienceSides(current: RunSummaryRow, prev: RunSummaryRow, periodPrev: RunSummaryRow, usePeriod: boolean):
   { now: SentimentFamilyRow; prev: SentimentFamilyRow } | null {
-  const usePeriod = current.period_audience_sentiment != null && periodPrev.period_audience_sentiment != null
   const nowRow = usePeriod ? current.period_audience_sentiment : current.audience_sentiment
   const prevRow = usePeriod ? periodPrev.period_audience_sentiment : prev.audience_sentiment
   if (!nowRow || !prevRow) return null
@@ -143,6 +142,26 @@ function audienceSides(current: RunSummaryRow, prev: RunSummaryRow, periodPrev: 
 /** Prior run_summary rows to consider when choosing a baseline. Deep enough
  *  to step over a run of catch-ups, shallow enough to stay one small query. */
 export const BASELINE_LOOKBACK = 8
+
+/**
+ * The date the delta block may name as "since <date>".
+ *
+ * Every period figure is measured against `periodPrev` (the last run that
+ * GATHERED), so when the whole block is period figures that is the honest date.
+ * But each family falls back to its cumulative column when either side lacks the
+ * period one, and those compare against `prevRow` — so a mixed block dated to
+ * periodPrev would put a cumulative movement under the wrong baseline. Mixed
+ * (or all-cumulative) therefore names the previous update, which is true of
+ * every row: the period ones simply span a little more than the label says.
+ */
+export function deltaBaselineDate(
+  prev: RunSummaryRow,
+  periodPrev: RunSummaryRow,
+  layers: { sentiment: boolean; share: boolean; conversations: boolean },
+): string {
+  const allPeriod = layers.sentiment && layers.share && layers.conversations
+  return allPeriod ? periodPrev.run_date : prev.run_date
+}
 
 /**
  * The two baselines a delta is measured against.
@@ -214,7 +233,12 @@ export async function computeRunDelta(
   // Sentiment: audience family only, period layer when both sides carry it.
   // A verdict, not a raw difference — floors (>= 100 judged per side) and a
   // 2xSE band keep re-judgment jitter and population changes out of the arrow.
-  const sides = audienceSides(current, prevRow, periodPrev)
+  // Which families compare against `periodPrev` (the last run that gathered) and
+  // which fall back to a cumulative column measured against `prevRow`. Hoisted
+  // out of audienceSides because the block's "since <date>" depends on all three
+  // (deltaBaselineDate).
+  const usePeriodSentiment = current.period_audience_sentiment != null && periodPrev.period_audience_sentiment != null
+  const sides = audienceSides(current, prevRow, periodPrev, usePeriodSentiment)
   const sentiment = sides
     ? {
         now: sides.now.positive as number,
@@ -266,10 +290,9 @@ export async function computeRunDelta(
   const convPrev = num(usePeriodConv ? periodPrev.period_comments : prevRow.total_comments)
 
   return {
-    // Every row of the digest's delta block is a period figure in practice, so
-    // the "since <date>" it carries has to name the baseline those figures were
-    // measured against, not merely the last run that happened.
-    prevRunDate: periodPrev.run_date,
+    prevRunDate: deltaBaselineDate(prevRow, periodPrev, {
+      sentiment: usePeriodSentiment, share: usePeriodShare, conversations: usePeriodConv,
+    }),
     sentiment,
     share:
       shareNow && sharePrev

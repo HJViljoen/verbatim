@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dayFloor, pickBaselines, type RunSummaryRow } from './report-delta'
+import { dayFloor, pickBaselines, deltaBaselineDate, type RunSummaryRow } from './report-delta'
 
 // "Previous update" has to mean a previous DAY. run_date is a timestamptz, so
 // an `.lt(run_date)` filter also matches a rerun from earlier the same
@@ -61,5 +61,28 @@ describe('pickBaselines — which update a delta is measured against', () => {
     const picked = pickBaselines(priors, new Set(['sep06', 'aug30']))!
     expect(picked.periodPrev.run_id).toBe('sep06')
     expect(pickBaselines([], new Set())).toBeNull()
+  })
+})
+
+// The date the block prints is the baseline its figures were measured against.
+// Each family falls back to a cumulative column (compared against the previous
+// RUN) when either side lacks the period one, so only an all-period block may
+// name periodPrev — otherwise a cumulative movement is dated to a baseline it
+// was never measured against.
+describe('deltaBaselineDate — "since <date>" names the baseline actually used', () => {
+  const prev = { run_id: 'sep06', run_date: '2026-09-06' } as RunSummaryRow
+  const periodPrev = { run_id: 'aug30', run_date: '2026-08-30' } as RunSummaryRow
+
+  it('names the last run that gathered when every family is on the period layer', () => {
+    expect(deltaBaselineDate(prev, periodPrev, { sentiment: true, share: true, conversations: true })).toBe('2026-08-30')
+  })
+
+  it('names the previous update when any family fell back to a cumulative column', () => {
+    for (const layers of [
+      { sentiment: false, share: true, conversations: true },
+      { sentiment: true, share: false, conversations: true },
+      { sentiment: true, share: true, conversations: false },
+      { sentiment: false, share: false, conversations: false },
+    ]) expect(deltaBaselineDate(prev, periodPrev, layers)).toBe('2026-09-06')
   })
 })
