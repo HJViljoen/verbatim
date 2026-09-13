@@ -16,7 +16,7 @@
 // function (tested in keyword-discovery.test.ts); the pipeline step and the
 // backfill script supply the rows and write the results.
 
-import { DISCOVERY_MAX_TERMS, DISCOVERY_MIN_VIDEOS, DISCOVERY_STOP_TERMS } from '../config'
+import { DISCOVERY_MAX_TERM_CHARS, DISCOVERY_MAX_TERMS, DISCOVERY_MIN_VIDEOS, DISCOVERY_STOP_TERMS } from '../config'
 import { dbSafeJson, dbSafeText } from '../db-text'
 import { fold } from '../gather/util'
 import { selectAll } from '../supabase-admin'
@@ -103,8 +103,10 @@ function configuredTerms(config: DiscoveryConfig): string[] {
 function isCovered(folded: string, configured: string[]): boolean {
   if (!folded) return true
   if (STOP.has(folded)) return true
-  // 1-2 character tokens and bare numbers are never a search term worth having.
+  // 1-2 character tokens, bare numbers and run-on pseudo-tags are never a search
+  // term worth having (and an over-long one cannot fit the unique index at all).
   if (folded.length < 3) return true
+  if (folded.length > DISCOVERY_MAX_TERM_CHARS) return true
   if (/^\d+$/.test(folded)) return true
   for (const cand of variants(folded)) {
     for (const term of configured) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { computeKeywordCandidates, type DiscoveryConfig, type DiscoveryVideo } from './keyword-discovery'
-import { DISCOVERY_MAX_TERMS, DISCOVERY_MIN_VIDEOS } from '../config'
+import { DISCOVERY_MAX_TERM_CHARS, DISCOVERY_MAX_TERMS, DISCOVERY_MIN_VIDEOS } from '../config'
 
 const vid = (id: string, over: Partial<DiscoveryVideo> = {}): DiscoveryVideo => ({
   id,
@@ -134,6 +134,17 @@ describe('computeKeywordCandidates', () => {
       SEALAND,
     )
     expect(byTerm(rows)).toEqual(['sailing'])
+  })
+
+  it('drops a run-on term too long for the unique index, keeps one at the limit', () => {
+    const long = 'a'.repeat(DISCOVERY_MAX_TERM_CHARS + 1)
+    const ok = 'b'.repeat(DISCOVERY_MAX_TERM_CHARS)
+    const rows = computeKeywordCandidates(
+      many(3, { caption: `#${long} #${ok}`, hashtags: ['c'.repeat(500)] }),
+      new Map(),
+      SEALAND,
+    )
+    expect(byTerm(rows)).toEqual([ok])
   })
 
   it('drops terms under the min-videos floor', () => {

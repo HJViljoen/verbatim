@@ -1179,6 +1179,15 @@ export const DISCOVERY_MIN_VIDEOS = 3
  *  will never read; the cap keeps the table a shortlist. */
 export const DISCOVERY_MAX_TERMS = 200
 
+/** Longest term worth storing. Two reasons, both hard: a caption can carry a
+ *  run-on pseudo-tag (the corpus already holds a 463-character one in
+ *  `videos.hashtags`) and nobody will ever search it; and `keyword_candidates`
+ *  puts `term` in a btree unique index, whose row cannot exceed 2704 BYTES — a
+ *  long enough term is not a bad row, it is an insert that fails outright and
+ *  costs the run its candidates. 120 characters is ~30x the median tag and
+ *  drops 7 distinct tags in the whole corpus. */
+export const DISCOVERY_MAX_TERM_CHARS = 120
+
 // --- Delta-scraping (2026-07-16) ---------------------------------------------
 // Corpus measurement behind the re-check layer: ~73% of an IG video's lifetime
 // comments arrive within 7 days of upload, ~27% after — signal the one-shot
