@@ -101,6 +101,21 @@ export function partialRunAlert(input: {
 }
 
 /**
+ * Recovered caption batches, ratio-gated the way per-video translate/OCR
+ * failures are (2026-09-13). A run-failed caption batch that the isolation pass
+ * re-fetched id-by-id cost Apify money but lost no data, and a few of them is an
+ * ordinary Apify day (3 of 37 on run d346b0f7) — closing such a run 'partial'
+ * would tell the client their update is thin when it is whole. Past `ratio` the
+ * actor itself is suspect, and that the run should say.
+ */
+export function isolatedBatchDegradation(isolated: number, total: number, ratio: number): string | null {
+  if (isolated <= 0) return null
+  const share = total > 0 ? isolated / total : 1
+  if (share <= ratio) return null
+  return `${isolated} of ${total} caption batches run-failed and were recovered id-by-id (${Math.round(share * 100)}%)`
+}
+
+/**
  * Pass A degradation rule (Tier 0, 2026-08-18): the run is degraded when any
  * live call died on a 429, or when failed calls exceed `ratio` of attempts.
  * Returns the one-line reason to record via noteError, or null when the run

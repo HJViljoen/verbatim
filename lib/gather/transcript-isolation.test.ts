@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { fetchTranscriptsIsolating } from './gather'
 import { ApifyError, isActorRunFailedError } from './apify'
+import { isolatedBatchDegradation } from '../pipeline/run-errors'
+import { ISOLATED_BATCH_ERROR_RATIO } from '../config'
 import type { FetchedTranscript } from './types'
 
 const tx = (id: string): FetchedTranscript => ({ text: `transcript ${id}`, lang: 'en', source: 'youtube_caption' })
@@ -125,37 +127,46 @@ describe('fetchTranscriptsIsolating', () => {
   })
 })
 
-describe('fetchTranscriptsIsolating — a run-failed batch is reportable (run d346b0f7, 2026-09-13)', () => {
+describe('a recovered run-failed batch is counted, not an error (run d346b0f7, 2026-09-13)', () => {
   // Batches 9, 13 and 29 of 37 run-failed on Apify and were isolated per id —
-  // 24 re-fetches, the data recovered. Correct behaviour, but the only trace was
-  // a console line, so three dead (paid) actor runs left pipeline_runs saying
-  // 'completed' with errors: []. transcribeBatch now pushes `isolated` onto its
-  // errors, which pipeline.ts already routes to noteError → status 'partial'.
-  it('reports nothing for a healthy run', async () => {
+  // 24 re-fetches, the data recovered, nothing lost. That is an Apify day, not a
+  // degraded run: routed as error lines it closed the run 'partial', which tells
+  // the client their update is thinner than usual and caps the findings at 3.
+  // So the count comes back and the pipeline ratio-gates it, the way the
+  // translate and OCR waves gate their per-item failures.
+  it('counts nothing for a healthy run', async () => {
     const f = fakeFetch({})
     const r = await fetchTranscriptsIsolating(f.fetch, ['a', 'b'], 8)
-    expect(r.isolated).toEqual([])
+    expect(r.isolatedBatches).toBe(0)
   })
 
-  it('reports one line per isolated batch, naming the batch size and the actor error', async () => {
+  it('counts one per isolated batch and returns no error strings to push', async () => {
     const f = fakeFetch({ poison: ['p1', 'p2'] })
     // Two batches of 2, each carrying one poison id plus a healthy mate.
     const r = await fetchTranscriptsIsolating(f.fetch, ['a', 'p1', 'b', 'p2'], 2)
-    expect(r.isolated).toHaveLength(2)
-    for (const line of r.isolated) {
-      expect(line).toContain('caption actor run-failed on a batch of 2')
-      expect(line).toMatch(/run-failed/)
-    }
+    expect(r.isolatedBatches).toBe(2)
+    expect(Object.keys(r)).toEqual(['fetched', 'failed', 'isolatedBatches'])
     // The recovery still holds: mates fetched, poison ids given a verdict.
     expect([...r.fetched.keys()].sort()).toEqual(['a', 'b'])
     expect([...r.failed.keys()].sort()).toEqual(['p1', 'p2'])
   })
 
-  it('reports nothing when the batch error is rethrown — nothing was swallowed to report', async () => {
+  it('counts nothing when the batch error is rethrown — the step fails on it instead', async () => {
     // Whole chunk poisoned: no mate resolves, so the original error propagates,
-    // the step retries, and the ids re-plan. An `isolated` line here would
-    // double-count a failure the run already fails on.
+    // the step retries, and the ids re-plan. Counting it here would double-count
+    // a failure the run already hears about.
     const f = fakeFetch({ poison: ['a', 'b'] })
     await expect(fetchTranscriptsIsolating(f.fetch, ['a', 'b'], 8)).rejects.toThrow(/run-failed/)
+  })
+
+  it('ratio gate: the observed 3-of-37 day stays clean, a broken actor trips it', () => {
+    // The gate the pipeline applies after a platform's transcribe waves.
+    expect(isolatedBatchDegradation(0, 37, ISOLATED_BATCH_ERROR_RATIO)).toBeNull()
+    expect(isolatedBatchDegradation(3, 37, ISOLATED_BATCH_ERROR_RATIO)).toBeNull() // the observed 8% day
+    const broken = isolatedBatchDegradation(20, 37, ISOLATED_BATCH_ERROR_RATIO)
+    expect(broken).toContain('20 of 37')
+    expect(broken).toContain('54%')
+    // Every batch dying alone still trips it, however few there were.
+    expect(isolatedBatchDegradation(1, 1, ISOLATED_BATCH_ERROR_RATIO)).toContain('100%')
   })
 })

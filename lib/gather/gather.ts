@@ -950,17 +950,17 @@ export async function fetchTranscriptsIsolating(
   ids: string[],
   batchSize: number,
   opts: { deadlineMs?: number; now?: () => number } = {},
-): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string>; isolated: string[] }> {
+): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string>; isolatedBatches: number }> {
   const fetched = new Map<string, FetchedTranscript | null>()
   const failed = new Map<string, string>()
-  // One line per batch whose actor run FAILED and had to be isolated. Recovering
+  // How many batches had a FAILED actor run and were isolated per id. Recovering
   // per id is the design and it works — run d346b0f7 (2026-09-13) isolated
-  // batches 9, 13 and 29 of 37 and re-fetched all 24 ids one by one — but until
-  // now the only trace was the console.warn below, so three failed actor runs
-  // (paid for, and a third of the YouTube transcript wall-clock) left the run
-  // record saying 'completed' with errors: []. The caller pushes these onto its
-  // `errors`, which pipeline.ts already routes to noteError.
-  const isolated: string[] = []
+  // batches 9, 13 and 29 of 37 and re-fetched all 24 ids one by one — so a
+  // recovered batch is an expected per-item failure, not a run error: the detail
+  // is in the console.warn below and the caller ratio-gates this count the way
+  // the translate and OCR waves gate theirs. A batch whose error is RETHROWN is
+  // not counted — the step fails on it and the run hears about it that way.
+  let isolatedBatches = 0
   const now = opts.now ?? Date.now
   const deadline = now() + (opts.deadlineMs ?? ISOLATION_DEADLINE_MS)
   for (const part of chunk(ids, batchSize)) {
@@ -973,7 +973,7 @@ export async function fetchTranscriptsIsolating(
       batchErr = e
     }
     console.warn(`[transcript] batch of ${part.length} run-failed, isolating per id: ${(batchErr as Error).message.slice(0, 160)}`)
-    isolated.push(`caption actor run-failed on a batch of ${part.length}, isolated per id: ${(batchErr as Error).message.slice(0, 160)}`)
+    isolatedBatches++
     const chunkFetched = new Map<string, FetchedTranscript | null>()
     const chunkFailed = new Map<string, string>()
     for (const id of part) {
@@ -990,7 +990,7 @@ export async function fetchTranscriptsIsolating(
     for (const [k, v] of chunkFetched) fetched.set(k, v)
     for (const [k, v] of chunkFailed) failed.set(k, v)
   }
-  return { fetched, failed, isolated }
+  return { fetched, failed, isolatedBatches }
 }
 
 export async function transcribeBatch(opts: {
@@ -1004,11 +1004,11 @@ export async function transcribeBatch(opts: {
   /** 1-based batch number for the ai_call_log call_index (fan-out mode). */
   batchNo?: number
   dryRun?: boolean
-}): Promise<{ transcribed: number; skipped: number; errors: string[] }> {
+}): Promise<{ transcribed: number; skipped: number; isolatedBatches: number; errors: string[] }> {
   const admin = createAdminClient()
   const adapter = adapters[opts.platform]
   const errors: string[] = []
-  if (!canTranscribe(adapter)) return { transcribed: 0, skipped: 0, errors }
+  if (!canTranscribe(adapter)) return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
   const startedAt = Date.now()
   const stepDeadline = startedAt + TRANSCRIBE_STEP_DEADLINE_MS
 
@@ -1022,7 +1022,7 @@ export async function transcribeBatch(opts: {
     if (opts.videoIds?.length) q = q.in('video_id', opts.videoIds)
     return q.order('id', { ascending: true })
   })
-  if (!rawRows.length) return { transcribed: 0, skipped: 0, errors }
+  if (!rawRows.length) return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
 
   // Skip videos already transcribed (idempotent re-runs / step retries).
   // Scoped to exactly the candidate ids, chunked — bounded however large the
@@ -1043,7 +1043,7 @@ export async function transcribeBatch(opts: {
       .in('video_id', part)
     if (error) {
       errors.push(`transcribe done-check: ${error.message}`)
-      return { transcribed: 0, skipped: 0, errors }
+      return { transcribed: 0, skipped: 0, isolatedBatches: 0, errors }
     }
     for (const r of (data ?? []) as { video_id: string; transcript_status: string | null; transcript_attempts: number | null }[]) {
       if (r.transcript_status != null) done.add(r.video_id)
@@ -1063,6 +1063,7 @@ export async function transcribeBatch(opts: {
   // so one actor call never carries hundreds of ids into a 60s timeout.
   let fetched: Map<string, FetchedTranscript | null> | null = null
   let fetchFailed = new Map<string, string>()
+  let isolatedBatches = 0
   if (adapter.fetchTranscripts && pending.length) {
     const r = await fetchTranscriptsIsolating(
       (ids) => adapter.fetchTranscripts!(ids),
@@ -1071,10 +1072,12 @@ export async function transcribeBatch(opts: {
     )
     fetched = r.fetched
     fetchFailed = r.failed
-    // A run-failed batch is a step error even though the isolation pass rescued
-    // its ids: the actor run was paid for and died, and a run that burned Apify
-    // money on a broken batch must say so rather than close clean.
-    for (const line of r.isolated) errors.push(line)
+    // A recovered batch is NOT a step error: the ids were all re-fetched, and a
+    // handful of run-failed batches is an expected Apify day (3 of 37 on run
+    // d346b0f7). Reported as a count so the caller can ratio-gate it — the
+    // translate and OCR waves' rule — instead of closing every such run
+    // 'partial' and capping the client's findings at 3.
+    isolatedBatches = r.isolatedBatches
   }
   let transcribed = 0
   let skipped = 0
@@ -1203,7 +1206,7 @@ export async function transcribeBatch(opts: {
   console.log(
     `[${opts.platform}] transcripts${opts.batchNo ? ` (batch ${opts.batchNo})` : ''}: ${transcribed} ok, ${skipped} empty/no-speech, ${rawRows.length - pending.length} already-done · ${Math.round(whisperMinutes * 10) / 10} whisper-min · ${Math.round(assemblyMinutes * 10) / 10} assemblyai-min`,
   )
-  return { transcribed, skipped, errors }
+  return { transcribed, skipped, isolatedBatches, errors }
 }
 
 // ---- CLI composition ---------------------------------------------------------
