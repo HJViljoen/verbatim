@@ -16,7 +16,6 @@
 // function (tested in keyword-discovery.test.ts); the pipeline step and the
 // backfill script supply the rows and write the results.
 
-import { chunk } from '../chunk'
 import { DISCOVERY_MAX_TERMS, DISCOVERY_MIN_VIDEOS, DISCOVERY_STOP_TERMS } from '../config'
 import { dbSafeJson, dbSafeText } from '../db-text'
 import { fold } from '../gather/util'
@@ -283,8 +282,14 @@ export async function discoverRunKeywords(
     client_videos: c.client_videos,
     competitor_videos: c.competitor_videos,
   }))
-  for (const part of chunk(rows, 100)) {
-    const { error } = await admin.from('keyword_candidates').insert(part)
+  // ONE insert, not a chunked loop. `rows` is capped at DISCOVERY_MAX_TERMS, and
+  // a single PostgREST insert is a single statement — so the delete/insert pair
+  // either both land or neither does. A chunked insert whose second request went
+  // out of retries (which this step swallows by design) would leave the run
+  // holding a partial candidate set, and the reader would under-count that run
+  // with nothing anywhere saying so.
+  if (rows.length) {
+    const { error } = await admin.from('keyword_candidates').insert(rows)
     if (error) throw new Error(`discovery insert: ${error.message}`)
   }
 
