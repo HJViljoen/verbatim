@@ -3,15 +3,27 @@ import { adminKeyValid } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { sendAlertEmail } from '@/lib/email'
 import { assessPipelineHealth, formatOpsEmail, LOOKBACK_MS, type HealthInputs } from '@/lib/ops/health'
+import { touchHeartbeat } from '@/lib/ops/heartbeat'
 
 // The dead-man's switch (WP2, 2026-09-11).
 //
 // Every alert this product has ever had runs inside an Inngest function, so the
 // one failure it cannot report is Inngest not calling it — which is what
 // happened on 2026-09-06: no pipeline_runs row for Össur at all, and silence.
-// This route is a SECOND scheduler. Vercel Cron calls it, it reads Postgres
-// directly and emails through Resend directly, and it depends on Inngest for
-// nothing. If Inngest is dead, this is the thing that says so.
+// This route is a SECOND scheduler. It reads Postgres directly and emails
+// through Resend directly, and it depends on Inngest for nothing. If Inngest is
+// dead, this is the thing that says so.
+//
+// TWO things call it (2026-09-13): Vercel Cron at 07:00 UTC, and a GitHub
+// Actions workflow at 07:10 UTC (.github/workflows/ops-check.yml). Vercel's cron
+// works — it fired at 07:40:40 UTC on 2026-09-13, because Hobby only promises
+// "within the hour", not on the minute — but it is the one caller that shares a
+// failure domain with the thing being watched: a Hobby usage cap pauses the
+// project and takes the crons with it, and Hobby's ~1 h of runtime-log retention
+// means a missed invocation leaves no trace to find later. GitHub's scheduler is
+// free and independent of both Vercel and Inngest, which is the whole point of a
+// dead-man's switch. Neither caller de-duplicates: a finding still true at both
+// emails twice, which is the cheap side of the trade.
 //
 // Timing (vercel.json, which cannot carry a comment): 07:00 UTC = 09:00 SAST,
 // THREE hours after the 06:00 SAST dispatcher slot. The run-not-started grace is
@@ -44,6 +56,14 @@ function secretMatches(provided: string | null, expected: string): boolean {
   const a = Buffer.from(provided ?? '')
   const b = Buffer.from(`Bearer ${expected}`)
   return a.length === b.length && timingSafeEqual(a, b)
+}
+
+/** Which scheduler called. Two of them do now — Vercel Cron and the GitHub
+ *  Actions workflow (.github/workflows/ops-check.yml) — and with two callers the
+ *  only useful question about a stale heartbeat is which one stopped firing. */
+function callerOf(req: Request): string {
+  if (req.headers.get('x-vercel-cron-schedule')) return 'vercel-cron'
+  return req.headers.get('user-agent') ?? 'unknown'
 }
 
 interface ClientRow {
@@ -143,7 +163,19 @@ export async function GET(req: Request): Promise<Response> {
         await sendAlertEmail(subject, text)
       }
     }
-    return Response.json({ ok: findings.length === 0, findings, alerting, checkedAt: now.toISOString() })
+    // The watchman's own beat, on every successful check. Vercel's cron leaves
+    // no durable trace — Hobby keeps about an hour of runtime logs, and a
+    // historical query answers ExceedsBillingLimitError — so this row is the
+    // only place the check's OWN silence is visible afterwards. Written last, so
+    // it means "the check completed", and through touchHeartbeat, which cannot
+    // throw: the beacon must never break the thing it watches.
+    // assessPipelineHealth ignores heartbeat names it does not know, so
+    // 'ops_check' can never become a finding about itself.
+    const heartbeat = await touchHeartbeat(createAdminClient, 'ops_check', {
+      findings: findings.length,
+      caller: callerOf(req),
+    })
+    return Response.json({ ok: findings.length === 0, findings, alerting, heartbeat: heartbeat.ok, checkedAt: now.toISOString() })
   } catch (e) {
     // The watchman falling over is itself an outage. Say so by email, then let
     // it through so Vercel's cron log records a failed invocation too.

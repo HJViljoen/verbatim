@@ -50,6 +50,21 @@ describe('assessPipelineHealth — Inngest liveness', () => {
     expect(f).toEqual([])
   })
 
+  it('ignores the ops_check beat the route writes about itself, however stale', () => {
+    // /api/cron/ops-check now upserts its own 'ops_check' beat so that the
+    // watchman's silence is visible in the DB. It must stay INERT here: a route
+    // that is not running cannot report on itself, and a checker that complained
+    // about its own last beat would fire a finding on its first run forever.
+    const f = assessPipelineHealth(inputs({
+      heartbeats: [
+        { name: 'inngest', lastSeenAt: agoMin(3) },
+        { name: 'dispatcher', lastSeenAt: agoMin(3) },
+        { name: 'ops_check', lastSeenAt: agoDays(9) },
+      ],
+    }))
+    expect(f).toEqual([])
+  })
+
   it('flags a heartbeat that has never been written, rather than throwing', () => {
     // The table exists but is empty (first deploy), or the table is not there
     // yet and the loader passed []. Either way this is the dead-man's switch
