@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildGateVerdictRows, stripLoneSurrogates } from './gate-verdicts'
+import { buildGateVerdictRows } from './gate-verdicts'
+import { dbSafeText } from '../db-text'
 import type { RelevanceCandidate, RelevanceVerdict } from './relevance'
 
 const cand = (video_id: string, over: Partial<RelevanceCandidate> = {}): RelevanceCandidate =>
@@ -101,6 +102,6 @@ describe('buildGateVerdictRows — JSON-safe text (run d346b0f7, 2026-09-13)', (
       new Map(),
     )
     expect(JSON.stringify(rows)).not.toMatch(/\\ud[89ab][0-9a-f]{2}(?!\\ud[c-f])/i)
-    for (const r of rows) expect(stripLoneSurrogates(r.caption_excerpt ?? '')).toBe(r.caption_excerpt ?? '')
+    for (const r of rows) expect(dbSafeText(r.caption_excerpt ?? '')).toBe(r.caption_excerpt ?? '')
   })
 })

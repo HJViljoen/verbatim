@@ -1,5 +1,6 @@
 import type { createAdminClient } from '../supabase-admin'
 import { chunk } from '../chunk'
+import { dbSafeText } from '../db-text'
 import type { RelevanceCandidate, RelevanceVerdict } from './relevance'
 
 // Recording what the relevance gate decides (Tier 1, 2026-08-18).
@@ -17,7 +18,7 @@ type Admin = ReturnType<typeof createAdminClient>
 const CAPTION_EXCERPT_CHARS = 200
 
 /**
- * Drop unpaired UTF-16 surrogates so the value survives the wire as JSON.
+ * Every text field, made safe to write (2026-09-13).
  *
  * An emoji is a surrogate PAIR — two UTF-16 code units. `slice(0, 200)` counts
  * code units, so a caption whose 200th unit is the first half of an emoji is cut
@@ -29,19 +30,14 @@ const CAPTION_EXCERPT_CHARS = 200
  * happened to tiktok and instagram on run d346b0f7 (2026-09-13) — 269 verdicts
  * gone, reddit and youtube (shorter, less emoji-dense titles) unaffected.
  *
- * Applied to every text field, not just the sliced one: scraped captions and
- * account names arrive with lone surrogates of their own, and a stray half-emoji
- * is never worth a failed write.
+ * dbSafeText is the one sanitiser for everything bound for a column (it also
+ * drops the U+0000 that 400s a write with 22P05 — see lib/db-text.ts). Applied
+ * to every field, not just the sliced one: scraped captions and account names
+ * arrive with lone surrogates of their own, and a stray half-emoji is never
+ * worth a failed write. Null-ness is preserved.
  */
-export function stripLoneSurrogates(s: string): string {
-  // A high surrogate not followed by a low one, or a low one not preceded by a
-  // high one. Both forms are what Postgres refuses.
-  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
-}
-
-/** stripLoneSurrogates over a nullable field, null-ness preserved. */
 const clean = <T extends string | null>(s: T): T =>
-  (s == null ? s : (stripLoneSurrogates(s) as T))
+  (s == null ? s : (dbSafeText(s) as T))
 
 export interface GateVerdictRow {
   client_id: string
