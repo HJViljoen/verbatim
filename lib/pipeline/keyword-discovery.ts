@@ -82,8 +82,25 @@ function variants(folded: string): string[] {
   return bare === folded ? [folded] : [folded, bare]
 }
 
-/** Every configured term, folded and despaced: what "already tracked" means. */
-function configuredTerms(config: DiscoveryConfig): string[] {
+/** Every configured term, folded and despaced, split BY SHAPE — which decides
+ *  how far a substring match may reach.
+ *
+ *  `tagged` is the whitespace-free ones, a handle or a hashtag, where matching
+ *  runs both ways: "sealandgear" is covered by the configured "#sealandgear"
+ *  (the candidate is contained in it) and "cotopaxiofficial" is covered by the
+ *  configured "cotopaxi" (the candidate contains it).
+ *
+ *  `phrases` is the multi-word ones, where only the forward direction is safe.
+ *  A candidate containing "upcycledbag" IS that keyword, but the single word
+ *  "bag" is a broader term of its own — the discovery this whole step exists to
+ *  surface — and running the other direction would delete it for no better
+ *  reason than that the configured "upcycled bag" happens to contain it. */
+interface Configured {
+  tagged: string[]
+  phrases: string[]
+}
+
+function configuredTerms(config: DiscoveryConfig): Configured {
   const raw = [
     ...(config.brand_keywords ?? []),
     ...(config.competitor_names ?? []),
@@ -92,15 +109,20 @@ function configuredTerms(config: DiscoveryConfig): string[] {
     ...(config.exclude_terms ?? []),
     ...Object.values(config.own_handles ?? {}),
   ]
-  return [...new Set(raw.map(fold).filter(Boolean).flatMap(variants))]
+  const tagged = new Set<string>()
+  const phrases = new Set<string>()
+  for (const term of raw) {
+    const folded = fold(term)
+    if (!folded) continue
+    const into = /\s/.test(folded) ? phrases : tagged
+    for (const form of variants(folded)) into.add(form)
+  }
+  return { tagged: [...tagged], phrases: [...phrases] }
 }
 
 /** Is this candidate already covered — by a configured term, a handle, or
- *  platform noise? Substring matching runs BOTH ways on purpose: "sealandgear"
- *  is covered by the configured "#sealandgear" (the candidate is contained in
- *  it) and "cotopaxiofficial" is covered by the configured "cotopaxi" (the
- *  candidate contains it). */
-function isCovered(folded: string, configured: string[]): boolean {
+ *  platform noise? */
+function isCovered(folded: string, configured: Configured): boolean {
   if (!folded) return true
   if (STOP.has(folded)) return true
   // 1-2 character tokens, bare numbers and run-on pseudo-tags are never a search
@@ -109,10 +131,15 @@ function isCovered(folded: string, configured: string[]): boolean {
   if (folded.length > DISCOVERY_MAX_TERM_CHARS) return true
   if (/^\d+$/.test(folded)) return true
   for (const cand of variants(folded)) {
-    for (const term of configured) {
+    for (const term of configured.tagged) {
       if (term === cand) return true
       if (term.length < SUBSTRING_MIN) continue
       if (cand.includes(term) || term.includes(cand)) return true
+    }
+    for (const term of configured.phrases) {
+      if (term === cand) return true
+      if (term.length < SUBSTRING_MIN) continue
+      if (cand.includes(term)) return true
     }
   }
   return false

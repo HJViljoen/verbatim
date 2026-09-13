@@ -67,6 +67,26 @@ describe('computeKeywordCandidates', () => {
     expect(byTerm(rows)).toEqual(['sailing'])
   })
 
+  it('keeps a single word a multi-word configured term merely contains ("bag" vs "upcycled bag")', () => {
+    const rows = computeKeywordCandidates(
+      many(3, { topics: ['bag', 'upcycled bag tutorial'] }),
+      new Map(),
+      { industry_keywords: ['upcycled bag'] },
+    )
+    // 'bag' is a broader term of its own; only the forward direction (a
+    // candidate containing the whole configured phrase) excludes.
+    expect(byTerm(rows)).toEqual(['bag'])
+  })
+
+  it('still excludes both ways for a tag-shaped configured term ("sealandgear" vs "#sealandgear")', () => {
+    const rows = computeKeywordCandidates(
+      many(3, { hashtags: ['sealandgear', 'thrifting'] }),
+      new Map(),
+      { brand_keywords: ['#sealandgear'] },
+    )
+    expect(byTerm(rows)).toEqual(['thrifting'])
+  })
+
   it('excludes a space-stripped configured term ("upcycledbag" vs "upcycled bag")', () => {
     const rows = computeKeywordCandidates(
       many(3, { hashtags: ['upcycledbag', 'upcycledbagtutorial', 'denim'] }),
