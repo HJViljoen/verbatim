@@ -475,16 +475,31 @@ export async function gatePlatform(opts: {
   // stored. Fresh videos take the full path below; resurfaced ones skip the
   // gate + attribution (they passed once — re-gated content gets deleted, so
   // presence in the DB means kept) and instead feed the growth comparison that
-  // decides which comment scrapes are worth re-paying for. Whole-platform scan
-  // + in-memory map, same URL-overflow avoidance as everywhere else.
-  const knownRows = await selectAll<KnownVideoState>(() =>
-    admin
-      .from('videos')
-      .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
-      .eq('client_id', opts.clientId)
-      .eq('platform', adapter.platform)
-      .order('id', { ascending: true }),
-  )
+  // decides which comment scrapes are worth re-paying for.
+  //
+  // Scoped to THIS run's candidate ids, chunked at 100 (chunkedIn's size, and
+  // the URL cap the whole-platform scan was avoiding). splitDelta only ever
+  // looks `known` up by a merged candidate's video_id, so the scan read the
+  // client's entire platform history to use a few hundred rows of it — a cost
+  // that grows every week and is served by an index lookup instead. It is also
+  // the read that took 6.9s and returned 504 at 05:15 on run d346b0f7; an
+  // exhausted retry there fails the whole run, since gate:<platform> has no
+  // .catch().
+  const knownRows = (
+    await Promise.all(
+      chunk(merged.map((v) => v.video_id), 100).map((part) =>
+        selectAll<KnownVideoState>(() =>
+          admin
+            .from('videos')
+            .select('video_id, video_url, comments_count, comments_count_at_scrape, upload_date, is_client, is_competitor, competitor_name')
+            .eq('client_id', opts.clientId)
+            .eq('platform', adapter.platform)
+            .in('video_id', part)
+            .order('id', { ascending: true }),
+        ),
+      ),
+    )
+  ).flat()
   const known = new Map(knownRows.map((r) => [r.video_id, r]))
   const { fresh, resurfaced } = splitDelta(merged, known)
 
@@ -558,7 +573,15 @@ export async function gatePlatform(opts: {
       )
       console.log(`[${adapter.platform}] recorded ${written} gate verdicts (${kept.length} kept, ${dropped} dropped)`)
     } catch (e) {
-      console.warn(`[${adapter.platform}] gate verdict recording failed: ${e instanceof Error ? e.message : String(e)}`)
+      // COUNTED, not merely warned. Non-fatal is right — losing the record must
+      // never lose the gather — but until 2026-09-13 the only trace was this
+      // console line, so run d346b0f7 lost tiktok's and instagram's entire gate
+      // record (269 verdicts, a 22P02 on a half-emoji caption) and still closed
+      // 'completed' with errors: []. `errors` is gatePlatform's return channel
+      // and pipeline.ts already feeds it to noteError, so one push is the fix.
+      const message = e instanceof Error ? e.message : String(e)
+      console.warn(`[${adapter.platform}] gate verdict recording failed: ${message}`)
+      errors.push(`gate verdicts not recorded: ${message}`)
     }
   }
   for (const v of kept) for (const kw of v.source_keywords ?? []) { const s = stats.get(kw); if (s) s.survived++ }
@@ -913,9 +936,17 @@ export async function fetchTranscriptsIsolating(
   ids: string[],
   batchSize: number,
   opts: { deadlineMs?: number; now?: () => number } = {},
-): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string> }> {
+): Promise<{ fetched: Map<string, FetchedTranscript | null>; failed: Map<string, string>; isolated: string[] }> {
   const fetched = new Map<string, FetchedTranscript | null>()
   const failed = new Map<string, string>()
+  // One line per batch whose actor run FAILED and had to be isolated. Recovering
+  // per id is the design and it works — run d346b0f7 (2026-09-13) isolated
+  // batches 9, 13 and 29 of 37 and re-fetched all 24 ids one by one — but until
+  // now the only trace was the console.warn below, so three failed actor runs
+  // (paid for, and a third of the YouTube transcript wall-clock) left the run
+  // record saying 'completed' with errors: []. The caller pushes these onto its
+  // `errors`, which pipeline.ts already routes to noteError.
+  const isolated: string[] = []
   const now = opts.now ?? Date.now
   const deadline = now() + (opts.deadlineMs ?? ISOLATION_DEADLINE_MS)
   for (const part of chunk(ids, batchSize)) {
@@ -928,6 +959,7 @@ export async function fetchTranscriptsIsolating(
       batchErr = e
     }
     console.warn(`[transcript] batch of ${part.length} run-failed, isolating per id: ${(batchErr as Error).message.slice(0, 160)}`)
+    isolated.push(`caption actor run-failed on a batch of ${part.length}, isolated per id: ${(batchErr as Error).message.slice(0, 160)}`)
     const chunkFetched = new Map<string, FetchedTranscript | null>()
     const chunkFailed = new Map<string, string>()
     for (const id of part) {
@@ -944,7 +976,7 @@ export async function fetchTranscriptsIsolating(
     for (const [k, v] of chunkFetched) fetched.set(k, v)
     for (const [k, v] of chunkFailed) failed.set(k, v)
   }
-  return { fetched, failed }
+  return { fetched, failed, isolated }
 }
 
 export async function transcribeBatch(opts: {
@@ -1025,6 +1057,10 @@ export async function transcribeBatch(opts: {
     )
     fetched = r.fetched
     fetchFailed = r.failed
+    // A run-failed batch is a step error even though the isolation pass rescued
+    // its ids: the actor run was paid for and died, and a run that burned Apify
+    // money on a broken batch must say so rather than close clean.
+    for (const line of r.isolated) errors.push(line)
   }
   let transcribed = 0
   let skipped = 0
