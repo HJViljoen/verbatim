@@ -50,7 +50,7 @@ describe('the delta block', () => {
     expect(html).toContain('▲ 3.4 pts')
     // The header card's sentiment is the period window; say so, or it reads as
     // the body tile's all-time figure disagreeing with itself.
-    expect(html).toContain('conversations rated this update read positive')
+    expect(html).toContain('conversations rated for sentiment this update read positive')
     expect(html).toContain('no clear change')
     expect(html).toContain('Ottobock <strong>15%</strong>')
     expect(html).toContain('Socket pain and poor fit · Price and access questions and 1 more')

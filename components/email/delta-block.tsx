@@ -31,7 +31,7 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       const s = delta.sentiment
       rows.push(
         <Row key="s" label="Sentiment" chip={verdictChip(s.verdict, ' pts')} href={`${appUrl}/dashboard`} linkText="See where you stand">
-          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated this update read positive
+          <strong>{s.now}%</strong> of the {fmtInt(s.nowJudged)} conversations rated for sentiment this update read positive
         </Row>,
       )
     }
