@@ -113,6 +113,23 @@ describe('text helpers', () => {
     const text = htmlToText('<html><head><title>x</title></head><body><div>One &amp; two</div><table><tr><td>a</td><td>b</td></tr></table><a href="https://x.y/z">Open</a><p>Done&nbsp;now</p></body></html>')
     expect(text).toBe('One & two\na b\nOpen (https://x.y/z)\nDone now')
   })
+  // 2026-09-13: the Össur digest's plain-text part was reported as
+  // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. The raw MIME
+  // of that send (DKIM-pass, so these are the bytes Resend signed) carries
+  // `Content-Transfer-Encoding: quoted-printable` with the `=` correctly
+  // escaped — `rec=3D85dd4fde-…` — and decodes to the exact URL: the mangling
+  // was a second quoted-printable decode in the tool that read the mail, not
+  // ours. What IS ours is that htmlToText inlines the href verbatim, so pin
+  // that: a `=` in a query string must reach the text part untouched.
+  it('htmlToText keeps a ?rec= link exactly as the href has it', () => {
+    const id = '85dd4fde-14ef-47c9-876b-6fa86c7cf169'
+    const d = { hero: { oneThing: { id, title: 'Launch an access navigator', reasoning: 'People start with practical access questions.', priority: 'high' }, voices: 96, platforms: ['youtube', 'tiktok', 'instagram', 'reddit'] } } as unknown as DashboardData
+    const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.recommendation'](d, ctx)))
+    const text = htmlToText(html)
+    expect(text).toContain(`(https://app.verbatimintel.com/dashboard/market?rec=${id})`)
+    expect(text).not.toContain('rec=3D')
+  })
+
   it('htmlToText decodes hex entities too, so an apostrophe reads as one', () => {
     // React writes an apostrophe as &#x27;: Össur&#x27;s must not reach an inbox.
     expect(htmlToText('<p>Össur&#x27;s share &#8212; and &#x2019;s</p>')).toBe('Össur\'s share — and ’s')
