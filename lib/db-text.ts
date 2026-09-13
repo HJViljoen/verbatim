@@ -29,7 +29,12 @@ export function dbSafeText(s: string): string {
 }
 
 /** The same, over a whole value bound for a jsonb column: every string inside
- *  an object, array or key. Non-strings pass through untouched. */
+ *  an object, array or key. Non-strings pass through untouched.
+ *
+ *  Pass PLAIN data: anything object-like is rebuilt from its own enumerable
+ *  entries, so a Date, Map or class instance comes back as {} — fine for the
+ *  log payloads this serves (they are already JSON-shaped), lossy for anything
+ *  else. */
 export function dbSafeJson<T>(v: T): T {
   if (typeof v === 'string') return dbSafeText(v) as unknown as T
   if (Array.isArray(v)) return v.map(dbSafeJson) as unknown as T
