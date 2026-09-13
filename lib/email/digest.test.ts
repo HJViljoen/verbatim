@@ -42,7 +42,11 @@ describe('the delta block', () => {
   it('leads with what changed, each proportion carrying its own verdict', () => {
     const html = renderToStaticMarkup(createElement(DeltaBlock, { delta, dashboard: null, appUrl: ctx.appUrl }))
     hygiene(html)
-    expect(html).toContain('What changed since your last update')
+    // The title says it once and the meta dates it; the two together used to
+    // read "What changed since your last update ... since 16 Aug".
+    expect(html).toContain('What changed')
+    expect(html).not.toContain('What changed since')
+    expect(html).toContain('since 16 Aug')
     expect(html).toContain('▲ 3.4 pts')
     // The header card's sentiment is the period window; say so, or it reads as
     // the body tile's all-time figure disagreeing with itself.

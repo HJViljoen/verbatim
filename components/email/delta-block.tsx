@@ -62,8 +62,11 @@ export function DeltaBlock({ delta, dashboard, appUrl }: { delta: RunDelta | nul
       )
     }
     if (!rows.length) return null
+    // The meta carries the comparison date, so the title must not carry it too:
+    // 'What changed since your last update' beside 'since 16 Aug' said the
+    // period twice in one header row.
     return (
-      <Section title={moved ? 'What changed since your last update' : 'Where you stand this update'} meta={`since ${shortDate(delta.prevRunDate)}`}>
+      <Section title={moved ? 'What changed' : 'Where you stand this update'} meta={`since ${shortDate(delta.prevRunDate)}`}>
         {rows}
       </Section>
     )
