@@ -14,16 +14,16 @@ import { touchHeartbeat } from '@/lib/ops/heartbeat'
 // through Resend directly, and it depends on Inngest for nothing. If Inngest is
 // dead, this is the thing that says so.
 //
-// TWO things call it (2026-09-13): Vercel Cron at 07:00 UTC, and a GitHub
-// Actions workflow at 07:10 UTC (.github/workflows/ops-check.yml). Vercel's cron
-// works — it fired at 07:40:40 UTC on 2026-09-13, because Hobby only promises
-// "within the hour", not on the minute — but it is the one caller that shares a
-// failure domain with the thing being watched: a Hobby usage cap pauses the
-// project and takes the crons with it, and Hobby's ~1 h of runtime-log retention
-// means a missed invocation leaves no trace to find later. GitHub's scheduler is
-// free and independent of both Vercel and Inngest, which is the whole point of a
-// dead-man's switch. Neither caller de-duplicates: a finding still true at both
-// emails twice, which is the cheap side of the trade.
+// ONE thing schedules it: the Vercel Hobby cron in vercel.json. Hobby promises
+// only "within the hour", not the minute — on 2026-09-13 the 07:00 UTC slot fired
+// at 07:40:40 — so treat the beat's timestamp as "some time in the 07:00 hour".
+// That cron shares a failure domain with the thing being watched (a Hobby usage
+// cap pauses the project and takes its crons with it) and Hobby keeps about an
+// hour of runtime logs, after which a historical query answers
+// ExceedsBillingLimitError: a missed invocation leaves no trace in Vercel. Hence
+// the heartbeat row written below, which is the only durable record that this
+// route ran at all. A second, independent caller is the obvious hardening and is
+// not in place.
 //
 // Timing (vercel.json, which cannot carry a comment): 07:00 UTC = 09:00 SAST,
 // THREE hours after the 06:00 SAST dispatcher slot. The run-not-started grace is
@@ -58,9 +58,10 @@ function secretMatches(provided: string | null, expected: string): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-/** Which scheduler called. Two of them do now — Vercel Cron and the GitHub
- *  Actions workflow (.github/workflows/ops-check.yml) — and with two callers the
- *  only useful question about a stale heartbeat is which one stopped firing. */
+/** Who called: 'vercel-cron' for the scheduled run, else the user-agent (a
+ *  by-hand run with X-Admin-Key). Recorded on the heartbeat because "the beat is
+ *  stale" is only actionable once you know whether the scheduler stopped or a
+ *  human was the last thing to touch it. */
 function callerOf(req: Request): string {
   if (req.headers.get('x-vercel-cron-schedule')) return 'vercel-cron'
   return req.headers.get('user-agent') ?? 'unknown'
