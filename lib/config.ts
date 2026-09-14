@@ -1223,8 +1223,24 @@ export function periodToTikTokRange(period: string): string {
  *  gather window and the period-metrics slice (YouTube's publishedAfter uses the
  *  same numbers). */
 export function periodWindowDays(period: string): number {
-  return period === 'daily' ? 1 : period === 'monthly' ? 30 : 7
+  if (period === 'daily') return 1
+  if (period === 'monthly') return 30
+  // Everything else is a week, and 'paused' is spelled out because it is a LIVE
+  // value, not a typo: Sealand's report_period is 'paused' today and 9 of the 17
+  // run_summary rows in production carry it. 'paused' means "never due" to the
+  // scheduler (schedule-due.ts) — it says nothing about how much a manual run on
+  // that tenant should cover, and a week is what it has always covered. Reading
+  // that answer out of a ternary's default arm made it look accidental.
+  return 7
 }
+
+/** How far back an ANCHORED gather window may reach (D6, 2026-09-15). A run
+ *  anchors its window on the previous run's end, so after a long silence the
+ *  window would otherwise be as wide as the gap — and the gather's real cost is
+ *  one paid comment scrape per eligible video, so a three-month window is a
+ *  three-month bill. 30 days is the deepest cadence the product offers
+ *  (monthly), so the cap can never narrow a tenant's configured window. */
+export const MAX_ANCHOR_DAYS = 30
 
 /** report_period → the window's inclusive lower bound as 'YYYY-MM-DD' (UTC day).
  *  The one date the whole gather agrees on: the flow-run window filter, the
