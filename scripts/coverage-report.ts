@@ -58,6 +58,13 @@ import { categoryLabel } from '../lib/voice-tiles'
 // per-audience baselines are reported too, because the readiness page prints
 // one per audience and the category audience is the only one that ever clears.
 //
+// A WEEK THAT CROSSES A MONTH BOUNDARY IS NOT READ. Both SQL functions group by
+// calendar month, so a week spanning two months comes back as two rows and
+// adding them counts a video with comments on both sides twice: measured on
+// production, Össur's week 36 is 290 distinct videos and 372 added up, 28% high.
+// A denominator that wrong is worse than a gap, so those weeks are named and
+// skipped. Phase 1's weekly reading needs a window-grouped read, not a sum.
+//
 // THE KIND MIX IS READ IN THIS PROCESS, not by an RPC: there is no SQL function
 // for it. The chain is the one monthly_theme_readings uses, with "an insight of
 // this kind" in place of "a member of this theme" — insight → comment evidence →
@@ -384,6 +391,15 @@ async function main() {
     const flagDetail: string[] = []
     const notes: string[] = []
     for (const week of weeks) {
+      if (crossesAMonth(week)) {
+        say(`| ${week.label} (${week.from.slice(0, 10)}) | — | — | — | not read |`)
+        notes.push(
+          `- ${week.label} crosses a month boundary and is not read. The monthly reading groups by ` +
+          'calendar month, so this week would arrive as two parts and a video carrying comments on both ' +
+          'sides of the boundary would be counted twice — on production that inflates a week by up to 28%.',
+        )
+        continue
+      }
       const weekRows = await readDenominators(admin, id, { from: week.from, to: week.to })
       const weekByAudience = perAudience(weekRows)
       const weekSlice = sum([...weekByAudience.values()].map((v) => v.videos))
@@ -461,14 +477,6 @@ async function main() {
           `moved ${flag.verdict!.change} points on a band of ${flag.verdict!.band}.`,
         )
       }
-      const lastInstant = new Date(new Date(week.to).getTime() - 1).toISOString()
-      if (week.from.slice(0, 7) !== lastInstant.slice(0, 7)) {
-        notes.push(
-          `- ${week.label} crosses a month boundary. The reading groups by calendar month, so this week's ` +
-          'figure is its two month-parts added together and a video carrying comments on both sides of the ' +
-          'boundary is counted in each.',
-        )
-      }
     }
 
     say()
@@ -485,6 +493,11 @@ async function main() {
     console.log(`\nwritten to ${out}`)
   }
 }
+
+/** Does this week span two calendar months? The reading is grouped by month, so
+ *  such a week cannot be read from it without counting some videos twice. */
+const crossesAMonth = (week: { from: string; to: string }): boolean =>
+  week.from.slice(0, 7) !== new Date(new Date(week.to).getTime() - 1).toISOString().slice(0, 7)
 
 /** The rival names a tenant tracks, in configuration order. */
 async function trackedRivals(admin: ReturnType<typeof createAdminClient>, clientId: string): Promise<string[]> {
