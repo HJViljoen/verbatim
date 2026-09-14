@@ -103,6 +103,15 @@ create policy "Members read their change log" on public.config_changes
 
 revoke all on public.config_changes from authenticated, anon;
 grant select on public.config_changes to authenticated;
+-- Stated, not inherited. Every `logged` row — a schedule, an initiative, the
+-- birth of a tenant's configuration, a re-tag, a re-gate, the whole
+-- reconstruction — is written by lib/config-log.ts through the service-role
+-- key, and today that works only because this project's default ACL happens to
+-- grant the service role everything on a table created by `postgres`. If that
+-- default ever differs, recordConfigChanges would console.error "permission
+-- denied for table config_changes" and return 0 while the trigger half kept
+-- working: a log that looks alive with half of it silently gone.
+grant select, insert on public.config_changes to service_role;
 
 -- 3. The actor, carried by the write site -------------------------------------
 -- {kind, user_id, label, at, run_id?} — set in the same UPDATE that changes the
