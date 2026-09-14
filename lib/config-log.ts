@@ -109,16 +109,31 @@ export interface ConfigChange {
 /** Who made a write, carried from the write site into the same UPDATE as the
  *  change itself (`tracking_configs.last_actor`) or straight onto a logged row.
  *
- *  `at` is part of the stamp on purpose: without it, two identical saves by the
- *  same person write an identical jsonb and the trigger's "is this stamp fresh"
- *  test reads the second one as unstamped. */
+ *  `at` and `nonce` are part of the stamp on purpose. The trigger's "is this
+ *  stamp fresh" test is `NEW.last_actor is distinct from OLD.last_actor`, so
+ *  two writes carrying a byte-identical stamp make the second one read as
+ *  unstamped — and an unstamped service-role write is logged as `pipeline`,
+ *  which is the one attribution that is certainly false for a person's edit.
+ *  `at` alone leaves that to millisecond resolution; the nonce settles it. */
 export interface ConfigActor {
   kind: ActorKind
   user_id: string | null
   label: string | null
   at: string
+  /** Unique per statement, so freshness never depends on the clock. Optional
+   *  only for the paths that never touch `last_actor` (a logged row builds its
+   *  own actor); `withActor` fills one in when a stamp arrives without one. */
+  nonce?: string
   /** The update this write belongs to — the pipeline's own config writes. */
   run_id?: string | null
+}
+
+/** A value no other statement will carry. `crypto` is on globalThis in every
+ *  runtime this repo runs in; the fallback keeps a stamp unique rather than
+ *  throwing if one ever is not. */
+function statementNonce(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+  return c?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 }
 
 export interface ConfigChangeInput {
@@ -181,8 +196,13 @@ export interface ActorSession {
  *  the database.
  *
  *  `detail` names the statement, so two writes in one save (search terms, then
- *  exclusions) carry two distinguishable stamps rather than one the trigger
- *  might read as stale. */
+ *  exclusions) are legible in the log; the nonce, not the detail, is what keeps
+ *  the trigger from reading the second one as stale.
+ *
+ *  On a browser (`authenticated`) write the database overrides kind, user and
+ *  label from identity — a session that can write `last_actor` could otherwise
+ *  claim to be anyone. What this stamp actually carries across is the operator
+ *  case, which arrives on the service-role client the switcher uses. */
 export function actorStamp(session: ActorSession, detail?: string, now: Date = new Date()): ConfigActor {
   const operating = Boolean(session.operator)
   const who = session.email ?? session.userId
@@ -192,19 +212,20 @@ export function actorStamp(session: ActorSession, detail?: string, now: Date = n
     user_id: session.userId,
     label: `${who}${where}${detail ? ` · ${detail}` : ''}`,
     at: now.toISOString(),
+    nonce: statementNonce(),
   }
 }
 
 /** An operator CLI. The label is the command, so the log says what to re-read. */
 export function scriptActor(label: string, now: Date = new Date()): ConfigActor {
-  return { kind: 'script', user_id: null, label, at: now.toISOString() }
+  return { kind: 'script', user_id: null, label, at: now.toISOString(), nonce: statementNonce() }
 }
 
 /** The pipeline writing its own configuration — today only subreddit
  *  discovery, which rewrites the community list on roughly every weekly
  *  gather. Stamped with the run so a week of churn is attributable. */
 export function pipelineActor(runId: string, label: string, now: Date = new Date()): ConfigActor {
-  return { kind: 'pipeline', user_id: null, label, at: now.toISOString(), run_id: runId }
+  return { kind: 'pipeline', user_id: null, label, at: now.toISOString(), nonce: statementNonce(), run_id: runId }
 }
 
 /** Inference, not record. Used only by scripts/reconstruct-config-log.ts. */
@@ -214,12 +235,15 @@ export function reconstructedActor(label: string, now: Date = new Date()): Confi
 
 // ---- Stamping a tracking_configs UPDATE -------------------------------------
 
-/** Add the actor to a `tracking_configs` UPDATE payload. */
+/** Add the actor to a `tracking_configs` UPDATE payload. The nonce belongs to
+ *  the statement rather than to the person, so one is filled in here for a
+ *  hand-built actor that arrived without one — a stamp the trigger cannot tell
+ *  from its predecessor is not a stamp. */
 export function withActor<T extends Record<string, unknown>>(
   update: T,
   actor: ConfigActor,
 ): T & { last_actor: ConfigActor } {
-  return { ...update, last_actor: dbSafeJson(actor) }
+  return { ...update, last_actor: dbSafeJson({ ...actor, nonce: actor.nonce ?? statementNonce() }) }
 }
 
 /** Run a `tracking_configs` UPDATE with the actor stamped on it, and survive a
@@ -236,7 +260,20 @@ export async function updateWithActor<R extends { error: unknown }>(
 ): Promise<R> {
   const stamped = await update(withActor(payload, actor))
   if (stamped.error && isMissingColumnError(stamped.error, 'last_actor')) {
-    console.warn('[config-log] tracking_configs.last_actor is not there yet — writing unstamped; the trigger will record the role only')
+    // An error, not a warning, and it names the person: the retry is
+    // UNATTRIBUTED, and the two ways it gets here end differently. If the
+    // column really is absent the trigger is absent too (they arrive in one
+    // migration) and the change is simply not logged at all. If the column is
+    // there and PostgREST's schema cache is merely stale — PGRST204 — the
+    // trigger does fire, and for the three settings writes that go out on the
+    // admin client it records `pipeline`/`service_role`: a client's own edit
+    // filed as the machine's. This line is then the only record of who it was.
+    const code = (stamped.error as { code?: string }).code ?? '?'
+    console.error(
+      `[config-log] tracking_configs.last_actor rejected (${code}) — retrying UNSTAMPED. ` +
+      `The write was ${actor.kind} ${actor.label ?? actor.user_id ?? 'unknown'}; ` +
+      'the log will name the database role instead, or nothing at all.',
+    )
     return update(payload)
   }
   return stamped

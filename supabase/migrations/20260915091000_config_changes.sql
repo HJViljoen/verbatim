@@ -114,12 +114,13 @@ grant select on public.config_changes to authenticated;
 grant select, insert on public.config_changes to service_role;
 
 -- 3. The actor, carried by the write site -------------------------------------
--- {kind, user_id, label, at, run_id?} — set in the same UPDATE that changes the
--- configuration, so the trigger can name a person the database cannot see.
--- `at` is part of the stamp on purpose: two identical saves by the same person
--- would otherwise write an identical jsonb, and the trigger's "is this stamp
--- fresh" test (NEW.last_actor is distinct from OLD.last_actor) would read the
--- second one as unstamped.
+-- {kind, user_id, label, at, nonce, run_id?} — set in the same UPDATE that
+-- changes the configuration, so the trigger can name a person the database
+-- cannot see. `at` and `nonce` are part of the stamp on purpose: two writes
+-- carrying a byte-identical jsonb would fail the trigger's "is this stamp
+-- fresh" test (NEW.last_actor is distinct from OLD.last_actor) and the second
+-- would be logged as a bare role. `at` leaves that to millisecond resolution;
+-- the per-statement nonce (lib/config-log.ts withActor) settles it.
 alter table public.tracking_configs add column if not exists last_actor jsonb;
 
 comment on column public.tracking_configs.last_actor is

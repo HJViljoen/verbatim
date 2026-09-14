@@ -81,7 +81,7 @@ describe('surfaceForColumn — the mapping the trigger also carries', () => {
 
 describe('actorStamp — who the database cannot see', () => {
   it('names a tenant member as a user, by email', () => {
-    expect(actorStamp({ userId: 'u1', email: 'owner@ossur.com', operator: null }, undefined, AT)).toEqual({
+    expect(actorStamp({ userId: 'u1', email: 'owner@ossur.com', operator: null }, undefined, AT)).toMatchObject({
       kind: 'user', user_id: 'u1', label: 'owner@ossur.com', at: '2026-09-15T08:00:00.000Z',
     })
   })
@@ -108,6 +108,23 @@ describe('actorStamp — who the database cannot see', () => {
     expect(terms.label).not.toBe(exclusions.label)
   })
 
+  it('carries a nonce, so freshness never rests on the clock or on the detail', () => {
+    // The trigger's freshness test is `NEW.last_actor is distinct from
+    // OLD.last_actor`. Two saves by the same person in the same millisecond
+    // with the same detail used to write the same jsonb, and the second one
+    // was then logged as a bare role — `pipeline` on the admin-client writes.
+    const session = { userId: 'u1', email: 'owner@ossur.com', operator: null }
+    const a = actorStamp(session, 'search terms', AT)
+    const b = actorStamp(session, 'search terms', AT)
+    expect(a).not.toEqual(b)
+    expect(a.nonce).toBeTruthy()
+    expect(a.nonce).not.toBe(b.nonce)
+    expect(scriptActor('scripts/set-cadence.ts --apply', AT).nonce)
+      .not.toBe(scriptActor('scripts/set-cadence.ts --apply', AT).nonce)
+    expect(pipelineActor('run-1', 'subreddit discovery', AT).nonce)
+      .not.toBe(pipelineActor('run-1', 'subreddit discovery', AT).nonce)
+  })
+
   it('stamps every actor kind inside the CHECK vocabulary', () => {
     const kinds = [
       actorStamp({ userId: 'u', operator: null }, undefined, AT).kind,
@@ -129,8 +146,15 @@ describe('actorStamp — who the database cannot see', () => {
 describe('withActor / updateWithActor — stamping the UPDATE itself', () => {
   it('adds the actor without disturbing the payload', () => {
     const payload = { report_period: 'weekly', report_day: 'sunday' }
-    expect(withActor(payload, actor())).toEqual({ ...payload, last_actor: actor() })
+    expect(withActor(payload, actor())).toMatchObject({ ...payload, last_actor: actor() })
     expect(payload).toEqual({ report_period: 'weekly', report_day: 'sunday' })
+  })
+
+  it('gives a hand-built stamp a nonce of its own, so two look different to the trigger', () => {
+    const one = withActor({}, actor()).last_actor
+    const two = withActor({}, actor()).last_actor
+    expect(one.nonce).toBeTruthy()
+    expect(one).not.toEqual(two)
   })
 
   it('strips characters a jsonb body cannot carry', () => {
@@ -146,8 +170,8 @@ describe('withActor / updateWithActor — stamping the UPDATE itself', () => {
     expect(seen[0]).toHaveProperty('last_actor')
   })
 
-  it('retries unstamped when the deploy lands before the migration', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it('retries unstamped when the deploy lands before the migration, and says whose write it was', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const seen: Record<string, unknown>[] = []
     const res = await updateWithActor(
       async (p) => {
@@ -157,11 +181,19 @@ describe('withActor / updateWithActor — stamping the UPDATE itself', () => {
           : { error: null }
       },
       { report_day: 'sunday' },
-      actor(),
+      actor({ kind: 'operator', label: 'heinrich@verbatimintel.com · settings' }),
     )
     expect(res.error).toBeNull()
     expect(seen).toHaveLength(2)
     expect(seen[1]).toEqual({ report_day: 'sunday' })
+    // The retry is unattributed: either nothing is logged (no column, no
+    // trigger) or the trigger logs the bare role — `pipeline` on the writes
+    // that go out on the admin client. This line is the only record of who it
+    // actually was, so it is an error and it names them.
+    const said = String(err.mock.calls[0]?.[0] ?? '')
+    expect(said).toContain('PGRST204')
+    expect(said).toContain('heinrich@verbatimintel.com')
+    expect(said).toContain('UNSTAMPED')
   })
 
   it('does not retry any other failure — one rejected write, one report of it', async () => {
