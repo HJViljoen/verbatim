@@ -216,6 +216,45 @@ export function completeWeeksBefore(now: string, count: number): IsoWeek[] {
   return out
 }
 
+/**
+ * Does this week span two calendar months?
+ *
+ * It decides whether a week can be read at all. Both SQL functions group by
+ * calendar month, so a week across a boundary arrives as two rows, and adding
+ * them counts a video carrying comments on both sides twice: measured on
+ * production, Össur's week 36 is 290 distinct videos and 372 added up — 28%
+ * high, on the denominator every share in that week divides by. A caller
+ * reading by month names and skips such a week instead of printing it wrong.
+ *
+ * `to` is exclusive, so the test is against the week's LAST instant: a week
+ * ending exactly at a month boundary does not cross it.
+ */
+export function weekCrossesAMonth(week: { from: string; to: string }): boolean {
+  const to = new Date(week.to).getTime()
+  if (Number.isNaN(to)) throw new Error(`weekCrossesAMonth: not a date: ${week.to}`)
+  return monthStartOf(week.from) !== monthStartOf(new Date(to - 1).toISOString())
+}
+
+/**
+ * Is a day (`YYYY-MM-DD`, or any instant whose first ten characters are one)
+ * inside the half-open window `[from, to)`?
+ *
+ * Compared as instants and never as strings. Every window here is built by a
+ * different helper — `monthWindow`, `completeWeeksBefore`, a caller's own
+ * concatenation — and `2026-09-07T00:00:00Z` and `2026-09-07T00:00:00.000Z` are
+ * the same moment that do not compare equal as text. A lexicographic test works
+ * only while every caller happens to spell the bound the same way, and fails
+ * silently for the first one that does not.
+ */
+export function dayInWindow(day: string, window: { from: string; to: string }): boolean {
+  const at = new Date(`${day.slice(0, 10)}T00:00:00.000Z`).getTime()
+  if (Number.isNaN(at)) throw new Error(`dayInWindow: not a date: ${day}`)
+  const from = new Date(window.from).getTime()
+  const to = new Date(window.to).getTime()
+  if (Number.isNaN(from) || Number.isNaN(to)) throw new Error(`dayInWindow: not a window: ${window.from}..${window.to}`)
+  return at >= from && at < to
+}
+
 // ---- Keys and freeze state ---------------------------------------------------
 
 /** A denominator row's identity: the table's primary key, minus the tenant. */

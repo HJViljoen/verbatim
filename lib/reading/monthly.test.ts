@@ -14,8 +14,10 @@ import {
   monthsToRefresh,
   nextMonth,
   completeWeeksBefore,
+  dayInWindow,
   isoWeekLabel,
   isoWeekOf,
+  weekCrossesAMonth,
   trailingCompleteMonths,
   themeReadingKey,
   windowOf,
@@ -567,5 +569,72 @@ describe('ISO weeks', () => {
     for (const w of completeWeeksBefore('2026-09-15T00:00:00.000Z', 11)) {
       expect(new Date(w.to).getTime() - new Date(w.from).getTime()).toBe(7 * 86_400_000)
     }
+  })
+})
+
+describe('weekCrossesAMonth — the weeks a month-grouped reading cannot answer', () => {
+  const weeks = completeWeeksBefore('2026-09-15T09:00:00.000Z', 11)
+  const week = (label: string) => weeks.find((w) => w.label === label)!
+
+  it('reads a week inside one month', () => {
+    // W35: Monday 24 August to Sunday 30 August, all of it in August.
+    expect(week('2026-W35').from).toBe('2026-08-24T00:00:00.000Z')
+    expect(weekCrossesAMonth(week('2026-W35'))).toBe(false)
+  })
+
+  it('refuses a week that spans two months', () => {
+    // W36: Monday 31 August to Sunday 6 September — two rows out of a monthly
+    // reading, and a video with comments on both sides counted twice.
+    expect(week('2026-W36').from).toBe('2026-08-31T00:00:00.000Z')
+    expect(weekCrossesAMonth(week('2026-W36'))).toBe(true)
+    // The other two in the replayed range, named in the report.
+    expect(weekCrossesAMonth(week('2026-W27'))).toBe(true)   // 29 Jun – 5 Jul
+    expect(weekCrossesAMonth(week('2026-W31'))).toBe(true)   // 27 Jul – 2 Aug
+    for (const label of ['2026-W28', '2026-W29', '2026-W30', '2026-W32', '2026-W33', '2026-W34', '2026-W37']) {
+      expect(weekCrossesAMonth(week(label))).toBe(false)
+    }
+  })
+
+  it('does not count a week that ENDS on a month boundary as crossing it', () => {
+    // `to` is exclusive: this week's last instant is 31 August, not 1 September.
+    expect(weekCrossesAMonth({ from: '2026-08-25T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' })).toBe(false)
+    expect(weekCrossesAMonth({ from: '2026-08-25T00:00:00.000Z', to: '2026-09-01T00:00:00.001Z' })).toBe(true)
+  })
+
+  it('refuses a value that is not a date rather than guessing', () => {
+    expect(() => weekCrossesAMonth({ from: '2026-08-24T00:00:00.000Z', to: 'never' })).toThrow(/not a date/)
+  })
+})
+
+describe('dayInWindow — a comment date against a half-open window', () => {
+  const august = { from: '2026-08-01T00:00:00.000Z', to: '2026-09-01T00:00:00.000Z' }
+
+  it('includes the first day and excludes the last bound', () => {
+    expect(dayInWindow('2026-08-01', august)).toBe(true)
+    expect(dayInWindow('2026-08-31', august)).toBe(true)
+    expect(dayInWindow('2026-09-01', august)).toBe(false)
+    expect(dayInWindow('2026-07-31', august)).toBe(false)
+  })
+
+  it('reads the day off a full timestamp, in UTC', () => {
+    expect(dayInWindow('2026-08-31T23:59:59.999Z', august)).toBe(true)
+    expect(dayInWindow('2026-09-01T00:00:00.000Z', august)).toBe(false)
+  })
+
+  it('compares instants, not text — the same bound spelled two ways agrees', () => {
+    // '2026-09-07T00:00:00Z' < '2026-09-07T00:00:00.000Z' as strings, which is
+    // how a lexicographic test drops a day at the edge of a window.
+    const terse = { from: '2026-09-07T00:00:00Z', to: '2026-09-14T00:00:00Z' }
+    const full = { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' }
+    for (const day of ['2026-09-06', '2026-09-07', '2026-09-13', '2026-09-14']) {
+      expect(dayInWindow(day, terse)).toBe(dayInWindow(day, full))
+    }
+    expect(dayInWindow('2026-09-07', terse)).toBe(true)
+    expect(dayInWindow('2026-09-14', terse)).toBe(false)
+  })
+
+  it('refuses a value that is not a date rather than dropping the row in silence', () => {
+    expect(() => dayInWindow('not a date', august)).toThrow(/not a date/)
+    expect(() => dayInWindow('2026-08-02', { from: 'whenever', to: august.to })).toThrow(/not a window/)
   })
 })

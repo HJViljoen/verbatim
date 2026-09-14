@@ -12,11 +12,13 @@ import {
 } from '../lib/reading/anomaly'
 import {
   completeWeeksBefore,
+  dayInWindow,
   monthStartOf,
   monthsBetween,
   readDenominators,
   readThemeReadings,
   trailingCompleteMonths,
+  weekCrossesAMonth,
   windowOf,
 } from '../lib/reading/monthly'
 import type { DenominatorReading } from '../lib/reading/types'
@@ -191,8 +193,7 @@ async function readKindCitations(
 function kindVideos(citations: readonly KindCitation[], from: string, to: string): Map<string, number> {
   const perKind = new Map<string, Set<string>>()
   for (const c of citations) {
-    const at = `${c.date}T00:00:00.000Z`
-    if (at < from || at >= to) continue
+    if (!dayInWindow(c.date, { from, to })) continue
     const set = perKind.get(c.category) ?? new Set<string>()
     set.add(c.videoUuid)
     perKind.set(c.category, set)
@@ -426,7 +427,7 @@ async function main() {
     const flagDetail: string[] = []
     const notes: string[] = []
     for (const week of weeks) {
-      if (crossesAMonth(week)) {
+      if (weekCrossesAMonth(week)) {
         say(`| ${week.label} (${week.from.slice(0, 10)}) | — | — | — | not read |`)
         notes.push(
           `- ${week.label} crosses a month boundary and is not read. The monthly reading groups by ` +
@@ -528,11 +529,6 @@ async function main() {
     console.log(`\nwritten to ${out}`)
   }
 }
-
-/** Does this week span two calendar months? The reading is grouped by month, so
- *  such a week cannot be read from it without counting some videos twice. */
-const crossesAMonth = (week: { from: string; to: string }): boolean =>
-  week.from.slice(0, 7) !== new Date(new Date(week.to).getTime() - 1).toISOString().slice(0, 7)
 
 /** The rival names a tenant tracks, in configuration order. */
 async function trackedRivals(admin: ReturnType<typeof createAdminClient>, clientId: string): Promise<string[]> {
