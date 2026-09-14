@@ -4,6 +4,7 @@ import {
   buildConfigSnapshot,
   isMissingBookkeepingColumn,
   openRunBookkeeping,
+  previousRunEnd,
   rowWindow,
   reconstructWindow,
   CONFIG_SNAPSHOT_COLUMNS,
@@ -95,6 +96,56 @@ describe('buildConfigSnapshot', () => {
     // snapshot goes through dbSafeJson like any other model-authored write.
     const snap = buildConfigSnapshot({ brand_keywords: ['run\u0000ning blade'] })
     expect(snap.brand_keywords).toEqual(['running blade'])
+  })
+})
+
+describe('previousRunEnd — what the next window anchors on', () => {
+  it('takes the window a run covered, not when it closed', () => {
+    // f9548a97 took 18 days to close a week: what the next run must pick up
+    // from is where its gather stopped.
+    expect(previousRunEnd(
+      [{ id: 'a', window_end: '2026-07-03T10:31:23.000Z', completed_at: '2026-07-21T12:03:22.000Z' }],
+      [],
+    )).toBe('2026-07-03T10:31:23.000Z')
+  })
+
+  it('falls back to completed_at for a row with no window', () => {
+    expect(previousRunEnd([{ id: 'a', window_end: null, completed_at: '2026-09-13T06:26:49.308Z' }], []))
+      .toBe('2026-09-13T06:26:49.308Z')
+  })
+
+  it('is not fooled by a resumed run that closed later than the run after it', () => {
+    // A covers 1-2 Sep, B covers 8-9 Sep, then A is resumed on the 10th — which
+    // moves A.completed_at and leaves A.window_end where it belongs. Anchoring
+    // on "the run that closed last" would open the next window on 1 Sep and
+    // re-buy a week of per-video comment scrapes.
+    const rows = [
+      { id: 'a', window_end: '2026-09-01T04:00:00.000Z', completed_at: '2026-09-10T09:00:00.000Z' },
+      { id: 'b', window_end: '2026-09-08T04:00:00.000Z', completed_at: '2026-09-09T06:00:00.000Z' },
+    ]
+    expect(previousRunEnd(rows, [])).toBe('2026-09-08T04:00:00.000Z')
+  })
+
+  it('never anchors on this run itself, or on the row a resume is reopening', () => {
+    const rows = [
+      { id: 'mine', window_end: '2026-09-20T04:00:00.000Z', completed_at: null },
+      { id: 'prev', window_end: '2026-09-13T04:06:38.483Z', completed_at: '2026-09-13T06:26:49.308Z' },
+    ]
+    expect(previousRunEnd(rows, ['mine'])).toBe('2026-09-13T04:06:38.483Z')
+  })
+
+  it('is null when the client has nothing closed to anchor on', () => {
+    expect(previousRunEnd([], [])).toBeNull()
+    expect(previousRunEnd([{ id: 'a', window_end: null, completed_at: null }], [])).toBeNull()
+    expect(previousRunEnd([{ id: 'a', window_end: 'not a date' }], [])).toBeNull()
+  })
+
+  it('compares instants, not strings — PostgREST spells them with +00', () => {
+    const rows = [
+      { id: 'a', window_end: '2026-09-13 04:06:38.483+00' },
+      { id: 'b', window_end: '2026-09-06T04:00:00.000Z' },
+    ]
+    expect(previousRunEnd(rows, [])).toBe('2026-09-13 04:06:38.483+00')
   })
 })
 

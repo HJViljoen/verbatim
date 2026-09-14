@@ -85,6 +85,43 @@ export function rowWindow(row: WindowColumns | null | undefined): RunWindow | nu
   return { start: row.window_start ?? null, end: row.window_end, basis: row.window_basis as WindowBasis }
 }
 
+/**
+ * Where the next run anchors: the latest point any closed run of this client
+ * has already covered.
+ *
+ * A row's own `window_end` is that point; `completed_at` stands in for a row
+ * that carries no window (every row before 2026-09-15, and any run opened while
+ * the migration had not landed). The two disagree after a resume — resuming a
+ * run moves its `completed_at` to today while its `window_end` correctly stays
+ * where the gather stopped — and taking the wrong one there is expensive: on
+ * "run A covers 1-2 Sep, run B covers 8-9 Sep, A is resumed on the 10th",
+ * ordering by `completed_at` makes A the previous run and the next window opens
+ * on 1 Sep, a ~12-day window that re-buys a week of per-video comment scrapes
+ * the run has already paid for.
+ *
+ * So the anchor is the MAXIMUM effective end, not the first row of an ordering.
+ * `exclude` is this run's own id (and a resume's target), which can sit at the
+ * top of the ordering and must never anchor the window on itself.
+ */
+export function previousRunEnd(
+  rows: { id: string; window_end?: string | null; completed_at?: string | null }[],
+  exclude: Iterable<string>,
+): string | null {
+  const mine = new Set(exclude)
+  let best: string | null = null
+  let bestMs = -Infinity
+  for (const row of rows) {
+    if (mine.has(row.id)) continue
+    const end = row.window_end ?? row.completed_at ?? null
+    if (!end) continue
+    const ms = Date.parse(end)
+    if (!Number.isFinite(ms) || ms <= bestMs) continue
+    best = end
+    bestMs = ms
+  }
+  return best
+}
+
 /** The columns 20260915090000_run_bookkeeping.sql adds to `pipeline_runs`. */
 export const BOOKKEEPING_COLUMNS = [
   'scheduled_for',

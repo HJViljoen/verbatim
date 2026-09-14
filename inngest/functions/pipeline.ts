@@ -32,7 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
-import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
+import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -122,15 +122,19 @@ async function loadRunWindowInput(
   const [prevRes, summaryRes, storedRes] = await Promise.all([
     // The previous run's own window_end, falling back to when it closed — the
     // rule lib/pipeline/owned-events.ts has always used for account events, now
-    // the rule for content too. Three rows, not one: this run's own row (and a
-    // resume's target) can sit at the top of the ordering and must not anchor
-    // the window on itself.
+    // the rule for content too. Ordered by window_end (the index this migration
+    // creates) and then by completed_at, which is what a row without a window
+    // sorts on; `previousRunEnd` then takes the latest of the two per row,
+    // because a resume moves completed_at without moving window_end. Five rows,
+    // not one: this run's own row (and a resume's target) can sit at the top of
+    // the ordering and must not anchor the window on itself.
     admin.from('pipeline_runs')
       .select('id, window_end, completed_at')
       .eq('client_id', clientId)
       .in('status', ['completed', 'partial'])
+      .order('window_end', { ascending: false, nullsFirst: false })
       .order('completed_at', { ascending: false, nullsFirst: false })
-      .limit(3),
+      .limit(5),
     // "The map exists" — the same existence check resolveGatherWindow has
     // always made: a closed synthesis, not merely an earlier run row.
     admin.from('run_summary').select('run_id').eq('client_id', clientId).neq('run_id', runId).limit(1).maybeSingle(),
@@ -139,11 +143,10 @@ async function loadRunWindowInput(
           .eq('id', resumeRunId).eq('client_id', clientId).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
-  const prev = ((prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[])
-    .find((r) => !mine.has(r.id))
+  const closed = (prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[]
   const storedRow = storedRes.data as (WindowColumns & { config_snapshot?: unknown }) | null
   return {
-    prevEnd: prev?.window_end ?? prev?.completed_at ?? null,
+    prevEnd: previousRunEnd(closed, mine),
     hasSummary: Boolean(summaryRes.data),
     stored: rowWindow(storedRow),
     hasConfigSnapshot: Boolean(storedRow?.config_snapshot),
