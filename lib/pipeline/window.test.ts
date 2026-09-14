@@ -164,6 +164,17 @@ describe('platform enum bounds', () => {
     expect(redditTimeFor(windowOf(14))).toBe('month')
   })
 
+  it('has no day bucket: a one-day frozen window still asks for the week', () => {
+    // D6 pins two buckets. A manual {period:'daily'} run on a tenant with run
+    // history gets a window a day wide and asks both actors for the week; the
+    // `inWindow` post-filter trims the surplus before anything is bought, so
+    // the cost is a wider search and nothing else. TODAY / 'day' survives only
+    // on the unwindowed CLI paths, which keep their period mapping.
+    expect(tiktokRangeFor(windowOf(1))).toBe('THIS_WEEK')
+    expect(redditTimeFor(windowOf(1))).toBe('week')
+    expect(tiktokRangeFor(windowOf(0))).toBe('THIS_WEEK')
+  })
+
   it('returns null with no frozen bound, so the caller keeps its own', () => {
     expect(tiktokRangeFor(undefined)).toBeNull()
     expect(tiktokRangeFor(null)).toBeNull()

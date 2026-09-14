@@ -121,7 +121,14 @@ export function windowSpanDays(w: RunWindow): number | null {
  *  drifts by a few hours is a hair over 7 days, and rounding that up to a month
  *  would buy three extra weeks of comment scrapes every week. Past 8 days the
  *  run is catching up on a miss and the month bucket is what it needs — the
- *  `inWindow` post-filter trims whatever the wider bucket over-returns. */
+ *  `inWindow` post-filter trims whatever the wider bucket over-returns.
+ *
+ *  Two buckets, not three (D6): there is deliberately no day arm, so once a
+ *  window is frozen the TODAY / 'day' bucket is retired. A manual daily run
+ *  asks both actors for the week and `inWindow` trims the surplus before the
+ *  comment scrape, which costs a wider search and nothing else. Only the
+ *  unwindowed callers — the CLI scripts and a baseline run — still map a
+ *  `daily` period straight onto TODAY / 'day'. */
 export const ENUM_WEEK_MAX_DAYS = 8
 
 /** Which enum bucket a frozen window falls in, or null when it has no lower
