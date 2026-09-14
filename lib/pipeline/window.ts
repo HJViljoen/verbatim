@@ -30,6 +30,10 @@ export type WindowBasis =
   | 'baseline'
   | 'resume'
   | 'reconstructed'
+  /** A resume that kept a window the backfill had reconstructed: the run
+   *  itself resumed, but the window it carries is still a label rather than a
+   *  record of what was gathered, and must keep saying so. */
+  | 'resume_reconstructed'
 
 /** The window a run covers. */
 export interface RunWindow {
@@ -66,7 +70,14 @@ export interface RunWindowInput {
 export function resolveRunWindow(input: RunWindowInput): RunWindow {
   const stored = input.stored
   if (stored && Number.isFinite(Date.parse(stored.end))) {
-    return { start: stored.start, end: stored.end, basis: 'resume' }
+    // The basis is not simply overwritten. A reconstructed window is the
+    // backfill's label — "the window the code of the day would have used" —
+    // and nothing may read it as a record of what was gathered. Stamping plain
+    // 'resume' over it would delete that warning from the only row carrying
+    // it, and the resumed run's period numbers would then be presented as
+    // measured against a window no run ever gathered.
+    const reconstructed = stored.basis === 'reconstructed' || stored.basis === 'resume_reconstructed'
+    return { start: stored.start, end: stored.end, basis: reconstructed ? 'resume_reconstructed' : 'resume' }
   }
 
   const nowMs = Date.parse(input.now)

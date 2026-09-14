@@ -37,6 +37,10 @@ alter table public.pipeline_runs add column if not exists window_end timestamptz
 --   baseline         the client's first data-producing run: unwindowed
 --   resume           an analysis-only resume kept the window already on the row
 --   reconstructed    written after the fact by the backfill, not by the run
+--   resume_reconstructed  a resume that kept a RECONSTRUCTED window: the run
+--                    resumed, but the window it carries is still a label, not a
+--                    record of what was gathered, and the row has to keep
+--                    saying so (the backfill runs before the first resume)
 alter table public.pipeline_runs add column if not exists window_basis text;
 
 do $$
@@ -47,7 +51,8 @@ begin
     alter table public.pipeline_runs
       add constraint pipeline_runs_window_basis_check
       check (window_basis is null or window_basis in
-        ('anchored','anchored_capped','rolling','baseline','resume','reconstructed'));
+        ('anchored','anchored_capped','rolling','baseline','resume','reconstructed',
+         'resume_reconstructed'));
   end if;
 end $$;
 

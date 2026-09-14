@@ -113,6 +113,24 @@ describe('resolveRunWindow — rolling, baseline, resume', () => {
     expect(w).toEqual({ ...stored, basis: 'resume' })
   })
 
+  it('keeps "reconstructed" visible when a resume inherits a backfilled window', () => {
+    // WP12 runs the backfill before the D8 rehearsal, so the row the rehearsal
+    // resumes carries a window the backfill LABELLED — "what the code of the
+    // day would have used" — not one any run gathered under. Stamping plain
+    // 'resume' over it would erase that from the only place it is recorded.
+    const stored: RunWindow = {
+      start: '2026-08-10T13:07:52.340Z',
+      end: '2026-08-17T13:07:52.340Z',
+      basis: 'reconstructed',
+    }
+    const w = resolveRunWindow({ now: OPEN, period: 'weekly', prevEnd: null, hasSummary: true, stored })
+    expect(w).toEqual({ ...stored, basis: 'resume_reconstructed' })
+    // And a second resume must not launder it back into a plain one.
+    expect(
+      resolveRunWindow({ now: OPEN, period: 'weekly', prevEnd: null, hasSummary: true, stored: w }).basis,
+    ).toBe('resume_reconstructed')
+  })
+
   it('computes a fresh window when the resumed row carries none', () => {
     // Every run row written before this shipped has no window; resuming one
     // must not strand it without a window at all.
