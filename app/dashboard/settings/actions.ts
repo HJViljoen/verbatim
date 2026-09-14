@@ -231,9 +231,12 @@ export async function updateSearchTerms(
   const { error: exclErr } = await updateWithActor(
     (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
     { exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() },
-    // A second stamp, distinct from the one above: two statements in one save
-    // that carried the same stamp would look to the trigger like one write and
-    // a re-save, and the second would log its actor as a bare role.
+    // A second stamp: every stamp carries its own nonce, so the trigger cannot
+    // read this one as a re-save of the statement above. The detail names which
+    // statement it was — it survives on the admin-client write above, while on
+    // this one (the session client) the database replaces the label with the
+    // caller's own identity, because a session that can write last_actor could
+    // otherwise claim to be anyone.
     actorStamp(session, 'exclusions'),
   )
 
