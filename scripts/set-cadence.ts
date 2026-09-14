@@ -1,0 +1,124 @@
+import { createAdminClient } from '../lib/supabase-admin'
+import { scriptActor, updateWithActor } from '../lib/config-log'
+import { ALL_PERIODS, DAYS } from '../app/dashboard/settings/constants'
+import { periodWindowDays } from '../lib/config'
+
+// Set a tenant's update cadence (Phase 0 WP2, for decision D4).
+//
+// `report_period` and `report_day` decide whether the Sunday dispatcher picks a
+// tenant up at all, and every pick-up spends real money: roughly $13–20 an
+// update (Apify $7–8, OpenAI $5–11). There has never been an operator path to
+// this pair — the settings form offers weekly and monthly only, deliberately,
+// because 'paused' is an operator lever the form's select cannot represent and
+// a save silently rewrote it to 'weekly', re-arming the scheduler on a tenant
+// meant to be quiet (T0-7).
+//
+// So: a script, dry by default, that prints what the change will cost and what
+// it will send before it writes anything. The write itself is stamped, so the
+// tracking_configs trigger records who armed a tenant rather than "service_role".
+//
+//   node --env-file=.env.local --import tsx scripts/set-cadence.ts \
+//     --client <uuid> [--period weekly|monthly|daily|paused] [--day sunday] [--apply]
+
+interface Args { clientId: string | null; period: string | null; day: string | null; apply: boolean }
+
+function parseArgs(argv: string[]): Args {
+  const a: Args = { clientId: null, period: null, day: null, apply: false }
+  for (let i = 0; i < argv.length; i++) {
+    const flag = argv[i]
+    const next = () => argv[++i]
+    if (flag === '--client') a.clientId = next()
+    else if (flag === '--period') a.period = next()
+    else if (flag === '--day') a.day = next()
+    else if (flag === '--apply') a.apply = true
+    else throw new Error(`unknown flag: ${flag}`)
+  }
+  return a
+}
+
+function validate(a: Args): string[] {
+  const errors: string[] = []
+  if (!a.clientId) errors.push('--client <uuid> is required: there is no safe default for a cadence change')
+  if (a.period && !(ALL_PERIODS as readonly string[]).includes(a.period)) {
+    errors.push(`--period must be one of ${ALL_PERIODS.join(', ')} (the tracking_configs CHECK vocabulary)`)
+  }
+  if (a.day && !(DAYS as readonly string[]).includes(a.day)) {
+    errors.push(`--day must be one of ${DAYS.join(', ')}`)
+  }
+  if (!a.period && !a.day) errors.push('nothing to change: pass --period, --day, or both')
+  return errors
+}
+
+async function main() {
+  const args = parseArgs(process.argv.slice(2))
+  const errors = validate(args)
+  if (errors.length) {
+    console.error('Cannot set the cadence:')
+    for (const e of errors) console.error(`  - ${e}`)
+    process.exit(1)
+  }
+  const clientId = args.clientId as string
+  const admin = createAdminClient()
+
+  const [{ data: client }, { data: cfg }, { data: schedules }] = await Promise.all([
+    admin.from('clients').select('company_name, is_active, approved_at').eq('id', clientId).maybeSingle(),
+    admin.from('tracking_configs').select('report_period, report_day').eq('client_id', clientId).maybeSingle(),
+    admin.from('report_schedules').select('name, active, recipients, is_default').eq('client_id', clientId).order('is_default', { ascending: false }),
+  ])
+  if (!client) throw new Error(`no client ${clientId}`)
+  if (!cfg) throw new Error(`no tracking_configs row for ${clientId}`)
+
+  const before = { report_period: cfg.report_period as string, report_day: cfg.report_day as string }
+  const after = {
+    report_period: args.period ?? before.report_period,
+    report_day: args.day ?? before.report_day,
+  }
+
+  console.log(`${client.company_name} — cadence ${args.apply ? 'APPLY' : 'dry run'}\n`)
+  for (const key of ['report_period', 'report_day'] as const) {
+    const changed = before[key] !== after[key]
+    console.log(`  ${key.padEnd(14)} ${before[key]}${changed ? `  →  ${after[key]}` : '   (unchanged)'}`)
+  }
+
+  if (before.report_period === after.report_period && before.report_day === after.report_day) {
+    console.log('\nNothing to change.')
+    return
+  }
+
+  // What this costs, and who hears about it. Both are things an operator should
+  // read before arming a tenant, not discover on the invoice.
+  const armed = after.report_period !== 'paused'
+  const rows = (schedules ?? []) as { name: string; active: boolean; recipients: string[]; is_default: boolean }[]
+  const live = rows.filter((s) => s.active && s.recipients.length > 0)
+  console.log('\n  what this means')
+  console.log(`    ${armed
+    ? `the dispatcher picks this tenant up on its ${after.report_period} slot (${after.report_day}), at roughly $13–20 an update (Apify $7–8, OpenAI $5–11)`
+    : 'the dispatcher stops picking this tenant up; nothing runs and nothing is spent until it is un-paused'}`)
+  if (armed) {
+    console.log(`    each update gathers a ${periodWindowDays(after.report_period)}-day window`)
+    console.log(`    ${live.length
+      ? `${live.length} schedule(s) would email: ${live.map((s) => `${s.name} (${s.recipients.length})`).join(', ')}`
+      : 'no schedule is both active and addressed, so no email goes out'}`)
+  }
+  if (!client.is_active || !client.approved_at) {
+    console.log('    ! the tenant is not active/approved, so the dispatcher skips it whatever the cadence says')
+  }
+
+  if (!args.apply) {
+    console.log('\n(dry run — nothing written. Re-run with --apply.)')
+    return
+  }
+
+  const { error } = await updateWithActor(
+    (payload) => admin.from('tracking_configs').update(payload).eq('client_id', clientId),
+    { ...after, updated_at: new Date().toISOString() },
+    scriptActor(`scripts/set-cadence.ts --client ${clientId} --apply`),
+  )
+  if (error) throw new Error(`write cadence: ${error.message}`)
+  console.log('\nwritten. The change log records one row per column that moved (surface `cadence`).')
+}
+
+main().catch((e) => {
+  console.error(e)
+  process.exit(1)
+})
