@@ -1829,11 +1829,18 @@ async function runSynthesisHalf(
   // with the window it is true for. The share tile sets it against how many
   // videos by and about the client were tracked in total — share counts both,
   // so the census is where "what you published" is still said on its own.
+  // BOTH bounds come from the run's frozen window when it has one. Taking the
+  // upper bound from the clock instead was the same gather-vs-synthesis
+  // divergence this work removed, on the same run: f9548a97 opened 3 Jul and
+  // synthesised 21 Jul, so a clock-read `until` counted 18 days of the client's
+  // posts into a window that ends on the 3rd — in the one number on the summary
+  // that is meant to be exact. Only the pre-Phase-0 fallback path (no frozen
+  // window) still reads the clock, which is what it started under.
   const ownedCensus = buildOwnedCensus(videos, {
     handles: (tc?.own_handles ?? {}) as Record<string, string>,
     competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
     since: window.since ?? periodSince(period),
-    until: new Date().toISOString().slice(0, 10),
+    until: (runWindow?.end ?? new Date().toISOString()).slice(0, 10),
   })
 
   const { data: client } = await admin.from('clients')
