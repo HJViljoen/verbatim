@@ -217,28 +217,61 @@ interface MonthlyCoverage {
   monthsWithAny: number
   monthsVideos: number
   monthsComments: number
-  firstMonth: string
-  lastMonth: string
+  /** `YYYY-MM`, or null for an audience with no month at all. */
+  firstMonth: string | null
+  lastMonth: string | null
   biggestVideos: number
   biggestComments: number
 }
 
-/** Question 1: how many months clear each floor, per audience. */
-function coverage(rows: readonly DenominatorReading[], floor: number): MonthlyCoverage[] {
-  const byAudience = new Map<string, DenominatorReading[]>()
-  for (const r of rows) byAudience.set(r.audience, [...(byAudience.get(r.audience) ?? []), r])
-  return [...byAudience.entries()]
-    .map(([audience, months]) => ({
-      audience,
-      monthsWithAny: months.length,
-      monthsVideos: months.filter((m) => m.videos >= floor).length,
-      monthsComments: months.filter((m) => m.comments >= floor).length,
-      firstMonth: months.map((m) => monthStartOf(m.month)).sort()[0].slice(0, 7),
-      lastMonth: months.map((m) => monthStartOf(m.month)).sort().at(-1)!.slice(0, 7),
-      biggestVideos: Math.max(...months.map((m) => m.videos)),
-      biggestComments: Math.max(...months.map((m) => m.comments)),
-    }))
+interface MonthCounts {
+  month: string
+  videos: number
+  comments: number
+}
+
+const shapeCoverage = (audience: string, months: readonly MonthCounts[], floor: number): MonthlyCoverage => {
+  const ordered = months.map((m) => monthStartOf(m.month)).sort()
+  return {
+    audience,
+    monthsWithAny: months.length,
+    monthsVideos: months.filter((m) => m.videos >= floor).length,
+    monthsComments: months.filter((m) => m.comments >= floor).length,
+    firstMonth: ordered[0]?.slice(0, 7) ?? null,
+    lastMonth: ordered.at(-1)?.slice(0, 7) ?? null,
+    biggestVideos: months.length > 0 ? Math.max(...months.map((m) => m.videos)) : 0,
+    biggestComments: months.length > 0 ? Math.max(...months.map((m) => m.comments)) : 0,
+  }
+}
+
+/**
+ * Question 1: how many months clear each floor, per audience.
+ *
+ * Three kinds of row, and the last two are why this is not a group-by:
+ *  - one per audience that has any month at all;
+ *  - one per tracked rival that has NONE, because "nobody posted about them in
+ *    any month" is an answer the readiness page prints, not a gap in a table;
+ *  - the pooled slice last — every audience together, which is the denominator
+ *    the anomaly check actually uses, so it belongs in the same table as the
+ *    audiences it pools. Videos and comments both sum cleanly: a video sits in
+ *    exactly one audience and a comment under exactly one video, so the sum IS
+ *    the distinct count (verified read-only on both tenants).
+ */
+function coverage(
+  rows: readonly DenominatorReading[],
+  floor: number,
+  trackedAudiences: readonly string[] = [],
+): MonthlyCoverage[] {
+  const byAudience = new Map<string, MonthCounts[]>()
+  for (const audience of trackedAudiences) byAudience.set(audience, [])
+  for (const r of rows) {
+    byAudience.set(r.audience, [...(byAudience.get(r.audience) ?? []), { month: r.month, videos: r.videos, comments: r.comments }])
+  }
+  const perAudience = [...byAudience.entries()]
+    .map(([audience, months]) => shapeCoverage(audience, months, floor))
     .sort((a, b) => a.audience.localeCompare(b.audience))
+  const pooled = [...sliceMonths(rows).entries()].map(([month, counts]) => ({ month, ...counts }))
+  return [...perAudience, shapeCoverage(SLICE, pooled, floor)]
 }
 
 /** The slice — every audience together — as its own month series. */
@@ -315,6 +348,7 @@ async function main() {
 
     const history = windowOf(monthsBetween(earliest, now))!
     const months = await readDenominators(admin, id, history)
+    const rivals = await trackedRivals(admin, id)
 
     // ---- Question 1: months clearing the floor ----
     say()
@@ -322,10 +356,12 @@ async function main() {
     say()
     say('| Audience | Months with any conversation | Months ≥ 100 videos | Months ≥ 100 comments | First → last | Biggest month (videos / comments) |')
     say('|---|---|---|---|---|---|')
-    for (const row of coverage(months, SHARE_BAND.minN)) {
+    for (const row of coverage(months, SHARE_BAND.minN, rivals.map((r) => `competitor:${r}`))) {
+      const span = row.firstMonth ? `${row.firstMonth} → ${row.lastMonth}` : '—'
+      const biggest = row.monthsWithAny > 0 ? `${row.biggestVideos} / ${row.biggestComments}` : 'no videos in any month'
       say(
         `| ${row.audience} | ${row.monthsWithAny} | **${row.monthsVideos}** | ${row.monthsComments} | ` +
-        `${row.firstMonth} → ${row.lastMonth} | ${row.biggestVideos} / ${row.biggestComments} |`,
+        `${span} | ${biggest} |`,
       )
     }
 
@@ -357,7 +393,6 @@ async function main() {
     // ---- Question 2: the replay ----
     const replayFrom = trailingCompleteMonths(weeks[0].from, 3)[0]
     const citations = await readKindCitations(admin, id, { from: `${replayFrom}T00:00:00.000Z`, to: weeks.at(-1)!.to })
-    const rivals = await trackedRivals(admin, id)
     const themeMonths = runId
       ? await readThemeReadings(admin, id, runId, { from: `${replayFrom}T00:00:00.000Z`, to: weeks.at(-1)!.to })
       : []
