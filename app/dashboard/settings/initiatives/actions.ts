@@ -147,6 +147,18 @@ export async function updateInitiative(
   })
   if (!parsed.success) return { ok: false, message: firstIssue(parsed.error) }
 
+  // What it said before the edit. One extra read on an action nobody takes
+  // twice a week, and without it the log can say an initiative is now called
+  // something, never what it was called — the gap saveSchedule already pays a
+  // SELECT to close. The session client is RLS-scoped, so a foreign id reads
+  // as null and the update below is the one that reports it.
+  const { data: prior } = await supabase
+    .from('initiatives')
+    .select('title, goal, direction')
+    .eq('id', parsed.data.id)
+    .eq('client_id', clientId)
+    .maybeSingle()
+
   // registry_ids and started_at are deliberately not editable: they are what
   // the measurement means. Change either and every point already reported
   // silently becomes a point about something else.
@@ -167,13 +179,16 @@ export async function updateInitiative(
   // has no way to catch.
   if ((data ?? []).length === 0) return { ok: false, message: 'That initiative is no longer here.' }
 
+  // Both halves describe the same three columns, so the row reads as a change
+  // rather than as a setting appearing from nowhere.
   await recordConfigChange(createAdminClient(), {
     clientId,
     surface: 'subjects',
     field: 'initiatives',
-    after: { id: parsed.data.id, title: parsed.data.title, direction: parsed.data.direction },
+    before: prior ?? null,
+    after: { title: parsed.data.title, goal: parsed.data.goal ?? null, direction: parsed.data.direction },
     actor: actorStamp(session, 'edited an initiative'),
-    note: 'title, note and direction only — what an initiative measures cannot be edited',
+    note: `initiative ${parsed.data.id} — title, note and direction only; what an initiative measures cannot be edited`,
   })
 
   revalidateInitiatives()
@@ -187,6 +202,14 @@ export async function setInitiativeStatus(id: string, status: string): Promise<I
   }
   const session = await getSessionContext()
   const { supabase, clientId } = session
+  // The status it is leaving. "Now dropped" without it is the one thing a
+  // reader of this row cannot reconstruct: the column is overwritten in place.
+  const { data: prior } = await supabase
+    .from('initiatives')
+    .select('status')
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .maybeSingle()
   const { data, error } = await supabase
     .from('initiatives')
     .update({ status, updated_at: new Date().toISOString() })
@@ -200,8 +223,10 @@ export async function setInitiativeStatus(id: string, status: string): Promise<I
     clientId,
     surface: 'subjects',
     field: 'initiatives',
-    after: { id, status },
+    before: prior ?? null,
+    after: { status },
     actor: actorStamp(session, `moved an initiative to ${status}`),
+    note: `initiative ${id}`,
   })
 
   revalidateInitiatives()

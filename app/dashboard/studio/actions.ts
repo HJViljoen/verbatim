@@ -191,9 +191,12 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
   // takes twice a week — and without it the log could say what a schedule
   // became but never what it was.
   if (id) {
+    // Every column scheduleFacts() keeps, and no other: a `before` that read
+    // seven columns against an `after` of nine made every edit look as though
+    // the template and the starter had just been set from nothing.
     const { data: prior } = await admin
       .from('report_schedules')
-      .select('name, cadence, recipients, attach_pdf, share_days, active, review')
+      .select('name, starter_key, report_id, cadence, recipients, attach_pdf, share_days, active, review')
       .eq('id', id).eq('client_id', clientId).maybeSingle()
     const { error } = await admin.from('report_schedules').update(row).eq('id', id).eq('client_id', clientId)
     if (error) return { ok: false, message: 'Could not save that. Try again.' }
