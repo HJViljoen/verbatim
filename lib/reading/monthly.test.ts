@@ -5,6 +5,7 @@ import {
   freezeBoundary,
   freezeFor,
   freezeStateFor,
+  isMissingMonthlyReading,
   mergeMonthRows,
   monthEndInstant,
   monthStartOf,
@@ -335,6 +336,41 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
       keyOf: themeReadingKey, now, runId: null,
     })
     expect(result.writes[0].run_id).toBeNull()
+  })
+})
+
+describe('isMissingMonthlyReading — surviving a deploy that lands before its migration', () => {
+  it('knows the four shapes the missing objects arrive in', () => {
+    expect(isMissingMonthlyReading({
+      code: 'PGRST202',
+      message: `Could not find the function public.${RPC_DENOMINATORS}(p_client, p_from, p_to) in the schema cache`,
+    })).toBe(true)
+    expect(isMissingMonthlyReading({
+      code: 'PGRST205',
+      message: `Could not find the table 'public.${TABLE_DENOMINATORS}' in the schema cache`,
+    })).toBe(true)
+    expect(isMissingMonthlyReading({ code: '42883', message: `function public.${RPC_THEME_READINGS} does not exist` })).toBe(true)
+    expect(isMissingMonthlyReading({ code: '42P01', message: `relation "public.${TABLE_THEME_READINGS}" does not exist` })).toBe(true)
+  })
+
+  it('still knows it once selectAll has flattened the code away', () => {
+    // selectAll wraps a PostgREST error in a plain Error, so by the time the
+    // step sees it the sentence is all that is left.
+    expect(isMissingMonthlyReading(
+      new Error(`selectAll: Could not find the table 'public.${TABLE_THEME_READINGS}' in the schema cache`),
+    )).toBe(true)
+    expect(isMissingMonthlyReading(
+      new Error(`selectAll: Could not find the function public.${RPC_THEME_READINGS} in the schema cache`),
+    )).toBe(true)
+  })
+
+  it('swallows nothing else', () => {
+    expect(isMissingMonthlyReading(new Error(`${TABLE_DENOMINATORS} upsert: duplicate key value violates unique constraint`))).toBe(false)
+    expect(isMissingMonthlyReading({ code: '42P01', message: 'relation "public.themes" does not exist' })).toBe(false)
+    expect(isMissingMonthlyReading({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(false)
+    expect(isMissingMonthlyReading(new Error('fetch failed'))).toBe(false)
+    expect(isMissingMonthlyReading(null)).toBe(false)
+    expect(isMissingMonthlyReading('PGRST202')).toBe(false)
   })
 })
 

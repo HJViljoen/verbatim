@@ -269,6 +269,42 @@ export function mergeMonthRows<T extends { month: string }>(args: {
   }
 }
 
+// ---- Surviving a deploy that lands before its migration -----------------------
+
+/** The four database objects 20260915092000_monthly_reading.sql creates. */
+const MONTHLY_READING_OBJECTS = [
+  RPC_DENOMINATORS,
+  RPC_THEME_READINGS,
+  TABLE_DENOMINATORS,
+  TABLE_THEME_READINGS,
+] as const
+
+/**
+ * Is this the error the reading gets before its migration lands?
+ *
+ * The migration is applied by hand, deliberately (it is a schema change on a
+ * live pipeline), so a deploy CAN reach production first — and WP12 puts the
+ * apply first precisely to avoid it. Without this test the freeze step throws
+ * on every attempt, burns its whole Inngest retry budget with backoff between
+ * attempts, and holds one of the account's five shared concurrency slots the
+ * entire time, for a record it was never going to be able to write. The same
+ * shape as `isMissingBookkeepingColumn` (WP1): narrow, named objects only,
+ * never a blanket swallow.
+ *
+ * `selectAll` flattens a PostgREST error into a plain `Error` before it gets
+ * here, so the code is usually gone and the sentence is what is left — hence
+ * both are accepted, and both only alongside one of this migration's own names.
+ */
+export function isMissingMonthlyReading(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!MONTHLY_READING_OBJECTS.some((name) => text.includes(name))) return false
+  // PGRST202 the function, PGRST205 the table, 42883/42P01 the same from Postgres.
+  if (code && ['PGRST202', 'PGRST205', '42883', '42P01'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
 // ---- Reading and writing ------------------------------------------------------
 
 /** PostgREST caps a response at 1000 rows — on an RPC exactly as on a select —

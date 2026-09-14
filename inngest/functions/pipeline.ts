@@ -31,7 +31,7 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
-import { fillingMonths, freezeMonths, monthsToRefresh } from '@/lib/reading/monthly'
+import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
@@ -1255,27 +1255,37 @@ export const runPipeline = inngest.createFunction(
     // Logged, NOT noteError'd — the keyword-discovery precedent. The reading is
     // a record kept alongside the report, not part of producing it, and a clean
     // run must not read 'partial' because a bookkeeping pass had a bad day. It
-    // is also the step that runs before its migration has necessarily been
-    // applied: until then every attempt fails, costs nothing, and says so.
+    // is also the step that can run before its migration has been applied:
+    // until then it is a logged no-op rather than a retry loop holding a slot.
     await step
       .run('freeze-months', async () => {
         const admin = createAdminClient()
-        const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
-        const r = await freezeMonths(admin, { clientId, runId, months })
-        console.log(
-          `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
-          `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
-          `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
-          `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
-          `${r.themes.deleted} dropped)`,
-        )
-        return {
-          months: r.months.length,
-          denominators: r.denominators.written,
-          themes: r.themes.written,
-          frozen: r.denominators.frozen + r.themes.frozen,
-          keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
-          heldStale: r.denominators.heldStale + r.themes.heldStale,
+        try {
+          const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
+          const r = await freezeMonths(admin, { clientId, runId, months })
+          console.log(
+            `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
+            `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
+            `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
+            `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
+            `${r.themes.deleted} dropped)`,
+          )
+          return {
+            months: r.months.length,
+            denominators: r.denominators.written,
+            themes: r.themes.written,
+            frozen: r.denominators.frozen + r.themes.frozen,
+            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
+            heldStale: r.denominators.heldStale + r.themes.heldStale,
+          }
+        } catch (e) {
+          // Its tables and functions do not exist yet: a no-op, not a failure.
+          // Retrying would burn the step's whole budget with backoff between
+          // attempts while holding one of the account's five shared slots, for
+          // a record it cannot write until the migration is applied by hand.
+          if (!isMissingMonthlyReading(e)) throw e
+          console.log('[freeze-months] skipped: 20260915092000_monthly_reading.sql has not been applied yet')
+          return null
         }
       })
       .catch((e) => {
