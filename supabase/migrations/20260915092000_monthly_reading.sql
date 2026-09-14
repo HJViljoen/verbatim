@@ -230,10 +230,16 @@ as $$
       and v.is_client
       and exists (
         select 1 from rivals r
-        where regexp_replace(
+        -- A plain substring test, which is what matchEntities does in JS
+        -- (hay.includes(fold(name)), no word boundary). NOT like '%'||name||'%':
+        -- competitor_names is free text a tenant types in Settings, and a name
+        -- holding _ or % would be a LIKE wildcard — silently inflating a count
+        -- that then freezes. Today's four names are clean; the next one need
+        -- not be.
+        where position(r.name in regexp_replace(
                 normalize(lower(coalesce(v.account_name, '') || ' ' || coalesce(v.caption, '') || ' ' ||
                                 coalesce(array_to_string(v.hashtags, ' '), '')), NFD),
-                '[\u0300-\u036f]', '', 'g') like '%' || r.name || '%'
+                '[\u0300-\u036f]', '', 'g')) > 0
       )
   ),
   -- comments.video_id is the PLATFORM id (text), never videos.id: the join is

@@ -382,6 +382,14 @@ describe('the migration and this module say the same thing', () => {
     expect(sql).not.toMatch(/(?:from|join) public\.audience_insights_current/)
   })
 
+  it('matches a rival name as a substring, never as a LIKE pattern', () => {
+    // competitor_names is free text a tenant types in Settings. Under LIKE, a
+    // name holding _ or % is a wildcard, and it would inflate dual_mention into
+    // rows that freeze.
+    expect(sql).toContain('where position(r.name in regexp_replace(')
+    expect(sql).not.toMatch(/like '%' \|\| r\.name/)
+  })
+
   it('writes the diacritic fold as escapes, never as the combining marks themselves', () => {
     // The class used to be two invisible marks in the source, one of which
     // combined with the preceding bracket on screen. This file is applied by
