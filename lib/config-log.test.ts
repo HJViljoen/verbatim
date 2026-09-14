@@ -4,6 +4,7 @@ import {
   CONFIG_SURFACES,
   WATCHED_CONFIG_COLUMNS,
   actorStamp,
+  bucketsAfterRetag,
   changeLogBoundary,
   changeRow,
   diffConfigRows,
@@ -381,6 +382,20 @@ describe('the corpus re-tag', () => {
     expect(skipRetag(null)).toBe(false)
     expect(skipRetag(undefined)).toBe(false)
     expect(skipRetag('')).toBe(false)
+  })
+
+  it('counts the corpus that exists, not the one the re-tag asked for', () => {
+    const before = ['competitor:Patagonia', 'competitor:Patagonia', 'industry', 'client']
+    // Rows 0 and 1 were re-judged as industry; row 1's UPDATE failed, so it is
+    // not in `moved` and keeps the bucket it has in the database.
+    const after = bucketsAfterRetag(before, new Map([[0, 'industry']]))
+    expect(after).toEqual(['industry', 'competitor:Patagonia', 'industry', 'client'])
+    expect(before).toEqual(['competitor:Patagonia', 'competitor:Patagonia', 'industry', 'client'])
+  })
+
+  it('ignores an index that is not a row', () => {
+    expect(bucketsAfterRetag(['industry'], new Map([[7, 'client'], [-1, 'client']]))).toEqual(['industry'])
+    expect(bucketsAfterRetag([], new Map())).toEqual([])
   })
 
   it('records the method, the rows moved and the rows spared', () => {

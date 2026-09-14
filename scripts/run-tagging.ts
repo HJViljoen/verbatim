@@ -1,5 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { recordConfigChange, retagChange, scriptActor, skipRetag } from '../lib/config-log'
+import { bucketsAfterRetag, recordConfigChange, retagChange, scriptActor, skipRetag } from '../lib/config-log'
 import { tagVideo, matchEntities, type VideoTags } from '../lib/gather/tagging'
 import { attributeVideos, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
 import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
@@ -149,12 +149,11 @@ async function main() {
   const finalCb: string[] = []
   const gptRejected: { row: VideoRow; from: string }[] = [] // substring tagged it, GPT demoted to industry
   const dual: VideoRow[] = []
-  const changed: { row: VideoRow; tag: VideoTags }[] = []
+  const changed: { row: VideoRow; tag: VideoTags; index: number }[] = []
   const spared: VideoRow[] = []   // own / rival-owned posts: identity, not a reading
   const bucketsBefore: string[] = []
-  const bucketsAfter: string[] = []
 
-  for (const r of rows) {
+  for (const [index, r] of rows.entries()) {
     const aTag = tagVideo({ account_name: r.account_name, caption: '', hashtags: [] }, config)
     const sTag = tagVideo(r, config)
     const fTag = finalTags.get(r.video_id) ?? { is_client: false, is_competitor: false, competitor_name: null }
@@ -173,15 +172,8 @@ async function main() {
       fTag.is_competitor !== r.is_competitor ||
       fTag.competitor_name !== r.competitor_name
     bucketsBefore.push(stored)
-    if (moves && skipRetag(r.source)) {
-      spared.push(r)
-      bucketsAfter.push(stored)
-    } else if (moves) {
-      changed.push({ row: r, tag: fTag })
-      bucketsAfter.push(bucket(fTag))
-    } else {
-      bucketsAfter.push(stored)
-    }
+    if (moves && skipRetag(r.source)) spared.push(r)
+    else if (moves) changed.push({ row: r, tag: fTag, index })
   }
 
   console.log(`=== BUCKET DISTRIBUTION — ${rows.length} videos${args.platform ? ` (${args.platform})` : ''} ===`)
@@ -231,13 +223,18 @@ async function main() {
   console.log(`\nWriting ${changed.length} updated tags…`)
   let ok = 0
   const errs: string[] = []
-  for (const { row, tag } of changed) {
+  // What actually landed, row by row. The loop keeps going past a failure, so
+  // the distribution this records has to be built from the writes that
+  // succeeded — a re-tag that intends 253 moves and lands 243 must not log a
+  // corpus in which all 253 moved.
+  const applied = new Map<number, string>()
+  for (const { row, tag, index } of changed) {
     const { error: uErr } = await admin
       .from('videos')
       .update({ is_client: tag.is_client, is_competitor: tag.is_competitor, competitor_name: tag.competitor_name })
       .eq('id', row.id)
     if (uErr) errs.push(`${row.video_id}: ${uErr.message}`)
-    else ok++
+    else { ok++; applied.set(index, bucket(tag)) }
   }
   console.log(`updated ${ok}/${changed.length}${errs.length ? `; ${errs.length} errors:\n  ${errs.slice(0, 10).join('\n  ')}` : ''}`)
 
@@ -248,7 +245,7 @@ async function main() {
     actor: scriptActor(`scripts/run-tagging.ts --write --method ${args.method}${args.platform ? ` --platform ${args.platform}` : ''}`),
     method: args.method,
     before: Object.fromEntries(tally(bucketsBefore)),
-    after: Object.fromEntries(tally(bucketsAfter)),
+    after: Object.fromEntries(tally(bucketsAfterRetag(bucketsBefore, applied))),
     rowsAffected: ok,
     skipped: spared.length,
     costUsd,

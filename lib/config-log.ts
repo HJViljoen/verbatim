@@ -389,6 +389,27 @@ export function skipRetag(source: string | null | undefined): boolean {
   return (IDENTITY_STAMPED_SOURCES as readonly string[]).includes(source ?? '')
 }
 
+/** Where every video sits AFTER a re-tag — counting only the rows whose UPDATE
+ *  actually landed. `moved` maps a row's index in `before` to the bucket it
+ *  moved to; anything not in it (unchanged, spared, or a write that failed)
+ *  keeps the bucket it had.
+ *
+ *  The re-tag writes row by row and keeps going past a failure, so `after` and
+ *  `rows_affected` can disagree: a run that intended 253 moves and landed 243
+ *  used to log a distribution in which all 253 had moved. This row is the only
+ *  record of an operation whose effect is otherwise unrecoverable, so it has to
+ *  describe the corpus that exists, not the one that was asked for. */
+export function bucketsAfterRetag(
+  before: readonly string[],
+  moved: ReadonlyMap<number, string>,
+): string[] {
+  const after = [...before]
+  for (const [index, bucket] of moved) {
+    if (Number.isInteger(index) && index >= 0 && index < after.length) after[index] = bucket
+  }
+  return after
+}
+
 /** The record a corpus re-tag leaves. Today it leaves none at all: `videos` has
  *  no `updated_at`, attribution is never written to `ai_call_log`, and the
  *  script carries no run id, so neither the moment, the method nor the OpenAI
