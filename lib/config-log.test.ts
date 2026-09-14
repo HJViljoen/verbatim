@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   ACTOR_KINDS,
@@ -452,5 +453,44 @@ describe('changeLogBoundary — inference must never read as record', () => {
     for (const line of [changeLogBoundary(null), changeLogBoundary('2026-09-15T00:00:00Z')]) {
       expect(line).not.toMatch(/\brun\b|gather|Pass [A-E]|pipeline/i)
     }
+  })
+})
+
+describe('the mirror in the migration — the two have to keep saying the same thing', () => {
+  // The trigger carries its own copy of the watched-column list and of the
+  // column→surface mapping, in SQL. A change to one side only is silent: the
+  // same edit then reads `knobs` when a person makes it in the browser and
+  // `other` when a script writes it, and diffConfigRows stops covering a column
+  // that the database is still logging. Nothing but this test notices.
+  const sql = readFileSync(new URL('../supabase/migrations/20260915091000_config_changes.sql', import.meta.url), 'utf8')
+
+  const quoted = (s: string) => [...s.matchAll(/'([^']+)'/g)].map((m) => m[1])
+
+  it('watches exactly the columns WATCHED_CONFIG_COLUMNS names, in the same order', () => {
+    const array = sql.match(/foreach\s+v_col\s+in\s+array\s+array\[([\s\S]*?)\]/i)?.[1]
+    expect(array, 'the trigger\'s column array is no longer where this test looks for it').toBeTruthy()
+    expect(quoted(array!)).toEqual([...WATCHED_CONFIG_COLUMNS])
+  })
+
+  it('files every column on the same surface the TypeScript does', () => {
+    const block = sql.match(/case v_col([\s\S]*?)\bend\b/i)?.[1]
+    expect(block, 'the trigger\'s CASE is no longer where this test looks for it').toBeTruthy()
+    const arms = new Map([...block!.matchAll(/when\s+'([^']+)'\s+then\s+'([^']+)'/g)].map((m) => [m[1], m[2]]))
+    const fallback = block!.match(/else\s+'([^']+)'/)?.[1]
+    expect(CONFIG_SURFACES).toContain(fallback as never)
+    for (const column of WATCHED_CONFIG_COLUMNS) {
+      expect(arms.get(column) ?? fallback, `${column} reads differently in SQL`).toBe(surfaceForColumn(column))
+    }
+    // And the CASE names nothing the loop never reaches.
+    for (const named of arms.keys()) expect(WATCHED_CONFIG_COLUMNS).toContain(named as never)
+  })
+
+  it('carries the same two vocabularies in its CHECK constraints', () => {
+    const surfaces = sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
+    const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]
+    expect(surfaces).toBeTruthy()
+    expect(kinds).toBeTruthy()
+    expect(quoted(surfaces!).sort()).toEqual([...CONFIG_SURFACES].sort())
+    expect(quoted(kinds!).sort()).toEqual([...ACTOR_KINDS].sort())
   })
 })
