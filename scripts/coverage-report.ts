@@ -67,20 +67,25 @@ import { categoryLabel } from '../lib/voice-tiles'
 // WHAT IT NEVER DOES: write anything, call a model, or spend a cent.
 //
 //   node --env-file=.env.local --import tsx scripts/coverage-report.ts \
-//     [--client <uuid>] [--weeks 11] [--out path/to/report.md]
+//     [--client <uuid>] [--weeks 11] [--out path/to/report.md] [--ignore-baseline-floor]
 
 interface Args {
   clientId: string | null
   weeks: number
   out: string | null
+  ignoreBaselineFloor: boolean
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: null, weeks: 11, out: null }
+  const args: Args = { clientId: null, weeks: 11, out: null, ignoreBaselineFloor: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--weeks') args.weeks = Number(argv[++i])
     else if (argv[i] === '--out') args.out = argv[++i]
+    // The second question, never a shipped reading: what the band alone would
+    // have said if the three-month baseline rule were waived. It says how much
+    // of a zero is the floor and how much is the correction.
+    else if (argv[i] === '--ignore-baseline-floor') args.ignoreBaselineFloor = true
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   if (!Number.isInteger(args.weeks) || args.weeks < 1) throw new Error('--weeks takes a positive whole number')
@@ -243,7 +248,8 @@ function sliceMonths(rows: readonly DenominatorReading[]): Map<string, { videos:
 // ---- The report --------------------------------------------------------------
 
 async function main() {
-  const { clientId, weeks: weekCount, out } = parseArgs(process.argv.slice(2))
+  const { clientId, weeks: weekCount, out, ignoreBaselineFloor } = parseArgs(process.argv.slice(2))
+  const options = ignoreBaselineFloor ? { requireBaselineMonths: 0 } : undefined
   const admin = createAdminClient()
   const now = new Date().toISOString()
   const lines: string[] = []
@@ -266,7 +272,10 @@ async function main() {
   say(
     `Read-only. The floor is ${SHARE_BAND.minN} videos a side (the product's own share band), ` +
     `and the same months are counted again at ${SHARE_BAND.minN} comments so the difference is visible. ` +
-    `Weeks ${weeks[0].label} to ${weeks.at(-1)!.label}.`,
+    `Weeks ${weeks[0].label} to ${weeks.at(-1)!.label}.` +
+    (ignoreBaselineFloor
+      ? ' **The three-month baseline rule is waived in this run** — the band is drawn whenever both sides clear their own floors, which is not what a shipped reading does.'
+      : ''),
   )
 
   for (const tenant of tenants) {
@@ -438,7 +447,7 @@ async function main() {
         }
       }
 
-      const reading = weekVsBaseline({ week: week.label, denominators: [sliceSeries], set })
+      const reading = weekVsBaseline({ week: week.label, denominators: [sliceSeries], set, options })
       const state = reading.baselines[0]
       say(
         `| ${week.label} (${week.from.slice(0, 10)}) | ${weekSlice} | ${state.label} | ` +

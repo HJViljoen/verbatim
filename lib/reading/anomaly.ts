@@ -157,6 +157,19 @@ export interface WeekVsBaselineOptions {
   floor?: BandOptions
   alpha?: number
   maxFlags?: number
+  /**
+   * How many of the trailing months must clear the floor before anything may be
+   * flagged. `BASELINE_MONTHS` by default, and a shipped reading never passes
+   * anything else.
+   *
+   * It exists for one measurement: the design's §9.20 asks how many flags the
+   * rule would have raised over a quarter, and on today's corpus the answer is
+   * decided almost entirely by this gate — so the replay has to be able to ask
+   * the second question too ("and if the baseline floor were waived?") to say
+   * how much of a zero is the floor and how much is the correction. The band's
+   * own floors (100 videos a side, 10 of the object's own) are untouched by it.
+   */
+  requireBaselineMonths?: number
 }
 
 // ---- The sentence the check prints while it is asleep ------------------------
@@ -285,6 +298,7 @@ export function weekVsBaseline(input: {
   const floor = input.options?.floor ?? SHARE_BAND
   const alpha = input.options?.alpha ?? FAMILY_ALPHA
   const maxFlags = input.options?.maxFlags ?? MAX_FLAGS
+  const requireMonths = input.options?.requireBaselineMonths ?? BASELINE_MONTHS
 
   const series = new Map(input.denominators.map((d) => [d.name, d]))
   const states = new Map(input.denominators.map((d) => [d.name, baselineStateOf(d, floor)]))
@@ -315,7 +329,9 @@ export function weekVsBaseline(input: {
     // A baseline under three months is not a thin comparison — it is no
     // comparison, and the check says so rather than drawing a band nobody
     // should read.
-    if (!state.ready) return { ...base, verdict: null, p: null, holmThreshold: null, state: 'baseline_forming' }
+    if (state.monthsClearing < requireMonths) {
+      return { ...base, verdict: null, p: null, holmThreshold: null, state: 'baseline_forming' }
+    }
 
     const sides = {
       nowPct: base.weekPct,

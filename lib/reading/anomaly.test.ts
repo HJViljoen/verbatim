@@ -331,3 +331,48 @@ describe('the week against the baseline', () => {
     ).toThrow(/no denominator "client"/)
   })
 })
+
+describe('the measurement knob', () => {
+  it('can be told to draw the band anyway, and says so on the row', () => {
+    const series: DenominatorSeries = {
+      name: 'industry-other',
+      weekVideos: 400,
+      months: [
+        { month: '2026-06-01', videos: 40 }, // under the floor
+        { month: '2026-07-01', videos: 400 },
+        { month: '2026-08-01', videos: 400 },
+      ],
+    }
+    const set = [flatObject('surge', { weekVideos: 80, monthVideos: 20 })]
+    const asShipped = weekVsBaseline({ week: '2026-W37', denominators: [series], set })
+    expect(asShipped.rows[0].state).toBe('baseline_forming')
+    expect(asShipped.flags).toEqual([])
+
+    const waived = weekVsBaseline({ week: '2026-W37', denominators: [series], set, options: { requireBaselineMonths: 0 } })
+    expect(waived.rows[0].state).toBe('flagged')
+    // The band's own floors are untouched, and the baseline state still tells
+    // the truth about how many months cleared.
+    expect(waived.baselines[0].label).toBe('baseline forming — 2 of 3 months')
+    expect(waived.rows[0].baselineMonthsClearing).toBe(2)
+  })
+
+  it('leaves the band\'s own floors in place when the month gate is waived', () => {
+    const series: DenominatorSeries = {
+      name: 'industry-other',
+      weekVideos: 400,
+      months: [
+        { month: '2026-06-01', videos: 20 },
+        { month: '2026-07-01', videos: 20 },
+        { month: '2026-08-01', videos: 20 },
+      ],
+    }
+    const waived = weekVsBaseline({
+      week: '2026-W37',
+      denominators: [series],
+      set: [flatObject('surge', { weekVideos: 80, monthVideos: 5 })],
+      options: { requireBaselineMonths: 0 },
+    })
+    // 60 videos behind it: under SHARE_BAND.minN, so no comparison is drawn.
+    expect(waived.rows[0].state).toBe('too_little_data')
+  })
+})
