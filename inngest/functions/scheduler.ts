@@ -1,7 +1,7 @@
 import { inngest } from '@/inngest/client'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { localDate, isWeeklyDue, isMonthlyDue } from '@/lib/pipeline/schedule-due'
+import { localDate, isWeeklyDue, isMonthlyDue, lastExpectedSlot } from '@/lib/pipeline/schedule-due'
 import { touchHeartbeat } from '@/lib/ops/heartbeat'
 import { sendAlertEmail } from '@/lib/email'
 
@@ -40,9 +40,10 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
       return touchHeartbeat(createAdminClient, 'dispatcher', { weekday, dayOfMonth })
     })
 
-    const dueClientIds = await step.run('find-due-clients', async () => {
+    const dueClients = await step.run('find-due-clients', async () => {
       const admin = createAdminClient()
-      const today = localDate()
+      const now = new Date()
+      const today = localDate(now)
 
       const [{ data: clients }, { data: configs }] = await Promise.all([
         admin.from('clients')
@@ -52,7 +53,7 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
       ])
 
       const cfgByClient = new Map((configs ?? []).map((c) => [c.client_id, c]))
-      const due: string[] = []
+      const due: { clientId: string; scheduledFor: string | null }[] = []
       for (const client of (clients ?? []) as (BillingClient & { id: string })[]) {
         const cfg = cfgByClient.get(client.id)
         if (!cfg) continue
@@ -64,7 +65,16 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
           console.log(`[scheduler] skipping ${client.id}: no access (${access.reason})`)
           continue
         }
-        if (isWeeklyDue(cfg, today) || isMonthlyDue(cfg, today)) due.push(client.id)
+        if (isWeeklyDue(cfg, today) || isMonthlyDue(cfg, today)) {
+          // The slot this dispatch is serving — today's 06:00 SAST, computed by
+          // the same rule the ops check uses to ask "was it started?". The run
+          // row carries it (pipeline_runs.scheduled_for), so that question stops
+          // being a recomputation from config and becomes a column. Null would
+          // mean a manual run, so a due client with no resolvable slot (it has
+          // one by construction here) simply carries none.
+          const slot = lastExpectedSlot(cfg, now)
+          due.push({ clientId: client.id, scheduledFor: slot ? slot.toISOString() : null })
+        }
       }
       return due
     })
@@ -77,17 +87,24 @@ export const scheduledPipelineDispatcher = inngest.createFunction(
     // email from there. /api/cron/ops-check owns delivery reliability now, over
     // a 48-hour window, and it runs on Vercel Cron where Inngest cannot silence it.
 
-    if (dueClientIds.length > 0) {
+    // Tolerate the pre-2026-09-15 memoised shape (a bare client id), so a
+    // dispatcher suspended across the deploy replays cleanly.
+    const due = (dueClients as (string | { clientId: string; scheduledFor: string | null })[]).map((d) =>
+      typeof d === 'string' ? { clientId: d, scheduledFor: null } : d,
+    )
+
+    if (due.length > 0) {
       await step.sendEvent(
         'dispatch-due-runs',
-        dueClientIds.map((clientId) => ({
+        due.map(({ clientId, scheduledFor }) => ({
           name: 'pipeline/run.requested',
           // sendReport: emit the periodic report once this scheduled run completes.
-          data: { clientId, options: { sendReport: true } },
+          // scheduledFor: the slot this run serves, recorded on the run row.
+          data: { clientId, options: { sendReport: true, scheduledFor } },
         })),
       )
     }
 
-    return { dispatched: dueClientIds.length, clientIds: dueClientIds }
+    return { dispatched: due.length, clientIds: due.map((d) => d.clientId) }
   },
 )

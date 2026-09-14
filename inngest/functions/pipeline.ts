@@ -31,6 +31,8 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { resolveRunWindow, isStalled, type RunWindow, type WindowBasis } from '@/lib/pipeline/window'
+import { dbSafeJson } from '@/lib/db-text'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -65,6 +67,11 @@ export interface PipelineRunOptions {
   // When set, emit a `report/send.requested` after the run completes so the
   // periodic report goes out. The scheduler sets this; manual "Run now" doesn't.
   sendReport?: boolean
+  // The dispatcher slot this run is serving (ISO, the 06:00 SAST slot for the
+  // day). Recorded on the run row so "was Sunday's run started?" is a column
+  // rather than a recomputation from tracking_configs. Absent on a manual run,
+  // which is exactly the distinction worth keeping.
+  scheduledFor?: string
   // Analysis-only resume: reuse an existing run row (reset to 'running') and
   // skip the gather fan-out entirely — the corpus is already in the DB. The
   // operator lever for finishing a run whose analysis half died, without
@@ -82,12 +89,109 @@ export interface PipelineRunOptions {
  *  `flags` is the run's frozen flag snapshot (absent on runs opened before
  *  2026-08-18, which fall back to reading the environment); `period` is the
  *  run's effective period, frozen the same way (absent on runs opened before
- *  2026-09-09). */
+ *  2026-09-09); `window` is the run's gather window, frozen the same way
+ *  (absent on runs opened before 2026-09-15, which fall back to resolving it
+ *  from the clock at each step, i.e. what they started under). */
 interface OpenRunResult {
   runId: string | null
   skipped?: string
   flags?: RunFlags
   period?: string
+  window?: RunWindow
+}
+
+/** The tracking_configs slice frozen onto a run row. Named columns, never
+ *  `select('*')`: a snapshot that silently grows a column is one nobody can
+ *  compare across runs. Subreddits keep name + status only — the probe detail
+ *  is churn, and the question a snapshot answers is "which communities was this
+ *  run searching". */
+interface TrackingConfigRow {
+  brand_keywords?: string[] | null
+  competitor_keywords?: string[] | null
+  industry_keywords?: string[] | null
+  exclude_terms?: string[] | null
+  competitor_names?: string[] | null
+  own_handles?: Record<string, string> | null
+  competitor_handles?: Record<string, Record<string, string>> | null
+  platforms?: string[] | null
+  subreddits?: { name?: string; status?: string }[] | null
+  report_period?: string | null
+  report_day?: string | null
+  max_videos?: number | null
+  max_comments?: number | null
+  comment_depth?: number | null
+}
+
+const CONFIG_SNAPSHOT_COLUMNS =
+  'brand_keywords, competitor_keywords, industry_keywords, exclude_terms, competitor_names, ' +
+  'own_handles, competitor_handles, platforms, subreddits, report_period, report_day, ' +
+  'max_videos, max_comments, comment_depth'
+
+function buildConfigSnapshot(tc: TrackingConfigRow | null) {
+  return dbSafeJson({
+    brand_keywords: tc?.brand_keywords ?? [],
+    competitor_keywords: tc?.competitor_keywords ?? [],
+    industry_keywords: tc?.industry_keywords ?? [],
+    exclude_terms: tc?.exclude_terms ?? [],
+    competitor_names: tc?.competitor_names ?? [],
+    own_handles: tc?.own_handles ?? {},
+    competitor_handles: tc?.competitor_handles ?? {},
+    platforms: tc?.platforms ?? [],
+    subreddits: (tc?.subreddits ?? []).map((s) => ({ name: s?.name ?? '', status: s?.status ?? '' })),
+    report_period: tc?.report_period ?? null,
+    report_day: tc?.report_day ?? null,
+    max_videos: tc?.max_videos ?? null,
+    max_comments: tc?.max_comments ?? null,
+    comment_depth: tc?.comment_depth ?? null,
+  })
+}
+
+/** The window columns of a run row, when it carries one. */
+interface WindowColumns { window_start?: string | null; window_end?: string | null; window_basis?: string | null }
+function rowWindow(row: WindowColumns | null | undefined): RunWindow | null {
+  if (!row?.window_end || !row.window_basis) return null
+  return { start: row.window_start ?? null, end: row.window_end, basis: row.window_basis as WindowBasis }
+}
+
+/**
+ * What `resolveRunWindow` needs from the DB: the previous run's end, whether a
+ * `run_summary` exists (baseline-vs-flow), and — on a resume — the window the
+ * row already carries. Read once, inside open-run, so no later step asks again.
+ */
+async function loadRunWindowInput(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  runId: string,
+  resumeRunId: string | undefined,
+): Promise<{ prevEnd: string | null; hasSummary: boolean; stored: RunWindow | null }> {
+  const mine = new Set([runId, resumeRunId].filter(Boolean) as string[])
+  const [prevRes, summaryRes, storedRes] = await Promise.all([
+    // The previous run's own window_end, falling back to when it closed — the
+    // rule lib/pipeline/owned-events.ts has always used for account events, now
+    // the rule for content too. Three rows, not one: this run's own row (and a
+    // resume's target) can sit at the top of the ordering and must not anchor
+    // the window on itself.
+    admin.from('pipeline_runs')
+      .select('id, window_end, completed_at')
+      .eq('client_id', clientId)
+      .in('status', ['completed', 'partial'])
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(3),
+    // "The map exists" — the same existence check resolveGatherWindow has
+    // always made: a closed synthesis, not merely an earlier run row.
+    admin.from('run_summary').select('run_id').eq('client_id', clientId).neq('run_id', runId).limit(1).maybeSingle(),
+    resumeRunId
+      ? admin.from('pipeline_runs').select('window_start, window_end, window_basis')
+          .eq('id', resumeRunId).eq('client_id', clientId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+  const prev = ((prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[])
+    .find((r) => !mine.has(r.id))
+  return {
+    prevEnd: prev?.window_end ?? prev?.completed_at ?? null,
+    hasSummary: Boolean(summaryRes.data),
+    stored: rowWindow(storedRes.data as WindowColumns | null),
+  }
 }
 
 export const runPipeline = inngest.createFunction(
@@ -204,9 +308,32 @@ export const runPipeline = inngest.createFunction(
       // configured cadence. Resolved ONCE, here, so gather, the owned window,
       // the synthesis slice, the census and run_summary.period cannot disagree
       // and a retry cannot see a different answer.
-      const { data: tcPeriod } = await admin.from('tracking_configs')
-        .select('report_period').eq('client_id', clientId).maybeSingle()
-      const period = effectivePeriod(options.period, tcPeriod?.report_period as string | null)
+      const { data: tcRow } = await admin.from('tracking_configs')
+        .select(CONFIG_SNAPSHOT_COLUMNS).eq('client_id', clientId).maybeSingle()
+      const tc = tcRow as TrackingConfigRow | null
+      const period = effectivePeriod(options.period, tc?.report_period ?? null)
+      // The run's gather window, frozen here for the same reason and for a
+      // sharper one: it used to be recomputed from Date.now() inside plan-owned,
+      // inside every gate:<platform> and inside synthesize, so a run that took
+      // days gathered one window and reported another (Össur f9548a97: 18 days
+      // apart). Anchored on the previous run's end, so a missed week is
+      // gathered rather than skipped — see lib/pipeline/window.ts.
+      const windowInput = await loadRunWindowInput(admin, clientId, options.runId ?? newRunId, options.runId)
+      const window = resolveRunWindow({
+        now: new Date().toISOString(),
+        period,
+        prevEnd: windowInput.prevEnd,
+        hasSummary: windowInput.hasSummary,
+        stored: windowInput.stored,
+      })
+      const bookkeeping = {
+        period,
+        scheduled_for: options.scheduledFor ?? null,
+        window_start: window.start,
+        window_end: window.end,
+        window_basis: window.basis,
+        config_snapshot: buildConfigSnapshot(tc),
+      }
       if (options.runId) {
         // started_at moves to NOW. It is set only at insert, and a resumed run
         // is by definition hours old, so leaving it would make every resumed
@@ -214,28 +341,31 @@ export const runPipeline = inngest.createFunction(
         // live run failed and open a second one alongside it.
         const { error } = await admin
           .from('pipeline_runs')
-          .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options })
+          .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, stalled: false, ...bookkeeping })
           .eq('id', options.runId).eq('client_id', clientId)
         if (error?.code === PG_UNIQUE_VIOLATION) return { runId: null, skipped: 'another run opened first (unique index)' }
         if (error) throw new Error(`reopen run: ${error.message}`)
-        return { runId: options.runId, flags, period }
+        return { runId: options.runId, flags, period, window }
       }
       const { error } = await admin
         .from('pipeline_runs')
-        .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options })
+        .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...bookkeeping })
       if (error?.code === PG_UNIQUE_VIOLATION) {
         // Either our own previous attempt's row (same id), or another run won
         // the race for this client (different id).
         const { data: ours } = await admin.from('pipeline_runs')
-          .select('id').eq('id', newRunId).eq('client_id', clientId).maybeSingle()
+          .select('id, window_start, window_end, window_basis').eq('id', newRunId).eq('client_id', clientId).maybeSingle()
         if (ours) {
           console.warn(`[open-run] reusing run ${newRunId} from a previous attempt of this step`)
-          return { runId: newRunId, flags, period }
+          // The row's own window, not the one just computed: the previous
+          // attempt gathered against what it wrote, and a second clock reading
+          // is exactly what this work exists to stop.
+          return { runId: newRunId, flags, period, window: rowWindow(ours as WindowColumns) ?? window }
         }
         return { runId: null, skipped: 'another run opened first (unique index)' }
       }
       if (error) throw new Error(`open run: ${error.message}`)
-      return { runId: newRunId, flags, period }
+      return { runId: newRunId, flags, period, window }
     })
     // Pre-2026-08-18 memoised shape: the step returned the run id itself.
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
@@ -248,6 +378,11 @@ export const runPipeline = inngest.createFunction(
     // tracking_configs — i.e. exactly the behaviour it started under.
     const runPeriod: string | null =
       (typeof opened === 'string' ? undefined : opened.period) ?? options.period ?? null
+    // The run's frozen gather window. Null on a run opened before 2026-09-15
+    // (including one in flight across the deploy): every reader then falls back
+    // to resolving the window from the clock, which is what that run started
+    // under and must keep doing.
+    const runWindow: RunWindow | null = (typeof opened === 'string' ? undefined : opened.window) ?? null
     if (!runId) {
       const reason = typeof opened === 'string' ? '' : opened.skipped ?? ''
       // A skipped SCHEDULED run would otherwise cost the client their whole
@@ -363,7 +498,7 @@ export const runPipeline = inngest.createFunction(
             // manual {period:'monthly'} run must widen the owned window the
             // same way it widens the gather.
             const period = runPeriod ?? effectivePeriod(options.period, data?.report_period as string | null)
-            const window = await resolveGatherWindow(clientId, runId, period)
+            const window = await resolveGatherWindow(clientId, runId, period, runWindow)
             return {
               handles: (data?.own_handles ?? {}) as Record<string, string>,
               competitorHandles: (data?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
@@ -414,6 +549,7 @@ export const runPipeline = inngest.createFunction(
                       clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
                       community: task.community, variant: task.variant,
                       maxVideos: options.maxVideos, period: runPeriod ?? undefined,
+                      window: runWindow,
                     }),
                   ),
                 )
@@ -427,7 +563,7 @@ export const runPipeline = inngest.createFunction(
         }
         const gate = await step.run(`gate:${platform}`, () =>
           withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, () =>
-            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined }),
+            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined, window: runWindow }),
           ),
         )
         totalVideos += gate.videosKept
@@ -1132,7 +1268,7 @@ export const runPipeline = inngest.createFunction(
         return null
       })
 
-    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId, runPeriod))
+    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId, runPeriod, runWindow))
 
     // Keyword ROI bookkeeping — fills keyword_performance.insights_contributed
     // for this run. Catch on the step promise (transcribe precedent): retries
@@ -1230,12 +1366,21 @@ export const runPipeline = inngest.createFunction(
     // 7. Close the run.
     await step.run('close-run', async () => {
       const admin = createAdminClient()
+      const completedAt = new Date().toISOString()
+      // Did the run take longer than the window it covered? A fact on the row,
+      // not a finding: nothing alerts on it yet, and on a same-day rerun (whose
+      // anchored window is minutes wide) it is true and harmless. The two runs
+      // that made this worth recording took 18.1 and 8.9 days to close a week.
+      const { data: row } = await admin.from('pipeline_runs')
+        .select('started_at').eq('id', runId).maybeSingle()
+      const startedAt = (row?.started_at as string | undefined) ?? completedAt
       await admin.from('pipeline_runs').update({
         status: runCloseStatus(totalErrors),
         videos_scraped: totalVideos,
-        completed_at: new Date().toISOString(),
+        completed_at: completedAt,
         errors: runErrors,
         error_message: summariseRunErrors(totalErrors, runErrors),
+        stalled: isStalled({ startedAt, completedAt, window: runWindow }),
       }).eq('id', runId)
     })
 
@@ -1597,7 +1742,12 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
 
 // Back half, synthesis step: metrics → Pass C → Pass D (a+b) → run_summary,
 // over the themes persisted by the persist-themes step. Mirrors scripts/run-cd.ts.
-async function runSynthesisHalf(clientId: string, runId: string, runPeriod: string | null = null) {
+async function runSynthesisHalf(
+  clientId: string,
+  runId: string,
+  runPeriod: string | null = null,
+  runWindow: RunWindow | null = null,
+) {
   const admin = createAdminClient()
 
   // Share rule (Heinrich, 2026-09-10). "Share of tracked conversation" counts
@@ -1664,8 +1814,11 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   // the tenant's cadence. Read from the run, NOT from tracking_configs: a
   // manual {period:'monthly'} on a 'paused' tenant gathered 30 days and then
   // measured the week against it (run cb0d97b2, 2026-09-09).
+  // The window is the RUN's, frozen at open-run — not a fresh reading of the
+  // clock. On the two multi-day runs in production this step cut the period at
+  // a date the gather had never been asked for (18 days later on f9548a97).
   const period = runPeriod ?? effectivePeriod(null, tc?.report_period as string | null)
-  const window = await resolveGatherWindow(clientId, runId, period)
+  const window = await resolveGatherWindow(clientId, runId, period, runWindow)
   const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date, window.since))
   const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments, analysedVideoIds)
