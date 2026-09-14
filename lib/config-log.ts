@@ -410,10 +410,29 @@ export function bucketsAfterRetag(
   return after
 }
 
+/** How a re-tag decided, in words a reader of a moved number can use. The
+ *  method matters — substring and gpt differ by up to 35x in rows touched — but
+ *  `substring` and `gpt` are our words, not anyone else's. */
+const RETAG_METHOD_WORDS: Record<string, string> = {
+  substring: 'by matching the words in each post',
+  gpt: 'by matching the words in each post, with the ambiguous ones judged one by one',
+}
+
+/** Add a detail to an actor's label without losing the label. */
+function labelled(actor: ConfigActor, detail: string): ConfigActor {
+  return detail ? { ...actor, label: `${actor.label ?? 'unknown'} · ${detail}` } : actor
+}
+
 /** The record a corpus re-tag leaves. Today it leaves none at all: `videos` has
  *  no `updated_at`, attribution is never written to `ai_call_log`, and the
  *  script carries no run id, so neither the moment, the method nor the OpenAI
- *  spend of the 2026-09-09 Sealand re-tag is recoverable. */
+ *  spend of the 2026-09-09 Sealand re-tag is recoverable.
+ *
+ *  The two halves are kept apart on purpose. `note` is the sentence — no
+ *  command line, no dollars, no internal vocabulary — because the log is
+ *  readable by every member of the tenant and Phase 1 will put it on a screen.
+ *  What only an operator needs (which script, which flags, what it spent) goes
+ *  on `actor_label`, beside the command that produced it. */
 export function retagChange(args: {
   clientId: string
   actor: ConfigActor
@@ -425,16 +444,20 @@ export function retagChange(args: {
   costUsd?: number
   note?: string
 }): ConfigChangeInput {
-  const money = args.costUsd === undefined ? '' : ` OpenAI $${args.costUsd.toFixed(5)}.`
+  const how = RETAG_METHOD_WORDS[args.method] ?? `by ${args.method}`
   return {
     clientId: args.clientId,
     surface: 'entity_retag',
     field: null,
     before: args.before,
     after: args.after,
-    actor: args.actor,
+    actor: args.costUsd === undefined ? args.actor : labelled(args.actor, `OpenAI $${args.costUsd.toFixed(5)}`),
     rowsAffected: args.rowsAffected,
-    note: `re-tagged the stored corpus by ${args.method}; ${args.skipped} identity-stamped row(s) (own and rival accounts) left alone.${money}${args.note ? ` ${args.note}` : ''}`,
+    note:
+      `re-checked which brand each stored video is about, ${how}. ` +
+      `${args.rowsAffected} video(s) moved; ${args.skipped} posted by your own or a tracked rival's account ` +
+      `were left as they were, because there the account says whose post it is.` +
+      `${args.note ? ` ${args.note}` : ''}`,
   }
 }
 

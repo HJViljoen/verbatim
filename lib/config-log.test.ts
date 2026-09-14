@@ -407,13 +407,31 @@ describe('the corpus re-tag', () => {
       after: { 'industry': 1844 },
       rowsAffected: 94,
       skipped: 37,
-      costUsd: 0,
+      costUsd: 0.312,
     })
     expect(row.surface).toBe('entity_retag')
     expect(row.rowsAffected).toBe(94)
-    expect(row.note).toContain('substring')
-    expect(row.note).toContain('37 identity-stamped row(s)')
+    expect(row.note).toContain('94 video(s) moved')
+    expect(row.note).toContain('37 posted by your own or a tracked rival')
     expect(row.before).toEqual({ 'competitor:Patagonia': 85, 'industry': 1692 })
+  })
+
+  it('keeps the command line and the spend on the label, and out of the sentence', () => {
+    // Every member of the tenant can read this table, and Phase 1 will put it
+    // on a screen. What the client reads is the note; what an operator needs —
+    // which script, which flags, what it cost us — belongs beside the command.
+    const row = retagChange({
+      clientId: CLIENT,
+      actor: scriptActor('scripts/run-tagging.ts --write --method gpt', AT),
+      method: 'gpt',
+      before: { industry: 10 },
+      after: { industry: 10 },
+      rowsAffected: 0,
+      skipped: 0,
+      costUsd: 0.312,
+    })
+    expect(row.actor.label).toBe('scripts/run-tagging.ts --write --method gpt · OpenAI $0.31200')
+    expect(row.note).not.toMatch(/\$|OpenAI|scripts\/|--write|gpt|substring|corpus/)
   })
 })
 
