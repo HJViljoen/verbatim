@@ -2,6 +2,7 @@ import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, REDDIT_COMMENT_DEPTH_CAP, REDDIT_HARVEST_POSTS, REDDIT_KEYWORD_SEARCH_POSTS, passAMinComments } from '../../config'
 import { num, str, first, toDateOnly } from '../util'
 import { tagVideo } from '../tagging'
+import { redditTimeFor } from '../../pipeline/window'
 
 // Reddit adapter (Wave 3). A subreddit post maps onto a "video" and its comment
 // tree onto `comments`, so the whole gather → gate → Pass A–D spine works
@@ -77,7 +78,11 @@ export const reddit: PlatformAdapter = {
         searchComments: false, // comments come later, and only for gate survivors
         searchCommunities: false,
         searchSort: 'relevance',
-        searchTime: periodToTimeFilter(config.report_period),
+        // Enum, not a date — same rounding as TikTok's dateRange: the run's
+        // frozen window becomes 'week' up to 8 days and 'month' past it, and
+        // the gate's `inWindow` post-filter trims the over-return. No frozen
+        // window (CLI, baseline run) keeps the period mapping.
+        searchTime: redditTimeFor(config.window) ?? periodToTimeFilter(config.report_period),
         // Its own cap, well under max_videos: keyword search is the WEAKER of
         // Reddit's two sources now that harvest exists (a keyword search cannot
         // see the ~75% of relevant posts that never mention a tracked term), and

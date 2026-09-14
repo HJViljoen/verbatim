@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { inWindow, resolveScrapeCap, capSearchPlan, buildPlatformTasks, searchStepId, searchLabel } from './gather'
+import { inWindow, resolveGatherWindow, resolveScrapeCap, capSearchPlan, buildPlatformTasks, searchStepId, searchLabel } from './gather'
 import type { SearchTask } from './gather'
 import { periodWindowDays, periodSince } from '../config'
+import type { RunWindow } from '../pipeline/window'
 import { reddit } from './platforms/reddit'
+import { tiktok } from './platforms/tiktok'
+import { instagram } from './platforms/instagram'
 import { usableTranscript } from '../pipeline/transcript-input'
 import type { GatherConfig, NormaliseCtx, VideoRef } from './types'
 
@@ -37,8 +40,34 @@ describe('periodWindowDays', () => {
     expect(periodWindowDays('weekly')).toBe(7)
     expect(periodWindowDays('monthly')).toBe(30)
     expect(periodWindowDays('anything-else')).toBe(7) // weekly is the default
+    expect(periodWindowDays('paused')).toBe(7) // a live value, not a typo
   })
 })
+
+// The run's frozen window (Phase 0 WP1). open-run decides it once; every step
+// that used to ask the clock now reads it. Absent, every path keeps the old
+// rolling answer — that is what makes this safe to deploy under an in-flight run.
+
+describe('resolveGatherWindow with a frozen window', () => {
+  const frozen: RunWindow = {
+    start: '2026-09-13T04:06:38.483Z',
+    end: '2026-09-20T04:00:00.000Z',
+    basis: 'anchored',
+  }
+
+  it('answers from the run row — no clock, no DB read', async () => {
+    const w = await resolveGatherWindow('c1', 'r1', 'weekly', frozen)
+    expect(w).toEqual({ baseline: false, since: '2026-09-13' })
+  })
+
+  it('carries a baseline run through unwindowed', async () => {
+    const w = await resolveGatherWindow('c1', 'r1', 'weekly', {
+      start: null, end: frozen.end, basis: 'baseline',
+    })
+    expect(w).toEqual({ baseline: true, since: null })
+  })
+})
+
 
 // The Reddit adapter's normalisers — the only Reddit-specific logic (search and
 // comment fetching are Apify actor calls). Fixtures below are REAL output from a
@@ -194,6 +223,38 @@ describe('reddit.videoSearch', () => {
     // at a fraction of the volume.
     expect(reddit.videoSearch!(config, ['ossur'], 70).input.maxPostsCount).toBe(20)
     expect(reddit.videoSearch!(config, ['ossur'], 5).input.maxPostsCount).toBe(5)
+  })
+})
+
+describe('search bounds from the run\'s frozen window', () => {
+  const END = '2026-09-20T04:00:00.000Z'
+  const windowed = (days: number): GatherConfig => ({
+    ...config,
+    window: { start: new Date(Date.parse(END) - days * 86_400_000).toISOString(), end: END, basis: 'anchored' },
+  })
+  const baseline: GatherConfig = { ...config, window: { start: null, end: END, basis: 'baseline' } }
+
+  it('gives Instagram the exact lower bound — its actor takes any date', () => {
+    const { input } = instagram.videoSearch!(windowed(7), ['bag'], 40, { variant: 'reels' })
+    expect(input.onlyPostsNewerThan).toBe('2026-09-13')
+  })
+
+  it('rounds TikTok and Reddit to their enums at the 8-day boundary', () => {
+    // Neither actor takes a date. A weekly cadence anchors a hair over 7 days
+    // when the slot drifts, so the week bucket has to hold past 7.
+    expect(tiktok.videoSearch!(windowed(7.2), ['bag'], 40).input.dateRange).toBe('THIS_WEEK')
+    expect(reddit.videoSearch!(windowed(7.2), ['ossur'], 40).input.searchTime).toBe('week')
+    // A run catching up on a missed week needs the wider bucket; the gate's
+    // inWindow post-filter trims whatever it over-returns.
+    expect(tiktok.videoSearch!(windowed(14), ['bag'], 40).input.dateRange).toBe('THIS_MONTH')
+    expect(reddit.videoSearch!(windowed(14), ['ossur'], 40).input.searchTime).toBe('month')
+  })
+
+  it('keeps the period-derived bound with no frozen window (CLI) or none to freeze (baseline)', () => {
+    expect(tiktok.videoSearch!(config, ['bag'], 40).input.dateRange).toBe('THIS_WEEK')
+    expect(tiktok.videoSearch!(baseline, ['bag'], 40).input.dateRange).toBe('THIS_WEEK')
+    expect(reddit.videoSearch!(baseline, ['ossur'], 40).input.searchTime).toBe('week')
+    expect(instagram.videoSearch!(baseline, ['bag'], 40).input.onlyPostsNewerThan).toBe(periodSince('weekly'))
   })
 })
 

@@ -1,5 +1,6 @@
 import type { PlatformAdapter } from '../types'
 import { APIFY_ACTORS, COMMENT_THRESHOLD, periodToTikTokRange } from '../../config'
+import { tiktokRangeFor } from '../../pipeline/window'
 import { num, str, first, getPath, toDateOnly, engagementRate } from '../util'
 import { tagVideo } from '../tagging'
 
@@ -23,7 +24,11 @@ export const tiktok: PlatformAdapter = {
       actor: APIFY_ACTORS.tiktok.video,
       input: {
         keywords: terms,
-        dateRange: periodToTikTokRange(config.report_period),
+        // The actor takes an enum, not a date, so the run's frozen window
+        // rounds to THIS_WEEK / THIS_MONTH (lib/pipeline/window.ts) and the
+        // gate's `inWindow` post-filter trims whatever the bucket over-returns.
+        // No frozen window (CLI, baseline run) keeps the period mapping.
+        dateRange: tiktokRangeFor(config.window) ?? periodToTikTokRange(config.report_period),
         maxItems: limit,
         sortType: 'RELEVANCE',
         includeSearchKeywords: false,

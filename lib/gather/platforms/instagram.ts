@@ -58,7 +58,11 @@ export const instagram: PlatformAdapter = {
         directUrls: hashtags.map((t) => `https://www.instagram.com/explore/tags/${t}/`),
         resultsType: opts?.variant ?? 'reels',
         resultsLimit: limit,
-        onlyPostsNewerThan: periodSince(config.report_period),
+        // The run's frozen window when there is one — the actor takes any date,
+        // so it gets the exact lower bound. A baseline run has none: it keeps
+        // the period-derived date, exactly as before (a search bound is the
+        // platform's, not the run's).
+        onlyPostsNewerThan: config.window?.start?.slice(0, 10) ?? periodSince(config.report_period),
       },
     }
   },
