@@ -146,6 +146,76 @@ function previousMonth(month: string): string {
   return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
 }
 
+/**
+ * The `count` calendar months that had already ENDED at `instant`, oldest first.
+ *
+ * The anomaly check's left-hand side is a week and its right-hand side is "the
+ * trailing three complete months" — complete as at the moment the week began,
+ * not as at today, so a replay of an old week reads the baseline that week
+ * actually had. The month the instant falls in is never complete (it is still
+ * filling); the first instant of a month is the one edge case, and there the
+ * month before it has just ended and counts.
+ */
+export function trailingCompleteMonths(instant: string, count: number): string[] {
+  const t = new Date(instant).getTime()
+  if (Number.isNaN(t)) throw new Error(`trailingCompleteMonths: not a date: ${instant}`)
+  let m = monthStartOf(instant)
+  for (let guard = 0; guard < 24 && new Date(monthEndInstant(m)).getTime() > t; guard++) m = previousMonth(m)
+  const out: string[] = []
+  for (let i = 0; i < count; i++) {
+    out.unshift(m)
+    m = previousMonth(m)
+  }
+  return out
+}
+
+// ---- ISO weeks ---------------------------------------------------------------
+// The week is the anomaly check's unit and nothing else in the product speaks
+// it. ISO, in UTC, because `comments.comment_date` is stored at UTC midnight and
+// a week that starts at the server's local midnight would move a video between
+// weeks depending on where the process happened to run.
+
+/** The ISO year and week a UTC date falls in. */
+export function isoWeekOf(iso: string): { year: number; week: number } {
+  const d = new Date(`${iso.slice(0, 10)}T00:00:00.000Z`)
+  if (Number.isNaN(d.getTime())) throw new Error(`isoWeekOf: not a date: ${iso}`)
+  // The Thursday of a week decides which year the week belongs to.
+  const thursday = new Date(d.getTime() + (4 - (d.getUTCDay() || 7)) * DAY_MS)
+  const year = thursday.getUTCFullYear()
+  const jan1 = Date.UTC(year, 0, 1)
+  return { year, week: Math.floor((thursday.getTime() - jan1) / (7 * DAY_MS)) + 1 }
+}
+
+/** `2026-W37`, the label a replay prints. */
+export const isoWeekLabel = (w: { year: number; week: number }): string => `${w.year}-W${String(w.week).padStart(2, '0')}`
+
+/** One ISO week as a half-open window, Monday 00:00 UTC to the next Monday. */
+export interface IsoWeek {
+  year: number
+  week: number
+  label: string
+  from: string
+  to: string
+}
+
+/** The `count` ISO weeks that had fully ENDED before `now`, oldest first. The
+ *  week `now` falls in is never one of them: a part-week is not a week, and the
+ *  check's whole point is a like-for-like comparison. */
+export function completeWeeksBefore(now: string, count: number): IsoWeek[] {
+  const d = new Date(now)
+  if (Number.isNaN(d.getTime())) throw new Error(`completeWeeksBefore: not a date: ${now}`)
+  const midnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+  const mondayOfThisWeek = midnight - ((d.getUTCDay() || 7) - 1) * DAY_MS
+  const out: IsoWeek[] = []
+  for (let back = count; back >= 1; back--) {
+    const from = mondayOfThisWeek - back * 7 * DAY_MS
+    const fromIso = new Date(from).toISOString()
+    const w = isoWeekOf(fromIso)
+    out.push({ ...w, label: isoWeekLabel(w), from: fromIso, to: new Date(from + 7 * DAY_MS).toISOString() })
+  }
+  return out
+}
+
 // ---- Keys and freeze state ---------------------------------------------------
 
 /** A denominator row's identity: the table's primary key, minus the tenant. */

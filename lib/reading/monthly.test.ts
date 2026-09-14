@@ -13,6 +13,10 @@ import {
   monthsBetween,
   monthsToRefresh,
   nextMonth,
+  completeWeeksBefore,
+  isoWeekLabel,
+  isoWeekOf,
+  trailingCompleteMonths,
   themeReadingKey,
   windowOf,
 } from './monthly'
@@ -497,6 +501,71 @@ describe('the migration and this module say the same thing', () => {
     const themeBlock = sql.slice(sql.indexOf(`create table if not exists public.${TABLE_THEME_READINGS}`))
     for (const c of [...columns, 'theme_id', 'excluded_on_camera', 'excluded_undated']) {
       expect(themeBlock).toContain(c)
+    }
+  })
+})
+
+// The calendar the anomaly check reads: complete weeks, and the complete months
+// behind them (WP4). Every boundary here is UTC.
+
+describe('trailing complete months', () => {
+  it('excludes the month the instant falls in — it is still filling', () => {
+    expect(trailingCompleteMonths('2026-09-07T00:00:00.000Z', 3)).toEqual(['2026-06-01', '2026-07-01', '2026-08-01'])
+  })
+
+  it('steps back a month for a week that starts before its month has ended', () => {
+    // ISO week 36 begins 31 August: August has not ended, so the baseline is May–July.
+    expect(trailingCompleteMonths('2026-08-31T00:00:00.000Z', 3)).toEqual(['2026-05-01', '2026-06-01', '2026-07-01'])
+  })
+
+  it('counts a month that ended on the very instant asked about', () => {
+    expect(trailingCompleteMonths('2026-09-01T00:00:00.000Z', 1)).toEqual(['2026-08-01'])
+  })
+
+  it('crosses a year boundary', () => {
+    expect(trailingCompleteMonths('2026-02-10T00:00:00.000Z', 3)).toEqual(['2025-11-01', '2025-12-01', '2026-01-01'])
+  })
+})
+
+describe('ISO weeks', () => {
+  it('reads the week a date falls in', () => {
+    expect(isoWeekOf('2026-06-29')).toEqual({ year: 2026, week: 27 })
+    expect(isoWeekOf('2026-07-05')).toEqual({ year: 2026, week: 27 })
+    expect(isoWeekOf('2026-09-07')).toEqual({ year: 2026, week: 37 })
+    expect(isoWeekOf('2026-09-13')).toEqual({ year: 2026, week: 37 })
+    // 1 January 2026 is a Thursday, so it belongs to week 1 of 2026…
+    expect(isoWeekOf('2026-01-01')).toEqual({ year: 2026, week: 1 })
+    // …and the Monday of that week is still December 2025.
+    expect(isoWeekOf('2025-12-29')).toEqual({ year: 2026, week: 1 })
+  })
+
+  it('labels a week the way the replay prints it', () => {
+    expect(isoWeekLabel({ year: 2026, week: 7 })).toBe('2026-W07')
+    expect(isoWeekLabel({ year: 2026, week: 37 })).toBe('2026-W37')
+  })
+
+  it('gives the eleven complete weeks behind 15 September 2026 as W27–W37', () => {
+    const weeks = completeWeeksBefore('2026-09-15T09:00:00.000Z', 11)
+    expect(weeks).toHaveLength(11)
+    expect(weeks.map((w) => w.label)).toEqual([
+      '2026-W27', '2026-W28', '2026-W29', '2026-W30', '2026-W31', '2026-W32',
+      '2026-W33', '2026-W34', '2026-W35', '2026-W36', '2026-W37',
+    ])
+    expect(weeks[0].from).toBe('2026-06-29T00:00:00.000Z')
+    expect(weeks.at(-1)?.from).toBe('2026-09-07T00:00:00.000Z')
+    expect(weeks.at(-1)?.to).toBe('2026-09-14T00:00:00.000Z')
+  })
+
+  it('never includes the week the clock is standing in', () => {
+    // A Monday: the week that began this morning is not complete.
+    const weeks = completeWeeksBefore('2026-09-14T00:00:00.000Z', 1)
+    expect(weeks[0].label).toBe('2026-W37')
+    expect(new Date(weeks[0].to).getTime()).toBeLessThanOrEqual(new Date('2026-09-14T00:00:00.000Z').getTime())
+  })
+
+  it('hands each week to the reading as a half-open window of exactly seven days', () => {
+    for (const w of completeWeeksBefore('2026-09-15T00:00:00.000Z', 11)) {
+      expect(new Date(w.to).getTime() - new Date(w.from).getTime()).toBe(7 * 86_400_000)
     }
   })
 })
