@@ -24,8 +24,8 @@
 --   * The trigger can never name a HUMAN for the writes that matter. Measured
 --     in production: a tenant's session client presents as `authenticated` with
 --     auth.uid() = that person; the service role presents as `service_role`
---     with auth.uid() NULL; the SQL editor presents as `postgres` with
---     auth.uid() NULL. The workspace switcher (lib/auth.ts) hands a platform
+--     with auth.uid() NULL; the SQL editor carries no JWT claims at all and
+--     logs in as `postgres`. The workspace switcher (lib/auth.ts) hands a platform
 --     admin's writes to the SERVICE-ROLE client, so exactly the operator edits
 --     worth logging arrive as an anonymous robot — indistinguishable from the
 --     pipeline's own subreddit write. So `tracking_configs.last_actor` carries
@@ -114,7 +114,7 @@ grant select on public.config_changes to authenticated;
 alter table public.tracking_configs add column if not exists last_actor jsonb;
 
 comment on column public.tracking_configs.last_actor is
-  'Who made the most recent write to this row: {kind, user_id, label, at, run_id?}, set by the write site (lib/config-log.ts withActor). Read by the tracking_configs_audit trigger and then of no further interest — the log is the record, this column is only the channel. A session-client write cannot forge it: the trigger pins kind and user_id from the JWT whenever current_user is ''authenticated''.';
+  'Who made the most recent write to this row: {kind, user_id, label, at, run_id?}, set by the write site (lib/config-log.ts withActor). Read by the tracking_configs_audit trigger and then of no further interest — the log is the record, this column is only the channel. A session-client write cannot forge it: the trigger pins kind and user_id from the JWT whenever the caller''s JWT role is ''authenticated''.';
 
 -- The tenant's own settings form writes two of the four term columns through
 -- the session client (T0-2 revoked the rest), so without this grant every
@@ -142,15 +142,16 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_old   jsonb := to_jsonb(OLD);
-  v_new   jsonb := to_jsonb(NEW);
-  v_actor jsonb := null;
-  v_col   text;
-  v_kind  text;
-  v_user  uuid := null;
-  v_label text := null;
-  v_run   uuid := null;
-  v_uid   uuid := null;
+  v_old    jsonb := to_jsonb(OLD);
+  v_new    jsonb := to_jsonb(NEW);
+  v_actor  jsonb := null;
+  v_col    text;
+  v_kind   text;
+  v_user   uuid := null;
+  v_label  text := null;
+  v_run    uuid := null;
+  v_uid    uuid := null;
+  v_caller text;
 begin
   -- A stamp only counts when it is fresh. A row re-saved with the same actor
   -- jsonb it already had is a write that did not say who made it.
@@ -165,6 +166,20 @@ begin
     v_uid := null;
   end;
 
+  -- WHO CONNECTED. Not `current_user`: inside a SECURITY DEFINER function that
+  -- is the function's OWNER, so every caller would read as `postgres` and the
+  -- forgery guard below would never fire (found by exercising this trigger on a
+  -- throwaway cluster before it was ever applied). The JWT's role claim is set
+  -- per request by PostgREST and is untouched by SECURITY DEFINER; a connection
+  -- with no claims at all — the SQL editor, the management API — falls back to
+  -- the login role, which is `postgres` for exactly those.
+  begin
+    v_caller := nullif(auth.role(), '');
+  exception when others then
+    v_caller := null;
+  end;
+  v_caller := coalesce(v_caller, session_user);
+
   if v_actor is not null then
     v_kind  := coalesce(v_actor ->> 'kind', '');
     v_label := nullif(v_actor ->> 'label', '');
@@ -176,19 +191,19 @@ begin
     -- they are mutually indistinguishable here, which is the whole reason
     -- last_actor exists. 'pipeline' is the honest default for it because the
     -- pipeline is the only UNSTAMPED service-role writer left in the repo.
-    v_kind  := case current_user
-                 when 'service_role' then 'pipeline'
-                 when 'postgres'     then 'sql'
-                 else 'user'
+    v_kind  := case v_caller
+                 when 'service_role'  then 'pipeline'
+                 when 'authenticated' then 'user'
+                 else 'sql'
                end;
     v_user  := v_uid;
-    v_label := current_user;
+    v_label := v_caller;
   end if;
 
   -- A browser-reachable write may not claim to be anything but the person
   -- holding the JWT. The column grant makes last_actor writable by the tenant's
   -- own session, so identity here comes from auth.uid(), never from the payload.
-  if current_user = 'authenticated' then
+  if v_caller = 'authenticated' then
     v_user := v_uid;
     v_run  := null;
     if v_kind not in ('user', 'operator') then v_kind := 'user'; end if;
@@ -252,6 +267,16 @@ create trigger tracking_configs_audit
   after update on public.tracking_configs
   for each row execute function public.tracking_configs_audit();
 
+-- Exercised before it was ever applied, on a throwaway PostgreSQL 17 cluster
+-- with a stub of this schema: hand-run SQL logs `sql`/postgres; the service
+-- role unstamped logs `pipeline`; the switcher (service role + an operator
+-- stamp) logs `operator` with the real person's id; a browser session cannot
+-- forge a kind, a user or a run; a malformed stamp is normalised rather than
+-- aborting the config write; an updated_at-only write logs nothing; a member
+-- reads only their own tenant's log and can insert none of it; and the file
+-- applies twice without error. That is also how the current_user bug above was
+-- found.
+--
 -- Post-apply checks (run by hand, read-only):
 --   select count(*) from public.config_changes;                                  -- 0
 --   select tgname from pg_trigger where tgrelid = 'public.tracking_configs'::regclass and not tgisinternal;
