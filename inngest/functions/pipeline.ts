@@ -32,7 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
-import { buildConfigSnapshot, openRunBookkeeping, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
+import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -106,6 +106,11 @@ interface OpenRunResult {
  * on a resume — the window the row already carries plus whether it already
  * carries a config snapshot. Read once, inside open-run, so no later step asks
  * again.
+ *
+ * Every read here names columns the bookkeeping migration adds, and none of the
+ * three errors are read: before the migration lands each comes back empty,
+ * which lands on the same answers the pre-2026-09-15 code had (no anchor, no
+ * stored window) — and open-run then writes without the columns at all.
  */
 async function loadRunWindowInput(
   admin: ReturnType<typeof createAdminClient>,
@@ -278,7 +283,18 @@ export const runPipeline = inngest.createFunction(
         stored: windowInput.stored,
       })
       const snapshot = buildConfigSnapshot(tc)
-      if (options.runId) {
+      // The bookkeeping migration is applied by hand (a schema change on a live
+      // pipeline is not a deploy side effect), so the code CAN reach production
+      // first. Every one of these columns is additive, so a write that names
+      // them before they exist comes back 42703/PGRST204 and the same write
+      // without them is exactly what every run did before this shipped —
+      // whereas failing here would fail the first step of every run for every
+      // tenant until someone applied the migration. The run then carries no
+      // frozen window and every reader falls back to the clock, as a
+      // pre-2026-09-15 row does. Same guard as ocr.ts and Pass D-b's lineage.
+      let recorded = true
+      const resumeRunId = options.runId
+      if (resumeRunId) {
         // started_at moves to NOW. It is set only at insert, and a resumed run
         // is by definition hours old, so leaving it would make every resumed
         // run instantly "abandoned" to the next open-run — which would stamp a
@@ -292,36 +308,48 @@ export const runPipeline = inngest.createFunction(
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
-        const { error } = await admin
-          .from('pipeline_runs')
-          .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, stalled: false, ...bookkeeping })
-          .eq('id', options.runId).eq('client_id', clientId)
+        const reopen = (extra: Record<string, unknown>) =>
+          admin
+            .from('pipeline_runs')
+            .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
+            .eq('id', resumeRunId).eq('client_id', clientId)
+        let { error } = await reopen({ stalled: false, ...bookkeeping })
+        if (error && isMissingBookkeepingColumn(error)) {
+          console.warn('[open-run] run bookkeeping columns are not in the database yet; reopening without them')
+          recorded = false
+          ;({ error } = await reopen({}))
+        }
         if (error?.code === PG_UNIQUE_VIOLATION) return { runId: null, skipped: 'another run opened first (unique index)' }
         if (error) throw new Error(`reopen run: ${error.message}`)
-        return { runId: options.runId, flags, period, window }
+        return { runId: resumeRunId, flags, period, ...(recorded ? { window } : {}) }
       }
-      const { error } = await admin
-        .from('pipeline_runs')
-        .insert({
-          id: newRunId, client_id: clientId, status: 'running', flags, options,
-          ...openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }),
-        })
+      const open = (extra: Record<string, unknown>) =>
+        admin
+          .from('pipeline_runs')
+          .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...extra })
+      let { error } = await open(openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }))
+      if (error && isMissingBookkeepingColumn(error)) {
+        console.warn('[open-run] run bookkeeping columns are not in the database yet; opening without them')
+        recorded = false
+        ;({ error } = await open({}))
+      }
       if (error?.code === PG_UNIQUE_VIOLATION) {
         // Either our own previous attempt's row (same id), or another run won
         // the race for this client (different id).
         const { data: ours } = await admin.from('pipeline_runs')
-          .select('id, window_start, window_end, window_basis').eq('id', newRunId).eq('client_id', clientId).maybeSingle()
+          .select(recorded ? 'id, window_start, window_end, window_basis' : 'id')
+          .eq('id', newRunId).eq('client_id', clientId).maybeSingle()
         if (ours) {
           console.warn(`[open-run] reusing run ${newRunId} from a previous attempt of this step`)
           // The row's own window, not the one just computed: the previous
           // attempt gathered against what it wrote, and a second clock reading
           // is exactly what this work exists to stop.
-          return { runId: newRunId, flags, period, window: rowWindow(ours as WindowColumns) ?? window }
+          return { runId: newRunId, flags, period, ...(recorded ? { window: rowWindow(ours as WindowColumns) ?? window } : {}) }
         }
         return { runId: null, skipped: 'another run opened first (unique index)' }
       }
       if (error) throw new Error(`open run: ${error.message}`)
-      return { runId: newRunId, flags, period, window }
+      return { runId: newRunId, flags, period, ...(recorded ? { window } : {}) }
     })
     // Pre-2026-08-18 memoised shape: the step returned the run id itself.
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
@@ -1330,14 +1358,29 @@ export const runPipeline = inngest.createFunction(
       const { data: row } = await admin.from('pipeline_runs')
         .select('started_at').eq('id', runId).maybeSingle()
       const startedAt = (row?.started_at as string | undefined) ?? completedAt
-      await admin.from('pipeline_runs').update({
-        status: runCloseStatus(totalErrors),
-        videos_scraped: totalVideos,
-        completed_at: completedAt,
-        errors: runErrors,
-        error_message: summariseRunErrors(totalErrors, runErrors),
-        stalled: isStalled({ startedAt, completedAt, window: runWindow }),
-      }).eq('id', runId)
+      const close = (extra: Record<string, unknown>) =>
+        admin.from('pipeline_runs').update({
+          status: runCloseStatus(totalErrors),
+          videos_scraped: totalVideos,
+          completed_at: completedAt,
+          errors: runErrors,
+          error_message: summariseRunErrors(totalErrors, runErrors),
+          ...extra,
+        }).eq('id', runId)
+      // Same "the migration has not landed yet" tolerance as open-run, and it
+      // matters more here: this update's error was never read, so a missing
+      // `stalled` column would have left the run at 'running' for ever with
+      // nothing said about it.
+      const { error } = await close({ stalled: isStalled({ startedAt, completedAt, window: runWindow }) })
+      if (error && isMissingBookkeepingColumn(error)) {
+        console.warn('[close-run] `stalled` is not in the database yet; closing without it')
+        await close({})
+      } else if (error) {
+        // Any other failure keeps the behaviour it has always had (the error
+        // was never read) — but says so, rather than leaving a run at
+        // 'running' with no line anywhere. Making it fatal belongs to WP9.
+        console.error(`[close-run] ${error.message}`)
+      }
     })
 
     // 7a-i. Settle the Apify ledger BEFORE reading it. `usageTotalUsd` on a

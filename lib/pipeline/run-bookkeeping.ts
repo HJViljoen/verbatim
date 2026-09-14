@@ -1,4 +1,5 @@
 import { dbSafeJson } from '../db-text'
+import { isMissingColumnError } from '../supabase-admin'
 import { periodWindowDays } from '../config'
 import type { RunWindow, WindowBasis } from './window'
 
@@ -82,6 +83,34 @@ export interface WindowColumns {
 export function rowWindow(row: WindowColumns | null | undefined): RunWindow | null {
   if (!row?.window_end || !row.window_basis) return null
   return { start: row.window_start ?? null, end: row.window_end, basis: row.window_basis as WindowBasis }
+}
+
+/** The columns 20260915090000_run_bookkeeping.sql adds to `pipeline_runs`. */
+export const BOOKKEEPING_COLUMNS = [
+  'scheduled_for',
+  'window_start',
+  'window_end',
+  'window_basis',
+  'period',
+  'stalled',
+  'config_snapshot',
+] as const
+
+/**
+ * Is this the error a bookkeeping write gets before its migration lands?
+ *
+ * The migration is applied by hand, deliberately (it is a schema change on a
+ * live pipeline), so a deploy CAN reach production first — and the columns are
+ * additive, which means the same write without them is exactly the behaviour
+ * every run had before this shipped. Without this test, open-run would come
+ * back 42703/PGRST204, exhaust its retries, and onFailure would mark every
+ * tenant's run failed and email about it until someone noticed.
+ *
+ * The same shape as the guards in lib/pipeline/ocr.ts and Pass D-b's lineage
+ * write: narrow, named columns only, never a blanket swallow.
+ */
+export function isMissingBookkeepingColumn(error: unknown): boolean {
+  return BOOKKEEPING_COLUMNS.some((column) => isMissingColumnError(error, column))
 }
 
 export interface OpenRunBookkeepingInput {

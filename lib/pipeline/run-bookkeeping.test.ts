@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
+  BOOKKEEPING_COLUMNS,
   buildConfigSnapshot,
+  isMissingBookkeepingColumn,
   openRunBookkeeping,
   rowWindow,
   reconstructWindow,
@@ -159,6 +161,34 @@ describe('openRunBookkeeping — what a resume may and may not rewrite', () => {
       resume: { hasConfigSnapshot: true },
     })
     expect(w.scheduled_for).toBe('2026-09-27T04:00:00.000Z')
+  })
+})
+
+describe('isMissingBookkeepingColumn — surviving a deploy that lands before its migration', () => {
+  it('recognises 42703 on any bookkeeping column', () => {
+    for (const column of BOOKKEEPING_COLUMNS) {
+      expect(isMissingBookkeepingColumn({
+        code: '42703',
+        message: `column "${column}" of relation "pipeline_runs" does not exist`,
+      })).toBe(true)
+    }
+  })
+
+  it('recognises the PostgREST schema-cache miss too', () => {
+    expect(isMissingBookkeepingColumn({
+      code: 'PGRST204',
+      message: "Could not find the 'window_basis' column of 'pipeline_runs' in the schema cache",
+    })).toBe(true)
+  })
+
+  it('does not swallow a real write failure', () => {
+    // Narrow on purpose: the point is to survive a deploy ordering, not to let
+    // open-run pretend a broken insert worked.
+    expect(isMissingBookkeepingColumn({ code: '23505', message: 'duplicate key value violates unique constraint' })).toBe(false)
+    expect(isMissingBookkeepingColumn({ code: '23514', message: 'new row violates check constraint "pipeline_runs_window_basis_check"' })).toBe(false)
+    expect(isMissingBookkeepingColumn({ code: '42703', message: 'column "videos_scraped" does not exist' })).toBe(false)
+    expect(isMissingBookkeepingColumn(null)).toBe(false)
+    expect(isMissingBookkeepingColumn('42703')).toBe(false)
   })
 })
 
