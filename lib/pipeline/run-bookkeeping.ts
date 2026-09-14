@@ -84,6 +84,55 @@ export function rowWindow(row: WindowColumns | null | undefined): RunWindow | nu
   return { start: row.window_start ?? null, end: row.window_end, basis: row.window_basis as WindowBasis }
 }
 
+export interface OpenRunBookkeepingInput {
+  /** The run's effective period, frozen at open. */
+  period: string
+  /** The window just frozen (or, on a resume, the one kept from the row). */
+  window: RunWindow
+  /** The dispatcher slot this INVOCATION was asked to serve, if any. */
+  scheduledFor?: string | null
+  /** The config slice read at open — `buildConfigSnapshot`'s output. */
+  snapshot: Record<string, unknown>
+  /** Present when this is an analysis-only resume of a row that already exists. */
+  resume?: { hasConfigSnapshot: boolean } | null
+}
+
+/**
+ * The bookkeeping columns a run writes at open.
+ *
+ * On a fresh run every column is this run's own: the slot the dispatcher named
+ * (explicitly null on a manual run — the distinction is the point), the window
+ * just frozen, the configuration it read.
+ *
+ * An analysis-only resume is different, and the difference is easy to get
+ * wrong: the row already belongs to a run that happened. Which slot that run
+ * served and which configuration it gathered under are facts about THAT run,
+ * and `POST /api/admin/trigger-run {runId, skipGather:true}` — the documented
+ * resume lever — carries neither. Writing them anyway would turn Sunday's
+ * scheduled run into a manual one the moment its analysis half was resumed, so
+ * that "was Sunday's run started?" answers no for a slot that was served. So:
+ * the slot is written only when the resume event carries one of its own, and
+ * the snapshot only when the row carries none (the resume's analysis half does
+ * read today's config, so a row with nothing on it is better served by that
+ * than by nothing at all).
+ */
+export function openRunBookkeeping(input: OpenRunBookkeepingInput): Record<string, unknown> {
+  const window = {
+    period: input.period,
+    window_start: input.window.start,
+    window_end: input.window.end,
+    window_basis: input.window.basis,
+  }
+  if (!input.resume) {
+    return { ...window, scheduled_for: input.scheduledFor ?? null, config_snapshot: input.snapshot }
+  }
+  return {
+    ...window,
+    ...(input.scheduledFor ? { scheduled_for: input.scheduledFor } : {}),
+    ...(input.resume.hasConfigSnapshot ? {} : { config_snapshot: input.snapshot }),
+  }
+}
+
 /**
  * The window a historical run covered, from the rule its own code was
  * following: [started_at − periodWindowDays(period), started_at]. A label, not

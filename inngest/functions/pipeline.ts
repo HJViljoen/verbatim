@@ -32,7 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
-import { buildConfigSnapshot, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
+import { buildConfigSnapshot, openRunBookkeeping, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -101,16 +101,18 @@ interface OpenRunResult {
 }
 
 /**
- * What `resolveRunWindow` needs from the DB: the previous run's end, whether a
- * `run_summary` exists (baseline-vs-flow), and — on a resume — the window the
- * row already carries. Read once, inside open-run, so no later step asks again.
+ * What open-run needs from the DB before it can write its bookkeeping: the
+ * previous run's end, whether a `run_summary` exists (baseline-vs-flow), and —
+ * on a resume — the window the row already carries plus whether it already
+ * carries a config snapshot. Read once, inside open-run, so no later step asks
+ * again.
  */
 async function loadRunWindowInput(
   admin: ReturnType<typeof createAdminClient>,
   clientId: string,
   runId: string,
   resumeRunId: string | undefined,
-): Promise<{ prevEnd: string | null; hasSummary: boolean; stored: RunWindow | null }> {
+): Promise<{ prevEnd: string | null; hasSummary: boolean; stored: RunWindow | null; hasConfigSnapshot: boolean }> {
   const mine = new Set([runId, resumeRunId].filter(Boolean) as string[])
   const [prevRes, summaryRes, storedRes] = await Promise.all([
     // The previous run's own window_end, falling back to when it closed — the
@@ -128,16 +130,18 @@ async function loadRunWindowInput(
     // always made: a closed synthesis, not merely an earlier run row.
     admin.from('run_summary').select('run_id').eq('client_id', clientId).neq('run_id', runId).limit(1).maybeSingle(),
     resumeRunId
-      ? admin.from('pipeline_runs').select('window_start, window_end, window_basis')
+      ? admin.from('pipeline_runs').select('window_start, window_end, window_basis, config_snapshot')
           .eq('id', resumeRunId).eq('client_id', clientId).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
   const prev = ((prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[])
     .find((r) => !mine.has(r.id))
+  const storedRow = storedRes.data as (WindowColumns & { config_snapshot?: unknown }) | null
   return {
     prevEnd: prev?.window_end ?? prev?.completed_at ?? null,
     hasSummary: Boolean(summaryRes.data),
-    stored: rowWindow(storedRes.data as WindowColumns | null),
+    stored: rowWindow(storedRow),
+    hasConfigSnapshot: Boolean(storedRow?.config_snapshot),
   }
 }
 
@@ -273,19 +277,21 @@ export const runPipeline = inngest.createFunction(
         hasSummary: windowInput.hasSummary,
         stored: windowInput.stored,
       })
-      const bookkeeping = {
-        period,
-        scheduled_for: options.scheduledFor ?? null,
-        window_start: window.start,
-        window_end: window.end,
-        window_basis: window.basis,
-        config_snapshot: buildConfigSnapshot(tc),
-      }
+      const snapshot = buildConfigSnapshot(tc)
       if (options.runId) {
         // started_at moves to NOW. It is set only at insert, and a resumed run
         // is by definition hours old, so leaving it would make every resumed
         // run instantly "abandoned" to the next open-run — which would stamp a
         // live run failed and open a second one alongside it.
+        //
+        // The bookkeeping is NOT simply rewritten: the slot the original run
+        // served and the config it gathered under are its facts, not this
+        // invocation's (lib/pipeline/run-bookkeeping.ts).
+        const bookkeeping = openRunBookkeeping({
+          period, window, snapshot,
+          scheduledFor: options.scheduledFor,
+          resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
+        })
         const { error } = await admin
           .from('pipeline_runs')
           .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, stalled: false, ...bookkeeping })
@@ -296,7 +302,10 @@ export const runPipeline = inngest.createFunction(
       }
       const { error } = await admin
         .from('pipeline_runs')
-        .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...bookkeeping })
+        .insert({
+          id: newRunId, client_id: clientId, status: 'running', flags, options,
+          ...openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }),
+        })
       if (error?.code === PG_UNIQUE_VIOLATION) {
         // Either our own previous attempt's row (same id), or another run won
         // the race for this client (different id).
