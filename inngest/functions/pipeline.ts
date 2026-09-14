@@ -1275,6 +1275,7 @@ export const runPipeline = inngest.createFunction(
           themes: r.themes.written,
           frozen: r.denominators.frozen + r.themes.frozen,
           keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
+          heldStale: r.denominators.heldStale + r.themes.heldStale,
         }
       })
       .catch((e) => {

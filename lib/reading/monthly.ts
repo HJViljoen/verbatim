@@ -189,8 +189,14 @@ export interface MergeResult<T> {
    *  with no videos left in that month. They are deleted: `filling` means
    *  "this is what the current clustering says", and a stale row would be a
    *  number from a clustering nobody is using any more. Frozen rows are never
-   *  in here. */
+   *  in here, and neither is anything when `emptyReading`. */
   stale: StoredFreeze[]
+  /** The fresh reading carried NO rows at all. */
+  emptyReading: boolean
+  /** Filling rows a non-empty reading would have deleted and this merge left
+   *  standing, because the reading was empty. Loud on purpose: a run in this
+   *  state wrote nothing and kept everything, and someone has to know. */
+  heldStale: number
 }
 
 /**
@@ -206,6 +212,18 @@ export interface MergeResult<T> {
  * months in between as well — and those arrive with no stored row read for
  * them, which would make a frozen April look new and overwrite it. A fresh row
  * whose month was not asked for is therefore dropped here.
+ *
+ * A reading that comes back completely empty is NOT "the clustering dropped
+ * every theme" — it is no reading at all, and it deletes nothing. The shape
+ * that produces it is ordinary: `persist-themes` writes `theme_observations`
+ * only inside its registry block, that block is gated on an env flag
+ * (`THEME_REGISTRY`) and wrapped in a catch that logs and lets the run close
+ * `completed`, so a run with a registry failure — or any run after the flag is
+ * unset — reaches this merge with zero observations. Treating that as an empty
+ * clustering would delete every filling row in the months read, and on a visit
+ * that was going to freeze them it would erase the month for good: no filling
+ * row means no later visit, and the Pass A prune makes it unrecomputable for
+ * that clustering. The rows are held instead, and the caller says so.
  */
 export function mergeMonthRows<T extends { month: string }>(args: {
   /** The months the fresh reading covered. Stored rows outside them are not
@@ -238,10 +256,17 @@ export function mergeMonthRows<T extends { month: string }>(args: {
     writes.push({ ...row, month, ...freezeFor(month, now, prior), read_at: now, run_id: runId })
   }
 
-  const stale = stored.filter(
+  const dropped = stored.filter(
     (s) => s.status === 'filling' && inWindow.has(monthStartOf(s.month)) && !freshKeys.has(s.key),
   )
-  return { writes, keptFrozen, stale }
+  const emptyReading = fresh.length === 0
+  return {
+    writes,
+    keptFrozen,
+    stale: emptyReading ? [] : dropped,
+    emptyReading,
+    heldStale: emptyReading ? dropped.length : 0,
+  }
 }
 
 // ---- Reading and writing ------------------------------------------------------
@@ -394,10 +419,20 @@ async function writeRows<T extends object>(
   return written
 }
 
+export interface FreezeSide {
+  written: number
+  frozen: number
+  keptFrozen: number
+  deleted: number
+  /** Filling rows left standing because the reading came back empty — see
+   *  `mergeMonthRows`. Anything but 0 means this run read nothing. */
+  heldStale: number
+}
+
 export interface FreezeSummary {
   months: string[]
-  denominators: { written: number; frozen: number; keptFrozen: number; deleted: number }
-  themes: { written: number; frozen: number; keptFrozen: number; deleted: number }
+  denominators: FreezeSide
+  themes: FreezeSide
 }
 
 /**
@@ -422,8 +457,8 @@ export async function freezeMonths(
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
   const empty: FreezeSummary = {
     months,
-    denominators: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0 },
-    themes: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0 },
+    denominators: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0 },
+    themes: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0 },
   }
   const window = windowOf(months)
   if (!window) return empty
@@ -438,7 +473,9 @@ export async function freezeMonths(
 
   // Theme readings. A run is required: a theme number without a clustering to
   // attribute it to is not a reading of anything.
-  let themeMerge: MergeResult<ThemeReading> = { writes: [], keptFrozen: 0, stale: [] }
+  let themeMerge: MergeResult<ThemeReading> = {
+    writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0,
+  }
   if (opts.runId) {
     const freshThemes = await readThemeReadings(admin, opts.clientId, opts.runId, window)
     const storedThemes = await storedThemeReadings(admin, opts.clientId, months)
@@ -455,13 +492,27 @@ export async function freezeMonths(
       frozen: denomRows.filter((r) => r.status === 'frozen').length,
       keptFrozen: denomMerge.keptFrozen,
       deleted: denomMerge.stale.length,
+      heldStale: denomMerge.heldStale,
     },
     themes: {
       written: themeRows.length,
       frozen: themeRows.filter((r) => r.status === 'frozen').length,
       keptFrozen: themeMerge.keptFrozen,
       deleted: themeMerge.stale.length,
+      heldStale: themeMerge.heldStale,
     },
+  }
+  // An empty reading is a failure, not a result, and the rows it did not delete
+  // are the only copy of those months. Say so wherever this runs — the pipeline
+  // step, the inspector, a backfill — rather than leaving it to a caller.
+  for (const [what, merge] of [['denominator', denomMerge], ['theme', themeMerge]] as const) {
+    if (merge.emptyReading && merge.heldStale > 0) {
+      console.error(
+        `[monthly-reading] the ${what} reading for ${opts.clientId} came back EMPTY over ` +
+        `${months.join(' ')} — ${merge.heldStale} filling rows held rather than deleted. ` +
+        'Nothing was written for those months; find out why before the next run freezes them.',
+      )
+    }
   }
   if (opts.dryRun) return summary
 

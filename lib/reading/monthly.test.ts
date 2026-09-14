@@ -286,6 +286,49 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect(result.writes.map((w) => w.month)).toEqual(['2026-03-01', '2026-09-01'])
   })
 
+  it('holds every filling row when the reading comes back empty — that is no reading, not an empty clustering', () => {
+    // The live shape: persist-themes writes theme_observations only inside its
+    // registry block, which is env-flagged and swallows its own failure, so a
+    // run can reach here having written none. Deleting on that answer erases
+    // the months for good — no filling row means no later visit, and the Pass A
+    // prune makes the clustering unrecomputable.
+    const held = [
+      stored({ key: '2026-08-01|industry-other|t1', month: '2026-08-01', theme_id: 't1' }),
+      stored({ key: '2026-09-01|industry-other|t2', month: '2026-09-01', theme_id: 't2' }),
+    ]
+    const result = mergeMonthRows({
+      months, fresh: [] as ThemeReading[], stored: held, keyOf: themeReadingKey, now, runId: RUN,
+    })
+    expect(result.writes).toEqual([])
+    expect(result.stale).toEqual([])
+    expect(result.emptyReading).toBe(true)
+    expect(result.heldStale).toBe(2)
+  })
+
+  it('still drops a row the clustering dropped when the rest of the reading arrived', () => {
+    const gone = stored({ key: '2026-08-01|industry-other|t-dropped', month: '2026-08-01', theme_id: 't-dropped' })
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('2026-09-01', 'industry-other', 't1', 5)],
+      stored: [gone],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+    })
+    expect(result.emptyReading).toBe(false)
+    expect(result.heldStale).toBe(0)
+    expect(result.stale.map((s) => s.key)).toEqual([gone.key])
+  })
+
+  it('holds nothing when there was nothing stored to hold', () => {
+    const result = mergeMonthRows({
+      months, fresh: [] as ThemeReading[], stored: [], keyOf: themeReadingKey, now, runId: RUN,
+    })
+    expect(result.emptyReading).toBe(true)
+    expect(result.heldStale).toBe(0)
+    expect(result.stale).toEqual([])
+  })
+
   it('writes a seed with no run as run_id null rather than inventing one', () => {
     const result = mergeMonthRows({
       months, fresh: [reading('2026-09-01', 'client', 't1', 1)], stored: [],

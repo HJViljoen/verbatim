@@ -173,13 +173,21 @@ async function main() {
       `(${plan.themes.frozen} frozen at once); ` +
       `${plan.denominators.keptFrozen + plan.themes.keptFrozen} stored rows are already frozen and would be left alone.`,
     )
+    const held = plan.denominators.heldStale + plan.themes.heldStale
+    if (held > 0) {
+      console.log(
+        `  ${held} stored filling rows would be held rather than dropped: a reading came back empty, ` +
+        'which is a reading that did not happen, not a month that emptied.',
+      )
+    }
 
     if (write) {
       const done = await freezeMonths(admin, { clientId: id, runId, months, now })
       console.log(
         `  WROTE ${done.denominators.written} denominator rows and ${done.themes.written} theme rows; ` +
         `${done.denominators.keptFrozen + done.themes.keptFrozen} frozen rows untouched, ` +
-        `${done.denominators.deleted + done.themes.deleted} stale filling rows dropped.`,
+        `${done.denominators.deleted + done.themes.deleted} stale filling rows dropped, ` +
+        `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty.`,
       )
     }
     console.log()
