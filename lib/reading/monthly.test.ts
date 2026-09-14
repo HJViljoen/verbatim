@@ -58,7 +58,7 @@ describe('months are UTC months', () => {
 
   it('never reads an instant in the server\'s local zone', () => {
     // 2026-03-01T00:30Z is 2026-02-28 in every zone west of UTC. The month is
-    // the UTC one, because comment_date is written UTC-midnight date-only.
+    // the UTC one, because comment_date is bucketed in UTC on both sides.
     expect(monthStartOf('2026-03-01T00:30:00.000Z')).toBe('2026-03-01')
   })
 

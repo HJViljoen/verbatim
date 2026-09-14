@@ -68,10 +68,16 @@ import { categoryLabel } from '../lib/voice-tiles'
 // skipped. Phase 1's weekly reading needs a window-grouped read, not a sum.
 //
 // THE KIND MIX IS READ IN THIS PROCESS, not by an RPC: there is no SQL function
-// for it. The chain is the one monthly_theme_readings uses, with "an insight of
-// this kind" in place of "a member of this theme" — insight → comment evidence →
-// dated comment → its analysed video. When Phase 1 gives the kind mix a loader,
-// this read should go.
+// for it. The chain is the COMMENT HALF of the one monthly_theme_readings uses,
+// with "an insight of this kind" in place of "a member of this theme" — insight
+// → comment evidence → dated comment → its analysed video. It is not the whole
+// chain: the RPC also attributes a member whose only evidence is spoken on
+// camera to the months its video already occupies, and this read has no such
+// arm. So a theme's numerator can hold a video a kind's never could, and the
+// two are not exactly commensurable — small on today's corpus (on-camera
+// evidence is 3.9% of Össur's rows, and only the part of it with no dated
+// comment anywhere is attributed), but not zero. When Phase 1 gives the kind
+// mix a loader, it should carry both arms and this read should go.
 //
 // WHAT IT NEVER DOES: write anything, call a model, or spend a cent.
 //
@@ -127,8 +133,12 @@ interface KindCitation {
  *
  * `audience_insights_current` is the population read the AGENTS.md rule asks
  * for: "all current insights", never a run filter. The comment carries the date
- * and names the video, exactly as the theme reading does, so a kind and a theme
- * are counted the same way and their shares are comparable.
+ * and names the video, exactly as the comment half of the theme reading does.
+ *
+ * It is that half and no more: monthly_theme_readings also attributes a member
+ * whose only evidence is on camera to the months its video already occupies,
+ * and there is no such arm here. Read a kind's share and a theme's share in the
+ * same week as near neighbours, not as the same measurement.
  */
 async function readKindCitations(
   admin: ReturnType<typeof createAdminClient>,

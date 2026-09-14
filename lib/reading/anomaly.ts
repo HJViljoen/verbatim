@@ -288,6 +288,18 @@ const sumMonths = (months: readonly DenominatorMonth[], within: ReadonlySet<stri
  * both summed across the months. A video that carried conversation in two of
  * those months counts in both, on both sides of the proportion, exactly as the
  * monthly reading itself counts it.
+ *
+ * WHICH MAKES THE BASELINE n VIDEO-MONTHS, NOT DISTINCT VIDEOS, and the standard
+ * error treats those as independent trials. They are not: a video with
+ * conversation in June and August is one video contributing two correlated
+ * observations, so the baseline's true variance is larger than `n` implies and
+ * the test is anti-conservative on that side — a cluster sample read as a simple
+ * one. It is stated here rather than corrected because on the shape this rule
+ * is built for the week dominates: at Össur's week 37 the week side carried 95%
+ * of the variance (28 of 205 against 38 of 1,089), so the flag stands either
+ * way. A longer baseline or a thinner week moves the balance, and the first
+ * design that reuses this rule on one should carry a design-effect factor on
+ * the baseline term rather than inherit this note.
  */
 export function weekVsBaseline(input: {
   week: string

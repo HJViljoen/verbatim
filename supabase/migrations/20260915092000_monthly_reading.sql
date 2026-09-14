@@ -58,9 +58,11 @@ create index if not exists comments_client_comment_date_idx
 -- 2. The denominator: how much conversation each audience had in a month -------
 create table if not exists public.month_denominators (
   client_id        uuid not null references public.clients(id) on delete cascade,
-  -- First day of the calendar month, UTC. comment_date is a timestamptz whose
-  -- values are all UTC midnight (four normalisers go through toDateOnly), so
-  -- the month is computed in UTC explicitly and never in the session's zone.
+  -- First day of the calendar month, UTC. comment_date is a timestamptz that
+  -- today's writers normalise to a date (four paths go through toDateOnly), but
+  -- 338 of production's 71,425 rows do carry a time of day, so the month is
+  -- computed with an explicit `at time zone 'UTC'` everywhere below and never
+  -- in the session's zone.
   month            date not null,
   -- 'client' | 'competitor:<name>' | 'industry-other'. The literal bucket
   -- string, competitor_name included verbatim, spaces and case and all —

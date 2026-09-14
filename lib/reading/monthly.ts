@@ -48,10 +48,16 @@ import {
 // never be backfilled to what an earlier run reported. Whatever is not written
 // down at the time is gone.
 //
-// Dates are UTC throughout. `comments.comment_date` is a timestamptz whose
-// values are all UTC midnight (four normalisers go through toDateOnly), and the
-// SQL functions bucket in UTC explicitly, so a month here is a UTC month and
-// never the server's local one.
+// Dates are UTC throughout: a month here is a UTC month, never the server's
+// local one, because the SQL functions bucket with an explicit `at time zone
+// 'UTC'` and every instant in this file is built and compared in UTC.
+// `comments.comment_date` is a timestamptz that today's writers normalise to a
+// date (four paths go through toDateOnly), but it is NOT true that every stored
+// value is UTC midnight — 338 of production's 71,425 rows carry a time of day,
+// all from one April 2026 window. Nothing here depends on their being midnight:
+// a date-only slice of such a value and the SQL bucketing agree because both
+// read UTC, which is the property to preserve if a reader is ever tempted to
+// compare `comment_date` as text or in the session's zone.
 
 // ---- Months -----------------------------------------------------------------
 
@@ -171,9 +177,9 @@ export function trailingCompleteMonths(instant: string, count: number): string[]
 
 // ---- ISO weeks ---------------------------------------------------------------
 // The week is the anomaly check's unit and nothing else in the product speaks
-// it. ISO, in UTC, because `comments.comment_date` is stored at UTC midnight and
-// a week that starts at the server's local midnight would move a video between
-// weeks depending on where the process happened to run.
+// it. ISO, in UTC, because `comments.comment_date` is bucketed in UTC and a week
+// that started at the server's local midnight would move a video between weeks
+// depending on where the process happened to run.
 
 /** The ISO year and week a UTC date falls in. */
 export function isoWeekOf(iso: string): { year: number; week: number } {
