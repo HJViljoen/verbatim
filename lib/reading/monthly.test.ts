@@ -265,6 +265,27 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect(themeReadingKey({ month: '2026-08-01', audience: 'client', theme_id: 't1' })).toBe('2026-08-01|client|t1')
   })
 
+  it('drops a fresh month nobody asked for — the gap in a non-contiguous ask', () => {
+    // months = [Mar, Aug, Sep] comes back from one call over Mar..Oct, so the
+    // reading carries April to July too. Those arrive with no stored row read
+    // for them; writing one would overwrite a frozen April as if it were new.
+    const gappy = ['2026-03-01', '2026-09-01', '2026-10-01']
+    const result = mergeMonthRows({
+      months: gappy,
+      fresh: [
+        reading('2026-03-01', 'industry-other', 't1', 3),
+        reading('2026-04-01', 'industry-other', 't1', 4),
+        reading('2026-07-01', 'industry-other', 't1', 7),
+        reading('2026-09-01', 'industry-other', 't1', 9),
+      ],
+      stored: [],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+    })
+    expect(result.writes.map((w) => w.month)).toEqual(['2026-03-01', '2026-09-01'])
+  })
+
   it('writes a seed with no run as run_id null rather than inventing one', () => {
     const result = mergeMonthRows({
       months, fresh: [reading('2026-09-01', 'client', 't1', 1)], stored: [],

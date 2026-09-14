@@ -199,6 +199,13 @@ export interface MergeResult<T> {
  * The one invariant this file exists to keep: a frozen row is never rewritten
  * and never deleted. Everything else — which rows are new, which are being
  * refreshed, which have fallen out of the clustering — follows from that.
+ *
+ * `months` is the gate on BOTH sides. The reading arrives from one SQL call
+ * over one contiguous window, so when the months asked for have a gap in them
+ * (a stale March row alongside August and September) the answer carries the
+ * months in between as well — and those arrive with no stored row read for
+ * them, which would make a frozen April look new and overwrite it. A fresh row
+ * whose month was not asked for is therefore dropped here.
  */
 export function mergeMonthRows<T extends { month: string }>(args: {
   /** The months the fresh reading covered. Stored rows outside them are not
@@ -220,6 +227,7 @@ export function mergeMonthRows<T extends { month: string }>(args: {
 
   for (const row of fresh) {
     const month = monthStartOf(row.month)
+    if (!inWindow.has(month)) continue
     const key = keyOf(row)
     freshKeys.add(key)
     const prior = storedByKey.get(key)
