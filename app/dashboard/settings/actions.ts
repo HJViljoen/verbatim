@@ -6,6 +6,7 @@ import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
+import { actorStamp, updateWithActor } from '@/lib/config-log'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
 
@@ -44,7 +45,8 @@ export async function updateTrackingConfig(
   // Server actions are directly POST-reachable, so authz is re-checked here —
   // never trusting the UI's disabled state. RLS is the third layer (the
   // tracking_configs UPDATE policy also requires owner/admin).
-  const { supabase, clientId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change settings.' }
   }
@@ -76,14 +78,20 @@ export async function updateTrackingConfig(
     return { ok: false, message: `Invalid ${field}: ${first?.message ?? 'check your input.'}` }
   }
 
-  const { error } = await supabase
-    .from('tracking_configs')
-    .update({
+  // Stamped (WP2): the change log's trigger sees `authenticated` and auth.uid()
+  // for this write, which is enough to name a tenant member — but the same
+  // action runs on the SERVICE-ROLE client whenever a platform admin is inside
+  // this workspace through the switcher, and then the database sees nobody at
+  // all. The stamp is what carries the person across that difference.
+  const { error } = await updateWithActor(
+    (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
+    {
       ...parsed.data,
       ...(isPaused ? { report_period: 'paused' } : {}),
       updated_at: new Date().toISOString(),
-    })
-    .eq('client_id', clientId)
+    },
+    actorStamp(session, 'settings'),
+  )
 
   if (error) {
     return { ok: false, message: `Could not save: ${error.message}` }
@@ -112,10 +120,14 @@ export async function updateTrackingConfig(
     JSON.stringify([...a].sort()) === JSON.stringify([...b].sort())
   const next = mergeCompetitorKeywords(storedKeywords, parsed.data.competitor_names)
   if (!sameSet(storedKeywords, next)) {
-    const { error: kwErr } = await createAdminClient()
-      .from('tracking_configs')
-      .update({ competitor_keywords: next })
-      .eq('client_id', clientId)
+    // Labelled as the derivation rather than as a term edit: the log has to be
+    // able to answer "did a person type this, or did it follow a rival name",
+    // and this write is always the second kind.
+    const { error: kwErr } = await updateWithActor(
+      (payload) => createAdminClient().from('tracking_configs').update(payload).eq('client_id', clientId),
+      { competitor_keywords: next },
+      actorStamp(session, 'competitor terms, derived from the rival list'),
+    )
     if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
   }
 
@@ -163,7 +175,8 @@ export async function updateSearchTerms(
   _prev: SettingsFormState,
   formData: FormData,
 ): Promise<SettingsFormState> {
-  const { supabase, clientId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
   if (!canManageTenant(role)) {
     return { ok: false, message: 'You don’t have permission to change search terms.' }
   }
@@ -196,10 +209,14 @@ export async function updateSearchTerms(
   // migration that may not have been applied yet, and when it hasn't, Postgres
   // rejects the whole statement — so writing them together would lose a brand
   // and category edit to a column the client never touched.
-  const { error, count } = await createAdminClient()
-    .from('tracking_configs')
-    .update(terms, { count: 'exact' })
-    .eq('client_id', clientId)
+  const { error, count } = await updateWithActor(
+    (payload) => createAdminClient()
+      .from('tracking_configs')
+      .update(payload, { count: 'exact' })
+      .eq('client_id', clientId),
+    terms,
+    actorStamp(session, 'search terms'),
+  )
   if (error) {
     console.error(`[settings] search terms not saved for ${clientId}: ${error.message}`)
     return { ok: false, message: 'Could not save your search terms. Try again, and tell us if it keeps happening.' }
@@ -211,10 +228,14 @@ export async function updateSearchTerms(
     return { ok: false, message: 'Nothing was saved — this workspace has no tracking setup yet. Talk to us and we’ll set it up.' }
   }
 
-  const { error: exclErr } = await supabase
-    .from('tracking_configs')
-    .update({ exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() })
-    .eq('client_id', clientId)
+  const { error: exclErr } = await updateWithActor(
+    (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
+    { exclude_terms: cleanTerms(parsed.data.exclude_terms), updated_at: new Date().toISOString() },
+    // A second stamp, distinct from the one above: two statements in one save
+    // that carried the same stamp would look to the trigger like one write and
+    // a re-save, and the second would log its actor as a bare role.
+    actorStamp(session, 'exclusions'),
+  )
 
   revalidatePath('/dashboard/settings')
   if (exclErr) {

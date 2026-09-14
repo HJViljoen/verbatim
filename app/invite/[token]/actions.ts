@@ -71,7 +71,7 @@ export async function acceptInvitation(_prev: AcceptState, formData: FormData): 
       if (error) return { ok: false, message: `Could not join workspace: ${error.message}` }
     }
     await markAccepted(invite.id)
-    await addToReportRecipients(invite.client_id, invite.email)
+    await addToReportRecipients(invite.client_id, invite.email, user.id)
     redirect('/dashboard')
   }
 
@@ -105,7 +105,7 @@ export async function acceptInvitation(_prev: AcceptState, formData: FormData): 
   if (memberErr) return { ok: false, message: `Could not join workspace: ${memberErr.message}` }
 
   await markAccepted(invite.id)
-  await addToReportRecipients(invite.client_id, invite.email)
+  await addToReportRecipients(invite.client_id, invite.email, newUserId)
 
   // Establish a session (writes auth cookies via the SSR client) then land them in.
   const { error: signInErr } = await supabase.auth.signInWithPassword({ email: invite.email, password })
@@ -129,9 +129,11 @@ async function markAccepted(id: string) {
  * never block someone from joining, and the accepter is usually a member,
  * whom RLS does not let write report_schedules.
  */
-async function addToReportRecipients(clientId: string, email: string): Promise<void> {
+async function addToReportRecipients(clientId: string, email: string, userId: string): Promise<void> {
   try {
-    await joinDefaultSchedule(createAdminClient(), clientId, email)
+    await joinDefaultSchedule(createAdminClient(), clientId, email, {
+      kind: 'user', user_id: userId, label: email, at: new Date().toISOString(),
+    })
   } catch (e) {
     console.error(`[invite] could not add ${email} to report_emails: ${e instanceof Error ? e.message : String(e)}`)
   }

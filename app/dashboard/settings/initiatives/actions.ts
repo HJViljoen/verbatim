@@ -3,6 +3,8 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase-admin'
+import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { INITIATIVE_DIRECTIONS, INITIATIVE_STATUSES, INITIATIVE_MAX_THEMES } from '@/lib/initiatives/types'
 
 // The initiative write path (WP7c). Declaring one is not an operator lever and
@@ -13,6 +15,15 @@ import { INITIATIVE_DIRECTIONS, INITIATIVE_STATUSES, INITIATIVE_MAX_THEMES } fro
 //
 // Nothing here deletes. A stopped initiative is `status = 'dropped'`, so a
 // report that already measured it does not quietly lose its subject.
+//
+// Logged under the `subjects` surface (WP2). There are no initiatives in
+// production yet, so nothing is being recorded today — but an initiative IS a
+// configuration change in the sense that matters: it declares what a
+// measurement is about, and `registry_ids` and `started_at` are immutable
+// afterwards precisely because changing them would change what every point
+// already reported means. The log is written with the service-role client:
+// config_changes has no insert policy, and a log a tenant can append to is not
+// a log.
 
 export interface InitiativeFormState {
   ok: boolean
@@ -54,7 +65,8 @@ export async function createInitiative(
   _prev: InitiativeFormState,
   formData: FormData,
 ): Promise<InitiativeFormState> {
-  const { supabase, clientId, userId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, userId } = session
 
   const parsed = createSchema.safeParse({
     title: formData.get('title'),
@@ -95,8 +107,23 @@ export async function createInitiative(
     .maybeSingle()
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
 
+  const id = (data as { id: string } | null)?.id
+  await recordConfigChange(createAdminClient(), {
+    clientId,
+    surface: 'subjects',
+    field: 'initiatives',
+    before: null,
+    after: {
+      id: id ?? null,
+      title: parsed.data.title,
+      direction: parsed.data.direction,
+      registry_ids: parsed.data.registry_ids,
+    },
+    actor: actorStamp(session, 'declared an initiative'),
+  })
+
   revalidateInitiatives()
-  return { ok: true, message: 'Tracking it from today.', id: (data as { id: string } | null)?.id }
+  return { ok: true, message: 'Tracking it from today.', id }
 }
 
 const updateSchema = z.object({
@@ -110,7 +137,8 @@ export async function updateInitiative(
   _prev: InitiativeFormState,
   formData: FormData,
 ): Promise<InitiativeFormState> {
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId } = session
   const parsed = updateSchema.safeParse({
     id: formData.get('id'),
     title: formData.get('title'),
@@ -139,6 +167,15 @@ export async function updateInitiative(
   // has no way to catch.
   if ((data ?? []).length === 0) return { ok: false, message: 'That initiative is no longer here.' }
 
+  await recordConfigChange(createAdminClient(), {
+    clientId,
+    surface: 'subjects',
+    field: 'initiatives',
+    after: { id: parsed.data.id, title: parsed.data.title, direction: parsed.data.direction },
+    actor: actorStamp(session, 'edited an initiative'),
+    note: 'title, note and direction only — what an initiative measures cannot be edited',
+  })
+
   revalidateInitiatives()
   return { ok: true, message: 'Saved.' }
 }
@@ -148,7 +185,8 @@ export async function setInitiativeStatus(id: string, status: string): Promise<I
   if (!(INITIATIVE_STATUSES as readonly string[]).includes(status)) {
     return { ok: false, message: 'Unknown status.' }
   }
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId } = session
   const { data, error } = await supabase
     .from('initiatives')
     .update({ status, updated_at: new Date().toISOString() })
@@ -157,6 +195,14 @@ export async function setInitiativeStatus(id: string, status: string): Promise<I
     .select('id')
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
   if ((data ?? []).length === 0) return { ok: false, message: 'That initiative is no longer here.' }
+
+  await recordConfigChange(createAdminClient(), {
+    clientId,
+    surface: 'subjects',
+    field: 'initiatives',
+    after: { id, status },
+    actor: actorStamp(session, `moved an initiative to ${status}`),
+  })
 
   revalidateInitiatives()
   return { ok: true, message: '' }
