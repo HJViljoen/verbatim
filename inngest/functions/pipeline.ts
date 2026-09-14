@@ -71,7 +71,7 @@ export interface PipelineRunOptions {
   // day). Recorded on the run row so "was Sunday's run started?" is a column
   // rather than a recomputation from tracking_configs. Absent on a manual run,
   // which is exactly the distinction worth keeping.
-  scheduledFor?: string
+  scheduledFor?: string | null
   // Analysis-only resume: reuse an existing run row (reset to 'running') and
   // skip the gather fan-out entirely — the corpus is already in the DB. The
   // operator lever for finishing a run whose analysis half died, without
