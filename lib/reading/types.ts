@@ -71,10 +71,16 @@ export interface ThemeReading {
   videos: number
   comments: number
   platform_mix: PlatformMix
-  /** Member insights evidenced only on camera / on screen whose video sits in
-   *  no month of the window that was read. */
+  /** Member insights evidenced only on camera / on screen whose video carries
+   *  no dated comment at all, so no month can take them. A property of the
+   *  theme in this audience, repeated identically on each of its month rows and
+   *  never summed across them — and independent of how wide a window the writer
+   *  read, so the pipeline's two-month call and the seed's whole-history call
+   *  write the same number. */
   excluded_on_camera: number
-  /** Cited comments with no date. */
+  /** Cited comments with no date, recorded against every month their video
+   *  occupies in this theme's reading — the rule `DenominatorReading` uses for
+   *  its own undated comments. Per month; never summed. */
   excluded_undated: number
 }
 

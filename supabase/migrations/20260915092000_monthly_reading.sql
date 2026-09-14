@@ -110,10 +110,17 @@ create table if not exists public.month_theme_readings (
   comments           int not null,
   platform_mix       jsonb not null,
   -- Member insights whose only evidence is on camera or on-screen text
-  -- (insight_evidence.source in ('video','video_text')) and whose video sits in
-  -- no month of this reading's window, so the citation carries no date at all.
+  -- (insight_evidence.source in ('video','video_text')) and whose video carries
+  -- no dated comment at all, so no month can take them. A property of the
+  -- theme's evidence in this audience, identical on every month row of that
+  -- theme and never summed across them — the members it counts belong to no
+  -- month by construction. It does not depend on how wide a window the writer
+  -- read, so the pipeline's two-month call and the seed's whole-history call
+  -- agree.
   excluded_on_camera int not null default 0,
-  -- Cited comments whose comment_date is null.
+  -- Cited comments with no date, recorded against every month their video does
+  -- occupy in this theme's reading — the same rule month_denominators uses.
+  -- Per month, and never summed across months.
   excluded_undated   int not null default 0,
   status             text not null check (status in ('filling','frozen')),
   origin             text not null check (origin in ('live','back_read')),
@@ -124,7 +131,11 @@ create table if not exists public.month_theme_readings (
 );
 
 comment on table public.month_theme_readings is
-  'One row per tenant per month per audience per theme: the months a single clustering reads, by comments.comment_date. Both exclusion counts are properties of the WINDOW this row was read in (one month, in the pipeline''s own path) and are never additive across months.';
+  'One row per tenant per month per audience per theme: the months a single clustering reads, by comments.comment_date. videos, comments and platform_mix are this month''s. excluded_undated is this month''s too. excluded_on_camera counts citations no month can carry and repeats identically on every month row of the theme; neither exclusion is ever summed across months.';
+comment on column public.month_theme_readings.excluded_on_camera is
+  'Member insights evidenced only on camera or on screen whose video carries no dated comment at all — a property of the theme in this audience, repeated on each of its month rows, never summed. Independent of the window the writer read, so the pipeline and the back-read seed agree.';
+comment on column public.month_theme_readings.excluded_undated is
+  'Cited comments with no date, attributed to every month their video occupies in this theme''s reading (the month_denominators rule). Per month; never summed.';
 
 create index if not exists month_theme_readings_theme_idx
   on public.month_theme_readings (client_id, theme_id, month);
@@ -364,12 +375,23 @@ as $$
     join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id and v.analysed
     where ca.comment_date >= p_from and ca.comment_date < p_to
   ),
-  undated as (
-    select ca.theme_id, v.audience, count(distinct ca.comment_id) as n
+  -- An undated citation belongs to no month, so it is recorded against every
+  -- month its video occupies in THIS theme's reading — the same rule the
+  -- denominator uses for its own undated comments: "the videos this theme reads
+  -- in this month also carry N citations nobody could date". Per month, never a
+  -- sum across months.
+  undated_per_video as (
+    select ca.theme_id, v.id as video_uuid, count(distinct ca.comment_id) as n
     from cited_all ca
     join vid_all v on v.platform = ca.platform and v.video_id = ca.video_id
     where ca.comment_date is null
     group by 1, 2
+  ),
+  undated as (
+    select s.theme_id, s.month, s.audience, sum(u.n) as n
+    from (select distinct c.theme_id, c.month, c.audience, c.video_uuid from cited c) s
+    join undated_per_video u on u.theme_id = s.theme_id and u.video_uuid = s.video_uuid
+    group by 1, 2, 3
   ),
   -- A member insight whose only evidence is spoken on camera or typed on the
   -- cover frame carries no date of its own. Its video is dated, though, so the
@@ -386,7 +408,15 @@ as $$
   ),
   -- The denominator, but only for the handful of videos an on-camera member
   -- hangs off (167 of 4,450 on Össur): the full month-by-video denominator is
-  -- 44k rows and nothing else here needs it.
+  -- 44k rows and nothing else here needs it. Two passes, and the difference
+  -- matters. The months INSIDE the window are what the member is attributed to,
+  -- so that pass is window-scoped. Whether the video occupies any month at all
+  -- is what decides the exclusion, and that one is deliberately window-FREE: "no
+  -- month could take this citation" is a fact about the video, not about how
+  -- many months the caller happened to batch into one call, and the number it
+  -- produces is frozen for ever. Window-scoped it read 3 on a whole-history call
+  -- (the seed) and 7 on an Aug–Sep call (the pipeline) for the same theme —
+  -- one column, two meanings, decided by whoever wrote the row first.
   denom as (
     select distinct date_trunc('month', c.comment_date at time zone 'UTC')::date as month,
            v.audience, v.id as video_uuid
@@ -394,6 +424,14 @@ as $$
     join vid_all v on v.platform = c.platform and v.video_id = c.video_id and v.analysed
     where c.client_id = p_client
       and c.comment_date >= p_from and c.comment_date < p_to
+      and v.id in (select o.video_uuid from oncam o)
+  ),
+  dated_ever as (
+    select distinct v.id as video_uuid
+    from public.comments c
+    join vid_all v on v.platform = c.platform and v.video_id = c.video_id and v.analysed
+    where c.client_id = p_client
+      and c.comment_date is not null
       and v.id in (select o.video_uuid from oncam o)
   ),
   oncam_in as (
@@ -404,7 +442,7 @@ as $$
   oncam_out as (
     select o.theme_id, o.audience, count(*) as n
     from oncam o
-    where not exists (select 1 from denom d where d.video_uuid = o.video_uuid)
+    where not exists (select 1 from dated_ever d where d.video_uuid = o.video_uuid)
     group by 1, 2
   ),
   vids as (
@@ -439,16 +477,18 @@ as $$
   from base b
   left join cmt c on c.theme_id = b.theme_id and c.month = b.month and c.audience = b.audience
   left join mix m on m.theme_id = b.theme_id and m.month = b.month and m.audience = b.audience
-  -- Both exclusions belong to the WINDOW, not to one of its months: called a
-  -- month at a time, as the pipeline calls it, they are exact; called over a
-  -- longer window they repeat on each month row and must never be summed.
+  -- excluded_on_camera is a property of the theme's evidence in this audience,
+  -- not of one month — the members it counts sit on videos that occupy NO
+  -- month, so no month can carry them. It repeats identically on every month
+  -- row of that theme and must never be summed. It no longer depends on the
+  -- window, so the seed and the pipeline write the same number.
   left join oncam_out oo on oo.theme_id = b.theme_id and oo.audience = b.audience
-  left join undated   u  on u.theme_id  = b.theme_id and u.audience  = b.audience
+  left join undated   u  on u.theme_id  = b.theme_id and u.month = b.month and u.audience = b.audience
   order by b.month, b.audience, b.theme_id
 $$;
 
 comment on function public.monthly_theme_readings(uuid, uuid, timestamptz, timestamptz) is
-  'Per month per audience per theme in [p_from, p_to), for one run''s clustering: distinct videos and comments the theme''s member insights cite, the platform mix, and the citations that could not be dated. theme_id is theme_registry.id.';
+  'Per month per audience per theme in [p_from, p_to), for one run''s clustering: distinct videos and comments the theme''s member insights cite, the platform mix, the undated citations those videos carry (per month), and the on-camera-only members no month can carry (per theme and audience, window-independent). theme_id is theme_registry.id.';
 
 revoke all on function public.monthly_theme_readings(uuid, uuid, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.monthly_theme_readings(uuid, uuid, timestamptz, timestamptz) to service_role;

@@ -382,6 +382,22 @@ describe('the migration and this module say the same thing', () => {
     expect(sql).not.toMatch(/(?:from|join) public\.audience_insights_current/)
   })
 
+  it('dates undated citations per month, and counts the on-camera exclusion independent of the window', () => {
+    // Both were properties of the CALL: the pipeline reads Aug–Sep and the seed
+    // reads the whole history, so the same frozen column meant two different
+    // things depending on who wrote the row first (7 vs 3 on Össur's top theme).
+    expect(sql).toContain('left join undated   u  on u.theme_id  = b.theme_id and u.month = b.month and u.audience = b.audience')
+    const datedEver = sql.slice(sql.indexOf('dated_ever as ('), sql.indexOf('oncam_in as ('))
+    expect(datedEver).toContain('c.comment_date is not null')
+    expect(datedEver).not.toContain('p_from')
+    expect(datedEver).not.toContain('p_to')
+    expect(sql).toContain('where not exists (select 1 from dated_ever d where d.video_uuid = o.video_uuid)')
+    // And the attribution INTO months stays window-scoped, or the function
+    // would return months the caller never asked for.
+    const denom = sql.slice(sql.indexOf('  denom as ('), sql.indexOf('  dated_ever as ('))
+    expect(denom).toContain('c.comment_date >= p_from and c.comment_date < p_to')
+  })
+
   it('grants both functions to the service role and to nobody else', () => {
     for (const fn of [
       `${RPC_DENOMINATORS}(uuid, timestamptz, timestamptz)`,
