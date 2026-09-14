@@ -382,6 +382,19 @@ describe('the migration and this module say the same thing', () => {
     expect(sql).not.toMatch(/(?:from|join) public\.audience_insights_current/)
   })
 
+  it('writes the diacritic fold as escapes, never as the combining marks themselves', () => {
+    // The class used to be two invisible marks in the source, one of which
+    // combined with the preceding bracket on screen. This file is applied by
+    // hand through the Supabase MCP: a copy, a paste or an editor normalising
+    // those bytes would change what 'Össur' folds to and therefore what
+    // dual_mention counts, with nothing raising an error. Both forms are built
+    // from code points here so this test cannot itself carry the bytes.
+    const BACKSLASH = String.fromCharCode(92)
+    const escaped = `[${BACKSLASH}u0300-${BACKSLASH}u036f]`
+    expect(sql.split(escaped).length - 1).toBe(2)
+    for (const mark of [0x300, 0x36f]) expect(sql.includes(String.fromCharCode(mark))).toBe(false)
+  })
+
   it('dates undated citations per month, and counts the on-camera exclusion independent of the window', () => {
     // Both were properties of the CALL: the pipeline reads Aug–Sep and the seed
     // reads the whole history, so the same frozen column meant two different

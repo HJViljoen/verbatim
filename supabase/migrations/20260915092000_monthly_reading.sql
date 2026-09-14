@@ -206,9 +206,13 @@ as $$
       and v.analyzed_run_id is not null
   ),
   -- The tenant's tracked rival names, folded the way lib/gather/util.ts fold()
-  -- folds them: lowercase, diacritics stripped ('Össur' -> 'ossur').
+  -- folds them: lowercase, diacritics stripped ('Össur' -> 'ossur'). The
+  -- combining-mark range is written as ARE escapes, not as the marks
+  -- themselves: this file is applied by hand through the Supabase MCP, and a
+  -- copy, a paste or an editor normalising invisible bytes would change the
+  -- fold with no error raised anywhere.
   rivals as (
-    select distinct regexp_replace(normalize(lower(cn), NFD), '[̀-ͯ]', '', 'g') as name
+    select distinct regexp_replace(normalize(lower(cn), NFD), '[\u0300-\u036f]', '', 'g') as name
     from public.tracking_configs tc, unnest(coalesce(tc.competitor_names, '{}'::text[])) cn
     where tc.client_id = p_client and coalesce(cn, '') <> ''
   ),
@@ -229,7 +233,7 @@ as $$
         where regexp_replace(
                 normalize(lower(coalesce(v.account_name, '') || ' ' || coalesce(v.caption, '') || ' ' ||
                                 coalesce(array_to_string(v.hashtags, ' '), '')), NFD),
-                '[̀-ͯ]', '', 'g') like '%' || r.name || '%'
+                '[\u0300-\u036f]', '', 'g') like '%' || r.name || '%'
       )
   ),
   -- comments.video_id is the PLATFORM id (text), never videos.id: the join is
