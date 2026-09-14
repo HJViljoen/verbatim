@@ -31,6 +31,7 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { fillingMonths, freezeMonths, monthsToRefresh } from '@/lib/reading/monthly'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
@@ -1243,6 +1244,43 @@ export const runPipeline = inngest.createFunction(
       ...themed.summary,
       newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
     }
+
+    // The comment-dated monthly reading (Phase 0, design items 1–2). Here,
+    // right after persist-themes, because it reads THIS run's observations:
+    // the months are the months of one clustering, and the next run's
+    // clustering is a different one. Only the months still open are touched —
+    // the current one, the previous one until its 30-day line passes, and any
+    // month whose stored row is still filling (that visit is what freezes it).
+    //
+    // Logged, NOT noteError'd — the keyword-discovery precedent. The reading is
+    // a record kept alongside the report, not part of producing it, and a clean
+    // run must not read 'partial' because a bookkeeping pass had a bad day. It
+    // is also the step that runs before its migration has necessarily been
+    // applied: until then every attempt fails, costs nothing, and says so.
+    await step
+      .run('freeze-months', async () => {
+        const admin = createAdminClient()
+        const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
+        const r = await freezeMonths(admin, { clientId, runId, months })
+        console.log(
+          `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
+          `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
+          `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
+          `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
+          `${r.themes.deleted} dropped)`,
+        )
+        return {
+          months: r.months.length,
+          denominators: r.denominators.written,
+          themes: r.themes.written,
+          frozen: r.denominators.frozen + r.themes.frozen,
+          keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
+        }
+      })
+      .catch((e) => {
+        console.error(`[freeze-months] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
 
     // Step 2c — account-event detection + explanation on the owned layer
     // (Wave 2: first pipeline wiring; previously script-only). After themes so
