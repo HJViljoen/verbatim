@@ -166,10 +166,10 @@ begin
     v_uid := null;
   end;
 
-  -- WHO CONNECTED. Not `current_user`: inside a SECURITY DEFINER function that
-  -- is the function's OWNER, so every caller would read as `postgres` and the
-  -- forgery guard below would never fire (found by exercising this trigger on a
-  -- throwaway cluster before it was ever applied). The JWT's role claim is set
+  -- WHO CONNECTED. Not `current_user` — inside a SECURITY DEFINER function it
+  -- names the function's OWNER, so every caller would read as `postgres` and
+  -- the forgery guard below would never fire (found by exercising this trigger
+  -- on a throwaway cluster before it was ever applied). The JWT's role claim is set
   -- per request by PostgREST and is untouched by SECURITY DEFINER; a connection
   -- with no claims at all — the SQL editor, the management API — falls back to
   -- the login role, which is `postgres` for exactly those.
