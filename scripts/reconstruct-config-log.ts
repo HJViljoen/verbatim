@@ -40,7 +40,10 @@ import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 // It cannot say anything at all about `platforms`, the volume knobs,
 // `exclude_terms`, or who made any of it. Those are simply gone.
 //
-// Dry by default; --apply writes. Refuses to write twice for the same tenant.
+// Dry by default; --apply writes, per tenant and in chunks of 25, so one
+// rejected row costs its chunk rather than the whole reconstruction. Refuses
+// to write twice for the same tenant, and says so when a tenant ends up part
+// written — that is the one state the guard cannot tell from a finished one.
 //
 //   node --env-file=.env.local --import tsx scripts/reconstruct-config-log.ts [--client <uuid>] [--apply]
 
@@ -379,7 +382,34 @@ async function main() {
     return
   }
   if (!rows.length) return
-  const written = await recordConfigChanges(admin, rows)
+  // Per tenant, in chunks. recordConfigChanges sends ONE insert, so ninety-one
+  // rows written together means a single rejected row writes nothing at all —
+  // and the per-tenant "already reconstructed" guard would then read zero and
+  // offer the identical batch again on the next run, with no way to tell a
+  // fresh tenant from a failed one. One bad row should cost one chunk.
+  const CHUNK = 25
+  let written = 0
+  for (const tenant of tenants) {
+    const mine = rows.filter((r) => r.clientId === tenant.id)
+    if (!mine.length) continue
+    let done = 0
+    for (let i = 0; i < mine.length; i += CHUNK) {
+      const slice = mine.slice(i, i + CHUNK)
+      const landed = await recordConfigChanges(admin, slice)
+      done += landed
+      if (landed !== slice.length) {
+        console.log(`  ${tenant.company_name}: rows ${i + 1}–${i + slice.length} NOT written (the error is above)`)
+      }
+    }
+    written += done
+    console.log(`  ${tenant.company_name}: wrote ${done} of ${mine.length}`)
+    if (done !== mine.length) {
+      console.log(
+        `  ⚠ ${tenant.company_name} is now PARTLY reconstructed. A re-run will skip it — the guard reads the ` +
+        `${done} row(s) that landed — so either finish it by hand or delete those rows and run this again.`,
+      )
+    }
+  }
   console.log(`\nwrote ${written} of ${rows.length}.`)
 }
 
