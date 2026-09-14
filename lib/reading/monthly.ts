@@ -347,20 +347,35 @@ async function storedThemeReadings(
 
 /** The months this tenant still has open, from the stored rows themselves.
  *  A month with a filling row has to be visited again even after its 30-day
- *  line passes — that visit is what freezes it. */
+ *  line passes — that visit is what freezes it.
+ *
+ *  Both reads page past 1000 rows on a UNIQUE order (each table's primary key
+ *  minus the tenant): a page break on a non-unique key can skip rows, and a
+ *  skipped row here is a month that never freezes. */
 export async function fillingMonths(admin: SupabaseClient, clientId: string): Promise<string[]> {
-  const out = new Set<string>()
-  for (const table of [TABLE_DENOMINATORS, TABLE_THEME_READINGS]) {
-    const rows = await selectAll<{ month: string }>(() =>
+  const [denoms, themes] = await Promise.all([
+    selectAll<{ month: string }>(() =>
       admin
-        .from(table)
+        .from(TABLE_DENOMINATORS)
         .select('month')
         .eq('client_id', clientId)
         .eq('status', 'filling')
-        .order('month', { ascending: true }),
-    )
-    for (const r of rows) out.add(monthStartOf(r.month))
-  }
+        .order('month', { ascending: true })
+        .order('audience', { ascending: true }),
+    ),
+    selectAll<{ month: string }>(() =>
+      admin
+        .from(TABLE_THEME_READINGS)
+        .select('month')
+        .eq('client_id', clientId)
+        .eq('status', 'filling')
+        .order('month', { ascending: true })
+        .order('audience', { ascending: true })
+        .order('theme_id', { ascending: true }),
+    ),
+  ])
+  const out = new Set<string>()
+  for (const r of [...denoms, ...themes]) out.add(monthStartOf(r.month))
   return [...out].sort()
 }
 
