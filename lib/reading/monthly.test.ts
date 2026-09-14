@@ -382,6 +382,21 @@ describe('the migration and this module say the same thing', () => {
     expect(sql).not.toMatch(/(?:from|join) public\.audience_insights_current/)
   })
 
+  it('puts "a frozen row is never rewritten" in the database, on both tables', () => {
+    // The merge keeps it, but two writers exist and nothing stopped a third.
+    // UPDATE only: a delete guard would block the cascade from clients and
+    // theme_registry and make a tenant undeletable.
+    expect(sql).toContain('create or replace function public.month_reading_frozen_guard()')
+    for (const table of [TABLE_DENOMINATORS, TABLE_THEME_READINGS]) {
+      expect(sql).toContain(`drop trigger if exists ${table}_frozen_guard on public.${table};`)
+      expect(sql).toMatch(new RegExp(
+        `create trigger ${table}_frozen_guard\\n\\s+before update on public\\.${table}\\n` +
+        `\\s+for each row when \\(old\\.status = 'frozen'\\)`,
+      ))
+    }
+    expect(sql).not.toMatch(/before delete on public\.month_/)
+  })
+
   it('matches a rival name as a substring, never as a LIKE pattern', () => {
     // competitor_names is free text a tenant types in Settings. Under LIKE, a
     // name holding _ or % is a wildcard, and it would inflate dual_mention into

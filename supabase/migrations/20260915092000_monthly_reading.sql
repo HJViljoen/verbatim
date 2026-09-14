@@ -140,6 +140,46 @@ comment on column public.month_theme_readings.excluded_undated is
 create index if not exists month_theme_readings_theme_idx
   on public.month_theme_readings (client_id, theme_id, month);
 
+-- 3b. A frozen row is never rewritten — a property of the record, not a promise
+-- The merge in lib/reading/monthly.ts excludes a frozen row from every write and
+-- restates status = 'filling' on every delete, but two writers already exist (the
+-- pipeline's freeze-months step and scripts/monthly-reading.ts --write) and
+-- nothing stopped a third. A frozen month cannot be recomputed for the clustering
+-- that produced it — the Pass A prune takes the citations, the retention sweep
+-- takes the comments — so an overwrite is unrecoverable, and the one rule these
+-- tables exist to keep belongs in the database.
+--
+-- UPDATE only, deliberately. A delete guard would also block the cascade from
+-- clients and theme_registry and make a tenant undeletable. The guard raises
+-- rather than silently skipping: the only way to reach it is a writer that did
+-- not merge, or the narrow race where a row froze between a merge's read and its
+-- write — and that one retries clean, because the retry re-reads the row.
+create or replace function public.month_reading_frozen_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $guard$
+begin
+  raise exception 'frozen monthly reading is never rewritten: %, month %, audience %',
+    tg_table_name, old.month, old.audience
+    using errcode = 'restrict_violation',
+          hint = 'Merge against what is stored (lib/reading/monthly.ts mergeMonthRows). A frozen month is the record.';
+  return null;
+end
+$guard$;
+
+drop trigger if exists month_denominators_frozen_guard on public.month_denominators;
+create trigger month_denominators_frozen_guard
+  before update on public.month_denominators
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_frozen_guard();
+
+drop trigger if exists month_theme_readings_frozen_guard on public.month_theme_readings;
+create trigger month_theme_readings_frozen_guard
+  before update on public.month_theme_readings
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_frozen_guard();
+
 -- 4. RLS — a tenant reads its own months, and writes none ----------------------
 -- Writes are the service role's (the pipeline step and the operator scripts),
 -- which bypasses RLS entirely; no write policy exists for anyone else. A
@@ -508,6 +548,7 @@ grant execute on function public.monthly_theme_readings(uuid, uuid, timestamptz,
 --   select indexname from pg_indexes where tablename = 'comments' and indexname = 'comments_client_comment_date_idx';
 --   select count(*) from public.month_denominators;                              -- 0
 --   select policyname, cmd from pg_policies where tablename like 'month_%';
+--   select tgname, tgrelid::regclass from pg_trigger where not tgisinternal and tgname like 'month_%_frozen_guard';
 --   select proname, prosecdef from pg_proc where proname in ('monthly_denominators','monthly_theme_readings');
 --   select has_function_privilege('service_role', 'public.monthly_denominators(uuid,timestamptz,timestamptz)', 'execute');
 --   select has_function_privilege('authenticated', 'public.monthly_denominators(uuid,timestamptz,timestamptz)', 'execute'); -- false

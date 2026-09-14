@@ -404,6 +404,11 @@ export async function fillingMonths(admin: SupabaseClient, clientId: string): Pr
   return [...out].sort()
 }
 
+/** Upsert on the primary key. The merge has already excluded every frozen row,
+ *  and since 20260915092000 a `before update` trigger on both tables raises if
+ *  one gets through anyway — so the narrow race (a row freezes between the read
+ *  and this write) costs a failed step and a retry that re-reads, rather than
+ *  the only copy of a month nobody can recompute. */
 async function writeRows<T extends object>(
   admin: SupabaseClient,
   table: string,
