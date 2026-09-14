@@ -1,5 +1,6 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { periodWindowDays } from '../lib/config'
+import { reconstructWindow } from '../lib/pipeline/run-bookkeeping'
 
 // Label the window every historical run covered — after the fact, and marked as
 // such (Phase 0 WP1, 2026-09-15).
@@ -46,15 +47,6 @@ function parseArgs(argv: string[]): { clientId: string | null; apply: boolean } 
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   return args
-}
-
-/** [start, end] for a run, from the rule its own code was following. */
-function reconstructWindow(startedAt: string, period: string): { start: string; end: string } {
-  const endMs = Date.parse(startedAt)
-  return {
-    start: new Date(endMs - periodWindowDays(period) * 86_400_000).toISOString(),
-    end: new Date(endMs).toISOString(),
-  }
 }
 
 async function main() {

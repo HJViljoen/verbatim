@@ -31,8 +31,8 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
-import { resolveRunWindow, isStalled, type RunWindow, type WindowBasis } from '@/lib/pipeline/window'
-import { dbSafeJson } from '@/lib/db-text'
+import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
+import { buildConfigSnapshot, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -98,59 +98,6 @@ interface OpenRunResult {
   flags?: RunFlags
   period?: string
   window?: RunWindow
-}
-
-/** The tracking_configs slice frozen onto a run row. Named columns, never
- *  `select('*')`: a snapshot that silently grows a column is one nobody can
- *  compare across runs. Subreddits keep name + status only — the probe detail
- *  is churn, and the question a snapshot answers is "which communities was this
- *  run searching". */
-interface TrackingConfigRow {
-  brand_keywords?: string[] | null
-  competitor_keywords?: string[] | null
-  industry_keywords?: string[] | null
-  exclude_terms?: string[] | null
-  competitor_names?: string[] | null
-  own_handles?: Record<string, string> | null
-  competitor_handles?: Record<string, Record<string, string>> | null
-  platforms?: string[] | null
-  subreddits?: { name?: string; status?: string }[] | null
-  report_period?: string | null
-  report_day?: string | null
-  max_videos?: number | null
-  max_comments?: number | null
-  comment_depth?: number | null
-}
-
-const CONFIG_SNAPSHOT_COLUMNS =
-  'brand_keywords, competitor_keywords, industry_keywords, exclude_terms, competitor_names, ' +
-  'own_handles, competitor_handles, platforms, subreddits, report_period, report_day, ' +
-  'max_videos, max_comments, comment_depth'
-
-function buildConfigSnapshot(tc: TrackingConfigRow | null) {
-  return dbSafeJson({
-    brand_keywords: tc?.brand_keywords ?? [],
-    competitor_keywords: tc?.competitor_keywords ?? [],
-    industry_keywords: tc?.industry_keywords ?? [],
-    exclude_terms: tc?.exclude_terms ?? [],
-    competitor_names: tc?.competitor_names ?? [],
-    own_handles: tc?.own_handles ?? {},
-    competitor_handles: tc?.competitor_handles ?? {},
-    platforms: tc?.platforms ?? [],
-    subreddits: (tc?.subreddits ?? []).map((s) => ({ name: s?.name ?? '', status: s?.status ?? '' })),
-    report_period: tc?.report_period ?? null,
-    report_day: tc?.report_day ?? null,
-    max_videos: tc?.max_videos ?? null,
-    max_comments: tc?.max_comments ?? null,
-    comment_depth: tc?.comment_depth ?? null,
-  })
-}
-
-/** The window columns of a run row, when it carries one. */
-interface WindowColumns { window_start?: string | null; window_end?: string | null; window_basis?: string | null }
-function rowWindow(row: WindowColumns | null | undefined): RunWindow | null {
-  if (!row?.window_end || !row.window_basis) return null
-  return { start: row.window_start ?? null, end: row.window_end, basis: row.window_basis as WindowBasis }
 }
 
 /**
