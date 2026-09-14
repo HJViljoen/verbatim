@@ -114,7 +114,7 @@ grant select on public.config_changes to authenticated;
 alter table public.tracking_configs add column if not exists last_actor jsonb;
 
 comment on column public.tracking_configs.last_actor is
-  'Who made the most recent write to this row: {kind, user_id, label, at, run_id?}, set by the write site (lib/config-log.ts withActor). Read by the tracking_configs_audit trigger and then of no further interest — the log is the record, this column is only the channel. A session-client write cannot forge it: the trigger pins kind and user_id from the JWT whenever the caller''s JWT role is ''authenticated''.';
+  'Who made the most recent write to this row: {kind, user_id, label, at, nonce, run_id?}, set by the write site (lib/config-log.ts withActor). Read by the tracking_configs_audit trigger and then of no further interest — the log is the record, this column is only the channel. A session-client write cannot forge it: whenever the caller''s JWT role is ''authenticated'' the trigger takes kind, user_id AND label from identity (auth.uid(), platform_admins, users.email) and ignores what the payload claimed.';
 
 -- The tenant's own settings form writes two of the four term columns through
 -- the session client (T0-2 revoked the rest), so without this grant every
@@ -202,11 +202,31 @@ begin
 
   -- A browser-reachable write may not claim to be anything but the person
   -- holding the JWT. The column grant makes last_actor writable by the tenant's
-  -- own session, so identity here comes from auth.uid(), never from the payload.
+  -- own session, so a tenant's own owner can POST any stamp they like — and a
+  -- half-guard that pinned only the id would still let them file the row as
+  -- actor_kind 'operator' with actor_label 'postgres (hand-run SQL)', i.e. as
+  -- Verbatim staff at a SQL prompt. In a table whose entire value is
+  -- attribution, every attributable field therefore comes from IDENTITY here,
+  -- never from the payload: the person is auth.uid(), the label is their stored
+  -- email, and 'operator' survives only if that person really is a platform
+  -- admin — the same test public.is_superadmin() makes, inlined so this trigger
+  -- depends on nothing but tables. What is lost is the stamp's `detail` (which
+  -- statement of a multi-statement save this was), which is not attribution.
   if v_caller = 'authenticated' then
     v_user := v_uid;
     v_run  := null;
-    if v_kind not in ('user', 'operator') then v_kind := 'user'; end if;
+    if v_kind <> 'operator'
+       or v_uid is null
+       or not exists (select 1 from public.platform_admins pa where pa.user_id = v_uid)
+    then
+      v_kind := 'user';
+    end if;
+    begin
+      v_label := nullif(auth.jwt() ->> 'email', '');
+    exception when others then
+      v_label := null;
+    end;
+    v_label := coalesce((select u.email from public.users u where u.id = v_uid), v_label, v_caller);
   end if;
 
   if v_kind not in ('user','operator','script','pipeline','sql','reconstructed') then
@@ -271,11 +291,14 @@ create trigger tracking_configs_audit
 -- with a stub of this schema: hand-run SQL logs `sql`/postgres; the service
 -- role unstamped logs `pipeline`; the switcher (service role + an operator
 -- stamp) logs `operator` with the real person's id; a browser session cannot
--- forge a kind, a user or a run; a malformed stamp is normalised rather than
--- aborting the config write; an updated_at-only write logs nothing; a member
--- reads only their own tenant's log and can insert none of it; and the file
--- applies twice without error. That is also how the current_user bug above was
--- found.
+-- forge a kind, a user or a run; a tenant owner stamping kind 'operator' is
+-- written down as 'user'; a tenant owner stamping the label 'postgres
+-- (hand-run SQL)' is written down as their own email; a platform admin writing
+-- through their own session keeps 'operator'; a malformed stamp is normalised
+-- rather than aborting the config write; an updated_at-only write logs nothing;
+-- a member reads only their own tenant's log and can insert none of it; and the
+-- file applies twice without error. That is also how the current_user bug above
+-- was found.
 --
 -- Post-apply checks (run by hand, read-only):
 --   select count(*) from public.config_changes;                                  -- 0
