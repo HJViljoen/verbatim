@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
+import { recordConfigChange, retagChange, scriptActor, skipRetag } from '../lib/config-log'
 import { tagVideo, matchEntities, type VideoTags } from '../lib/gather/tagging'
 import { attributeVideos, type AttributionMethod, type AttrCandidate } from '../lib/gather/attribution'
 import { COMMENT_THRESHOLD, SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
@@ -20,6 +21,22 @@ import type { GatherConfig } from '../lib/gather/types'
 //   --write            persist the final tags (UPDATE changed rows)
 //
 // A2 derives buckets live from these flags, so after --write only A2/C/D re-run.
+//
+// TWO THINGS THIS SCRIPT LEARNED THE HARD WAY (WP2, 2026-09-15).
+//
+// 1. It never touches an OWNED or COMPETITOR_OWNED row. Those tags are an
+//    IDENTITY stamped by account membership (lib/gather/owned.ts: "the
+//    account's own read is the authority"), not a reading of content — and
+//    re-judging them by content strips is_client from 37 of Sealand's 59 own
+//    posts, because its handle `sealandgear` contains none of its brand
+//    keywords. The script used not to read `source` at all.
+// 2. --write leaves a config_changes row: method, before/after bucket counts,
+//    rows moved, rows spared, cost. When this ran on 2026-09-09 it moved 253
+//    Sealand videos and took 84 themes with them, and nothing anywhere recorded
+//    that it had happened — `videos` has no updated_at, attribution is never
+//    written to ai_call_log, and the script carries no run id. Whether that run
+//    used --method gpt or --method substring is still unknowable, and the two
+//    differ by up to 35x in rows touched.
 
 
 interface Args { clientId: string; platform?: string; method: AttributionMethod; write: boolean }
@@ -42,6 +59,7 @@ interface VideoRow {
   id: string
   video_id: string
   platform: string
+  source: string | null
   account_name: string
   caption: string
   hashtags: string[]
@@ -101,7 +119,7 @@ async function main() {
   const rows = await selectAll<VideoRow>(() => {
     let q = admin
       .from('videos')
-      .select('id, video_id, platform, account_name, caption, hashtags, comments_count, is_client, is_competitor, competitor_name')
+      .select('id, video_id, platform, source, account_name, caption, hashtags, comments_count, is_client, is_competitor, competitor_name')
       .eq('client_id', args.clientId)
     if (args.platform) q = q.eq('platform', args.platform)
     return q.order('id', { ascending: true })
@@ -114,6 +132,14 @@ async function main() {
     caption: r.caption,
     hashtags: r.hashtags,
   }))
+  if (args.method === 'gpt') {
+    // The call below is unconditional and sits far above the dry-run return, so
+    // a "dry" inspection has already spent the money by the time it prints.
+    console.log(
+      `! --method gpt asks OpenAI about every substring candidate among ${rows.length} videos, and it does that\n` +
+      '  BEFORE it knows whether you asked to write. --method substring is the free path.\n',
+    )
+  }
   console.log(`Attributing ${rows.length} videos (method=${args.method})…\n`)
   const { tags: finalTags, costUsd, gptJudged } = await attributeVideos(candidates, { method: args.method, config })
 
@@ -124,6 +150,9 @@ async function main() {
   const gptRejected: { row: VideoRow; from: string }[] = [] // substring tagged it, GPT demoted to industry
   const dual: VideoRow[] = []
   const changed: { row: VideoRow; tag: VideoTags }[] = []
+  const spared: VideoRow[] = []   // own / rival-owned posts: identity, not a reading
+  const bucketsBefore: string[] = []
+  const bucketsAfter: string[] = []
 
   for (const r of rows) {
     const aTag = tagVideo({ account_name: r.account_name, caption: '', hashtags: [] }, config)
@@ -138,12 +167,20 @@ async function main() {
     if (m.brand && m.competitors.length > 0) dual.push(r)
     if (bucket(sTag) !== 'industry' && bucket(fTag) === 'industry') gptRejected.push({ row: r, from: bucket(sTag) })
 
-    if (
+    const stored = bucket({ is_client: r.is_client, is_competitor: r.is_competitor, competitor_name: r.competitor_name })
+    const moves =
       fTag.is_client !== r.is_client ||
       fTag.is_competitor !== r.is_competitor ||
       fTag.competitor_name !== r.competitor_name
-    ) {
+    bucketsBefore.push(stored)
+    if (moves && skipRetag(r.source)) {
+      spared.push(r)
+      bucketsAfter.push(stored)
+    } else if (moves) {
       changed.push({ row: r, tag: fTag })
+      bucketsAfter.push(bucket(fTag))
+    } else {
+      bucketsAfter.push(stored)
     }
   }
 
@@ -177,7 +214,14 @@ async function main() {
   console.log(`gpt-judged:             ${gptJudged}`)
   console.log(`gpt rejected (noise):   ${gptRejected.length}`)
   console.log(`rows whose tags change: ${changed.length}`)
+  console.log(`own / rival-owned rows left alone: ${spared.length}  ← identity from the account, not from the caption`)
   console.log(`attribution cost:       $${costUsd.toFixed(5)}`)
+  if (spared.length) {
+    for (const r of spared.slice(0, 10)) {
+      console.log(`    ${r.source} [${r.platform}] @${r.account_name}: "${trim(r.caption, 60)}"`)
+    }
+    if (spared.length > 10) console.log(`    … +${spared.length - 10} more`)
+  }
 
   if (!args.write) {
     console.log('\n(dry — no writes. Re-run with --write to persist.)')
@@ -196,6 +240,21 @@ async function main() {
     else ok++
   }
   console.log(`updated ${ok}/${changed.length}${errs.length ? `; ${errs.length} errors:\n  ${errs.slice(0, 10).join('\n  ')}` : ''}`)
+
+  // The record the 2026-09-09 re-tag never left. Counts, not row ids: what a
+  // reader of a moved number needs is which buckets grew and which shrank.
+  const logged = await recordConfigChange(admin, retagChange({
+    clientId: args.clientId,
+    actor: scriptActor(`scripts/run-tagging.ts --write --method ${args.method}${args.platform ? ` --platform ${args.platform}` : ''}`),
+    method: args.method,
+    before: Object.fromEntries(tally(bucketsBefore)),
+    after: Object.fromEntries(tally(bucketsAfter)),
+    rowsAffected: ok,
+    skipped: spared.length,
+    costUsd,
+    note: args.platform ? `${args.platform} only` : undefined,
+  }))
+  console.log(logged ? 'change log: recorded.' : 'change log: NOT recorded (see the error above).')
 }
 
 main().catch((e) => {

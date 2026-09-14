@@ -1,4 +1,5 @@
 import { createAdminClient } from '../lib/supabase-admin'
+import { diffConfigRows, scriptActor, updateWithActor } from '../lib/config-log'
 import { parseSubreddits, setSubredditStatuses } from '../lib/gather/subreddits'
 import type { SubredditEntry } from '../lib/gather/types'
 
@@ -9,6 +10,12 @@ import type { SubredditEntry } from '../lib/gather/types'
 // diff, it is re-runnable, and the reasoning for every value is next to it.
 //
 //   node --env-file=.env.local --import tsx scripts/sealand-config-2026-09.ts [--apply]
+//
+// Every field it writes is logged by the tracking_configs trigger, one row per
+// column that moves; this script only supplies the actor, in the same UPDATE.
+// (When this script last ran, on 2026-09-09, there was no log at all: the rival
+// set it rewrote is recoverable only from theme_registry buckets and from this
+// file's own git history.)
 //
 // Dry by default. After --apply, re-stamp the stored corpus's entity tags:
 //   node --env-file=.env.local --import tsx scripts/run-tagging.ts --write --client <sealand>
@@ -152,12 +159,25 @@ async function main() {
   }
   console.log(`\n  unchanged: platforms ${list(before.platforms)} · report_period '${before.report_period}' (no schedule; the next manual run passes period:'monthly')`)
 
+  const actor = scriptActor('scripts/sealand-config-2026-09.ts --apply')
+  const willLog = diffConfigRows({
+    clientId: SEALAND,
+    before: before as unknown as Record<string, unknown>,
+    after: update as unknown as Record<string, unknown>,
+    actor,
+  })
+  console.log(`\n  change log: ${willLog.length} row(s) — ${willLog.map((r) => `${r.field} (${r.surface})`).join(', ') || 'none'}`)
+
   if (!apply) {
     console.log('\n(dry run — nothing written. Re-run with --apply.)')
     return
   }
 
-  const { error: upErr } = await admin.from('tracking_configs').update(update).eq('client_id', SEALAND)
+  const { error: upErr } = await updateWithActor(
+    (payload) => admin.from('tracking_configs').update(payload).eq('client_id', SEALAND),
+    update,
+    actor,
+  )
   if (upErr) throw new Error(`write config: ${upErr.message}`)
 
   const { data: after, error: reErr } = await admin

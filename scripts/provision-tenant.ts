@@ -25,6 +25,7 @@ import { randomBytes } from 'crypto'
 import { createAdminClient } from '../lib/supabase-admin'
 import { buildProvisionPlan, validateSpec, type TenantSpec } from '../lib/provisioning'
 import { ensureDefaultSchedule } from '../lib/schedules/default'
+import { diffConfigRows, recordConfigChanges, scriptActor } from '../lib/config-log'
 
 const csv = (v: string | undefined) => (v ?? '').split(',').map((s) => s.trim()).filter(Boolean)
 
@@ -99,7 +100,21 @@ async function main() {
     .from('tracking_configs').insert({ client_id: clientId, ...plan.config })
   if (cfgErr) throw new Error(`create tracking_config: ${cfgErr.message}`)
 
-  await ensureDefaultSchedule(admin, clientId, spec.reportEmails)
+  // The configuration a tenant is born with, logged (WP2). The tracking_configs
+  // trigger fires on UPDATE — a birth has no before to diff — so without this a
+  // provisioned tenant's first configuration would be undated forever, the way
+  // every tenant in production is today.
+  const actor = scriptActor('scripts/provision-tenant.ts --commit')
+  const born = diffConfigRows({
+    clientId,
+    before: null,
+    after: plan.config as unknown as Record<string, unknown>,
+    actor,
+    note: 'the configuration this workspace was provisioned with',
+  })
+  const logged = await recordConfigChanges(admin, born)
+
+  await ensureDefaultSchedule(admin, clientId, spec.reportEmails, null, actor)
 
   let inviteUrl: string | null = null
   if (invite) {
@@ -112,6 +127,7 @@ async function main() {
   }
 
   console.log(`\nCreated. client_id = ${clientId}`)
+  console.log(`Change log: ${logged} of ${born.length} opening value(s) recorded.`)
   if (inviteUrl) console.log(`Owner invite: ${inviteUrl}`)
   console.log(
     plan.client.is_active

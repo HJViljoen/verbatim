@@ -78,6 +78,49 @@ export function validateSpec(spec: TenantSpec): string[] {
   for (const e of (spec.reportEmails ?? [])) {
     push(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e), `not an email address: ${e}`)
   }
+  for (const [name, handles] of Object.entries(spec.competitorHandles ?? {})) {
+    for (const e of validateHandles(handles ?? {})) errors.push(`${name} — ${e}`)
+  }
+  return errors
+}
+
+/** The three platforms an account census can actually read. Reddit has no
+ *  brand profile worth reading — a subreddit is a community, not an account
+ *  (lib/gather/owned.ts OWNED_PROFILE_PLATFORMS). */
+export const HANDLE_PLATFORMS: readonly string[] = ['instagram', 'tiktok', 'youtube']
+
+/** A YouTube handle must be a CHANNEL ID, not an @name: the owned reader calls
+ *  the Data API's channels endpoint with it (lib/gather/owned.ts), and an
+ *  @name silently reads nothing. Both live tenants' own channels are stored
+ *  this way (`UClVW7BGbRvC5-0kowu8quhw`, `UCCthtmYgmon7h0meZaC1FEQ`). */
+export const YOUTUBE_CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/
+
+/** Validate one rival's account handles. Nothing in the product has ever
+ *  checked these — `buildProvisionPlan` only filters the KEYS to names that are
+ *  tracked — and a wrong handle credits another brand's posts to a tracked
+ *  rival, which is worse than tracking nothing (the reason Sealand's config
+ *  script verified each one by hand: TikTok @cotopaxi is a private individual
+ *  named Nelson). Returns sentences, empty when the set is usable. */
+export function validateHandles(handles: Record<string, string>): string[] {
+  const errors: string[] = []
+  for (const [platform, handle] of Object.entries(handles)) {
+    if (!HANDLE_PLATFORMS.includes(platform)) {
+      errors.push(`${platform}: not a platform an account can be read on (${HANDLE_PLATFORMS.join(', ')})`)
+      continue
+    }
+    const value = (handle ?? '').trim()
+    if (!value) {
+      errors.push(`${platform}: empty handle — leave the platform out instead`)
+      continue
+    }
+    if (value.startsWith('@')) {
+      errors.push(`${platform}: drop the leading @ — handles are stored bare`)
+      continue
+    }
+    if (platform === 'youtube' && !YOUTUBE_CHANNEL_ID.test(value)) {
+      errors.push(`youtube: "${value}" is not a channel id — YouTube is read by channel id (UC… , 24 characters), and an @name reads nothing at all`)
+    }
+  }
   return errors
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildProvisionPlan, validateSpec, LIMITS } from './provisioning'
+import { buildProvisionPlan, validateSpec, validateHandles, LIMITS } from './provisioning'
 
 const base = { companyName: 'Dagne Dover', competitorNames: ['Away', 'Beis', 'Calpak'] }
 
@@ -74,5 +74,44 @@ describe('buildProvisionPlan (Tier 2)', () => {
   it('flags reddit, which spends on every run', () => {
     const p = buildProvisionPlan({ ...base, platforms: ['tiktok', 'reddit'] })
     expect(p.warnings.join(' ')).toContain('reddit is enabled')
+  })
+})
+
+
+describe('validateHandles — a wrong handle credits someone else\'s posts', () => {
+  it('accepts the shape both live tenants actually store', () => {
+    expect(validateHandles({ instagram: 'cotopaxi', tiktok: 'cotopaxiofficial', youtube: 'UCjGWYNy7xrGOJ72AeMBb-hA' })).toEqual([])
+  })
+
+  it('refuses a YouTube @name, which the owned reader silently reads nothing for', () => {
+    const errors = validateHandles({ youtube: 'ottobock' })
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('channel id')
+  })
+
+  it('refuses a channel id of the wrong length or prefix', () => {
+    expect(validateHandles({ youtube: 'UCtooshort' })).toHaveLength(1)
+    expect(validateHandles({ youtube: 'ABPTbB5O4fdDTYeZNaj5ihFQ' })).toHaveLength(1)
+    expect(validateHandles({ youtube: 'UCPTbB5O4fdDTYeZNaj5ihFQ' })).toEqual([])
+  })
+
+  it('refuses a platform no account can be read on, Reddit included', () => {
+    expect(validateHandles({ reddit: 'amputee' })[0]).toContain('not a platform')
+    expect(validateHandles({ twitter: 'ossur' })[0]).toContain('not a platform')
+  })
+
+  it('refuses a leading @ and an empty value rather than storing either', () => {
+    expect(validateHandles({ instagram: '@ottobock' })[0]).toContain('drop the leading @')
+    expect(validateHandles({ tiktok: '  ' })[0]).toContain('empty handle')
+  })
+
+  it('carries the rival name when a spec is validated whole', () => {
+    const errors = validateSpec({
+      companyName: 'Össur',
+      competitorNames: ['Ottobock'],
+      competitorHandles: { Ottobock: { youtube: 'ottobock' } },
+    })
+    expect(errors[0]).toContain('Ottobock')
+    expect(errors[0]).toContain('channel id')
   })
 })
