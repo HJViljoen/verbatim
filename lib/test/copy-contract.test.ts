@@ -37,10 +37,22 @@ describe('copyNodes', () => {
     expect(prose.ownText).toBe('a b')
   })
 
-  it('is not confused by self-closed voids or attributes holding angle brackets', () => {
+  it('is not confused by self-closed voids', () => {
     const nodes = copyNodes('<div data-copy="level"><img src="x.png"/>Dominant · 21 of 36<br/></div>')
     expect(nodes).toHaveLength(1)
     expect(nodes[0].text).toBe('Dominant · 21 of 36')
+  })
+
+  it('does NOT survive a raw angle bracket inside an attribute value', () => {
+    // The honest bound of the scanner, asserted so nobody reads the title
+    // above and assumes more. markupText strips tags with /<[^>]*>/g
+    // (lib/test/render.ts), so an unescaped `>` in an attribute ends the tag
+    // early and its tail lands in the text. Harmless while every input comes
+    // from renderToStaticMarkup — React escapes `>` in attribute values — so
+    // the fix is "render the block", not a parser; a raw string fixture or a
+    // dangerouslySetInnerHTML block is what would break it.
+    expect(copyNodes('<span data-copy="level">Dominant · 21 of 36</span>')[0].text).toBe('Dominant · 21 of 36')
+    expect(markupText('<span title="a > b">Dominant</span>')).toBe('b">Dominant')
   })
 
   it('ignores a data-copy value it does not know', () => {
