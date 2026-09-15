@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
-import { renameFrom, type RenameRecord } from '../rivals'
+import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
 import { isMissingMonthlyReading, monthStartOf } from './monthly'
 import {
@@ -79,7 +79,9 @@ export function readingHandle(clientId: string, client: SupabaseClient = reading
 
 export interface MonthSeriesOptions {
   /** The audience keys to read. Every audience the tenant has when omitted —
-   *  which is what a coverage or "since we started" read wants. */
+   *  which is what a coverage or "since we started" read wants. Either name of
+   *  a renamed rival names the whole line: the months under the other name are
+   *  fetched too, and the series comes back keyed by the newest name. */
   audiences?: readonly Audience[]
   /** What the numerators are. Only `theme` has a table today; `subject` and
    *  `kind` get theirs in M4 and M5, and this is where they attach. */
@@ -97,7 +99,8 @@ export interface MonthSeriesOptions {
 
 export interface MonthSeriesSet {
   substrate: Substrate
-  /** One per audience asked for, per object asked for. */
+  /** One per RIVAL asked for, per object asked for — a renamed rival is one
+   *  series under its newest name, not one per stored key. */
   series: MonthSeries[]
   /** Every denominator row read, unfolded — what `sinceStart` and a coverage
    *  line are computed from. */
@@ -121,6 +124,13 @@ const NUMERATOR_ID_COLUMN: Partial<Record<ObjectKind, string>> = {
   theme: 'theme_id',
 }
 
+/** Every key one rival has worn, including the one asked for. A key nothing was
+ *  renamed to or from answers with itself. */
+function namesFor(chains: RenameChains, audience: string): string[] {
+  const head = chains.headOf.get(audience) ?? audience
+  return chains.namesOf.get(head) ?? [audience]
+}
+
 /**
  * The stored months for one axis, one set of audiences and one set of objects.
  *
@@ -137,9 +147,25 @@ export async function loadMonthSeries(
 ): Promise<MonthSeriesSet> {
   const from = monthStartOf(options.from)
   const to = monthStartOf(options.to)
-  const audiences = options.audiences ? [...new Set(options.audiences)] : null
+  const asked = options.audiences ? [...new Set(options.audiences)] : null
   const objectIds = options.objectIds ? [...new Set(options.objectIds)] : null
   const objectKind = options.objectKind ?? null
+
+  // THE RENAMES ARE READ FIRST, BECAUSE THEY WIDEN THE QUESTION. A caller's
+  // audience keys come off `tracking_configs`, so they are today's names; the
+  // months a renamed rival carried under its old name are filed under the old
+  // key and always will be (a frozen row cannot be re-keyed). Asking the
+  // database for today's key alone fetches half the line and `stitchRenames`
+  // has nothing to stitch — the line silently starts at the rename. So the ask
+  // is expanded through the chain before the query, and the answer is keyed by
+  // the head, which is also what stops one rival coming back as two series
+  // when the caller named no audiences at all.
+  const changes = await loadChanges(client, clientId)
+  const renames = changes.map(renameFrom).filter((r): r is RenameRecord => r != null)
+  const askedChains = renameChains(asked ?? [], renames)
+  const audiences = asked
+    ? [...new Set(asked.flatMap((a) => namesFor(askedChains, a)))]
+    : null
 
   let substrate: Substrate = 'seeded'
   let denominators: StoredDenominator[] = []
@@ -194,8 +220,6 @@ export async function loadMonthSeries(
     }
   }
 
-  const changes = await loadChanges(client, clientId)
-  const renames = changes.map(renameFrom).filter((r): r is RenameRecord => r != null)
   const changeLogFrom =
     options.changeLogFrom !== undefined ? options.changeLogFrom : firstLoggedAt(changes)
   const seriesChanges: SeriesChange[] = changes.map((c) => ({
@@ -208,7 +232,13 @@ export async function loadMonthSeries(
 
   const labels = table && objectIds ? await loadLabels(client, clientId, objectKind, objectIds) : new Map<string, string>()
 
-  const keys = audiences ?? [...new Set(denominators.map((d) => d.audience))]
+  // One key per RIVAL, not per stored string: a renamed rival holds months
+  // under both names, and keying by the raw distinct set would return the same
+  // line twice — a duplicated chart line, and a double count for a caller that
+  // sums across `series`.
+  const seed = asked ?? denominators.map((d) => d.audience)
+  const chains = asked ? askedChains : renameChains(seed, renames)
+  const keys = [...new Set(seed.map((a) => chains.headOf.get(a) ?? a))]
   const numeratorById = new Map<string, StoredNumerator[]>()
   for (const row of numerators) {
     const id = String((row as unknown as Record<string, unknown>)[idColumn as string] ?? '')

@@ -21,6 +21,7 @@ import {
   rivalKey,
   rivalNameOf,
   rivalSlug,
+  renameChains,
   stitchRenames,
   type Competitor,
   type RenameRecord,
@@ -545,5 +546,54 @@ describe('renameRival / retireRival — the TypeScript half', () => {
     } as never
     expect(await retireRival({ client, clientId: 'c1', actor }, 'r1')).toEqual({ retired: false, name: 'Poler' })
     expect(touched).toEqual([])
+  })
+})
+
+describe('renameChains — a reader expands its question before it asks it', () => {
+  const rename = (from: string, to: string, at = '2026-08-01T00:00:00Z'): RenameRecord => ({ from, to, at })
+  const TOPO_WAS = 'competitor:Topo Designs'
+  const TOPO = 'competitor:Topo'
+
+  it('answers today\'s key with BOTH keys, so the query fetches the whole line', () => {
+    // The bug this exists to stop: a caller asks for the key it holds (today's,
+    // off tracking_configs), the query fetches only months filed under it, and
+    // the stitched line silently starts at the rename.
+    const chains = renameChains([TOPO], [rename(TOPO_WAS, TOPO)])
+    expect(chains.headOf.get(TOPO)).toBe(TOPO)
+    expect(chains.namesOf.get(TOPO)).toEqual([TOPO_WAS, TOPO])
+  })
+
+  it('answers the OLD key with the same line, drawn under the new name', () => {
+    const chains = renameChains([TOPO_WAS], [rename(TOPO_WAS, TOPO)])
+    expect(chains.headOf.get(TOPO_WAS)).toBe(TOPO)
+    expect(chains.namesOf.get(TOPO)).toEqual([TOPO_WAS, TOPO])
+  })
+
+  it('folds a merge and a chain into one head, so one rival is never two series', () => {
+    const chains = renameChains(
+      ['competitor:A', 'competitor:B', 'competitor:C'],
+      [rename('competitor:A', 'competitor:C'), rename('competitor:B', 'competitor:C')],
+    )
+    expect(new Set(['competitor:A', 'competitor:B', 'competitor:C'].map((k) => chains.headOf.get(k)))).toEqual(
+      new Set(['competitor:C']),
+    )
+    expect(chains.namesOf.get('competitor:C')).toEqual(['competitor:A', 'competitor:B', 'competitor:C'])
+  })
+
+  it('leaves a key nothing was renamed to or from exactly as it is', () => {
+    const chains = renameChains(['industry-other', 'client'], [rename(TOPO_WAS, TOPO)])
+    expect(chains.headOf.get('industry-other')).toBe('industry-other')
+    expect(chains.namesOf.get('client')).toEqual(['client'])
+  })
+
+  it('agrees with stitchRenames about which names are one rival', () => {
+    const renames = [rename(TOPO_WAS, TOPO)]
+    const points = [
+      { audience: TOPO_WAS, month: '2026-05' },
+      { audience: TOPO, month: '2026-07' },
+    ]
+    const [line] = stitchRenames(points, renames)
+    const chains = renameChains([TOPO], renames)
+    expect(chains.namesOf.get(line.audience)).toEqual(line.names)
   })
 })

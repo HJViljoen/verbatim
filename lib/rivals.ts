@@ -519,35 +519,49 @@ export function renameLabel(from: string, to: string): string {
   return `${was} is now called ${now}`
 }
 
+/** Every key one rival has worn, and the one its line is drawn under. */
+export interface RenameChains {
+  /** For every key in the seed and in the log: the newest name in its chain. */
+  headOf: Map<string, string>
+  /** Keyed by head: the legend, oldest name first, ending on the head. */
+  namesOf: Map<string, string[]>
+}
+
+interface Chains extends RenameChains {
+  /** One step out of each key. */
+  next: Map<string, RenameRecord>
+  /** Keyed by head: the renames inside that component. */
+  chainOf: Map<string, RenameRecord[]>
+  /** How many renames a key is from its head; `MAX_SAFE_INTEGER` when it never
+   *  reaches it (the backwards step of a cycle). */
+  stepsToHead: (key: string, head: string) => number
+}
+
 /**
- * Join the halves of a renamed rival's series into one line with the change
- * marked on it.
+ * The keys one rival has worn, resolved from the rename log.
  *
- * A rename splits the record and cannot un-split it: frozen months keep the old
- * key forever. So the reader does the joining, and says so — the line is
- * continuous, the rule is drawn at the month the name changes, and the sentence
- * over it names both. Audiences nothing was renamed to or from come back
- * untouched, one series each, so a caller can pass everything it holds.
+ * Exported because a READER has to expand its question before it asks it: a
+ * caller that asks for today's rival keys (they come off `tracking_configs`,
+ * so that is the normal case) would otherwise never fetch the months filed
+ * under the old name, and `stitchRenames` would have nothing to stitch — the
+ * line would silently start at the rename. Seed this with the keys asked for,
+ * query on `namesOf(headOf(key))`, and key the answer by the head.
  *
- * Pure: the points are whatever the caller has, as long as they carry an
- * `audience` and a `month`. The keys one rival has worn are found as a
- * component, not as a chain, so all three shapes a log written by people
- * actually contains come out as ONE line with every name in the legend:
- * A→B→C (drawn under C), A→C together with B→C (a merge, drawn under C, both
- * rules marked), and A→B→A (no key in a cycle is un-renamed, so the newest
- * rename's target is the name the line takes, and only the rules that carry it
- * towards that name are drawn).
+ * Pure, and the same component walk `stitchRenames` does — the two cannot
+ * disagree about which names are one rival because there is one walk.
  */
-export function stitchRenames<P extends { audience: string; month: string }>(
-  series: readonly P[],
-  renames: readonly RenameRecord[],
-): StitchedSeries<P>[] {
+export function renameChains(seed: readonly string[], renames: readonly RenameRecord[]): RenameChains {
+  const { headOf, namesOf } = chainsOf(seed, renames)
+  return { headOf, namesOf }
+}
+
+function chainsOf(seed: readonly string[], renames: readonly RenameRecord[]): Chains {
   // One step out of each key: a rival was renamed TO something, once. A second
   // row for the same `from` is a correction of the first and is ignored.
   const next = new Map<string, RenameRecord>()
   for (const r of renames) if (r.from !== r.to && !next.has(r.from)) next.set(r.from, r)
 
-  const keys = new Set<string>(series.map((p) => p.audience))
+  const keys = new Set<string>(seed)
   for (const [from, step] of next) { keys.add(from); keys.add(step.to) }
 
   // The keys one rival has worn, as a COMPONENT rather than a chain. Two names
@@ -586,17 +600,11 @@ export function stitchRenames<P extends { audience: string; month: string }>(
     void root
   }
 
-  const grouped = new Map<string, P[]>()
-  for (const p of series) {
-    const head = headOf.get(p.audience) ?? p.audience
-    grouped.set(head, [...(grouped.get(head) ?? []), p])
-  }
-
   // How many renames a key is from the head, so the legend reads oldest first
   // and ends on the name the line is drawn under.
-  const stepsToHead = (key: string, head: string, size: number): number => {
+  const stepsToHead = (key: string, head: string): number => {
     let at = key
-    for (let n = 0; n <= size; n++) {
+    for (let n = 0; n <= keys.size; n++) {
       if (at === head) return n
       const step = next.get(at)
       if (!step) return Number.MAX_SAFE_INTEGER
@@ -605,20 +613,62 @@ export function stitchRenames<P extends { audience: string; month: string }>(
     return Number.MAX_SAFE_INTEGER
   }
 
+  const namesOf = new Map<string, string[]>()
+  for (const [, group] of members) {
+    const head = headOf.get(group[0]) as string
+    namesOf.set(
+      head,
+      [...group].sort((a, b) => {
+        const d = stepsToHead(b, head) - stepsToHead(a, head)
+        return d !== 0 ? d : a.localeCompare(b)
+      }),
+    )
+  }
+
+  return { headOf, namesOf, next, chainOf, stepsToHead }
+}
+
+/**
+ * Join the halves of a renamed rival's series into one line with the change
+ * marked on it.
+ *
+ * A rename splits the record and cannot un-split it: frozen months keep the old
+ * key forever. So the reader does the joining, and says so — the line is
+ * continuous, the rule is drawn at the month the name changes, and the sentence
+ * over it names both. Audiences nothing was renamed to or from come back
+ * untouched, one series each, so a caller can pass everything it holds.
+ *
+ * Pure: the points are whatever the caller has, as long as they carry an
+ * `audience` and a `month`. The keys one rival has worn are found as a
+ * component, not as a chain, so all three shapes a log written by people
+ * actually contains come out as ONE line with every name in the legend:
+ * A→B→C (drawn under C), A→C together with B→C (a merge, drawn under C, both
+ * rules marked), and A→B→A (no key in a cycle is un-renamed, so the newest
+ * rename's target is the name the line takes, and only the rules that carry it
+ * towards that name are drawn).
+ */
+export function stitchRenames<P extends { audience: string; month: string }>(
+  series: readonly P[],
+  renames: readonly RenameRecord[],
+): StitchedSeries<P>[] {
+  const { headOf, namesOf, chainOf, stepsToHead } = chainsOf(series.map((p) => p.audience), renames)
+
+  const grouped = new Map<string, P[]>()
+  for (const p of series) {
+    const head = headOf.get(p.audience) ?? p.audience
+    grouped.set(head, [...(grouped.get(head) ?? []), p])
+  }
+
   const out: StitchedSeries<P>[] = []
   for (const [head, points] of grouped) {
     const sorted = [...points].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0))
-    const group = members.get(find(head)) ?? [head]
-    const names = [...group].sort((a, b) => {
-      const d = stepsToHead(b, head, group.length) - stepsToHead(a, head, group.length)
-      return d !== 0 ? d : a.localeCompare(b)
-    })
+    const names = namesOf.get(head) ?? [head]
     const breaks: RenameBreak[] = []
     for (const step of chainOf.get(head) ?? []) {
       // Only the steps that carry a name TOWARDS the one the line is drawn
       // under. In a cycle the closing step points backwards, and a rule reading
       // "B is now called A" on a line labelled B is worse than no rule.
-      if (stepsToHead(step.from, head, group.length) <= stepsToHead(step.to, head, group.length)) continue
+      if (stepsToHead(step.from, head) <= stepsToHead(step.to, head)) continue
       // The month the new key first appears. No months under it yet (a rival
       // renamed before its first reading) means no rule to draw.
       const first = sorted.find((p) => p.audience === step.to)
