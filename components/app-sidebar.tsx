@@ -5,35 +5,40 @@ import {
   SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, LayoutTemplate, Users, UserRound, Sparkles, CreditCard, Settings, LogOut, BookOpen } from "lucide-react"
+import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, Layers, CalendarDays, Sparkles, Settings, LogOut } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
+import { OLD_PAGES, oldPageFor, oldPagesGroupLabel, surfaceForPath, surfacesIn, type NavKey } from "@/lib/nav"
 
-// Two groups (component-map §1, MASTER rule 1): the intelligence pages a client
-// reads, then the account pages. Trends was dissolved into the pages it served
-// (2026-08-22): share over time lives on Competitive, theme movers on Voice,
-// movement since the first update on the Dashboard, your accounts on Content.
-const INTELLIGENCE = [
-  { href: "/dashboard",             label: "Dashboard",           icon: LayoutDashboard },
-  { href: "/dashboard/market",      label: "Market Intelligence", icon: Target },
-  { href: "/dashboard/voice",       label: "Voice of Customer",   icon: MessageCircle },
-  { href: "/dashboard/profile",     label: "Consumer Profile",    icon: UserRound },
-  { href: "/dashboard/competitive", label: "Competitive Intel",   icon: Swords },
-  { href: "/dashboard/videos",      label: "Content",             icon: Play },
-]
-const ACCOUNT = [
-  { href: "/dashboard/studio",   label: "Studio",   icon: LayoutTemplate },
-  { href: "/dashboard/reports",  label: "Reports",  icon: FileText },
-  { href: "/dashboard/team",     label: "Team",     icon: Users },
-  { href: "/dashboard/billing",  label: "Billing",  icon: CreditCard },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
-  { href: "/dashboard/guide",    label: "Guide",    icon: BookOpen },
-]
+// The nine reading surfaces, in the mock's order, from lib/nav.ts — the one
+// table the page bars and the parked pages' banners read too. Two groups, as
+// every app artboard draws them: Intelligence, then Account.
+//
+// Studio, Team and Billing left this list in Phase 1 (WP9): Team and Billing
+// are rail entries inside Settings (components/settings-frame.tsx) and reach
+// their pages from there, and the Studio is reached from Reports. Nothing was
+// orphaned by dropping them; WP16 rebuilds the Settings rail around them.
 
-// The agent rides its OWN flag, not the Ask one: lighting up the agent must
-// not light up Pass E and the weekly re-evaluation inside a pipeline run.
-const AGENT_ITEM = { href: "/dashboard/agent", label: "Verbatim Agent", icon: Sparkles }
+const ICON: Record<NavKey, typeof LayoutDashboard> = {
+  overview: LayoutDashboard,
+  subjects: Layers,
+  voice: MessageCircle,
+  market: Target,
+  competitive: Swords,
+  week: CalendarDays,
+  ask: Sparkles,
+  reports: FileText,
+  settings: Settings,
+}
+
+// The parked pages keep the icons they had, so a reader recognises the page
+// they are being moved off.
+const OLD_ICON: Record<string, typeof LayoutDashboard> = {
+  "/dashboard/market-intel": Target,
+  "/dashboard/competitive-intel": Swords,
+  "/dashboard/videos": Play,
+}
 
 type NavItem = { href: string; label: string; icon: typeof LayoutDashboard }
 
@@ -49,10 +54,20 @@ const ITEM_CLASS =
 
 export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boolean; header?: React.ReactNode; ops?: React.ReactNode }) {
   const pathname = usePathname()
-  // The agent sits directly under the profile it reads from.
-  const intelligence: NavItem[] = showAgent
-    ? INTELLIGENCE.flatMap((item) => (item.href === "/dashboard/profile" ? [item, AGENT_ITEM] : [item]))
-    : INTELLIGENCE
+  // Ask is one of the nine and still rides AGENT_ENABLED: decision B opens it
+  // to client owners and admins in WP21, and until that lands SENDING is
+  // platform-admin only (app/dashboard/agent/page.tsx). Showing a client an
+  // item they cannot use is worse than showing them eight. One env var flips
+  // it; WP21 removes the gate.
+  const active = surfaceForPath(pathname)
+  const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: ICON[key] })
+  const intelligence = surfacesIn("Intelligence")
+    .filter((s) => s.key !== "ask" || showAgent)
+    .map((s) => item(s.key, s.href, s.label))
+  const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
+  const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_ICON[p.href] ?? Play }))
+  const parked = oldPageFor(pathname)
+
   // Close the mobile drawer when a nav item is tapped — otherwise it stays
   // open over the new page until the backdrop is tapped.
   const { setOpenMobile } = useSidebar()
@@ -61,19 +76,19 @@ export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boo
     await signOut()
   }
 
-  const renderGroup = (label: string, items: NavItem[]) => (
+  const renderGroup = (label: string, items: NavItem[], isActive: (href: string) => boolean) => (
     <SidebarGroup className="px-1.5">
       <SidebarGroupLabel className="h-7 px-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">
         {label}
       </SidebarGroupLabel>
       <SidebarGroupContent>
         <SidebarMenu className="gap-0.5">
-          {items.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton asChild isActive={pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"))} className={ITEM_CLASS}>
-                <Link href={item.href} onClick={() => setOpenMobile(false)}>
-                  <item.icon className="size-4 text-muted-foreground group-data-[active=true]/menu-button:text-foreground" aria-hidden />
-                  <span>{item.label}</span>
+          {items.map((navItem) => (
+            <SidebarMenuItem key={navItem.href}>
+              <SidebarMenuButton asChild isActive={isActive(navItem.href)} className={ITEM_CLASS}>
+                <Link href={navItem.href} onClick={() => setOpenMobile(false)}>
+                  <navItem.icon className="size-4 text-muted-foreground group-data-[active=true]/menu-button:text-foreground" aria-hidden />
+                  <span>{navItem.label}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -99,12 +114,18 @@ export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boo
       </SidebarHeader>
 
       <SidebarContent className="gap-1 pt-1">
-        {renderGroup("Intelligence", intelligence)}
-        {renderGroup("Account", ACCOUNT)}
+        {renderGroup("Intelligence", intelligence, (href) => active?.href === href)}
+        {renderGroup("Account", account, (href) => active?.href === href)}
+        {/* The pages Phase 1 replaces, in their own group with the date on the
+            label (decision C). They are listed rather than hidden because the
+            reading on them is the reading people have been using for months,
+            and a page that disappears without a date is a page someone emails
+            about. Each one carries a banner naming its replacement. */}
+        {renderGroup(oldPagesGroupLabel(), oldPages, (href) => parked?.href === href)}
         {/* The operator's group arrives as a slot for the same reason the
             header does: resolving who is looking is async, and this component
             is "use client". Absent — every user who is not a platform admin —
-            the sidebar is exactly the two groups above. */}
+            the sidebar is exactly the three groups above. */}
         {ops}
       </SidebarContent>
 
