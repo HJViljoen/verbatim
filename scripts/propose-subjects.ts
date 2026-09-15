@@ -1,5 +1,10 @@
 import { createAdminClient } from '../lib/supabase-admin'
-import { buildProposeUserPrompt, proposalSummary, proposeSubjects } from '../lib/subjects/propose'
+import {
+  buildProposeUserPrompt,
+  loadProposalSources,
+  proposalSummary,
+  proposeSubjects,
+} from '../lib/subjects/propose'
 import { SUBJECTS_MAX, SUBJECTS_MIN } from '../lib/subjects/types'
 
 // Propose a tenant's subject candidates (design item 22, decision E).
@@ -38,22 +43,24 @@ async function main() {
   const { clientId, apply, showPrompt } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
 
-  const dry = await proposeSubjects(admin, clientId, { dryRun: true })
-  const claims = dry.sources.filter((s) => s.kind === 'claim').length
-  const themes = dry.sources.filter((s) => s.kind === 'theme').length
+  // Read once. The pools are two full reads of the tenant's claims and themes,
+  // and the priced dry run and the real call are asking about the same ones.
+  const sources = await loadProposalSources(admin, clientId)
+  const claims = sources.filter((s) => s.kind === 'claim').length
+  const themes = sources.filter((s) => s.kind === 'theme').length
   console.log(`[propose-subjects] ${clientId}: ${claims} own-voice claims · ${themes} category themes`)
-  if (showPrompt) console.log(`\n--- the prompt ---\n${buildProposeUserPrompt(dry.sources)}\n`)
+  if (showPrompt) console.log(`\n--- the prompt ---\n${buildProposeUserPrompt(sources)}\n`)
 
   if (!apply) {
     console.log('[propose-subjects] dry run — nothing sent. Re-run with --apply to make the one model call.')
     return
   }
-  if (dry.sources.length === 0) {
+  if (sources.length === 0) {
     console.log('[propose-subjects] nothing to propose from: no own-voice claims and no category themes on file.')
     return
   }
 
-  const result = await proposeSubjects(admin, clientId)
+  const result = await proposeSubjects(admin, clientId, { sources })
   console.log(`\n${proposalSummary(result)}\n`)
   console.log(`[propose-subjects] $${result.costUsd.toFixed(4)} · pick ${SUBJECTS_MIN}-${SUBJECTS_MAX} of these in Settings › Subjects.`)
 }

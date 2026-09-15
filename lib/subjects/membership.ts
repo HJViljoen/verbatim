@@ -406,6 +406,12 @@ export interface SubjectMembershipOptions {
   /** Skip the coverage refusal. For the calibration harness alone, which is
    *  measuring precision on a sample and is not writing a number anyone reads. */
   ignoreCoverage?: boolean
+  /** The tenant's embedding coverage, when the caller has already counted it.
+   *  It is a property of the PASS, not of a subject — two `count=exact` queries
+   *  over the whole insight population — and asking it once per subject is five
+   *  to eight times the same answer. Both runners read it once and hand it
+   *  down; absent, this reads it itself, so a lone caller is never wrong. */
+  coverage?: { embedded: number; total: number }
 }
 
 /**
@@ -429,7 +435,7 @@ export async function judgeSubject(
   const budget = opts.budgetUsd ?? subjectBudgetUsd()
 
   if (!opts.ignoreCoverage) {
-    const coverage = await embeddingCoverage(admin, opts.clientId)
+    const coverage = opts.coverage ?? (await embeddingCoverage(admin, opts.clientId))
     if (!coverageClears(coverage)) {
       out.skipped = 'coverage_short'
       return out
@@ -569,6 +575,8 @@ export async function judgeAllSubjects(
   if (subjects === null) return [{ ...emptyMembershipResult(), skipped: 'migration' }]
   if (subjects.length === 0) return [{ ...emptyMembershipResult(), skipped: 'no_subjects' }]
   if (!opts.dryRun) await embedSubjects(admin, subjects)
+  // Once for the pass, not once per subject.
+  const coverage = opts.coverage ?? (opts.ignoreCoverage ? undefined : await embeddingCoverage(admin, opts.clientId))
 
   const out: SubjectMembershipResult[] = []
   let spent = 0
@@ -576,7 +584,7 @@ export async function judgeAllSubjects(
   for (const s of subjects) {
     // The ceiling is the PASS's, not each subject's: eight subjects each
     // stopping at $3 would be a $24 pass.
-    const r = await judgeSubject(admin, s, { ...opts, budgetUsd: Math.max(0, budget - spent) })
+    const r = await judgeSubject(admin, s, { ...opts, coverage, budgetUsd: Math.max(0, budget - spent) })
     spent += r.costUsd
     out.push(r)
   }

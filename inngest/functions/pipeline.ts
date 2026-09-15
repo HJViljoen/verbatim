@@ -34,6 +34,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
+import { embeddingCoverage } from '@/lib/agent/retrieve'
 import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
@@ -1296,29 +1297,37 @@ export const runPipeline = inngest.createFunction(
     //
     //     No-op when M4 is not applied, and a REFUSAL rather than a low number
     //     when insight embedding coverage is short — see lib/subjects/membership.ts.
-    const subjects = await step
+    const subjectPlan = await step
       .run('plan-subject-membership', async () => {
         const admin = createAdminClient()
         try {
           const named = await loadActiveSubjects(admin, clientId)
+          // Counted once here rather than once inside each fan-out step: it is
+          // two count=exact queries over the whole insight population and it is
+          // a property of the PASS, not of a subject.
+          const coverage = named.length > 0 ? await embeddingCoverage(admin, clientId) : null
           // The phrase vectors, here rather than in each batch step: 5-8 texts
           // is one embeddings request and about half a millionth of a dollar,
           // and every band read below is meaningless without them. Re-read
           // afterwards so each step carries its subject's real embedding state
           // — a subject that has just been given a vector must not arrive at
           // its step still looking like one that never had one.
-          if (await embedSubjects(admin, named) > 0) return await loadActiveSubjects(admin, clientId)
-          return named
+          if (await embedSubjects(admin, named) > 0) {
+            return { subjects: await loadActiveSubjects(admin, clientId), coverage }
+          }
+          return { subjects: named, coverage }
         } catch (e) {
           if (!isMissingSubjects(e)) throw e
           console.log('[subject-membership] skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet')
-          return []
+          return { subjects: [], coverage: null }
         }
       })
       .catch((e) => {
         console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
-        return []
+        return { subjects: [], coverage: null }
       })
+    const subjects = subjectPlan.subjects
+    const subjectCoverage = subjectPlan.coverage ?? undefined
     //
     //     THE CEILING IS THE PASS'S, NOT EACH SUBJECT'S. subjectBudgetUsd() is
     //     5% of RUN_MODEL_BUDGET_USD — $3 at the default $60 — and it is a
@@ -1339,7 +1348,7 @@ export const runPipeline = inngest.createFunction(
       const r = await step
         .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
           const admin = createAdminClient()
-          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd })
+          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd, coverage: subjectCoverage })
           console.log(`[subject-membership] ${membershipSummary(r)}`)
           return r
         })

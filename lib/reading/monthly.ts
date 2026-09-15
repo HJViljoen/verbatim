@@ -770,12 +770,16 @@ export async function freezeMonths(
     : await runClusteringKey(admin, opts.runId)
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
   const noSide = (): FreezeSide => ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 })
-  const empty: FreezeSummary = {
-    months, denominators: noSide(), themes: noSide(),
-    sides: { [TABLE_THEME_READINGS]: noSide() },
+  // Every side this visit COULD have written gets an entry, the theme side and
+  // each sibling alike, so a caller iterating `sides` reports the same set of
+  // tables on a visit with no months as on one with months.
+  const emptySides = (): Record<string, FreezeSide> => {
+    const out: Record<string, FreezeSide> = { [TABLE_THEME_READINGS]: noSide() }
+    for (const side of opts.sides ?? []) out[side.table.table] = noSide()
+    return out
   }
   const window = windowOf(months)
-  if (!window) return empty
+  if (!window) return { months, denominators: noSide(), themes: noSide(), sides: emptySides() }
 
   // Denominators.
   const freshDenoms = await readDenominators(admin, opts.clientId, window)
@@ -855,7 +859,7 @@ export async function freezeMonths(
       refusedLate: denomMerge.refusedLate.length,
     },
     themes: noSide(),
-    sides: { [TABLE_THEME_READINGS]: noSide() },
+    sides: emptySides(),
   }
   for (const m of merges) summary.sides[m.side.table.table] = sideOf(m)
   summary.themes = summary.sides[TABLE_THEME_READINGS]

@@ -419,9 +419,15 @@ export async function loadProposalSources(
 export async function proposeSubjects(
   admin: ReturnType<typeof createAdminClient>,
   clientId: string,
-  opts: { dryRun?: boolean } = {},
+  opts: {
+    dryRun?: boolean
+    /** The pools, when the caller has already read them. Every runner prices a
+     *  dry run first and then makes the call, and reading two full pools twice
+     *  for one $0.002 prompt is two round trips nobody asked for. */
+    sources?: readonly ProposalSource[]
+  } = {},
 ): Promise<ProposalResult> {
-  const sources = await loadProposalSources(admin, clientId)
+  const sources = opts.sources ? [...opts.sources] : await loadProposalSources(admin, clientId)
   if (opts.dryRun) return { clientId, sources, candidates: [], costUsd: 0, error: 'dry run — nothing was sent' }
 
   const systemPrompt = buildProposeSystemPrompt()
