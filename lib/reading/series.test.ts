@@ -272,6 +272,24 @@ describe('buildSeries · labels', () => {
     expect(s.points[0].labels.find((l) => l.kind === 'tracking_change')!.text).toBe('Two search terms were added.')
   })
 
+  it('says one sentence per thing said, not one per covering change', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-06-01', 182)],
+      changes: [
+        { changed_at: '2026-06-02T00:00:00.000Z', surface: 'terms', note: null, months: '[2026-06-01,2026-07-01)' },
+        { changed_at: '2026-06-03T00:00:00.000Z', surface: 'rivals', note: null, months: '[2026-06-01,2026-07-01)' },
+        { changed_at: '2026-06-04T00:00:00.000Z', surface: 'handles', note: 'A rival was renamed.', months: '[2026-06-01,2026-07-01)' },
+      ],
+    })
+    const said = s.points[0].labels.filter((l) => l.kind === 'tracking_change').map((l) => l.text)
+    expect(said).toEqual([
+      'What this workspace tracks changed, and it moved this month.',
+      'A rival was renamed.',
+    ])
+  })
+
   it('a change with no months band marks nothing — a band nobody can parse is no record', () => {
     const s = buildSeries({
       axis,

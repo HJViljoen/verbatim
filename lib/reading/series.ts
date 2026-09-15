@@ -420,12 +420,19 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
     const renamed = renamedAt.get(month)
     if (renamed) labels.push({ kind: 'renamed', text: renamed.label ?? renameLabel(renamed.from, renamed.to) })
 
+    // ONE SENTENCE PER THING SAID, not one per covering change.
+    // `loadMonthSeries` passes EVERY change the tenant has ever logged, so a
+    // month covered by several bands collected several labels — and every one
+    // whose `note` is null carries the SAME default sentence, so a month could
+    // carry N identical caveats. The same "one caveat per bar" shape as the
+    // unrecorded-grouping note, in the label list rather than in the notes.
+    const saidHere = new Set<string>()
     for (const change of input.changes ?? []) {
       if (!rangeCoversMonth(change.months, month)) continue
-      labels.push({
-        kind: 'tracking_change',
-        text: change.note ?? 'What this workspace tracks changed, and it moved this month.',
-      })
+      const text = change.note ?? 'What this workspace tracks changed, and it moved this month.'
+      if (saidHere.has(text)) continue
+      saidHere.add(text)
+      labels.push({ kind: 'tracking_change', text })
     }
 
     if (
