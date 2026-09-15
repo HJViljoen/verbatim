@@ -105,7 +105,15 @@ export const DIRECTION_WORDS = [
   'upward', 'downward', 'uptick', 'downtick', 'momentum',
 ]
 
-export const DIRECTION_RE = new RegExp(`\\b(${DIRECTION_WORDS.join('|')})\\b`, 'gi')
+/**
+ * A fresh matcher each call, never one shared `/g` regex: `lastIndex` survives
+ * a call, so a caller that loops over an exported instance and forgets to
+ * reset it skips matches — non-deterministically, which is the worst way for a
+ * contract to fail.
+ */
+export function directionRe(): RegExp {
+  return new RegExp(`\\b(${DIRECTION_WORDS.join('|')})\\b`, 'gi')
+}
 
 /** A level's evidence: "of" followed by a number, with or without separators. */
 const DENOMINATOR_RE = /\bof\s+[\d][\d,.   ]*\d*\b/i
@@ -252,10 +260,10 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   const outermost = verdicts.filter((n) => !verdicts.some((p) => p !== n && n.start >= p.start && n.end <= p.end))
   for (const n of [...outermost].sort((x, y) => y.start - x.start)) rest = rest.slice(0, n.start) + ' ' + rest.slice(n.end)
   const restText = markupText(rest)
-  DIRECTION_RE.lastIndex = 0
+  const re = directionRe()
   const seen = new Set<string>()
   let d: RegExpExecArray | null
-  while ((d = DIRECTION_RE.exec(restText)) !== null) {
+  while ((d = re.exec(restText)) !== null) {
     const word = d[1].toLowerCase()
     if (seen.has(word)) continue
     seen.add(word)

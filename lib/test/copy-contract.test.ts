@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { markupText, decodeEntities } from './render'
-import { copyNodes, copyViolations, assertCopyContract, DIRECTION_WORDS } from './copy-contract'
+import { copyNodes, copyViolations, assertCopyContract, DIRECTION_WORDS, directionRe } from './copy-contract'
 
 // The contract's own tests. Markup strings rather than JSX so this file stays
 // under the pure-logic include (`lib/**/*.test.ts`) and the scanner is tested
@@ -141,6 +141,13 @@ describe('copyViolations — (c) no direction word outside a verdict node', () =
     expect(DIRECTION_WORDS).not.toContain('rise')
     expect(DIRECTION_WORDS).not.toContain('fall')
     expect(copyViolations('<p>Comments that fall outside the window.</p>')).toEqual([])
+  })
+
+  it('hands out a fresh matcher, so a caller cannot carry lastIndex into the next call', () => {
+    const first = directionRe()
+    expect(first.exec('gaining and fading')?.[1]).toBe('gaining')
+    expect(first.lastIndex).toBeGreaterThan(0)
+    expect(directionRe().exec('gaining and fading')?.[1]).toBe('gaining')
   })
 
   it('matches whole words only', () => {
