@@ -69,8 +69,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `month_theme_readings` — which exist once `20260915092000_monthly_reading.sql`
   is applied AND the tables are seeded, not before; a fresh database has the
   code and no rows, and every reader has to survive that. (Production: applied
-  and seeded 2026-09-15 — 214 denominator months, 2,872 theme readings, both
-  tenants.) A month is `filling` until 30 days after it ends and `frozen` after;
+  and seeded on both tenants 2026-09-15; counts live in the status notes and in
+  the database, never here.) A month is `filling` until 30 days after it ends and `frozen` after;
   a frozen row is never rewritten — a BEFORE UPDATE trigger per table
   (`month_denominators_frozen_guard`, `month_theme_readings_frozen_guard`, both
   running `month_reading_frozen_guard()`) refuses it, so a late-discovered video
