@@ -374,7 +374,7 @@ export async function fetchQuoteTextsByRefs(
     ? (async () => {
         const rows = await fetchChunks<{ run_id: string; brand_voice: { about?: { quote?: string | null }[] } | null }>(
           [...brandVoice.keys()],
-          (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk).order('run_id') as unknown as Rows,
+          (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk).order('id') as unknown as Rows,
         )
         for (const r of rows) {
           for (const n of brandVoice.get(r.run_id) ?? []) {
