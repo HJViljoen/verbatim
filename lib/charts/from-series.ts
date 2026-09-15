@@ -1,3 +1,4 @@
+import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import type { MonthLabel, MonthPoint, MonthSeries } from '../reading/series'
 import { monthStartOf, nextMonth } from '../reading/monthly'
@@ -121,7 +122,11 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
   // denominator passes its own `endNote`.
   const end = measure === 'share' ? [...points].reverse().find((p) => p.value != null) : undefined
   return {
-    label: opts.label ?? series.objectLabel ?? series.audience,
+    // A CLIENT NEVER SEES A PIPELINE KEY. Callers are expected to pass `label`,
+    // and the fallback used to hand `industry-other` and `competitor:Ottobock`
+    // straight to an end label and every hover on the line. `audienceLabel` is
+    // the one place those keys are turned into words (lib/readiness/types.ts).
+    label: opts.label ?? series.objectLabel ?? audienceLabel(series.audience),
     color: opts.color,
     points,
     ...(opts.excludes ? { excludes: opts.excludes } : {}),

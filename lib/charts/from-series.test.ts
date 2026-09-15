@@ -102,9 +102,11 @@ describe('seriesToCalendar labelling', () => {
     expect(seriesToCalendar(series([point('2026-07-01')]), { color: 'c' }).label).toBe('Durability')
   })
 
-  it('falls back to the audience key when the series is about an audience', () => {
+  it('names the audience in the client\'s words, never by its pipeline key', () => {
     const s = series([point('2026-07-01')], { objectLabel: null })
-    expect(seriesToCalendar(s, { color: 'c' }).label).toBe('competitor:Freitag')
+    expect(seriesToCalendar(s, { color: 'c' }).label).toBe('Freitag')
+    expect(seriesToCalendar({ ...s, audience: 'industry-other' }, { color: 'c' }).label).toBe('The category')
+    expect(seriesToCalendar({ ...s, audience: 'client' }, { color: 'c' }).label).toBe('Your own brand')
   })
 
   it('ends with the denominator of the month the end label is drawn at', () => {
