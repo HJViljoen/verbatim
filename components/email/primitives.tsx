@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- an email carries plain <img>, never next/image */
+import { translationNote, MACHINE_TRANSLATION_STAMP } from '@/components/quote-block'
 import type { CSSProperties, ReactNode } from 'react'
 import { EMAIL, FONT } from '../../lib/email/theme'
 
@@ -147,7 +148,13 @@ export function DeltaText({ value, unit = '', decimals = 0, good = 'neutral' }: 
   return <span style={{ ...text.mono, fontSize: 11, fontWeight: 600, color }}>{v > 0 ? '+' : '−'}{Math.abs(v).toLocaleString('en-US')}{unit}</span>
 }
 
-export function Quote({ text: t, cite }: { text: string; cite?: ReactNode }) {
+export function Quote({ text: t, cite, lang, english }: { text: string; cite?: ReactNode; lang?: string | null; english?: string | null }) {
+  const note = translationNote({ lang, english })
+  const label = note.language
+    ? note.english
+      ? `${note.language} · English below, ${MACHINE_TRANSLATION_STAMP}`
+      : `${note.language} · no English rendering yet`
+    : null
   return (
     <table width="100%" {...presentation} style={{ ...T, marginTop: 6 }}>
       <tbody>
@@ -155,6 +162,8 @@ export function Quote({ text: t, cite }: { text: string; cite?: ReactNode }) {
           <td width={2} style={{ background: EMAIL.border, fontSize: 1 }}>&nbsp;</td>
           <td style={{ padding: '2px 0 2px 10px' }}>
             <div style={{ fontFamily: FONT.serif, fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: EMAIL.ink }}>“{t}”</div>
+            {note.english ? <div style={{ fontFamily: FONT.serif, fontSize: 13, lineHeight: '1.45', color: EMAIL.muted, marginTop: 4 }}>{note.english}</div> : null}
+            {label ? <div style={{ ...text.small, fontSize: 10.5, marginTop: 3 }}>{label}</div> : null}
             {cite ? <div style={{ ...text.small, fontSize: 11, marginTop: 3 }}>{cite}</div> : null}
           </td>
         </tr>

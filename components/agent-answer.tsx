@@ -62,7 +62,7 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
                 </p>
                 <ConversationCount n={point.conversationCount} />
               </div>
-              <Quotes items={point.quotes.map((q) => q.text)} />
+              <Quotes items={point.quotes.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))} />
               {point.themeRefs.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {point.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}

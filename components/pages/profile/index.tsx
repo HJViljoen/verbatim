@@ -213,7 +213,7 @@ function Block({
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-[15px] leading-relaxed text-foreground/85">{body}</p>
-          {quote && <Quotes items={[quote.text]} />}
+          {quote && <Quotes items={[{ text: quote.text, lang: quote.lang, english: quote.english }]} />}
         </CardContent>
       </Card>
     </div>

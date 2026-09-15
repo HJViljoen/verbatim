@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from 'react'
+import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
@@ -194,7 +195,7 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
           <Eyebrow>What the conversation shows</Eyebrow>
           {saw?.text && <BlockSlot block={saw} textClass={`max-w-[70ch] ${BODY}`}><Paragraphs text={saw.text} figures={figures} className={`max-w-[70ch] ${BODY}`} /></BlockSlot>}
           {saw?.quote?.text && (
-            <blockquote className="mt-1 max-w-[66ch] rounded-lg bg-inner px-5 py-3.5 font-serif text-[15px] italic leading-[1.5] text-secondary-foreground">“{saw.quote.text}”</blockquote>
+            <div className="mt-1"><QuoteBlock quote={saw.quote} mode="print" /></div>
           )}
         </div>
         <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>

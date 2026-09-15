@@ -360,9 +360,9 @@ function GroundedIn({ conv, voices, platforms, themes, mode }: { conv: number; v
   )
 }
 
-function QuoteList({ quotes }: { quotes: { text: string }[] }) {
+function QuoteList({ quotes }: { quotes: { text: string; lang?: string | null; english?: string | null }[] }) {
   if (quotes.length === 0) return null
-  return <div className="flex flex-col gap-2.5">{quotes.map((q, i) => <Verbatim key={i} quote={q.text} />)}</div>
+  return <div className="flex flex-col gap-2.5">{quotes.map((q, i) => <Verbatim key={i} quote={q.text} lang={q.lang} english={q.english} />)}</div>
 }
 
 /** The single-column pane version — the detail pane beside rail/list, app mode. */
@@ -449,7 +449,7 @@ function DetailPane({ d, mode }: { d: D; mode: RenderMode }) {
     <>
       <DetailHeader eyebrow="Said about you" title={item.claim} meta={`${item.account}${item.platform ? ` · ${platformLabel(item.platform)}` : ''}`} />
       <PaneBody>
-        <DetailSection label="In their words"><Verbatim quote={item.quote.text} cite={item.account} /></DetailSection>
+        <DetailSection label="In their words"><Verbatim quote={item.quote.text} lang={item.quote.lang} english={item.quote.english} cite={item.account} /></DetailSection>
         {item.url && (
           <DetailSection><a href={item.url} target="_blank" rel="noopener noreferrer" className="text-[12.5px] font-medium hover:underline">Watch the video →</a></DetailSection>
         )}
@@ -544,7 +544,7 @@ function DetailSlideBody({ d, item }: { d: D; item: MarketDetail }) {
       <div className="min-h-0 overflow-hidden">
         <p className="mb-1 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Said about you</p>
         <h3 className="text-[15px] font-semibold leading-[1.3] [text-wrap:pretty]">{item.claim}</h3>
-        <div className="mt-3"><Verbatim quote={item.quote.text} cite={item.account} /></div>
+        <div className="mt-3"><Verbatim quote={item.quote.text} lang={item.quote.lang} english={item.quote.english} cite={item.account} /></div>
       </div>
       <div className="min-h-0 overflow-hidden">
         <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Where</p>
