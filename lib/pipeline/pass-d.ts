@@ -820,6 +820,23 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     // `recRows.length`: a parse that returned no recommendations is a real
     // answer for this update, and leaving the previous attempt's rows behind
     // would report it as this one's.
+    //
+    // WHICH HALF SURVIVES, AND WHICH DOES NOT — the cost of that choice, said
+    // out loud. Only the RECOMMENDATIONS are left standing. `runPassD` deleted
+    // and reinserted this run's `market_insights` with fresh ids long before the
+    // D-b call, so on a RETRY that then fails (`!b.parsed` above, or the
+    // insights/competitive early return before the call), the surviving rows'
+    // `based_on` ids point at market_insights that no longer exist. Both readers
+    // resolve a dangling id to nothing — `lib/market-tiles.ts` recEvidenceTier
+    // gives tier `archive`, `lib/pages/market.ts` recSupportIds gives no
+    // evidence chips — so those recommendations render ungrounded and sunk in
+    // the agenda, and the step reports `recommendations: 0`.
+    //
+    // Degraded beats empty: the words are still the client's last real answer,
+    // where the old behaviour showed an update with no recommendations at all.
+    // Moving the delete above the `!b.parsed` return would buy the empty state
+    // back and re-open exactly the bug this replaced, so it is a judgement to
+    // revisit deliberately (2026-09-15, WP7), not a line to quietly move.
     {
       const { error } = await admin.from('recommendations').delete().eq('client_id', clientId).eq('run_id', runId)
       if (error) throw new Error(`clear recommendations: ${error.message}`)
