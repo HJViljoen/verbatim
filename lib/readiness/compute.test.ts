@@ -235,6 +235,30 @@ describe('tracked terms', () => {
     expect(find(computeReadiness(inputs), 'tracked-terms').status).toBe('exists')
   })
 
+  it('names ops, not the client, when only the missing record holds it back', () => {
+    // Both workspaces today: every bucket has words in it, and the row sits at
+    // `partial` solely because nothing writes a change down. Telling the client
+    // to add or drop a term would not move the pill by a word.
+    const row = find(computeReadiness(ossur()), 'tracked-terms')
+    expect(row.status).toBe('partial')
+    expect(row.owner).toBe('ops')
+    expect(row.unlocks).toContain('Apply the change log')
+  })
+
+  it('goes back to the client the moment a bucket is empty', () => {
+    const inputs = ossur({ terms: { brand: 1, competitor: 0, industry: 5, exclude: 0, updatedAt: null } })
+    const row = find(computeReadiness(inputs), 'tracked-terms')
+    expect(row.owner).toBe('client')
+    expect(row.unlocks).toContain('Tell us what to add or drop')
+  })
+
+  it('is the client’s once the log exists but nothing has been recorded in it', () => {
+    const inputs = ossur({ changeLog: { available: true, rows: 0, firstLoggedAt: null, lastChangeAt: null } })
+    const row = find(computeReadiness(inputs), 'tracked-terms')
+    expect(row.status).toBe('partial')
+    expect(row.owner).toBe('client')
+  })
+
   it('is missing when nothing is tracked at all', () => {
     const inputs = ossur({ terms: { brand: 0, competitor: 0, industry: 0, exclude: 0, updatedAt: null } })
     const row = find(computeReadiness(inputs), 'tracked-terms')
@@ -546,6 +570,21 @@ describe('what was decided', () => {
   it('is in place when every recommendation is linked and decisions are being made', () => {
     const inputs = sealand({ recommendations: { total: 65, withLineage: 65, decisions: 4 } })
     expect(find(computeReadiness(inputs), 'decisions').status).toBe('exists')
+  })
+
+  it('does not ask the client for an act nobody can perform yet', () => {
+    // Today on both workspaces. The owner column is there to separate the red
+    // that costs no engineering time from the red that does; naming the client
+    // beside "mark a recommendation done" while nothing can record one does
+    // the opposite.
+    const row = find(computeReadiness(ossur()), 'decisions')
+    expect(row.owner).toBe('ops')
+    expect(row.unlocks).toContain('Apply the record of what was decided')
+
+    const ready = ossur({ recommendations: { total: 56, withLineage: 5, decisions: 0 } })
+    const readyRow = find(computeReadiness(ready), 'decisions')
+    expect(readyRow.owner).toBe('client')
+    expect(readyRow.unlocks).toContain('Mark a recommendation done')
   })
 })
 

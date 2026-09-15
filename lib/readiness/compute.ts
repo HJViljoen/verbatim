@@ -104,11 +104,17 @@ function trackedTerms(i: ReadinessInputs): ReadinessRow {
   const t = i.terms
   const buckets = [t.brand, t.competitor, t.industry]
   const empty = buckets.filter((n) => n === 0).length
-  const status: ReadinessStatus = worst(
-    buckets.every((n) => n === 0) ? 'missing' : empty > 0 ? 'partial' : 'exists',
-    // Terms with no record of when they changed are terms nobody can audit.
-    i.changeLog.available && i.changeLog.rows > 0 ? 'exists' : 'partial',
-  )
+  const termsStatus: ReadinessStatus = buckets.every((n) => n === 0) ? 'missing' : empty > 0 ? 'partial' : 'exists'
+  // Terms with no record of when they changed are terms nobody can audit.
+  const logStatus: ReadinessStatus = i.changeLog.available && i.changeLog.rows > 0 ? 'exists' : 'partial'
+  const status = worst(termsStatus, logStatus)
+
+  // OWNER FOLLOWS THE BRANCH THAT PRODUCED THE STATUS. With every bucket
+  // filled, the only thing holding this row short of green is that nothing in
+  // the product records a change — and no client can apply a migration. Asking
+  // them to "tell us what to add or drop" would not move the pill by a word,
+  // which is exactly the confusion the owner column exists to prevent.
+  const heldByLogOnly = termsStatus === 'exists' && !i.changeLog.available
   const detail =
     `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}` +
     (t.exclude > 0 ? `, ${plural(t.exclude, 'exception')}` : '') +
@@ -116,8 +122,10 @@ function trackedTerms(i: ReadinessInputs): ReadinessRow {
 
   return row(
     'tracked-terms', 'Tracking', 'the words each update searches, and a record of when they changed',
-    status, detail, 'client',
-    'Tell us what to add or drop; the change log then carries who changed it and when.',
+    status, detail, heldByLogOnly ? 'ops' : 'client',
+    heldByLogOnly
+      ? 'Apply the change log, so that an edit to these words is written down when it happens.'
+      : 'Tell us what to add or drop; the change log then carries who changed it and when.',
     [changeLogBoundary(i.changeLog.firstLoggedAt)],
   )
 }
@@ -441,8 +449,9 @@ function changeRecord(i: ReadinessInputs): ReadinessRow {
 
 function decisions(i: ReadinessInputs): ReadinessRow {
   const r = i.recommendations
+  const nothingCanRecord = r.decisions === null
   const status: ReadinessStatus =
-    r.decisions === null || r.decisions === 0 ? 'missing'
+    nothingCanRecord || r.decisions === 0 ? 'missing'
       : r.withLineage < r.total ? 'partial'
         : 'exists'
 
@@ -457,8 +466,15 @@ function decisions(i: ReadinessInputs): ReadinessRow {
 
   return row(
     'decisions', 'Recommendations', 'what was decided about each one',
-    status, `${decided.charAt(0).toUpperCase()}${decided.slice(1)} · ${lineage}.`, 'client',
-    'Mark a recommendation done, working on it, or not now — the next update then carries the answer forward instead of asking again.',
+    status, `${decided.charAt(0).toUpperCase()}${decided.slice(1)} · ${lineage}.`,
+    // The same rule as row 2 and row 5: while nothing can record a decision,
+    // naming the client as owner and "mark a recommendation done" as the act
+    // asks for something nobody is able to do. The owner is whoever can move
+    // the pill, and that is ops until the record exists.
+    nothingCanRecord ? 'ops' : 'client',
+    nothingCanRecord
+      ? 'Apply the record of what was decided; the client can then mark a recommendation done, working on it, or not now.'
+      : 'Mark a recommendation done, working on it, or not now — the next update then carries the answer forward instead of asking again.',
   )
 }
 
