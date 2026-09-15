@@ -8,10 +8,53 @@ import { StatValue, Delta } from '@/components/charts/stat'
 import { Sparkline } from '@/components/charts/sparkline'
 import { RankedBar } from '@/components/charts/ranked-bar'
 import { Ring } from '@/components/charts/ring'
+import { CalendarLine } from '@/components/charts/calendar-line'
+import { MovementBadge } from '@/components/delta-badge'
+import { monthAxis } from '@/lib/reading/series'
+import type { CalendarSeries } from '@/lib/charts/calendar'
 
 // Development-only fixture for the print frame: real shell and chart
 // components, made-up numbers. `scripts/render-smoke.ts` prints it to PDF and
 // PNG so the frame can be checked without a snapshot. 404 in production.
+//
+// Slide 3 is WP10's calendar line, carrying every token at once — a below-floor
+// month, a month whose own k is under the numerator floor, a hollow month, a
+// still-filling month with "at this point last month" beside it, a recorded
+// rule with its affected band, a reconstructed rule and the read-back hatch.
+// It is here because the tokens have to be LOOKED at, and on production data no
+// single tenant has all seven in one axis (a real Össur axis is four months and
+// two points). Invented numbers, exactly like the rest of this page.
+
+const CAL_AXIS = monthAxis('2026-02-01', '2026-09-01')
+
+const CAL_SERIES: CalendarSeries[] = [
+  {
+    label: 'You', color: 'var(--you)', endNote: 'of 84',
+    points: [
+      { month: '2026-02-01', value: null, state: 'below_floor', n: 22 },
+      { month: '2026-03-01', value: 17, state: 'read', k: 18, n: 106 },
+      { month: '2026-04-01', value: 19, state: 'read', k: 22, n: 116 },
+      { month: '2026-05-01', value: null, state: 'hollow' },
+      { month: '2026-06-01', value: 24, state: 'read', k: 19, n: 79 },
+      { month: '2026-07-01', value: 26, state: 'read', k: 21, n: 81 },
+      { month: '2026-08-01', value: 28, state: 'read', k: 23, n: 82 },
+      { month: '2026-09-01', value: 31, state: 'filling', k: 26, n: 84, atLastMonth: 27 },
+    ],
+  },
+  {
+    label: 'Brand B', color: 'var(--comp)', excludes: 'excludes Reddit', endNote: 'of 142',
+    points: [
+      { month: '2026-02-01', value: null, state: 'hollow' },
+      { month: '2026-03-01', value: null, state: 'hollow' },
+      { month: '2026-04-01', value: null, state: 'below_numerator', k: 2, n: 140 },
+      { month: '2026-05-01', value: 38, state: 'read', k: 52, n: 137 },
+      { month: '2026-06-01', value: 39, state: 'read', k: 54, n: 138 },
+      { month: '2026-07-01', value: 40, state: 'read', k: 55, n: 138 },
+      { month: '2026-08-01', value: 41, state: 'read', k: 57, n: 139 },
+      { month: '2026-09-01', value: 44, state: 'read', k: 62, n: 142 },
+    ],
+  },
+]
 
 export default async function SmokePage({ searchParams }: { searchParams: Promise<{ style?: string; tile?: string }> }) {
   if (process.env.NODE_ENV === 'production') notFound()
@@ -70,6 +113,28 @@ export default async function SmokePage({ searchParams }: { searchParams: Promis
         <Tile col={4} row={2} eyebrow="Since your first update"><p className="text-[12.5px]">Lead competitor: Brand B · share −4 pt</p></Tile>
         <Tile col={3} row={1} eyebrow="Top recommendation"><p className="text-[12.5px] font-medium">Answer the long-wear question in your own content.</p></Tile>
         <Tile col={3} row={1} eyebrow="On your accounts"><p className="text-[12.5px]">Instagram +212 followers</p></Tile>
+      </Slide>
+      <Slide title="Durability, month by month" chrome={chrome} page={3} pages={3}>
+        <Tile col={12} row={3} eyebrow="Share of videos where durability came up" meta="monthly · Feb → Sep 2026">
+          <CalendarLine
+            axis={CAL_AXIS}
+            series={CAL_SERIES}
+            rules={[
+              { month: '2026-09-01', at: '2026-09-03', kind: 'tracking_change', label: 'Brand C was added to what we track.', affects: ['2026-09-01'] },
+              { month: '2026-06-01', kind: 'reconstructed', label: 'We did not record how themes were grouped for this month.' },
+            ]}
+            bands={[{ months: ['2026-02-01', '2026-03-01'], label: 'Read back at setup — these months had already closed when we started.' }]}
+            format={(v) => `${v}%`}
+            caption="February is below the floor for your audience (22 videos) — drawn in the gutter, with no reading. Brand B is read from May."
+          />
+        </Tile>
+        <Tile col={6} row={1} eyebrow="This month against last">
+          <div className="flex items-center gap-3">
+            <MovementBadge verdict={{ objectKind: 'theme', objectId: 'r1', objectLabel: 'Durability', audience: 'client', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 26, n: 84 }, baseline: { k: 23, n: 82 }, changePts: 3.1, bandPts: 2.4, state: 'moved', flags: [] }} unit="pts" />
+            <MovementBadge verdict={{ objectKind: 'theme', objectId: 'r2', objectLabel: 'Repair', audience: 'competitor:Brand B', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 62, n: 142 }, changePts: null, bandPts: null, state: 'refused', refusedReason: 'rename', flags: [] }} />
+            <MovementBadge verdict={{ objectKind: 'theme', objectId: 'r3', objectLabel: 'Fit', audience: 'industry-other', window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' }, value: { k: 4, n: 33 }, changePts: null, bandPts: null, state: 'too_little_data', flags: [] }} />
+          </div>
+        </Tile>
       </Slide>
     </PrintRoot>
   )

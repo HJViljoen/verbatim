@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   axisLabels, calendarGeometry, chartId, collapseRules, hoverTitle, legendStates, lineSegments,
-  spanOf, stateNote, valueScale, type CalendarPoint, type CalendarSeries,
+  niceMid, spanOf, stateNote, valueScale, type CalendarPoint, type CalendarSeries,
 } from './calendar'
 import { monthAxis } from '../reading/series'
 
@@ -74,10 +74,39 @@ describe('valueScale', () => {
     expect(valueScale(withTick).hi).toBeCloseTo(100.8, 5)
   })
 
+  it('puts the midline on a number a reader can read', () => {
+    // hi = 44 × 1.12 = 49.28, so the arithmetic midpoint is 24.64 — which is
+    // what LineChart prints today. The line stays where it is; the label does not.
+    const s = valueScale([{ label: 'You', color: 'a', points: [p('2026-09-01', 44)] }])
+    expect(s.mid).toBe(25)
+    expect(s.y(s.mid)).toBeCloseTo(94.75, 1)
+  })
+
   it('survives a series with nothing plotted', () => {
     const s = valueScale([{ label: 'You', color: 'a', points: [p('2026-09-01', null, 'hollow')] }])
     expect(s.y(0)).toBe(180)
     expect(Number.isFinite(s.y(1))).toBe(true)
+  })
+})
+
+describe('niceMid', () => {
+  it('rounds to tens on a counts axis', () => {
+    expect(niceMid(0, 220)).toBe(110)
+    expect(niceMid(0, 461)).toBe(230)
+  })
+
+  it('rounds to fives in the ordinary share range', () => {
+    expect(niceMid(0, 49.28)).toBe(25)
+    expect(niceMid(0, 97)).toBe(50)
+  })
+
+  it('rounds to whole numbers on a narrow axis', () => {
+    expect(niceMid(0, 13)).toBe(7)
+    expect(niceMid(0, 7)).toBe(4)
+  })
+
+  it('keeps a decimal where whole numbers would collapse the axis', () => {
+    expect(niceMid(0, 1.4)).toBe(0.7)
   })
 })
 

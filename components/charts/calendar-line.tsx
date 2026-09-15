@@ -127,10 +127,13 @@ export function CalendarLine({
   const read = new Set<string>()
   for (const s of series) for (const p of s.points) if (p.value != null) read.add(p.month)
 
+  // A month owns half a slot either side of its x, and a band is clamped to the
+  // plot: shading that ran past the last month would sit under the end labels,
+  // which belong to the line and not to the change.
   const bandRect = (span: { from: number; to: number }, key: string, fill: string, title: string) => {
     const half = g.slot / 2
-    const x1 = Math.max(g.padL - half, g.xAt(span.from) - half)
-    const x2 = Math.min(g.padR + half, g.xAt(span.to) + half)
+    const x1 = Math.max(g.padL, g.xAt(span.from) - half)
+    const x2 = Math.min(g.padR, g.xAt(span.to) + half)
     return (
       <rect key={key} x={x1} y={g.top} width={Math.max(2, x2 - x1)} height={g.baseline - g.top} fill={fill}>
         <title>{title}</title>
@@ -168,8 +171,10 @@ export function CalendarLine({
         aria-label={label ?? `${series.map((s) => s.label).join(' vs ')}, month by month`}
       >
         <defs>
-          <pattern id={hatch} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-            <line x1={0} y1={0} x2={0} y2={6} stroke="var(--border)" strokeWidth={1} />
+          {/* A hairline hatch, deliberately faint: the back-read is a caveat
+              about months, not a block of shading competing with the lines. */}
+          <pattern id={hatch} width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1={0} y1={0} x2={0} y2={7} stroke="var(--border)" strokeWidth={0.75} opacity={0.55} />
           </pattern>
         </defs>
 
@@ -360,10 +365,12 @@ function FillingBar({
             <title>{`At this point last month: ${format(atLastMonth)}`}</title>
           </line>
           {/* The filling month is the LAST one, so the label usually has no
-              room to its right and goes to the left of the bar instead. */}
+              room to its right and goes to the left of the bar instead — and it
+              sits BELOW the tick, because the tick is by definition close to
+              this month's own point and a label on its line reads over it. */}
           <text
             x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
-            y={y(atLastMonth) + 3}
+            y={y(atLastMonth) + 13}
             textAnchor={x + w + 6 < padR ? 'start' : 'end'}
             fontSize={9}
             fontFamily="var(--font-plex-mono), monospace"

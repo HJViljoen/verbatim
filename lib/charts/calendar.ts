@@ -187,7 +187,25 @@ export function valueScale(
   const lo = zeroBase ? 0 : values.length ? Math.min(...values) : 0
   const hi = values.length ? Math.max(...values) * 1.12 : 1
   const span = hi - lo || 1
-  return { lo, hi, mid: lo + span / 2, y: (v) => baseline - (baseline - top) * ((v - lo) / span) }
+  return { lo, hi, mid: niceMid(lo, hi), y: (v) => baseline - (baseline - top) * ((v - lo) / span) }
+}
+
+/**
+ * A midline a reader can read.
+ *
+ * `hi` carries 12% headroom so an end label has somewhere to sit, which makes
+ * the arithmetic midpoint an arithmetic accident: a series topping out at 44%
+ * puts the midline at 24.64%, and `LineChart` prints exactly that today. The
+ * line is drawn AT this value, so the label and the rule still agree — only the
+ * number is chosen to be a round one.
+ */
+export function niceMid(lo: number, hi: number): number {
+  const mid = lo + (hi - lo) / 2
+  const span = hi - lo
+  if (span >= 100) return Math.round(mid / 10) * 10
+  if (span >= 20) return Math.round(mid / 5) * 5
+  if (span >= 4) return Math.round(mid)
+  return Math.round(mid * 10) / 10
 }
 
 /**
