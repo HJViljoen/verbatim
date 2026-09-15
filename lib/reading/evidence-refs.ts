@@ -212,7 +212,16 @@ export function quotableLine(r: PointResolution): string {
   // already gone this way and written down why: attention.ts refuses the word
   // outright ("would put two meanings under one word on the same block") and
   // record.ts says "videos" for this exact quantity.
-  const videos = r.videos.resolvable === 1 ? '1 video' : `${r.videos.resolvable} videos`
+  // WITH ITS DENOMINATOR WHEN THERE IS ONE, as the comments half already has.
+  // `total` minus `resolvable` is the refs whose video row has gone entirely —
+  // scripts/regate-corpus.ts --apply is the one documented way that happens —
+  // and they were silently absent from the line while the merely tombstoned
+  // ones got a parenthetical. The asymmetry inside one sentence is what made it
+  // read as a defect rather than a choice.
+  const lostVideos = Math.max(0, r.videos.total - r.videos.resolvable)
+  const videos = lostVideos > 0
+    ? `${r.videos.resolvable} of ${r.videos.total} videos`
+    : r.videos.resolvable === 1 ? '1 video' : `${r.videos.resolvable} videos`
   const gone = r.unavailableVideos > 0
     ? `${r.unavailableVideos === r.videos.resolvable ? 'no longer' : `${r.unavailableVideos} no longer`} on the platform`
     : null

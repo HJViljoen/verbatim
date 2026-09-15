@@ -129,6 +129,12 @@ describe('quotableLine — what a reader is told about a decayed point', () => {
     expect(quotableLine(r({ comments: { total: 31, resolvable: 8 } }))).toBe('4 videos · 8 of 31 voices still quotable')
   })
 
+  it('prints the videos half with its denominator when some are gone entirely', () => {
+    // total minus resolvable is the refs whose video ROW has gone — they were
+    // silently absent while the tombstoned ones got a parenthetical.
+    expect(quotableLine(r({ videos: { total: 6, resolvable: 4 } }))).toBe('4 of 6 videos · 31 voices')
+  })
+
   it('names the videos the platform no longer serves', () => {
     expect(quotableLine(r({ unavailableVideos: 1 }))).toBe('4 videos (1 no longer on the platform) · 31 voices')
     expect(quotableLine(r({ unavailableVideos: 4 }))).toBe('4 videos (no longer on the platform) · 31 voices')
