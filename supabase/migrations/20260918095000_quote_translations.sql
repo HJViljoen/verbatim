@@ -251,11 +251,24 @@ create policy "Members read their month evidence refs" on public.month_evidence_
 
 revoke all on public.month_evidence_refs from authenticated, anon;
 grant select on public.month_evidence_refs to authenticated;
--- No update, and no truncate. A frozen record is not corrected: the BEFORE
--- UPDATE guard refuses it anyway, and withholding the grant says so twice.
--- Delete stays, because the merge deletes stale FILLING rows exactly as it does
--- on the month tables.
-grant select, insert, delete on public.month_evidence_refs to service_role;
+-- Stated, not inherited from whatever the project's default ACL happens to be
+-- (the config_changes precedent, 2026-09-15). The month tables' four, for the
+-- month tables' reasons.
+--
+-- UPDATE IS REQUIRED, AND THE ACL IS NOT WHAT REFUSES A FROZEN ROW. A filling
+-- audience-month's row is rewritten on every visit, and the writer is an
+-- upsert — INSERT … ON CONFLICT DO UPDATE, which PostgreSQL refuses without
+-- the UPDATE privilege even when no row actually conflicts. Taking the grant
+-- away would not harden the freeze; it would make every refs write fail, be
+-- swallowed by the non-fatal catch in lib/reading/monthly.ts, and leave this
+-- table permanently empty. What refuses a correction to a frozen row is the
+-- BEFORE UPDATE trigger above (month_reading_frozen_guard), which is a rule
+-- about the ROW's status and not about the role — the same thing that protects
+-- month_denominators and month_theme_readings, which hold the same four.
+-- TRUNCATE is the one that goes: emptying the record in a single statement is
+-- not an operation the merge needs.
+grant select, insert, update, delete on public.month_evidence_refs to service_role;
+revoke truncate on public.month_evidence_refs from service_role;
 
 -- 3. The freeze-time read ------------------------------------------------------
 -- The same joins monthly_theme_readings makes, returning the ids it collapses
@@ -413,8 +426,14 @@ comment on column public.videos.transcript_en is
 --     frozen raises restrict_violation, while the same row for a filling
 --     audience-month is accepted, and the FIRST back-read of an audience-month
 --     that froze before this table existed is accepted (decision K);
---   * an UPDATE of a frozen row raises restrict_violation, and service_role
---     holds no update grant on the table at all;
+--   * an UPDATE of a frozen row raises restrict_violation — from the trigger,
+--     which is the only thing that refuses it. service_role DOES hold UPDATE
+--     here, and must: the writer is an upsert and a filling row is rewritten
+--     every visit. Re-exercised 2026-09-15 on the same cluster after the grant
+--     was corrected: `grant select, insert, delete` alone makes a plain
+--     `insert … on conflict do update` fail with "permission denied for table"
+--     even on a non-conflicting row, which is what the earlier wording would
+--     have shipped;
 --   * authenticated can select its own tenant's rows in both tables and no
 --     other tenant's, and holds no insert/update/delete on either;
 --   * monthly_evidence_refs returns the same distinct video and comment counts
