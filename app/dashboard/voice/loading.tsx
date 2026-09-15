@@ -1,45 +1,46 @@
 import { SkeletonPage, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
-import { directionWordsFor } from '@/lib/config'
 
-// Mirrors app/dashboard/voice/page.tsx (2026-08-28): the conversation by theme
-// (8×4 — filter row, category tabs, the map) · the theme pane (4×4) · gaining
-// and fading (4×2, gated off by D1) · how your customers talk · audience mood
-// (4×2 each beside it, 6×2 each without it) · hear these voices (12×2, five
-// quote cards across). The skeleton follows the grid the page actually draws,
-// or the page jumps when it lands.
+// Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the audience, platform
+// and kind row (12×2) · what moved (12×4) · a theme in full (12×6) · who is
+// talking (12×4). The skeleton follows the grid the page actually draws, or
+// the page jumps when it lands.
+//
+// It reads NO gate. The old skeleton branched on `directionWordsFor('voice.
+// movers')` because the tile it stood in for was registered behind that
+// constant; VO2 is not — it earns its direction words from three consecutive
+// months of the comment-dated series, and it is always drawn.
 export default function VoiceLoading() {
-  const blocks = ['col-span-3 row-span-2', 'col-span-2 row-span-2', 'col-span-2', 'col-span-2', 'col-span-3', 'col-span-2', 'col-span-2', 'col-span-2']
-  const half = directionWordsFor('voice.movers') ? 4 : 6
   return (
-    <SkeletonPage title="Voice of Customer" pills={1}>
-      <SkeletonTile col={8} row={4} meta>
-        <div className="flex gap-2">
-          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-7 w-28 rounded-full" />)}
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {Array.from({ length: 6 }, (_, i) => <Bone key={i} className="h-5 w-20 rounded-md" />)}
-        </div>
-        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-3 gap-1.5">
-          {blocks.map((c, i) => <Bone key={i} className={`h-full w-full rounded-[6px] ${c}`} />)}
-        </div>
-      </SkeletonTile>
-      <SkeletonTile col={4} row={4} meta>
-        <Bone className="h-5 w-3/4" />
-        <div className="flex gap-1.5"><Bone className="h-4 w-20 rounded-full" /><Bone className="h-4 w-16 rounded-full" /></div>
-        <BoneLines lines={3} />
-        <Bone className="h-6 w-24" />
-        <Bone className="h-1.5 w-full rounded-full" />
-        <BoneLines lines={5} />
-      </SkeletonTile>
-      {directionWordsFor('voice.movers') && <SkeletonTile col={4} row={2} meta><BoneBars rows={6} /></SkeletonTile>}
-      <SkeletonTile col={half} row={2} meta>
-        <div className="flex flex-wrap gap-1">{Array.from({ length: 8 }, (_, i) => <Bone key={i} className="h-5 w-24 rounded-[4px]" />)}</div>
-      </SkeletonTile>
-      <SkeletonTile col={half} row={2} meta><BoneBars rows={3} /></SkeletonTile>
+    <SkeletonPage title="Voice" pills={1}>
       <SkeletonTile col={12} row={2} meta>
-        <div className="grid flex-1 grid-cols-5 gap-4">
-          {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="flex flex-col gap-2"><Bone className="h-4 w-24 rounded-full" /><BoneLines lines={3} /></div>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-6 w-32 rounded-full" />)}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: 6 }, (_, i) => <Bone key={i} className="h-5 w-24 rounded-full" />)}
+        </div>
+      </SkeletonTile>
+
+      <SkeletonTile col={12} row={4} meta>
+        <BoneBars rows={6} />
+      </SkeletonTile>
+
+      <SkeletonTile col={12} row={6} meta>
+        <Bone className="h-5 w-2/5" />
+        <BoneLines lines={2} />
+        <Bone className="h-8 w-28" />
+        <Bone className="h-20 w-full rounded-[6px]" />
+        <Bone className="h-1.5 w-full rounded-full" />
+        <BoneLines lines={6} />
+      </SkeletonTile>
+
+      <SkeletonTile col={12} row={4} meta>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="flex gap-3">
+              <Bone className="h-16 w-10 flex-none rounded-[6px]" />
+              <div className="flex flex-1 flex-col gap-1.5"><Bone className="h-4 w-1/3" /><BoneLines lines={3} /></div>
+            </div>
           ))}
         </div>
       </SkeletonTile>

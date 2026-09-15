@@ -1253,7 +1253,35 @@ export const REGISTRY_DORMANT_RUNS = 3
  * so both answers stay under test.
  */
 export type DirectionReader =
-  /** Voice of Customer · "Gaining and fading" — the tile, its drawer, its deck slide. */
+  /**
+   * Voice of Customer · "Gaining and fading" — the tile, its drawer, its deck slide.
+   *
+   * STILL FALSE AFTER VOICE SHIPPED (Phase 1 WP13), and the plan's "flips
+   * `voice.movers` in the direction map" is answered by not flipping it —
+   * the same answer WP11 gave `dashboard.themes` below, for the same reason
+   * and one more that is this key's own.
+   *
+   * The shared reason: this key gates the LEGACY Voice of Customer module,
+   * whose renderables are registered under the page key `voice`
+   * (components/pages/registry.ts) and reached by the export route, the share
+   * page, the Studio's catalogue and `lib/reports/templates.ts`. WP13 replaced
+   * the ROUTE at /dashboard/voice; the module stays, because an artefact names
+   * a module and not an address. Flipping this key would re-register
+   * `voice.movers`, return it to the Studio picker and to the monthly-marketing
+   * starter, and hand a NEW report a tile whose series is `themes` rows per RUN
+   * with a per-update sparkline beside it — the exact object D1 exists to
+   * suppress. Nothing stored names it today (checked read-only on production:
+   * zero `reports` rows and zero `report_snapshots` name the page `voice`),
+   * which is an argument for leaving it alone, not for switching it on.
+   *
+   * The reason of its own: VO2 does not read this map at all. It ranks the
+   * comment-dated month series, bands each row against the month before it
+   * (`monthChange`), and prints a direction word only where `directionWord`
+   * earns one over three consecutive months inside one clustering regime. A
+   * key flips when the surface it names RE-BASES; this surface has not
+   * re-based, it has been replaced, and its replacement needs no permission
+   * from here.
+   */
   | 'voice.movers'
   /**
    * Dashboard · the themes list's "New" chip, the movement row, the email's chip.
