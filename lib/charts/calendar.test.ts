@@ -181,6 +181,14 @@ describe('collapseRules', () => {
     expect(collapseRules(axis, [one])).toEqual([one])
   })
 
+  it('leaves a lone rule\'s own band alone — the band is what the change MOVED', () => {
+    // decision U: `affects_months` is rarely the month the change was made in.
+    // Unioning the rule's own month in shaded every month between.
+    const one = { month: '2026-04-01', label: 'Poler added', kind: 'tracking_change' as const, affects: ['2026-01-01', '2026-02-01'] }
+    expect(collapseRules(axis, [one])).toEqual([one])
+    expect(spanOf(axis, collapseRules(axis, [one])[0].affects!)).toEqual({ from: 0, to: 1 })
+  })
+
   it('unions the affected months of a collapsed run', () => {
     const out = collapseRules(axis, [
       { month: '2026-02-01', label: 'corpus re-tagged', kind: 'tracking_change', affects: ['2026-01-01'] },

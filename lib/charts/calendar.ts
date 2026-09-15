@@ -266,8 +266,15 @@ export function collapseRules(axis: readonly string[], rules: readonly CalendarR
   const flush = () => {
     if (!run.length) return
     const first = run[0].r
+    // A LONE RULE KEEPS ITS OWN BAND. `affects_months` is what the change MOVED
+    // and is rarely the month it was made in (decision U): folding the rule's
+    // own month in stretched a retroactive band forward over every month
+    // between — a change made in September that moved April and May shaded all
+    // six months and said "affects Apr 2026 to Sep 2026". The union is only
+    // defensible for a COLLAPSED run, where the months carrying the break are
+    // themselves part of what is being said.
     const months = [...new Set([...run.flatMap((e) => e.r.affects ?? []), ...run.map((e) => axis[e.i])].map(monthStartOf))].sort()
-    out.push(run.length === 1 && !first.affects ? first : { ...first, affects: months })
+    out.push(run.length === 1 ? first : { ...first, affects: months })
     run = []
   }
   for (const entry of on) {
