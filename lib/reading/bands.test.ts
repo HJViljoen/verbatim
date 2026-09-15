@@ -261,6 +261,35 @@ describe('directionWord', () => {
     expect(directionWord([p('2026-04-01', 900, 1000), p('2026-05-01', 20, 1000), ...rising])).toBe('growing')
   })
 
+  it('gives a series with NO clustering its word — absence is not disagreement', () => {
+    // month_kind_readings and month_audience_stats carry no clustering column on
+    // purpose, and an absent key is UNKNOWN, which is never equal to another
+    // unknown — so every kind was refused a direction word in every month, for
+    // ever, and the caller was told "we never had three readings".
+    const noKey = rising.map((point) => ({ ...point, clusteringKey: null }))
+    expect(directionWord(noKey)).toBeNull()
+    expect(directionWord(noKey.map((point) => ({ ...point, regime: 'n/a' as const })))).toBe('growing')
+  })
+
+  it('still refuses a run that mixes a declared absence with a real key', () => {
+    const mixed = [
+      { ...rising[0], clusteringKey: null, regime: 'n/a' as const },
+      { ...rising[1], clusteringKey: 'a1b2' },
+      { ...rising[2], clusteringKey: 'a1b2' },
+    ]
+    expect(directionWord(mixed)).toBeNull()
+  })
+
+  it('still refuses a run whose keys are simply absent', () => {
+    expect(directionWord(rising)).toBe('growing')
+    const unknown = [
+      { ...rising[0], clusteringKey: null },
+      { ...rising[1], clusteringKey: null },
+      { ...rising[2], clusteringKey: null },
+    ]
+    expect(directionWord(unknown)).toBeNull()
+  })
+
   it('returns null — not flat — when a month in the run is hollow', () => {
     const gapped = [p('2026-06-01', 100, 1000), p('2026-07-01', null, null), p('2026-08-01', 230, 1000)]
     expect(directionWord(gapped)).toBeNull()

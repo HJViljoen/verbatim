@@ -1122,10 +1122,16 @@ export async function freezeMonths(
     // insights into themes cannot move either. `kindChange` and `moodChange`
     // already strip the clustering caveat the shared rule would add, and a key
     // STORED on these rows would hand it straight back to any later reader that
-    // built a SeriesPoint off the table — `directionWord` would then refuse a
-    // kind's direction word across a clustering boundary, which is exactly the
-    // asymmetry this migration's header says is deliberate. So the two tables
-    // carry no such column and nothing here writes one.
+    // built a SeriesPoint off the table. So the two tables carry no such column
+    // and nothing here writes one.
+    //
+    // A READER OF THESE ROWS HAS TO SAY SO, THOUGH. An absent key is UNKNOWN
+    // and two unknowns are never one regime, so a SeriesPoint built off one of
+    // these tables with nothing else set is refused a direction word in every
+    // month, for ever — the opposite of the argument above, and silently, since
+    // the caller gets the null that means "we never had three readings". The
+    // shape that says the true thing is `SeriesPoint.regime: 'n/a'`, which
+    // kindChange and moodChange set; a new reader off either table sets it too.
     sides.push({
       table: MONTH_KIND_TABLE,
       read: (w) => readKindReadings(admin, opts.clientId, w),

@@ -200,6 +200,12 @@ export function kindChange(input: KindChangeInput): Verdict {
     videos: p.videos,
     k: p.k,
     audience,
+    // Declared, not left absent — see `SeriesPoint.regime`. A kind's series has
+    // no grouping to be like-for-like about, and an ABSENT key is "unknown",
+    // which is never equal to another unknown: every kind's direction word came
+    // back null in every month, for ever, reported as "we never had three
+    // readings" when three existed and were refused.
+    regime: 'n/a',
   })
   const verdict = monthChange({
     object: { kind: 'kind', id: input.kind, label: kindLabel(input.kind) },
@@ -209,15 +215,12 @@ export function kindChange(input: KindChangeInput): Verdict {
     floor: input.floor ?? SHARE_BAND,
     flags: input.flags,
   })
-  // THE ONE THING STRIPPED, AND WHY IT IS STRIPPED HERE RATHER THAN FAKED
-  // UPSTREAM. `monthChange` reads the two months' clustering keys and, finding
-  // neither (this series carries none), flags `clustering_unknown` — "nobody
-  // recorded the grouping these two readings were taken under". On a theme that
-  // is the honest caveat and on today's corpus it is on nearly every
-  // comparison. On a KIND it is simply false: there is no grouping, so there is
-  // nothing for a reader to be warned about. The alternative — handing both
-  // points one invented key so the shared rule sees one regime — would write a
-  // fiction into the comparison to get a true answer out of it.
+  // BELT AND BRACES ON THE CAVEAT. `regime: 'n/a'` above already stops
+  // `monthChange` adding `clustering_unknown` — "nobody recorded the grouping
+  // these two readings were taken under", which on a theme is the honest caveat
+  // and on a KIND is simply false, because there is no grouping. This strips
+  // the flag a CALLER may have passed in `input.flags`, which is the only way
+  // one can still arrive.
   const regime = new Set<VerdictFlag>(['clustering_changed', 'clustering_unknown'])
   return { ...verdict, flags: verdict.flags.filter((f) => !regime.has(f)) }
 }

@@ -54,7 +54,29 @@ export interface SeriesPoint {
    *  fingerprint shipped earns no direction word — conservative in the
    *  direction a reader survives. */
   clusteringKey?: string | null
+  /**
+   * `'n/a'` — THIS SERIES HAS NO CLUSTERING TO BE LIKE-FOR-LIKE ABOUT, which
+   * is a different statement from `clusteringKey: null` and has to be made
+   * out loud.
+   *
+   * `month_kind_readings` and `month_audience_stats` carry no clustering
+   * column, on purpose: a re-grouping of insights into themes cannot move
+   * `audience_insights.category` or a video's sentiment. But absence is not
+   * agreement — two unknown keys are not one regime — so every point of such a
+   * series arrived with an undefined key and `directionWord` refused EVERY
+   * kind, in every month, for ever, reporting it as "we never had three
+   * readings to look at" when three readings existed and were refused.
+   *
+   * So the absence is declared rather than inferred. A point that sets this is
+   * in one regime with any other point that sets it, and in no regime at all
+   * with a point that carries a real key.
+   */
+  regime?: 'n/a'
 }
+
+/** A point's regime for the two like-for-like rules — see `SeriesPoint.regime`. */
+export const regimeOf = (point: SeriesPoint): string | null =>
+  point.regime === 'n/a' ? 'n/a' : point.clusteringKey ?? null
 
 export interface ObjectIdentity {
   kind: ObjectKind
@@ -122,8 +144,8 @@ export function monthChange(input: MonthChangeInput): Verdict {
   // every frozen month on today's corpus looks like. Both stop a direction
   // word and neither refuses the band, but only one of them may be printed as
   // "themes were re-grouped".
-  const bothKnown = Boolean(input.curr.clusteringKey) && Boolean(input.prev.clusteringKey)
-  const regimeChanged = !sameRegime(input.curr.clusteringKey, input.prev.clusteringKey)
+  const bothKnown = Boolean(regimeOf(input.curr)) && Boolean(regimeOf(input.prev))
+  const regimeChanged = !sameRegime(regimeOf(input.curr), regimeOf(input.prev))
   const regimeFlag: VerdictFlag = bothKnown ? 'clustering_changed' : 'clustering_unknown'
   if (regimeChanged && !flags.includes(regimeFlag)) flags.push(regimeFlag)
   if (renamed && !flags.includes('renamed')) flags.push('renamed')
@@ -301,6 +323,8 @@ const pct = (point: SeriesPoint): number => {
  *     call and has to answer it with the same `null` as the other exits.
  *   * all of them sit in ONE clustering regime. Two unknown keys are not one
  *     regime, so a stretch frozen before the fingerprint shipped earns no word.
+ *     A series with no clustering to be like-for-like about says so with
+ *     `regime: 'n/a'` and is not refused for it — see `SeriesPoint.regime`.
  *   * all of them are filed under ONE name. A renamed rival's two halves are
  *     drawn as one line with the break marked; a word spoken across the break
  *     would be a claim about the conversation that is really a claim about a
@@ -327,7 +351,7 @@ export function directionWord(
   if (!tail.every((p) => clearsFloor(p, floor))) return null
   if (tail.some((p) => p.k == null)) return null
   for (let i = 1; i < tail.length; i++) {
-    if (!sameRegime(tail[i].clusteringKey, tail[i - 1].clusteringKey)) return null
+    if (!sameRegime(regimeOf(tail[i]), regimeOf(tail[i - 1]))) return null
     if ((tail[i].audience ?? null) !== (tail[i - 1].audience ?? null)) return null
   }
 

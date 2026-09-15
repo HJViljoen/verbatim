@@ -206,6 +206,9 @@ export function moodChange(input: MoodChangeInput): Verdict {
     videos: p.judged,
     k: p[mood],
     audience,
+    // A mood series has no clustering to be like-for-like about, and says so
+    // rather than leaving the key absent — see `SeriesPoint.regime`.
+    regime: 'n/a',
   })
   const flags = [...(input.flags ?? [])]
   // The span of the comparison, not the two month starts: the break falls
