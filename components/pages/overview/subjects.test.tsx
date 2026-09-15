@@ -82,4 +82,12 @@ describe('OV2 · your subjects', () => {
     expect(markup).not.toContain('var(--')
     expect(markup).not.toContain('<svg')
   })
+
+  it('refuses to draw two readings as a trend line', () => {
+    const data = overviewFixture()
+    const rows = data.subjects.rows.map((r) => ({ ...r, spark: [null, null, null, null, 19, 19.2] }))
+    const markup = render(overviewSubjects.render({ ...data, subjects: { ...data.subjects, rows } }, 'app', ctx))
+    expect(markup).toContain('Aug \u2192 Sep only')
+    expect(markup).not.toContain('<svg')
+  })
 })

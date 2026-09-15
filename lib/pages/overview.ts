@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
-import { fmtInt, shortDate } from '../format'
+import { fmtInt, monthName, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
@@ -120,6 +120,9 @@ export interface SubjectRow {
   direction: Direction | null
   /** The last `SPARK_MONTHS` category readings, nulls where unreadable. */
   spark: (number | null)[]
+  /** The months `spark` is indexed by, same length — a chart that cannot be
+   *  drawn says which months it had. */
+  sparkMonths: string[]
   href: string
 }
 
@@ -651,6 +654,27 @@ export const MOVES_MASTHEAD = 'We report what the conversation did after you act
 /** The precedence caveat OV4 carries (§7, bucket precedence). */
 export const RIVALS_CAVEAT =
   'A video that names both you and a rival counts in your audience only; the count of those is in the record.'
+
+/**
+ * What a row's "Monthly line" column says when it may not be a line.
+ *
+ * TWO READINGS ARE NOT A TREND, AND A SPARKLINE DRAWS THEM AS ONE. `Sparkline`
+ * normalises to the min and max of the values it is handed, so 19.0% → 19.2%
+ * and 5% → 40% draw the identical full-amplitude climb, with an end dot, no
+ * axis, no denominator and no hover — the claim D1 bans in words, arriving as a
+ * picture, under a column headed "Monthly line". The approved mock refuses
+ * exactly this case and prints "Aug → Sep only" instead (`Main.dc.html`, four
+ * rows of it), and the design asks for the line "at longer horizons".
+ *
+ * Null means the row has three readings or more and may be drawn.
+ */
+export function monthlyLineLabel(spark: readonly (number | null)[], months: readonly string[]): string | null {
+  const read = months.filter((_, i) => spark[i] != null)
+  if (read.length >= 3) return null
+  if (read.length === 0) return 'no month reads'
+  const short = (m: string) => monthName(m).split(' ')[0]
+  return read.length === 1 ? `${short(read[0])} only` : `${short(read[0])} → ${short(read[read.length - 1])} only`
+}
 
 /** The subjects block's line about which column carries the month. */
 export function subjectsNote(rows: readonly SubjectRow[]): string | null {
@@ -1400,6 +1424,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       category,
       direction: input.thin ? null : directionWord(axisPoints),
       spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
+      sparkMonths: axisPoints.slice(-SPARK_MONTHS).map((p) => p.month),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }
   })

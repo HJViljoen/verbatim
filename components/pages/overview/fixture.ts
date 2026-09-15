@@ -122,6 +122,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           category: { k: 305, n: 1388, pct: 22, verdict: verdict({ objectKind: 'subject', objectId: 's1', objectLabel: 'Durability', value: { k: 305, n: 1388 }, changePts: 3.2, bandPts: 2.1 }), observed: true },
           direction: 'growing',
           spark: [null, 18, 19, 20, 21, 22],
+          sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
           href: '/dashboard/subjects?item=s1',
         },
         {
@@ -132,6 +133,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           category: { k: 375, n: 1388, pct: 27, verdict: verdict({ objectKind: 'subject', objectId: 's2', objectLabel: 'Price', value: { k: 375, n: 1388 }, changePts: -3.1, bandPts: 2.1 }), observed: true },
           direction: 'fading',
           spark: [30, 29, 29, 28, 28, 27],
+          sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
           href: '/dashboard/subjects?item=s2',
         },
       ],

@@ -14,6 +14,7 @@ import {
   headline,
   medianOf,
   firstHeardThisMonth,
+  monthlyLineLabel,
   moveLine,
   MOVES_EMPTY,
   recordWindow,
@@ -235,6 +236,24 @@ describe('moves', () => {
   })
 })
 
+describe('monthlyLineLabel', () => {
+  const months = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
+  it('lets a line be drawn once three months read', () => {
+    expect(monthlyLineLabel([null, 18, 19, 20], months)).toBeNull()
+  })
+  it('names the two months instead of drawing a slope through them', () => {
+    // Sparkline normalises to the values it is handed, so 19.0 → 19.2 draws the
+    // same climb as 5 → 40. The mock prints this label instead.
+    expect(monthlyLineLabel([null, null, 19, 19.2], months)).toBe('Aug \u2192 Sep only')
+  })
+  it('names the one month it has', () => {
+    expect(monthlyLineLabel([null, null, null, 19.2], months)).toBe('Sep only')
+  })
+  it('says so when no month reads at all', () => {
+    expect(monthlyLineLabel([null, null, null, null], months)).toBe('no month reads')
+  })
+})
+
 describe('subjectsNote', () => {
   const sideless = { k: null, n: null, pct: null, verdict: null, observed: false }
   const row = (yourN: number | null, verdict: Verdict | null): SubjectRow => ({
@@ -245,6 +264,7 @@ describe('subjectsNote', () => {
     category: { ...sideless },
     direction: null,
     spark: [],
+    sparkMonths: [],
     href: '#',
   })
 

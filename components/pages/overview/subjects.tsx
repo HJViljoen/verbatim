@@ -9,7 +9,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { Direction } from '@/lib/reading/bands'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { candidateLine } from '@/lib/pages/overview'
+import { candidateLine, monthlyLineLabel } from '@/lib/pages/overview'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -74,7 +74,16 @@ function Row({ row, mode }: { row: SubjectRow; mode: RenderMode }) {
         </span>
       </td>
       <td className="py-1.5 align-top">
-        <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+        {/* TWO READINGS ARE NOT A TREND. Sparkline normalises to the min and
+            max of what it is handed, so 19.0% → 19.2% and 5% → 40% draw the
+            same full-amplitude climb — a claim the row has not earned, under a
+            column headed "Monthly line". The mock refuses the case in words
+            and so does this (lib/pages/overview.ts monthlyLineLabel). */}
+        {monthlyLineLabel(row.spark, row.sparkMonths) ? (
+          <span className="font-mono text-[10.5px] text-muted-foreground">{monthlyLineLabel(row.spark, row.sparkMonths)}</span>
+        ) : (
+          <Sparkline values={row.spark} color="var(--cat)" width={72} height={20} animate={false} />
+        )}
       </td>
     </tr>
   )
