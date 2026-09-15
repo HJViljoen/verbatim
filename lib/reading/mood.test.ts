@@ -34,6 +34,17 @@ describe('the family rule', () => {
     expect(isAudienceSentiment({ analyzed_lane: 'claims_only' })).toBe(false)
     expect(isAudienceSentiment({})).toBe(false)
   })
+
+  // Every column the rule reads is nullable, and this is the arm the SQL in
+  // monthly_audience_stats had wrong: an `or` over two comparisons against NULL
+  // is NULL, not false, so `filter (where is_audience)` and
+  // `filter (where not is_audience)` both dropped such a video and it landed in
+  // neither count. Here it is framing, and the migration's CASE now agrees.
+  it('counts an unstamped, unlaned video as framing rather than as nothing', () => {
+    expect(isAudienceSentiment({ sentiment_source: null, analyzed_lane: null })).toBe(false)
+    expect(isAudienceSentiment({ sentiment_source: null, analyzed_lane: 'claims_only' })).toBe(false)
+    expect(isAudienceSentiment({ sentiment_source: null, analyzed_lane: 'full' })).toBe(true)
+  })
 })
 
 describe('the four-way distribution', () => {

@@ -656,12 +656,33 @@ as $$
   ),
   -- The provenance rule, mirrored from lib/reading/mood.ts isAudienceSentiment
   -- (itself the rule 20260820110000_sentiment_split.sql backfilled with):
-  -- stamped provenance wins; with none, only the full lane read the comments.
+  -- stamped provenance wins; with none, the lane, because only the full lane
+  -- read the comments.
+  --
+  -- A CASE, NOT A BOOLEAN EXPRESSION, AND THAT IS THE POINT OF IT. Both
+  -- columns are nullable, and an `or` over two comparisons against NULL
+  -- evaluates to NULL rather than to false — so `filter (where is_audience)`
+  -- and `filter (where not is_audience)` would BOTH drop such a row, and the
+  -- video would be counted in neither `judged` nor `judged_framing`. The
+  -- TypeScript rule counts it as framing (a provenance we cannot read is not a
+  -- reading of the audience), and `framingShare` is exactly the number that
+  -- would have caught the 2026-08-16 pass reorder the week it happened — so
+  -- silently under-reporting it into a row that then FREEZES is the one
+  -- outcome worth writing this carefully to avoid. Zero rows on either tenant
+  -- carry a null source today (measured read-only 2026-09-15); the columns are
+  -- nullable and the rows are permanent, which is reason enough.
+  --
+  -- The three arms are the TypeScript function's three lines in order,
+  -- including its last one: a source that is neither 'audience' nor 'framing'
+  -- falls through to the lane rather than being read as framing.
   judged_rows as (
     select d.month, d.audience,
            d.sentiment,
-           (d.sentiment_source = 'audience'
-             or (d.sentiment_source is null and d.analyzed_lane = 'full')) as is_audience,
+           case
+             when d.sentiment_source = 'audience' then true
+             when d.sentiment_source = 'framing'  then false
+             else coalesce(d.analyzed_lane, '') = 'full'
+           end as is_audience,
            d.video_uuid
     from dated d
     where d.sentiment in ('positive', 'negative', 'neutral', 'mixed')
