@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { GLOSSARY, type GlossaryKey } from '@/lib/calibration'
+import type { NavKey } from '@/lib/nav'
 import { DrawerLink } from '@/components/shell/drawer-link'
 import { Card, CardContent } from '@/components/ui/card'
 
@@ -13,7 +14,7 @@ import { Card, CardContent } from '@/components/ui/card'
 // the server's first paint and ignored once the router has hydrated — the
 // URL is the truth either way. Drop into a page header row; pass the page's
 // own path as basePath.
-export function HowToRead({ items, basePath }: { items: GlossaryKey[]; open?: boolean; basePath: string }) {
+export function HowToRead({ items, basePath, anchor }: { items: GlossaryKey[]; open?: boolean; basePath: string; anchor?: NavKey }) {
   const sp = useSearchParams()
   const isOpen = sp.get('detail') === 'legend'
   return (
@@ -50,13 +51,11 @@ export function HowToRead({ items, basePath }: { items: GlossaryKey[]; open?: bo
                   Every label above is assigned by a fixed rule from counted data — never worded by the AI.
                 </p>
                 <p className="pt-1 text-xs">
-                  {/* The Guide retired into Settings (WP9, decision C). This link is
-                      live on five pages, so it points at an address that exists
-                      today — Settings itself — rather than at
-                      `/dashboard/settings/how-to-read`, which WP16 builds and which
-                      404s until it does. WP16 restores the per-page anchor in the
-                      commit that creates the sub-page. */}
-                  <a href="/dashboard/settings" className="font-medium text-foreground underline underline-offset-2">Full guide to this page →</a>
+                  {/* The Guide retired into Settings › How to read (WP9 decision C,
+                      built in WP16). The anchor is the page's own card, so the
+                      legend on a page opens the words written about THAT page
+                      rather than the top of a list of nine. */}
+                  <a href={`/dashboard/settings/how-to-read${anchor ? `#${anchor}` : ''}`} className="font-medium text-foreground underline underline-offset-2">Full guide to this page →</a>
                 </p>
               </div>
             </CardContent>
