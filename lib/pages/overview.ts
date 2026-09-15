@@ -13,10 +13,8 @@ import type { Quote, Scope } from '../renderables/types'
 import {
   CLIENT_AUDIENCE,
   INDUSTRY_AUDIENCE,
-  isMissingCompetitors,
-  loadCompetitors,
+  loadTrackedRivals,
   rivalKey,
-  type Competitor,
 } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import {
@@ -812,25 +810,6 @@ interface AnomalyFlagRow {
   quote_refs: string[] | null
 }
 
-/** The tenant's rivals, from `competitors` where M1 has landed and from the
- *  tracked list where it has not. One shape either way, so nothing downstream
- *  has to know which of the two answered. */
-async function loadRivals(
-  supabase: SupabaseClient,
-  clientId: string,
-): Promise<{ name: string; retiredAt: string | null }[]> {
-  let stored: Competitor[] = []
-  try {
-    stored = await loadCompetitors(supabase, clientId)
-  } catch (error) {
-    if (!isMissingCompetitors(error)) throw error
-  }
-  if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
-  const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
-  const tc = row<{ competitor_names: string[] | null }>(res, 'overview.rivals')
-  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
-}
-
 /** A stored month table, read straight (not recomputed). Null — never [] —
  *  when the migration that creates it has not been applied here. */
 async function readStoredMonths<T>(
@@ -918,7 +897,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
         .order('started_at', { ascending: true }),
     ),
     fetchRunningRunIds(supabase, clientId, 'overview'),
-    loadRivals(supabase, clientId),
+    loadTrackedRivals(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'
