@@ -12,6 +12,7 @@ import {
   findRival,
   isMissingCompetitors,
   isRivalAudience,
+  planRivals,
   renameFrom,
   renameRival,
   retireRival,
@@ -190,6 +191,61 @@ describe('findRival — a stored name finds its identity', () => {
     expect(findRival(rivals, 'industry-other')).toBeNull()
     expect(findRival(rivals, 'competitor:Poler')).toBeNull()
     expect(findRival(rivals, '')).toBeNull()
+  })
+})
+
+describe('planRivals — every tracked name keeps an identity', () => {
+  // The invariant the table is worth having for. The backfill makes it true
+  // once; a Settings save that adds a rival is where it would start decaying —
+  // a name with no row has no "tracked since", resolves back from a frozen
+  // month to nothing, and cannot be renamed at all (rename_rival needs an id).
+  const row = (over: Partial<Competitor>): Competitor => ({
+    id: 'x', client_id: 'c', name: 'X', slug: 'x', first_seen_at: null,
+    retired_at: null, superseded_by: null, created_by: null, created_at: '', ...over,
+  })
+  const live = [row({ id: 'b', name: 'Cotopaxi', slug: 'cotopaxi' })]
+
+  it('creates only the names that have no row', () => {
+    const plan = planRivals(live, ['Cotopaxi', 'Rareform'])
+    expect(plan.create).toEqual([{ name: 'Rareform', slug: 'rareform' }])
+    expect(plan.revive).toEqual([])
+  })
+
+  it('matches on the slug, so a re-typed capitalisation is not a second rival', () => {
+    expect(planRivals(live, ['cotopaxi', 'COTOPAXI ']).create).toEqual([])
+  })
+
+  it('keeps one row per slug when a list names the same rival twice', () => {
+    expect(planRivals([], ['Topo Designs', 'topo designs']).create)
+      .toEqual([{ name: 'Topo Designs', slug: 'topo-designs' }])
+  })
+
+  it('revives the retired row rather than minting a second identity', () => {
+    // Two rows on one slug would make findRival choose, and the frozen months
+    // under that name belong to the rival that earned them.
+    const retired = [
+      row({ id: 'old', name: 'Patagonia', slug: 'patagonia', retired_at: '2026-09-09T16:10:00Z' }),
+      row({ id: 'older', name: 'Patagonia', slug: 'patagonia', retired_at: '2026-06-01T00:00:00Z' }),
+    ]
+    const plan = planRivals(retired, ['Patagonia'])
+    expect(plan.create).toEqual([])
+    expect(plan.revive.map((r) => r.id)).toEqual(['old'])
+  })
+
+  it('leaves a retired row alone when the same slug is already live', () => {
+    const both = [
+      row({ id: 'old', name: 'Topo Designs', slug: 'topo-designs', retired_at: '2026-09-09T16:10:00Z' }),
+      row({ id: 'now', name: 'Topo designs', slug: 'topo-designs' }),
+    ]
+    expect(planRivals(both, ['Topo designs'])).toEqual({ create: [], revive: [] })
+  })
+
+  it('never removes: a name dropped from the list is retireRival’s business', () => {
+    expect(planRivals(live, [])).toEqual({ create: [], revive: [] })
+  })
+
+  it('skips a name that folds to no slug at all', () => {
+    expect(planRivals([], ['   ', '!!!']).create).toEqual([])
   })
 })
 

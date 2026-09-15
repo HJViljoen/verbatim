@@ -7,6 +7,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { actorStamp, updateWithActor } from '@/lib/config-log'
+import { ensureRivals } from '@/lib/rivals'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { PERIODS, DAYS } from './constants'
 
@@ -130,6 +131,20 @@ export async function updateTrackingConfig(
     )
     if (kwErr) console.error(`[settings] competitor_keywords not updated for ${clientId}: ${kwErr.message}`)
   }
+
+  // Every tracked name gets an identity (WP1). M1's backfill establishes the
+  // invariant "every name in competitor_names has exactly one live competitors
+  // row" for the tenants that existed when it ran; this save is where it would
+  // otherwise start decaying — an added rival with no row has no "tracked
+  // since", cannot be resolved back from a frozen month's `competitor:<name>`,
+  // and cannot be renamed at all, because rename_rival needs an id. Admin
+  // client: `authenticated` has SELECT on competitors and nothing else, the
+  // same reason competitor_keywords goes out on it. Non-fatal — the settings
+  // are saved either way and the next save reconciles.
+  await ensureRivals(
+    { client: createAdminClient(), clientId, actor: actorStamp(session, 'settings') },
+    parsed.data.competitor_names,
+  )
 
   revalidatePath('/dashboard/settings')
   return { ok: true, message: 'Settings saved.' }

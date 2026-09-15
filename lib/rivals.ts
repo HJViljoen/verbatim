@@ -177,7 +177,7 @@ export function findRival(rivals: readonly Competitor[], nameOrAudience: string 
   return hits.find((r) => !r.retired_at) ?? hits[0] ?? null
 }
 
-// ---- Renaming and retiring --------------------------------------------------
+// ---- Creating, renaming and retiring ----------------------------------------
 
 /** What a write to a rival's identity needs: the admin client, the tenant, and
  *  the person or command behind it. Every configuration write carries an actor
@@ -192,6 +192,127 @@ export interface RivalContext {
   affectsMonths?: string | null
   /** Overrides the sentence the log stores. Client-readable copy only. */
   note?: string | null
+}
+
+/** What the tenant's tracked list asks of the identity table. Pure, so the
+ *  rule is testable without a database: the query is one read either side. */
+export interface RivalPlan {
+  /** Names with no row at all, as they will be stored. */
+  create: { name: string; slug: string }[]
+  /** Rows that are retired and tracked again. */
+  revive: Competitor[]
+}
+
+/** Which identities a tracked list is missing.
+ *
+ *  Matched on the slug, like `findRival`, so a re-typed capitalisation is not a
+ *  second rival. A name whose only row is RETIRED revives that row rather than
+ *  minting a second one: two rows sharing a slug would make `findRival` choose
+ *  between them, and the frozen months under that name belong to the rival that
+ *  earned them. Nothing is ever removed here — a name dropped from the list is
+ *  `retireRival`'s business. */
+export function planRivals(existing: readonly Competitor[], names: readonly string[]): RivalPlan {
+  // One name per slug, first spelling wins: 'Cotopaxi' and 'cotopaxi ' typed
+  // into one Settings field are one rival, and the live unique index agrees.
+  const wanted = new Map<string, string>()
+  for (const raw of names) {
+    const name = (raw ?? '').trim()
+    const slug = rivalSlug(name)
+    if (!name || !slug || wanted.has(slug)) continue
+    wanted.set(slug, name)
+  }
+
+  const live = new Set(existing.filter((r) => !r.retired_at).map((r) => r.slug))
+  const retired = new Map<string, Competitor>()
+  for (const row of existing) {
+    if (!row.retired_at || live.has(row.slug)) continue
+    const kept = retired.get(row.slug)
+    // The most recently retired row is what this name last was.
+    if (!kept || (kept.retired_at ?? '') < row.retired_at) retired.set(row.slug, row)
+  }
+
+  const plan: RivalPlan = { create: [], revive: [] }
+  for (const [slug, name] of wanted) {
+    if (live.has(slug)) continue
+    const back = retired.get(slug)
+    if (back) plan.revive.push(back)
+    else plan.create.push({ name, slug })
+  }
+  return plan
+}
+
+/** What a reconcile did. Names, not counts, because the caller logs them. */
+export interface EnsureResult {
+  /** Names that had no identity and now have one. */
+  created: string[]
+  /** Names whose identity had been retired and is tracked again. */
+  revived: string[]
+}
+
+/**
+ * Give every tracked name an identity, and revive one that is tracked again.
+ *
+ * THE INVARIANT. `competitors` is only worth having if every name in
+ * `tracking_configs.competitor_names` has exactly one live row: that is what
+ * supplies "tracked since {date}", what `findRival` resolves a frozen month's
+ * `competitor:<name>` through, and what `rename_rival` needs an id for. The
+ * migration's backfill makes it true once. Nothing else in this file creates a
+ * row — `rename_rival` and `retireRival` only ever UPDATE — so without this the
+ * table starts drifting at the first rival anyone adds in Settings and the new
+ * one can never be renamed at all.
+ *
+ * Call it AFTER a successful write of the tracked list, with an admin client:
+ * `authenticated` has SELECT on this table and nothing else, deliberately.
+ *
+ * Additive and non-fatal by the same asymmetry as `recordConfigChange`: the
+ * configuration write has already happened, so a failure here is logged and
+ * leaves the identity to the next save rather than reporting an error for work
+ * that succeeded. It never renames, never retires and never deletes; removing a
+ * name from the list is `retireRival`'s job, because a rival whose row vanished
+ * takes its frozen months' only label with it.
+ */
+export async function ensureRivals(ctx: RivalContext, names: readonly string[]): Promise<EnsureResult> {
+  const out: EnsureResult = { created: [], revived: [] }
+  if (names.length === 0) return out
+  try {
+    const plan = planRivals(await loadCompetitors(ctx.client, ctx.clientId), names)
+    if (plan.create.length === 0 && plan.revive.length === 0) return out
+
+    for (const back of plan.revive) {
+      const { error } = await ctx.client
+        .from(COMPETITORS_TABLE)
+        .update({ retired_at: null })
+        .eq('client_id', ctx.clientId)
+        .eq('id', back.id)
+      if (error) throw error
+      out.revived.push(back.name)
+    }
+
+    if (plan.create.length) {
+      const { error } = await ctx.client.from(COMPETITORS_TABLE).insert(plan.create.map((r) => ({
+        client_id: ctx.clientId,
+        name: r.name,
+        slug: r.slug,
+        // Today, which is the truth for a name tracked from now on. The
+        // backfilled rows' earlier dates are evidence found in the corpus, not
+        // a start anyone recorded.
+        first_seen_at: new Date().toISOString(),
+        created_by: ctx.actor.label ?? ctx.actor.kind,
+      })))
+      if (error) throw error
+      // Pushed only once the statement landed, so the result describes the
+      // table that exists rather than the one that was asked for.
+      out.created.push(...plan.create.map((r) => r.name))
+    }
+  } catch (error) {
+    if (isMissingCompetitors(error)) {
+      console.error(`[rivals] ${COMPETITORS_TABLE} is not there yet — ${ctx.clientId} keeps its names without identities.`)
+      return out
+    }
+    const message = (error as { message?: string }).message ?? String(error)
+    console.error(`[rivals] identities NOT reconciled for ${ctx.clientId}: ${message}`)
+  }
+  return out
 }
 
 /** What `rename_rival()` did. Counts, because the operation is otherwise
