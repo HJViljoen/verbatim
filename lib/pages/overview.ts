@@ -558,6 +558,39 @@ export function splitMovers(movers: readonly Mover[], shown: number = MOVERS_SHO
   return { growing: [...up].sort(by).slice(0, shown), fading: [...down].sort(by).slice(0, shown) }
 }
 
+/**
+ * May this row say "first heard this month"?
+ *
+ * IT IS A CLAIM ABOUT THE THEME, NOT ABOUT THE WINDOW. It was read off the
+ * first readable point on the DRAWN axis, which on the default horizon is two
+ * months — so any theme absent in August and present in September would print
+ * it inside a `data-copy="verdict"` node, the marker that asserts a reading is
+ * behind the word. Measured read-only on production: of the category themes
+ * with a September row and no August row, 7 on Össur and 19 on Sealand have a
+ * reading in an earlier month. So the flag is stated only where the drawn axis
+ * reaches the beginning of the tenant's readable record and the absence is the
+ * theme's own. A claim the drawn months cannot support is not softened, it is
+ * not made.
+ *
+ * (Today the flag cannot be reached on OV3's movers at all: a first-ever month
+ * has a baseline of k = 0, `SHARE_BAND.minK` is 10, and the comparison reads
+ * `too_little_data` — so the row is never one of the banded movers. The rule
+ * is written here, tested here, and ready for the surfaces that print a level
+ * rather than a change.)
+ */
+export function firstHeardThisMonth(input: {
+  /** The first month DRAWN. */
+  axisFrom: string
+  /** The first month READABLE for this tenant (`sinceStart`). */
+  recordFrom: string | null
+  /** The months this object carried a reading in, ascending. */
+  readableMonths: readonly string[]
+  month: string
+}): boolean {
+  if (input.recordFrom == null || monthStartOf(input.axisFrom) > monthStartOf(input.recordFrom)) return false
+  return input.readableMonths.length > 0 && monthStartOf(input.readableMonths[0]) === monthStartOf(input.month)
+}
+
 /** The month a move declared today is first scored in: the month after the one
  *  it was declared in, because the month it was declared in is already part
  *  filled when the declaration lands. */
@@ -905,6 +938,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     statsRows,
     panel,
     perAudience: audienceMonthVideos(history.denominators),
+    recordFrom: started.from,
     thin,
   })
 
@@ -1356,6 +1390,9 @@ interface CategoryInput {
   statsRows: StoredStatsRow[] | null
   panel: AttentionPanel | null
   perAudience: Map<string, number>
+  /** The first month of this tenant's readable record (`sinceStart`). "First
+   *  heard this month" may be said only when the drawn axis reaches it. */
+  recordFrom: string | null
   thin: boolean
 }
 
@@ -1424,7 +1461,12 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       pct: curr.pct,
       verdict,
       direction: input.thin ? null : directionWord(s.points),
-      isNew: readable.length > 0 && readable[0].month === input.month,
+      isNew: firstHeardThisMonth({
+        axisFrom: input.axis[0] ?? input.month,
+        recordFrom: input.recordFrom,
+        readableMonths: readable.map((p) => p.month),
+        month: input.month,
+      }),
     })
   }
   const { growing, fading } = input.thin ? { growing: [], fading: [] } : splitMovers(movers)

@@ -13,6 +13,7 @@ import {
   firstScoringMonth,
   headline,
   medianOf,
+  firstHeardThisMonth,
   moveLine,
   MOVES_EMPTY,
   recordWindow,
@@ -166,6 +167,26 @@ describe('headline', () => {
     expect(h.lead).toBeNull()
     expect(h.body).toBe('Nothing moved clearly this month. Here is where you stand.')
     expect(h.figures).toEqual({})
+  })
+})
+
+describe('firstHeardThisMonth', () => {
+  const readable = ['2026-09-01']
+  it('is silent when the drawn axis starts after the record does', () => {
+    // The default horizon draws two months. A theme absent in August and
+    // present in September is not thereby new: on production 7 Össur themes
+    // and 19 Sealand ones in exactly that shape have a reading further back.
+    expect(firstHeardThisMonth({ axisFrom: '2026-08-01', recordFrom: '2026-01-01', readableMonths: readable, month: '2026-09-01' })).toBe(false)
+  })
+  it('is said when the axis reaches the record and the absence is the theme\u2019s own', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: readable, month: '2026-09-01' })).toBe(true)
+  })
+  it('is silent when the theme was read in an earlier month', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: ['2026-07-01', '2026-09-01'], month: '2026-09-01' })).toBe(false)
+  })
+  it('is silent when nothing is readable at all', () => {
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: null, readableMonths: readable, month: '2026-09-01' })).toBe(false)
+    expect(firstHeardThisMonth({ axisFrom: '2026-01-01', recordFrom: '2026-01-01', readableMonths: [], month: '2026-09-01' })).toBe(false)
   })
 })
 
@@ -375,7 +396,7 @@ describe('buildCategory', () => {
   it('says what is not recorded rather than printing zeros, when M5 is absent', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
     })
     expect(c.kinds).toEqual([])
     expect(c.kindsNote).toContain('not recorded month by month')
@@ -388,7 +409,7 @@ describe('buildCategory', () => {
   it('reads the movers off the month series and earns a direction word', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: false,
     })
     expect(c.growing.map((m) => m.label)).toEqual(['Will it survive a wet commute'])
     expect(c.growing[0].direction).toBe('growing')
@@ -403,7 +424,7 @@ describe('buildCategory', () => {
     ]
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, kindRows, statsRows: null, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows, statsRows: null, panel: null, perAudience, thin: false,
     })
     expect(c.kinds.map((k) => k.kind)).toContain('question')
     expect(c.kinds.find((k) => k.kind === 'question')?.pct).toBe(33.9)
@@ -414,7 +435,7 @@ describe('buildCategory', () => {
   it('suppresses every comparison in a thin month and says so', () => {
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, kindRows: null, statsRows: null, panel: null, perAudience, thin: true,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows: null, panel: null, perAudience, thin: true,
     })
     expect(c.growing).toEqual([])
     expect(c.fading).toEqual([])
@@ -428,7 +449,7 @@ describe('buildCategory', () => {
     ]
     const c = buildCategory({
       audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
-      series, kindRows: null, statsRows, panel: null, perAudience, thin: false,
+      series, recordFrom: AXIS[0], kindRows: null, statsRows, panel: null, perAudience, thin: false,
     })
     expect(c.mood?.judged).toBe(1112)
     expect(c.mood?.shares.find((s) => s.mood === 'negative')?.pct).toBe(18)
