@@ -364,6 +364,10 @@ describe('the mirror in the migration — the two have to keep saying the same t
   // grant 403s the whole decision.
   const sql = readFileSync(new URL('../../supabase/migrations/20260915093000_rec_decisions.sql', import.meta.url), 'utf8')
 
+  it('creates the table REC_DECISIONS_TABLE names', () => {
+    expect(sql).toContain(`create table if not exists public.${REC_DECISIONS_TABLE} (`)
+  })
+
   it('checks exactly the words lib/calibration.ts REC_STATUSES names', () => {
     const check = sql.match(/status\s+text not null check \(status in \(([^)]*)\)\)/)?.[1]
     expect(check, 'the status CHECK is no longer where this test looks for it').toBeTruthy()

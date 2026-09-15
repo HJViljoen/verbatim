@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { getSessionContext } from '@/lib/auth'
 import { REC_STATUSES, type RecStatus } from '@/lib/calibration'
-import { isMissingRecDecisions } from '@/lib/rec-decisions'
+import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '@/lib/rec-decisions'
 
 // Moving a recommendation through its lifecycle — the write the `status`
 // column has been granted for since 2026-08-18 and never received.
@@ -59,7 +59,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   // the database can see nobody at all. On a tenant's own session the insert
   // policy pins it to auth.uid() as well, so one member cannot file a decision
   // under another's name.
-  const { error: decisionError } = await supabase.from('rec_decisions').insert({
+  const { error: decisionError } = await supabase.from(REC_DECISIONS_TABLE).insert({
     client_id: clientId,
     lineage_id: (rec.lineage_id as string | null) ?? (rec.id as string),
     recommendation_id: rec.id as string,

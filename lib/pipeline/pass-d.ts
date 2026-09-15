@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, previousRunId, withoutLineageColumn, inheritedStatus, isMissingRecDecisions, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
+import { assignLineage, previousRunId, withoutLineageColumn, inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -967,7 +967,7 @@ async function applyLineage(
     let decisions: RecDecision[] | null = null
     try {
       const { data, error } = await admin
-        .from('rec_decisions')
+        .from(REC_DECISIONS_TABLE)
         .select('lineage_id, status, decided_at')
         .eq('client_id', clientId)
         .in('lineage_id', lineageIds)
