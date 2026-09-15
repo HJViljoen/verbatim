@@ -81,11 +81,17 @@ function renderEvidence(insights: RetrievedInsight[]): string {
  *  the line the block already printed whenever a topic had no points of its
  *  own. Said rather than left out — an unexplained silence invites the model to
  *  answer the direction question from the evidence in front of it, which is one
- *  reading and cannot speak to change. */
+ *  reading and cannot speak to change.
+ *
+ *  Scoped to A TOPIC's history, deliberately. D1 keeps the update's own banded
+ *  verdicts — the sentiment and share the digest carries, which have an n and a
+ *  band behind them — and the email sent this month leads on one of them
+ *  ("sentiment down 13.9 pts"). A blanket "the history is not readable" here
+ *  would have the agent contradict the email in the same week. */
 const NO_TREND_BLOCK = [
   'MOVEMENT OVER TIME (counts per reading, not remembered words).',
   '- no per-topic history for these topics yet',
-  'You may NOT claim a topic is growing, fading or steady: say plainly that the history is not readable yet, and answer what the conversation says now.',
+  'You may NOT claim a topic is growing, fading or steady: say plainly that a topic’s history is not readable yet, and answer what the conversation says now.',
 ].join('\n')
 
 function renderTrend(trend: TrendContext): string {

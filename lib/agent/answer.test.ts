@@ -39,6 +39,11 @@ describe('movementBlock', () => {
     const gated = movementBlock(trend, 'trend', false)
     expect(gated).toContain('- no per-topic history for these topics yet')
     expect(gated).toContain('You may NOT claim a topic is growing, fading or steady')
+    // Scoped to A TOPIC's history: the update's own banded sentiment and share
+    // verdicts survive D1 (run_summary period layers, with an n and a band),
+    // and the digest leads on them — the agent must not deny them.
+    expect(gated).toContain('a topic’s history is not readable yet')
+    expect(gated).not.toContain('that the history is not readable yet')
     expect(gated).not.toContain('rising')
     expect(gated).not.toContain('You may describe direction from them.')
     // The shipped default, and the loader is skipped so `trend` is null anyway.
