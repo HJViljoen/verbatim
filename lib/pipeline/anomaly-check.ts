@@ -37,6 +37,7 @@ import {
   trailingCompleteMonths,
 } from '../reading/monthly'
 import { readSubjectWindow } from '../subjects/read'
+import { isMissingSubjects } from '../subjects/types'
 import {
   TABLE_DENOMINATORS,
   TABLE_KIND_READINGS,
@@ -1076,9 +1077,19 @@ export async function buildReading(
       if (isMissingCompetitors(e)) return []
       throw e
     }),
+    // NARROW AND NAMED, never a blanket swallow — the rule
+    // `isMissingMonthlyReading`'s own docblock states and the rival read beside
+    // this one already keeps. Swallowing everything here would not merely lose
+    // labels: the whole subject arm drops out of `candidates`, `setSize`
+    // shrinks and the Holm threshold LOOSENS, so a transient database error
+    // could let a flag fire that would not otherwise have fired. A silent
+    // change to the measurement is the one thing this file cannot afford.
     selectAll<{ id: string; name: string }>(() =>
       admin.from('subjects').select('id, name').eq('client_id', clientId).eq('status', 'active').order('id', { ascending: true }),
-    ).catch(() => [] as { id: string; name: string }[]),
+    ).catch((e) => {
+      if (isMissingSubjects(e)) return [] as { id: string; name: string }[]
+      throw e
+    }),
     selectAll<{ id: string; canonical_label: string | null }>(() =>
       admin.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).order('id', { ascending: true }),
     ),
