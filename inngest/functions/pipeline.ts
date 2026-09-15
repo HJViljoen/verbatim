@@ -1473,7 +1473,13 @@ export const runPipeline = inngest.createFunction(
       } else if (error) {
         // Any other failure keeps the behaviour it has always had (the error
         // was never read) — but says so, rather than leaving a run at
-        // 'running' with no line anywhere. Making it fatal belongs to WP9.
+        // 'running' with no line anywhere. WP9 weighed making it fatal and
+        // decided against: a throw retries and then fails the function, which
+        // stamps the run 'failed' and skips request-report, so the client loses
+        // the week's update over a bookkeeping write that did not change a
+        // single number. A row left at 'running' is caught twice as it is — the
+        // next run's open sweep closes it after six hours, and the ops check
+        // raises run_stuck the following morning.
         console.error(`[close-run] ${error.message}`)
       }
     })
