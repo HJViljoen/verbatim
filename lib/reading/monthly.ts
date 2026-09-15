@@ -48,6 +48,26 @@ import {
 // never be backfilled to what an earlier run reported. Whatever is not written
 // down at the time is gone.
 //
+// WHAT A SERIES OF THESE ROWS IS COMPARABLE ACROSS. One clustering is applied
+// to every month a single VISIT reads — that is what makes a visit's months
+// comparable with each other, and it is the whole point of reading the history
+// with one run's themes. It does NOT hold across the freeze boundary: a month
+// freezes under whatever clustering was current when its 30-day line passed, so
+// the seed freezes the back-read under one run, the next Sunday freezes last
+// month under its own, and October's run freezes September under a third.
+// `theme_id` is the stable registry identity, so those rows join cleanly and a
+// reader plotting one theme month over month gets a line without tripping
+// anything — drawn from member sets that came from different A2 clusterings.
+// `month_theme_readings.run_id` records which clustering each row came from,
+// and like-for-like means equal run_id. A reader spanning more than one has to
+// say so on screen (AGENTS.md carries the rule; the migration's header says it
+// beside the schema).
+//
+// AND THE AUDIENCE KEY IS A NAME. `audience` is `competitor:<competitor_name>`,
+// free text from Settings, and part of both tables' primary keys: rename a
+// rival and its frozen months stay under the old string while the new name
+// starts at zero, with no visit ever returning to re-key them.
+//
 // Dates are UTC throughout: a month here is a UTC month, never the server's
 // local one, because the SQL functions bucket with an explicit `at time zone
 // 'UTC'` and every instant in this file is built and compared in UTC.

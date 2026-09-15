@@ -265,9 +265,16 @@ function monthsOfHistory(i: ReadinessInputs): ReadinessRow {
       ? `No month yet carries ${i.floor} videos in any audience — the biggest holds ${fmtInt(Math.max(...shaped.map((s) => s.biggestVideos), 0))}.`
       : `${plural(best.monthsVideos, 'month')} clear ${i.floor} videos in ${audienceLabel(best.audience).toLowerCase()}; ${clearing.length} of ${shaped.length} audiences clear any.`
 
+  // An audience with months stored under a name nobody tracks any more is a
+  // rival that was renamed after its months were seeded: `audience` is the
+  // literal `competitor:<name>` string and part of the frozen rows' primary
+  // key, so the old months stay where they are and the new name starts from
+  // zero. Named here because the two rows would otherwise just look short.
+  const tracked = new Set(i.monthly.tracked)
   const notes = shaped.map((s) =>
     `${audienceLabel(s.audience)} — ${s.monthsVideos} of ${s.monthsWithAny} months clear ${i.floor} videos (${s.monthsComments} clear ${i.floor} comments)` +
-    (s.monthsWithAny === 0 ? ' · no month at all' : ''))
+    (s.monthsWithAny === 0 ? ' · no month at all' : '') +
+    (!tracked.has(s.audience) ? ' · filed under a name this workspace no longer tracks, so its months are a series of their own' : ''))
 
   return row('months-of-history', 'History', `months carrying ${i.floor} videos, audience by audience`,
     status, detail, 'ops', unlocks, notes)

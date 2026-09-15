@@ -41,6 +41,32 @@
 -- reading. That is the design's "no artefact is silently corrected", not a
 -- claim that the month cannot change.
 --
+-- WHAT A SERIES OF THESE ROWS IS COMPARABLE ACROSS. One clustering is applied
+-- to every month a single VISIT reads, and that is the promise. It is not the
+-- promise across the freeze boundary: each month freezes under whatever
+-- clustering was current when its 30-day line passed, so the seed freezes the
+-- back-read under one run, the following Sunday freezes last month under its
+-- own, and October's run freezes September under a third. theme_id is the
+-- stable theme_registry identity, so those rows join cleanly and a reader
+-- plotting one theme month over month will get a line without tripping
+-- anything — drawn from member sets that came from different A2 clusterings.
+-- month_theme_readings.run_id records which clustering each row came from, and
+-- a like-for-like comparison is one where run_id is equal. A reader that wants
+-- a longer series than one clustering covers has to say so on screen; nothing
+-- in the schema can say it for them (AGENTS.md carries the same rule).
+--
+-- THE AUDIENCE KEY IS A NAME, AND A RENAME SPLITS THE SERIES. `audience` is
+-- built at read time as 'competitor:' || videos.competitor_name — free text a
+-- tenant types in Settings — and it is part of both primary keys. Rename a
+-- rival and its frozen months stay filed under the old string for ever (a
+-- frozen row cannot be re-keyed: the guard below refuses the update, and the
+-- months are past their line so no visit returns to them), while the new name
+-- starts from zero. Sealand's rival set was last rewritten on 2026-09-09, so
+-- this is a live behaviour, not a hypothetical. Settle a rival's spelling
+-- before seeding its months; after that, a rename is a decision to split the
+-- record, and the change log (config_changes, surface 'rivals') is where the
+-- date of the split is written down.
+--
 -- Nothing reads these tables yet. The pipeline's freeze-months step and
 -- scripts/monthly-reading.ts write them; the readiness page (WP10) and the
 -- Phase 1 monthly series are the readers.
@@ -138,6 +164,12 @@ comment on column public.month_theme_readings.excluded_on_camera is
   'Member insights evidenced only on camera or on screen whose video carries no dated comment at all — a property of the theme in this audience, repeated on each of its month rows, never summed. Independent of the window the writer read, so the pipeline and the back-read seed agree.';
 comment on column public.month_theme_readings.excluded_undated is
   'Cited comments with no date, attributed to every month their video occupies in this theme''s reading (the month_denominators rule). Per month; never summed.';
+comment on column public.month_theme_readings.run_id is
+  'The run whose clustering produced this row. Rows of different months may carry different run_ids — each month freezes under whatever clustering was current when its 30-day line passed — so a cross-month comparison is like-for-like only where run_id is equal, and this column is how a reader tells.';
+comment on column public.month_theme_readings.audience is
+  'The literal bucket string, competitor_name included verbatim. It is a NAME, not an identity: renaming a rival leaves its frozen months under the old string and starts the new one at zero, and a frozen row cannot be re-keyed. Same rule and same wording as month_denominators.audience.';
+comment on column public.month_denominators.audience is
+  'The literal bucket string, competitor_name included verbatim. It is a NAME, not an identity: renaming a rival in Settings leaves every frozen month filed under the old string and starts the new name from zero, and no later visit returns to a frozen month to re-key it. Settle a rival''s spelling before seeding its months; a rename afterwards splits the record, and config_changes (surface ''rivals'') dates the split.';
 
 create index if not exists month_theme_readings_theme_idx
   on public.month_theme_readings (client_id, theme_id, month);

@@ -52,7 +52,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `month_theme_readings`. A month is `filling` until 30 days after it ends and
   `frozen` after; a frozen row is never rewritten — the `month_reading_frozen_guard`
   trigger refuses the UPDATE, so a late-discovered video shows as accrual and no
-  artefact is silently corrected.
+  artefact is silently corrected. Two limits come with that, and a reader has to
+  carry them: months freeze under whatever clustering was current when each
+  passed its line, so rows of different months may carry different `run_id`s and
+  a cross-month comparison is like-for-like only where `run_id` is equal; and
+  `audience` is a NAME (`competitor:<competitor_name>`, free text from Settings),
+  so renaming a rival splits its series — the frozen months stay under the old
+  string and cannot be re-keyed.
 - **Every configuration write carries an actor.** `tracking_configs` UPDATEs go
   through `updateWithActor` / `withActor` (`lib/config-log.ts`) so the
   `tracking_configs_audit` trigger logs a person instead of a role; surfaces the

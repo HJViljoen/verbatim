@@ -404,6 +404,25 @@ describe('months of history', () => {
     expect(row.status).toBe('missing')
     expect(row.detail).toBe('No month yet carries 100 videos in any audience — the biggest holds 20.')
   })
+
+  // `audience` is `competitor:<name>` and part of the frozen rows' primary key,
+  // so renaming a rival in Settings leaves its months under the old string and
+  // starts the new name at zero. Both then read short, and only this line says
+  // why. (Sealand's rival set was last rewritten on 2026-09-09, so it is a live
+  // behaviour, not a hypothetical.)
+  it('names an audience whose months are filed under a rival name nobody tracks any more', () => {
+    const renamed = {
+      tracked: ['client', 'competitor:Cotopaxi Inc', 'industry-other'],
+      months: [
+        { month: '2026-08-01', audience: 'competitor:Cotopaxi', videos: 120, comments: 900 },
+        { month: '2026-09-01', audience: 'competitor:Cotopaxi Inc', videos: 4, comments: 20 },
+      ],
+    }
+    const notes = find(computeReadiness(ossur({ monthly: renamed })), 'months-of-history').notes
+    expect(notes.find((n) => n.startsWith('Cotopaxi —'))).toContain('no longer tracks')
+    expect(notes.find((n) => n.startsWith('Cotopaxi Inc —'))).not.toContain('no longer tracks')
+    expect(notes.find((n) => n.startsWith('Your own brand'))).not.toContain('no longer tracks')
+  })
 })
 
 describe('the baseline behind an unusual week', () => {
