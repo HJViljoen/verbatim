@@ -505,7 +505,7 @@ export const MOVES_EMPTY =
 /** What OV5 says about what is not here yet. `{month}` is the month Market's
  *  bottom section arrives in. */
 export const movesUnlock = (month: string): string =>
-  `Scoring, and the pre-filled monthly card, arrive with Market's bottom section in ${monthName(month)}.`
+  `Scoring, and the pre-filled monthly card, arrive with Market’s bottom section in ${monthName(month)}.`
 
 /** The masthead OV5 and Market both carry, code-written. */
 export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
