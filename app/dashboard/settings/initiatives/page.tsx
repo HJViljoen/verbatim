@@ -5,11 +5,17 @@ import { getSessionContext } from '@/lib/auth'
 import { weekdayDate } from '@/lib/format'
 import { rows as readRows, row } from '@/lib/pages/read'
 import { toInitiative, type InitiativeDbRow } from '@/lib/initiatives/types'
+import { initiativePromise } from '@/lib/initiatives/measure'
 
 // Settings › Initiatives — the list of what this workspace declared it is
 // trying to move, and the only place to rename, finish or stop one. Declaring
 // happens where the theme is (Voice of Customer): a list of themes with no
 // evidence beside them is not where anyone decides what to track.
+//
+// The card's promise comes from `initiativePromise()`, which is gated on D1:
+// this page and the "Track this theme" sheet are the two places the product
+// tells a client what tracking will give them back, and both must promise only
+// what the tile can currently draw.
 
 export default async function InitiativesSettingsPage() {
   const { supabase, clientId } = await getSessionContext()
@@ -46,7 +52,7 @@ export default async function InitiativesSettingsPage() {
       <div className="flex flex-col gap-3">
         <SettingsCard
           title="What you are trying to move"
-          description="Each one is measured on the themes it was declared with, from the day you declared it. We report whether that conversation grew or shrank — never whether you succeeded."
+          description={`Each one is measured on the themes it was declared with, from the day you declared it. ${initiativePromise()}`}
         >
           {initiatives.length === 0 ? (
             <p className="text-[12px] text-muted-foreground">

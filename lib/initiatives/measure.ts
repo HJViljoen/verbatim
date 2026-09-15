@@ -193,6 +193,25 @@ export function initiativeLine(m: InitiativeMeasure, startedLabel: string, direc
 export const trackedLine = (startedLabel: string, updates: number): string =>
   `Tracked since ${startedLabel} · ${updates} updates read`
 
+/**
+ * What the two surfaces that ask a client to DECLARE an initiative promise
+ * they will get back — the "Track this theme" sheet on Voice of Customer and
+ * the Settings › Initiatives card. Said in one place because it is one
+ * promise made twice.
+ *
+ * Gated on D1 for the same reason the tile and its empty state are: while
+ * `RUN_INDEXED_DIRECTION_WORDS` is off the tile prints no direction at all
+ * (`initiativeTile` empties the series, the mood delta and the verdict
+ * sentence), so an invitation that promised "grew or shrank" would be
+ * promising what the product has just withdrawn. Phase 1 flips the constant,
+ * the tile draws the series again, and this sentence comes back with it.
+ */
+export function initiativePromise(directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+  return directionWords
+    ? 'Every update from today on says whether its share of its own group’s conversation grew or shrank — never whether you succeeded.'
+    : 'Every update from today on reports its share of its own group’s conversation — never whether you succeeded.'
+}
+
 /** Whether a movement went the way the client said they wanted. Null when
  *  there is nothing to judge — never a green tick on a flat line.
  *

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  measureInitiative, initiativeLine, wentTheirWay, INITIATIVE_FLAT_BAND,
+  measureInitiative, initiativeLine, initiativePromise, wentTheirWay, INITIATIVE_FLAT_BAND,
   type ObservationPoint, type RunInWindow,
 } from './measure'
 
@@ -151,6 +151,27 @@ describe('initiativeLine', () => {
     // The two honest-silence sentences are already direction-free and stay.
     expect(initiativeLine(measure([]), '1 Aug', false)).toBe('Nothing heard on this since 1 Aug — it lands with the next update.')
     expect(initiativeLine(measure([10]), '1 Aug', false)).toBe('One update in since 1 Aug — movement needs a second.')
+  })
+})
+
+describe('initiativePromise', () => {
+  // The sentence the two declaration surfaces print. It must promise no more
+  // than the tile draws: while the gate is off the tile has no series, no mood
+  // delta and no verdict, so the invitation may not say "grew or shrank".
+  it('promises no direction while the run-indexed direction words are gated off', () => {
+    const off = initiativePromise(false)
+    expect(off).toBe('Every update from today on reports its share of its own group’s conversation — never whether you succeeded.')
+    expect(initiativePromise()).toBe(off) // the shipped default
+    for (const word of ['grew', 'shrank', 'rose', 'fell', 'gaining', 'fading']) expect(off).not.toContain(word)
+  })
+
+  it('promises the direction again when Phase 1 flips the constant', () => {
+    expect(initiativePromise(true)).toContain('grew or shrank')
+  })
+
+  // Both branches end on the one thing this product will never claim.
+  it('never promises to say whether the initiative worked', () => {
+    for (const on of [true, false]) expect(initiativePromise(on)).toContain('never whether you succeeded')
   })
 })
 
