@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
-import { changedTerms, monthKeyOf, monthsRange, planAffects } from './config-affects'
+import { changedTerms, monthKeyOf, monthsRange, planAffects, rangeCoversMonth } from './config-affects'
 
 describe('changedTerms — what moved, in the corpus’s own spelling', () => {
   it('takes both directions: added and removed', () => {
@@ -97,6 +97,37 @@ describe('monthsRange — the band a change draws', () => {
   it('is null for nothing, because a band over nothing is not a band', () => {
     expect(monthsRange([])).toBeNull()
     expect(monthsRange(['', 'not-a-month'])).toBeNull()
+  })
+})
+
+describe('rangeCoversMonth — the reader\'s half of the band', () => {
+  const band = monthsRange(['2026-06', '2026-07']) as string
+
+  it('covers every month in the band it was built from', () => {
+    expect(rangeCoversMonth(band, '2026-06-01')).toBe(true)
+    expect(rangeCoversMonth(band, '2026-07-01')).toBe(true)
+  })
+
+  it('is half-open, so the month after the last one is outside it', () => {
+    expect(rangeCoversMonth(band, '2026-08-01')).toBe(false)
+    expect(rangeCoversMonth(band, '2026-05-01')).toBe(false)
+  })
+
+  it('covers a band of one month', () => {
+    expect(rangeCoversMonth(monthsRange(['2026-08']), '2026-08-01')).toBe(true)
+    expect(rangeCoversMonth(monthsRange(['2026-08']), '2026-09-01')).toBe(false)
+  })
+
+  it('covers nothing when there is no band, or one nobody can parse', () => {
+    expect(rangeCoversMonth(null, '2026-08-01')).toBe(false)
+    expect(rangeCoversMonth('', '2026-08-01')).toBe(false)
+    expect(rangeCoversMonth('(2026-06-01,2026-08-01]', '2026-07-01')).toBe(false)
+    expect(rangeCoversMonth('empty', '2026-07-01')).toBe(false)
+  })
+
+  it('covers nothing for a month nobody can parse', () => {
+    expect(rangeCoversMonth(band, '')).toBe(false)
+    expect(rangeCoversMonth(band, '2026-06')).toBe(false)
   })
 })
 

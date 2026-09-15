@@ -1,0 +1,371 @@
+import { describe, it, expect } from 'vitest'
+import {
+  buildSeries,
+  isReadable,
+  monthAxis,
+  pointsByMonth,
+  type DenominatorPoint,
+  type MonthLabelKind,
+  type NumeratorPoint,
+} from './series'
+
+const den = (month: string, videos: number, over: Partial<DenominatorPoint> = {}): DenominatorPoint => ({
+  month,
+  audience: 'industry-other',
+  videos,
+  comments: videos * 10,
+  status: 'frozen',
+  origin: 'live',
+  read_at: '2026-09-15T00:00:00.000Z',
+  run_id: 'd346b0f7-5b2b-4b46-a60c-db0c83ecfda7',
+  frozen_at: '2026-09-15T00:00:00.000Z',
+  clustering_key: 'a=v4;c=0.58',
+  ...over,
+})
+
+const num = (month: string, videos: number, over: Partial<NumeratorPoint> = {}): NumeratorPoint => ({
+  month,
+  audience: 'industry-other',
+  videos,
+  comments: videos * 2,
+  clustering_key: 'a=v4;c=0.58',
+  ...over,
+})
+
+const kinds = (labels: readonly { kind: MonthLabelKind }[]): MonthLabelKind[] => labels.map((l) => l.kind)
+
+describe('monthAxis', () => {
+  it('generates every month from one to the other, inclusive', () => {
+    expect(monthAxis('2026-06-01', '2026-09-01')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+
+  it('takes any day in a month and returns month starts', () => {
+    expect(monthAxis('2026-06-17T09:00:00Z', '2026-08-02')).toEqual(['2026-06-01', '2026-07-01', '2026-08-01'])
+  })
+
+  it('is one month when both ends are the same month', () => {
+    expect(monthAxis('2026-09-01', '2026-09-30')).toEqual(['2026-09-01'])
+  })
+
+  it('crosses a year end', () => {
+    expect(monthAxis('2025-11-01', '2026-02-01')).toEqual(['2025-11-01', '2025-12-01', '2026-01-01', '2026-02-01'])
+  })
+
+  it('is empty when the end is before the start rather than wrapping', () => {
+    expect(monthAxis('2026-09-01', '2026-06-01')).toEqual([])
+  })
+})
+
+describe('buildSeries · the six month states', () => {
+  const axis = monthAxis('2026-06-01', '2026-09-01')
+
+  it('frozen and filling come off the ROW, not the clock', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [
+        den('2026-06-01', 182),
+        den('2026-07-01', 118),
+        den('2026-08-01', 628),
+        // Past its 30-day line and still stored filling: the next visit is what
+        // freezes it, and until then the row is what the word means.
+        den('2026-09-01', 388, { status: 'filling', frozen_at: null }),
+      ],
+    })
+    expect(s.points.map((p) => p.state)).toEqual(['frozen', 'frozen', 'frozen', 'filling'])
+    expect(s.points[3].status).toBe('filling')
+  })
+
+  it('a month with a row under the floor is below_floor, not hollow', () => {
+    const s = buildSeries({ axis, audience: 'client', denominators: [den('2026-08-01', 20, { audience: 'client' })] })
+    const by = pointsByMonth(s)
+    expect(by.get('2026-08-01')!.state).toBe('below_floor')
+    expect(by.get('2026-08-01')!.videos).toBe(20)
+    expect(by.get('2026-07-01')!.state).toBe('hollow')
+  })
+
+  it('a hollow month keeps its slot and its nulls — never a zero', () => {
+    const s = buildSeries({ axis, audience: 'industry-other', denominators: [den('2026-08-01', 628)] })
+    expect(s.points).toHaveLength(4)
+    const july = pointsByMonth(s).get('2026-07-01')!
+    expect(july.state).toBe('hollow')
+    expect(july.videos).toBeNull()
+    expect(july.comments).toBeNull()
+    expect(july.pct).toBeNull()
+  })
+
+  it('an unapplied migration is `missing` on every month, not zero', () => {
+    const s = buildSeries({ axis, audience: 'industry-other', denominators: [], substrate: 'missing' })
+    expect(s.points.every((p) => p.state === 'missing')).toBe(true)
+    expect(s.points.every((p) => p.videos === null)).toBe(true)
+  })
+
+  it('an unseeded tenant is `not_seeded`, told apart from a genuine zero', () => {
+    const s = buildSeries({ axis, audience: 'industry-other', denominators: [], substrate: 'not_seeded' })
+    expect(s.points.every((p) => p.state === 'not_seeded')).toBe(true)
+    const seeded = buildSeries({ axis, audience: 'industry-other', denominators: [den('2026-06-01', 182)] })
+    expect(seeded.points[1].state).toBe('hollow')
+  })
+
+  it('missing and not_seeded suppress the change-log note, which would be a claim about nothing', () => {
+    expect(buildSeries({ axis, audience: 'x', denominators: [], substrate: 'missing' }).notes).toEqual([])
+    expect(buildSeries({ axis, audience: 'x', denominators: [], substrate: 'not_seeded' }).notes).toEqual([])
+  })
+
+  it('isReadable is true only for the two states a comparison may be drawn on', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-06-01', 182), den('2026-07-01', 20)],
+    })
+    expect(s.points.map(isReadable)).toEqual([true, false, false, false])
+  })
+})
+
+describe('buildSeries · the numerator', () => {
+  const axis = monthAxis('2026-06-01', '2026-09-01')
+  const denominators = [den('2026-06-01', 182), den('2026-07-01', 118), den('2026-08-01', 628), den('2026-09-01', 388)]
+
+  it('reproduces the pinned production reading 28 · 9 · 102 · 44', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: '29837c1a-ad02-452c-acaf-0da46efcffbd',
+      objectLabel: 'Audience identities and amputation types',
+      denominators,
+      readings: [num('2026-06-01', 28), num('2026-07-01', 9), num('2026-08-01', 102), num('2026-09-01', 44)],
+    })
+    expect(s.points.map((p) => p.k)).toEqual([28, 9, 102, 44])
+    expect(s.points.map((p) => p.pct)).toEqual([15.4, 7.6, 16.2, 11.3])
+    expect(s.objectLabel).toBe('Audience identities and amputation types')
+  })
+
+  it('a month the object is absent from is zero, and a month the AUDIENCE is absent from is null', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 't',
+      denominators: [den('2026-06-01', 182), den('2026-08-01', 628)],
+      readings: [num('2026-06-01', 28)],
+    })
+    const by = pointsByMonth(s)
+    expect(by.get('2026-08-01')!.k).toBe(0)
+    expect(by.get('2026-08-01')!.pct).toBe(0)
+    expect(by.get('2026-07-01')!.k).toBeNull()
+  })
+
+  it('a denominator-only series has no k at all — not a zero', () => {
+    const s = buildSeries({ axis, audience: 'industry-other', denominators })
+    expect(s.points.every((p) => p.k === null && p.pct === null)).toBe(true)
+  })
+
+  it('ignores numerator rows filed under another audience', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 't',
+      denominators,
+      readings: [num('2026-08-01', 102), num('2026-08-01', 7, { audience: 'client' })],
+    })
+    expect(pointsByMonth(s).get('2026-08-01')!.k).toBe(102)
+  })
+
+  it('drops rows outside the axis rather than widening it', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [...denominators, den('2026-02-01', 500)],
+    })
+    expect(s.points).toHaveLength(4)
+    expect(s.points[0].month).toBe('2026-06-01')
+  })
+
+  it('names the first month a comparison could start from', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-06-01', 20), den('2026-07-01', 118), den('2026-08-01', 628)],
+    })
+    expect(s.firstReadable).toBe('2026-07-01')
+    expect(buildSeries({ axis, audience: 'x', denominators: [] }).firstReadable).toBeNull()
+  })
+})
+
+describe('buildSeries · labels', () => {
+  const axis = monthAxis('2026-06-01', '2026-09-01')
+
+  it('labels a back-read month as read back at setup', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-06-01', 182, { origin: 'back_read' }), den('2026-07-01', 118)],
+    })
+    expect(kinds(s.points[0].labels)).toContain('read_back_at_setup')
+    expect(kinds(s.points[1].labels)).not.toContain('read_back_at_setup')
+  })
+
+  it('prints the date a still-filling month settles on', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-09-01', 388, { status: 'filling', frozen_at: null })],
+    })
+    const label = s.points[3].labels.find((l) => l.kind === 'still_filling')!
+    expect(label.text).toContain('2026-10-31')
+  })
+
+  it('draws a clustering rule at the first month under the new key, and nowhere else', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 't',
+      denominators: [den('2026-06-01', 182), den('2026-07-01', 118), den('2026-08-01', 628), den('2026-09-01', 388)],
+      readings: [
+        num('2026-06-01', 28),
+        num('2026-07-01', 9),
+        num('2026-08-01', 102, { clustering_key: 'a=v5;c=0.58' }),
+        num('2026-09-01', 44, { clustering_key: 'a=v5;c=0.58' }),
+      ],
+    })
+    expect(s.points.map((p) => kinds(p.labels).includes('clustering_changed'))).toEqual([false, false, true, false])
+  })
+
+  it('collapses a run of unrecorded groupings into ONE note instead of a rule per month', () => {
+    // Every month frozen before the fingerprint shipped carries no key, and two
+    // unknowns are deliberately not one regime.
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 't',
+      denominators: [den('2026-06-01', 182), den('2026-07-01', 118), den('2026-08-01', 628), den('2026-09-01', 388)],
+      readings: [
+        num('2026-06-01', 28, { clustering_key: null }),
+        num('2026-07-01', 9, { clustering_key: null }),
+        num('2026-08-01', 102, { clustering_key: null }),
+        num('2026-09-01', 44, { clustering_key: null }),
+      ],
+    })
+    expect(s.points.every((p) => !kinds(p.labels).includes('clustering_changed'))).toBe(true)
+    const collapsed = s.notes.filter((n) => n.kind === 'clustering_changed')
+    expect(collapsed).toHaveLength(1)
+    expect(collapsed[0].text).toContain('2026-07')
+    expect(collapsed[0].text).toContain('2026-09')
+  })
+
+  it('draws a faint band over the months a tracking change MOVED, not the month it was made in', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-06-01', 182), den('2026-07-01', 118), den('2026-08-01', 628), den('2026-09-01', 388)],
+      changes: [
+        {
+          changed_at: '2026-09-12T00:00:00.000Z',
+          surface: 'terms',
+          note: 'Two search terms were added.',
+          months: '[2026-06-01,2026-08-01)',
+        },
+      ],
+    })
+    expect(s.points.map((p) => kinds(p.labels).includes('tracking_change'))).toEqual([true, true, false, false])
+    expect(s.points[0].labels.find((l) => l.kind === 'tracking_change')!.text).toBe('Two search terms were added.')
+  })
+
+  it('a change with no months band marks nothing — a band nobody can parse is no record', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      denominators: [den('2026-08-01', 628)],
+      changes: [{ changed_at: '2026-08-04T00:00:00.000Z', surface: 'rivals', note: 'x', months: null }],
+    })
+    expect(s.points.every((p) => !kinds(p.labels).includes('tracking_change'))).toBe(true)
+  })
+
+  it('carries the change-log boundary as a series note, in the calibrated wording', () => {
+    const none = buildSeries({ axis, audience: 'x', denominators: [] })
+    expect(none.notes[0].kind).toBe('no_change_record_before')
+    expect(none.notes[0].text).toContain('No configuration change has been recorded yet')
+    const some = buildSeries({ axis, audience: 'x', denominators: [], changeLogFrom: '2026-09-15T08:00:00.000Z' })
+    expect(some.notes[0].text).toContain('2026-09-15')
+  })
+
+  it('marks a thin month against its own trailing median, and leaves a normal one alone', () => {
+    const wide = monthAxis('2025-10-01', '2026-09-01')
+    const s = buildSeries({
+      axis: wide,
+      audience: 'industry-other',
+      denominators: [
+        ...wide.slice(0, 11).map((m) => den(m, 600)),
+        den('2026-09-01', 150),
+      ],
+    })
+    expect(kinds(s.points[s.points.length - 1].labels)).toContain('thin')
+    expect(kinds(s.points[5].labels)).not.toContain('thin')
+  })
+
+  it('applies the no-updates arm only from the tenant\'s first run, so the back-read is not thin by construction', () => {
+    // Össur's first run is 2026-04-06; 51 of its 55 category months have zero
+    // updates by construction, and a literal rule would empty the back-read.
+    const wide = monthAxis('2025-10-01', '2026-09-01')
+    const s = buildSeries({
+      axis: wide,
+      audience: 'industry-other',
+      denominators: wide.map((m) => den(m, 600, { origin: 'back_read' })),
+      updatesByMonth: Object.fromEntries(wide.map((m) => [m, 0])),
+      firstRunMonth: '2026-04-01',
+    })
+    const thin = s.points.filter((p) => kinds(p.labels).includes('thin')).map((p) => p.month)
+    expect(thin).toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
+  })
+})
+
+describe('buildSeries · a renamed rival is one line with the break marked', () => {
+  const axis = monthAxis('2026-06-01', '2026-09-01')
+  const renames = [{ from: 'competitor:Topo', to: 'competitor:Topo Designs', at: '2026-08-04T00:00:00.000Z' }]
+  const rows = [
+    den('2026-06-01', 182, { audience: 'competitor:Topo' }),
+    den('2026-07-01', 118, { audience: 'competitor:Topo' }),
+    den('2026-08-01', 628, { audience: 'competitor:Topo Designs' }),
+    den('2026-09-01', 388, { audience: 'competitor:Topo Designs' }),
+  ]
+
+  it('draws one line under the newest name and keeps both in the legend', () => {
+    const s = buildSeries({ axis, audience: 'competitor:Topo Designs', denominators: rows, renames })
+    expect(s.audience).toBe('competitor:Topo Designs')
+    expect(s.names).toEqual(['competitor:Topo', 'competitor:Topo Designs'])
+    expect(s.points.map((p) => p.videos)).toEqual([182, 118, 628, 388])
+  })
+
+  it('is found by the OLD key too, so a link that predates the rename still resolves', () => {
+    const s = buildSeries({ axis, audience: 'competitor:Topo', denominators: rows, renames })
+    expect(s.audience).toBe('competitor:Topo Designs')
+    expect(s.points.map((p) => p.videos)).toEqual([182, 118, 628, 388])
+  })
+
+  it('marks the break at the month the key changes, and says both names', () => {
+    const s = buildSeries({ axis, audience: 'competitor:Topo Designs', denominators: rows, renames })
+    expect(s.points.map((p) => kinds(p.labels).includes('renamed'))).toEqual([false, false, true, false])
+    expect(s.points[2].labels.find((l) => l.kind === 'renamed')!.text).toContain('Topo')
+  })
+
+  it('keeps each month filed under the name it was read as', () => {
+    const s = buildSeries({ axis, audience: 'competitor:Topo Designs', denominators: rows, renames })
+    expect(s.points.map((p) => p.audience)).toEqual([
+      'competitor:Topo',
+      'competitor:Topo',
+      'competitor:Topo Designs',
+      'competitor:Topo Designs',
+    ])
+  })
+
+  it('an audience nothing was renamed to or from comes back untouched', () => {
+    const s = buildSeries({ axis, audience: 'industry-other', denominators: [den('2026-08-01', 628)], renames })
+    expect(s.names).toEqual(['industry-other'])
+    expect(s.audience).toBe('industry-other')
+  })
+
+  it('an audience with no rows at all is still a line of hollow months', () => {
+    const s = buildSeries({ axis, audience: 'competitor:Rareform', denominators: [den('2026-08-01', 628)] })
+    expect(s.audience).toBe('competitor:Rareform')
+    expect(s.points.every((p) => p.state === 'hollow')).toBe(true)
+  })
+})

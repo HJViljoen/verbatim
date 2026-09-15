@@ -151,6 +151,21 @@ export function monthsRange(months: readonly string[]): string | null {
   return `[${first}-01,${end})`
 }
 
+/** Does a stored `affects_months` band cover this month? The inverse of
+ *  `monthsRange`, and the reader's half of it: a change draws a faint band over
+ *  the months it moved, so the reading layer has to ask each month whether it is
+ *  inside one. Half-open `[first, last+1)`, exactly as written; a null or
+ *  malformed band covers nothing, because a band nobody can parse is not a
+ *  record of anything. */
+export function rangeCoversMonth(range: string | null | undefined, month: string): boolean {
+  if (!range) return false
+  const m = /^\[(\d{4}-\d{2}-\d{2}),(\d{4}-\d{2}-\d{2})\)$/.exec(range.trim())
+  if (!m) return false
+  const key = (month ?? '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false
+  return key >= m[1] && key < m[2]
+}
+
 /** A comment's month key, in UTC — the same clock `monthly_denominators` uses
  *  (`date_trunc('month', c.comment_date at time zone 'UTC')`). */
 export function monthKeyOf(commentDate: string): string | null {
