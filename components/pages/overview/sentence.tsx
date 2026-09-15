@@ -96,9 +96,20 @@ export const overviewSentence: Block<OverviewData> = {
           className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
           style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
         >
-          Two voices
+          {/* "TWO OF N VOICES" (disposition #18). The N is the readable voices
+              the sentence's own videos held, so a reader can see that two were
+              chosen and not that two were all there was. */}
+          {s.voices.length} of {fmtInt(Math.max(s.voicesFrom, s.voices.length))} voices
         </span>
-        <BlockQuotes mode={mode} quotes={s.voices.map((v) => ({ quote: v.quote, cite: v.cite }))} />
+        <BlockQuotes
+          mode={mode}
+          quotes={s.voices.map((v) => ({
+            quote: v.quote,
+            // platform · date · LINK (design §3 OV1). The words stay the words
+            // when there is nowhere to send the reader.
+            cite: v.href ? <a href={v.href} rel="noreferrer" target="_blank" style={email ? { color: EMAIL.muted } : undefined}>{v.cite}</a> : v.cite,
+          }))}
+        />
       </div>
     ) : null
 

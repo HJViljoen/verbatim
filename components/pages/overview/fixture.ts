@@ -106,9 +106,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         href: '/dashboard/market',
       },
       voices: [
-        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a video we read' },
-        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under a video we read' },
+        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a video we read', href: 'https://www.tiktok.com/@x/video/1' },
+        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under a video we read', href: null },
       ],
+      voicesFrom: 37,
       verdicts: [lead],
     },
     subjects: {

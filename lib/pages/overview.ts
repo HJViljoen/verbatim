@@ -7,6 +7,7 @@ import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-d
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { citationLink } from '../evidence-cite'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { SHARE_BAND } from '../report-bands'
@@ -278,6 +279,9 @@ export interface Voice {
   quote: Quote
   /** Platform · date · where it was said. */
   cite: string
+  /** Where to go and read it. Null where the video carries no public URL —
+   *  the cite is then printed without a link rather than with a dead one. */
+  href: string | null
 }
 
 export interface SentenceBlock {
@@ -290,6 +294,11 @@ export interface SentenceBlock {
   interpretation: Interpretation
   ledger: LedgerRow | null
   voices: Voice[]
+  /** How many readable voices the sentence's videos held — the N of "2 of N
+   *  voices" (disposition #18). NOT a figure: it is a count of the evidence
+   *  behind a figure this block already declares, not a reading of the month,
+   *  and the page's budget counts readings. */
+  voicesFrom: number
   /** Every comparison this block may speak from. */
   verdicts: Verdict[]
 }
@@ -1090,13 +1099,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   ]
   const head = headline({ verdicts: thin ? [] : sentenceVerdicts })
   const ledger = await loadLedger(supabase, clientId)
-  const voices = await loadVoices(supabase, head.lead, top, themedRunId)
+  const voices = await loadVoices(supabase, clientId, head.lead, top, themedRunId)
   const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null
   const interpretation = composeInterpretation(
     'interpretation_monthly',
     sentenceVerdicts,
     proseFigures(head.figures),
-    voices.map((v) => ({ ref: v.quote.ref })),
+    voices.voices.map((v) => ({ ref: v.quote.ref })),
   )
   const sentence: SentenceBlock = {
     lead: head.lead,
@@ -1105,7 +1114,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     anomaly,
     interpretation,
     ledger,
-    voices,
+    voices: voices.voices,
+    voicesFrom: voices.from,
     verdicts: sentenceVerdicts,
   }
 
@@ -1404,13 +1414,14 @@ async function buildAnomaly(supabase: SupabaseClient, flag: AnomalyFlagRow): Pro
 /** Two voices from the videos behind the sentence (design §3 OV1). */
 async function loadVoices(
   supabase: SupabaseClient,
+  clientId: string,
   lead: Verdict | null,
   top: readonly { objectId: string }[],
   themedRunId: string | null,
-): Promise<Voice[]> {
-  if (!themedRunId) return []
+): Promise<{ voices: Voice[]; from: number }> {
+  if (!themedRunId) return { voices: [], from: 0 }
   const registryId = lead?.objectKind === 'theme' ? lead.objectId : top[0]?.objectId
-  if (!registryId) return []
+  if (!registryId) return { voices: [], from: 0 }
   const themeRes = await supabase
     .from('themes')
     .select('id, label, supporting_insight_ids')
@@ -1419,7 +1430,7 @@ async function loadVoices(
     .limit(1)
   const theme = rows<{ id: string; label: string; supporting_insight_ids: string[] | null }>(themeRes, 'overview.voicesTheme')[0]
   const insightIds = (theme?.supporting_insight_ids ?? []).slice(0, 40)
-  if (insightIds.length === 0) return []
+  if (insightIds.length === 0) return { voices: [], from: 0 }
 
   const citations = await fetchQuoteCitationsByAudience(supabase, insightIds)
   const pool: QuoteCitation[] = []
@@ -1442,20 +1453,33 @@ async function loadVoices(
   }
   const shown = pool.slice(0, VOICES_SHOWN)
   const commentIds = shown.map((c) => c.commentId).filter((id): id is string => Boolean(id))
-  const meta = new Map<string, { platform: string | null; comment_date: string | null }>()
+  type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
+  const meta = new Map<string, CommentMeta>()
   if (commentIds.length > 0) {
-    const res = await supabase.from('comments').select('id, platform, comment_date').in('id', commentIds)
-    for (const c of rows<{ id: string; platform: string | null; comment_date: string | null }>(res, 'overview.voiceComments')) {
-      meta.set(c.id, c)
+    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id').in('id', commentIds)
+    for (const c of rows<CommentMeta & { id: string }>(res, 'overview.voiceComments')) meta.set(c.id, c)
+  }
+  // WHERE TO GO AND READ IT. The design asks the cite for "platform · date ·
+  // link" and the block printed no link at all. `citationLink` is the product's
+  // one answer for that (lib/evidence-cite.ts): YouTube deep-links to the
+  // comment, TikTok and Instagram have no public per-comment URL and land on
+  // the post. A video with no stored URL gets no link rather than a dead one.
+  const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
+  const urlByKey = new Map<string, string>()
+  if (nativeIds.length > 0) {
+    const res = await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds)
+    for (const v of rows<{ platform: string | null; video_id: string | null; video_url: string | null }>(res, 'overview.voiceVideos')) {
+      if (v.video_url && v.video_id) urlByKey.set(`${v.platform}::${v.video_id}`, v.video_url)
     }
   }
-  return shown.map((c) => {
+  const voices = shown.map((c) => {
     const m = c.commentId ? meta.get(c.commentId) : undefined
     const cite = [
       m?.platform ? m.platform : null,
       m?.comment_date ? shortDate(m.comment_date) : null,
       'under a video we read',
     ].filter(Boolean).join(' · ')
+    const url = m?.platform && m.video_id ? urlByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
     return {
       quote: {
         ref: quoteRef.evidence(c.evidenceId),
@@ -1463,8 +1487,10 @@ async function loadVoices(
         ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
       },
       cite,
+      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
     }
   })
+  return { voices, from: pool.length }
 }
 
 // ---- the blocks' own shaping ---------------------------------------------------

@@ -85,4 +85,14 @@ describe('OV1 · in one sentence', () => {
     const markup = render(overviewSentence.render(overviewFixture(), 'email', ctx))
     expect(markup).toContain('https://app.verbatimintel.com/dashboard/market')
   })
+
+  it('heads the voices with two of N, and links the cite where there is somewhere to go', () => {
+    const markup = render(overviewSentence.render(overviewFixture(), 'app', ctx))
+    expect(renderText(overviewSentence.render(overviewFixture(), 'app', ctx))).toContain('2 of 37 voices')
+    expect(markup).toContain('href="https://www.tiktok.com/@x/video/1"')
+    // The second voice has no stored video URL: the cite is printed whole,
+    // without a dead link.
+    expect(markup).toContain('tiktok · 11 Sep · under a video we read')
+    expect((markup.match(/<a [^>]*href="https:\/\/www\.tiktok\.com/g) ?? []).length).toBe(1)
+  })
 })
