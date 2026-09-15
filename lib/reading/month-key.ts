@@ -27,16 +27,3 @@ export function nextMonth(month: string): string {
   const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
   return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString())
 }
-
-/** A list of month keys, sorted and split where the calendar skips one. Each
- *  run is one unbroken stretch — which is what a band, a span sentence or a
- *  "three consecutive months" rule is actually about. */
-export function monthRuns(months: readonly string[]): string[][] {
-  const runs: string[][] = []
-  for (const month of [...new Set(months.map(monthStartOf))].sort()) {
-    const held = runs[runs.length - 1]
-    if (held && nextMonth(held[held.length - 1]) === month) held.push(month)
-    else runs.push([month])
-  }
-  return runs
-}

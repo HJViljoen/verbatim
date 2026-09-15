@@ -210,17 +210,30 @@ describe('calendarBandsFor', () => {
     expect(one[0].label).toContain('this month had already closed')
   })
 
-  it('draws two bands for two separate back-reads, never one over the readable gap between', () => {
+  it('draws two bands when a month we read live sits between two back-reads', () => {
     const back: MonthLabel = { kind: 'read_back_at_setup', text: 'x' }
     const s = series([
       point('2026-01-01', { labels: [back] }),
       point('2026-02-01', { labels: [back] }),
-      point('2026-03-01'),
+      point('2026-03-01', { state: 'frozen' }),
       point('2026-04-01', { labels: [back] }),
     ])
     const bands = calendarBandsFor([s])
     expect(bands.map((b) => b.months)).toEqual([['2026-01-01', '2026-02-01'], ['2026-04-01']])
     expect(bands[1].label).toContain('this month had already closed')
+  })
+
+  it('does NOT break the band on a month nobody has a row for', () => {
+    // Össur's 61 back-read months carry 11 hollow ones among them: nothing was
+    // read in those either way, and six bands where there is one back-read is
+    // noise, not precision.
+    const back: MonthLabel = { kind: 'read_back_at_setup', text: 'x' }
+    const s = series([
+      point('2026-01-01', { labels: [back] }),
+      point('2026-02-01', { state: 'hollow', videos: null, k: null, pct: null }),
+      point('2026-03-01', { labels: [back] }),
+    ])
+    expect(calendarBandsFor([s]).map((b) => b.months)).toEqual([['2026-01-01', '2026-03-01']])
   })
 
   it('unions the back-read of several lines', () => {

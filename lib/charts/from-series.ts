@@ -1,7 +1,6 @@
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import type { MonthLabel, MonthPoint, MonthSeries } from '../reading/series'
-import { monthRuns } from '../reading/month-key'
 import { backReadBandLabel } from './calendar'
 import type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries } from './calendar'
 
@@ -174,17 +173,37 @@ export function calendarRulesFor(series: readonly MonthSeries[]): CalendarRule[]
  * sentence says "this month" and a band is a run of them (`backReadBandLabel`).
  */
 export function calendarBandsFor(series: readonly MonthSeries[]): CalendarBand[] {
-  const months = new Set<string>()
+  // A BAND BREAKS ON A MONTH WE ACTUALLY READ, NOT ON AN EMPTY ONE. The chart
+  // shades a band from its first month to its last (`spanOf` takes min..max),
+  // so two separate back-reads in one months[] would hatch everything between
+  // them — including months that were read live, which is exactly the claim the
+  // hatch is there to deny. A month nobody has a row for is not such a month:
+  // nothing was read in it either way, and breaking the run there would litter
+  // production's axis with six bands where there is one back-read (Össur's 61
+  // back-read months carry 11 hollow months among them; Sealand's 64 carry 6).
+  // Two back-reads either side of a month we read live stay two bands — not
+  // reachable today, reachable the day a rival is added to a tenant that
+  // already has history, which is what the back-read exists for.
+  const back = new Set<string>()
+  const live = new Set<string>()
   for (const s of series) {
     for (const p of s.points) {
-      if (p.labels.some((l) => l.kind === 'read_back_at_setup')) months.add(p.month)
+      if (p.labels.some((l) => l.kind === 'read_back_at_setup')) back.add(p.month)
+      else if (p.state === 'frozen' || p.state === 'filling' || p.state === 'below_floor') live.add(p.month)
     }
   }
-  // ONE BAND PER UNBROKEN STRETCH. The chart shades a band from its first month
-  // to its last (`spanOf` takes min..max), so two separate back-reads in one
-  // months[] would hatch the readable months between them as read-back too.
-  // Today every tenant has exactly one contiguous stretch (Össur 61 months,
-  // Sealand 64) — that stops being true the day a rival is added to a tenant
-  // that already has history, which is what the back-read exists for.
-  return monthRuns([...months]).map((run) => ({ months: run, label: backReadBandLabel(run.length) }))
+  const runs: string[][] = []
+  let run: string[] = []
+  // The axis is every month any line carries, in order — not the first line's,
+  // which need not be the longest.
+  const axis = [...new Set(series.flatMap((s) => s.points.map((p) => p.month)))].sort()
+  for (const month of axis) {
+    if (back.has(month)) run.push(month)
+    else if (live.has(month) && run.length) {
+      runs.push(run)
+      run = []
+    }
+  }
+  if (run.length) runs.push(run)
+  return runs.map((r) => ({ months: r, label: backReadBandLabel(r.length) }))
 }
