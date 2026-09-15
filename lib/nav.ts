@@ -72,6 +72,12 @@ export const SURFACES: readonly Surface[] = [
  *  Reports or Settings. */
 export const hasHorizon = (s: Surface): boolean => s.bar === 'reading'
 
+/** The "how sound is this" band appears wherever the page IS a reading — the
+ *  five month surfaces and This week, which reads an update. Ask, Reports and
+ *  Settings state no basis because they make no reading; a band on Settings
+ *  counting updates is furniture, and furniture that looks like a fact. */
+export const hasRecord = (s: Surface): boolean => s.bar !== 'title'
+
 export function surface(key: NavKey): Surface {
   const s = SURFACES.find((x) => x.key === key)
   if (!s) throw new Error(`no surface: ${key}`)

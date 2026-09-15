@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { BarPill, PageBar } from '@/components/shell/page-grid'
 import { HowSound } from '@/components/shell/how-sound'
-import { hasHorizon, surface, type NavKey } from '@/lib/nav'
+import { hasHorizon, hasRecord, surface, type NavKey } from '@/lib/nav'
 import { contextLine, horizonOptions, updateLine, type ContextLineInput } from '@/lib/shell/bar'
 import { parseHorizon } from '@/lib/reading/horizon'
 
@@ -20,9 +20,12 @@ import { parseHorizon } from '@/lib/reading/horizon'
  * carries the two updates it compares and NO horizon — it is dated by the
  * update, and a month control on it would offer a window the page does not
  * read. Ask, Reports and Settings carry the title alone; nothing on them is a
- * reading of a period, so a horizon or a soundness counter would be furniture.
+ * reading of a period, so a horizon or a soundness band would be furniture.
  * Which one a surface takes is `Surface.bar` — a field in the table, not a
- * judgement made per page.
+ * judgement made per page — and BOTH controls are gated on it (`hasHorizon`,
+ * `hasRecord`). The band was gated on nothing but the data being present, so a
+ * caller handing Settings a record got "How sound is this · 2 updates" on a
+ * page that reads no period.
  */
 
 export interface PageBarProps {
@@ -59,7 +62,7 @@ export function SurfacePageBar({ nav, params = {}, context = null, updates = nul
       {/* Under the bar, not in it (the mock's band): the basis is a sentence a
           reader reads, not a control they operate, and the right-hand end of
           the title row is where the controls are. */}
-      {record && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
+      {record && hasRecord(s) && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
     </div>
   )
 }

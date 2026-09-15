@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { SurfacePageBar, HorizonControl } from './page-bar'
-import { SURFACES, hasHorizon } from '@/lib/nav'
+import { SURFACES, hasHorizon, hasRecord } from '@/lib/nav'
 
 // The page bar is what tells a reader which page they are on, what it answers
 // and when it was read. These are the three things it must never get wrong:
@@ -61,6 +61,19 @@ describe('SurfacePageBar', () => {
     for (const s of SURFACES) {
       const markup = render(<SurfacePageBar nav={s.key} context={CONTEXT} updates={{ update: '2026-09-14T04:00:00Z' }} />)
       expect(markup.includes('Since we started')).toBe(hasHorizon(s))
+    }
+  })
+
+  it('states a basis on exactly the surfaces that make a reading', () => {
+    // Handed a record, Ask, Reports and Settings must print none: the table
+    // decides, not the caller. They used to print "How sound is this · 2
+    // updates" on a page that reads no period at all.
+    for (const s of SURFACES) {
+      const markup = render(
+        <SurfacePageBar nav={s.key} context={CONTEXT} updates={{ update: '2026-09-14T04:00:00Z' }}
+          record={{ line: '2 updates · 394 videos', lines: ['Two updates were delivered.'] }} />,
+      )
+      expect(markup.includes('How sound is this')).toBe(hasRecord(s))
     }
   })
 })

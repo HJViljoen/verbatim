@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, oldPageBanner, oldPageFor,
+  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, hasRecord, oldPageBanner, oldPageFor,
   oldPagesGroupLabel, retireDate, surface, surfaceForPath, surfacesIn,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
@@ -32,6 +32,10 @@ describe('the nine surfaces', () => {
 
   it('offers a horizon only on a reading of months', () => {
     expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive'])
+  })
+
+  it('states a basis on every reading and on nothing else', () => {
+    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive', 'week'])
   })
 
   it('splits into the two groups the artboards draw', () => {
