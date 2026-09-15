@@ -4,7 +4,7 @@ import { chunk } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
-import { isMissingMonthlyReading, monthStartOf } from './monthly'
+import { isMissingMonthlyReading, monthEndInstant, monthStartOf } from './monthly'
 import {
   buildSeries,
   monthAxis,
@@ -95,6 +95,14 @@ export interface MonthSeriesOptions {
   to: string
   /** `min(config_changes.changed_at)` is read here too unless a caller has it. */
   changeLogFrom?: string | null
+  /** Delivered updates per month start, and the month of the tenant's first
+   *  one — decision M's thin-month rule needs both, and without them its first
+   *  arm ("fewer than two updates in a month after we started") can never
+   *  fire. Read here off `pipeline_runs` unless a caller already holds them;
+   *  `updatesByMonth: {}` reads nothing and leaves the arm off. A run count is
+   *  a run-indexed number and is a period key for NOTHING else (AGENTS.md). */
+  updatesByMonth?: Readonly<Record<string, number>>
+  firstRunMonth?: string | null
 }
 
 export interface MonthSeriesSet {
@@ -231,6 +239,10 @@ export async function loadMonthSeries(
   }))
 
   const labels = table && objectIds ? await loadLabels(client, clientId, objectKind, objectIds) : new Map<string, string>()
+  const updates =
+    options.updatesByMonth !== undefined || options.firstRunMonth !== undefined
+      ? { byMonth: options.updatesByMonth ?? {}, firstRunMonth: options.firstRunMonth ?? null }
+      : await loadUpdates(client, clientId, from, to)
 
   // One key per RIVAL, not per stored string: a renamed rival holds months
   // under both names, and keying by the raw distinct set would return the same
@@ -258,6 +270,8 @@ export async function loadMonthSeries(
           renames,
           substrate,
           changeLogFrom,
+          updatesByMonth: updates.byMonth,
+          firstRunMonth: updates.firstRunMonth,
         }),
       )
       continue
@@ -273,6 +287,8 @@ export async function loadMonthSeries(
           renames,
           substrate,
           changeLogFrom,
+          updatesByMonth: updates.byMonth,
+          firstRunMonth: updates.firstRunMonth,
           objectId,
           objectLabel: labels.get(objectId) ?? null,
         }),
@@ -281,6 +297,50 @@ export async function loadMonthSeries(
   }
 
   return { substrate, series, denominators, renames, changeLogFrom }
+}
+
+/** The runs that DELIVERED something, per month, and the month of the first one
+ *  ever. `completed` and `partial` are what every other surface counts as an
+ *  update (lib/pages/*.ts), and a month before the first of them is read back at
+ *  setup rather than thin — which is decision M's own gate, and the only reason
+ *  the thin rule may look at a run date at all. */
+async function loadUpdates(
+  client: SupabaseClient,
+  clientId: string,
+  from: string,
+  to: string,
+): Promise<{ byMonth: Record<string, number>; firstRunMonth: string | null }> {
+  const delivered = ['completed', 'partial']
+  const runs = await selectAll<{ started_at: string | null }>(() =>
+    client
+      .from('pipeline_runs')
+      .select('id, started_at')
+      .eq('client_id', clientId)
+      .in('status', delivered)
+      .gte('started_at', `${from}T00:00:00.000Z`)
+      .lt('started_at', monthEndInstant(to))
+      .order('started_at', { ascending: true })
+      .order('id', { ascending: true }),
+  )
+  const byMonth: Record<string, number> = {}
+  for (const run of runs) {
+    if (!run.started_at) continue
+    const month = monthStartOf(run.started_at)
+    byMonth[month] = (byMonth[month] ?? 0) + 1
+  }
+
+  const first = await client
+    .from('pipeline_runs')
+    .select('started_at')
+    .eq('client_id', clientId)
+    .in('status', delivered)
+    .not('started_at', 'is', null)
+    .order('started_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (first.error) throw new Error(`pipeline_runs first run: ${first.error.message}`)
+  const startedAt = (first.data as { started_at?: string | null } | null)?.started_at ?? null
+  return { byMonth, firstRunMonth: startedAt ? monthStartOf(startedAt) : null }
 }
 
 /** Every change this tenant has logged, oldest first. An empty list when the
