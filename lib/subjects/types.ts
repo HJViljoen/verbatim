@@ -143,7 +143,11 @@ export const SUBJECT_EMBED_INPUT_VERSION = 'subject_embed_v1'
 /** Design :891 — a subject's share is not shown to a client until precision has
  *  been measured at or above this on a hand-labelled sample. */
 export const SUBJECT_PRECISION_FLOOR = 0.85
-/** Insights per tenant in that sample. */
+/** Hand labels per tenant — PAIRS, not insights, and the whole sheet rather
+ *  than a per-subject figure. A decision is about a (subject, insight) pair, so
+ *  200 insights against 5-8 subjects would be 1,000-1,600 labels and days of
+ *  reading; this is the afternoon the design budgets, split evenly across the
+ *  confirmed set (lib/subjects/calibration.ts calibrationQuota). */
 export const SUBJECT_CALIBRATION_SAMPLE = 200
 
 /** Embedding coverage the membership step insists on before it counts anything.

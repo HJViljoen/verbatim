@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  calibrationQuota,
+  calibrationScoreFloor,
   candidateThresholds,
+  pickCalibrationPairs,
   clearsPrecisionGate,
   formatPrecisionTable,
   precisionAt,
@@ -10,7 +13,7 @@ import {
   sampleForCalibration,
   type LabelledPair,
 } from './calibration'
-import { SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from './types'
+import { SUBJECT_CALIBRATION_SAMPLE, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from './types'
 
 const pair = (over: Partial<LabelledPair>): LabelledPair => ({
   subjectId: 's', audienceInsightId: 'i', score: 0.6, judged: null, label: false, ...over,
@@ -140,5 +143,69 @@ describe('formatPrecisionTable', () => {
   it('prints an em dash rather than 0% for a row that predicted nothing', () => {
     const text = formatPrecisionTable([{ high: 0.8, low: 0.7, predicted: 0, correct: 0, precision: null, missed: 3, unknown: 0 }])
     expect(text).toContain('—')
+  })
+})
+
+describe('calibrationQuota', () => {
+  it('splits ONE tenant sheet across its subjects — the unit is the pair', () => {
+    // 200 insights x 8 subjects would be 1,600 labels. The sheet is 200 labels.
+    expect(calibrationQuota(5)).toBe(40)
+    expect(calibrationQuota(8)).toBe(25)
+    expect(calibrationQuota(5) * 5).toBeLessThanOrEqual(SUBJECT_CALIBRATION_SAMPLE)
+    expect(calibrationQuota(8) * 8).toBeLessThanOrEqual(SUBJECT_CALIBRATION_SAMPLE)
+  })
+
+  it('still asks about something when a tenant has more subjects than labels', () => {
+    expect(calibrationQuota(400)).toBe(1)
+    expect(calibrationQuota(0)).toBe(0)
+  })
+})
+
+describe('calibrationScoreFloor', () => {
+  it('is the lowest threshold the table would ever call a member', () => {
+    const floor = calibrationScoreFloor()
+    expect(floor).toBe(Math.min(...candidateThresholds().map((t) => t.low)))
+    // A pair under the floor is predicted "not a member" at every row of the
+    // table, so its label cannot move a single precision figure.
+    for (const t of candidateThresholds()) {
+      expect(predictAt({ score: floor - 0.01, judged: true }, t.high, t.low)).toBe(false)
+    }
+  })
+})
+
+describe('pickCalibrationPairs', () => {
+  const scored = Array.from({ length: 200 }, (_, i) => ({
+    audienceInsightId: `i${i}`,
+    score: i / 200,
+  }))
+
+  it('asks only about pairs a label could change an answer for', () => {
+    const picked = pickCalibrationPairs('s1', scored, 50, 0.45)
+    expect(picked.every((p) => p.score >= 0.45)).toBe(true)
+  })
+
+  it('holds the quota', () => {
+    expect(pickCalibrationPairs('s1', scored, 20, 0.45)).toHaveLength(20)
+  })
+
+  it('asks the same questions twice — the labels are expensive', () => {
+    expect(pickCalibrationPairs('s1', scored, 20, 0.45)).toEqual(pickCalibrationPairs('s1', scored, 20, 0.45))
+  })
+
+  it('samples per PAIR, so two subjects do not get one insight set', () => {
+    const a = pickCalibrationPairs('s1', scored, 20, 0.45).map((p) => p.audienceInsightId)
+    const b = pickCalibrationPairs('s2', scored, 20, 0.45).map((p) => p.audienceInsightId)
+    expect(a).not.toEqual(b)
+  })
+
+  it('walks the reader down from the obvious members into the band', () => {
+    const picked = pickCalibrationPairs('s1', scored, 20, 0.45)
+    const scores = picked.map((p) => p.score)
+    expect([...scores].sort((x, y) => y - x)).toEqual(scores)
+  })
+
+  it('returns everything eligible when the quota exceeds it', () => {
+    const few = scored.filter((p) => p.score >= 0.98)
+    expect(pickCalibrationPairs('s1', few, 100, 0.45)).toHaveLength(few.length)
   })
 })

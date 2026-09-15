@@ -2,11 +2,13 @@ import { readFileSync, writeFileSync } from 'fs'
 
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
+  calibrationQuota,
+  calibrationScoreFloor,
   clearsPrecisionGate,
   formatPrecisionTable,
+  pickCalibrationPairs,
   precisionAt,
   precisionTable,
-  sampleForCalibration,
   type LabelledPair,
 } from '../lib/subjects/calibration'
 import { loadActiveSubjects } from '../lib/subjects/membership'
@@ -25,9 +27,19 @@ import {
 //
 //   1. node --env-file=.env.local --import tsx scripts/subject-calibration.ts \
 //        --client <uuid> --emit labels.jsonl
-//      Writes one line per (subject, insight) pair from a deterministic sample
-//      of 200 live insights: the subject, what the audience said, the machine's
-//      similarity score, and `"label": null` for a person to fill in.
+//      Writes one line per (subject, insight) PAIR: the subject, what the
+//      audience said, the machine's similarity score, and `"label": null` for a
+//      person to fill in.
+//
+//      THE BUDGET IS 200 PAIRS PER TENANT, NOT 200 INSIGHTS. A decision is
+//      about a pair, so 200 insights crossed with every active subject is
+//      1,000-1,600 labels — days of reading, not the afternoon the design
+//      budgets. The sheet is split evenly across the subjects instead (40 each
+//      at five, 25 at eight) and drawn only from pairs at or above the lowest
+//      threshold the table tries: below that the shipped procedure answers "not
+//      a member" whatever the label says, so those labels buy nothing. What
+//      that costs is honest and stated — recall below the floor is NOT measured
+//      by this sheet, and `missed` counts only the members it could have found.
 //
 //   2. …edit labels.jsonl, replacing every null with true or false…
 //
@@ -49,6 +61,9 @@ import {
 // is counted as `unknown` and printed, never scored as a miss.
 
 interface Args { clientId: string; emit: string | null; score: string | null; apply: boolean; sample: number }
+
+// `sample` is the tenant's WHOLE sheet in pairs, split across its subjects —
+// see calibrationQuota.
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { clientId: '', emit: null, score: null, apply: false, sample: SUBJECT_CALIBRATION_SAMPLE }
@@ -102,18 +117,22 @@ async function main() {
         .not('embedding', 'is', null)
         .order('id', { ascending: true }),
     )
-    const picked = new Set(sampleForCalibration(ids.map((r) => r.id), sample))
-    const text = new Map(ids.filter((r) => picked.has(r.id)).map((r) => [r.id, r]))
+    const text = new Map(ids.map((r) => [r.id, r]))
+    const quota = calibrationQuota(subjects.length, sample)
+    const floor = calibrationScoreFloor()
     const lines: string[] = []
+    const insights = new Set<string>()
     for (const s of subjects) {
-      const scores = await scoreAll(admin, clientId, s.id)
-      for (const row of scores) {
-        const t = text.get(row.audience_insight_id)
-        if (!t) continue
+      const scored = (await scoreAll(admin, clientId, s.id))
+        .filter((row) => text.has(row.audience_insight_id))
+        .map((row) => ({ audienceInsightId: row.audience_insight_id, score: row.score }))
+      for (const row of pickCalibrationPairs(s.id, scored, quota, floor)) {
+        const t = text.get(row.audienceInsightId)!
+        insights.add(row.audienceInsightId)
         lines.push(JSON.stringify({
           subjectId: s.id,
           subject: s.name,
-          audienceInsightId: row.audience_insight_id,
+          audienceInsightId: row.audienceInsightId,
           said: `${t.theme.replace(/_/g, ' ')}: ${t.description}`,
           score: Math.round(row.score * 10000) / 10000,
           label: null,
@@ -121,8 +140,12 @@ async function main() {
       }
     }
     writeFileSync(emit, lines.join('\n') + '\n')
-    console.log(`[subject-calibration] ${lines.length} pairs over ${picked.size} insights × ${subjects.length} subjects → ${emit}`)
+    console.log(
+      `[subject-calibration] ${lines.length} pairs to label — up to ${quota} for each of ${subjects.length} subjects, ` +
+      `over ${insights.size} distinct insights, all at or above ${floor} → ${emit}`,
+    )
     console.log('[subject-calibration] replace every "label": null with true or false, then re-run with --score.')
+    console.log(`[subject-calibration] pairs below ${floor} are not asked about: no threshold pair in the table would call them members, so a label there changes nothing. Recall below it is not measured.`)
     return
   }
 

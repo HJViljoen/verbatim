@@ -1,6 +1,6 @@
 import { createHash } from 'crypto'
 
-import { SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from './types'
+import { SUBJECT_CALIBRATION_SAMPLE, SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from './types'
 
 // The precision gate (design :891): a subject's share is not shown to a client
 // until precision has been measured, by hand, at or above 85%.
@@ -20,14 +20,14 @@ import { SUBJECT_MATCH_HIGH, SUBJECT_MATCH_LOW, SUBJECT_PRECISION_FLOOR } from '
 // today, and this is how they stop being.
 
 /**
- * A deterministic sample of insight ids.
+ * A deterministic sample of keys.
  *
- * Deterministic because the labels are expensive: 200 of them per tenant, read
- * by a person, and a sample that moved between the run that emitted the sheet
- * and the run that scores it would throw the work away. Hashed rather than
- * strided — a stride over an id order is a sample of whatever the id order
- * happens to correlate with, and `audience_insights.id` is minted per run, so a
- * stride would over-weight whichever run last re-read the corpus.
+ * Deterministic because the labels are expensive: every one is read by a
+ * person, and a sample that moved between the run that emitted the sheet and
+ * the run that scores it would throw the work away. Hashed rather than strided
+ * — a stride over an id order is a sample of whatever the id order happens to
+ * correlate with, and `audience_insights.id` is minted per run, so a stride
+ * would over-weight whichever run last re-read the corpus.
  */
 export function sampleForCalibration(ids: readonly string[], n: number): string[] {
   return [...ids]
@@ -35,6 +35,59 @@ export function sampleForCalibration(ids: readonly string[], n: number): string[
     .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
     .slice(0, n)
     .map((x) => x.id)
+}
+
+/**
+ * How many pairs to put in front of a person for ONE subject.
+ *
+ * THE UNIT IS THE PAIR, AND THE BUDGET IS PER TENANT. A decision is about a
+ * (subject, insight) pair, so a sample of 200 insights crossed with every
+ * active subject is 1,000-1,600 labels at 5-8 subjects — several days of
+ * reading per tenant, not the afternoon the design budgets. The 200 is the
+ * tenant's whole sheet instead, split evenly: 40 pairs each at five subjects,
+ * 25 at eight. Thin, and honestly thin — `calibration_n` records exactly how
+ * many labels a subject's figure rests on, and the precision table prints the
+ * predicted count beside every row so a reader can see when a percentage is
+ * four pairs out of five.
+ */
+export function calibrationQuota(subjects: number, total = SUBJECT_CALIBRATION_SAMPLE): number {
+  if (subjects <= 0) return 0
+  return Math.max(1, Math.floor(total / subjects))
+}
+
+/** The lowest similarity any candidate threshold pair would call a member.
+ *
+ *  Below it the shipped procedure answers "not a member" at every pair in the
+ *  table, so a label there changes no precision figure — it can only ever move
+ *  `missed`, and the sheet cannot measure recall over a corpus of thousands
+ *  from a sample of hundreds anyway. Labelling above the floor is where the
+ *  person's time buys an answer. */
+export function calibrationScoreFloor(thresholds = candidateThresholds()): number {
+  return Math.min(...thresholds.map((t) => t.low))
+}
+
+/**
+ * The pairs of one subject a person is asked about.
+ *
+ * Deterministic in the subject as well as the insight — the hash is over the
+ * PAIR — so two subjects do not receive the same insights just because those
+ * insights hash low, and re-emitting the sheet asks the same questions.
+ * Ordered by score so the reader walks from the obvious members down into the
+ * band, which is where their attention is worth most.
+ */
+export function pickCalibrationPairs<T extends { audienceInsightId: string; score: number }>(
+  subjectId: string,
+  scored: readonly T[],
+  quota: number,
+  floor = calibrationScoreFloor(),
+): T[] {
+  const eligible = scored.filter((r) => r.score >= floor)
+  const keep = new Set(
+    sampleForCalibration(eligible.map((r) => `${subjectId}|${r.audienceInsightId}`), quota),
+  )
+  return eligible
+    .filter((r) => keep.has(`${subjectId}|${r.audienceInsightId}`))
+    .sort((a, b) => b.score - a.score || (a.audienceInsightId < b.audienceInsightId ? -1 : 1))
 }
 
 /** One hand-labelled (subject, insight) pair, with what the machine knew. */
