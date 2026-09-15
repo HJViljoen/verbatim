@@ -1287,7 +1287,11 @@ interface CastInput {
  * call, as the page's one piece of decoration.
  */
 async function buildCast(input: CastInput): Promise<CastBlock> {
-  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it · current state, not a trend.`
+  // NOT the mock's "current state, not a trend": "trend" is on the product's
+  // own direction-word list (lib/calibration.ts), and rule (c) refuses one
+  // outside a node carrying a band. The sentence says the same thing without
+  // borrowing the vocabulary of the comparison it is refusing to make.
+  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it · this month as it stands, never compared with another month.`
   if (!input.profile) {
     return {
       state: 'not_run', personas: [], selected: null, denominator: input.denominator,

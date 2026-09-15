@@ -207,7 +207,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       unnamedPct: 16,
       profileDate: '2026-09-13',
       stale: false,
-      floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it · current state, not a trend.`,
+      floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it · this month as it stands, never compared with another month.`,
       empty: null,
     },
     record: {
