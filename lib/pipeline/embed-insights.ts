@@ -32,6 +32,22 @@ import { logAiCall, type AiLogArgs } from './ai-log'
 // $0.0048 for both tenants' entire corpus. Buying back half a cent by putting a
 // write on the one step that cannot afford it is the wrong trade. Reading A2's
 // vectors instead of recomputing them is a Phase 1 optimisation.
+//
+// THE BUDGET, written down because nothing else in this file bounds it. The
+// step is deliberately uncapped: it embeds whatever is still NULL, and the
+// biggest that has ever been is a whole tenant's corpus. Sized against the
+// 300 s route cap, in-region:
+//   read      ~1–3 s for 1,400–2,100 rows (measured from ZA; less from dub1)
+//   embed     one request per 512 insights — 3 for Össur's backlog, 5 for
+//             Sealand's, ~7 for a whole 3,100-row corpus
+//   write     ~1 s per 100-row body (the measured cost of the 100-chunk vector
+//             insert in themes.ts) — 15, 21 and ~32 bodies respectively
+// So ~60 s for the largest case that exists today, and the worst case that
+// COULD exist is a Pass A prompt-version bump, which AGENTS.md warns re-reads
+// the whole corpus: every row NULL again, i.e. exactly that ~60 s, per tenant.
+// The cap binds at roughly ten times today's corpus. When it does, the fix is
+// the `limit` option below plus a default — not a new step — because the work
+// is already idempotent: whatever is left is still NULL next run.
 
 /** Rows per RPC call. The write body is the constraint, not the row count: a
  *  1536-float vector is ~19.3 kB of JSON (measured across both tenants), so 100
