@@ -354,7 +354,13 @@ export async function activateSubject(
 
 /** Retire a subject. Never a delete: the months it already carries are the
  *  record, and `moves.subject_id` is ON DELETE RESTRICT precisely so a
- *  declaration cannot be quietly dropped along with it. */
+ *  declaration cannot be quietly dropped along with it.
+ *
+ *  "The months it already carries keep their line" is true because the database
+ *  makes it true: `subjects_retirement_freeze` closes every month the subject
+ *  still had open, at this instant. A retired subject is never re-judged, so
+ *  from here its membership only decays — an open month left open would be
+ *  recomputed downward every run and freeze at a number the client never saw. */
 export async function retireSubject(
   ctx: WriteContext,
   admin: AdminClient,

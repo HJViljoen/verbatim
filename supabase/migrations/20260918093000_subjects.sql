@@ -311,6 +311,55 @@ create trigger month_subject_readings_frozen_insert_guard
   for each row
   execute function public.month_reading_frozen_insert_guard();
 
+-- Retiring a subject CLOSES the months it is still carrying.
+--
+-- Without this the copy is a lie in one direction and the numbers are wrong in
+-- the other. `retireSubject` tells the client "Stopped. The months it already
+-- carries keep their line." — true of a frozen month, false of every month
+-- still filling at retirement, because subject_memberships cascades from
+-- audience_insights and only ACTIVE subjects are re-judged: a retired subject's
+-- member set loses 20-34% of its rows every run (the churn measured
+-- 2026-09-15), so its open months would be recomputed downward every Sunday
+-- and freeze at a number far below what the client was reading when they
+-- stopped. Freezing them at the moment of retirement is what makes the sentence
+-- true.
+--
+-- It is a trigger rather than a second statement in the application for the
+-- reason the read functions need: they skip retired subjects, so a retired
+-- subject's `filling` row would be stale on the next visit and the stale sweep
+-- would DELETE it. Closing the months has to happen wherever the retirement
+-- does — the Settings write, an operator script, a hand-run UPDATE.
+--
+-- SECURITY DEFINER because a member retires a subject on the `authenticated`
+-- client, which holds SELECT on month_subject_readings and nothing else. It
+-- touches only the retired subject's own rows, and only ones that are still
+-- filling, so the BEFORE UPDATE frozen guard (which fires only on
+-- old.status = 'frozen') never sees it.
+create or replace function public.subject_retirement_freeze()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  update public.month_subject_readings
+     set status = 'frozen', frozen_at = now()
+   where client_id = new.client_id
+     and subject_id = new.id
+     and status = 'filling';
+  return new;
+end;
+$$;
+
+comment on function public.subject_retirement_freeze() is
+  'Freezes a retired subject''s still-filling months at the moment of retirement. A retired subject is not re-judged, so its membership decays with every Pass A prune; leaving its open months to be recomputed would freeze them at a number the client never saw.';
+
+drop trigger if exists subjects_retirement_freeze on public.subjects;
+create trigger subjects_retirement_freeze
+  after update of status on public.subjects
+  for each row when (new.status = 'retired' and old.status is distinct from 'retired')
+  execute function public.subject_retirement_freeze();
+
 alter table public.month_subject_readings enable row level security;
 
 drop policy if exists "Members read their month subject readings" on public.month_subject_readings;
@@ -364,8 +413,15 @@ as $$
     where v.client_id = p_client
   ),
   mem as (
+    -- Retired subjects are not read. They are not re-judged either, so their
+    -- membership only decays from here, and a fresh reading of one would open
+    -- NEW months for a subject the client stopped tracking. Their existing
+    -- months are frozen at retirement (subject_retirement_freeze) and are the
+    -- record; this function never sees them, and the stale sweep never touches
+    -- a frozen row.
     select m.subject_id, m.audience_insight_id as insight_id
     from public.subject_memberships m
+    join public.subjects sub on sub.id = m.subject_id and sub.status <> 'retired'
     where m.client_id = p_client and m.member
   ),
   ins as (
@@ -517,8 +573,15 @@ as $$
     where v.client_id = p_client
   ),
   mem as (
+    -- Retired subjects are not read. They are not re-judged either, so their
+    -- membership only decays from here, and a fresh reading of one would open
+    -- NEW months for a subject the client stopped tracking. Their existing
+    -- months are frozen at retirement (subject_retirement_freeze) and are the
+    -- record; this function never sees them, and the stale sweep never touches
+    -- a frozen row.
     select m.subject_id, m.audience_insight_id as insight_id
     from public.subject_memberships m
+    join public.subjects sub on sub.id = m.subject_id and sub.status <> 'retired'
     where m.client_id = p_client and m.member
   ),
   ins as (
