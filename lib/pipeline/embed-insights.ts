@@ -85,7 +85,8 @@ export interface EmbedInsightsResult {
   /** Rows the RPC reports it wrote. Lower than `embedded` means somebody else
    *  got there first or the row is gone — both fine, neither an error. */
   written: number
-  /** Embeddings requests made — one ai_call_log row each. */
+  /** Embeddings requests made — one ai_call_log row each. On a dry run, the
+   *  number that would be made. */
   requests: number
   /** Estimated, from characters. The response carries real usage; embedTexts
    *  does not return it, and widening that signature would touch A2. */
@@ -93,10 +94,14 @@ export interface EmbedInsightsResult {
   /** Set when the migration has not been applied yet: nothing read, nothing
    *  spent, nothing written. */
   skipped: 'migration' | null
+  /** This call only read and priced: nothing went to OpenAI and nothing was
+   *  written, ai_call_log included. The translate/ocr rule — a dry run leaves
+   *  the tenant's tables exactly as it found them. */
+  dryRun: boolean
 }
 
 export function emptyEmbedResult(): EmbedInsightsResult {
-  return { candidates: 0, attempted: 0, embedded: 0, written: 0, requests: 0, costUsd: 0, skipped: null }
+  return { candidates: 0, attempted: 0, embedded: 0, written: 0, requests: 0, costUsd: 0, skipped: null, dryRun: false }
 }
 
 // ---- Pure -------------------------------------------------------------------
@@ -208,10 +213,14 @@ export function isMissingEmbeddingWrite(error: unknown): boolean {
 export function embedSummary(r: EmbedInsightsResult): string {
   if (r.skipped === 'migration') return 'skipped: 20260915094000_insight_embedding.sql has not been applied yet'
   if (r.candidates === 0) return 'nothing to embed — every live insight already carries a vector'
+  const skipped = r.attempted < r.candidates ? ` · ${r.candidates - r.attempted} skipped (no description)` : ''
+  if (r.dryRun) {
+    return `would embed ${r.attempted} of ${r.candidates} in ${r.requests} request(s), ~$${r.costUsd.toFixed(4)}${skipped}`
+  }
   const skippedWrite = r.embedded - r.written
   return (
     `${r.written} of ${r.candidates} embedded in ${r.requests} request(s), ~$${r.costUsd.toFixed(4)}` +
-    (r.attempted < r.candidates ? ` · ${r.candidates - r.attempted} skipped (no description)` : '') +
+    skipped +
     (skippedWrite > 0 ? ` · ${skippedWrite} already written or gone` : '')
   )
 }
@@ -248,6 +257,11 @@ export interface EmbedInsightsOptions {
   runId: string | null
   /** Cap the number of rows embedded, for a cautious first apply. */
   limit?: number
+  /** Read and price, send nothing, write nothing — ai_call_log included. The
+   *  rule ocr.ts and translate.ts already hold themselves to: a dry run leaves
+   *  the tenant's tables exactly as it found them. One code path rather than a
+   *  second loop in the script, because a second loop is where the two drift. */
+  dryRun?: boolean
 }
 
 /**
@@ -271,10 +285,13 @@ export async function embedNullInsights(
   opts: EmbedInsightsOptions,
 ): Promise<EmbedInsightsResult> {
   const out = emptyEmbedResult()
+  out.dryRun = opts.dryRun === true
 
   // Ask the write path whether it exists BEFORE spending anything. An empty
   // array is a no-op that returns 0, and one round trip is cheaper than
-  // embedding a whole corpus into a function that is not there yet.
+  // embedding a whole corpus into a function that is not there yet. A dry run
+  // asks too — "how much would this cost" is worth nothing next to "and it
+  // would fail".
   try {
     await writeEmbeddings(admin, [])
   } catch (e) {
@@ -290,6 +307,15 @@ export async function embedNullInsights(
   const todo = opts.limit && opts.limit > 0 ? eligible.slice(0, opts.limit) : eligible
   out.attempted = todo.length
   if (todo.length === 0) return out
+
+  if (out.dryRun) {
+    for (const request of embedRequests(todo)) {
+      out.requests++
+      out.costUsd += embedCostUsd(request.map((r) => embedInput(r)))
+    }
+    out.costUsd = Math.round(out.costUsd * 1e6) / 1e6
+    return out
+  }
 
   let callIndex = 0
   for (const request of embedRequests(todo)) {

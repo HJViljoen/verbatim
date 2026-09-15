@@ -244,19 +244,46 @@ describe('embedSummary — what the step says when there was nothing to do', () 
   })
 
   it('reports what landed', () => {
-    const s = embedSummary({ candidates: 1449, attempted: 1449, embedded: 1449, written: 1449, requests: 3, costUsd: 0.0012, skipped: null })
+    const s = embedSummary({ candidates: 1449, attempted: 1449, embedded: 1449, written: 1449, requests: 3, costUsd: 0.0012, skipped: null, dryRun: false })
     expect(s).toBe('1449 of 1449 embedded in 3 request(s), ~$0.0012')
   })
 
   it('names rows it skipped and rows somebody else had already written', () => {
-    const s = embedSummary({ candidates: 10, attempted: 8, embedded: 8, written: 6, requests: 1, costUsd: 0.0001, skipped: null })
+    const s = embedSummary({ candidates: 10, attempted: 8, embedded: 8, written: 6, requests: 1, costUsd: 0.0001, skipped: null, dryRun: false })
     expect(s).toContain('2 skipped (no description)')
     expect(s).toContain('2 already written or gone')
   })
 
+  it('says "would" on a dry run, and never claims a row was written', () => {
+    const s = embedSummary({ candidates: 2087, attempted: 2087, embedded: 0, written: 0, requests: 5, costUsd: 0.0017, skipped: null, dryRun: true })
+    expect(s).toBe('would embed 2087 of 2087 in 5 request(s), ~$0.0017')
+    expect(s).not.toContain('embedded in')
+  })
+
   it('carries no pipeline jargon a client could not read', () => {
-    const s = embedSummary({ candidates: 10, attempted: 10, embedded: 10, written: 10, requests: 1, costUsd: 0.0001, skipped: null })
+    const s = embedSummary({ candidates: 10, attempted: 10, embedded: 10, written: 10, requests: 1, costUsd: 0.0001, skipped: null, dryRun: false })
     for (const word of ['Pass A', 'Pass C', 'run_id', 'T#']) expect(s).not.toContain(word)
+  })
+})
+
+describe('the backfill script', () => {
+  const src = readFileSync(join(__dirname, '..', '..', 'scripts', 'embed-insights.ts'), 'utf8')
+
+  it('is dry by default and writes only on --apply', () => {
+    expect(src).toContain("=== '--apply'")
+    expect(src).toContain('dryRun: true')
+    expect(src).toMatch(/if \(!apply\)/)
+  })
+
+  it('runs the same module the pipeline step runs, not a second loop', () => {
+    expect(src).toContain("from '../lib/pipeline/embed-insights'")
+    expect(src).not.toContain('embedTexts')
+    expect(src).not.toContain(".from('audience_insights')")
+  })
+
+  it('refuses --force with a reason instead of silently writing nothing', () => {
+    expect(src).toContain("=== '--force'")
+    expect(src).toContain('--force is gone')
   })
 })
 
