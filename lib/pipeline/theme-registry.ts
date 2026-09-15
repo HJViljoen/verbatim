@@ -261,7 +261,19 @@ export function matchThemes(
         if (!title || title !== normaliseTitle(e.canonical_label)) continue
         s = { score: strong, arm: 'title', video: 0, insight: 0 }
       }
-      if (s.score <= 0) continue
+      // `overlapped` is the lineage record — it becomes `mergedFrom`, and for
+      // an unmatched theme `splitFrom`, which persistThemes writes into
+      // theme_registry.parent_theme_id. It is written once and never
+      // corrected, so the bar is the weak band, not "any evidence at all".
+      //
+      // The bar used to be score > 0, which was tolerable while the only arm
+      // was the insight set: clusters partition the insights, so within one run
+      // two themes share an insight set 0.00 times on average. The video arm is
+      // not like that — measured on Össur's d346b0f7 (757 themes), a theme
+      // shares at least one video with another above-floor theme in its bucket
+      // 4.70 times on average, max 123. Left at > 0, most new entries would be
+      // born asserting a split from a theme they merely share a video with.
+      if (s.score < weak) continue
       overlapped.push(e.id)
       const cos = cosine && t.embedding && e.embedding ? cosine(t.embedding, e.embedding) : 0
       const common = { key: t.key, entryId: e.id, score: s.score, arm: s.arm, insight: s.insight, cosine: cos }

@@ -286,6 +286,30 @@ describe('matchThemes — the video arm', () => {
     expect(small.themeId).toBeNull()
     expect(small.splitFrom).toBe('r1')
   })
+
+  it('does not call a shared video a split — lineage needs the weak band', () => {
+    // Measured on Össur's d346b0f7 (757 themes): within one run a theme shares
+    // an insight set with another theme 0.00 times on average — clusters
+    // partition the insights — but shares at least one VIDEO with an
+    // above-floor theme in its bucket 4.70 times on average, max 123. At the
+    // old bar (any score above zero) nearly every new entry would be born
+    // asserting a parent_theme_id it never split from.
+    const videos = ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10']
+    const reg = [withVideos(entry('r1', ['i1', 'i2']), videos)]
+    const res = matchThemes([
+      theme('holder', ['i1', 'i2'], { memberVideoIds: videos }),
+      theme('stranger', ['n1'], { memberVideoIds: ['v1', 'w1'] }),
+    ], reg)
+    expect(res.find((r) => r.key === 'holder')!.themeId).toBe('r1')
+    const stranger = res.find((r) => r.key === 'stranger')!
+    expect(stranger.themeId).toBeNull()
+    expect(stranger.kind).toBe('new')
+    expect(stranger.splitFrom).toBeUndefined()
+    expect(scorePair(
+      { memberInsightIds: ['n1'], memberVideoIds: ['v1', 'w1'] },
+      { member_insight_ids: ['i1', 'i2'], member_video_ids: videos },
+    ).score).toBeLessThan(0.25)
+  })
 })
 
 describe('matchThemes — what may cross a bucket', () => {
