@@ -8,6 +8,7 @@ import {
   INDUSTRY_AUDIENCE,
   RIVAL_PREFIX,
   UNKNOWN_RIVAL,
+  audienceFold,
   audienceOf,
   findRival,
   isMissingCompetitors,
@@ -193,6 +194,26 @@ describe('rivalSlug — the stable key a spelling folds to', () => {
     // '-ssur' there, and renaming a step id strands an in-flight run.
     const owned = readFileSync(new URL('./gather/owned.ts', import.meta.url), 'utf8')
     expect(owned).toContain("const slug = entity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')")
+  })
+})
+
+describe('audienceFold — is this the same rival, whatever it is spelled', () => {
+  it('folds a rival key to its slug and leaves the other two audiences alone', () => {
+    expect(audienceFold('competitor:Cotopaxi')).toBe('competitor:cotopaxi')
+    expect(audienceFold('competitor:cotopaxi ')).toBe('competitor:cotopaxi')
+    expect(audienceFold('competitor:Topo Designs')).toBe('competitor:topo-designs')
+    expect(audienceFold(' client ')).toBe('client')
+    expect(audienceFold('industry-other')).toBe('industry-other')
+    expect(audienceFold(null)).toBe('')
+  })
+  it('keeps a name with no slug at all apart from every other one', () => {
+    // '!!!' has no letter and no digit, so rivalSlug gives it nothing; the
+    // lowercased name is the fold, which still tells it from '???'.
+    expect(audienceFold('competitor:!!!')).toBe('competitor:!!!')
+    expect(audienceFold('competitor:!!!')).not.toBe(audienceFold('competitor:???'))
+  })
+  it('is not a storage key: the audience is still the name, verbatim', () => {
+    expect(rivalKey('Cotopaxi')).toBe('competitor:Cotopaxi')
   })
 })
 

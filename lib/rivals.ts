@@ -137,6 +137,26 @@ export function rivalSlug(name: string | null | undefined): string {
   return `x-${[...new TextEncoder().encode(base)].map((b) => b.toString(16).padStart(2, '0')).join('')}`
 }
 
+/** An audience key folded to the RIVAL it names rather than to its spelling:
+ *  `competitor:Cotopaxi`, `competitor:cotopaxi ` and `competitor:COTOPAXI` all
+ *  fold to `competitor:cotopaxi`, while `client` and `industry-other` come back
+ *  as they are.
+ *
+ *  It is NOT a key anything is stored under — `month_*.audience` and
+ *  `theme_registry.bucket` keep the name verbatim, which is the whole of
+ *  decision I. It is what lets a reader ask "are these two strings the same
+ *  rival" in one place: theme matching uses it to let an exact title carry an
+ *  identity across two spellings (lib/pipeline/theme-registry.ts matchThemes),
+ *  and nothing may use it to MERGE stored rows, because a frozen month under
+ *  the old string is the record. */
+export function audienceFold(audience: string | null | undefined): string {
+  const raw = (audience ?? '').trim()
+  const name = rivalNameOf(raw)
+  if (name === null) return raw
+  const slug = rivalSlug(name)
+  return `${RIVAL_PREFIX}${slug || name.trim().toLowerCase()}`
+}
+
 // ---- The identity -----------------------------------------------------------
 
 /** The table, named once so a reader and a writer cannot disagree. */
