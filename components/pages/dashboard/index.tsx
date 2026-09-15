@@ -350,7 +350,7 @@ const initiatives: R = ({ initiatives }, mode) => {
   return (
     <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
       meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
-      footer={app && t.total > 0 ? <Link href="/dashboard/market#moves">Manage what you track →</Link> : undefined}
+      footer={app && t.total > 0 ? <Link href="/dashboard/settings/initiatives">Manage what you track →</Link> : undefined}
     >
       {/* Five columns on a laptop; on a phone the title takes its own line and
           the rest wraps under it. Held on one row, a 400px screen cut every

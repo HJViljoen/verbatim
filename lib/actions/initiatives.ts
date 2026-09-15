@@ -56,12 +56,16 @@ const firstIssue = (e: z.ZodError) => {
 
 /** Revalidate everywhere an initiative is read.
  *
- *  WP9 moved this action out of app/dashboard/settings/initiatives/ — the page
- *  retired and redirects to Market's moves section, while the action itself is
- *  still called from Voice's "Track this" button, so it had to stop living
- *  beside a page that no longer exists. `initiatives` is the legacy table;
- *  WP12/WP13 move Track this onto `moves`. */
+ *  WP9 moved this action out of app/dashboard/settings/initiatives/ because
+ *  Voice's "Track this" button calls it too, and an action imported by module
+ *  path moves house every time its page does. The page itself is parked, not
+ *  retired: it is where an initiative is renamed, finished and stopped until
+ *  WP14's moves panel. `initiatives` is the legacy table; WP12/WP13 move Track
+ *  this onto `moves`. */
 function revalidateInitiatives() {
+  // The parked settings page is where an initiative is renamed, finished and
+  // stopped until WP14's moves panel; it has to see its own write.
+  revalidatePath('/dashboard/settings/initiatives')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/voice')

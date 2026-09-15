@@ -214,7 +214,7 @@ const initiatives: E<DashboardData> = ({ initiatives }, ctx) => {
         { aligns: ['left', 'right', 'right'], widths: [undefined, 56, 190] },
       )))}
       <div style={{ marginTop: 6 }}>
-        <a href={`${ctx.appUrl}/dashboard/market#moves`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
+        <a href={`${ctx.appUrl}/dashboard/settings/initiatives`} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>
           {t.total > t.rows.length ? `${t.total - t.rows.length} more you are tracking` : 'Manage what you track'} →
         </a>
       </div>

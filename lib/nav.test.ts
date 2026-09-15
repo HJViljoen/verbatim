@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  OLD_PAGES, RETIRED_ADDRESSES, SURFACES, hasHorizon, oldPageBanner, oldPageFor,
+  OLD_PAGES, PARKED_INITIATIVES, RETIRED_ADDRESSES, SURFACES, hasHorizon, oldPageBanner, oldPageFor,
   oldPagesGroupLabel, retireDate, surface, surfaceForPath, surfacesIn,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
@@ -76,6 +76,17 @@ describe('the old pages', () => {
     for (const p of OLD_PAGES) expect(surface(p.replacedBy).href).toMatch(/^\/dashboard/)
   })
 
+  it('parks Settings › Initiatives outside the sidebar group, with the same banner', () => {
+    const b = oldPageBanner(PARKED_INITIATIVES)
+    expect(b.title).toBe('Initiatives is being replaced by Market')
+    expect(b.body).toBe('This page stays available until 30 Nov 2026. Renaming, finishing and stopping one happens here until Market can do it.')
+    expect(b.href).toBe('/dashboard/market')
+    // It is a Settings sub-page, not one of the three the sidebar lists.
+    expect(OLD_PAGES.map((p) => p.href)).not.toContain(PARKED_INITIATIVES.href)
+    // And it is not redirected any more.
+    expect(RETIRED_ADDRESSES[PARKED_INITIATIVES.href]).toBeUndefined()
+  })
+
   it('finds the page a parked path belongs to', () => {
     expect(oldPageFor('/dashboard/market-intel')?.label).toBe('Market Intelligence')
     expect(oldPageFor('/dashboard/videos')?.label).toBe('Content')
@@ -104,9 +115,12 @@ describe('the old pages', () => {
 })
 
 describe('the addresses that lose their page', () => {
-  it('are the four nothing stored points at, and land on a live surface', () => {
+  it('are the three nothing stored points at AND nothing is lost by, and land on a live surface', () => {
+    // Settings › Initiatives was a fourth and is parked instead: it is the only
+    // place to rename, finish or stop an initiative, and the panel that takes
+    // that job is WP14. A redirect there dropped a capability silently.
     expect(Object.keys(RETIRED_ADDRESSES).sort()).toEqual([
-      '/dashboard/guide', '/dashboard/profile', '/dashboard/settings/connections', '/dashboard/settings/initiatives',
+      '/dashboard/guide', '/dashboard/profile', '/dashboard/settings/connections',
     ])
     // EXACTLY one of the nine's own addresses, not a sub-path of one. The
     // looser rule passed for `/dashboard/settings/how-to-read`, an address

@@ -7,15 +7,18 @@ import { PaneHeader, PaneBody, RailGroup, RailLink } from '@/components/shell/ma
 // owner/admin-editable and member-readable, as before; Team holds the
 // member-level pages. Two panes, not resizable — settings don't need it.
 
-export type SettingsSection = 'tracking' | 'billing' | 'team'
+export type SettingsSection = 'tracking' | 'initiatives' | 'billing' | 'team'
 
-// WP9: Initiatives, Connections and the Guide left the rail with their pages
-// — all three redirect (lib/nav.ts RETIRED_ADDRESSES), and a rail entry that
-// bounces is worse than no entry. Team and Billing stay, and they are why
-// dropping the three from the sidebar orphaned nothing. WP16 rebuilds this
+// WP9: Connections and the Guide left the rail with their pages — both
+// redirect (lib/nav.ts RETIRED_ADDRESSES), and a rail entry that bounces is
+// worse than no entry. Initiatives stayed, because its page is parked rather
+// than retired: it is the only place to rename, finish or stop one until
+// Market's moves panel lands in WP14. Team and Billing stay, and they are why
+// dropping the other two from the sidebar orphaned nothing. WP16 rebuilds this
 // rail as the seven sub-pages.
 const RAIL: { key: SettingsSection; href: string; label: string; group: 'Workspace' }[] = [
   { key: 'tracking', href: '/dashboard/settings', label: 'Tracking & reports', group: 'Workspace' },
+  { key: 'initiatives', href: '/dashboard/settings/initiatives', label: 'Initiatives', group: 'Workspace' },
   { key: 'billing', href: '/dashboard/billing', label: 'Plan & billing', group: 'Workspace' },
   { key: 'team', href: '/dashboard/team', label: 'Team', group: 'Workspace' },
 ]

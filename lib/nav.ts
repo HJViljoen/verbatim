@@ -147,6 +147,26 @@ export const retireDate = (): string => fullDate(`${OLD_PAGES_RETIRE_ON}T00:00:0
 
 export const oldPagesGroupLabel = (): string => `Old pages (retiring ${retireDate()})`
 
+/**
+ * Settings › Initiatives, parked rather than redirected.
+ *
+ * It is not in `OLD_PAGES` because `OLD_PAGES` is the sidebar's "Old pages"
+ * group and this is a Settings sub-page, reached from the settings rail and
+ * from the two "Manage what you track →" tiles. It is parked for the same
+ * reason Market Intelligence is: it is the only place a client can rename,
+ * finish or stop an initiative, and Market's `moves` panel — the thing that
+ * takes the job — is WP14. Redirected, the address landed on a shell that says
+ * it is being built, and the capability was gone until WP14 with nothing
+ * saying so. The banner, the replacement's name and the date come from the
+ * same composer as the other three.
+ */
+export const PARKED_INITIATIVES: OldPage = {
+  href: '/dashboard/settings/initiatives',
+  label: 'Initiatives',
+  replacedBy: 'market',
+  caveat: 'Renaming, finishing and stopping one happens here until Market can do it.',
+}
+
 /** What a parked page says at the top of itself. */
 export function oldPageBanner(page: OldPage): { title: string; body: string; cta: string; href: string } {
   const to = surface(page.replacedBy)
@@ -161,9 +181,12 @@ export function oldPageBanner(page: OldPage): { title: string; body: string; cta
 // ---- Addresses that lose their page -----------------------------------------
 
 /**
- * The four addresses Phase 1 empties, and where each reader should land
- * (refute-06 §2.4: these four are exactly the ones nothing stored points at,
- * which is why a redirect can cover them at all).
+ * The addresses Phase 1 empties, and where each reader should land (refute-06
+ * §2.4: the four orphans are exactly the ones nothing stored points at, which
+ * is why a redirect can cover them at all). Initiatives left this list again:
+ * a redirect is only honest where nothing is lost, and that page is the only
+ * place an initiative can be renamed, finished or stopped. See
+ * PARKED_INITIATIVES above.
  *
  * A thin `page.tsx` calling `redirect()` per address, not `next.config.ts` —
  * that file's own header forbids adding `redirects()` because config redirects
@@ -183,5 +206,4 @@ export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
   '/dashboard/profile': '/dashboard/voice#cast',
   '/dashboard/guide': '/dashboard/settings',
   '/dashboard/settings/connections': '/dashboard/settings',
-  '/dashboard/settings/initiatives': '/dashboard/market#moves',
 }
