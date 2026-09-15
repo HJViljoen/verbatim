@@ -64,6 +64,16 @@ import { bandVerdict, type Verdict, type VerdictFlag } from './verdicts'
 //   components/pages/competitive/index.tsx:80-137,214 and components/email/tiles.tsx
 //                                                 the rendered layer word
 //
+// WP14 RETIRED THE FIRST GROUP AS A READER SOURCE, in the only way a parked
+// page allows: the NEW Market and the NEW Competitive
+// (lib/pages/{market,competitive}-surface.ts) read none of these columns, and
+// the old pages at /dashboard/{market,competitive}-intel keep every one of
+// them until OLD_PAGES_RETIRE_ON. A reader reaching /dashboard/competitive now
+// meets the comment-dated months; a reader reaching the parked page meets the
+// run-indexed layer, with the banner that says which page it is. Deleting the
+// reads instead would have taken the parked page down, which is the page four
+// sent emails still link into.
+//
 // Nothing here reads any of them. Each retires as its surface re-bases, and
 // until then the two layers answer two different questions: period_* is
 // (this run's run_id) AND (upload_date >= the window's start), an upload-dated
