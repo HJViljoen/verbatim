@@ -38,6 +38,19 @@ import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 // back through FILLING ones). A second run would write the theme rows under a
 // LATER clustering, which is the one thing these two tables exist to prevent.
 //
+// --write IS ALSO THE ONLY THING THAT WILL EVER GIVE A CLOSED MONTH ITS
+// EVIDENCE IDS (item 31a, 2026-09-18). The pipeline's freeze-months step calls
+// the refs freeze for the months monthsToRefresh returns, and that is the
+// filling months plus the walk-back of open ones — never a closed one. On
+// production 2026-09-15 that is 13 audience-months of 214; the other 201
+// (2020-10 → 2026-07) can only be given their ids here, through the INSERT
+// guard's decision-K arm, which accepts the FIRST back-read of an
+// audience-month that closed before month_evidence_refs existed. Once. So this
+// is a prerequisite of the tile that prints "8 of 31 voices still quotable",
+// not an optional tidy-up: run it per tenant after 20260918095000 is applied
+// and before that reader ships, or the historical series opens to nothing and
+// the frozen guard refuses the correction.
+//
 //   node --env-file=.env.local --import tsx scripts/monthly-reading.ts [--client <uuid>] [--run <uuid>] [--all] [--write] [--denominators-only]
 
 interface Args {

@@ -49,6 +49,27 @@ import type {
 // is how a reader recovers the gap rather than being told a single reading
 // date. Nothing here pretends otherwise.
 //
+// ONLY OPEN MONTHS GET IDS FROM THE PIPELINE, WHICH IS ALMOST NONE OF THEM.
+// `monthsToRefresh` returns the stored FILLING months plus the walk-back of
+// still-open ones and never a closed one, so the freeze-months step will only
+// ever call this for the current month and the one before it. Measured on
+// production 2026-09-15: 201 of 214 audience-months are already frozen
+// (2020-10 → 2026-07); 13 are filling. So 94% of the series — the whole
+// historical part, which is exactly the part a frozen-month reader most wants
+// to open — gets no ids at all from a pipeline run, for ever.
+//
+// The one thing that fills them is the operator script, per tenant:
+//
+//     node --env-file=.env.local --import tsx scripts/monthly-reading.ts \
+//       --client <uuid> --run <uuid> --write
+//
+// which reaches a closed month through the INSERT guard's decision-K arm: a
+// brand-new row for a closed audience-month is accepted while the target table
+// holds no earlier-transaction row for it, because that is the first back-read
+// of a table that did not exist when the month closed. It is accepted ONCE.
+// Run it before the WP11/WP12 tile ships, or "which videos was this read on"
+// is empty for every month before 2026-08 and cannot be corrected afterwards.
+//
 // AND WHY IT IS A SEPARATE TABLE. 20260915092000 refused ids on the month
 // reading in writing: "a frozen id list would decay into a record of what we
 // can no longer show". That is right, and it is an argument about the MONTH
