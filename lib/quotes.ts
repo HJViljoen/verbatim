@@ -283,7 +283,7 @@ interface Rows {
   range(from: number, to: number): Page
 }
 interface Ordered extends Rows {
-  order(col: string): Rows
+  order(col: string): Ordered
 }
 interface EvidenceClient {
   from(table: string): {
@@ -295,6 +295,13 @@ interface EvidenceClient {
 
 /** Split an id list into PostgREST-URL-sized chunks, fetch them ALL AT ONCE,
  *  and page each chunk past the 1000-row cap.
+ *
+ *  `size` IS IN IDS AND THE LIMIT IS IN BYTES, so a caller whose ids are not
+ *  uuids has to say so. 120 was sized for 36-character uuids (~4.4 KB of
+ *  request line, half the usual 8 KiB); 120 sha-256 hex hashes are ~7.9 KB,
+ *  within 4% of it, and the failure is a rejected chunk that fails the whole
+ *  Promise.all and takes every reading on the page with it. readTranslations
+ *  passes HASH_CHUNK for that reason.
  *
  *  Two different caps, and chunking only answers the first. 120 ids keeps the
  *  request URL short (PostgREST's other limit); it does nothing about the
@@ -316,6 +323,10 @@ async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, siz
   )
   return pages.flat()
 }
+
+/** Ids per chunk for a sha-256 hex hash: 60 × 65 bytes ≈ 3.9 KB of request
+ *  line, half of what 120 would cost and well clear of the 8 KiB limit. */
+const HASH_CHUNK = 60
 
 /**
  * Attach the cache's reading to a set of texts.
@@ -366,13 +377,25 @@ export async function readTranslations(client: unknown, texts: readonly string[]
     const c = client as EvidenceClient
     const rows = await fetchChunks<{ text_hash: string; language: string | null; english: string | null }>(
       hashes,
-      (part) => c.from('comment_translations').select('text_hash, language, english').in('text_hash', part).order('text_hash') as unknown as Rows,
+      // `.order('text_hash')` alone is not a unique order, and range paging on
+      // a non-unique order can repeat or skip a row. One popular emoji comment
+      // shared by a thousand videos would be enough. The primary key is
+      // (comment_id, text_hash), so comment_id is the tiebreaker that makes it
+      // total — and it need not be selected to be ordered on.
+      (part) => c.from('comment_translations').select('text_hash, language, english').in('text_hash', part).order('text_hash').order('comment_id') as unknown as Rows,
+      HASH_CHUNK,
     )
     for (const r of rows) if (r.language) out.set(r.text_hash, { lang: r.language, english: r.english })
   } catch (e) {
     // Never fatal: an English rendering is an addition to a quote, and a page
     // that cannot reach the cache shows the originals it has always shown.
-    console.warn(`[quotes] translation read degraded: ${e instanceof Error ? e.message : String(e)}`)
+    //
+    // It is also INVISIBLE on the surface — a quote with no reading renders
+    // exactly like one nothing has read — so the log line is the only place it
+    // is ever said, and it says how much was lost rather than only that
+    // something was. A whole page's worth here means every non-English quote on
+    // it showed bare.
+    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
   }
   return out
 }
