@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, legendStates, lineSegments,
-  monthColumns, spanOf, STATE_LABEL, valueScale,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendStates,
+  lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -121,6 +121,15 @@ export function CalendarLine({
   const printRuleLabels = drawn.length <= MAX_PRINTED_RULE_LABELS
   const states = legendStates(series)
   const columns = monthColumns(months, series)
+  // End labels are placed by the CHART, not by each series: two lines ending a
+  // couple of points apart would otherwise print two 11px labels on one line.
+  const labelYs = spreadLabels(
+    series.map((s) => {
+      const end = lastReading(s.points)
+      return end?.value != null ? scale.y(end.value) + 4 : null
+    }),
+    { min: g.top + 4, max: g.baseline },
+  )
   const showLegend = legend && (series.length >= 2 || states.length > 0)
 
   // A month nobody has a reading for gets a fainter label, the way the mock
@@ -221,7 +230,7 @@ export function CalendarLine({
           )
         })}
 
-        {series.map((s) => (
+        {series.map((s, i) => (
           <SeriesMarks
             key={s.label}
             series={s}
@@ -229,6 +238,7 @@ export function CalendarLine({
             y={scale.y}
             format={format}
             padR={g.padR}
+            labelY={labelYs[i]}
           />
         ))}
 
@@ -274,13 +284,16 @@ export function CalendarLine({
 /** One series: its segments, its points, its gutter marks, its filling bar and
  *  its end label. Split out so the chart body reads as a list of layers. */
 function SeriesMarks({
-  series, geometry: g, y, format, padR,
+  series, geometry: g, y, format, padR, labelY = null,
 }: {
   series: CalendarSeries
   geometry: ReturnType<typeof calendarGeometry>
   y: (v: number) => number
   format: (v: number) => string
   padR: number
+  /** Where the end label sits, de-collided against the other series by the
+   *  chart (`spreadLabels`). Falls back to the point's own y. */
+  labelY?: number | null
 }) {
   const points = series.points
   const runs = lineSegments(points)
@@ -341,7 +354,7 @@ function SeriesMarks({
       })}
 
       {end && endX != null && end.value != null && (
-        <text x={padR + 10} y={y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+        <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
           {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}

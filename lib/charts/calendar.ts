@@ -232,6 +232,56 @@ export function lineSegments(points: readonly CalendarPoint[]): number[][] {
   return runs
 }
 
+/** The last month of a series that carries a plotted value — the point the end
+ *  label belongs to, which on today's corpus is usually NOT the last month on
+ *  the axis (a tenant's newest month is normally below the floor). */
+export function lastReading(points: readonly CalendarPoint[]): CalendarPoint | null {
+  for (let i = points.length - 1; i >= 0; i--) if (points[i].value != null) return points[i]
+  return null
+}
+
+/**
+ * End labels, nudged apart.
+ *
+ * Phase 1's headline chart is you vs one rival vs the category on one axis, and
+ * two lines ending within a couple of points put two 11px labels on top of each
+ * other. The approved mock hand-spaced its four end labels 13–22px apart; this
+ * is that spacing, computed. Nulls (a line with nothing plotted, which has no
+ * end label) keep their place in the list.
+ *
+ * The labels are pushed DOWN in y order until each clears the one above by
+ * `gap`, and the whole stack is then lifted if it ran past `max` — so a crowded
+ * chart moves every label a little rather than moving the bottom one a lot, and
+ * no label leaves the box. The POINTS do not move: only the words do, which is
+ * the compromise — a label may sit a few pixels off its own line, and the
+ * alternative is two unreadable labels.
+ */
+export function spreadLabels(
+  ys: readonly (number | null)[],
+  opts: { gap?: number; min?: number; max?: number } = {},
+): (number | null)[] {
+  const gap = opts.gap ?? 13
+  const min = opts.min ?? 0
+  const max = opts.max ?? Number.POSITIVE_INFINITY
+  const placed = ys
+    .map((y, i) => ({ y, i }))
+    .filter((e): e is { y: number; i: number } => e.y != null)
+    .sort((a, b) => a.y - b.y)
+  let last = -Infinity
+  for (const e of placed) {
+    e.y = Math.max(e.y, last + gap)
+    last = e.y
+  }
+  const overflow = placed.length ? placed[placed.length - 1].y - max : 0
+  if (overflow > 0) {
+    const lift = Math.min(overflow, Math.max(0, (placed[0]?.y ?? min) - min))
+    for (const e of placed) e.y -= lift
+  }
+  const out: (number | null)[] = ys.map(() => null)
+  for (const e of placed) out[e.i] = e.y
+  return out
+}
+
 /** The axis positions a set of months covers, or null when none of them is on
  *  this axis — a change that moved months nobody is looking at draws nothing. */
 export function spanOf(axis: readonly string[], months: readonly string[]): { from: number; to: number } | null {

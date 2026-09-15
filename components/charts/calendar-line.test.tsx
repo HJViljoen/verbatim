@@ -163,6 +163,14 @@ describe('CalendarLine', () => {
     expect(markup).toContain('viewBox="0 0 880 210"')
   })
 
+  it('keeps two end labels off each other when two lines end together', () => {
+    const close: CalendarSeries = { ...rival, label: 'Poler', points: rival.points.map((q) => (q.value == null ? q : { ...q, value: 31.5 })) }
+    const markup = render(CalendarLine({ axis: AXIS, series: [you, close], format: (v) => `${v}%` }))
+    const ys = [...markup.matchAll(/<text x="710" y="([\d.]+)"/g)].map((m) => Number(m[1]))
+    expect(ys).toHaveLength(2)
+    expect(Math.abs(ys[0] - ys[1])).toBeGreaterThanOrEqual(13)
+  })
+
   it('thins the labels on a 68-month axis instead of printing 68 of them', () => {
     const long = monthAxis('2021-02-01', '2026-09-01')
     const markup = render(CalendarLine({

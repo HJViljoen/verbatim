@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, legendStates, lineSegments, monthColumns,
-  niceMid, spanOf, stateNote, valueScale, type CalendarPoint, type CalendarSeries,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, lastReading, legendStates,
+  lineSegments, monthColumns, niceMid, spanOf, spreadLabels, stateNote, valueScale,
+  type CalendarPoint, type CalendarSeries,
 } from './calendar'
 import { monthAxis } from '../reading/series'
 
@@ -241,6 +242,41 @@ describe('hoverTitle', () => {
   it("carries the caller's own caveat last", () => {
     expect(hoverTitle({ label: 'You' }, p('2026-09-01', 12, 'filling', { k: 4, n: 33, note: 'settles on 31 October 2026' })))
       .toBe('You 12 · Sep 2026 · 4 of 33 videos · still filling · settles on 31 October 2026')
+  })
+})
+
+describe('spreadLabels', () => {
+  it('leaves labels that already clear each other alone', () => {
+    expect(spreadLabels([30, 60, 100])).toEqual([30, 60, 100])
+  })
+
+  it('pushes a colliding pair apart by the gap, keeping the order they came in', () => {
+    expect(spreadLabels([40, 42], { gap: 13 })).toEqual([40, 53])
+  })
+
+  it('nudges by y order, not by series order', () => {
+    expect(spreadLabels([42, 40], { gap: 13 })).toEqual([53, 40])
+  })
+
+  it('lifts the stack rather than running a label out of the box', () => {
+    const out = spreadLabels([170, 172, 174], { gap: 13, min: 16, max: 180 })
+    expect(Math.max(...(out as number[]))).toBeLessThanOrEqual(180)
+    expect(Math.min(...(out as number[]))).toBeGreaterThanOrEqual(16)
+  })
+
+  it('keeps a line with no end label in its place', () => {
+    expect(spreadLabels([40, null, 42], { gap: 13 })).toEqual([40, null, 53])
+  })
+})
+
+describe('lastReading', () => {
+  it('takes the last month with a value, not the last month on the axis', () => {
+    const points = [p('2026-07-01', 21), p('2026-08-01', null, 'below_floor'), p('2026-09-01', null, 'hollow')]
+    expect(lastReading(points)?.month).toBe('2026-07-01')
+  })
+
+  it('has nothing to point at when nothing is plotted', () => {
+    expect(lastReading([p('2026-07-01', null, 'hollow')])).toBeNull()
   })
 })
 
