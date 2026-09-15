@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
+  TRANSLATION_COLUMNS,
   createCitedQuotePicker,
   bucketByAudienceId,
   fetchLiveBucketsByAudience,
@@ -406,5 +407,17 @@ describe('the picker, once a quote can be read', () => {
     const rows: QuoteRow[] = [{ quote: mixed, rank: 1, evidenceId: 'ev-mix', lang: 'es', english }]
     const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
     expect(pick(['a1'], 1, 'comfort')).toEqual([{ ref: 'e:ev-mix', text: mixed, lang: 'es', english }])
+  })
+})
+
+describe('TRANSLATION_COLUMNS — the unscoped read selects nothing a tenant owns', () => {
+  it('names the three columns the cross-tenant argument rests on, and no others', () => {
+    // readTranslations queries comment_translations by text_hash with NO client
+    // predicate on the admin client. That is harmless only because a row holds
+    // a machine translation of the exact bytes asked about: "It would stop
+    // being harmless the moment a row carried anything a tenant owns — so it
+    // must not." This is the enforcement the argument did not have.
+    expect(TRANSLATION_COLUMNS.split(',').map((c) => c.trim()).sort())
+      .toEqual(['english', 'language', 'text_hash'])
   })
 })

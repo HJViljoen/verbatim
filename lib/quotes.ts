@@ -369,6 +369,21 @@ const HASH_CHUNK = 60
  * insight_evidence rows, so it attaches the reading itself. Every other surface
  * gets it from fetchQuotesByAudience / fetchQuoteCitationsByAudience.
  */
+/**
+ * The ONLY columns the unscoped read may select, named once so a test can hold
+ * it.
+ *
+ * The cross-tenant read above is correct by argument — a row holds a machine
+ * translation of the exact bytes asked about and nothing tenant-shaped — and
+ * the argument was load-bearing with nothing enforcing it. The header's own
+ * sentence is the condition: "It would stop being harmless the moment a row
+ * carried anything a tenant owns." A column added to comment_translations and
+ * selected here would breach it silently; a test on this constant makes the
+ * breach a red build instead, and the table comment says the same thing to
+ * whoever adds the column.
+ */
+export const TRANSLATION_COLUMNS = 'text_hash, language, english'
+
 export async function readTranslations(client: unknown, texts: readonly string[]): Promise<Map<string, { lang: string; english: string | null }>> {
   const out = new Map<string, { lang: string; english: string | null }>()
   const hashes = [...new Set(texts.map((t) => cleanQuote(t)).filter(Boolean).map(quoteTextHash))]
@@ -382,7 +397,7 @@ export async function readTranslations(client: unknown, texts: readonly string[]
       // shared by a thousand videos would be enough. The primary key is
       // (comment_id, text_hash), so comment_id is the tiebreaker that makes it
       // total — and it need not be selected to be ordered on.
-      (part) => c.from('comment_translations').select('text_hash, language, english').in('text_hash', part).order('text_hash').order('comment_id') as unknown as Rows,
+      (part) => c.from('comment_translations').select(TRANSLATION_COLUMNS).in('text_hash', part).order('text_hash').order('comment_id') as unknown as Rows,
       HASH_CHUNK,
     )
     for (const r of rows) if (r.language) out.set(r.text_hash, { lang: r.language, english: r.english })
