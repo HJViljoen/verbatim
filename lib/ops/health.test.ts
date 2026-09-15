@@ -317,6 +317,51 @@ describe('assessPipelineHealth — a run that closed clean and wrote nothing', (
     }))).toEqual([])
   })
 
+  // WP7 moved the recommendations delete to after a successful D-b parse, so a
+  // retried synthesis whose second call refuses leaves attempt 1's rows
+  // standing while this run's market_insights have been reinserted under fresh
+  // ids. The count is then non-zero and every row is dangling — the run closes
+  // 'completed', the step logs `recommendations: 0`, and the client reads
+  // recommendations with no evidence behind them.
+  it('flags a run whose recommendations all cite insights it no longer has', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 4 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].detail).toContain('4 recommendations that cite no insight this run has')
+  })
+
+  it('does not flag a run where only some recommendations lost their references', () => {
+    // One recommendation whose references the parser rejected is an ordinary
+    // bad day for the model. The retry state loses ALL of them at once.
+    expect(assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 3 } })],
+    }))).toEqual([])
+    expect(assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 0 } })],
+    }))).toEqual([])
+  })
+
+  it('says nothing about groundedness when the caller did not measure it', () => {
+    // Absent is "not counted", here as everywhere else in this rule.
+    expect(assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1 } })],
+    }))).toEqual([])
+  })
+
+  it('says "no recommendations" rather than "ungrounded" when there are none', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 0, costs: 1, ungroundedRecommendations: 0 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].detail).toContain('no recommendations')
+    expect(f[0].detail).not.toContain('cite no insight')
+  })
+
   it('has nothing to say about the stranded run until it is closed', () => {
     // 06706296… has sat at 'analyzing' since 2026-06-13 with 4 recommendations
     // and no observations. It is not 'completed', and even when the operator

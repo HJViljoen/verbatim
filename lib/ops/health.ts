@@ -82,6 +82,24 @@ export interface RunRowCounts {
   recommendations: number
   /** 0 or 1 — `run_costs` is one row per run. */
   costs: number
+  /** Of those recommendations, how many point at NO insight this run still has
+   *  — every id in `based_on.insight_ids` resolving to neither a
+   *  `market_insights` nor a `competitive_insights` row of the same run (an
+   *  empty `insight_ids` counts here too).
+   *
+   *  It exists because presence is not groundedness. WP7 moved the
+   *  recommendations delete to after a successful D-b parse, so a retried
+   *  synthesis whose second call refuses leaves the FIRST attempt's rows
+   *  standing — while `runPassD` has already deleted and reinserted this run's
+   *  market insights with fresh ids. The count is then non-zero and the rows
+   *  are dangling: both readers resolve them to nothing (tier `archive`, no
+   *  evidence chips), the step logs `recommendations: 0`, and the run closes
+   *  'completed'. That console line ages out of Vercel's retention within the
+   *  hour, and the client is left reading ungrounded recommendations.
+   *
+   *  Absent from the counts (undefined) on a caller that does not compute it —
+   *  read, like the counts themselves, as "not counted", never as zero. */
+  ungroundedRecommendations?: number
 }
 
 export interface HealthRun {
@@ -263,7 +281,9 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
   //    without counting, everything after close-run cannot change the status at
   //    all, and until this week the whole theme_observations write sat inside a
   //    swallowed try/catch. So the status is not evidence on its own — the rows
-  //    are. Three, each the end of a different half of the run.
+  //    are. Three of them, each the end of a different half of the run, plus
+  //    one arm on what the recommendations POINT AT, because WP7 made a
+  //    non-zero count of dangling rows a state this run can close clean in.
   for (const r of inputs.runs) {
     if (!needsRowCounts(r, inputs.now)) continue
     const counts = r.rows
@@ -275,6 +295,22 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
       missing.push('no theme observations — the trend series has no point for this update')
     }
     if (counts.recommendations === 0) missing.push('no recommendations')
+    // Presence is not groundedness. A retried synthesis that fails at D-b keeps
+    // the previous attempt's recommendations, whose `based_on` ids point at
+    // market insights this run deleted and reinserted under fresh ids — a
+    // non-zero count of rows the client reads with no evidence behind any of
+    // them. Only when ALL of them are dangling: one recommendation whose
+    // references the parser rejected is an ordinary bad day for the model, not
+    // an incomplete run.
+    else if (
+      counts.ungroundedRecommendations !== undefined &&
+      counts.ungroundedRecommendations === counts.recommendations
+    ) {
+      missing.push(
+        `${counts.recommendations} recommendations that cite no insight this run has — ` +
+        'a retried synthesis left the previous attempt\'s rows behind, and they render ungrounded',
+      )
+    }
     // Written after close-run and .catch()-ed, so its absence cannot show up in
     // the status: a run that cost money and recorded none looks free.
     if (counts.costs === 0) missing.push('no run_costs row — what this update spent is unrecorded')

@@ -40,7 +40,7 @@ import { touchHeartbeat } from '@/lib/ops/heartbeat'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-// Five Supabase round-trips plus three head counts per freshly-closed run
+// Five Supabase round-trips plus five small reads per freshly-closed run
 // (usually none, at most a handful), plus a Resend call, on a cold start. The
 // Hobby default is 10 s, and a timeout here is exactly the silent failure this
 // route exists to prevent.
@@ -84,8 +84,15 @@ interface RunRow {
 }
 
 /** What each freshly-closed run left behind: theme observations, recommendations
- *  and its cost row. Three head counts per run, and only for the runs the rule
- *  will actually judge — one or two on a normal morning, none on most.
+ *  and its cost row — and, for the recommendations, whether they still point at
+ *  anything. Two head counts and three small selects per run, and only for the
+ *  runs the rule will actually judge — one or two on a normal morning, none on
+ *  most.
+ *
+ *  The three selects are bounded by the model's own output: a run writes single
+ *  figures of recommendations, market insights and competitive insights (the
+ *  prompts cap each), so they are nowhere near PostgREST's 1000-row cap and
+ *  need no paging. They are ids only — no text is read here.
  *
  *  A count that fails is left ABSENT rather than written as 0: the checker reads
  *  absent as "not counted" and says nothing, because an unreadable table is a
@@ -103,15 +110,45 @@ async function withRowCounts(
     }
     return count ?? 0
   }
+  const ids = async (table: string, runId: string): Promise<string[] | null> => {
+    const { data, error } = await admin.from(table).select('id').eq('run_id', runId)
+    if (error) {
+      console.warn(`[ops-check] reading ${table} ids for run ${runId}: ${error.message}`)
+      return null
+    }
+    return ((data ?? []) as { id: string }[]).map((r) => r.id)
+  }
   return Promise.all(runs.map(async (run) => {
     if (!needsRowCounts(run, now)) return run
-    const [observations, recommendations, costs] = await Promise.all([
+    const [observations, costs, recRows, miIds, ciIds] = await Promise.all([
       head('theme_observations', run.id),
-      head('recommendations', run.id),
       head('run_costs', run.id),
+      (async (): Promise<{ based_on: { insight_ids?: string[] } | null }[] | null> => {
+        const { data, error } = await admin.from('recommendations').select('based_on').eq('run_id', run.id)
+        if (error) {
+          console.warn(`[ops-check] reading recommendations for run ${run.id}: ${error.message}`)
+          return null
+        }
+        return (data ?? []) as { based_on: { insight_ids?: string[] } | null }[]
+      })(),
+      ids('market_insights', run.id),
+      ids('competitive_insights', run.id),
     ])
-    if (observations === null || recommendations === null || costs === null) return run
-    const rows: RunRowCounts = { observations, recommendations, costs }
+    if (observations === null || costs === null || recRows === null || miIds === null || ciIds === null) return run
+    // Grounded = at least one cited id that this run still has. Both tables,
+    // because `based_on.insight_ids` mixes market insights (M#) and competitive
+    // insights (C#), and a recommendation grounded only in a C# reference is
+    // grounded.
+    const live = new Set([...miIds, ...ciIds])
+    const ungroundedRecommendations = recRows.filter(
+      (r) => !(r.based_on?.insight_ids ?? []).some((id) => live.has(id)),
+    ).length
+    const rows: RunRowCounts = {
+      observations,
+      recommendations: recRows.length,
+      costs,
+      ungroundedRecommendations,
+    }
     return { ...run, rows }
   }))
 }
