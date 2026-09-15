@@ -13,6 +13,7 @@ import {
   firstScoringMonth,
   headline,
   medianOf,
+  atThisPointWindow,
   firstHeardThisMonth,
   isMissingAnomalyFlags,
   monthlyLineLabel,
@@ -71,6 +72,23 @@ describe('recordWindow', () => {
   })
   it('stops at the last day of the month rather than running past it', () => {
     expect(recordWindow('2026-08-01', '2026-09-15T08:00:00.000Z').to).toBe('2026-08-31')
+  })
+})
+
+describe('atThisPointWindow', () => {
+  it('puts the same number of COMPLETE days on both sides', () => {
+    // 15 Sep is fourteen whole days and part of a fifteenth; [1 Aug, 15 Aug)
+    // is fourteen whole days. The old window ran to 16 Aug and flattered last
+    // month by up to a day's traffic.
+    expect(atThisPointWindow('2026-09-01', '2026-09-15T08:00:00.000Z')).toEqual({
+      from: '2026-08-01', to: '2026-08-15T00:00:00.000Z',
+    })
+  })
+  it('has no comparison to offer on the first of the month', () => {
+    expect(atThisPointWindow('2026-09-01', '2026-09-01T08:00:00.000Z')).toBeNull()
+  })
+  it('is null once the month is complete — a finished month is not still filling', () => {
+    expect(atThisPointWindow('2026-08-01', '2026-09-15T08:00:00.000Z')).toBeNull()
   })
 })
 

@@ -1178,9 +1178,18 @@ function audienceMonthVideos(
 export function atThisPointWindow(month: string, now: string): { from: string; to: string } | null {
   const days = daysInto(month, now)
   if (days == null) return null
+  // COMPLETE DAYS ON BOTH SIDES. `daysInto` is the day of the month — 15 on
+  // 15 September — and this month holds fourteen whole days plus part of a
+  // fifteenth, so a previous-month window of [1 Aug, 16 Aug) put fifteen whole
+  // days against them and flattered last month by up to a day's traffic in the
+  // one comparison OV0 exists to make. Fourteen against fourteen. On the first
+  // of the month nothing has elapsed to compare with, and the line says so
+  // rather than drawing an empty window as a zero.
+  const elapsed = days - 1
+  if (elapsed <= 0) return null
   const prev = previousMonthOf(month)
   const to = new Date(`${prev}T00:00:00.000Z`)
-  to.setUTCDate(to.getUTCDate() + days)
+  to.setUTCDate(to.getUTCDate() + elapsed)
   return { from: prev, to: to.toISOString() }
 }
 
