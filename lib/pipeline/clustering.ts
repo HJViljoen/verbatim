@@ -15,7 +15,7 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 //
 // So the run records what it clustered under, at open-run, beside the frozen
 // window and the frozen flags — and the reading compares THAT. Legible rather
-// than hashed: an operator reading `a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1`
+// than hashed: an operator reading `a=pass_a_v4.1;i=transcripts+translation+ocr;c=0.58;f=2;m=gpt-5.4;mp=theme_merge_v1;k=video_v1`
 // off a month row can see which knob moved, where a hash would only say "not
 // the same".
 //
@@ -24,11 +24,21 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 // a month-to-month change stops being a change in the conversation:
 //   a  the Pass A prompt version — a bump re-reads every eligible video, which
 //      re-mints the insights the clustering runs over
+//   i  the Pass A INPUT flags (transcripts · translation · ocr). A flag flip
+//      re-reads a video without touching the prompt version: both 'translated'
+//      and 'ocr' are SelectReasons in pass-a-plan, deliberately, so that the
+//      corpus is re-read a video at a time instead of all at once. That is the
+//      very event this comment's own example is — Össur 29a56395 → d346b0f7
+//      flipped translation and OCR on — and `a=` alone does not move for it,
+//      so the key would have called the two months like-for-like
 //   c  the embedding cluster similarity threshold — where one theme ends
 //   f  the evidence floor — which themes the product will show at all, and now
 //      also where the video arm of the theme key takes over
 //   m  the merge model — a gpt-5.4 call with no temperature decides which
 //      clusters fuse, so its identity is part of the clustering
+//   mp the merge PROMPT version — the model is half of that call; the words
+//      that ask it which clusters are one theme are the other half, and a
+//      rewording re-partitions the corpus exactly as a moved threshold does
 //   k  the theme-key rule — the cutover to the video key is itself an identity
 //      event, and a marker that does not carry it would make the one run that
 //      needs the marker look unremarkable. Measured with
@@ -48,15 +58,37 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
  *  on — not when a threshold moves, which `c` and `f` already carry. */
 export const THEME_KEY_RULE = 'video_v1'
 
+/** The Pass A inputs a run read its videos with. Each one is a SelectReason in
+ *  pass-a-plan, so flipping it re-reads the corpus a video at a time without
+ *  moving `passAPromptVersion`. */
+export interface PassAInputs {
+  transcripts: boolean
+  translation: boolean
+  ocr: boolean
+}
+
 /** The knobs that define a run's clustering. */
 export interface ClusteringRegime {
   /** `passAPromptVersion(flags.transcripts)` — the regime the run's Pass A
    *  calls book against. */
   promptVersion: string
+  /** The run's frozen Pass A flags — `flags.transcripts` / `.translation` /
+   *  `.ocr`, not today's environment. */
+  passAInputs: PassAInputs
   clusterThreshold: number
   evidenceFloor: number
   mergeModel: string
+  /** theme-merge.ts PROMPT_VERSION, passed in for the same reason the Pass A
+   *  version is: clustering.ts must stay importable by a page. */
+  mergePromptVersion: string
   themeKey: string
+}
+
+/** The enabled inputs, in a fixed order, as one legible token. `none` rather
+ *  than an empty field so a key never has two adjacent separators. */
+function inputsField(inputs: PassAInputs): string {
+  const on = (['transcripts', 'translation', 'ocr'] as const).filter((k) => inputs[k])
+  return on.length ? on.join('+') : 'none'
 }
 
 /** The regime this deploy would cluster under, given the Pass A version the
@@ -66,12 +98,18 @@ export interface ClusteringRegime {
  *
  *  Read at open-run, once, and written to the row — never recomputed later, for
  *  the same reason the window is frozen there (AGENTS.md). */
-export function currentClusteringRegime(input: { promptVersion: string }): ClusteringRegime {
+export function currentClusteringRegime(input: {
+  promptVersion: string
+  passAInputs: PassAInputs
+  mergePromptVersion: string
+}): ClusteringRegime {
   return {
     promptVersion: input.promptVersion,
+    passAInputs: input.passAInputs,
     clusterThreshold: CLUSTER_SIMILARITY_THRESHOLD,
     evidenceFloor: EVIDENCE_FLOOR,
     mergeModel: SYNTHESIS_MODEL,
+    mergePromptVersion: input.mergePromptVersion,
     themeKey: THEME_KEY_RULE,
   }
 }
@@ -82,9 +120,11 @@ export function currentClusteringRegime(input: { promptVersion: string }): Clust
 export function clusteringKey(regime: ClusteringRegime): string {
   return [
     `a=${regime.promptVersion}`,
+    `i=${inputsField(regime.passAInputs)}`,
     `c=${regime.clusterThreshold}`,
     `f=${regime.evidenceFloor}`,
     `m=${regime.mergeModel}`,
+    `mp=${regime.mergePromptVersion}`,
     `k=${regime.themeKey}`,
   ].join(';')
 }

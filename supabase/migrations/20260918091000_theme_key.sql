@@ -43,7 +43,10 @@
 --     clustering change between month X and month Y": two runs can produce
 --     identical clustering, and one run_id can span a regime change — the Pass
 --     A flags flipped between Össur's 29a56395 and d346b0f7 with nothing but a
---     seven-key JSON blob recording it.
+--     seven-key JSON blob recording it. The key carries those flags itself
+--     (`i=`), not only the prompt version they select, because flipping
+--     translation or OCR re-reads the corpus a video at a time without moving
+--     passAPromptVersion — which is that very event.
 --   * `month_denominators.clustering_key` / `month_theme_readings.clustering_key`
 --     — the run's fingerprint copied onto the month rows freeze-months writes,
 --     so a reader can ask the like-for-like question without joining
@@ -94,7 +97,7 @@ alter table public.month_denominators   add column if not exists clustering_key 
 alter table public.month_theme_readings add column if not exists clustering_key text;
 
 comment on column public.pipeline_runs.clustering_key is
-  'The regime this run clustered under, as a legible fingerprint: pass A prompt version, cluster similarity threshold, evidence floor, merge model, theme-key rule (lib/pipeline/clustering.ts clusteringKey). Frozen at open-run beside the window and the flags. NULL on every run opened before 2026-09-18 and on any run opened while this migration had not landed — which reads as "unknown", never as "the same as the next one".';
+  'The regime this run clustered under, as a legible fingerprint: pass A prompt version, pass A input flags (transcripts/translation/ocr), cluster similarity threshold, evidence floor, merge model, merge prompt version, theme-key rule (lib/pipeline/clustering.ts clusteringKey). Frozen at open-run beside the window and the flags. NULL on every run opened before 2026-09-18 and on any run opened while this migration had not landed — which reads as "unknown", never as "the same as the next one".';
 comment on column public.month_theme_readings.clustering_key is
   'The clustering fingerprint of the run named in run_id, copied here by freeze-months so a reader can tell a re-grouping from an ordinary change of run without joining pipeline_runs a dozen times. NULL means unknown (rows frozen before 2026-09-18, or written by a run that carried no key) and a reader may not read two NULLs as equal.';
 comment on column public.month_denominators.clustering_key is

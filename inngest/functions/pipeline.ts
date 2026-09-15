@@ -35,6 +35,7 @@ import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh }
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
+import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, isMissingClusteringKeyColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
@@ -315,6 +316,13 @@ export const runPipeline = inngest.createFunction(
       // the Pass A flags with nothing but a JSON blob recording it).
       const clusteringKey = clusteringKeyOf(currentClusteringRegime({
         promptVersion: passAPromptVersion(flags.transcripts),
+        // The flags themselves, not just the version they select: flipping
+        // translation or OCR re-reads the corpus a video at a time (the
+        // 'translated' and 'ocr' SelectReasons) without moving
+        // passAPromptVersion, which is exactly what happened between 29a56395
+        // and d346b0f7.
+        passAInputs: { transcripts: flags.transcripts, translation: flags.translation, ocr: flags.ocr },
+        mergePromptVersion: THEME_MERGE_PROMPT_VERSION,
       }))
       // The bookkeeping migration is applied by hand (a schema change on a live
       // pipeline is not a deploy side effect), so the code CAN reach production
