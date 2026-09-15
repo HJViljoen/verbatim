@@ -30,7 +30,7 @@ import {
 import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, KIND_ORDER, type KindShare, type RedditRead } from '../reading/kinds'
-import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
+import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
@@ -1138,11 +1138,12 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   }
 }
 
-/** The day a month stops moving — 30 days after it ends (FREEZE_AFTER_DAYS). */
+/** The day a month stops moving, off the reading layer's own rule rather than
+ *  a second copy of it: `freezeBoundary` reads FREEZE_AFTER_DAYS, which is
+ *  what the `month_reading_frozen_guard` trigger enforces. A hand-rolled 30
+ *  days here would drift from the database the day that constant moved. */
 function freezesOn(month: string): string {
-  const end = new Date(`${nextMonth(month)}T00:00:00.000Z`)
-  end.setUTCDate(end.getUTCDate() + 30)
-  return end.toISOString().slice(0, 10)
+  return freezeBoundary(month).slice(0, 10)
 }
 
 /** Videos per audience per month, off the denominator rows. */
