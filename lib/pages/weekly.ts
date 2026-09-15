@@ -12,7 +12,7 @@ import { citationLink } from '../evidence-cite'
 import { shortDate } from '../format'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
-import { loadOverview, audienceInSentence, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
+import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import {
   weekCheck,
@@ -220,7 +220,7 @@ export function headlineObject(data: OverviewData): {
     return {
       label: lead.objectLabel,
       objectId: lead.objectId,
-      audience: audienceInSentence(lead.audience),
+      audience: audienceInLabel(lead.audience),
       k: lead.value.k,
       n: lead.value.n,
       atLastMonth: row?.categoryAtLastMonth ? { k: row.categoryAtLastMonth.k, n: row.categoryAtLastMonth.n } : null,
@@ -233,7 +233,7 @@ export function headlineObject(data: OverviewData): {
     return {
       label: best.label,
       objectId: best.id,
-      audience: 'the category’s videos',
+      audience: 'the category',
       k: best.category.k ?? 0,
       n: best.category.n ?? 0,
       atLastMonth: best.categoryAtLastMonth ? { k: best.categoryAtLastMonth.k, n: best.categoryAtLastMonth.n } : null,
@@ -241,7 +241,7 @@ export function headlineObject(data: OverviewData): {
   }
   const top = [...data.category.growing, ...data.category.fading].sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0))[0]
   if (top) {
-    return { label: top.label, objectId: top.id, audience: 'the category’s videos', k: top.k, n: top.n, atLastMonth: null }
+    return { label: top.label, objectId: top.id, audience: 'the category', k: top.k, n: top.n, atLastMonth: null }
   }
   return null
 }

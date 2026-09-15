@@ -187,7 +187,9 @@ export interface WeekSentenceInput {
   /** A stable key fragment; ids are prefixed because a token beginning with a
    *  digit never substitutes (WP11 surprise 1). */
   objectId: string
-  /** The audience the share is a share of, in the reader's words. */
+  /** The audience the share is a share of, as a NOUN — "the category", "your
+   *  own brand" (`audienceInLabel`). Not the possessive `audienceInSentence`
+   *  form: "of 388 videos in the category's videos" says videos twice. */
   audience: string
   k: number
   n: number
@@ -224,7 +226,7 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
   // category's durability conversation is running at 24% of 271 videos". The
   // level carries its "of how many", which is what the calibration rule asks
   // for; a fourth number here would cost a flag on the first screen.
-  const head = `${stamp}: ${input.label} is running at [[${share}]] of [[${of}]] videos in ${input.audience}`
+  const head = `${stamp}: ${input.label} is running at [[${share}]] of [[${of}]] videos read for ${input.audience}`
 
   if (!input.atLastMonth) {
     return { body: `${head}. At this point last month: not recorded yet.`, figures }

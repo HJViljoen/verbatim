@@ -102,7 +102,7 @@ describe('headlineObject', () => {
     expect(head?.label).toBe('Durability')
     expect(head?.k).toBe(65)
     expect(head?.atLastMonth).toEqual({ k: 44, n: 244 })
-    expect(head?.audience).toBe('the category’s videos')
+    expect(head?.audience).toBe('the category')
   })
 
   it('falls back to the largest level when nothing cleared a band', () => {

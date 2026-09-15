@@ -88,7 +88,7 @@ export const weeklyIncoming: Block<WeeklyData> = {
           i.rivalPosts.map((p) => (
             <Line key={`${p.platform}:${p.account}:${p.uploadDate ?? ''}`} mode={mode}>
               <strong>{p.rival}</strong> posted on {platformLabel(p.platform)}
-              {p.uploadDate ? ` · ${shortDate(p.uploadDate)}` : ''} · <span data-copy="figure">{fmtInt(p.comments)}</span> comments read
+              {p.uploadDate ? ` · ${shortDate(p.uploadDate)}` : ''} · <span data-copy="figure">{fmtInt(p.comments)}</span> {p.comments === 1 ? 'comment' : 'comments'} read
               {p.href ? (
                 mode === 'email'
                   ? <> · <a href={p.href} style={{ color: EMAIL.link, textDecoration: 'none' }}>see the post →</a></>

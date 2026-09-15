@@ -67,7 +67,7 @@ describe('WR1 · the week in one sentence', () => {
   it('states the month so far against the same point last month', () => {
     const text = renderText(block.render(quietFixture(), 'app', ctx))
     expect(text).toContain('September, 18 days in')
-    expect(text).toContain('9.4% of 1,388 videos')
+    expect(text).toContain('9.4% of 1,388 videos read for the category')
     expect(text).toContain('at this point in August')
   })
 
