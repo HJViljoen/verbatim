@@ -116,6 +116,45 @@ create unique index if not exists subjects_live_name_idx
 create index if not exists subjects_client_status_idx
   on public.subjects (client_id, status, named_at);
 
+-- `superseded_by` is a lineage, and a lineage that crosses tenants is a lineage
+-- that reads as one subject's history and is two workspaces'. The foreign key
+-- cannot say so — it admits any subjects row — and the column IS in the member
+-- update grant (that is how a rename joins the old line to the new), so the
+-- rule is a trigger. Under RLS a member cannot even see another tenant's
+-- subject, so the `exists` fails and the message is the same one service_role
+-- gets.
+create or replace function public.subjects_lineage_same_tenant()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.superseded_by is null then
+    return new;
+  end if;
+  if new.superseded_by = new.id then
+    raise exception 'subjects.superseded_by cannot name its own row'
+      using errcode = 'check_violation';
+  end if;
+  if not exists (
+    select 1 from public.subjects s
+    where s.id = new.superseded_by and s.client_id = new.client_id
+  ) then
+    raise exception 'subjects.superseded_by must name a subject of the same tenant'
+      using errcode = 'foreign_key_violation';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.subjects_lineage_same_tenant() is
+  'Keeps a subject''s lineage inside one tenant: superseded_by must name a subject of the same client, and never the row itself. The foreign key admits any subjects row and the column is in the member update grant, so the rule has to be a trigger.';
+
+drop trigger if exists subjects_lineage_same_tenant on public.subjects;
+create trigger subjects_lineage_same_tenant
+  before insert or update of superseded_by, client_id on public.subjects
+  for each row execute function public.subjects_lineage_same_tenant();
+
 -- 2. Membership — one decision per (subject, insight) pair ---------------------
 create table if not exists public.subject_memberships (
   subject_id          uuid not null references public.subjects(id) on delete cascade,
@@ -166,9 +205,14 @@ drop policy if exists "Members read their subjects" on public.subjects;
 create policy "Members read their subjects" on public.subjects
   for select to authenticated using (client_id = public.get_my_client_id());
 
+-- The actor is pinned as well as the tenant, the same rule `moves` carries and
+-- for the same reason: a subject is one member saying what this workspace is to
+-- be measured on, and the log of who said it is the whole provenance. Without
+-- the second clause one member can file a subject under another member's id.
 drop policy if exists "Members name their subjects" on public.subjects;
 create policy "Members name their subjects" on public.subjects
-  for insert to authenticated with check (client_id = public.get_my_client_id());
+  for insert to authenticated
+  with check (client_id = public.get_my_client_id() and created_by = (select auth.uid()));
 
 drop policy if exists "Members retire their subjects" on public.subjects;
 create policy "Members retire their subjects" on public.subjects
@@ -797,3 +841,5 @@ revoke delete, truncate on public.moves from service_role;
 --   select has_table_privilege('authenticated', 'public.moves', 'update');              -- false
 --   select has_table_privilege('authenticated', 'public.moves', 'delete');              -- false
 --   select has_column_privilege('authenticated', 'public.subjects', 'name', 'update');  -- false
+--   select tgname from pg_trigger where not tgisinternal and tgrelid = 'public.subjects'::regclass;
+--     -- subjects_lineage_same_tenant, subjects_retirement_freeze
