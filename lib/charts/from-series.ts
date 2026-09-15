@@ -71,7 +71,6 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
   const measure = opts.measure ?? 'share'
   const floor = opts.floor === null ? null : (opts.floor ?? SHARE_BAND)
   const minK = measure === 'share' ? floor?.minK ?? null : null
-  const last = series.points[series.points.length - 1]
 
   const points: CalendarPoint[] = series.points.map((p) => {
     const value = measureOf(p, measure)
@@ -101,12 +100,19 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
     }
   })
 
+  // THE END LABEL'S DENOMINATOR IS THE END LABEL'S MONTH, not the last month on
+  // the axis. The chart draws its label at the last PLOTTED point, so taking
+  // `points[last].videos` puts one month's "of N" under another month's
+  // percentage — and on today's corpus that is the normal case, because a
+  // tenant's last axis month is usually below the floor and carries no point at
+  // all (Sealand's own audience ends on 3 videos; Össur's on 19).
+  const end = [...points].reverse().find((p) => p.value != null)
   return {
     label: opts.label ?? series.objectLabel ?? series.audience,
     color: opts.color,
     points,
     ...(opts.excludes ? { excludes: opts.excludes } : {}),
-    ...(opts.endNote ? { endNote: opts.endNote } : last?.videos != null ? { endNote: `of ${last.videos.toLocaleString('en-US')}` } : {}),
+    ...(opts.endNote ? { endNote: opts.endNote } : end?.n != null ? { endNote: `of ${end.n.toLocaleString('en-US')}` } : {}),
   }
 }
 

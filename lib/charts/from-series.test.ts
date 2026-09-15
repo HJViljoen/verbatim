@@ -107,8 +107,23 @@ describe('seriesToCalendar labelling', () => {
     expect(seriesToCalendar(s, { color: 'c' }).label).toBe('competitor:Freitag')
   })
 
-  it('ends with the last month\'s own denominator, so the end label carries an "of N"', () => {
+  it('ends with the denominator of the month the end label is drawn at', () => {
     expect(seriesToCalendar(series([point('2026-07-01', { videos: 1388 })]), { color: 'c' }).endNote).toBe('of 1,388')
+  })
+
+  it('does NOT take the last axis month when that month carries no point', () => {
+    // The normal case on today's corpus: a tenant's last month is below the
+    // floor, so the end label belongs to an earlier month and so does its "of N".
+    const s = series([
+      point('2026-07-01', { videos: 1388, k: 401 }),
+      point('2026-08-01', { state: 'below_floor', videos: 3, k: 1, pct: 33.3 }),
+    ])
+    expect(seriesToCalendar(s, { color: 'c' }).endNote).toBe('of 1,388')
+  })
+
+  it('carries no "of N" at all for a line with nothing plotted', () => {
+    const s = series([point('2026-08-01', { state: 'hollow', videos: null, k: null, pct: null })])
+    expect(seriesToCalendar(s, { color: 'c' }).endNote).toBeUndefined()
   })
 
   it('takes a caller\'s endNote over its own', () => {
