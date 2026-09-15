@@ -68,9 +68,19 @@ describe('surfaceForPath', () => {
     expect(surfaceForPath('/dashboard/videos')).toBeNull()
   })
 
-  it('lights nothing on a page outside the nine', () => {
-    expect(surfaceForPath('/dashboard/billing')).toBeNull()
-    expect(surfaceForPath('/dashboard/team')).toBeNull()
+  it('lights the surface a live page outside the nine belongs to', () => {
+    // Three live pages sat outside the rule and a reader inside them saw no
+    // mark anywhere. Team and billing are reached from the Settings rail; the
+    // Studio is where a report is edited.
+    expect(surfaceForPath('/dashboard/billing')?.key).toBe('settings')
+    expect(surfaceForPath('/dashboard/team')?.key).toBe('settings')
+    expect(surfaceForPath('/dashboard/studio')?.key).toBe('reports')
+    expect(surfaceForPath('/dashboard/studio/edit/abc')?.key).toBe('reports')
+  })
+
+  it('still lights nothing on a page that belongs to none', () => {
+    expect(surfaceForPath('/dashboard/ops/readiness')).toBeNull()
+    expect(surfaceForPath('/login')).toBeNull()
   })
 })
 

@@ -88,6 +88,22 @@ export function surface(key: NavKey): Surface {
 export const surfacesIn = (group: NavGroup): Surface[] => SURFACES.filter((s) => s.group === group)
 
 /**
+ * Live addresses that are not one of the nine but belong under one.
+ *
+ * Team and Plan & billing are reached from the Settings rail and are Settings
+ * as far as a reader is concerned; the Studio is where a report is edited, and
+ * a reader gets to it from Reports. Without this they were three live pages
+ * outside the active-nav rule: a reader inside them saw no mark anywhere and
+ * the shell stopped saying where they were. A parked page is deliberately NOT
+ * here — a page that is going must not light the page that replaced it.
+ */
+const UNDER: Readonly<Record<string, NavKey>> = {
+  '/dashboard/team': 'settings',
+  '/dashboard/billing': 'settings',
+  '/dashboard/studio': 'reports',
+}
+
+/**
  * Which surface a path belongs to, for the active-nav mark.
  *
  * `/dashboard` is exact-matched because every dashboard path starts with it —
@@ -103,7 +119,11 @@ export function surfaceForPath(pathname: string): Surface | null {
       : pathname === s.href || pathname.startsWith(`${s.href}/`)
     if (hit && (!best || s.href.length > best.href.length)) best = s
   }
-  return best
+  if (best) return best
+  for (const [href, key] of Object.entries(UNDER)) {
+    if (pathname === href || pathname.startsWith(`${href}/`)) return surface(key)
+  }
+  return null
 }
 
 // ---- The pages that are retiring --------------------------------------------
