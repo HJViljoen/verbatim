@@ -1091,6 +1091,20 @@ export async function freezeMonths(
           `[monthly-reading] no attention panel for ${opts.clientId}: no account was first seen before ` +
           `${panelCutoff(readMonth)}, so the attention half ${existing ? 'stays on the panel frozen at ' + existing.frozen_at : 'reads nothing this visit'}.`,
         )
+        if (!existing) {
+          // AND IT IS PERMANENT FOR EVERY MONTH THIS VISIT CLOSES. panel_id is
+          // stamped on each month_audience_stats row, so a back-read taken
+          // before the tenant has a panel writes null on all 88-113 of its
+          // closed audience-months — and decision K's arm is spent, so the
+          // frozen guard refuses the correction afterwards. Freezing the panel
+          // is a PREREQUISITE of the historical seed, not a later step, and the
+          // dry run has to say so rather than only "would read nothing".
+          console.warn(
+            `[monthly-reading] the attention half of every month this visit CLOSES for ${opts.clientId} will be ` +
+            'written with no panel, permanently — a closed audience-month takes no later row. Freeze a panel first ' +
+            '(an account first seen before the cutoff) if the attention half is wanted for the history at all.',
+          )
+        }
       }
     } else if (reason === 'tracking_change') {
       console.log(
