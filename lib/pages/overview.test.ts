@@ -14,6 +14,7 @@ import {
   headline,
   medianOf,
   firstHeardThisMonth,
+  isMissingAnomalyFlags,
   monthlyLineLabel,
   readingsCounter,
   moveLine,
@@ -119,6 +120,17 @@ describe('fillingLine', () => {
 
   it('carries no direction word — the badge carries the movement', () => {
     expect(fillingLine(base)).not.toMatch(/\b(growing|fading|rising|falling|flat|steady)\b/i)
+  })
+})
+
+describe('isMissingAnomalyFlags', () => {
+  it('knows M7 from every other way a read can fail', () => {
+    expect(isMissingAnomalyFlags({ code: 'PGRST205', message: "Could not find the table 'public.anomaly_flags' in the schema cache" })).toBe(true)
+    expect(isMissingAnomalyFlags({ code: '42P01', message: 'relation "anomaly_flags" does not exist' })).toBe(true)
+    // An RLS refusal, a network error and a renamed column are news, not M7.
+    expect(isMissingAnomalyFlags({ code: '42501', message: 'permission denied for table anomaly_flags' })).toBe(false)
+    expect(isMissingAnomalyFlags(new Error('fetch failed'))).toBe(false)
+    expect(isMissingAnomalyFlags(null)).toBe(false)
   })
 })
 

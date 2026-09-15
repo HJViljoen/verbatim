@@ -1323,14 +1323,35 @@ async function loadFlags(supabase: SupabaseClient, clientId: string, month: stri
         .order('week_start', { ascending: false })
         .order('rank', { ascending: true }),
     )
-  } catch {
-    // Narrow by name is not available here — the table is WP8's and the guard
-    // it ships (`isMissingAnomalyFlags`) lives beside the writer, which pulls
-    // the OpenAI client into a page bundle. The flag line is decoration on a
-    // page whose every other block stands on its own, so a failed read costs
-    // the line and nothing else.
+  } catch (error) {
+    // DEGRADE, BUT SAY SO. The flag line is decoration on a page whose every
+    // other block stands on its own, so a failed read costs the line and
+    // nothing else — but a bare `catch {}` made an RLS failure, a network
+    // error and a column rename indistinguishable from "M7 is not applied",
+    // with nothing written anywhere. That is exactly the failure lib/pages/
+    // read.ts was written against: a broken read and an empty table are the
+    // same value, and the server log is the only place either can surface.
+    //
+    // Narrow by NAME here rather than importing WP8's own guard, which lives
+    // beside the writer and would pull the OpenAI client into a page bundle:
+    // a missing table before M7 is the expected state and says nothing; any
+    // other error is news.
+    if (!isMissingAnomalyFlags(error)) {
+      console.error(`[pages] overview.flags: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
     return []
   }
+}
+
+/** Is `anomaly_flags` (M7) simply not applied here? The same shape
+ *  `isMissingMonthlyReading` tests, asked about one table by name. */
+export function isMissingAnomalyFlags(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes('anomaly_flags')) return false
+  if (code && ['PGRST202', 'PGRST205', '42883', '42P01'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
 async function buildAnomaly(supabase: SupabaseClient, flag: AnomalyFlagRow): Promise<AnomalyLine> {
