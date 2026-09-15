@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
+  chunkByAudienceMonth,
   denominatorKey,
   freezeBoundary,
   freezeFor,
@@ -317,6 +318,46 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     })
     expect(result.writes).toEqual([])
     expect(result.keptFrozen).toBe(1)
+  })
+
+  it('never splits one audience-month across two write statements', () => {
+    // Decision K's back-read arm admits a first row into a closed audience-month
+    // only while no EARLIER transaction has written one, and every chunk is a
+    // transaction — so a boundary inside an audience-month loses its remainder
+    // for ever. Three audience-months of 2, 3 and 2 rows at a cap of 4.
+    const rows = [
+      { month: '2026-01-01', audience: 'client', n: 1 },
+      { month: '2026-01-01', audience: 'client', n: 2 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 3 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 4 },
+      { month: '2026-01-01', audience: 'competitor:a', n: 5 },
+      { month: '2026-02-01', audience: 'client', n: 6 },
+      { month: '2026-02-01', audience: 'client', n: 7 },
+    ]
+    const parts = chunkByAudienceMonth(rows, 4)
+    for (const part of parts) {
+      expect(new Set(part.map(denominatorKey)).size).toBeLessThanOrEqual(part.length)
+    }
+    // Every audience-month lands whole, in exactly one part.
+    for (const key of ['2026-01-01|client', '2026-01-01|competitor:a', '2026-02-01|client']) {
+      const holding = parts.filter((p) => p.some((r) => denominatorKey(r) === key))
+      expect(holding).toHaveLength(1)
+    }
+    expect(parts.flat().map((r) => r.n)).toEqual([1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('sends an audience-month wider than the cap alone rather than splitting it', () => {
+    const rows = [
+      { month: '2026-01-01', audience: 'client', n: 0 },
+      ...Array.from({ length: 5 }, (_, i) => ({ month: '2026-01-01', audience: 'competitor:a', n: i + 1 })),
+      { month: '2026-02-01', audience: 'client', n: 6 },
+    ]
+    const parts = chunkByAudienceMonth(rows, 3)
+    expect(parts.map((p) => p.length)).toEqual([1, 5, 1])
+  })
+
+  it('batches nothing into nothing', () => {
+    expect(chunkByAudienceMonth([], 500)).toEqual([])
   })
 
   it('keys a denominator on month and audience alone', () => {

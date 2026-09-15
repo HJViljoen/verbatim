@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { mergeMonthRows, monthStartOf, windowOf, type MergeResult } from './monthly'
+import { chunkByAudienceMonth, mergeMonthRows, monthStartOf, windowOf, type MergeResult } from './monthly'
 import type {
   Audience, FreezeColumns, MonthOrigin, MonthStatus, PlatformMix, StoredFreeze,
 } from './types'
@@ -360,7 +360,11 @@ export async function freezeEvidenceRefs(
   out.commentIds = new Set(rows.flatMap((r) => r.comment_ids)).size
   if (opts.dryRun) return out
 
-  for (const part of chunk(rows, 200)) {
+  // Batched on audience-month boundaries, never a flat `chunk`: decision K's
+  // back-read arm admits a first row into a closed audience-month only while
+  // no EARLIER transaction has written one, and every chunk is its own
+  // transaction — see `chunkByAudienceMonth`.
+  for (const part of chunkByAudienceMonth(rows, 200)) {
     const { error } = await admin.from(TABLE_EVIDENCE_REFS)
       .upsert(part, { onConflict: 'client_id,month,audience,object_kind,object_id' })
     if (error) throw new Error(`${TABLE_EVIDENCE_REFS} upsert: ${(error as { message?: string }).message ?? String(error)}`)

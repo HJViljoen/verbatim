@@ -1,6 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk } from '../chunk'
 import type { ConfigActor } from '../config-log'
 import { freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
@@ -764,18 +763,77 @@ export async function fillingMonths(
   return [...out].sort()
 }
 
+/**
+ * Pack rows into write-sized batches WITHOUT splitting one audience-month
+ * across two of them.
+ *
+ * DECISION K IS A ONE-STATEMENT PROMISE, and a plain `chunk` breaks it. The
+ * INSERT guard's back-read arm (`month_reading_frozen_insert_guard` clause (c),
+ * 20260918092000) admits a new row into a CLOSED audience-month only while the
+ * target table holds no row of that audience-month written by an EARLIER
+ * transaction. Every PostgREST request is its own transaction, so a 200/500-row
+ * boundary falling inside an audience-month puts its remainder in a second
+ * transaction, where the guard sees the first half and refuses — taking the
+ * whole statement with it, for ever: the rows already in the table are exactly
+ * what it refuses against next time, and `mergeMonthRows` then (correctly)
+ * drops the remainder into `refusedLate` on every later attempt.
+ *
+ * Measured on production before this existed: over `month_theme_readings`, the
+ * shape the refs read returns, Sealand's 1,611 rows across 81 audience-months
+ * chunk at 200 into 9 parts and ZERO of the 8 boundaries land on an
+ * audience-month edge; Össur's 1,346 across 96 gives 1 aligned boundary of 6.
+ * So the historical back-read — the ONE shot 201 already-frozen audience-months
+ * get — failed on its first misaligned boundary every time.
+ *
+ * Rows arrive grouped already (every read orders month, audience, object), so
+ * this costs one Map and nothing on the pipeline path, where
+ * `closedAudienceMonths` is empty and the guard never fires. An audience-month
+ * wider than `size` goes out ALONE and oversized: one statement is the
+ * contract, and a group that cannot fit still must not be split.
+ */
+export function chunkByAudienceMonth<T extends { month: string; audience: string }>(
+  rows: readonly T[],
+  size: number,
+): T[][] {
+  const groups = new Map<string, T[]>()
+  for (const row of rows) {
+    const key = denominatorKey(row)
+    const held = groups.get(key)
+    if (held) held.push(row)
+    else groups.set(key, [row])
+  }
+  const out: T[][] = []
+  let current: T[] = []
+  for (const group of groups.values()) {
+    if (current.length > 0 && current.length + group.length > size) {
+      out.push(current)
+      current = []
+    }
+    current.push(...group)
+    if (current.length >= size) {
+      out.push(current)
+      current = []
+    }
+  }
+  if (current.length > 0) out.push(current)
+  return out
+}
+
 /** Upsert on the primary key. The merge has already excluded every frozen row,
  *  and since 20260915092000 a `before update` trigger on both tables raises if
  *  one gets through anyway — so the narrow race (a row freezes between the read
  *  and this write) costs a failed step and a retry that re-reads, rather than
- *  the only copy of a month nobody can recompute. */
-export async function writeMonthRows<T extends object>(
+ *  the only copy of a month nobody can recompute.
+ *
+ *  Batched on audience-month boundaries, never a flat `chunk` — see
+ *  `chunkByAudienceMonth` for the decision-K reason. */
+export async function writeMonthRows<T extends { month: string; audience: string }>(
   admin: SupabaseClient,
   table: MonthTable,
   rows: readonly T[],
 ): Promise<number> {
   let written = 0
-  for (const part of chunk(rows, 500)) {
+  for (const part of chunkByAudienceMonth(rows, 500)) {
     const { error } = await admin.from(table.table).upsert(part, { onConflict: table.onConflict })
     if (error) throw new Error(`${table.table} upsert: ${(error as { message?: string }).message ?? String(error)}`)
     written += part.length
@@ -1085,7 +1143,7 @@ export async function freezeMonths(
     console.log('[monthly-reading] kinds, mood and attention skipped: 20260918094000_kind_mood_attention.sql has not been applied yet')
   }
 
-  const merges: { side: NumeratorSide; merge: MergeResult<MonthNumeratorRow>; rows: Record<string, unknown>[] }[] = []
+  const merges: { side: NumeratorSide; merge: MergeResult<MonthNumeratorRow>; rows: MonthNumeratorRow[] }[] = []
   for (const side of sides) {
     let fresh: readonly MonthNumeratorRow[]
     let stored: StoredFreeze[]
