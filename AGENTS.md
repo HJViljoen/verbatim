@@ -12,6 +12,20 @@ This version has breaking changes — APIs, conventions, and file structure may 
   string; renaming/renumbering strands in-flight runs across a deploy. Change
   step shape only between runs, and re-register after function changes:
   `curl -X PUT https://app.verbatimintel.com/api/inngest`.
+- **A new step is an additive id in its own position** — never a rename, a
+  renumber or a reorder. Two landed 2026-09-15: `embed-insights` (after the
+  Pass A wave, before `cross-reference`) and `freeze-months` (after
+  `persist-themes`, before `owned-events`). Both are non-fatal — logged, not
+  `noteError`'d, the `keyword-discovery` precedent — because a record kept
+  alongside the report must not make a clean run read `partial`; and both
+  no-op rather than retry when their migration has not been applied yet.
+- **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
+  / `window_end` / `window_basis`, rule in `lib/pipeline/window.ts`). Steps read
+  it off `OpenRunResult` / `GatherOptions`; no step recomputes the window from
+  `Date.now()` — three did, and two multi-day runs gathered and synthesised
+  against windows 18 and 9 days apart. Instagram and YouTube take the dates;
+  TikTok and Reddit take enums (`tiktokRangeFor` / `redditTimeFor`) and the
+  `inWindow` post-filter trims the surplus.
 - **Tests are pure-logic only** (`lib/**/*.test.ts`, vitest — no network, DB,
   or GPT). New pure pipeline logic gets a test; don't mock the world to test
   I/O glue.
@@ -30,6 +44,23 @@ This version has breaking changes — APIs, conventions, and file structure may 
   key; `themes.registry_id` is the stable identity, and cross-run joins use it.
   Do not join themes by `label` — labels churn ~88% run to run because a
   reasoning model writes them and reasoning models take no temperature.
+- **A period is dated by the comment, never by the run.** `run_id` / `run_date`
+  are a run's own bookkeeping and are never a period key outside `run_summary`
+  (`theme_observations.run_date` is the wall clock at persist — one run has
+  carried two dates). The series is per calendar month by `comments.comment_date`
+  through `lib/reading/monthly.ts` into `month_denominators` /
+  `month_theme_readings`. A month is `filling` until 30 days after it ends and
+  `frozen` after; a frozen row is never rewritten — the `month_reading_frozen_guard`
+  trigger refuses the UPDATE, so a late-discovered video shows as accrual and no
+  artefact is silently corrected.
+- **Every configuration write carries an actor.** `tracking_configs` UPDATEs go
+  through `updateWithActor` / `withActor` (`lib/config-log.ts`) so the
+  `tracking_configs_audit` trigger logs a person instead of a role; surfaces the
+  trigger cannot see (schedules, subjects, an entity re-tag, a re-gate) call
+  `recordConfigChange(s)`. Operator scripts pass `scriptActor('<the command>')`,
+  the pipeline `pipelineActor(runId, …)`; hand-run SQL is caught by the trigger
+  alone. A browser's stamp is never taken on trust — kind, user and label come
+  from identity, and `operator` survives only for a `platform_admins` row.
 - **The Supabase client is untyped** (no `Database` generic). Reads past 1000
   rows must use `selectAll` (`lib/supabase-admin.ts`) — a bare `.select()`
   silently caps at 1000.
@@ -37,6 +68,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   no raw scores; "comments" vs "conversations" have fixed meanings
   (`lib/calibration.ts` GLOSSARY). Copy claims about behavior must match the
   code (a page once claimed "no email is sent" while Resend sent).
+- **No direction word on the run-indexed series** (`RUN_INDEXED_DIRECTION_WORDS`
+  in `lib/config.ts`, false since 2026-09-15). Gaining / fading / New compares
+  two readings of one cumulative corpus taken at two arbitrary moments, not two
+  periods — a missed week moves the number as much as the conversation does.
+  Gated branches read the constant instead of deleting the code and gated pure
+  functions take it as an argument, so both answers stay tested and Phase 1
+  flips it one reader at a time as each re-bases on the monthly reading. Levels
+  are untouched, as is any period reading with an n and a band (the digest's
+  sentiment and share verdicts).
 - **Costs are real**: gather scripts spend Apify money; synthesis calls spend
   OpenAI. Prefer inspectors/dry-run flags (`run-relevance.ts`, `--no-merge`,
   send-report's default preview) when iterating.
