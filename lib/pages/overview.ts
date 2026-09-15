@@ -30,7 +30,7 @@ import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Directi
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
-import { monthStartOf, nextMonth } from '../reading/month-key'
+import { longMonth, monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
@@ -388,10 +388,14 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * as a sentence, so it takes the long form (WP10: "a surface that wants the
  * long form writes it in its own caption"). Written here rather than widened in
  * lib/format, because one caption is not a vocabulary change.
+ *
+ * MOVED DOWN, NOT COPIED (WP17). The weekly report composes the same stamp and
+ * must not drag this module's graph — a Supabase client, every reading loader —
+ * into a pure composer to get a month's name, so the formatter now lives beside
+ * the rest of the month arithmetic in lib/reading/month-key.ts and this stays
+ * as the name every existing caller already imports.
  */
-export function longMonth(month: string): string {
-  return new Date(`${monthStartOf(month)}T00:00:00.000Z`).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
-}
+export { longMonth }
 
 const pctOf = (k: number | null, n: number | null): number | null =>
   k == null || n == null || n <= 0 ? null : round1((k / n) * 100)

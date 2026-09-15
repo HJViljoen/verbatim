@@ -27,3 +27,14 @@ export function nextMonth(month: string): string {
   const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
   return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString())
 }
+
+/** The month before this one. */
+export function prevMonth(month: string): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
+}
+
+/** "September" — the month's name, UTC, for a sentence. */
+export function longMonth(month: string): string {
+  return new Date(`${monthStartOf(month)}T00:00:00.000Z`).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
+}
