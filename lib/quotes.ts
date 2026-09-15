@@ -334,8 +334,13 @@ async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, siz
  * Degrades to "nothing is known" on any read failure, including the one that
  * matters before 20260918095000 is applied. A quote with no reading renders as
  * it always has.
+ *
+ * Exported alongside `readingOf` for the one page that does NOT reach its
+ * renderables through a picker: Voice builds a theme pane's quotes straight off
+ * insight_evidence rows, so it attaches the reading itself. Every other surface
+ * gets it from fetchQuotesByAudience / fetchQuoteCitationsByAudience.
  */
-async function readTranslations(client: unknown, texts: readonly string[]): Promise<Map<string, { lang: string; english: string | null }>> {
+export async function readTranslations(client: unknown, texts: readonly string[]): Promise<Map<string, { lang: string; english: string | null }>> {
   const out = new Map<string, { lang: string; english: string | null }>()
   const hashes = [...new Set(texts.map((t) => cleanQuote(t)).filter(Boolean).map(quoteTextHash))]
   if (!hashes.length) return out
@@ -355,7 +360,7 @@ async function readTranslations(client: unknown, texts: readonly string[]): Prom
 }
 
 /** The reading for one text, or nothing. */
-const readingOf = (
+export const readingOf = (
   translations: Map<string, { lang: string; english: string | null }>,
   text: string | null,
 ): { lang?: string | null; english?: string | null } => {

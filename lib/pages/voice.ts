@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk } from '../chunk'
 import { selectAll } from '../supabase-admin'
-import { fetchInsightsByIds, fetchQuoteCitationsByAudience, readsAsHeroQuote, cleanQuote, type QuoteCitation } from '../quotes'
+import { fetchInsightsByIds, fetchQuoteCitationsByAudience, readsAsHeroQuote, cleanQuote, readTranslations, readingOf, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { prevalenceTier, type GlossaryKey, type PrevalenceTier } from '../calibration'
@@ -380,6 +380,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // same wave: the ribbon's citations (when the pool is already known) and the
   // open theme pane's evidence — none of the three depends on another.
   type EvidenceRow = { id: string; audience_insight_id: string; quote: string; redacted: boolean | null }
+  /** What `readTranslations` hands back: the cache's reading per text hash. */
+  type QuoteReadings = Awaited<ReturnType<typeof readTranslations>>
   const [insightRows, earlyCitations, detailEvidenceRes] = await Promise.all([
     fetchInsightsByIds<InsightMeta>(supabase, themes.flatMap((t) => t.supporting_insight_ids ?? []), 'id, journey_stage, platform'),
     stageFilter === 'all'
@@ -491,7 +493,15 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       meta?.likes && meta.likes > 0 ? `${fmtCompact(meta.likes)} likes` : null,
       c.theme.bucket === 'client' ? 'your audience' : c.theme.bucket.startsWith('competitor:') ? `${competitorName(c.theme.bucket)}’s audience` : null,
     ].filter(Boolean).join(' · ')
-    return { themeId: c.theme.id, themeLabel: c.theme.label, themeCategory: c.theme.category, quote: { ref: quoteRef.evidence(c.citation.evidenceId), text: c.quote }, who }
+    // The citation carries the cache's reading and the renderable is where a
+    // reader meets it, so it travels the last step too. Every other page
+    // reaches its renderables through createCitedQuotePicker, which does this
+    // for them; Voice builds them by hand and has to say so (item 8).
+    return {
+      themeId: c.theme.id, themeLabel: c.theme.label, themeCategory: c.theme.category,
+      quote: { ref: quoteRef.evidence(c.citation.evidenceId), text: c.quote, ...(c.citation.lang != null ? { lang: c.citation.lang, english: c.citation.english ?? null } : {}) },
+      who,
+    }
   })
 
   // ---- audience mood: the feeling Pass A read on each insight, counted —
@@ -500,7 +510,12 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const moods = topEmotions(emotionRows.filter((r) => !entityInsightIds || entityInsightIds.has(r.id)).map((r) => r.emotion), 3)
 
   // ---- the theme pane — evidence fetched above ----
-  const themeDetail = (t: ThemeRow, evidence: EvidenceRow[]): ThemeDetail => {
+  // The theme pane and the print deck are the only places in the product that
+  // build renderable quotes straight off insight_evidence rows rather than
+  // through a picker, so the cache's reading is attached here or nowhere
+  // (item 8). `readings` is keyed by text hash and is empty — harmlessly —
+  // before 20260918095000 is applied or if the read fails.
+  const themeDetail = (t: ThemeRow, evidence: EvidenceRow[], readings: QuoteReadings): ThemeDetail => {
     const quotes: Quote[] = []
     let withheld = 0
     const seen = new Set<string>()
@@ -509,7 +524,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       const q = cleanQuote(ev.quote)
       if (seen.has(q.toLowerCase()) || quotes.length >= DETAIL_QUOTES) continue
       seen.add(q.toLowerCase())
-      quotes.push({ ref: quoteRef.evidence(ev.id), text: q })
+      quotes.push({ ref: quoteRef.evidence(ev.id), text: q, ...readingOf(readings, q) })
     }
     const denom = groupSize(t.bucket)
     const h = historyOf(t)
@@ -522,7 +537,10 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
       quotes, withheld, memberThemes: t.member_themes,
     }
   }
-  const theme = detailTheme ? themeDetail(detailTheme, readRows<EvidenceRow>(detailEvidenceRes, 'voice.detailEvidence')) : null
+  const detailEvidence = readRows<EvidenceRow>(detailEvidenceRes, 'voice.detailEvidence')
+  const theme = detailTheme
+    ? themeDetail(detailTheme, detailEvidence, await readTranslations(supabase, detailEvidence.map((e) => e.quote ?? '')))
+    : null
 
   // `full` (print): every confirmed theme under the current filters, in full —
   // one evidence read for all of them, grouped per theme. Capped: a deck with
@@ -544,7 +562,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     }
     const byInsight = new Map<string, EvidenceRow[]>()
     for (const r of rows) byInsight.set(r.audience_insight_id, [...(byInsight.get(r.audience_insight_id) ?? []), r])
-    allThemes = wanted.map((t) => themeDetail(t, t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME).flatMap((id) => byInsight.get(id) ?? [])))
+    const fullReadings = await readTranslations(supabase, rows.map((r) => r.quote ?? ''))
+    allThemes = wanted.map((t) => themeDetail(t, t.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME).flatMap((id) => byInsight.get(id) ?? []), fullReadings))
   }
 
   const legendItems: GlossaryKey[] = showNew ? [...LEGEND_ITEMS, 'new'] : LEGEND_ITEMS
