@@ -25,6 +25,14 @@ export interface ResearchQuote {
   text: string
   commentId: string | null
   videoId: string | null
+  /** The cache's reading, in memory only and on exactly the same terms as
+   *  `text`: stripped at the step boundary with the words, and resolved back
+   *  onto the ref by `resolveQuotes` before the document is composed. Typed
+   *  here because `pickQuote` both FILTERS and RENDERS on it (item 8) — a
+   *  quote that loses its reading between the agent and the page is a
+   *  translated voice silently dropped from every finding. */
+  lang?: string | null
+  english?: string | null
 }
 
 export interface ResearchPoint {
@@ -85,7 +93,7 @@ export async function runResearch(
             themeLabels: p.themeRefs.map((t) => t.label),
             conversationCount: p.conversationCount,
             quotes: p.quotes
-              .map((qq) => ({ ref: qq.commentId ? quoteRef.comment(qq.commentId) : qq.videoId ? quoteRef.video(qq.videoId) : '', text: qq.text, commentId: qq.commentId, videoId: qq.videoId }))
+              .map((qq) => ({ ref: qq.commentId ? quoteRef.comment(qq.commentId) : qq.videoId ? quoteRef.video(qq.videoId) : '', text: qq.text, commentId: qq.commentId, videoId: qq.videoId, lang: qq.lang, english: qq.english }))
               .filter((qq) => qq.ref),
             questionId: q.id,
           })),

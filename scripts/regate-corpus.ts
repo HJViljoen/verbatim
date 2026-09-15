@@ -33,6 +33,18 @@ import type { GatherConfig } from '../lib/gather/types'
 // the most destructive operation an operator can run — the rows are gone, and
 // a report already sent keeps citing comments that no longer exist — so the
 // record of having run it is the least the log can carry.
+//
+// AND IT IS THE ONE THING THAT EMPTIES A FROZEN MONTH'S EVIDENCE (item 31a,
+// 2026-09-18). month_evidence_refs promises that a frozen point can still be
+// opened to WHICH videos it was read on, and the promise rests on videos never
+// being deleted: the retention sweep TOMBSTONES a video the platform stopped
+// serving, precisely because videos(id) cascades into the whole analysis
+// (inngest/functions/retention.ts). This script deletes video rows outright, in
+// dependency order, and nothing stales the frozen months that name them —
+// month_evidence_refs' UPDATE guard would refuse a correction even if something
+// tried. After a re-gate those points read "counted, not quotable" with no
+// videos behind them either, and no run can put them back: a frozen month is
+// never revisited. Weigh that against the corpus being wrong.
 
 import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 

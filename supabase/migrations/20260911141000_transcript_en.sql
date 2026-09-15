@@ -15,6 +15,15 @@
 -- a hero quote never translates). Nothing downstream stores, freezes or
 -- displays a translated word; insight_evidence.quote is still the original.
 --
+-- NARROWED 2026-09-18, and the file is left as it was applied. The paragraph
+-- above is true of TRANSCRIPTS and stays true of them: this column is still
+-- read only by a model and is still never displayed or frozen. What it is no
+-- longer true of is translation in general — design item 8 gives a quoted
+-- COMMENT an English rendering shown beside the original and stamped as a
+-- machine translation (20260918095000_quote_translations.sql, which also
+-- rewrites this column's live comment). The 2026-08-09 decision cited above
+-- now covers this column and nothing else.
+--
 -- Three additive columns:
 --   transcript_en            the English rendering (null = not translated, and
 --                            for an English or unknown-language video, never

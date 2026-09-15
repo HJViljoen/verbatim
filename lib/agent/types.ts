@@ -27,7 +27,7 @@ export interface GroundedPoint {
   voices: 'client' | 'category'
   /** Real comments. A quote carries the id it came from — an uncitable quote
    *  never reaches this register. */
-  quotes: { text: string; commentId: string | null; videoId: string | null }[]
+  quotes: { text: string; commentId: string | null; videoId: string | null; lang?: string | null; english?: string | null }[]
   /** Distinct source videos behind `insightIds`. Computed in code from the
    *  cited rows, never taken from the model (the 2026-08-19 lesson). */
   conversationCount: number

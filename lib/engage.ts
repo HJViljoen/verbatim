@@ -15,7 +15,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk } from './chunk'
 import { selectAll } from './supabase-admin'
-import { cleanQuote, englishHits } from './quotes'
+import { cleanQuote, readableQuote } from './quotes'
 
 export const ENGAGE_CATEGORIES = [
   'purchase_intent',
@@ -118,12 +118,19 @@ export function rankEngageCandidates(
     const t = Date.parse(c.comment.commentDate)
     if (!Number.isFinite(t) || t < windowStart) return false
     if (opts.vocab && !isOnTopic(c, opts.vocab)) return false
-    // A reply digest is only actionable in the client's language: hard-gate on
-    // reading as English (the hero-quote rule, lib/quotes.ts), min-length so
-    // "yes!!" can't take a slot. Unlike hero quotes there's no max — display
-    // truncates instead of dropping a long genuine question.
+    // A reply digest is only actionable in a language the client can answer
+    // in: gate on READABILITY (quoteAvailability, lib/quotes.ts — the one
+    // English gate since item 8), min-length so "yes!!" can't take a slot.
+    // Unlike hero quotes there's no max — display truncates instead of dropping
+    // a long genuine question.
+    //
+    // Nothing moves here in Phase 1: this path carries no reading from the
+    // cache, so quoteAvailability falls back to exactly the englishHits rule
+    // this line used to be. Design §5 puts the inbox's own "full quote with its
+    // language and English rendering" in Phase 2, with Content; when that lands
+    // it passes the reading in and this gate opens by itself.
     const text = cleanQuote(c.comment.text)
-    return text.length >= 12 && englishHits(text) >= 2
+    return text.length >= 12 && readableQuote({ text })
   })
 
   fresh.sort(

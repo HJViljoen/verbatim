@@ -30,7 +30,7 @@ export function WorkingsDrawer({ workings, selectedId, blockLabel }: { workings:
                 <span className="rounded-full bg-tile px-1.5 py-0.5 ring-1 ring-border">{fmt(p.conversationCount)} conversation{p.conversationCount === 1 ? '' : 's'}</span>
                 {p.themeLabels.slice(0, 3).map((t) => <span key={t}>{t}</span>)}
               </p>
-              <Quotes items={p.quotes.map((q) => q.text).filter(Boolean).slice(0, 2)} />
+              <Quotes items={p.quotes.filter((q) => q.text).slice(0, 2).map((q) => ({ text: q.text, lang: q.lang, english: q.english }))} />
             </div>
           ))}
           {concerns.map((c) => {

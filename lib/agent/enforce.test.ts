@@ -235,6 +235,33 @@ describe('quote handling across points', () => {
     expect(out.grounded).toHaveLength(2)
     expect(out.grounded[1].quotes).toHaveLength(1)
   })
+
+  // Item 8: the ordering asks whether this reader can read the quote, not
+  // whether the bytes look English, and the register carries the reading so the
+  // page can print it under the original.
+  it('ranks a translated voice with the readable ones, and carries its rendering', () => {
+    const spanish = 'Me encanta esta pierna, cambió mi vida por completo'
+    const base = insight('a', 'v1', 0)
+    // Rank 0, so the Spanish quote leads on rank alone — but nothing can read it.
+    const untranslated: RetrievedInsight = {
+      ...base,
+      quotes: [
+        { quote: spanish, rank: 0, evidenceId: 'e-es', commentId: 'c-es', videoId: 'v1', lang: 'es', english: null },
+        { quote: 'the socket rubs after about an hour of walking', rank: 1, evidenceId: 'e-en', commentId: 'c-en', videoId: 'v1' },
+      ],
+    }
+    const lead = (i: RetrievedInsight) =>
+      enforceRegisters({ answer: 'x', grounded: [{ text: 'Comfort.', insightIds: ['a'] }] }, [i], opts).grounded[0].quotes[0]
+
+    expect(lead(untranslated).text).toBe('the socket rubs after about an hour of walking')
+
+    const english = 'I love this leg, it changed my life completely'
+    const translated: RetrievedInsight = {
+      ...untranslated,
+      quotes: [{ ...untranslated.quotes[0], english }, untranslated.quotes[1]],
+    }
+    expect(lead(translated)).toEqual({ text: spanish, commentId: 'c-es', videoId: 'v1', lang: 'es', english })
+  })
 })
 
 describe('judgement can actually cite the evidence', () => {

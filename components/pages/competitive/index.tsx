@@ -303,7 +303,7 @@ const detail: R = (d, mode) => {
             </DetailSection>
             {f.quotes.length > 0 && (
               <DetailSection label={f.competitorName ? `${f.competitorName}’s audience, in their words` : 'In their words'}>
-                <div className="flex flex-col gap-2.5">{f.quotes.map((q, i) => <Verbatim key={i} quote={q.text} />)}</div>
+                <div className="flex flex-col gap-2.5">{f.quotes.map((q, i) => <Verbatim key={i} quote={q.text} lang={q.lang} english={q.english} />)}</div>
               </DetailSection>
             )}
             <DetailSection label="Grounded in">

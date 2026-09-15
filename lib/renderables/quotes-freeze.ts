@@ -1,4 +1,4 @@
-import type { Quote } from './types'
+import type { Quote, QuoteResolution } from './types'
 
 /**
  * Freeze and thaw the quotes inside tile-ready page data.
@@ -80,12 +80,25 @@ function walk(node: unknown, fn: (q: Quote) => Quote | null): unknown {
   return node
 }
 
-/** Empty every quote's text; return the frozen copy and the refs it carries. */
+/** Empty every quote's text; return the frozen copy and the refs it carries.
+ *
+ *  `english` and `lang` go with the text, and the reason is the same reason
+ *  `text` goes: an English rendering is a third party's words (item 8,
+ *  2026-09-18). Stored on the frozen quote it would sit inside
+ *  report_snapshots.data — the one place this module exists to keep words out
+ *  of — and it would survive the erasure that took the original, which is the
+ *  exact failure the ref spine was built to make impossible. Both come back at
+ *  render from comment_translations, through the same door and under the same
+ *  `redacted = false` rule as the original (lib/quotes.ts
+ *  fetchQuoteResolutionsByRefs). `lang` travels with them rather than being
+ *  kept as a harmless fact, because a language label on a quote whose words are
+ *  gone is a statement about a person nobody can check. */
 export function freezeQuotes<T>(data: T): { data: T; refs: string[] } {
   const refs = new Set<string>()
   const frozen = walk(data, (q) => {
     refs.add(q.ref)
-    return { ...q, text: '' }
+    const { lang: _lang, english: _english, ...rest } = q
+    return { ...rest, text: '' }
   }) as T
   return { data: frozen, refs: [...refs] }
 }
@@ -100,11 +113,21 @@ export function collectQuoteRefs(data: unknown): string[] {
   return [...refs]
 }
 
-/** Put the words back from a ref → text map. Unresolvable quotes are removed. */
-export function resolveQuotes<T>(data: T, texts: Map<string, string>): T {
+/** Put the words back from a ref → text map. Unresolvable quotes are removed.
+ *
+ *  A resolution may be a bare string (the words, as it always was) or a
+ *  `{ text, lang, english }` triple — the reading item 8 adds. Both are
+ *  accepted so that a caller who does not want the English, or a fixture that
+ *  never had it, keeps working unchanged. A resolution with no `text` is not a
+ *  resolution: the quote is dropped, exactly as an erased one is. */
+export function resolveQuotes<T>(data: T, texts: Map<string, string | QuoteResolution>): T {
   return walk(data, (q) => {
-    const text = texts.get(q.ref)
-    if (!text) return null
-    return { ...q, text }
+    const r = texts.get(q.ref)
+    if (!r) return null
+    if (typeof r === 'string') return { ...q, text: r }
+    if (!r.text) return null
+    const out: Quote = { ...q, text: r.text }
+    if (r.lang != null) { out.lang = r.lang; out.english = r.english ?? null }
+    return out
   }) as T
 }

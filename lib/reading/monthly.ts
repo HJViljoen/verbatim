@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
 import type { ConfigActor } from '../config-log'
+import { freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   PANEL_LEAD_MONTHS,
@@ -767,6 +768,10 @@ export interface FreezeSummary {
    *  tracking change that re-based it. Null when nothing was frozen. */
   panelReason: PanelReason | null
   skippedKindMoodAttention: boolean
+  /** The ids behind the theme numbers, written down beside them (item 31a).
+   *  Absent when there is no run to attribute a clustering to — a seed writing
+   *  denominators alone reads no citations. */
+  evidenceRefs?: EvidenceRefSummary
 }
 
 /**
@@ -1127,7 +1132,42 @@ export async function freezeMonths(
       'against a fresh reading, never an addition to the record.',
     )
   }
-  if (opts.dryRun) return summary
+  // The ids behind those numbers (item 31a). Its own function because BOTH
+  // paths need it: the inspector has to be able to preview what the refs
+  // freeze would write — previewing it is the one thing the inspector is for —
+  // and an `if (opts.dryRun) return` above the call made `freezeEvidenceRefs`'
+  // own dryRun flag unreachable.
+  //
+  // Non-fatal on either path, and the only non-fatal write in this function: a
+  // record kept alongside the report must not make a clean run read `partial`
+  // (the keyword-discovery precedent), and the months themselves are complete
+  // without it. Said out loud rather than swallowed.
+  const evidenceRefs = async (dryRun: boolean): Promise<EvidenceRefSummary | undefined> => {
+    if (!opts.runId) return undefined
+    try {
+      return await freezeEvidenceRefs(admin, {
+        clientId: opts.clientId,
+        runId: opts.runId,
+        months,
+        now,
+        dryRun,
+        clusteringKey,
+        closedAudienceMonths,
+      })
+    } catch (e) {
+      console.error(
+        `[monthly-reading] the evidence-id freeze${dryRun ? ' preview' : ''} failed for ${opts.clientId} over ${months.join(' ')}: ` +
+        `${e instanceof Error ? e.message : String(e)}. The months are frozen; their ids are not, and a month ` +
+        'that closes without them cannot be given them later.',
+      )
+      return undefined
+    }
+  }
+
+  if (opts.dryRun) {
+    summary.evidenceRefs = await evidenceRefs(true)
+    return summary
+  }
 
   // ORDER MATTERS, and it is the only thing standing between a failed write and
   // a month lost for good. Each table is its own statement and any of them can
@@ -1155,6 +1195,12 @@ export async function freezeMonths(
   for (const m of merges) {
     if (m.rows.length > 0) await writeMonthRows(admin, m.side.table, m.rows)
   }
+  // The refs write is on the SAME side of the line as every numerator, and for
+  // the same reason: the denominator is the commit marker the INSERT guard
+  // reads, so a refs row has to land before its audience-month's denominator
+  // freezes or the database refuses it for ever — no later visit returns to a
+  // closed month.
+  summary.evidenceRefs = await evidenceRefs(false)
   if (denomRows.length > 0) {
     try {
       await writeMonthRows(admin, MONTH_DENOMINATOR_TABLE, denomRows)

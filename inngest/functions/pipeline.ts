@@ -16,6 +16,7 @@ import { attributeRunKeywords } from '@/lib/pipeline/keyword-attribution'
 import { discoverRunKeywords } from '@/lib/pipeline/keyword-discovery'
 import { planClassifyMetaBatches, runClassifyMetaBatch } from '@/lib/pipeline/classify-meta'
 import { planTranslateBatches, translateBatch } from '@/lib/pipeline/translate'
+import { planQuoteTranslations, translateQuotesBatch } from '@/lib/pipeline/translate-quotes'
 import { planOcrBatches, ocrBatch, planOcrBackfill, ocrBackfillBatch, emptyOcrResult, mentionsMissingColumn } from '@/lib/pipeline/ocr'
 import { ingestOwnedPosts, supportsOwnedProfile, buildOwnedCensus, entitySlug, type OwnedEntity } from '@/lib/gather/owned'
 import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, mergeTallies, formatTally } from '@/lib/gather/transcript-backfill'
@@ -45,7 +46,7 @@ import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, is
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
-import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
+import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, PASS_A_ERROR_RATIO, ISOLATED_BATCH_ERROR_RATIO, RUN_MODEL_BUDGET_USD, TRANSCRIBE_PARALLEL, BACKFILL_PARALLEL, TRANSLATE_PARALLEL, TRANSLATE_QUOTES_PARALLEL, OCR_PARALLEL, OCR_CAP, captureRunFlags, periodSince, effectivePeriod, type RunFlags } from '@/lib/config'
 import type { Platform } from '@/lib/gather/types'
 import type { CommentRow, SynthesisVideoRow } from '@/lib/pipeline/types'
 import { SYNTHESIS_VIDEO_COLUMNS } from '@/lib/pipeline/types'
@@ -1241,6 +1242,69 @@ export const runPipeline = inngest.createFunction(
     else if (passADegraded) console.warn(`[pass-a] ${passADegraded} (already recorded as failed batch steps)`)
     else if (passA.errored > 0) console.warn(`[pass-a] ${passA.errored} video call(s) failed under the ${PASS_A_ERROR_RATIO * 100}% ratio; re-read next run. First: ${passA.errors[0] ?? ''}`)
 
+    // 4g. QUOTE TRANSLATION (Phase 1 WP6, design item 8, 2026-09-18). Every
+    //     comment this tenant's CURRENT analysis cites gets a detected language
+    //     and, where it is not English, an English rendering — cached on
+    //     (comment, exact text) so a comment is paid for once and an edited one
+    //     is re-read.
+    //
+    //     Here, right after the Pass A wave and before embed-insights, for the
+    //     same reason that one sits where it does: every videos.analyzed_run_id
+    //     pointer has moved by now, so audience_insights_current means what it
+    //     says and the read reaches the whole cited corpus rather than only
+    //     what this run re-analysed. It cannot live inside pass-a:N-of-M — a
+    //     video whose analysis is already current never enters a batch again,
+    //     and its comments would never be translated.
+    //
+    //     Logged, NOT noteError'd — the embed-insights and keyword-discovery
+    //     precedent. A reading aid kept alongside the report must not make a
+    //     clean run read 'partial'; an uncached comment is simply offered again
+    //     next run, which is the retry. It is also a step that can run before
+    //     its migration is applied: until then it is a logged no-op that has
+    //     read nothing and spent nothing.
+    const quoteTranslation = { needing: 0, deferred: 0, translated: 0, english: 0, cached: 0, failed: 0, cost: 0, rateLimited: false }
+    {
+      const plan = await step
+        .run('plan-translate-quotes', () => planQuoteTranslations(clientId))
+        .catch((e) => {
+          console.error(`[translate-quotes] plan out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return { batches: [] as string[][], needing: 0, deferred: 0, comments: 0 }
+        })
+      quoteTranslation.needing = plan.needing
+      quoteTranslation.deferred = plan.deferred
+      for (let w = 0; w < plan.batches.length; w += TRANSLATE_QUOTES_PARALLEL) {
+        const wave = await Promise.all(
+          plan.batches.slice(w, w + TRANSLATE_QUOTES_PARALLEL).map((commentIds, j) =>
+            step
+              .run(`translate-quotes:${w + j + 1}-of-${plan.batches.length}`, () =>
+                translateQuotesBatch({ clientId, runId, commentIds, batchNo: w + j + 1 }),
+              )
+              // Per-step catch (the transcribe fan-out's precedent): one batch
+              // out of retries must not abandon the rest, and its comments stay
+              // uncached and are re-planned next run.
+              .catch((e: unknown) => ({
+                translated: 0, english: 0, cached: 0, failed: commentIds.length, costUsd: 0, rateLimited: false,
+                errors: [`translate-quotes step failed: ${e instanceof Error ? e.message.slice(0, 200) : String(e).slice(0, 200)}`],
+              })),
+          ),
+        )
+        for (const r of wave) {
+          quoteTranslation.translated += r.translated
+          quoteTranslation.english += r.english
+          quoteTranslation.cached += r.cached
+          quoteTranslation.failed += r.failed
+          quoteTranslation.cost += r.costUsd
+          if (r.rateLimited) quoteTranslation.rateLimited = true
+          for (const err of r.errors) console.warn(`[translate-quotes] ${err}`)
+        }
+      }
+      if (plan.needing) {
+        console.log(
+          `[translate-quotes] ${plan.needing} texts needed across ${plan.comments} comments · ${quoteTranslation.translated} translated · ${quoteTranslation.english} already English · ${quoteTranslation.cached} already cached · ${quoteTranslation.failed} not placed · ${quoteTranslation.deferred} deferred by the cap${quoteTranslation.rateLimited ? ' · RATE LIMITED' : ''} · ~$${quoteTranslation.cost.toFixed(3)}`,
+        )
+      }
+    }
+
     // Keep the agent's retrieval index current (Phase 0, design item 36). Here,
     // right after the Pass A wave: every videos.analyzed_run_id pointer has
     // moved by now, so audience_insights_current means what it says and the
@@ -1502,6 +1566,22 @@ export const runPipeline = inngest.createFunction(
             `${r.skippedKindMoodAttention ? ' · kinds/mood/attention skipped: M5 not applied' : ''}`,
           )
           const all = [r.denominators, ...Object.values(r.sides)]
+          // The ids behind those numbers, said separately (item 31a). An
+          // operator reading this log is the only person who will ever see
+          // whether "which videos was this read on" was answerable for these
+          // months, and `refusedLate` is the number that says the record
+          // declined to take a point.
+          const refs = r.evidenceRefs
+          console.log(
+            refs === undefined
+              ? '[freeze-months] evidence ids: not attempted — this visit has no run to attribute a clustering to'
+              : refs.missing
+                ? '[freeze-months] evidence ids: skipped — 20260918095000_quote_translations.sql has not been applied yet'
+                : `[freeze-months] evidence ids ${refs.written} written (${refs.frozen} now frozen, ` +
+                  `${refs.keptFrozen} already frozen and left alone, ${refs.deleted} dropped, ` +
+                  `${refs.refusedLate} refused because their months have closed) · ` +
+                  `${refs.videoIds} videos and ${refs.commentIds} comments named`,
+          )
           return {
             months: r.months.length,
             denominators: r.denominators.written,
@@ -1513,6 +1593,12 @@ export const runPipeline = inngest.createFunction(
             keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
             heldStale: all.reduce((n, s) => n + s.heldStale, 0),
             refusedLate: all.reduce((n, s) => n + s.refusedLate, 0),
+            evidenceRefs: refs
+              ? {
+                  written: refs.written, frozen: refs.frozen, refusedLate: refs.refusedLate,
+                  videoIds: refs.videoIds, commentIds: refs.commentIds, missing: refs.missing,
+                }
+              : null,
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.

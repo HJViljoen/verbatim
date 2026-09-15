@@ -18,11 +18,24 @@ import { logAiCall } from './ai-log'
 // because the standing instruction is accuracy and quality of output first.
 //
 // THE INVARIANT this serves: the ORIGINAL transcript stays the evidence. A
-// translation is a reading aid for the extraction model and nothing else — it
-// is never quoted, never displayed, never frozen into a snapshot. Pass A gets
-// both blocks and is told which one it may quote from, so the verbatim-quote
-// validator (which matches against the clipped ORIGINAL the model saw) keeps
-// working unchanged and the "in their own words" promise (2026-08-09) holds.
+// TRANSCRIPT translation is a reading aid for the extraction model and nothing
+// else — it is never quoted, never displayed, never frozen into a snapshot.
+// Pass A gets both blocks and is told which one it may quote from, so the
+// verbatim-quote validator (which matches against the clipped ORIGINAL the
+// model saw) keeps working unchanged and the "in their own words" promise
+// holds.
+//
+// THAT IS A RULE ABOUT THIS FILE, NOT ABOUT TRANSLATION (narrowed 2026-09-18).
+// As first written it said the invariant in absolute terms and cited the
+// 2026-08-09 decision "a hero quote never translates", which design item 8
+// reverses for QUOTED COMMENTS: a comment shown to a client now carries an
+// English rendering underneath the original, stamped as a machine translation
+// (lib/pipeline/translate-quotes.ts, comment_translations). Nothing about a
+// transcript changed — a transcript is a creator's speech, this column is still
+// only ever read by a model, and the quote validator still matches the
+// original. The narrowing is recorded here because the repo's rule is that a
+// copy claim about behaviour matches the code, and this claim had outgrown its
+// subject.
 //
 // Translation is its own pipeline wave rather than part of transcription, so it
 // covers the historical corpus and the platform-URL backfill path too — a

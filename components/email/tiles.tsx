@@ -79,7 +79,7 @@ const hero: E<DashboardData> = ({ hero: h }) => {
       {h.beats.slice(0, 3).map((b) => (
         <p key={b.metric} style={{ ...text.body, fontSize: 13, margin: '8px 0 0' }}>{b.before}<strong>{b.figure}</strong>{b.after}</p>
       ))}
-      {h.quotes.slice(0, 2).map((q, i) => <Quote key={i} text={q.text} />)}
+      {h.quotes.slice(0, 2).map((q, i) => <Quote key={i} text={q.text} lang={q.lang} english={q.english} />)}
       {h.quotes.length > 0 && h.voices > 0 ? <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{h.quotes.length > 1 ? 'two' : 'one'} of {fmtInt(h.voices)} voices behind the top recommendation</div> : null}
     </div>
   )

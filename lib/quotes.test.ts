@@ -9,6 +9,8 @@ import {
   readsAsHeroQuote,
   englishHits,
   createQuotePicker,
+  quoteAvailability,
+  readableQuote,
   type QuoteRow,
 } from './quotes'
 import { audienceOf } from './rivals'
@@ -302,5 +304,107 @@ describe('fetchQuoteTextsByRefs — the read-failure contract', () => {
     expect(await fetchQuoteTextsByRefs(admin, ['e:ev1'], { onReadError: 'throw' })).toEqual(
       new Map([['e:ev1', 'I love this bag']]),
     )
+  })
+})
+
+// ---- The one English gate (item 8, decision A, 2026-09-18) ------------------
+
+describe('quoteAvailability — the one English gate', () => {
+  const es = 'Me encanta esta pierna, cambió mi vida por completo'
+  const en = 'the socket rubs after about an hour of walking'
+
+  it('falls back to the old heuristic where nothing has read the text', () => {
+    expect(quoteAvailability({ text: en })).toBe('english')
+    expect(quoteAvailability({ text: es })).toBe('untranslated')
+  })
+
+  it('takes the cache\'s word over the heuristic in both directions', () => {
+    // "Love it 🔥" scores zero English function words and is English.
+    expect(quoteAvailability({ text: 'Love it 🔥', lang: 'en', english: null })).toBe('english')
+    // A Portuguese comment the heuristic scored as English ("doía" → do + a).
+    expect(quoteAvailability({ text: 'me doía mucho a mi', lang: 'pt', english: 'it hurt me a lot' })).toBe('translated')
+  })
+
+  it('is untranslated for another language with no rendering yet', () => {
+    expect(quoteAvailability({ text: es, lang: 'es', english: null })).toBe('untranslated')
+    expect(quoteAvailability({ text: es, lang: 'es', english: '   ' })).toBe('untranslated')
+  })
+
+  it('reads a regional tag as English', () => {
+    expect(quoteAvailability({ text: 'blah', lang: 'en-GB' })).toBe('english')
+  })
+
+  it('readableQuote is everything but untranslated — the "English available" filter', () => {
+    expect(readableQuote({ text: es, lang: 'es', english: 'I love this leg, it changed my life' })).toBe(true)
+    expect(readableQuote({ text: es, lang: 'es', english: null })).toBe(false)
+    expect(readableQuote({ text: en })).toBe(true)
+  })
+})
+
+describe('readsAsHeroQuote with a reading', () => {
+  const es = 'Me encanta esta pierna, cambió mi vida por completo'
+
+  it('still refuses anything outside card length, translated or not', () => {
+    expect(readsAsHeroQuote('too short', { lang: 'en' })).toBe(false)
+    expect(readsAsHeroQuote('x'.repeat(200), { lang: 'es', english: 'y'.repeat(200) })).toBe(false)
+  })
+
+  it('lets a translated quote lead a card, and an untranslated one not', () => {
+    expect(readsAsHeroQuote(es)).toBe(false)
+    expect(readsAsHeroQuote(es, { lang: 'es', english: 'I love this leg, it changed my life completely' })).toBe(true)
+    expect(readsAsHeroQuote(es, { lang: 'es', english: null })).toBe(false)
+  })
+})
+
+describe('the picker, once a quote can be read', () => {
+  const slugs = new Map<string, string>()
+  const untranslated: QuoteRow[] = [
+    { quote: 'Me encanta esta pierna, cambió mi vida por completo', rank: 1, evidenceId: 'ev-es' },
+  ]
+  const translated: QuoteRow[] = [
+    { ...untranslated[0], lang: 'es', english: 'I love this leg, it changed my life completely' },
+  ]
+
+  it('rejects a non-English quote nothing has read — today\'s behaviour, unchanged', () => {
+    const pick = createCitedQuotePicker(new Map([['a1', untranslated]]), slugs)
+    expect(pick(['a1'], 2, 'fit and comfort')).toEqual([])
+  })
+
+  it('takes it once the cache has an English rendering, and carries the rendering', () => {
+    const pick = createCitedQuotePicker(new Map([['a1', translated]]), slugs)
+    const out = pick(['a1'], 2, 'fit and comfort')
+    expect(out).toEqual([{
+      ref: 'e:ev-es',
+      text: 'Me encanta esta pierna, cambió mi vida por completo',
+      lang: 'es',
+      english: 'I love this leg, it changed my life completely',
+    }])
+  })
+
+  it('carries nothing extra for a quote nothing has read', () => {
+    const rows: QuoteRow[] = [{ quote: 'the socket rubs after about an hour of walking', rank: 1, evidenceId: 'ev-en' }]
+    const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
+    expect(pick(['a1'], 1, 'socket')).toEqual([{ ref: 'e:ev-en', text: 'the socket rubs after about an hour of walking' }])
+  })
+
+  // The one movement the collapse makes BEFORE any translation exists, named so
+  // it is a decision and not a surprise. quoteScore's gate used to be
+  // `englishHits >= 2` alone; the unified gate is readsAsHeroQuote's
+  // `englishHits >= 2 && englishHits > romanceHits`, which is strictly tighter.
+  const mixed = 'no me gusta pero es muy bueno para mi hermano'
+
+  it('drops a Romance-majority quote with two incidental English words, which quoteScore alone used to take', () => {
+    expect(englishHits(mixed)).toBeGreaterThanOrEqual(2) // the old gate passed it
+    expect(readsAsHeroQuote(mixed)).toBe(false) // the hero pool already refused it
+    expect(quoteAvailability({ text: mixed })).toBe('untranslated') // and now so does the picker
+    const pick = createCitedQuotePicker(new Map([['a1', [{ quote: mixed, rank: 1, evidenceId: 'ev-mix' }]]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([])
+  })
+
+  it('hands the same quote back once the cache has read it, as a translation', () => {
+    const english = 'I do not like it but it is very good for my brother'
+    const rows: QuoteRow[] = [{ quote: mixed, rank: 1, evidenceId: 'ev-mix', lang: 'es', english }]
+    const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([{ ref: 'e:ev-mix', text: mixed, lang: 'es', english }])
   })
 })
