@@ -123,6 +123,30 @@ describe('dropUnverdictedDirection — the rule that did not exist', () => {
     expect(out.text).not.toContain('conversation is,')
   })
 
+  // One earned label used to licence every direction word beside it, so this
+  // sentence shipped an unearned claim about fit on durability's verdict.
+  it('does not let one earned object license a second object’s direction', () => {
+    const out = dropUnverdictedDirection('Durability is growing and fit is fading.', [verdict('durability', 'growing')])
+    expect(out.text).toBe('')
+    expect(out.droppedDirection).toBe(1)
+  })
+
+  it('keeps a sentence where every directional clause names its own earned object', () => {
+    const raw = 'Durability is growing and fit is fading.'
+    const verdicts = [verdict('durability', 'growing'), verdict('fit', 'fading')]
+    expect(dropUnverdictedDirection(raw, verdicts).text).toBe(raw)
+  })
+
+  it('does not split on a bare comma, which brackets an apposition as often as a clause', () => {
+    const raw = 'Durability, the theme buyers keep returning to, is growing.'
+    expect(dropUnverdictedDirection(raw, [verdict('durability', 'growing')]).text).toBe(raw)
+  })
+
+  it('keeps a licensed claim beside a clause that makes no directional one', () => {
+    const raw = 'Durability is growing, and buyers ask about the fit.'
+    expect(dropUnverdictedDirection(raw, [verdict('durability', 'growing')]).text).toBe(raw)
+  })
+
   // Probe from the research: 49 of 8,192 theme descriptions use a direction
   // word about the SUBJECT. The word list cannot tell those apart, so the slot
   // policy does — and this is the sentence that proves the policy matters.

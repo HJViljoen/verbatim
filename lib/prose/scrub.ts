@@ -247,6 +247,17 @@ export function dropDigitSentences(raw: string, figures: FigureTable, opts: Digi
  * contain — the model is never handed an id to type. That is a loose match and
  * it is deliberately loose in the safe direction: a sentence naming no object
  * at all ("Attention is fading.") is licensed by nothing and drops.
+ *
+ * THE LICENCE IS PER CLAUSE, not per sentence. One earned label used to licence
+ * every direction word beside it, so "Durability is growing and fit is fading."
+ * survived on durability's verdict alone and shipped an unearned claim about
+ * fit — loose in the UNSAFE direction, which is the one thing the match may not
+ * be. A sentence is split on `;` and on the conjunctions that join two clauses,
+ * and every clause that names a direction must name an earned object itself.
+ * The residual looseness is an elided subject ("durability is growing and
+ * gaining"): the second clause names no object, so the sentence drops. That is
+ * the safe direction, and the slots this rule runs on all have a code-composed
+ * fallback behind them.
  */
 export function dropUnverdictedDirection(raw: string, verdicts: readonly Verdict[] = []): ProseScrub {
   const { kept, offending } = scanDirection(raw, verdicts)
@@ -285,11 +296,26 @@ function scanDirection(raw: string, verdicts: readonly Verdict[]): { kept: strin
   const offending: string[] = []
   for (const sentence of splitSentences(raw ?? '')) {
     if (directionHits(sentence).length === 0) { kept.push(sentence); continue }
-    const lower = sentence.toLowerCase()
-    if (earned.some((label) => lower.includes(label))) { kept.push(sentence); continue }
-    offending.push(sentence)
+    const licensed = clausesOf(sentence).every((clause) => {
+      if (directionHits(clause).length === 0) return true
+      const lower = clause.toLowerCase()
+      return earned.some((label) => lower.includes(label))
+    })
+    if (licensed) kept.push(sentence)
+    else offending.push(sentence)
   }
   return { kept, offending }
+}
+
+/** A sentence's clauses, for the licence check only. Split on a semicolon and
+ *  on the words that join two clauses — never on a bare comma, which brackets
+ *  an apposition ("Durability, the theme buyers keep returning to, is growing")
+ *  as often as it separates one. */
+function clausesOf(sentence: string): string[] {
+  return sentence
+    .split(/;|\s+(?:and|but|while|whereas|though|although|yet)\s+/i)
+    .map((c) => c.trim())
+    .filter(Boolean)
 }
 
 // ---- The policy table -------------------------------------------------------
