@@ -382,6 +382,23 @@ describe('buildSubjects', () => {
     expect(b.rows).toEqual([])
   })
 
+  it('reads an absent row as a zero only where the month was read at all', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability'), subject('s2', 'Price')],
+      // September was read (s1 has a row); August was not read for anybody.
+      months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
+      denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
+    })
+    const price = b.rows.find((r) => r.id === 's2') as SubjectRow
+    // s2 was not raised in a month that WAS read: a real zero, on both readers.
+    expect(price.category.k).toBe(0)
+    expect(price.category.observed).toBe(true)
+    expect(price.spark[price.spark.length - 1]).toBe(0)
+    // August was never computed: not a zero, and not "0.0% 0 of 1,200".
+    expect(price.spark[price.spark.length - 2]).toBeNull()
+  })
+
   it('carries "at this point last month" on the category side only', () => {
     const b = buildSubjects({
       subjects: [subject('s1', 'Durability')],

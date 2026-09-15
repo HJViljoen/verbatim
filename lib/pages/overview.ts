@@ -1562,12 +1562,26 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const byKey = new Map<string, StoredSubjectRow>()
   for (const r of input.months) byKey.set(`${monthStartOf(r.month)}|${r.audience}|${r.subject_id}`, r)
   const rivalAudience = input.leadRival ? rivalKey(input.leadRival) : null
+  // AN ABSENT ROW IS A ZERO ONLY WHERE THE MONTH WAS READ AT ALL.
+  // `monthly_subject_readings` writes no zero rows, so a subject missing from
+  // an audience-month that OTHER subjects have rows in really did come up in
+  // no video. A month with no subject rows at all was never computed, and
+  // reading that as zero prints "0.0% 0 of 388" for a month nothing looked at
+  // — and produces a real banded change out of it next month. The two readers
+  // disagreed about which was which: the table said 0 wherever a denominator
+  // existed and the sparkline said "no reading" for the same cell.
+  const readMonths = new Set(input.months.map((r) => `${monthStartOf(r.month)}|${r.audience}`))
+  const kOf = (subjectId: string, audience: string, month: string): number | null => {
+    const row = byKey.get(`${month}|${audience}|${subjectId}`)
+    if (row) return row.videos
+    return readMonths.has(`${month}|${audience}`) ? 0 : null
+  }
 
   const side = (subjectId: string, audience: string, month: string | null): SideReading => {
     if (!month) return { k: null, n: null, pct: null, verdict: null, observed: false }
     const n = input.perAudience.get(`${month}|${audience}`) ?? null
-    const k = byKey.get(`${month}|${audience}|${subjectId}`)?.videos ?? (n == null ? null : 0)
-    return { k, n, pct: pctOf(k, n), verdict: null, observed: n != null }
+    const k = n == null ? null : kOf(subjectId, audience, month)
+    return { k, n, pct: pctOf(k, n), verdict: null, observed: n != null && k != null }
   }
 
   const rows: SubjectRow[] = active.map((s) => {
@@ -1577,7 +1591,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     const point = (audience: string, month: string): SeriesPoint => ({
       month,
       videos: input.perAudience.get(`${month}|${audience}`) ?? null,
-      k: byKey.get(`${month}|${audience}|${s.id}`)?.videos ?? null,
+      k: kOf(s.id, audience, month),
       audience,
       // A subject's membership is not a clustering artefact, so its months are
       // comparable across a boundary a theme's are not (lib/subjects/read.ts).
