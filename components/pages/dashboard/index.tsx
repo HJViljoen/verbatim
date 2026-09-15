@@ -437,7 +437,7 @@ function FunnelBody({ d }: { d: D }) {
           </li>
         ))}
       </ol>
-      <p className="mt-4 text-[11px] text-muted-foreground">a conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation</p>
+      <p className="mt-4 text-[11px] text-muted-foreground">a conversation is one video and the comments written under it that month; themes are confirmed only when heard in more than one conversation</p>
     </>
   )
 }

@@ -110,7 +110,35 @@ export function evidenceOf(count: number, denom: number | null | undefined, noun
 }
 
 export const GLOSSARY = {
-  conversations: ['Conversations', 'one video and the comments it sparked — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
+  // ---- The thirteen words (design §0, "the thirteen words a reader needs") --
+  // update · month · week · video · audience · subject · theme · kind · rival ·
+  // move · level · change · direction, with the flags `new` and `gone quiet`.
+  // No reading surface prints a term outside this list — the four platform
+  // names and the reading date excepted, because those are proper nouns and a
+  // date. Everything below them is legacy: each entry belongs to a page Phase 1
+  // retires or rewrites, and it goes when that page does (THIRTEEN_WORDS is the
+  // list a new surface may draw from; see the note on it).
+  update: ['Update', 'one delivery — a gather, an analysis, and everything written from it. Updates are counted and dated in the record; an update is never a period, and no figure on a reading page is indexed by one'],
+  month: ['Month', 'the calendar month a comment was WRITTEN in — the one clock this product keeps. A month is re-read by every update until 30 days after it ends, marked "still filling" until then, and frozen after'],
+  week: ['Week', 'seven days inside a month. Printed only on the weekly report and This week, always beside the month it is stated against, never on its own'],
+  video: ['Video', 'one video and the comments written under it that month — the unit every share is a share of. A video posted in June and still drawing comment in September belongs to both months. Comments are counted separately, as comments'],
+  audience: ['Audience', 'whose videos a figure is about: yours, one named rival’s, or the rest of the category. Every figure states which, and no two are pooled silently'],
+  subject: ['Subject', 'something you told us you care about, in your own words, dated and logged — counted by exactly the rule a theme is'],
+  theme: ['Theme', 'something the category kept saying, grouped and named from what was read. The grouping is ours and it can change; when it does, the line says so'],
+  kind: ['Kind', 'what a comment was doing — a question, an objection, praise. One comment is one kind, and the kinds do not sum to the conversation'],
+  rival: ['Rival', 'a brand you named in Settings. A rival that leaves the tracked set terminates its line with a break, never falling to zero, and a renamed rival is one line with the rename marked on it'],
+  move: ['Move', 'something you did — a launch, a campaign, a message you pushed — dated by you and read against the audiences you did not touch. Your statement, not ours; we only report what the conversation did after it'],
+  level: ['Level', 'what a figure is running at, always printed with its denominator: "3 of the 28 videos in your audience"'],
+  change: ['Change', 'the difference between two levels, banded with each side’s video count as n. Inside the band it reads "no clear change"; under 100 videos a side, or 10 of the object’s own, "too few to compare"'],
+  direction: ['Growing · fading · flat', 'a direction word, earned only by three consecutive monthly readings under one grouping and assigned in code, never by the model. One comparison can say a thing moved; it can never say which way it is going'],
+  gone_quiet: ['Gone quiet', 'heard in earlier months and not in this one — a flag, not a direction, and computed only over updates that actually produced themes'],
+  // `new` — the other flag — is the entry below. Its wording is still the
+  // run-indexed one ("not present in your previous update") because that is
+  // what the pages printing it today actually compute; it re-bases on the
+  // monthly series with the page that prints it, and the code that already
+  // reads the months calls the flag by the same name (VerdictFlag 'new').
+  // ---- Legacy · each retires with the page that prints it -------------------
+  conversations: ['Conversations', 'one video and the comments written under it that month — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
   dominant: ['Dominant', "at least 40% of the group's analysed conversations (minimum 10)"],
   widespread: ['Widespread', "at least 15% of the group's analysed conversations (minimum 5)"],
   recurring: ['Recurring', 'heard in more than one conversation, below Widespread'],
@@ -141,6 +169,166 @@ export type GlossaryKey = keyof typeof GLOSSARY
 
 /** Tooltip text for a glossary term. */
 export const glossaryRule = (key: GlossaryKey): string => GLOSSARY[key][1]
+
+/**
+ * The thirteen words, in the design's own order, plus the two flags.
+ *
+ * A reading surface built from Phase 1 on draws its vocabulary from HERE and
+ * prints no term outside it. The rest of GLOSSARY is legacy — `dominant`,
+ * `early_signal`, `say_vs_hear`, `moving`, `about_you` and the others each
+ * belong to a page that Phase 1 retires or rewrites, and deleting an entry
+ * while the word is still on the screen that prints it would leave the word
+ * unexplained, which is worse than a long glossary. They go with their pages.
+ */
+export const THIRTEEN_WORDS = [
+  'update', 'month', 'week', 'video', 'audience', 'subject', 'theme', 'kind',
+  'rival', 'move', 'level', 'change', 'direction',
+] as const satisfies readonly GlossaryKey[]
+
+/** The two flags that sit beside the thirteen. A flag is not a direction: it
+ *  says an object was or was not there, never which way it is going. */
+export const READER_FLAGS = ['new', 'gone_quiet'] as const satisfies readonly GlossaryKey[]
+
+// ---- The direction vocabulary — the scrubber's match list ------------------
+// One list, three users, so they cannot drift (design item 9): the code that
+// PRINTS a direction word, the prompt rule that BANS one, and the scrubber
+// that ENFORCES the ban (lib/prose/scrub.ts).
+//
+// NOT `MAGNITUDE_WORDS` (lib/prose/scrub.ts), which is about how MUCH; this
+// one is about which WAY. `growing` and `increasing` are the only two members
+// of both. And NOT `DIRECTION_WORDS_BY_READER` (lib/config.ts), which is the
+// per-reader gate on whether a direction may be printed at all.
+//
+// CALIBRATION. Measured on production prose, three classes of false positive
+// decide the shape of this list and of `directionHits`:
+//
+//  1. `up` / `down` as verb particles. A 24-word regex over the 51 stored
+//     executive-brief beats returns two hits and BOTH are particles — "unless
+//     Össur shows up with clearer education", "happening outside Össur unless
+//     it shows up earlier". A bare `up` in the list deletes correct prose, so
+//     `up` and `down` count only in a movement frame: after a movement verb
+//     ("moved up", "is down"), before `from`/`on`/`against`/`by`/`since`, or
+//     in front of a points noun ("up 4 points").
+//  2. A direction word describing the SUBJECT rather than a measurement —
+//     "fielding errors that change momentum", "practical skills like growing
+//     food" (49 of 8,192 theme descriptions, 13 of 8,192 theme labels). No
+//     word list can tell those apart from a movement claim, so they are held
+//     off by the POLICY TABLE instead: a theme's label and description are the
+//     model's own words and are never direction-scrubbed.
+//  3. Foreign-language homographs. The magnitude strip already deletes `vast`
+//     from inside the Dutch "dat staat vast" because it is a word-delete with
+//     no idea where a quote starts. This list is only ever used for a SENTENCE
+//     DROP, never a word delete, and `directionHits` ignores quoted spans:
+//     inside quotation marks the words are the speaker's, not a claim of ours.
+export const DIRECTION_WORDS = [
+  // The product's own three, and the flags.
+  'growing', 'grew', 'grows', 'growth',
+  'fading', 'faded', 'fades',
+  'flat', 'flattened',
+  'new', 'gone quiet',
+  // The words a model reaches for instead.
+  'rising', 'rise', 'risen', 'rose',
+  'declining', 'decline', 'declined', 'declines',
+  'falling', 'fell', 'fallen',
+  'climbing', 'climbed',
+  'gaining', 'gained', 'gains',
+  'losing ground', 'lost ground',
+  'momentum',
+  'steady', 'steadily', 'holding steady',
+  'trending', 'trended',
+  'accelerating', 'accelerated',
+  'slowing', 'slowed',
+  'shrinking', 'shrank', 'shrunk',
+  'increasing', 'increased', 'increase',
+  'decreasing', 'decreased', 'decrease',
+  'more and more', 'less and less',
+  'upward', 'downward', 'uptick', 'downtick',
+  'surging', 'surged', 'surge',
+  'picked up', 'tapered off',
+  // Particle-shaped, matched only in a movement frame (class 1 above).
+  'up', 'down',
+] as const
+
+/** The three that need a frame around them before they are a claim. `up` and
+ *  `down` are verb particles far more often than measurements (class 1), and
+ *  `new` is an ordinary adjective — "the new socket", "new to the category" —
+ *  far more often than it is the flag. Each is counted only in the frame that
+ *  makes it one. */
+const FRAMED = new Set(['up', 'down', 'new'])
+
+/** Verbs after which `up` / `down` is a measurement, not a particle. */
+const MOVEMENT_VERBS =
+  'moved|moves|move|moving|went|goes|go|going|ticked|ticks|edged|edges|nudged|nudges|' +
+  'is|was|are|were|be|been|sits|sat|held|holding|trending|trended|came|comes|tracking|tracked'
+
+/** Nouns after which `up` / `down` is a measurement ("up 4 points"). */
+const POINT_NOUNS = 'points?|pts?|percent|%'
+
+const escape = (word: string): string => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** Word-boundary matcher for one entry; multi-word entries match as a phrase. */
+const wordRe = (word: string): RegExp => new RegExp(`\\b${escape(word).replace(/\s+/g, '\\s+')}\\b`, 'gi')
+
+/**
+ * Spans a reader would read as somebody else's words: anything between a pair
+ * of quotation marks, straight or curly. A direction word inside one is being
+ * QUOTED, not claimed, and nothing this product does to its own prose may
+ * reach inside a quotation (§6.2: the magnitude strip does, and mutilates
+ * Dutch and German text every time it runs).
+ */
+function quotedSpans(text: string): [number, number][] {
+  const spans: [number, number][] = []
+  for (const m of text.matchAll(/"[^"]*"|“[^”]*”|'[^']{2,}'|‘[^’]{2,}’/g)) {
+    const start = m.index ?? 0
+    spans.push([start, start + m[0].length])
+  }
+  return spans
+}
+
+/**
+ * Every direction word this text claims, lower-cased, in the order found and
+ * without repeats. Empty means the sentence makes no directional claim.
+ *
+ * Quoted spans are skipped, and `up` / `down` count only inside a movement
+ * frame. This is the whole detection half of the direction-word rule; the
+ * decision of what to DO about a hit belongs to the scrubber, which needs the
+ * verdicts to know whether the claim was earned.
+ */
+export function directionHits(text: string): string[] {
+  const source = text ?? ''
+  if (!source) return []
+  const spans = quotedSpans(source)
+  const quoted = (index: number): boolean => spans.some(([a, b]) => index >= a && index < b)
+  const found: string[] = []
+  for (const word of DIRECTION_WORDS) {
+    const re = wordRe(word)
+    for (const m of source.matchAll(re)) {
+      const at = m.index ?? 0
+      if (quoted(at)) continue
+      if (FRAMED.has(word) && !inClaimFrame(word, source, at, m[0].length)) continue
+      if (!found.includes(word)) found.push(word)
+      break
+    }
+  }
+  return found
+}
+
+/** Is this occurrence a claim about movement or presence, or just English? */
+function inClaimFrame(word: string, text: string, at: number, length: number): boolean {
+  const before = text.slice(Math.max(0, at - 40), at)
+  const after = text.slice(at + length, at + length + 40)
+  if (word === 'new') {
+    // The flag, not the adjective: "new this month", "is new", "newly heard".
+    if (/\b(is|are|was|were|reads?|counts? as|flagged)\s+$/i.test(before)) return true
+    if (/^\s+(this|last)\s+(month|week|update|quarter)\b/i.test(after)) return true
+    if (/^\s+(to|in)\s+(the\s+)?(reading|months?|series|record)\b/i.test(after)) return true
+    return false
+  }
+  if (new RegExp(`\\b(${MOVEMENT_VERBS})\\s+$`, 'i').test(before)) return true
+  if (/^\s+(from|on|against|by|since|versus|vs\.?)\b/i.test(after)) return true
+  if (new RegExp(`^\\s+[\\w.,]*\\s*(${POINT_NOUNS})\\b`, 'i').test(after)) return true
+  return false
+}
 
 // ---- Ladder 4 · Priority — positional, forced scarcity ----------------------
 // The model ranks (relative judgment is reliable); code assigns the words

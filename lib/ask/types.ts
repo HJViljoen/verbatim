@@ -35,7 +35,8 @@ export interface ClaimResult {
    *  enforced in code, never trusted to the model. */
   theySay: string | null
   /** Distinct source videos behind the verdict. A conversation is one video and
-   *  the comments it sparked (lib/calibration.ts), so this is the honest unit. */
+   *  the comments written under it that month (lib/calibration.ts), so this is the
+   *  honest unit. */
   conversationCount: number
   themeRefs: ThemeRef[]
   /** Grounding for live quote resolution. No quote text is stored. */

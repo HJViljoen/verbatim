@@ -20,7 +20,7 @@ export default async function SmokePage({ searchParams }: { searchParams: Promis
     context: 'Dashboard · Sealand · 23 Aug 2026',
     footer: (
       <MethodNote
-        data={{ company: 'Sealand', period: 'Update of 23 Aug 2026', platforms: ['tiktok', 'instagram', 'youtube'], videos: 412, comments: 4950, note: 'A conversation is one video and the comments beneath it; a theme is heard when at least two conversations carry it.' }}
+        data={{ company: 'Sealand', period: 'Update of 23 Aug 2026', platforms: ['tiktok', 'instagram', 'youtube'], videos: 412, comments: 4950, note: 'A conversation is one video and the comments written under it that month; a theme is heard when at least two conversations carry it.' }}
       />
     ),
   }

@@ -486,7 +486,7 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
       platforms: platformsTracked,
       videos: summary?.total_videos != null ? Number(summary.total_videos) : null,
       comments: summary?.total_comments != null ? Number(summary.total_comments) : null,
-      note: 'A conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation.',
+      note: 'A conversation is one video and the comments written under it that month; themes are confirmed only when heard in more than one conversation.',
     },
   }
 }

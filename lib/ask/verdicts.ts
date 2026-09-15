@@ -106,7 +106,7 @@ export interface Grounding {
  *   outlive their insights (prune-stale-analysis), so a check re-evaluated
  *   against an older run would otherwise count rows that are gone.
  * - Counts are distinct SOURCE VIDEOS of the surviving cited insights — a
- *   conversation is one video and the comments it sparked. The theme's own
+ *   conversation is one video and the comments written under it that month. The theme's own
  *   total breadth is not the claim's evidence.
  */
 export function validateVerdicts(
