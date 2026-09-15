@@ -13,6 +13,8 @@ import {
   isMissingCompetitors,
   isRivalAudience,
   renameFrom,
+  renameRival,
+  retireRival,
   renameLabel,
   rivalKey,
   rivalNameOf,
@@ -310,5 +312,86 @@ describe('isMissingCompetitors — surviving a deploy that lands before M1', () 
     expect(isMissingCompetitors(null)).toBe(false)
     expect(isMissingCompetitors({ code: '42P01', message: 'relation "public.subjects" does not exist' })).toBe(false)
     expect(isMissingCompetitors({ code: '23505', message: 'duplicate key value violates unique constraint on competitors' })).toBe(false)
+  })
+})
+
+describe('renameRival / retireRival — the TypeScript half', () => {
+  const actor = { kind: 'user' as const, user_id: 'u1', label: 'owner@sealand.test · settings', at: '2026-11-12T08:00:00Z', nonce: 'n1' }
+
+  it('calls the function by the names the migration declares', () => {
+    // A misspelled RPC argument is invisible until the day someone renames a
+    // rival in production, so the two sides are compared here instead.
+    const sql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
+    const decl = sql.slice(sql.indexOf('create or replace function public.rename_rival'))
+    const declared = [...decl.slice(0, decl.indexOf(') returns jsonb')).matchAll(/^\s*(p_[a-z_]+)\s+/gm)].map((m) => m[1])
+    const source = readFileSync(new URL('./rivals.ts', import.meta.url), 'utf8')
+    const passed = [...source.slice(source.indexOf("rpc('rename_rival'")).matchAll(/^\s*(p_[a-z_]+):/gm)].map((m) => m[1])
+    expect(declared).toEqual(['p_client_id', 'p_competitor_id', 'p_new_name', 'p_actor', 'p_affects_months', 'p_note'])
+    expect(passed).toEqual(declared)
+  })
+
+  it('hands the whole rename to the one transaction and returns its counts', async () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = []
+    const client = {
+      rpc: (fn: string, args: Record<string, unknown>) => {
+        calls.push({ fn, args })
+        return Promise.resolve({
+          data: { renamed: true, old_name: 'Topo Designs', new_name: 'Topo', videos: 98, theme_registry: 21, themes: 4, change_id: 'ch1' },
+          error: null,
+        })
+      },
+    } as never
+
+    const result = await renameRival(
+      { client, clientId: 'c1', actor, affectsMonths: '[2025-06-01,2026-10-01)' },
+      'rival-1',
+      'Topo',
+    )
+    expect(calls).toHaveLength(1)
+    expect(calls[0].fn).toBe('rename_rival')
+    expect(calls[0].args.p_affects_months).toBe('[2025-06-01,2026-10-01)')
+    expect(result.videos).toBe(98)
+    expect(result.theme_registry).toBe(21)
+  })
+
+  it('retires without deleting, and logs the audience the line ends under', async () => {
+    const updates: Record<string, unknown>[] = []
+    const logged: Record<string, unknown>[] = []
+    const client = {
+      from: (table: string) => ({
+        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'r1', name: 'Poler', retired_at: null }, error: null }) }) }) }),
+        update: (payload: Record<string, unknown>) => {
+          updates.push({ table, ...payload })
+          return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) }
+        },
+        insert: (rows: Record<string, unknown>[]) => {
+          logged.push(...rows)
+          return Promise.resolve({ error: null })
+        },
+      }),
+    } as never
+
+    const out = await retireRival({ client, clientId: 'c1', actor }, 'r1', new Date('2026-11-12T08:00:00Z'))
+    expect(out).toEqual({ retired: true, name: 'Poler' })
+    expect(updates).toEqual([{ table: 'competitors', retired_at: '2026-11-12T08:00:00.000Z' }])
+    expect(logged).toHaveLength(1)
+    expect(logged[0].surface).toBe('rivals')
+    expect(logged[0].affects_audiences).toEqual(['competitor:Poler'])
+    expect(String(logged[0].note)).toContain('Poler')
+    // Calibrated: a client reads this line. No key, no jargon, no zero.
+    expect(String(logged[0].note)).not.toMatch(/competitor:|bucket|audience key/)
+  })
+
+  it('retiring an already-retired rival writes nothing at all', async () => {
+    const touched: string[] = []
+    const client = {
+      from: () => ({
+        select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: () => Promise.resolve({ data: { id: 'r1', name: 'Poler', retired_at: '2026-09-09T16:10:00Z' }, error: null }) }) }) }),
+        update: () => { touched.push('update'); return { eq: () => ({ eq: () => Promise.resolve({ error: null }) }) } },
+        insert: () => { touched.push('insert'); return Promise.resolve({ error: null }) },
+      }),
+    } as never
+    expect(await retireRival({ client, clientId: 'c1', actor }, 'r1')).toEqual({ retired: false, name: 'Poler' })
+    expect(touched).toEqual([])
   })
 })
