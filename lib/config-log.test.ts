@@ -22,6 +22,7 @@ import {
   updateWithActor,
   withActor,
   type ConfigActor,
+  type ConfigChangeInput,
 } from './config-log'
 
 // The configuration change log's pure half. The other half is a database
@@ -378,6 +379,60 @@ describe('recordConfigChange — non-fatal by design', () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {})
     const f = fake({ message: 'relation "public.config_changes" does not exist' })
     expect(await recordConfigChange(f.client, { clientId: CLIENT, surface: 'regate', actor: actor() })).toBe(false)
+    expect(err).toHaveBeenCalled()
+  })
+
+  // A deploy can reach production before M1 is applied by hand, and PostgREST
+  // rejects an insert whole on an unknown column. Without the retry a re-tag
+  // moves 253 videos and then loses the ONLY record of it — the surface, the
+  // two distributions, the row count and the sentence — over a band.
+  const sequenced = (errors: ({ message?: string; code?: string } | null)[]) => {
+    const inserted: Record<string, unknown>[][] = []
+    return {
+      inserted,
+      client: {
+        from: () => ({
+          insert: async (rows: Record<string, unknown> | Record<string, unknown>[]) => {
+            inserted.push(Array.isArray(rows) ? rows : [rows])
+            return { error: errors[inserted.length - 1] ?? null }
+          },
+        }),
+      },
+    }
+  }
+  const withBand = (surface: 'entity_retag'): ConfigChangeInput => ({
+    clientId: CLIENT, surface, actor: actor(),
+    note: 'the record the 2026-09-09 re-tag never left',
+    affects: { audiences: ['competitor:Topo Designs'], months: '[2021-12-01,2026-10-01)' },
+  })
+
+  it('keeps the row when the database has not got the affects columns yet', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'affects_months' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, withBand('entity_retag'))).toBe(true)
+    expect(f.inserted).toHaveLength(2)
+    expect(f.inserted[0][0]).toHaveProperty('affects_months')
+    expect(f.inserted[1][0]).not.toHaveProperty('affects_months')
+    expect(f.inserted[1][0]).not.toHaveProperty('affects_audiences')
+    // The record itself survives the retry intact.
+    expect(f.inserted[1][0].surface).toBe('entity_retag')
+    expect(f.inserted[1][0].note).toBe('the record the 2026-09-09 re-tag never left')
+    expect(err).toHaveBeenCalled()
+  })
+
+  it('does not retry when the rejected column is not one of the two', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'source' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, withBand('entity_retag'))).toBe(false)
+    expect(f.inserted).toHaveLength(1)
+    expect(err).toHaveBeenCalled()
+  })
+
+  it('does not retry a row that never carried a band', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const f = sequenced([{ code: 'PGRST204', message: "Could not find the 'affects_months' column of 'config_changes' in the schema cache" }, null])
+    expect(await recordConfigChange(f.client, { clientId: CLIENT, surface: 'regate', actor: actor() })).toBe(false)
+    expect(f.inserted).toHaveLength(1)
     expect(err).toHaveBeenCalled()
   })
 

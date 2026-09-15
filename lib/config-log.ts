@@ -204,10 +204,11 @@ export function changeRow(input: ConfigChangeInput): Record<string, unknown> {
     source: input.source ?? 'logged',
     rows_affected: input.rowsAffected ?? null,
     note: input.note ? dbSafeText(input.note) : null,
-    // Absent stays absent rather than becoming an explicit NULL, so a row
-    // written by a deploy that has landed before its migration is rejected on
-    // the column that does not exist yet instead of silently losing the note
-    // with it. `recordConfigChanges` already survives that by logging loudly.
+    // Absent stays absent rather than becoming an explicit NULL: a writer that
+    // cannot say leaves the column alone, and NULL there means "not known".
+    // A deploy that lands before M1 therefore sends a column the database does
+    // not have — `recordConfigChanges` catches exactly that and retries without
+    // these two, because losing the band must not cost the row.
     ...(input.affects?.audiences ? { affects_audiences: input.affects.audiences.map((a) => dbSafeText(a)) } : {}),
     ...(input.affects?.months ? { affects_months: input.affects.months } : {}),
   }
@@ -408,15 +409,50 @@ export async function recordConfigChange(admin: InsertableClient, input: ConfigC
   return (await recordConfigChanges(admin, [input])) === 1
 }
 
-/** The same, for a set of changes written together. Returns how many landed. */
+/** The two columns M1 adds, and the only part of a change row that a database
+ *  which has not seen M1 yet can reject. */
+const AFFECTS_COLUMNS = ['affects_audiences', 'affects_months'] as const
+
+/** The same row without what a change BROKE — the surface, the before/after,
+ *  the counts and the sentence, which is the record itself. */
+function withoutAffects(row: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...row }
+  for (const column of AFFECTS_COLUMNS) delete out[column]
+  return out
+}
+
+/** The same, for a set of changes written together. Returns how many landed.
+ *
+ *  Retries once without `affects_audiences` / `affects_months` when the
+ *  database has not seen M1 yet. PostgREST rejects an insert WHOLE on an
+ *  unknown column, so without this a deploy that lands before the migration
+ *  turns "the band was not computed" into "the change was never recorded" —
+ *  and for a corpus re-tag that record is unrecoverable once the process
+ *  exits (`videos` has no history). The band is the part we can afford to
+ *  lose; the row is not. Same shape as `updateWithActor`'s unstamped retry:
+ *  the rejected statement wrote nothing, so the retry cannot write twice. */
 export async function recordConfigChanges(admin: InsertableClient, inputs: ConfigChangeInput[]): Promise<number> {
   if (inputs.length === 0) return 0
-  const { error } = await admin.from(CONFIG_CHANGES_TABLE).insert(inputs.map(changeRow))
-  if (error) {
-    console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${error.message ?? 'unknown error'}`)
+  const rows = inputs.map(changeRow)
+  const { error } = await admin.from(CONFIG_CHANGES_TABLE).insert(rows)
+  if (!error) return inputs.length
+
+  const carried = rows.some((row) => AFFECTS_COLUMNS.some((column) => column in row))
+  const missing = AFFECTS_COLUMNS.find((column) => isMissingColumnError(error, column))
+  if (carried && missing) {
+    console.error(
+      `[config-log] config_changes.${missing} does not exist yet — re-inserting ${inputs.length} change(s) ` +
+      `for ${inputs[0].clientId} WITHOUT the affected audiences and months. The change is recorded; ` +
+      'what it moved is not, and cannot be worked out later.',
+    )
+    const { error: bare } = await admin.from(CONFIG_CHANGES_TABLE).insert(rows.map(withoutAffects))
+    if (!bare) return inputs.length
+    console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${bare.message ?? 'unknown error'}`)
     return 0
   }
-  return inputs.length
+
+  console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${error.message ?? 'unknown error'}`)
+  return 0
 }
 
 // ---- The corpus operations --------------------------------------------------
