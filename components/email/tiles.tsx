@@ -4,7 +4,7 @@ import { BUCKET_COLOR, priorityLabel, type DashboardData } from '../../lib/pages
 import type { ContentData } from '../../lib/pages/content'
 import type { CompetitiveData } from '../../lib/pages/competitive'
 import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
-import { movementRows } from '../../lib/dashboard-tiles'
+import { movementRows, movementShowsChange } from '../../lib/dashboard-tiles'
 import { RUN_INDEXED_DIRECTION_WORDS } from '../../lib/config'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
@@ -156,7 +156,9 @@ const movement: E<DashboardData> = ({ movement: mv, updatesCount }, ctx) => {
           return row([r.label, <span key="v" style={{ ...text.mono, fontWeight: 600 }}>{st.fmt(r.value)}</span>, <DeltaText key="d" value={r.delta} unit={st.unit} decimals={st.decimals} good={st.good} />], { aligns: ['left', 'right', 'right'], widths: [undefined, 64, 70] })
         }))}
       </div>
-      <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{updatesCount} updates · {shortDate(mv.dates[0])} → {shortDate(mv.dates[mv.dates.length - 1])} · change vs the previous update</div>
+      {/* The footnote describes a column, so it goes when the column does:
+          on the cumulative layer the deltas are gated (D1). */}
+      <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{updatesCount} updates · {shortDate(mv.dates[0])} → {shortDate(mv.dates[mv.dates.length - 1])}{movementShowsChange(mv) ? ' · change vs the previous update' : ''}</div>
     </div>
   )
 }

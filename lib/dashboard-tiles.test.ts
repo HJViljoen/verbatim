@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   themeTiers, topThemes, bucketKind, platformSplit, sentimentSplit, shareBreakdown, pointDelta,
-  movement, movementRows, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
+  movement, movementRows, movementShowsChange, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
 } from './dashboard-tiles'
 
 describe('themeTiers', () => {
@@ -165,8 +165,8 @@ describe('movement', () => {
 })
 
 describe('movementRows', () => {
-  const mv = (keys: string[]) => ({
-    dates: ['2026-08-02', '2026-08-09'], leadCompetitor: 'Ottobock', layer: 'period' as const,
+  const mv = (keys: string[], layer: 'period' | 'cumulative' = 'period') => ({
+    dates: ['2026-08-02', '2026-08-09'], leadCompetitor: 'Ottobock', layer,
     rows: keys.map((key) => ({ key, label: key, series: [1, 2], value: 2, delta: 1 })) as never,
   })
   // A snapshot frozen before the gate still carries the row, and "the email as
@@ -175,6 +175,33 @@ describe('movementRows', () => {
     expect(movementRows(mv(['yourShare', 'positive', 'themes']), false).map((r) => r.key)).toEqual(['yourShare', 'positive'])
     expect(movementRows(mv(['yourShare', 'themes'])).map((r) => r.key)).toEqual(['yourShare']) // the shipped default
     expect(movementRows(mv(['yourShare', 'themes']), true).map((r) => r.key)).toEqual(['yourShare', 'themes'])
+  })
+
+  // D1's exemption is for PERIOD figures — a window's own share, sentiment and
+  // conversation count, each with an n and a band. On the cumulative fallback
+  // (Sealand today: 4 of 10 run_summary rows predate the period columns) the
+  // same four rows are differences between two readings of a growing corpus,
+  // which is what the themes row is gated for.
+  it('keeps the levels and drops the series and deltas on the cumulative layer', () => {
+    const rows = movementRows(mv(['yourShare', 'volume'], 'cumulative'), false)
+    expect(rows.map((r) => r.key)).toEqual(['yourShare', 'volume'])
+    expect(rows.map((r) => r.value)).toEqual([2, 2])
+    expect(rows.map((r) => r.series)).toEqual([[], []])
+    expect(rows.map((r) => r.delta)).toEqual([null, null])
+    // The shipped default is the gated one.
+    expect(movementRows(mv(['volume'], 'cumulative'))[0].delta).toBeNull()
+  })
+
+  it('leaves the period layer\'s deltas alone, and gives the cumulative ones back in Phase 1', () => {
+    expect(movementRows(mv(['volume']), false)[0]).toMatchObject({ series: [1, 2], delta: 1 })
+    expect(movementRows(mv(['volume'], 'cumulative'), true)[0]).toMatchObject({ series: [1, 2], delta: 1 })
+  })
+
+  it('says whether a tile may print "change vs the previous update"', () => {
+    expect(movementShowsChange(mv(['volume']), false)).toBe(true)
+    expect(movementShowsChange(mv(['volume'], 'cumulative'), false)).toBe(false)
+    expect(movementShowsChange(mv(['volume'], 'cumulative'))).toBe(false) // the shipped default
+    expect(movementShowsChange(mv(['volume'], 'cumulative'), true)).toBe(true)
   })
 })
 

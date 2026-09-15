@@ -183,7 +183,13 @@ export interface Movement {
  * confirmed, +12" counts a cumulative corpus at two arbitrary moments, so the
  * delta reads as a fact about the conversation when it is mostly a fact about
  * how much was gathered. The other four rows are period figures out of
- * run_summary and are untouched.
+ * run_summary — ON THE PERIOD LAYER. On the cumulative fallback they are the
+ * same defect wearing four other labels, and `movementRows` gates the whole
+ * tile's directions there; see its comment. (Sealand is on that fallback
+ * today: 4 of its 10 run_summary rows predate the period columns.)
+ *
+ * The numbers are still COMPUTED on both layers, and stored as computed. The
+ * gate is at render, where a frozen snapshot passes through it too.
  */
 export function movement(
   summaries: HistoryRow[],
@@ -228,9 +234,30 @@ export function movement(
  *  today on, but a snapshot frozen before the gate still carries it in its
  *  data, and "the email as sent" re-renders from that snapshot. A word we have
  *  withdrawn must not come back because an artefact remembers it, so both the
- *  app tile and the email tile read their rows through here. */
+ *  app tile and the email tile read their rows through here.
+ *
+ *  ON THE CUMULATIVE LAYER the remaining four rows lose their series and their
+ *  deltas as well. The exemption D1 grants the movement tile is for PERIOD
+ *  figures — a share, a sentiment and a conversation count for the update's own
+ *  window, each with an n and a band behind it. When any run_summary row is
+ *  missing that layer the whole tile falls back to totals, and "Conversations
+ *  26,100 · +5,663" is then the difference between two readings of a corpus
+ *  that grows with every gather: the very thing the Themes row is gated for,
+ *  with no layer disclosed on the tile. Sealand's dashboard prints exactly that
+ *  today. The LEVELS stay — a level is a fact either way — and Phase 1 flips
+ *  the constant and gives the series back. */
 export function movementRows(mv: Movement, directionWords = RUN_INDEXED_DIRECTION_WORDS): MovementRow[] {
-  return directionWords ? mv.rows : mv.rows.filter((r) => r.key !== 'themes')
+  if (directionWords) return mv.rows
+  const rows = mv.rows.filter((r) => r.key !== 'themes')
+  if (mv.layer === 'period') return rows
+  return rows.map((r) => ({ ...r, series: [], delta: null }))
+}
+
+/** Whether a tile drawn from this movement may say "change vs the previous
+ *  update" in its own words. False wherever `movementRows` has taken the
+ *  deltas away, so a footnote does not describe a column that is not there. */
+export function movementShowsChange(mv: Movement, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean {
+  return directionWords || mv.layer === 'period'
 }
 
 // ── owned accounts ────────────────────────────────────────────────────────
