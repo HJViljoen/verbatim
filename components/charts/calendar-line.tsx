@@ -213,6 +213,14 @@ export function CalendarLine({
 
         <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
         <line x1={g.padL} y1={scale.y(scale.mid)} x2={g.padR} y2={scale.y(scale.mid)} stroke="var(--muted)" strokeWidth={1} />
+        {/* TWO Y LABELS, NOT THREE — the spec (§3.9) over the artboard, settled
+            here so WP11 does not have to. The mock's Subjects board also prints
+            the top of its scale ("50"), and it can: its data is invented and
+            tops out at a round number. This scale's top is `max × 1.12`, the
+            headroom an end label sits in, so the third label would read 49.3%
+            on a 44% series — an arithmetic accident, printed at a height where
+            no rule is drawn to anchor it. The baseline and the midline both
+            have a line under them; the top does not. */}
         <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
         <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
 
