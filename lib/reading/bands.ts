@@ -284,6 +284,11 @@ const pct = (point: SeriesPoint): number => {
  *     that cleared the floor" would happily span a year and call it a trend.
  *   * each clears both floors — 100 videos in the audience, 10 of the object's
  *     own — so no reading in the run is one the product would refuse on its own.
+ *   * each HAS a k. A denominator-only series has no numerator at all
+ *     (`SeriesPoint.k` null), every point reads 0%, the steps agree at zero and
+ *     the word would come out `flat` — a direction earned from nothing.
+ *     `clearsFloor` deliberately passes a null k, so this module invites the
+ *     call and has to answer it with the same `null` as the other exits.
  *   * all of them sit in ONE clustering regime. Two unknown keys are not one
  *     regime, so a stretch frozen before the fingerprint shipped earns no word.
  *   * all of them are filed under ONE name. A renamed rival's two halves are
@@ -310,6 +315,7 @@ export function directionWord(
     if (monthStartOf(tail[i].month) !== nextMonth(tail[i - 1].month)) return null
   }
   if (!tail.every((p) => clearsFloor(p, floor))) return null
+  if (tail.some((p) => p.k == null)) return null
   for (let i = 1; i < tail.length; i++) {
     if (!sameRegime(tail[i].clusteringKey, tail[i - 1].clusteringKey)) return null
     if ((tail[i].audience ?? null) !== (tail[i - 1].audience ?? null)) return null

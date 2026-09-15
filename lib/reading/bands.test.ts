@@ -313,3 +313,36 @@ describe('directionWord', () => {
     expect(directionWord(rising, { run: 4 })).toBeNull()
   })
 })
+
+describe('directionWord — a series with no numerator earns no word', () => {
+  const month = (m: string, videos: number, k: number | null): SeriesPoint => ({
+    month: m, videos, k, clusteringKey: 'k1', audience: 'industry-other',
+  })
+
+  it('answers null, not flat, on a denominator-only series', () => {
+    // pct() reads `k ?? 0`, so every point is 0%, both steps agree at zero and
+    // the old answer was `flat` — a direction word earned from nothing.
+    // clearsFloor passes a null k on purpose, so the call is invited.
+    expect(directionWord([
+      month('2026-06-01', 400, null),
+      month('2026-07-01', 420, null),
+      month('2026-08-01', 440, null),
+    ])).toBeNull()
+  })
+
+  it('answers null when only ONE month of the run has no k', () => {
+    expect(directionWord([
+      month('2026-06-01', 400, 40),
+      month('2026-07-01', 420, null),
+      month('2026-08-01', 440, 80),
+    ])).toBeNull()
+  })
+
+  it('still answers flat when three real readings disagree', () => {
+    expect(directionWord([
+      month('2026-06-01', 400, 40),
+      month('2026-07-01', 400, 60),
+      month('2026-08-01', 400, 40),
+    ])).toBe('flat')
+  })
+})
