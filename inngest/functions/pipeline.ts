@@ -32,6 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
@@ -1177,6 +1178,37 @@ export const runPipeline = inngest.createFunction(
     if (passADegraded && passA.batchesFailed === 0) noteError('pass-a', passADegraded)
     else if (passADegraded) console.warn(`[pass-a] ${passADegraded} (already recorded as failed batch steps)`)
     else if (passA.errored > 0) console.warn(`[pass-a] ${passA.errored} video call(s) failed under the ${PASS_A_ERROR_RATIO * 100}% ratio; re-read next run. First: ${passA.errors[0] ?? ''}`)
+
+    // Keep the agent's retrieval index current (Phase 0, design item 36). Here,
+    // right after the Pass A wave: every videos.analyzed_run_id pointer has
+    // moved by now, so audience_insights_current means what it says and the
+    // read reaches the WHOLE backlog, not just what this run wrote. It cannot
+    // live inside pass-a:N-of-M — decideAnalysis never re-selects a video whose
+    // analysis is already current, so those rows never enter a batch again and
+    // the 3,536 already sitting NULL would stay NULL forever.
+    //
+    // Before cross-reference and long before themes:<bucket>, which is the one
+    // step that must not take on more work: its merge call alone spent 183 s of
+    // a 300 s cap on Össur's 2026-09-13 run and it has no per-step catch, so a
+    // write failure there fails the run.
+    //
+    // Logged, NOT noteError'd — the keyword-discovery precedent. A searchable
+    // index is something the run maintains alongside the report, not part of
+    // producing it, and a clean run must not read 'partial' because an index
+    // pass had a bad day; the rows are still NULL next run, which is the retry.
+    // It is also a step that can run before its migration is applied: until
+    // then it is a logged no-op that has read nothing and spent nothing.
+    await step
+      .run('embed-insights', async () => {
+        const admin = createAdminClient()
+        const r = await embedNullInsights(admin, { clientId, runId })
+        console.log(`[embed-insights] ${embedSummary(r)}`)
+        return r
+      })
+      .catch((e) => {
+        console.error(`[embed-insights] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
 
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
