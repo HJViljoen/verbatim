@@ -67,4 +67,11 @@ describe('OV4 · rivals', () => {
     expect(markup).not.toContain('class=')
     expect(markup).not.toContain('var(--')
   })
+
+  it('says why a rival\u2019s own posts are not read, and says nothing of the kind about you or the category', () => {
+    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
+    // One rival row, one client row, in the fixture.
+    expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
+    expect(markup).toContain('their own posts are not readable yet · Verbatim engineering')
+  })
 })

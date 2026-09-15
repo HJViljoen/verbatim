@@ -7,7 +7,8 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { OverviewData, RivalRow } from '@/lib/pages/overview'
+import { isRivalAudience } from '@/lib/rivals'
+import { OWN_POSTS_UNREADABLE, type OverviewData, type RivalRow } from '@/lib/pages/overview'
 
 // OV4 · Rivals (design §3 OV4).
 //
@@ -47,7 +48,11 @@ function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode 
  *  side we cannot read are "— not tracked", and the sentence names who fixes
  *  it rather than implying the rival said nothing. */
 function OwnPosts({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode {
-  const text = row.ownPosts ?? '— not tracked'
+  // ONLY A RIVAL HAS "THEIR OWN POSTS". The standings carry your own brand's
+  // row and the category's, and "on their own posts: — not tracked" against
+  // either of them is an absence of nothing.
+  if (!isRivalAudience(row.audience)) return null
+  const text = row.ownPosts ?? OWN_POSTS_UNREADABLE
   return mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{text}</span>
     : <span className="text-[12px] text-muted-foreground">{text}</span>

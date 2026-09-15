@@ -682,6 +682,19 @@ export const MOVES_UNLOCK =
 /** The masthead OV5 and Market both carry, code-written. */
 export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
 
+/**
+ * What OV4 says under "on their own posts" until M8.
+ *
+ * `video_claims` has no tenant SELECT policy until M8 (WP16), so no tenant may
+ * read a rival's own claims. The design's words for a side we cannot read are
+ * "— not tracked", and the mock's fuller string names who fixes it
+ * ("— not tracked · accounts not configured · digital director · by 15 Oct").
+ * The owner is nameable and is named; the DATE is not — nothing in the product
+ * holds one, and inventing a date on a client's page is the defect OV5's
+ * unlock had.
+ */
+export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Verbatim engineering'
+
 /** The precedence caveat OV4 carries (§7, bucket precedence). */
 export const RIVALS_CAVEAT =
   'A video that names both you and a rival counts in your audience only; the count of those is in the record.'
@@ -1842,9 +1855,13 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
       attentionVerdict: s.attentionVerdict,
       contentVerdict: s.contentVerdict,
       // Their own posts are read through `video_claims`, which no tenant may
-      // select until M8 adds the policy (WP16). The honest answer is the
-      // design's own words for an untracked side.
-      ownPosts: isRivalAudience(s.audience) ? null : null,
+      // select until M8 adds the policy (WP16), so this is null on every row
+      // today and the block says why. It is a field for a CLAIM; the absence
+      // is the block's to word (OWN_POSTS_UNREADABLE), and it is printed on
+      // rivals only — your own brand and the category are not rivals with
+      // posts of their own to read, and "— not tracked" against them said
+      // nothing about anything.
+      ownPosts: null,
       raisedMost: raisedMost(s.audience),
       retiredAt: retiredBy.get(s.audience) ?? null,
     })),
