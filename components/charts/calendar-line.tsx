@@ -162,12 +162,19 @@ export function CalendarLine({
         </div>
       )}
 
+      {/* SCALED UNIFORMLY, not stretched. `preserveAspectRatio="none"` is
+          house precedent (LineChart carries it), and it cannot be used here:
+          the two gutter tokens differ by SHAPE alone — below_floor is a circle,
+          below_numerator a 6×6 square — and any container that is not exactly
+          `width` px scales x and y by different factors, which turns the circle
+          into an ellipse and the square into a rectangle until they converge.
+          Measured at a 1085px container (x × 1.23). So the drawing keeps its
+          ratio and the box takes its height from the viewBox, exactly as the
+          mock's own 880×210 artboard does. */}
       <svg
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
-        height={height}
-        preserveAspectRatio="none"
-        style={{ overflow: 'visible', display: 'block' }}
+        style={{ overflow: 'visible', display: 'block', height: 'auto' }}
         role="img"
         aria-label={label ?? `${series.map((s) => s.label).join(' vs ')}, month by month`}
       >

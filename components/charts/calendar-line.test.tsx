@@ -155,6 +155,14 @@ describe('CalendarLine', () => {
     expect(markup).not.toContain('rounded-full')
   })
 
+  it('scales uniformly, so the round gutter token cannot become an ellipse', () => {
+    // below_floor is a circle and below_numerator a square of the same size:
+    // the pair is distinguished by SHAPE, so a non-uniform scale converges them.
+    const markup = render(chart())
+    expect(markup).not.toContain('preserveAspectRatio="none"')
+    expect(markup).toContain('viewBox="0 0 880 210"')
+  })
+
   it('thins the labels on a 68-month axis instead of printing 68 of them', () => {
     const long = monthAxis('2021-02-01', '2026-09-01')
     const markup = render(CalendarLine({

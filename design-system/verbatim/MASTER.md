@@ -245,6 +245,9 @@ baseline, and rules drawn behind the lines.
   gutter `baseline+6`, month labels `height−7`. Arithmetic in `lib/charts/calendar.ts`.
 - **A gap is a gap.** `(number | null)` per month, one `<polyline>` per unbroken run. `Sparkline`
   behaves the same way.
+- **The calendar line scales UNIFORMLY** — no `preserveAspectRatio="none"`, unlike `LineChart`. Its
+  two gutter tokens differ by shape alone (circle vs square), and a stretched viewBox turns the
+  circle into an ellipse and the square into a rectangle until they read as the same mark.
 - **Five month states, three of them new tokens:**
 
 | state | token | meaning |
