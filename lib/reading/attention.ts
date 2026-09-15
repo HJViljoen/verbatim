@@ -51,7 +51,17 @@ import { TABLE_ATTENTION_PANELS, type PlatformMix } from './types'
 // column that is missing half the time.
 
 /** Months of lead a panel member needs: first seen at least this long before
- *  the month being read. */
+ *  the month the panel was FROZEN FOR.
+ *
+ *  "Frozen for", not "being read", and the difference is real on a back-read.
+ *  A tenant has one panel era at a time — that is the whole point of
+ *  `samePanelEra` and of `month_audience_stats.panel_id` — so a visit that
+ *  reads twelve months freezes ONE panel, cutoff taken from the newest month in
+ *  the window, and the older months in that window are then read over a panel
+ *  with less than three months of lead on them. `panelLead` says how much lead
+ *  a given month actually got and `panelUnderLead` marks the ones below the
+ *  rule, so the shortfall is a number a reader can be shown rather than a
+ *  silent difference between this constant and what happened. */
 export const PANEL_LEAD_MONTHS = 3
 
 /** Platforms that are never panel members. See the head of this file. */
@@ -104,6 +114,27 @@ export function panelCutoff(month: string, lead: number = PANEL_LEAD_MONTHS): st
   const d = new Date(Date.UTC(y, (m - 1) - lead, 1))
   return d.toISOString().slice(0, 10)
 }
+
+/** Whole calendar months between a panel's cutoff and the month it is being
+ *  read for — the lead that month actually got. Negative when the cutoff is
+ *  after the month, which is the state of every month in a back-read window
+ *  older than the one the panel was frozen for. */
+export function panelLead(cutoff: string, month: string): number {
+  const [cy, cm] = cutoff.slice(0, 7).split('-').map(Number)
+  const [my, mm] = month.slice(0, 7).split('-').map(Number)
+  return (my - cy) * 12 + (mm - cm)
+}
+
+/** Did this month get less lead than the rule asks for? True for the older
+ *  months of a back-read window, because the tenant gets ONE panel era and its
+ *  cutoff comes from the newest month read. A block that draws such a month
+ *  says so; it is not a reason to refuse the reading, because the alternative —
+ *  a panel per month — is a new denominator per point and no series at all. */
+export const panelUnderLead = (
+  panel: Pick<AttentionPanel, 'cutoff'>,
+  month: string,
+  lead: number = PANEL_LEAD_MONTHS,
+): boolean => panelLead(panel.cutoff, month) < lead
 
 /** An account and when our gather first saw it. */
 export interface SeenAccount {

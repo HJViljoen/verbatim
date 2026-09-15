@@ -15,7 +15,9 @@ import {
   attentionRowsOf,
   freezePanel,
   panelCutoff,
+  panelLead,
   panelStale,
+  panelUnderLead,
   samePanelEra,
 } from './attention'
 
@@ -140,6 +142,27 @@ describe('panelStale', () => {
       expect(PANEL_STALING_SURFACES).not.toContain(surface)
       expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
     }
+  })
+})
+
+describe('the lead a month actually got', () => {
+  // A tenant gets ONE panel era, so a back-read freezes one panel off the
+  // newest month in the window and every month behind it is read with less
+  // lead than PANEL_LEAD_MONTHS asks for. Reading Sealand's August in early
+  // October is the live case: cutoff 1 July, one month of lead on August.
+  const panel = { cutoff: '2026-07-01' }
+
+  it('counts whole months from the cutoff', () => {
+    expect(panelLead('2026-06-01', '2026-09-01')).toBe(3)
+    expect(panelLead('2026-07-01', '2026-08-01')).toBe(1)
+    expect(panelLead('2025-11-01', '2026-02-15')).toBe(3)
+    expect(panelLead('2026-09-01', '2026-07-01')).toBe(-2)
+  })
+
+  it('marks the months of a back-read the rule does not cover', () => {
+    expect(panelUnderLead(panel, '2026-10-01')).toBe(false)
+    expect(panelUnderLead(panel, '2026-08-01')).toBe(true)
+    expect(panelUnderLead(panel, '2026-05-01')).toBe(true)
   })
 })
 

@@ -4,12 +4,15 @@ import { chunk } from '../chunk'
 import type { ConfigActor } from '../config-log'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
+  PANEL_LEAD_MONTHS,
   currentPanel,
   freezePanel,
   isMissingKindMoodAttention,
   panelCutoff,
   panelStale,
+  panelUnderLead,
   trackingChangesSince,
+  type AttentionPanel,
   type PanelReason,
 } from './attention'
 import {
@@ -933,6 +936,7 @@ export async function freezeMonths(
       ? panelStale(existing, await trackingChangesSince(admin, opts.clientId, existing.frozen_at))
       : false
     const reason: PanelReason | null = !existing ? 'first_freeze' : stale ? 'tracking_change' : null
+    let panel: AttentionPanel | null = existing
     if (reason && opts.actor && !opts.dryRun) {
       const frozen = await freezePanel(admin, {
         clientId: opts.clientId,
@@ -941,6 +945,7 @@ export async function freezeMonths(
         actor: opts.actor,
       })
       if (frozen.panel) {
+        panel = frozen.panel
         panelId = frozen.panel.id
         panelFrozen = true
         panelReason = reason
@@ -956,6 +961,23 @@ export async function freezeMonths(
       console.log(
         `[monthly-reading] the attention panel for ${opts.clientId} is overtaken by a logged tracking change ` +
         `and was NOT re-frozen this visit (${opts.dryRun ? 'dry run' : 'no actor'}); the index still reads over the panel frozen at ${existing!.frozen_at}.`,
+      )
+    }
+
+    // ONE PANEL ERA PER TENANT, AND THE OLDER MONTHS PAY FOR IT. The cutoff
+    // comes from the NEWEST month in the window, so every month behind it gets
+    // less than PANEL_LEAD_MONTHS of lead: reading Sealand's August in early
+    // October takes a 1 July cutoff, which is one month of lead on August and
+    // not three. The alternative is a panel per month, which is a new
+    // denominator per point and therefore no series at all. So the shortfall is
+    // recorded rather than fixed — printed here, markable on a chart through
+    // `panelUnderLead` — and nothing pretends the constant's rule held.
+    const short = panel ? months.filter((m) => panelUnderLead(panel, m)) : []
+    if (panel && short.length > 0) {
+      console.log(
+        `[monthly-reading] ${short.length} of ${months.length} months (${short[0]}…${short[short.length - 1]}) ` +
+        `are read over a panel whose cutoff is ${panel.cutoff}, so they get less than ${PANEL_LEAD_MONTHS} ` +
+        `months' lead. One panel era per tenant is the design; the shortfall belongs on the axis, not in the numbers.`,
       )
     }
 
