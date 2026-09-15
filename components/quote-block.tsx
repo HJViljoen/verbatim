@@ -26,6 +26,14 @@ import type { Quote } from '@/lib/renderables/types'
 // and inline-styled because that is the only thing an email client renders
 // reliably — it is the constraint every email primitive in this repo is built
 // under, not a stylistic choice.
+//
+// ONE OTHER FILE STILL DRAWS A QUOTE, and it draws it in table markup:
+// components/email/primitives.tsx `Quote`, which is built on the email theme
+// constants this file deliberately does not import. It delegates the WORDS —
+// translationNote for what to say, translationLabel for how to say it — and
+// keeps only the markup. That split is the rule for any future renderer: a
+// surface may own its own layout, and no surface owns the sentence. Writing the
+// label out again is the fourteen-places failure in miniature.
 
 export type QuoteMode = 'app' | 'print' | 'email'
 
@@ -80,13 +88,27 @@ export function translationNote(q: { lang?: string | null; english?: string | nu
 /** The stamp. One sentence, no jargon, and it says WHO translated it. */
 export const MACHINE_TRANSLATION_STAMP = 'machine translation'
 
+/** The line under a quote that names its language and says where the English
+ *  came from, or null where there is nothing to say.
+ *
+ *  A FUNCTION rather than three copies of a template literal, for the reason
+ *  this file exists at all: the header argues that a promise kept in fourteen
+ *  places is kept in thirteen, and the same is true of a sentence. Three
+ *  renderers print this line — QuoteBlock itself, `Quotes` (which lays out its
+ *  own stack) and the email primitive `Quote` (which is built on its own theme
+ *  constants and cannot delegate the markup) — and they must not be free to
+ *  word it differently. They delegate the WORDS; the markup stays theirs. */
+export function translationLabel(note: { language: string | null; english: string | null }): string | null {
+  if (!note.language) return null
+  return note.english
+    ? `${note.language} · English below, ${MACHINE_TRANSLATION_STAMP}`
+    : `${note.language} · no English rendering yet`
+}
+
 export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): ReactNode {
-  const { language, english } = translationNote(quote)
-  const label = language
-    ? english
-      ? `${language} · English below, ${MACHINE_TRANSLATION_STAMP}`
-      : `${language} · no English rendering yet`
-    : null
+  const note = translationNote(quote)
+  const { english } = note
+  const label = translationLabel(note)
 
   if (mode === 'email') {
     return (

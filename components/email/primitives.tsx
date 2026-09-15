@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element -- an email carries plain <img>, never next/image */
-import { translationNote, MACHINE_TRANSLATION_STAMP } from '@/components/quote-block'
+import { translationNote, translationLabel } from '@/components/quote-block'
 import type { CSSProperties, ReactNode } from 'react'
 import { EMAIL, FONT } from '../../lib/email/theme'
 
@@ -149,12 +149,11 @@ export function DeltaText({ value, unit = '', decimals = 0, good = 'neutral' }: 
 }
 
 export function Quote({ text: t, cite, lang, english }: { text: string; cite?: ReactNode; lang?: string | null; english?: string | null }) {
+  // The MARKUP is this file's (an email is a table of inline styles, and these
+  // are its theme constants); the WORDS are QuoteBlock's, so the label cannot
+  // drift between the app and the email that links to it.
   const note = translationNote({ lang, english })
-  const label = note.language
-    ? note.english
-      ? `${note.language} · English below, ${MACHINE_TRANSLATION_STAMP}`
-      : `${note.language} · no English rendering yet`
-    : null
+  const label = translationLabel(note)
   return (
     <table width="100%" {...presentation} style={{ ...T, marginTop: 6 }}>
       <tbody>

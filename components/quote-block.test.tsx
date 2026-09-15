@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
-import { QuoteBlock, translationNote, languageName, MACHINE_TRANSLATION_STAMP, type QuoteMode } from './quote-block'
+import { QuoteBlock, translationNote, translationLabel, languageName, MACHINE_TRANSLATION_STAMP, type QuoteMode } from './quote-block'
 import { Quotes } from './quotes'
 import { Verbatim } from './shell/master-list'
+import { Quote as EmailQuote } from './email/primitives'
 import type { Quote } from '@/lib/renderables/types'
 
 // Item 8's promise, asserted as markup: the original leads, the English sits
@@ -123,6 +124,26 @@ describe('the adopters render the same promise', () => {
 
   it('Quotes renders nothing for an empty list', () => {
     expect(render(<Quotes items={[]} />)).toBe('')
+  })
+
+  // The sentence lives in ONE place. Three renderers print it — QuoteBlock,
+  // the Quotes stack over it, and the email primitive with its own table
+  // markup — and if any of them re-words it the app and the email that links
+  // to it stop agreeing about what a reader is looking at.
+  it('every renderer prints the same label, word for word', () => {
+    const label = translationLabel(translationNote(es))!
+    expect(label).toBe(`Spanish · English below, ${MACHINE_TRANSLATION_STAMP}`)
+    for (const mode of MODES) expect(renderText(<QuoteBlock quote={es} mode={mode} />)).toContain(label)
+    expect(renderText(<Quotes items={[es]} />)).toContain(label)
+    expect(renderText(<EmailQuote text={es.text} lang={es.lang} english={es.english} />)).toContain(label)
+  })
+
+  it('and the same one where there is no rendering yet', () => {
+    const unread = { text: es.text, lang: 'es', english: null }
+    const label = translationLabel(translationNote(unread))!
+    expect(label).toBe('Spanish · no English rendering yet')
+    expect(renderText(<Quotes items={[unread]} />)).toContain(label)
+    expect(renderText(<EmailQuote text={unread.text} lang="es" english={null} />)).toContain(label)
   })
 
   // The dashboard hands its hero quotes over whole — renderable Quotes, `ref`
