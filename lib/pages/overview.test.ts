@@ -282,6 +282,7 @@ describe('subjectsNote', () => {
     direction: null,
     spark: [],
     sparkMonths: [],
+    categoryAtLastMonth: null,
     href: '#',
   })
 
@@ -345,16 +346,39 @@ describe('buildSubjects', () => {
   it('says the reading is not recorded when M4 is not applied', () => {
     const b = buildSubjects({
       subjects: null, months: null, denominators: new Map(), perAudience,
-      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', thin: false,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
     expect(b.state).toBe('not_recorded')
     expect(b.rows).toEqual([])
   })
 
+  it('carries "at this point last month" on the category side only', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')],
+      months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 900 }],
+      denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag',
+      atLastMonth: {
+        bySubject: new Map([[`${INDUSTRY_AUDIENCE}|s1`, 264], [`${CLIENT_AUDIENCE}|s1`, 12]]),
+        perAudience: new Map([[INDUSTRY_AUDIENCE, 1290], [CLIENT_AUDIENCE, 70]]),
+      },
+      thin: false,
+    })
+    expect(b.rows[0].categoryAtLastMonth).toEqual({ k: 264, n: 1290, pct: 20.5 })
+  })
+
+  it('says nothing about last month when the window could not be read', () => {
+    const b = buildSubjects({
+      subjects: [subject('s1', 'Durability')], months: [], denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.rows[0].categoryAtLastMonth).toBeNull()
+  })
+
   it('offers the proposer’s candidates rather than a blank form', () => {
     const b = buildSubjects({
       subjects: [subject('s1', 'Durability', 'proposed')], months: [], denominators: new Map(), perAudience,
-      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, thin: false,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: false,
     })
     expect(b.state).toBe('candidates')
     expect(b.candidates[0].name).toBe('Durability')
@@ -372,7 +396,7 @@ describe('buildSubjects', () => {
     withRival.set(`2026-09-01|${rivalKey('Freitag')}`, 142)
     const b = buildSubjects({
       subjects: [subject('s1', 'Durability')], months, denominators: new Map(), perAudience: withRival,
-      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', thin: false,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
     })
     expect(b.state).toBe('ready')
     expect(b.rows[0].category.pct).toBe(22)
@@ -388,7 +412,7 @@ describe('buildSubjects', () => {
       subjects: [subject('s1', 'Durability')],
       months: [{ month: '2026-09-01', audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: 305, comments: 0 }],
       denominators: new Map(), perAudience,
-      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, thin: true,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: null, atLastMonth: null, thin: true,
     })
     expect(b.rows[0].category.verdict).toBeNull()
     expect(b.rows[0].direction).toBeNull()

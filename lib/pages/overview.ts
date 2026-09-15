@@ -30,7 +30,7 @@ import {
 import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, KIND_ORDER, type KindShare, type RedditRead } from '../reading/kinds'
-import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
@@ -46,7 +46,7 @@ import {
 import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
-import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -123,6 +123,12 @@ export interface SubjectRow {
   /** The months `spark` is indexed by, same length — a chart that cannot be
    *  drawn says which months it had. */
   sparkMonths: string[]
+  /** The category side at the same point LAST month, while this one is still
+   *  filling (design §3 OV2, Time). The category side only: it is the only one
+   *  of the three with the n to make the comparison mean anything, and the
+   *  other two would print a pair of single figures as if they compared. Null
+   *  when the month is complete, or when M4/M3 cannot answer the window. */
+  categoryAtLastMonth: { k: number; n: number; pct: number | null } | null
   href: string
 }
 
@@ -914,7 +920,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       })
     : []
 
-  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags] =
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags, subjectsAtLastMonth] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
         from: readAxis[0],
@@ -937,6 +943,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       }),
       readAtThisPointLastMonth(reading, month, readingAt),
       loadFlags(supabase, clientId, month),
+      readSubjectsAtThisPointLastMonth(reading, month, readingAt),
     ])
 
   // ── OV0 · the page bar and the still-filling line ──────────────────────
@@ -1008,6 +1015,10 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     month,
     prevMonth,
     leadRival: leadRival?.name ?? null,
+    atLastMonth:
+      monthStatus === 'filling' && subjectsAtLastMonth != null
+        ? { bySubject: subjectsAtLastMonth, perAudience: lastMonthSoFar.perAudience }
+        : null,
     thin,
   })
 
@@ -1143,23 +1154,73 @@ function audienceMonthVideos(
   return out
 }
 
-/** "At this point last month", in one window call (design §3 OV0). */
+/**
+ * The window "at this point last month" means, composed once.
+ *
+ * OV0 states it for the page and OV2 states it per subject row, and two
+ * arithmetics for one phrase is how they come to disagree. Null when the month
+ * is behind us: a complete month is not still filling and has no "this point".
+ */
+export function atThisPointWindow(month: string, now: string): { from: string; to: string } | null {
+  const days = daysInto(month, now)
+  if (days == null) return null
+  const prev = previousMonthOf(month)
+  const to = new Date(`${prev}T00:00:00.000Z`)
+  to.setUTCDate(to.getUTCDate() + days)
+  return { from: prev, to: to.toISOString() }
+}
+
+/** "At this point last month", in one window call (design §3 OV0). The
+ *  per-audience row is kept, not just the pooled total, because OV2's own
+ *  version of the comparison divides by the category's n and not by the
+ *  page's. */
 async function readAtThisPointLastMonth(
   reading: ReadingHandle,
   month: string,
   now: string,
-): Promise<{ videos: number | null; known: boolean }> {
-  const days = daysInto(month, now)
-  if (days == null) return { videos: null, known: true }
-  const prev = previousMonthOf(month)
-  const to = new Date(`${prev}T00:00:00.000Z`)
-  to.setUTCDate(to.getUTCDate() + days)
-  const answer = await loadWindowReading(reading.client, reading.clientId, {
-    from: prev,
-    to: to.toISOString(),
-  })
-  if (answer.denominators == null) return { videos: null, known: false }
-  return { videos: answer.denominators.reduce((total, d) => total + (d.videos ?? 0), 0), known: true }
+): Promise<{ videos: number | null; known: boolean; perAudience: Map<string, number> }> {
+  const window = atThisPointWindow(month, now)
+  if (!window) return { videos: null, known: true, perAudience: new Map() }
+  const answer = await loadWindowReading(reading.client, reading.clientId, window)
+  if (answer.denominators == null) return { videos: null, known: false, perAudience: new Map() }
+  const perAudience = new Map<string, number>()
+  for (const d of answer.denominators) perAudience.set(d.audience, d.videos ?? 0)
+  return {
+    videos: answer.denominators.reduce((total, d) => total + (d.videos ?? 0), 0),
+    known: true,
+    perAudience,
+  }
+}
+
+/**
+ * Each subject's videos at the same point last month, per audience.
+ *
+ * Through `window_subject_readings`, never by taking last month's whole row:
+ * "at this point last month" is a part-month, and the stored month row is the
+ * whole of it. Null — never an empty map — when M4 is not applied here, which
+ * is also when OV2 itself is refusing.
+ */
+async function readSubjectsAtThisPointLastMonth(
+  reading: ReadingHandle,
+  month: string,
+  now: string,
+): Promise<Map<string, number> | null> {
+  const window = atThisPointWindow(month, now)
+  if (!window) return null
+  try {
+    const rows = await selectAll<{ audience: string; subject_id: string; videos: number | null }>(() =>
+      reading.client
+        .rpc(RPC_WINDOW_SUBJECT_READINGS, { p_client: reading.clientId, p_from: window.from, p_to: window.to })
+        .order('audience', { ascending: true })
+        .order('subject_id', { ascending: true }),
+    )
+    const out = new Map<string, number>()
+    for (const r of rows) out.set(`${r.audience}|${r.subject_id}`, r.videos ?? 0)
+    return out
+  } catch (error) {
+    if (isMissingSubjects(error) || isMissingMonthlyReading(error)) return null
+    throw error
+  }
 }
 
 function previousMonthOf(month: string): string {
@@ -1373,7 +1434,20 @@ interface SubjectsInput {
   month: string
   prevMonth: string
   leadRival: string | null
+  /** Each `<audience>|<subject id>` at the same point last month, and the
+   *  audiences' own denominators there. Null where the window cannot be read. */
+  atLastMonth: { bySubject: Map<string, number>; perAudience: Map<string, number> } | null
   thin: boolean
+}
+
+/** The category side of one subject at the same point last month, or null. */
+function atLastMonthFor(input: SubjectsInput, subjectId: string) {
+  const at = input.atLastMonth
+  if (!at) return null
+  const n = at.perAudience.get(INDUSTRY_AUDIENCE) ?? null
+  if (n == null || n <= 0) return null
+  const k = at.bySubject.get(`${INDUSTRY_AUDIENCE}|${subjectId}`) ?? 0
+  return { k, n, pct: pctOf(k, n) }
 }
 
 export function buildSubjects(input: SubjectsInput): SubjectsBlock {
@@ -1452,6 +1526,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       direction: input.thin ? null : directionWord(axisPoints),
       spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
       sparkMonths: axisPoints.slice(-SPARK_MONTHS).map((p) => p.month),
+      categoryAtLastMonth: atLastMonthFor(input, s.id),
       href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
     }
   })

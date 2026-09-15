@@ -57,6 +57,15 @@ function Side({ side, mode = 'app' }: { side: SideReading | null; mode?: RenderM
     : <span className="font-mono text-[12px] tabular-nums">{body}</span>
 }
 
+/** "at this point last month: 20.5% (264 of 1,290)", or nothing at all. */
+function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth']; mode?: RenderMode }): ReactNode {
+  if (!at || at.pct == null) return null
+  const body = <>at this point last month <span data-copy="figure">{fmtPct(at.pct)} {fmtInt(at.k)} of {fmtInt(at.n)}</span></>
+  return mode === 'email'
+    ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{body}</div>
+    : <span className="block text-[11px] text-muted-foreground">{body}</span>
+}
+
 function Row({ row, mode }: { row: SubjectRow; mode: RenderMode }) {
   return (
     <tr>
@@ -65,7 +74,15 @@ function Row({ row, mode }: { row: SubjectRow; mode: RenderMode }) {
       </td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.you} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.rival} mode={mode} /></td>
-      <td className="py-1.5 pr-3 align-top"><Side side={row.category} mode={mode} /></td>
+      <td className="py-1.5 pr-3 align-top">
+        <Side side={row.category} mode={mode} />
+        {/* AND, WHILE THE MONTH IS STILL FILLING, THE SAME POINT LAST MONTH —
+            on the category side only, because it is the only one of the three
+            with the n to make the comparison mean anything (design §3 OV2,
+            Time). It is a LEVEL beside a level, not a change: no band is drawn
+            over a part-month against a part-month. */}
+        <AtLastMonth at={row.categoryAtLastMonth} mode={mode} />
+      </td>
       <td className="py-1.5 pr-3 align-top"><BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top">
         <span className="flex flex-wrap items-center gap-1.5">
@@ -140,6 +157,7 @@ export const overviewSubjects: Block<OverviewData> = {
               <div style={{ marginTop: 2 }}>
                 you <Side side={r.you} mode={mode} /> · {s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
               </div>
+              <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
               <div style={{ marginTop: 2 }}>
                 <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} /> <DirectionWord direction={r.direction} mode={mode} />
               </div>

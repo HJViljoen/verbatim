@@ -123,6 +123,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           direction: 'growing',
           spark: [null, 18, 19, 20, 21, 22],
           sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
+          categoryAtLastMonth: { k: 264, n: 1290, pct: 20.5 },
           href: '/dashboard/subjects?item=s1',
         },
         {
@@ -134,6 +135,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           direction: 'fading',
           spark: [30, 29, 29, 28, 28, 27],
           sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
+          categoryAtLastMonth: null,
           href: '/dashboard/subjects?item=s2',
         },
       ],
