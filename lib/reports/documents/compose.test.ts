@@ -36,7 +36,7 @@ const signals = {
   delta: { prevRunDate: '2026-08-23', sentiment: { now: 69.4, prev: 66, verdict: { state: 'no_clear_change', change: 3.4, band: 8 }, nowJudged: 147, prevJudged: 120 }, share: null, newThemes: { count: 15, labels: ['Confidence about visible limb loss'] }, conversations: { now: 3270, prev: 2100 } },
   themes: [], trajectoryOf: () => null,
   concerns: [{ id: 'S1', label: 'Insurance and Medicare barriers', description: 'People are frustrated that coverage rules block access.', buckets: [{ bucket: 'client', themeId: 't1', label: 'Insurance and Medicare barriers', evidenceCount: 3 }, { bucket: 'industry-other', themeId: 't2', label: 'Insurance blocks needed care', evidenceCount: 8 }], total: 11, categories: ['pain_point'], rankScore: 2, themeIds: ['t1', 't2'], registryIds: [], insightIds: [], videoIds: [], trajectory: 'seen 2 updates running' }],
-  competitors: [{ name: 'Ottobock', bucket: 'competitor:Ottobock', claims: [{ competitor: 'Ottobock', claim: 'Arrange a trial fitting.', quote: 'arrange a trial fitting' }], praise: [], hurt: [], asks: [], shareNow: 9, shareAll: 12.4, videosNow: 42, thin: false }],
+  competitors: [{ name: 'Ottobock', bucket: 'competitor:Ottobock', claims: [{ competitor: 'Ottobock', claim: 'Arrange a trial fitting.', quote: 'arrange a trial fitting' }], about: [{ competitor: 'Ottobock', claim: 'Reviewers call the knee heavy.', quote: 'that knee is heavy', voice: 'about' }], praise: [], hurt: [], asks: [], shareNow: 9, shareAll: 12.4, videosNow: 42, thin: false }],
   sayVsHear: [{ you_say: 'Terrain adaptation adjusts the foot.', your_quote: 'x', audience: 'echoes', they_say: 'People talk about stairs and falls.', gap: 'Show the terrain.', supporting_theme_ids: [] }],
   brandVoice: null, ciSummary: null,
   personas: [{ key: 'first-time-buyer', name: 'First-time buyer', oneLiner: 'At the start.', scope: 'category', wants: 'Confidence.', blockers: 'Cost.', triggers: 'Plain answers.', howTheyTalk: [], who: [], insightIds: [], evidenceCount: 10, sourceVideoCount: 8, prevalence: 'common', platformMix: null, bucketMix: {}, themeIds: [] }],
@@ -52,7 +52,7 @@ const written: WriterOutput = {
     { headline: 'A thin one', saw: 'Something.', means: 'Nothing.', practice: [], sure_note: '', based_on: ['G7'], quote_from: null, continued_from: null },
     { headline: 'Comfort by evening', saw: 'People describe fit changing by evening.', means: 'Fit is the buyer\'s measure.', practice: ['Ask how the fit holds by evening.'], sure_note: 'One strand.', based_on: ['G2'], quote_from: 'G2', continued_from: 'Comfort by evening' },
   ],
-  competitors: [{ name: 'ottobock', pitch: 'They sell the trial fitting.', praise: 'Knee technology.', hurt: 'Programming quality.', read: 'Ask about programming before comparing knees.', based_on: ['G1'] }],
+  competitors: [{ name: 'ottobock', pitch: 'They sell the trial fitting.', about: 'Creators keep calling the knee heavy.', praise: 'Knee technology.', hurt: 'Programming quality.', read: 'Ask about programming before comparing knees.', based_on: ['G1'] }],
   persona_lines: [{ name: 'First-time buyer', line: 'Make the category legible.' }],
   care: ['"no excuses": the category jokes about batteries.'],
   not_sure_yet: ['Whether approval times differ by clinic.'],
@@ -399,5 +399,54 @@ describe('writerSchema', () => {
     }).user
     expect(user(MARKET_BRIEF)).toContain('A1. Ossur says "Terrain adaptation adjusts the foot."')
     expect(user(SALES_BRIEF)).toContain('- Ossur says "Terrain adaptation adjusts the foot."')
+  })
+})
+
+describe('the competitor page keeps the two voices apart', () => {
+  const figures = documentFigures(signals, answers)
+  const compose = (s: Signals, w: WriterOutput) =>
+    composeDocument({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 't', period: 'p', signals: s, answers, written: w, figures, model: 'm', promptVersion: 'v', costUsd: 0, timings: {} }).data
+
+  const blockText = (d: ReturnType<typeof compose>, field: string) =>
+    d.pages.find((p) => p.kind === 'competitor')!.blocks.find((b) => b.field === field)?.text
+
+  it('prints the pitch and what others say as two blocks, in that order', () => {
+    const d = compose(signals, written)
+    const fields = d.pages.find((p) => p.kind === 'competitor')!.blocks.map((b) => b.field)
+    expect(fields).toEqual(['pitch', 'about', 'praise', 'hurt', 'read'])
+    expect(blockText(d, 'pitch')).toBe('They sell the trial fitting.')
+    expect(blockText(d, 'about')).toBe('Creators keep calling the knee heavy.')
+  })
+
+  it('falls back to each side\'s own claims, and never to the other side\'s', () => {
+    const d = compose(signals, { ...written, competitors: [{ ...written.competitors![0], pitch: '', about: '' }] })
+    expect(blockText(d, 'pitch')).toBe('Arrange a trial fitting.')
+    expect(blockText(d, 'about')).toBe('Reviewers call the knee heavy.')
+  })
+
+  it('says nothing was captured per side — a rival whose own videos yielded nothing still has an about block', () => {
+    // Sealand's live shape: Cotopaxi is 2 own claims against 187 about.
+    const noOwn = { ...signals, competitors: [{ ...signals.competitors[0], claims: [] }] } as unknown as Signals
+    const d = compose(noOwn, { ...written, competitors: [{ ...written.competitors![0], pitch: '', about: '' }] })
+    expect(blockText(d, 'pitch')).toBe('Nothing from their own videos was captured this update.')
+    expect(blockText(d, 'about')).toBe('Reviewers call the knee heavy.')
+
+    const neither = { ...signals, competitors: [{ ...signals.competitors[0], claims: [], about: [] }] } as unknown as Signals
+    const e = compose(neither, { ...written, competitors: [{ ...written.competitors![0], pitch: '', about: '' }] })
+    expect(blockText(e, 'about')).toBe('Nothing others said about them was captured this update.')
+  })
+
+  it('tells the writer which lines are the rival\'s and which are somebody else\'s', () => {
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures, signals, answers, previous: null, thin: false })
+    expect(user).toContain('  What they say in their own videos:\n  - Arrange a trial fitting.')
+    expect(user).toContain("  What others say about them (creators and reviewers, NOT this brand's own words):\n  - Reviewers call the knee heavy.")
+    const schema = (writerSchema(SALES_BRIEF).shape.competitors as unknown as { element: { shape: Record<string, { description?: string }> } }).element.shape
+    expect(schema.about.description).toContain('never write them as something the brand claims')
+  })
+
+  it('the method page says where the two came from', () => {
+    const d = compose(signals, written)
+    const method = d.pages.find((p) => p.kind === 'method')!.blocks[0].items!
+    expect(method.join(' ')).toContain('videos other people posted about it for what others say')
   })
 })

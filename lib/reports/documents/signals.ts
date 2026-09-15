@@ -31,6 +31,9 @@ export interface CompetitorSignal {
   /** What they say in THEIR OWN videos (their marketing, not a comment, and
    *  not a creator narrating over their product — see competitorVoice). */
   claims: BrandClaim[]
+  /** What somebody ELSE said about them in a video they did not post — a
+   *  creator, a reviewer, a retailer. Never printed as this brand's pitch. */
+  about: BrandClaim[]
   praise: MergeThemeRow[]
   hurt: MergeThemeRow[]
   asks: MergeThemeRow[]
@@ -189,6 +192,7 @@ export async function loadSignals(
       name,
       bucket,
       claims: claims.competitorsOwn.filter((c) => c.competitor?.toLowerCase() === name.toLowerCase()).slice(0, 8),
+      about: claims.competitorsAbout.filter((c) => c.competitor?.toLowerCase() === name.toLowerCase()).slice(0, 8),
       ...own,
       shareNow: pct(sovNow, bucket),
       shareAll: pct(sovAll, bucket),

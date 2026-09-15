@@ -83,6 +83,7 @@ export function writerSchema(t: DocumentTemplate) {
         shape.competitors ??= z.array(z.object({
         name: z.string(),
         pitch: z.string().describe(`What they are pitching in their own videos, as a read not a list. Under ${cap('pitch')} characters.`),
+        about: z.string().describe(`What others say about them: how creators, reviewers and retailers describe this brand when the brand is not speaking, as a read not a list. These are not the brand's own words — never write them as something the brand claims or promises. Under ${cap('about')} characters.`),
         praise: z.string().describe(`What their users praise. Under ${cap('praise')} characters.`),
         hurt: z.string().describe(`Where their users hurt. Under ${cap('hurt')} characters.`),
         read: z.string().describe(`The read for ${t.readerNoun} when this competitor comes up: what to ask about, what not to compare. Under ${cap('read')} characters.`),
@@ -135,7 +136,7 @@ export interface WriterOutput {
     continued_from: string | null
   }[]
   not_sure_yet: string[]
-  competitors?: { name: string; pitch: string; praise: string; hurt: string; read: string; based_on: string[] }[]
+  competitors?: { name: string; pitch: string; about: string; praise: string; hurt: string; read: string; based_on: string[] }[]
   persona_lines?: { name: string; line: string }[]
   care?: string[]
   standing?: string
@@ -206,6 +207,12 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const competitors = s.competitors.map((c) => [
     `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; share key [[${slug(c.name)}_share_pct]]`,
     c.claims.length ? `  What they say in their own videos:\n${c.claims.map((cl) => `  - ${cl.claim}`).join('\n')}` : '  What they say in their own videos: nothing captured this update.',
+    // A separate list with its own label, for the same reason Pass C gained a
+    // second block: these lines are a creator's or a reviewer's, and read
+    // beside the ones above with no label they become the brand's marketing.
+    c.about.length
+      ? `  What others say about them (creators and reviewers, NOT this brand's own words):\n${c.about.map((cl) => `  - ${cl.claim}`).join('\n')}`
+      : '  What others say about them: nothing captured this update.',
     c.praise.length ? `  What their users praise:\n${c.praise.map((t) => `  - ${t.label}: ${t.description}`).join('\n')}` : '  What their users praise: nothing captured this update.',
     c.hurt.length ? `  Where their users hurt:\n${c.hurt.map((t) => `  - ${t.label}: ${t.description}`).join('\n')}` : '  Where their users hurt: nothing captured this update.',
     c.asks.length ? `  What their users ask:\n${c.asks.map((t) => `  - ${t.label}: ${t.description}`).join('\n')}` : '',

@@ -33,7 +33,7 @@ const fmtPct = (n: number) => `${Math.round(n * 10) / 10}%`
 /** Names in the inputs that carry digits, so the writer may repeat them. */
 export function allowedTokens(s: Signals, answers: ResearchAnswer[]): string[] {
   return productTokens([
-    ...s.competitors.flatMap((c) => c.claims.map((cl) => cl.claim)),
+    ...s.competitors.flatMap((c) => [...c.claims, ...c.about].map((cl) => cl.claim)),
     ...s.themes.flatMap((t) => [t.label, t.description]),
     ...answers.flatMap((a) => a.grounded.map((p) => p.text)),
     ...s.sayVsHear.map((e) => e.you_say),
@@ -220,9 +220,10 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       const id = `c_${slug(c.name)}`
       const wc = (w.competitors ?? []).find((x) => x.name.trim().toLowerCase() === c.name.toLowerCase())
       const { ok } = resolveIndices(wc?.based_on, known)
-      const text = (field: 'pitch' | 'praise' | 'hurt' | 'read', fallback: string) => prose(wc?.[field] || fallback, figures, cap(field))
+      const text = (field: 'pitch' | 'about' | 'praise' | 'hurt' | 'read', fallback: string) => prose(wc?.[field] || fallback, figures, cap(field))
       const blocks: DocBlock[] = [
         { id: `${id}.pitch`, field: 'pitch', text: text('pitch', c.claims.length ? c.claims.slice(0, 4).map((cl) => cl.claim).join(' ') : 'Nothing from their own videos was captured this update.') },
+        { id: `${id}.about`, field: 'about', text: text('about', c.about.length ? c.about.slice(0, 4).map((cl) => cl.claim).join(' ') : 'Nothing others said about them was captured this update.') },
         { id: `${id}.praise`, field: 'praise', text: text('praise', c.praise.length ? c.praise.slice(0, 4).map((t) => `${t.label}: ${t.description}`).join(' ') : 'Nothing their users praised was captured this update.') },
         { id: `${id}.hurt`, field: 'hurt', text: text('hurt', c.hurt.length ? c.hurt.slice(0, 4).map((t) => `${t.label}: ${t.description}`).join(' ') : 'Nothing their users complained about was captured this update.') },
         { id: `${id}.read`, field: 'read', text: text('read', '') },
@@ -451,7 +452,7 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
   // to describe competitor pages and personas unconditionally, which on a
   // leadership brief (neither) was a method note for a different document.
   const wherePagesComeFrom = [
-    has('competitor') ? "Competitor pages read each competitor's own videos for what it pitches and its audience's comments for praise and complaint." : '',
+    has('competitor') ? "Competitor pages read each competitor's own videos for what it pitches, videos other people posted about it for what others say, and its audience's comments for praise and complaint." : '',
     has('standing') ? 'Standing is measured as share of the tracked video conversation, and movement is called only where the numbers can carry it.' : '',
     has('say_hear') ? "The claims page sets what the company says in its own videos against what the tracked conversation does with it; a claim it does not take up is recorded as not taken up, never answered on its behalf." : '',
     has('personas') ? 'Personas come from the consumer profile, which groups the whole conversation by who is speaking and where they are in the journey.' : '',
