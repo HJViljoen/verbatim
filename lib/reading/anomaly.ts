@@ -1,5 +1,6 @@
 import { INSIGHT_CATEGORIES } from '../pipeline/schemas'
 import { proportionDelta, SHARE_BAND, type BandOptions, type DeltaVerdict } from '../report-bands'
+import type { Verdict } from './verdicts'
 
 // The anomaly check — is this week unusual against the months behind it?
 // (Phase 0 WP4, design item 40 + §9.20, 2026-09-15. Pure: no DB, no clock.)
@@ -396,5 +397,48 @@ export function weekVsBaseline(input: {
     rows,
     flaggedCount: flagged.length,
     flags: flagged.slice(0, maxFlags),
+  }
+}
+
+// ---- The anomaly check as a verdict ------------------------------------------
+
+/**
+ * One `AnomalyRow` as a `Verdict` (Phase 1 WP3).
+ *
+ * The check was written before the contract and keeps its own row shape: a
+ * replay compares it week by week with what the coverage report published, and
+ * `AnomalyReading` carries the family — the set size, the Holm thresholds, the
+ * baselines — that a single verdict has no room for. So this is an adapter, not
+ * a rewrite, and `weekVsBaseline` is untouched.
+ *
+ * `state` takes the ROW's answer, not the band's. `flagged` means both gates
+ * cleared (the product's floors AND the correction for having asked the whole
+ * set at once), and a row whose band said `moved` but whose p did not clear its
+ * Holm threshold is `no_clear_change` — the check's honest answer, and the
+ * reason the verdict cannot simply be read off `row.verdict.state`.
+ *
+ * No `direction`: three consecutive readings are what earn a direction word,
+ * and a week against a pooled baseline is one reading.
+ */
+export function anomalyVerdict(
+  row: AnomalyRow,
+  window: { from: string; to: string },
+  basis?: { from: string; to: string },
+): Verdict {
+  return {
+    objectKind: row.kind,
+    objectId: row.id,
+    objectLabel: row.label,
+    // The denominator's name IS the audience the share is a share of — an
+    // audience string, or the pooled slice the caller named and prints.
+    audience: row.denominator,
+    window: { kind: 'week', from: window.from, to: window.to },
+    ...(basis ? { basis } : {}),
+    value: { k: row.weekVideos, n: row.weekTotal },
+    baseline: { k: row.baselineVideos, n: row.baselineTotal },
+    changePts: row.verdict?.change ?? null,
+    bandPts: row.verdict?.band ?? null,
+    state: row.state === 'flagged' ? 'moved' : row.state,
+    flags: [],
   }
 }
