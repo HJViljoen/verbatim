@@ -127,7 +127,8 @@ export interface PrecisionRow {
   correct: number
   /** correct / predicted, or null when nothing was predicted. */
   precision: number | null
-  /** Members the person named that the procedure would miss. */
+  /** Members the person named that the procedure would DECIDE AGAINST. A pair
+   *  the procedure leaves to the judge is not missed — it is `unknown`. */
   missed: number
   /** Pairs that would land in the band with no judge decision on file — the
    *  measurement's own blind spot, printed rather than swept up. */
@@ -155,8 +156,12 @@ export function precisionAt(
   for (const p of pairs) {
     const yes = predictAt(p, high, low)
     if (yes === null) {
+      // UNKNOWN ONLY. A pair sitting in the band with no judge decision on file
+      // has not been MISSED — nobody asked. Counting it in both columns made
+      // the recall column read worse than the procedure is, and made `missed`
+      // non-additive with `predicted`. `unknown` is the honest home for it, and
+      // the printed table shows both columns so an operator can see it.
       unknown++
-      if (p.label) missed++
       continue
     }
     if (yes) {

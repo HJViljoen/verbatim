@@ -86,7 +86,7 @@ describe('precisionAt', () => {
     expect(row.unknown).toBe(0)
   })
 
-  it('counts an unjudged band pair as unknown, and as a miss only when it was a member', () => {
+  it('counts an unjudged band pair as unknown and NOT as a miss — nobody asked', () => {
     const row = precisionAt([
       pair({ score: 0.6, judged: null, label: true }),
       pair({ score: 0.6, judged: null, label: false }),
@@ -94,7 +94,9 @@ describe('precisionAt', () => {
     expect(row.unknown).toBe(2)
     expect(row.predicted).toBe(0)
     expect(row.precision).toBeNull()
-    expect(row.missed).toBe(1)
+    // Counting it in both columns made recall read worse than the procedure is
+    // and made `missed` non-additive with `predicted`.
+    expect(row.missed).toBe(0)
   })
 
   it('reports no precision rather than 0% when nothing was predicted', () => {
