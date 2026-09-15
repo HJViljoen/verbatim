@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, monthName, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
-import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { SHARE_BAND } from '../report-bands'
@@ -407,10 +408,15 @@ export function fillingLine(input: FillingLineInput): string {
   }
   parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
   if (input.videos == null) parts.push('nothing read into this month yet')
-  else if (input.expected != null && input.expected > 0) {
-    parts.push(`${fmtInt(input.videos)} of an expected ~${fmtInt(Math.round(input.expected))} videos`)
-  } else {
+  else {
     parts.push(`${fmtInt(input.videos)} ${input.videos === 1 ? 'video' : 'videos'}`)
+    // NOT "of an expected ~N". The design writes the median as a projection,
+    // and on a corpus that is still growing it is not one: Sealand's three
+    // gathered months are 50, 36 and 407, so "475 of an expected ~50" claims a
+    // forecast the number cannot support. The median is stated as what it is —
+    // the trailing months' middle — which is also the mock's own wording on
+    // OV6 ("2,359 videos analysed (trailing median 2,240)").
+    if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
   }
   if (input.status === 'filling') {
     parts.push(
@@ -425,9 +431,18 @@ export function fillingLine(input: FillingLineInput): string {
   return parts.join(' · ')
 }
 
-/** What the largest change is measured against, as a figure table key. */
-const figureKey = (objectId: string, suffix: string): string =>
-  `${objectId.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
+/**
+ * A figure table key for one object.
+ *
+ * THE `o_` PREFIX IS LOad-BEARING. A key is substituted into prose by
+ * `FIGURE_KEY_RE` (lib/prose/scrub.ts), which is `[a-z][a-z0-9_]*` — it must
+ * START WITH A LETTER. Össur's largest mover this month is
+ * `2418f4d7-54a2-…`, and without the prefix its token matched nothing and
+ * `[[2418f4d7_54a2_…_share]]` reached the page verbatim. Caught by rendering
+ * against production; a uuid beginning with a letter had hidden it.
+ */
+export const figureKey = (objectId: string, suffix: string): string =>
+  `o_${objectId.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
 
 export interface HeadlineInput {
   /** The verdicts OV1 chooses its sentence from — subjects and themes. */
@@ -543,9 +558,9 @@ interface RecRow {
   id: string
   title: string
   lineage_id: string | null
-  first_seen_run_date: string | null
   status: string | null
-  rank_score: number | null
+  priority: string | null
+  based_on: { insight_ids?: string[] } | null
 }
 
 interface AnomalyFlagRow {
@@ -563,13 +578,6 @@ interface AnomalyFlagRow {
   rank: number
   explanation: { sentences?: string[] } | null
   quote_refs: string[] | null
-}
-
-/** Months between two month starts, as a count. */
-function monthsApart(from: string, to: string): number {
-  const a = new Date(`${monthStartOf(from)}T00:00:00.000Z`)
-  const b = new Date(`${monthStartOf(to)}T00:00:00.000Z`)
-  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth())
 }
 
 /** The tenant's rivals, from `competitors` where M1 has landed and from the
@@ -705,7 +713,14 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const window = horizonWindow(horizon, readingAt, started.from)
   const axis = window.months
   const month = axis[axis.length - 1]
-  const prevMonth = axis.length > 1 ? axis[axis.length - 2] : null
+  // THE COMPARISON IS THE CALENDAR'S, NOT THE HORIZON'S. "This month" is a
+  // one-month axis, and taking the previous month off the axis left the
+  // default reading of the default page with no month-on-month comparison at
+  // all — every badge silent on the horizon every reader opens first. The
+  // horizon decides how much is DRAWN; the month before this one is always
+  // read, so the page reads one month wider than it draws.
+  const prevMonth = previousMonthOf(month)
+  const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
   const monthStatus = freezeStateFor(month, readingAt)
   const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'overview')
 
@@ -715,8 +730,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const top = themedRunId
     ? await loadTopObjects(reading.client, clientId, {
         objectKind: 'theme',
-        audiences: [INDUSTRY_AUDIENCE],
-        from: axis[0],
+        // EVERY AUDIENCE, not just the category's. OV4's "raised most under
+        // their content" is a reading of the RIVAL's audience, and asking only
+        // for the category's top themes left every rival row with a dash while
+        // Sealand's Cotopaxi carried 21 theme rows that month. `loadTopObjects`
+        // ranks per audience, so one call answers for all of them.
+        audiences,
+        from: readAxis[0],
         to: month,
         limit: MOVER_POOL,
       })
@@ -725,7 +745,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags] =
     await Promise.all([
       loadMonthSeries(reading.client, clientId, {
-        from: axis[0],
+        from: readAxis[0],
         to: month,
         audiences,
         objectKind: 'theme',
@@ -734,9 +754,9 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
         firstRunMonth,
         changeLogFrom: history.changeLogFrom,
       }),
-      readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, axis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
-      readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, axis, ['month', 'audience'], isMissingKindMoodAttention),
-      readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, axis, ['month', 'audience', 'subject_id'], isMissingSubjects),
+      readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, readAxis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
+      readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, readAxis, ['month', 'audience'], isMissingKindMoodAttention),
+      readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, readAxis, ['month', 'audience', 'subject_id'], isMissingSubjects),
       loadSubjects(supabase, clientId),
       loadMoves(supabase, clientId),
       currentPanel(reading.client, clientId).catch((error: unknown) => {
@@ -753,15 +773,27 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     denominatorByMonth.set(d.month, (denominatorByMonth.get(d.month) ?? 0) + d.videos)
   }
   const monthVideos = denominatorByMonth.get(month) ?? null
-  const trailing = axis
-    .slice(0, -1)
+  // THE TRAILING MEDIAN IS THE TENANT'S GATHERED ERA, not its whole history
+  // and not the page's axis. Two ways to get this wrong and production showed
+  // both: off the AXIS, "This month" has no trailing months at all and "Last
+  // 3" has two (Össur read "449 of an expected ~429"); off the whole HISTORY,
+  // the median is dominated by months that were read back at setup and never
+  // gathered — six years of two-video months — and Össur read "449 of an
+  // expected ~15". A month before the first update is not a month we
+  // collected, and comparing a gathered month with one is comparing two
+  // different things. It is the same era gate `thinMonth`'s updates arm
+  // already applies, applied to its median arm.
+  const historyMonths = [...denominatorByMonth.keys()].sort()
+  const trailing = historyMonths
+    .filter((m) => m < month && m >= firstRunMonth)
     .slice(-12)
     .map((m) => denominatorByMonth.get(m) ?? null)
-  const expected = medianOf(trailing)
+  // One month is not a median. Under two, the line prints the count alone.
+  const expected = trailing.length >= 2 ? medianOf(trailing) : null
   const daysIn = daysInto(month, readingAt)
   const thin = thinMonth(
     { month, videos: monthVideos, k: null },
-    [...denominatorByMonth.entries()].filter(([m]) => m < month).slice(-12).map(([, v]) => v),
+    trailing,
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   )
   const updateDates = runsRaw.filter((r) => monthStartOf(r.started_at) === month).map((r) => shortDate(r.started_at))
@@ -798,7 +830,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     months: subjectMonths,
     denominators: denominatorByMonth,
     perAudience: audienceMonthVideos(history.denominators),
-    axis,
+    axis: readAxis,
     month,
     prevMonth,
     leadRival: leadRival?.name ?? null,
@@ -808,7 +840,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // ── OV3 · what the category is saying ─────────────────────────────────
   const category = buildCategory({
     audience: INDUSTRY_AUDIENCE,
-    axis,
+    axis: readAxis,
     month,
     prevMonth,
     series: themeSet.series,
@@ -861,7 +893,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     verdicts: thin ? [] : sentenceVerdicts,
     audienceLabel: 'the category’s videos',
   })
-  const ledger = await loadLedger(supabase, clientId, month)
+  const ledger = await loadLedger(supabase, clientId)
   const voices = await loadVoices(supabase, head.lead, top, themedRunId)
   const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null
   const interpretation = composeInterpretation(
@@ -998,14 +1030,18 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
 }
 
 /** The top row of Market's ledger, with its age and the decision on it. */
-async function loadLedger(supabase: SupabaseClient, clientId: string, month: string): Promise<LedgerRow | null> {
+async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<LedgerRow | null> {
   const [recRes, decisionRes] = await Promise.all([
     supabase
       .from('recommendations')
-      .select('id, title, lineage_id, first_seen_run_date, status, rank_score')
-      .eq('client_id', clientId)
-      .order('rank_score', { ascending: false, nullsFirst: false })
-      .limit(1),
+      // THE COLUMNS THE TABLE ACTUALLY HAS. There is no `first_seen_run_date`
+      // and no `rank_score`: Pass D-b deletes and reinserts every
+      // recommendation each update, so the row carries no history at all and
+      // `lineage_id` is the only thing about it that survives. Ordering is
+      // `topRecommendation`'s — priority, then how well grounded — so Overview
+      // and Market name the same top row.
+      .select('id, title, lineage_id, status, priority, based_on')
+      .eq('client_id', clientId),
     selectAll<RecDecision>(() =>
       supabase
         .from(REC_DECISIONS_TABLE)
@@ -1016,7 +1052,7 @@ async function loadLedger(supabase: SupabaseClient, clientId: string, month: str
         .limit(200),
     ).catch(() => [] as RecDecision[]),
   ])
-  const rec = rows<RecRow>(recRes, 'overview.recommendation')[0]
+  const rec = topRecommendation(rows<RecRow>(recRes, 'overview.recommendation'))
   if (!rec) return null
   const decided = rec.lineage_id
     ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
@@ -1025,9 +1061,15 @@ async function loadLedger(supabase: SupabaseClient, clientId: string, month: str
   return {
     id: rec.id,
     title: rec.title,
-    // Age needs a lineage; it is null on every stored row today and the block
-    // prints nothing rather than dating a recommendation from its newest copy.
-    monthsOld: rec.lineage_id && rec.first_seen_run_date ? monthsApart(rec.first_seen_run_date, month) : null,
+    // NO AGE, AND THAT IS THE HONEST ANSWER TODAY. "First raised N months ago"
+    // needs a lineage with history behind it; every stored row was written by
+    // the newest update and `lineage_id` was backfilled to the row's own id in
+    // 20260915093000, so dating one from what is stored would date it from its
+    // newest copy. The earliest DECISION is a real date and a different claim
+    // (when you first acted, not when we first said it), so it is printed as
+    // itself below and never as an age. Market's ledger (WP14) is where the
+    // age arrives, once two updates have carried one lineage.
+    monthsOld: null,
     status: recStatus(inherited ?? rec.status),
     statusLabel: REC_STATUS_LABEL[recStatus(inherited ?? rec.status)],
     decidedAt: decided?.decided_at ?? null,
@@ -1109,6 +1151,13 @@ async function loadVoices(
       const text = cleanQuote(c.quote)
       const key = text.toLowerCase()
       if (!text || seen.has(key)) continue
+      // THE ONE ENGLISH-AND-LENGTH GATE (lib/quotes.ts, item 8). Without it
+      // production offered "must buyyy" and "must buy" as Sealand's two
+      // voices: two near-identical four-character comments, on the block that
+      // is supposed to be the month's evidence. It reads the cache's own
+      // language answer where there is one and the heuristic where there is
+      // not, so a translated quote is kept and an unreadable one is not.
+      if (!readsAsHeroQuote(text, c)) continue
       seen.add(key)
       pool.push({ ...c, quote: text })
     }
@@ -1149,7 +1198,7 @@ interface SubjectsInput {
   perAudience: Map<string, number>
   axis: readonly string[]
   month: string
-  prevMonth: string | null
+  prevMonth: string
   leadRival: string | null
   thin: boolean
 }

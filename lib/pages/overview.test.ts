@@ -23,6 +23,9 @@ import {
   type SubjectRow,
 } from './overview'
 import type { Verdict } from '../reading/verdicts'
+import { proseFigures } from '../prose/figures'
+import { FIGURE_KEY_RE } from '../prose/scrub'
+import { substituteFigures } from '../reports/cover'
 
 // The Overview's pure half (Phase 1 WP11). Everything here is shape and words:
 // the loader's I/O is exercised against production read-only and the blocks are
@@ -79,7 +82,7 @@ describe('fillingLine', () => {
 
   it('prints the month so far against the same point last month', () => {
     expect(fillingLine(base)).toBe(
-      'September, 18 days in · 3 updates · 271 of an expected ~469 videos · last month at this point: 244',
+      'September, 18 days in · 3 updates · 271 videos · trailing median 469 · last month at this point: 244',
     )
   })
 
@@ -111,8 +114,8 @@ describe('headline', () => {
       audienceLabel: 'the category’s videos',
     })
     expect(h.lead?.objectLabel).toBe('Durability')
-    expect(h.body).toContain('Durability came up in [[t1_share]]')
-    expect(Object.keys(h.figures).sort()).toEqual(['t1_of', 't1_share', 't1_videos'])
+    expect(h.body).toContain('Durability came up in [[o_t1_share]]')
+    expect(Object.keys(h.figures).sort()).toEqual(['o_t1_of', 'o_t1_share', 'o_t1_videos'])
     // Code's sentence, not the model's: no digit is typed into it.
     expect(h.body.replace(/\[\[[a-z0-9_]+\]\]/g, '')).not.toMatch(/\d/)
   })
@@ -120,6 +123,16 @@ describe('headline', () => {
   it('takes the largest by magnitude, in either direction', () => {
     const h = headline({ verdicts: [moved('t1', 'Durability', 2.0), moved('t2', 'Price', -9.3)], audienceLabel: 'x' })
     expect(h.lead?.objectId).toBe('t2')
+  })
+
+  it('keys a figure so it can actually be substituted, whatever the object id is', () => {
+    // Össur's largest mover is `2418f4d7-…`: a key taken straight off that id
+    // starts with a digit, FIGURE_KEY_RE never matches it, and the raw
+    // `[[…]]` token reaches the reader. Found by rendering against production.
+    const h = headline({ verdicts: [moved('2418f4d7-54a2-497e-8433-6cd89bc2322b', 'Admiration', 5.1)], audienceLabel: 'x' })
+    for (const key of Object.keys(h.figures)) expect(key).toMatch(/^[a-z][a-z0-9_]*$/)
+    expect(substituteFigures(h.body, proseFigures(h.figures)).some((p) => 'figure' in p)).toBe(true)
+    expect(h.body.match(FIGURE_KEY_RE)?.length).toBe(3)
   })
 
   it('reads nothing that did not clear its band', () => {

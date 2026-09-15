@@ -45,6 +45,9 @@ describe('the Overview’s blocks', () => {
         for (const mode of MODES) {
           const markup = render(block.render(data, mode, ctx))
           expect(markup.length).toBeGreaterThan(0)
+          // No unsubstituted figure token ever reaches a reader — the defect
+          // production found on an object id that begins with a digit.
+          expect(markup, `${block.key}/${mode}`).not.toContain('[[')
           assertCopyContract(markup)
         }
       }

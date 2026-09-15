@@ -56,12 +56,13 @@ export const overviewBar: Block<OverviewData> = {
             size="lg"
             base={`${longMonth(b.month)}${b.daysIn == null ? ', complete' : `, ${b.daysIn} ${b.daysIn === 1 ? 'day' : 'days'} in`}`}
           />
-          <BlockStat
-            value={b.atLastMonthKnown && b.atLastMonth != null ? fmtInt(b.atLastMonth) : '—'}
-            unit="videos"
-            mode={mode}
-            base="last month at this point"
-          />
+          {/* Drawn only where the comparison exists. An em dash under "last
+              month at this point" is a stat that says nothing, beside a line
+              that already says why — and two ways of printing the same absence
+              is one too many. */}
+          {b.atLastMonthKnown && b.atLastMonth != null ? (
+            <BlockStat value={fmtInt(b.atLastMonth)} unit="videos" mode={mode} base="last month at this point" />
+          ) : null}
           <BlockStat
             value={fmtInt(b.updates)}
             unit={b.updates === 1 ? 'update' : 'updates'}
