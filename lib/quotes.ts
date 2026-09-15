@@ -331,6 +331,39 @@ export async function fetchQuoteTextsByCommentId(
 
 const HERO_TABLES = new Set(['recommendations', 'market_insights', 'competitive_insights', 'account_events'])
 
+/**
+ * One kind of ref's read, allowed to fail without taking the render with it.
+ *
+ * Used ONLY by `fetchQuoteTextsByRefs`, and the asymmetry is the point.
+ * `fetchChunks` pages through `selectAll`, which throws on any PostgREST error
+ * — right for a live page (it reloads) and for a pipeline step (it retries),
+ * and wrong here: this function is the hydration boundary of a FROZEN artefact,
+ * and its callers are the Sunday digest send (lib/schedules/deliver.ts), the
+ * share link and the PDF/PNG export (app/render/[snapshotId]), the schedule
+ * preview and the Studio editor. Those are one-shot renders of numbers that are
+ * already final, fired two tenants at a time into a 5-slot account at 06:00 —
+ * exactly when a connection reset or a statement timeout on the 120-id comment
+ * read is most likely. One transient error on one of eight parallel reads must
+ * not be the difference between the digest going out with a few quotes missing
+ * and the digest not going out at all.
+ *
+ * Refs that do not resolve are absent from the map and the resolver drops them
+ * by contract, so a failed read degrades exactly as an erased comment does. It
+ * is loud in the log, with the ref kind and how many were being asked for, so a
+ * render that came back thin can be explained rather than guessed at.
+ */
+async function softRead<T>(kind: string, count: number, read: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await read()
+  } catch (e) {
+    console.error(
+      `[quotes] ${count} ${kind} ref(s) did not resolve, rendering without them: ` +
+      `${e instanceof Error ? e.message : String(e)}`,
+    )
+    return fallback
+  }
+}
+
 /** Resolve quote TEXT for snapshot refs — 'e:<insight_evidence.id>',
  *  'c:<comments.id>', 'v:<videos.id>', 'h:<table>:<row id>'
  *  (lib/renderables/quotes-freeze.ts). Same rule and same reason as
@@ -338,7 +371,11 @@ const HERO_TABLES = new Set(['recommendations', 'market_insights', 'competitive_
  *  a stored export re-renders without any voice the erasure sweep has removed.
  *  Hero refs read the row's hero_quote, which that sweep nulls by string
  *  match. Refs that do not resolve are absent from the map and the resolver
- *  drops them. */
+ *  drops them.
+ *
+ *  Each kind of ref is read through `softRead`, so a failure of one read costs
+ *  those quotes and not the whole render — see its comment for why this one
+ *  boundary degrades where every other reader throws. */
 export async function fetchQuoteTextsByRefs(
   client: unknown,
   refs: string[],
@@ -362,16 +399,18 @@ export async function fetchQuoteTextsByRefs(
     const m = /^([ecvmp]):(.+)$/.exec(ref)
     if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p'].push(m[2])
   }
-  const heroReads = [...heroes.entries()].map(async ([table, ids]) => {
-    const rows = await fetchChunks<{ id: string; hero_quote: string | null }>(
-      ids,
-      (chunk) => c.from(table).select('id, hero_quote').in('id', chunk).order('id') as unknown as Rows,
-    )
-    for (const r of rows) if (r.hero_quote) out.set(`h:${table}:${r.id}`, cleanQuote(r.hero_quote))
-  })
+  const heroReads = [...heroes.entries()].map(([table, ids]) =>
+    softRead(`h:${table}`, ids.length, async () => {
+      const rows = await fetchChunks<{ id: string; hero_quote: string | null }>(
+        ids,
+        (chunk) => c.from(table).select('id, hero_quote').in('id', chunk).order('id') as unknown as Rows,
+      )
+      for (const r of rows) if (r.hero_quote) out.set(`h:${table}:${r.id}`, cleanQuote(r.hero_quote))
+    }, undefined),
+  )
   // "Said about you" claims quoted from videos: run_summary.brand_voice.about[n].
   const brandVoiceRead = brandVoice.size
-    ? (async () => {
+    ? softRead('b: (said about you)', brandVoice.size, async () => {
         const rows = await fetchChunks<{ run_id: string; brand_voice: { about?: { quote?: string | null }[] } | null }>(
           [...brandVoice.keys()],
           (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk).order('id') as unknown as Rows,
@@ -382,13 +421,13 @@ export async function fetchQuoteTextsByRefs(
             if (q) out.set(`b:${r.run_id}:${n}`, cleanQuote(q))
           }
         }
-      })()
+      }, undefined)
     : Promise.resolve()
   // m: the comment as posted — read from `comments`, but only for ids an
   // evidence row still cites (redacted = false), so the sweep's deletion and
   // the counts-not-quotes rule reach it exactly as they reach the excerpt.
   const messageRead = by.m.length
-    ? (async () => {
+    ? softRead('m: (comment as posted)', by.m.length, async () => {
         const cited = await fetchChunks<{ comment_id: string | null }>(
           by.m,
           (chunk) => c.from('insight_evidence').select('comment_id').in('comment_id', chunk).eq('redacted', false).order('id'),
@@ -399,31 +438,31 @@ export async function fetchQuoteTextsByRefs(
           (chunk) => c.from('comments').select('id, text').in('id', chunk).order('id') as unknown as Rows,
         )
         for (const r of rows) if (r.text) out.set(`m:${r.id}`, cleanQuote(r.text))
-      })()
+      }, undefined)
     : Promise.resolve()
   // p: a customer phrase — language_samples by id (cascade-deleted with its comment).
   const phraseRead = by.p.length
-    ? (async () => {
+    ? softRead('p: (customer phrase)', by.p.length, async () => {
         const rows = await fetchChunks<{ id: string; phrase: string | null }>(
           by.p,
           (chunk) => c.from('language_samples').select('id, phrase').in('id', chunk).order('id') as unknown as Rows,
         )
         for (const r of rows) if (r.phrase) out.set(`p:${r.id}`, r.phrase)
-      })()
+      }, undefined)
     : Promise.resolve()
   const [byId, byComment, byVideo] = await Promise.all([
-    fetchChunks<{ id: string; quote: string | null }>(
+    softRead('e: (evidence)', by.e.length, () => fetchChunks<{ id: string; quote: string | null }>(
       by.e,
       (chunk) => c.from('insight_evidence').select('id, quote').in('id', chunk).eq('redacted', false).order('id'),
-    ),
-    fetchChunks<{ comment_id: string | null; quote: string | null }>(
+    ), []),
+    softRead('c: (comment)', by.c.length, () => fetchChunks<{ comment_id: string | null; quote: string | null }>(
       by.c,
       (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false).order('id'),
-    ),
-    fetchChunks<{ source_video_id: string | null; quote: string | null }>(
+    ), []),
+    softRead('v: (video)', by.v.length, () => fetchChunks<{ source_video_id: string | null; quote: string | null }>(
       by.v,
       (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false).order('id'),
-    ),
+    ), []),
   ])
   await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead])
   for (const r of byId) if (r.quote && !out.has(`e:${r.id}`)) out.set(`e:${r.id}`, r.quote)
