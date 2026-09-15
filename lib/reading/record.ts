@@ -631,8 +631,12 @@ const plural = (n: number, word: string): string => `${fmtInt(n)} ${word}${n ===
 /**
  * The one "how sound is this" line, in the page bar.
  *
- * One counter on screen and no other method text on the page. It opens to the
- * record; everything it cannot say in a clause it says there.
+ * One sentence on screen and no other method text on the page. It is printed
+ * in full, in the open, under the bar — the mock's band (`Main.dc.html`) — and
+ * beside it a link opens the record, where everything the sentence cannot say
+ * is said. The words "the record" are that link's, not this sentence's: a line
+ * that ends "→ the record" reads as an instruction wherever it is printed
+ * without one, which is what the record page itself did.
  */
 export function howSoundLine(input: RecordInputs): string {
   const parts: string[] = []
@@ -657,7 +661,7 @@ export function howSoundLine(input: RecordInputs): string {
   }
 
   if (input.changes.inWindow > 0) parts.push(plural(input.changes.inWindow, 'tracking change'))
-  return `${parts.join(' · ')} → the record`
+  return parts.join(' · ')
 }
 
 /**

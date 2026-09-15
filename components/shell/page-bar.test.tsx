@@ -42,6 +42,21 @@ describe('SurfacePageBar', () => {
     expect(render(<SurfacePageBar nav="market" />)).not.toContain('reading as at')
   })
 
+  it('prints the whole basis sentence in the open, not in a tooltip', () => {
+    // The mock draws the band with every clause visible. A `title` attribute
+    // is nothing on a phone, nothing in a screenshot and nothing on paper, and
+    // the video count and the non-English share are the reading's own basis.
+    const record = {
+      line: '4 updates · 2,359 videos · 27% of what was said on camera was not in English · 1 tracking change',
+      lines: ['Four updates were delivered in this window.'],
+    }
+    const text = renderText(<SurfacePageBar nav="overview" context={CONTEXT} record={record} />)
+    expect(text).toContain('2,359 videos')
+    expect(text).toContain('27% of what was said on camera was not in English')
+    expect(text).toContain('1 tracking change')
+    expect(text).toContain('the record →')
+  })
+
   it('offers the horizon on exactly the five surfaces the table says', () => {
     for (const s of SURFACES) {
       const markup = render(<SurfacePageBar nav={s.key} context={CONTEXT} updates={{ update: '2026-09-14T04:00:00Z' }} />)

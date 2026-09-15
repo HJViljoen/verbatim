@@ -2,23 +2,29 @@
 
 import { useSearchParams } from 'next/navigation'
 import { DrawerLink } from '@/components/shell/drawer-link'
-import { BarPill } from '@/components/shell/page-grid'
 import { Card, CardContent } from '@/components/ui/card'
 import { detailHref } from '@/lib/shell/bar'
 
-// "How sound is this?" — the one counter a reading surface shows about itself,
-// and the record behind it (item 7, WP7's composer).
+// "How sound is this" — the sentence a reading surface says about its own
+// basis, and the record behind it (item 7, WP7's composer).
+//
+// IN THE OPEN, as the mock draws it (`mock-sealand/artboards/Main.dc.html`): a
+// bordered band under the bar carrying the whole sentence — the updates, the
+// videos, the share not in English, the tracking changes — and beside it one
+// link to the record. It was briefly a pill wearing the first clause with the
+// sentence in a `title` attribute; that hid the video count, the non-English
+// share and the tracking-change count from every phone, every tablet, every
+// screenshot and every print, on a product whose argument is that a reading
+// states its own basis.
 //
 // Same mechanism as HowToRead: the record is static text already in the
 // payload, so opening it must not cost a server round trip. `?detail=record`
 // is the address, pushed with history.pushState by DrawerLink, and closing it
-// returns to the page's own address.
+// returns to the page's own address, selection and all.
 //
-// The pill prints ONE line and the record prints the rest. The rule that made
-// it one line: a method note nobody reads is a method note that has failed, and
-// six clauses in a page bar is a method note. Everything the clause cannot say,
-// the record says in full — including the facts nothing has recorded yet, which
-// print as "not recorded" rather than as a zero.
+// The band prints the sentence and the record prints the rest — including the
+// facts nothing has recorded yet, which print as "not recorded" rather than as
+// a zero.
 
 export function HowSound({
   basePath, params = {}, line, lines,
@@ -28,9 +34,6 @@ export function HowSound({
   // a static render in a test or a script — and a page bar that throws
   // outside Next is a page bar nothing can check.
   const isOpen = sp?.get('detail') === 'record'
-  // The pill wears the short head of the line — the counter, not the sentence —
-  // and the whole sentence is its title, so a bar at phone width never wraps.
-  const head = line.split(' · ')[0]
   // The reader's horizon and selection travel with the record, both ways. The
   // drawer is pushed with history.pushState and nothing re-renders, so a bare
   // basePath would leave the address bar saying "/dashboard/voice" while the
@@ -40,9 +43,16 @@ export function HowSound({
   const close = detailHref(basePath, params, null)
   return (
     <>
-      <DrawerLink href={open} title={line} className="shrink-0 cursor-pointer" data-print-hide>
-        <BarPill>How sound is this? · {head}</BarPill>
-      </DrawerLink>
+      {/* The band wraps rather than truncates: at phone width the sentence
+          takes the lines it needs. It is NOT print-hidden — the basis is part
+          of the reading wherever the reading is seen — but the link into the
+          record is, because a link is furniture on paper. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 self-start rounded-2xl px-3 py-1.5 ring-1 ring-border">
+        <span className="font-mono text-[11px] leading-[1.5] text-muted-foreground">How sound is this: {line}</span>
+        <DrawerLink href={open} className="shrink-0 cursor-pointer text-[12px] font-medium text-foreground underline underline-offset-2" data-print-hide>
+          the record →
+        </DrawerLink>
+      </div>
       {isOpen && (
         <div role="dialog" aria-modal="true" aria-label="The record" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-8">
           <DrawerLink href={close} aria-label="Close" className="absolute inset-0 bg-foreground/25">{''}</DrawerLink>

@@ -79,11 +79,17 @@ describe('countRefused', () => {
   })
 })
 
-describe('howSoundLine — one line, one counter, opening to the record', () => {
+describe('howSoundLine — one sentence, printed in the open', () => {
   it('is the design’s line', () => {
     expect(howSoundLine(inputs())).toBe(
-      '3 updates · 394 videos (YouTube 212 · TikTok 163 · Instagram 82 · Reddit 12) · 34% of what was said on camera was not in English · 1 tracking change → the record',
+      '3 updates · 394 videos (YouTube 212 · TikTok 163 · Instagram 82 · Reddit 12) · 34% of what was said on camera was not in English · 1 tracking change',
     )
+  })
+
+  it('names no link — the record is a link beside it, not a clause in it', () => {
+    // The same string is printed in the band, in the record's own dialog and
+    // anywhere a screenshot catches it; only one of those places has a link.
+    expect(howSoundLine(inputs())).not.toContain('the record')
   })
 
   it('states the non-English share against what is KNOWN, not against everything', () => {

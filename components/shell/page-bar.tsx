@@ -9,8 +9,9 @@ import { parseHorizon } from '@/lib/reading/horizon'
 /**
  * The page bar every Phase 1 surface wears (item 42, the mock's §3.2).
  *
- * Title · the one question · the context line · the horizon · "how sound is
- * this" · Export, in that order, composed from lib/nav.ts so the label a
+ * Title · the context line · the horizon and Export at the right-hand end · the
+ * one question under them · the "how sound is this" band under that, composed
+ * from lib/nav.ts so the label a
  * reader clicked in the sidebar and the title at the top of the page it opened
  * are the same string.
  *
@@ -50,11 +51,16 @@ export function SurfacePageBar({ nav, params = {}, context = null, updates = nul
       : null
 
   return (
-    <PageBar title={s.label} context={line ?? undefined} subtitle={s.question ?? undefined}>
-      {hasHorizon(s) && <HorizonControl basePath={s.href} params={params} current={horizon} />}
+    <div className="flex shrink-0 flex-col gap-1.5">
+      <PageBar title={s.label} context={line ?? undefined} subtitle={s.question ?? undefined}>
+        {hasHorizon(s) && <HorizonControl basePath={s.href} params={params} current={horizon} />}
+        {children}
+      </PageBar>
+      {/* Under the bar, not in it (the mock's band): the basis is a sentence a
+          reader reads, not a control they operate, and the right-hand end of
+          the title row is where the controls are. */}
       {record && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
-      {children}
-    </PageBar>
+    </div>
   )
 }
 
