@@ -23,6 +23,7 @@ import { planTranscriptBackfill, backfillTranscriptsBatch, emptyBackfillTally, m
 import { discoverSubreddits } from '@/lib/gather/subreddit-discovery'
 import { activeSubreddits } from '@/lib/gather/subreddits'
 import { runStep2c } from '@/lib/pipeline/owned-events'
+import { runAnomalyCheck } from '@/lib/pipeline/anomaly-check'
 import { runPassE } from '@/lib/pipeline/pass-e'
 import { reevaluatePlanChecks } from '@/lib/ask/reevaluate'
 import { summariseRunErrors, partialRunAlert, passADegradation, isolatedBatchDegradation, runCloseStatus, RUN_ERROR_CAP } from '@/lib/pipeline/run-errors'
@@ -34,6 +35,7 @@ import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { pipelineActor } from '@/lib/config-log'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { SLICE } from '@/lib/reading/coverage'
 import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { embeddingCoverage } from '@/lib/agent/retrieve'
@@ -1612,6 +1614,50 @@ export const runPipeline = inngest.createFunction(
       })
       .catch((e) => {
         console.error(`[freeze-months] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
+    // The anomaly check (design item 40, decision S). HERE, between
+    // freeze-months and owned-events, for two reasons and not by taste: it
+    // reads the month rows freeze-months has just written, and it wants this
+    // run's themes exactly as owned-events does. An ADDITIVE id in its own
+    // position — never a rename, a renumber or a reorder (AGENTS.md).
+    //
+    // Logged, NOT noteError'd — the freeze-months and keyword-discovery
+    // precedent. The flags are a record kept alongside the report, and a clean
+    // update must not read 'partial' because a bookkeeping pass had a bad day.
+    // A no-op, not a retry loop, until its migration is applied.
+    //
+    // THE ORDER IS ALSO WHAT GUARANTEES THE WEEKLY REPORT SEES THE FLAGS.
+    // `report/send.requested` is emitted after close-run, which is after this;
+    // so the rows are on disk before the report function starts.
+    //
+    // ONE MODEL CALL, AND ONLY IF SOMETHING FIRED. gpt-4.1-mini, ~$0.0014 on a
+    // week that flags and $0 on the ~21 of 22 tenant-weeks that do not.
+    await step
+      .run('anomaly-check', async () => {
+        const r = await runAnomalyCheck({
+          clientId,
+          runId,
+          window: runWindow,
+          // The videos this update held. `pipeline_runs.videos_scraped` is the
+          // same measure on the trailing runs — and is not written until
+          // close-run, which is why it is passed in rather than read.
+          updateVideos: totalVideos,
+        })
+        console.log(`[anomaly-check] ${r.status} — ${r.note}`)
+        if (r.registration) {
+          console.log(
+            `[anomaly-check] set: ${r.registration.counts.kind} kinds · ${r.registration.counts.rival} rivals · ` +
+            `${r.registration.counts.subject} subjects · ${r.registration.counts.theme} themes ` +
+            `(${r.registration.trimmed.length} of ${r.registration.ranked} ranked themes could not reach ` +
+            `${r.registration.minWeekVideos} videos in a typical week of ${Math.round(r.registration.medianWeekVideos[SLICE] ?? 0)})`,
+          )
+        }
+        return { status: r.status, written: r.written, flagged: r.reading?.flaggedCount ?? 0, costUsd: r.costUsd }
+      })
+      .catch((e) => {
+        console.error(`[anomaly-check] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
 
