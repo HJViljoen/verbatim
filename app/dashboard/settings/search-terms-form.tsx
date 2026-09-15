@@ -35,7 +35,7 @@ const idleSuggest: SuggestState = { ok: false, message: '', suggestions: null }
 
 /** One editable list of terms: chips, an add box, and the count against the cap. */
 function TermList({
-  name, label, hint, terms, suggestions, disabled, onAdd, onRemove,
+  name, label, hint, terms, suggestions, disabled, dates, onAdd, onRemove,
 }: {
   name: Bucket
   label: string
@@ -43,6 +43,10 @@ function TermList({
   terms: string[]
   suggestions: string[]
   disabled: boolean
+  /** When each term entered the set, folded lower-case, from the change log
+   *  (WP16). Absent for a term the log never names — the chip then carries no
+   *  date rather than a guess, and the panel says why once underneath. */
+  dates?: Readonly<Record<string, string>>
   onAdd: (term: string) => string | null
   onRemove: (term: string) => void
 }) {
@@ -70,6 +74,9 @@ function TermList({
           <li key={t}>
             <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-tile py-0.5 pl-2.5 pr-1 text-[11.5px] shadow-block">
               {t}
+              {dates?.[t.trim().toLowerCase()] && (
+                <span className="font-mono text-[10px] text-muted-foreground">{dates[t.trim().toLowerCase()]}</span>
+              )}
               <input type="hidden" name={name} value={t} />
               <button
                 type="button"
@@ -139,7 +146,15 @@ function TermList({
   )
 }
 
-export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canEdit: boolean }) {
+export function SearchTermsForm({ cfg, canEdit, dates, datesNote }: {
+  cfg: SearchTermsConfig
+  canEdit: boolean
+  /** When each term entered the set, from the change log (WP16), folded
+   *  lower-case. A term the log never names carries no date at all — the
+   *  boundary sentence below says why, once, instead of a guess on each chip. */
+  dates?: Readonly<Record<string, string>>
+  datesNote?: string
+}) {
   const [state, formAction, saving] = useActionState(updateSearchTerms, idleSave)
   const [suggest, setSuggest] = useState<SuggestState>(idleSuggest)
   const [suggesting, startSuggest] = useTransition()
@@ -192,21 +207,21 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
               name="brand_keywords" label="Your brand"
               hint="How people write your name, including the ways they get it wrong."
               terms={terms.brand_keywords} suggestions={unused('brand_keywords', suggest.suggestions?.brand ?? [])}
-              disabled={disabled}
+              disabled={disabled} dates={dates}
               onAdd={(t) => addTerm('brand_keywords', t)} onRemove={(t) => removeTerm('brand_keywords', t)}
             />
             <TermList
               name="competitor_keywords" label="Competitors"
               hint="What we search for to find their posts. Names to tag them by are set below."
               terms={terms.competitor_keywords} suggestions={unused('competitor_keywords', suggest.suggestions?.competitors ?? [])}
-              disabled={disabled}
+              disabled={disabled} dates={dates}
               onAdd={(t) => addTerm('competitor_keywords', t)} onRemove={(t) => removeTerm('competitor_keywords', t)}
             />
             <TermList
               name="industry_keywords" label="Your category"
               hint="What buyers type when they are talking about this kind of product."
               terms={terms.industry_keywords} suggestions={unused('industry_keywords', suggest.suggestions?.category ?? [])}
-              disabled={disabled}
+              disabled={disabled} dates={dates}
               onAdd={(t) => addTerm('industry_keywords', t)} onRemove={(t) => removeTerm('industry_keywords', t)}
             />
           </div>
@@ -216,11 +231,13 @@ export function SearchTermsForm({ cfg, canEdit }: { cfg: SearchTermsConfig; canE
               name="exclude_terms" label="Not this"
               hint="Senses of your name that are not you — Cotopaxi the volcano, Sealand the shipping line. One of these only counts against a post that carries none of your other terms, so the richer your lists above, the safer this is."
               terms={terms.exclude_terms} suggestions={[]}
-              disabled={disabled}
+              disabled={disabled} dates={dates}
               onAdd={(t) => addTerm('exclude_terms', t)} onRemove={(t) => removeTerm('exclude_terms', t)}
             />
           </div>
         </fieldset>
+
+        {datesNote && <p className="text-[11px] text-muted-foreground">{datesNote}</p>}
 
         {canEdit ? (
           <div className="flex flex-wrap items-center gap-3">

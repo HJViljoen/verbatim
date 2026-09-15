@@ -76,3 +76,73 @@ export function termDateWords(date: TermDate | undefined): string {
   if (!date) return 'in the set before we kept a record'
   return date.source === 'recorded' ? `added ${date.on}` : `in use by ${date.on}, not recorded`
 }
+
+// ---- The per-term yield, month by month -------------------------------------
+
+/**
+ * A term's yield per month — and the month is the UPDATE's, not the comment's.
+ *
+ * This is the one figure in the product that is honestly run-dated, and it
+ * says so wherever it is printed. `keyword_performance` records what a GATHER
+ * found: a term that ran on 13 September found what it found that day, and the
+ * comments behind those videos are dated by their own clock and belong to
+ * whatever months they belong to. So this axis cannot be put beside the monthly
+ * reading's, and a page that drew them on one chart would be claiming a term's
+ * yield moved in a month when what moved was when we searched.
+ *
+ * AGENTS.md's rule is that `run_id` / `run_date` are never a period key OUTSIDE
+ * a run's own bookkeeping. A gather is a run's own bookkeeping; this is the
+ * record of what each gather brought back.
+ */
+export interface TermMonth {
+  month: string
+  found: number
+  kept: number
+  /** kept / found, 0-100, one decimal. */
+  keptPct: number
+}
+
+export interface TermYield {
+  keyword: string
+  months: TermMonth[]
+  found: number
+  kept: number
+  keptPct: number
+}
+
+export interface KeywordRunRow {
+  keyword: string
+  videos_found: number
+  gate_survived: number
+  created_at: string
+}
+
+export function termYieldByMonth(rows: readonly KeywordRunRow[]): TermYield[] {
+  const byTerm = new Map<string, Map<string, { found: number; kept: number }>>()
+  for (const r of rows) {
+    const keyword = (r.keyword ?? '').trim()
+    if (!keyword) continue
+    const month = r.created_at.slice(0, 7)
+    const months = byTerm.get(keyword) ?? new Map()
+    const cell = months.get(month) ?? { found: 0, kept: 0 }
+    cell.found += r.videos_found ?? 0
+    cell.kept += r.gate_survived ?? 0
+    months.set(month, cell)
+    byTerm.set(keyword, months)
+  }
+  const pct = (k: number, n: number) => (n > 0 ? Math.round((k / n) * 1000) / 10 : 0)
+  return [...byTerm.entries()]
+    .map(([keyword, months]) => {
+      const list = [...months.entries()]
+        .map(([month, v]) => ({ month, ...v, keptPct: pct(v.kept, v.found) }))
+        .sort((a, b) => (a.month < b.month ? -1 : 1))
+      const found = list.reduce((n, m) => n + m.found, 0)
+      const kept = list.reduce((n, m) => n + m.kept, 0)
+      return { keyword, months: list, found, kept, keptPct: pct(kept, found) }
+    })
+    .sort((a, b) => b.found - a.found || a.keyword.localeCompare(b.keyword))
+}
+
+/** The sentence that has to sit beside every one of those numbers. */
+export const TERM_YIELD_BASIS =
+  'Dated by the update that searched, not by when the comments were written — this is what each search brought back, and it is the only figure here on that clock.'
