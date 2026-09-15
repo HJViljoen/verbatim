@@ -147,8 +147,13 @@ create table if not exists public.comment_translations (
   -- only other language columns are on videos and describe the CREATOR's
   -- speech, which as a per-comment decider is 34–58% precise (refute-07 §1.3).
   language     text not null,
-  -- The English rendering, or NULL for "this text is already English". NULL is
-  -- a RESULT, not a missing value — the row exists, so the text has been read.
+  -- The English rendering, or NULL for "there is nothing to render": the text
+  -- is already English ('en'), or it carries no language at all ('und' — pure
+  -- emoji, a bare handle, digits). NULL is a RESULT, not a missing value — the
+  -- row exists, so the text has been read, and a text that has been read is
+  -- never sent to the model again. Only a NON-ENGLISH, NON-'und' language with
+  -- a null rendering is a failed reading, and that combination is never
+  -- written.
   english      text,
   model        text not null,
   prompt_version text not null,
@@ -161,9 +166,9 @@ comment on table public.comment_translations is
 comment on column public.comment_translations.text_hash is
   'sha-256 hex of the exact text translated, whitespace-collapsed. The cache key''s second half and the only invalidation an edited comment gets: the YouTube refresh upserts a comment on (client_id, platform, comment_id), so an edit keeps the row id and changes the text.';
 comment on column public.comment_translations.english is
-  'NULL means "already English" — a result the model returned, not an absent value. A row with a non-English language and a NULL english is a failed reading and is never written.';
+  'NULL means there is nothing to render — the text is already English, or its language is ''und'' (it carries no language at all: pure emoji, a bare handle, digits). Either way it is a result the model returned, not an absent value, and the row exists so the text is never paid for again. Only a non-English, non-''und'' language with a NULL english is a failed reading, and that is never written.';
 comment on column public.comment_translations.language is
-  'The language the model detected in this text. The only per-comment language signal in the schema; videos.transcript_lang is the creator''s speech and is 34–58% precise used as a per-comment decider.';
+  'The language the model detected in this text, or ''und'' where there is none to detect. The only per-comment language signal in the schema; videos.transcript_lang is the creator''s speech and is 34–58% precise used as a per-comment decider.';
 
 create index if not exists comment_translations_client_hash_idx
   on public.comment_translations (client_id, text_hash);

@@ -82,6 +82,28 @@ import {
 // 627/684 confidently-non-English comments the run cites, and the cache makes
 // it fall towards the lower bound over the first few weeks. Nothing here is
 // material against a $5–17 run and a $60 budget.
+//
+// THE CACHE HAS NO PERMANENT FLOOR, and that took a deliberate decision. The
+// prompt asks for language 'und' where a text "carries no language at all —
+// pure emoji, a bare handle, digits", and an earlier version of
+// quoteTranslationRows refused to write a row for any answer that was neither
+// English nor a translation. Those texts were therefore never cached: the same
+// bytes went to the model on every run for ever and `needing` never drained to
+// zero. A determination that a text carries no language IS a determination, so
+// it is cached like any other.
+//
+// The class is SMALL and its size is not ours to measure. Over every currently
+// displayable cited text (2026-09-15, both tenants, excerpts and comments as
+// posted): 18,521 distinct texts, of which 7 carry no letter in any script, 13
+// carry two letters or fewer, and 1 is a bare handle. So the floor this
+// removes is a few tens of texts a run, not a few hundred — cents, not
+// dollars. What makes it worth the change is that the size is the MODEL's
+// judgement and not a SQL predicate: 'und' is whatever it declines to place,
+// and a class that can grow with a prompt revision should not be a class that
+// can never be cached. (A related figure is easy to misread: 922 of the 18,521
+// contain no ASCII alphanumeric, but those are Thai, Arabic, CJK and Devanagari
+// comments — they have a language, they get a rendering, and they were always
+// cached.)
 
 /** A text to translate, and the cache row it will become. `commentId` is what
  *  the row cascades from; `hash` is what makes it findable at render. */
@@ -175,13 +197,20 @@ export function planQuoteSteps(
  *  can find and re-do what this one produced. */
 export const TRANSLATE_QUOTES_PROMPT_VERSION = 'quote_translate_v1'
 
+/** ISO 639-2's "no linguistic content", the word the prompt asks for where a
+ *  text is pure emoji, a bare handle or digits. A row carrying it is a RESULT
+ *  and is cached, because a population that cannot be cached is a population
+ *  re-billed to the model on every run for ever. */
+export const UNDETERMINED_LANG = 'und'
+
 const quoteTranslationSchema = z.object({
   items: z.array(z.object({
     /** The item's position in the input list, 1-based. */
     n: z.number(),
     /** ISO 639-1 of the language detected in THIS text, or 'und'. */
     language: z.string(),
-    /** null — and only null — when the text is already English. */
+    /** null — and only null — when there is nothing to render: the text is
+     *  already English, or it has no language ('und'). */
     english: z.string().nullable(),
   })),
 })
@@ -274,13 +303,28 @@ export interface TranslationRow {
  * mangled uuid tells us nothing. Three answers are refused:
  *
  *   * an `n` outside the batch, or a repeat — nothing can be written from it;
- *   * a non-English language with a null rendering — that is a failed reading,
- *     not a verdict, and caching it would make the failure permanent;
+ *   * a language that is neither English nor 'und' with a null rendering —
+ *     that is a failed reading, not a verdict, and caching it would make the
+ *     failure permanent;
  *   * a rendering that is only whitespace, which is the same thing said quietly.
  *
- * `english: null` WITH an English language is a real result and is cached, so
- * an English comment is paid for once and never again. That is the whole reason
- * every cited comment can be sent to the model without a language pre-filter.
+ * `english: null` is a RESULT, not a failure, in TWO cases, and both are cached:
+ *
+ *   * an ENGLISH text — nothing to render, so an English comment is paid for
+ *     once and never again. That is the whole reason every cited comment can be
+ *     sent to the model without a language pre-filter.
+ *   * a text whose language is 'und' — the prompt asks for exactly that word
+ *     where a text "carries no language at all: pure emoji, a bare handle,
+ *     digits", so 'und' is the model doing what it was told. Refusing to write
+ *     those rows made that population permanently uncacheable: the same bytes
+ *     were re-sent on every run for ever and `plan.needing` never drained to
+ *     zero. A determination that a text carries no language IS a
+ *     determination. The header has the measured size (small) and why it is
+ *     worth fixing anyway (the size is the model's call, not a predicate's).
+ *
+ * What a cached 'und' row means to the read path is unchanged: quoteAvailability
+ * reads it as 'untranslated', because a reader has nothing to read either way.
+ * It is the BILL that changes, not a single rendered quote.
  */
 export function quoteTranslationRows(
   clientId: string,
@@ -292,16 +336,20 @@ export function quoteTranslationRows(
   for (const r of results) {
     const i = Math.trunc(r.n) - 1
     if (!Number.isFinite(r.n) || i < 0 || i >= items.length || used.has(i)) continue
-    const language = normaliseLang(r.language) ?? 'und'
+    const language = normaliseLang(r.language) ?? UNDETERMINED_LANG
     const english = r.english?.trim() || null
-    if (!english && !isEnglishLang(language)) continue
+    const nothingToRender = isEnglishLang(language) || language === UNDETERMINED_LANG
+    if (!english && !nothingToRender) continue
     used.add(i)
     rows.push({
       client_id: clientId,
       comment_id: items[i].commentId,
       text_hash: items[i].hash,
       language,
-      english: english === null || isEnglishLang(language) ? null : dbSafeText(english),
+      // Stored NULL wherever there is nothing to render, so a row's meaning is
+      // the column comment's: an echo of the emoji back at us is not a
+      // translation and must not be shown under the original as one.
+      english: english === null || nothingToRender ? null : dbSafeText(english),
       model: TRANSLATE_QUOTES_MODEL,
       prompt_version: TRANSLATE_QUOTES_PROMPT_VERSION,
     })

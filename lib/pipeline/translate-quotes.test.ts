@@ -261,6 +261,22 @@ describe('quoteTranslationRows', () => {
     const { rows } = quoteTranslationRows('tenant', items.slice(1), [{ n: 1, language: 'en', english: 'it works' }])
     expect(rows[0]).toMatchObject({ language: 'en', english: null })
   })
+
+  // The prompt asks for 'und' where a text carries no language at all.
+  // Refusing the row made that population permanently uncacheable — re-billed
+  // on every run for ever, and `needing` never reaching zero.
+  const emoji: TranslationTarget[] = [{ commentId: 'c3', text: '🔥🔥🔥', hash: 'h3' }]
+
+  it('caches "this text has no language" as a result, so emoji are paid for once', () => {
+    const { rows, unplaced } = quoteTranslationRows('tenant', emoji, [{ n: 1, language: 'und', english: null }])
+    expect(unplaced).toBe(0)
+    expect(rows[0]).toMatchObject({ comment_id: 'c3', text_hash: 'h3', language: 'und', english: null })
+  })
+
+  it('stores no rendering for an undetermined text even when the model echoed one', () => {
+    const { rows } = quoteTranslationRows('tenant', emoji, [{ n: 1, language: 'und', english: '🔥🔥🔥' }])
+    expect(rows[0]).toMatchObject({ language: 'und', english: null })
+  })
 })
 
 describe('isMissingQuoteTranslations', () => {
