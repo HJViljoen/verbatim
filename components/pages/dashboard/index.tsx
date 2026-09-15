@@ -496,7 +496,7 @@ const renderables: Record<string, Renderable<D>> = {
 
 // The email says the same tiles in tables (Stage 3); a tile without an email
 // renderer is on the paper only.
-for (const [k, fn] of Object.entries(dashboardEmail)) renderables[k].email = fn
+for (const [k, fn] of Object.entries(dashboardEmail)) { const r = renderables[k]; if (r) r.email = fn }
 
 /** The grid, in the page's order. */
 const GRID_ORDER = ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts']
@@ -545,7 +545,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
     )
   }
   return (
-    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="dashboard" params={params} tiles={gridOrder(d).flatMap((k) => (renderables[k] ? [{ key: k, title: renderables[k].title }] : []))}>
     <PageFrame>
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
@@ -554,7 +554,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
       </PageBar>
 
       <PageGrid>
-        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {gridOrder(d).map((key) => <Fragment key={key}>{renderables[key]?.render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}

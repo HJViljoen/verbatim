@@ -353,8 +353,11 @@ export function ProfilePage({ data: d, params }: { data: ProfileData | ProfileEm
         {/* No page bar on this page: the export control sits in the top-right
             corner, over nothing (the switcher is top-left). */}
         <div className="absolute right-0 top-0 z-10"><ExportMenu /></div>
-        {renderables['profile.persona'].render(d, 'app')}
-        {renderables['profile.platformMix'].render(d, 'app')}
+        {/* `?.` on every read, never a bare index: the outage this page had
+            was a gating change unregistering a key a render still asked for,
+            and a missing key throws the whole tree rather than dropping a tile. */}
+        {renderables['profile.persona']?.render(d, 'app')}
+        {renderables['profile.platformMix']?.render(d, 'app')}
         {/* Optional: unregistered while profile.mix is gated (D1). `renderables`
             is indexed, so TypeScript will not miss it for you — the page throws
             if this reads the key without asking. */}

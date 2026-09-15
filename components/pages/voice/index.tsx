@@ -423,7 +423,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
   // these five voices, not a fresh draw.
   const exportParams = { ...params, seed: String(f.seed) }
   return (
-    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.map((k) => ({ key: k, title: renderables[k].title }))}>
+    <ExportScope page="voice" params={exportParams} tiles={GRID_ORDER.flatMap((k) => (renderables[k] ? [{ key: k, title: renderables[k].title }] : []))}>
     <PageFrame>
       <PageBar title="Voice of Customer" context={`What are they saying? · ${weekdayDate(d.runDate)}`}>
         {d.pillsInBar && <EntityPills d={d} />}
@@ -432,7 +432,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
       </PageBar>
 
       <PageGrid>
-        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key].render(d, 'app')}</Fragment>)}
+        {GRID_ORDER.map((key) => <Fragment key={key}>{renderables[key]?.render(d, 'app')}</Fragment>)}
       </PageGrid>
 
       {/* ── drawers: one click deeper ────────────────────────────────── */}
