@@ -444,12 +444,19 @@ function delivery(i: ReadinessInputs): ReadinessRow {
 
 function changeRecord(i: ReadinessInputs): ReadinessRow {
   const c = i.changeLog
+  // `rows` counts RECORDED changes only — the reconstruction's backdated rows
+  // are a labelled prehistory, and counting them here would make this row say
+  // "in place" about a workspace whose record has not begun. They are named
+  // separately so the operator can see the prehistory landed.
   const status: ReadinessStatus = !c.available || c.rows === 0 ? 'missing' : 'exists'
+  const prehistory = c.reconstructed > 0
+    ? ` ${plural(c.reconstructed, 'earlier entry', 'earlier entries')} reconstructed from what each update searched.`
+    : ''
   const detail = !c.available
     ? 'Not recorded yet — nothing in the product writes down a configuration change.'
     : c.rows === 0
-      ? 'Nothing has been recorded yet.'
-      : `${plural(c.rows, 'change')} recorded · last on ${dateOrNever(c.lastChangeAt, '—')}.`
+      ? `Nothing has been recorded yet.${prehistory}`
+      : `${plural(c.rows, 'change')} recorded · last on ${dateOrNever(c.lastChangeAt, '—')}.${prehistory}`
 
   return row(
     'change-record', 'Change log', 'a record of every change to what we track',

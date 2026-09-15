@@ -101,7 +101,7 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
       period: 'weekly',
       schedules: [{ name: 'Weekly digest', active: true, recipients: 4, lastSentAt: '2026-09-13T06:28:00.513Z' }],
     },
-    changeLog: { available: false, rows: 0, firstLoggedAt: null, lastChangeAt: null },
+    changeLog: { available: false, rows: 0, reconstructed: 0, firstLoggedAt: null, lastChangeAt: null },
     recommendations: { total: 56, withLineage: 5, decisions: null },
     retention: { cohortDay: '2026-08-23', cohortRows: 768, nightlyCap: 5000, dueAfterDays: 25 },
     floor: FLOOR,
@@ -245,7 +245,7 @@ describe('tracked terms', () => {
 
   it('hands the sentence to the change log once there is one', () => {
     const inputs = ossur({
-      changeLog: { available: true, rows: 33, firstLoggedAt: '2026-07-01T00:00:00Z', lastChangeAt: '2026-09-13T10:00:58Z' },
+      changeLog: { available: true, rows: 33, reconstructed: 0, firstLoggedAt: '2026-07-01T00:00:00Z', lastChangeAt: '2026-09-13T10:00:58Z' },
     })
     const row = find(computeReadiness(inputs), 'tracked-terms')
     expect(row.detail).toContain('last change recorded 13 Sep 2026')
@@ -254,7 +254,7 @@ describe('tracked terms', () => {
   })
 
   it('is in place once terms exist in every bucket and changes are recorded', () => {
-    const inputs = ossur({ changeLog: { available: true, rows: 91, firstLoggedAt: '2026-09-15T00:00:00Z', lastChangeAt: '2026-09-15T00:00:00Z' } })
+    const inputs = ossur({ changeLog: { available: true, rows: 91, reconstructed: 0, firstLoggedAt: '2026-09-15T00:00:00Z', lastChangeAt: '2026-09-15T00:00:00Z' } })
     expect(find(computeReadiness(inputs), 'tracked-terms').status).toBe('exists')
   })
 
@@ -276,7 +276,7 @@ describe('tracked terms', () => {
   })
 
   it('is the client’s once the log exists but nothing has been recorded in it', () => {
-    const inputs = ossur({ changeLog: { available: true, rows: 0, firstLoggedAt: null, lastChangeAt: null } })
+    const inputs = ossur({ changeLog: { available: true, rows: 0, reconstructed: 0, firstLoggedAt: null, lastChangeAt: null } })
     const row = find(computeReadiness(inputs), 'tracked-terms')
     expect(row.status).toBe('partial')
     expect(row.owner).toBe('client')
@@ -577,11 +577,35 @@ describe('the change record', () => {
   })
 
   it('counts the changes once they are there', () => {
-    const inputs = ossur({ changeLog: { available: true, rows: 33, firstLoggedAt: '2026-07-01T00:00:00Z', lastChangeAt: '2026-09-13T10:00:58Z' } })
+    const inputs = ossur({ changeLog: { available: true, rows: 33, reconstructed: 0, firstLoggedAt: '2026-07-01T00:00:00Z', lastChangeAt: '2026-09-13T10:00:58Z' } })
     const row = find(computeReadiness(inputs), 'change-record')
     expect(row.status).toBe('exists')
     expect(row.detail).toBe('33 changes recorded · last on 13 Sep 2026.')
     expect(row.notes[0]).toContain('No change was recorded before 2026-07-01')
+  })
+
+  // The reconstruction writes 91 backdated rows across the two workspaces
+  // (step 5c), every one of them inference from what each update searched. The
+  // page's own boundary sentence says the record begins at the first LOGGED
+  // row, so counting them as record would make it contradict itself.
+  it('does not count a reconstructed entry as a recorded change', () => {
+    const inputs = ossur({
+      changeLog: { available: true, rows: 0, reconstructed: 33, firstLoggedAt: null, lastChangeAt: null },
+    })
+    const row = find(computeReadiness(inputs), 'change-record')
+    expect(row.status).toBe('missing')
+    expect(row.detail).toBe('Nothing has been recorded yet. 33 earlier entries reconstructed from what each update searched.')
+    expect(row.notes[0]).toContain('No configuration change has been recorded yet')
+  })
+
+  it('names the prehistory beside the record once both exist', () => {
+    const inputs = ossur({
+      changeLog: { available: true, rows: 2, reconstructed: 33, firstLoggedAt: '2026-09-17T14:00:00Z', lastChangeAt: '2026-09-17T14:00:00Z' },
+    })
+    const row = find(computeReadiness(inputs), 'change-record')
+    expect(row.status).toBe('exists')
+    expect(row.detail).toBe('2 changes recorded · last on 17 Sep 2026. 33 earlier entries reconstructed from what each update searched.')
+    expect(row.notes[0]).toContain('No change was recorded before 2026-09-17')
   })
 })
 

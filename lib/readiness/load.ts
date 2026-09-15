@@ -354,23 +354,35 @@ async function tableIsThere(admin: Admin, table: string, missing: (e: unknown) =
   return true
 }
 
+/** The change log, counted as the boundary sentence means it.
+ *
+ *  Every read but one excludes `source = 'reconstructed'`. Deploy step 5c
+ *  writes 91 backdated rows (Össur 33, Sealand 58) whose `changed_at` is a
+ *  July–September date inferred from what each update searched, so an
+ *  unfiltered min() would name one of them as the day the record began — the
+ *  inverse of the sentence this page prints — and an unfiltered count would let
+ *  a workspace with nothing logged read "33 changes recorded · In place".
+ *  scripts/reconstruct-config-log.ts draws the same line for the same reason
+ *  ("the boundary is where the RECORD begins"). The reconstructed rows are
+ *  counted on their own, because a labelled prehistory is worth naming. */
 async function loadChangeLog(admin: Admin, clientId: string): Promise<ReadinessInputs['changeLog']> {
   if (!(await tableIsThere(admin, CONFIG_CHANGES_TABLE, isMissingConfigLog))) {
-    return { available: false, rows: 0, firstLoggedAt: null, lastChangeAt: null }
+    return { available: false, rows: 0, reconstructed: 0, firstLoggedAt: null, lastChangeAt: null }
   }
-  const { count, error } = await admin.from(CONFIG_CHANGES_TABLE)
-    .select('id', { count: 'exact', head: true }).eq('client_id', clientId)
-  if (error) throw error
-
-  const [first, last] = await Promise.all([
-    admin.from(CONFIG_CHANGES_TABLE).select('changed_at').eq('client_id', clientId)
-      .order('changed_at', { ascending: true }).limit(1).maybeSingle(),
-    admin.from(CONFIG_CHANGES_TABLE).select('changed_at').eq('client_id', clientId)
-      .order('changed_at', { ascending: false }).limit(1).maybeSingle(),
+  const recorded = () => admin.from(CONFIG_CHANGES_TABLE).select('changed_at')
+    .eq('client_id', clientId).neq('source', 'reconstructed')
+  const [rows, reconstructed, first, last] = await Promise.all([
+    headCount(() => admin.from(CONFIG_CHANGES_TABLE)
+      .select('id', { count: 'exact', head: true }).eq('client_id', clientId).neq('source', 'reconstructed')),
+    headCount(() => admin.from(CONFIG_CHANGES_TABLE)
+      .select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('source', 'reconstructed')),
+    recorded().order('changed_at', { ascending: true }).limit(1).maybeSingle(),
+    recorded().order('changed_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   return {
     available: true,
-    rows: count ?? 0,
+    rows,
+    reconstructed,
     firstLoggedAt: (firstRow(first)?.changed_at as string | undefined) ?? null,
     lastChangeAt: (firstRow(last)?.changed_at as string | undefined) ?? null,
   }

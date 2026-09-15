@@ -170,8 +170,20 @@ export interface DeliveryInput {
 export interface ChangeLogInput {
   /** False before the change log's migration is applied. */
   available: boolean
+  /** Changes actually RECORDED — `source <> 'reconstructed'`. The boundary
+   *  sentence this page prints everywhere says the record begins at the first
+   *  logged row and everything before it is inference, so a reconstructed row
+   *  counted here would make the page contradict its own sentence: after the
+   *  backfill's 91 backdated rows a workspace with nothing logged would read
+   *  "33 changes recorded · In place". */
   rows: number
+  /** Backdated rows written by scripts/reconstruct-config-log.ts. Counted
+   *  separately because a prehistory is worth naming and is not a record. */
+  reconstructed: number
+  /** The first RECORDED change — where the record begins. Null while only
+   *  reconstructed rows exist. */
   firstLoggedAt: string | null
+  /** The last RECORDED change, for the same reason. */
   lastChangeAt: string | null
 }
 
