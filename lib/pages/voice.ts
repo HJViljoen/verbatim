@@ -15,13 +15,13 @@ import { pickThemedRunId } from './themed-run'
 import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import type { MethodNoteData } from '../../components/print/method-note'
-import { EXPORT_FULL_MAX_ITEMS } from '../config'
+import { EXPORT_FULL_MAX_ITEMS, RUN_INDEXED_DIRECTION_WORDS } from '../config'
 
 // Voice of Customer loader — the data half of the old app/dashboard/voice/page.tsx
 // (split 2026-08-29, Reports & Exports T4). "What are they saying?": the theme
 // map is the hero (block = conversations, tint = whose audience), the selected
-// theme in full beside it, gaining-and-fading, the customers' own phrases,
-// audience mood, five verbatim voices across the bottom.
+// theme in full beside it, the customers' own phrases, audience mood, five
+// verbatim voices across the bottom.
 //
 // Rules kept: theme identity is theme_registry (registry_id) — cross-update
 // joins never use labels; strength_score gates and orders but is never
@@ -30,6 +30,12 @@ import { EXPORT_FULL_MAX_ITEMS } from '../config'
 // that insight; an in-flight update is never read. The ribbon's ?seed= is
 // random when absent in the app; an export carries the seed it was clicked
 // with, so the snapshot renders the same five voices.
+//
+// D1 (2026-09-15): every direction the page used to read off the per-update
+// theme series is gated on RUN_INDEXED_DIRECTION_WORDS — the movers list, the
+// per-theme sparklines on the map and in the pane, and the "New" chips. What
+// stays is every level: the map, the counts, the tiers, the phrases, the mood
+// and the voices. Phase 1 turns them back on against the monthly reading.
 
 export interface ThemeRow {
   id: string
@@ -316,7 +322,10 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const runDate = (themedRunId ? runDates.get(themedRunId) : null)
     ?? summaryRows.find((s) => s.run_id === runId)?.run_date
     ?? (latestRun.started_at as string)
-  const showNew = updatesCount > 1
+  // "New" is a direction word off the per-update series (raw themes.first_seen,
+  // which means "this registry entry was opened by this update" — a relabel
+  // opens one), so it is gated with the rest (D1). The legend key follows it.
+  const showNew = updatesCount > 1 && RUN_INDEXED_DIRECTION_WORDS
   const samples = readRows<{ id: string; phrase: string; platform: string | null }>(samplesRes, 'voice.languageSamples')
   const sampleTotal = samplesRes.count ?? samples.length
   const asQuote = (s: { id: string; phrase: string; platform: string | null }) => ({ ref: quoteRef.phrase(s.id), text: s.phrase, platform: s.platform })
@@ -409,9 +418,14 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const tabs = categoryTabs(categoryCounts)
 
   // ---- trajectories across updates (sparks + movers) ----
+  // Both readers are gated (D1): themeMovers returns nothing while the direction
+  // words are off, and `historyOf` is only consulted behind the same constant —
+  // a sparkline of conversations per UPDATE is a direction the reader's eye
+  // draws, whether or not a word sits beside it.
   const { trajectories, keyOf } = themeTrajectories(historyRows.filter((r) => !runningIds.includes(r.run_id)), runDates)
   const trajectoryByKey = new Map(trajectories.map((t) => [t.key, t]))
-  const historyOf = (t: ThemeRow): Trajectory | undefined => trajectoryByKey.get(keyOf(t))
+  const historyOf = (t: ThemeRow): Trajectory | undefined =>
+    RUN_INDEXED_DIRECTION_WORDS ? trajectoryByKey.get(keyOf(t)) : undefined
   const moversAll = themeMovers(trajectories).filter((t) => entityFilter === 'all' || t.bucket === entityFilter)
   const movers = moversAll.filter((t) => t.movement !== 'steady')
   const steadyCount = moversAll.length - movers.length

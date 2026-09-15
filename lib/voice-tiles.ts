@@ -9,7 +9,7 @@
 //     its 0–10 scale) but is never shown — what the page prints is conversations
 //     (evidence_count), a real count.
 
-import { VIDEO_EVIDENCE_WEIGHT } from './config'
+import { RUN_INDEXED_DIRECTION_WORDS, VIDEO_EVIDENCE_WEIGHT } from './config'
 import { CURATION_GATE } from './curation'
 import { bucketKind, type Bucket } from './dashboard-tiles'
 
@@ -197,8 +197,14 @@ export function themeTrajectories(rows: ThemeHistoryRow[], runDates: Map<string,
 
 /** The gaining-and-fading list: themes heard in ≥2 updates, movers first by
  *  the size of the move (strength rule orders; conversations break ties),
- *  then emerging, then steady. */
-export function themeMovers(trajectories: Trajectory[]): Trajectory[] {
+ *  then emerging, then steady.
+ *
+ *  EMPTY while `RUN_INDEXED_DIRECTION_WORDS` is off (D1): the whole list is a
+ *  direction read off a series indexed by update, so there is no honest subset
+ *  of it to show. The page then has no movers tile and no drawer; the ordering
+ *  rule below is kept, tested and unchanged for the Phase 1 flip. */
+export function themeMovers(trajectories: Trajectory[], directionWords = RUN_INDEXED_DIRECTION_WORDS): Trajectory[] {
+  if (!directionWords) return []
   const rank = (t: Trajectory) => (t.movement === 'gaining' || t.movement === 'fading' ? 0 : t.movement === 'emerging' ? 1 : 2)
   return trajectories
     .filter((t) => t.strength.length >= 2)

@@ -200,6 +200,41 @@ describe('composeDocument', () => {
   })
 })
 
+// D1: `trajectoryWord` is gated off, so a concern reaches compose with an empty
+// trajectory. The shape is not new — a concern whose members carried no word has
+// always produced it — and these pin what a document says in it. The fixture
+// above keeps the worded shape, which is what Phase 1 restores once the words
+// come off the monthly reading rather than off the update index.
+describe('a document composed with no history word', () => {
+  const gated = { ...signals, concerns: [{ ...signals.concerns[0], trajectory: '' }] } as unknown as Signals
+  const gatedFigures = documentFigures(gated, answers)
+  const composed = composeDocument({
+    template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Sales brief', period: 'Update of 30 Aug 2026',
+    signals: gated, answers, written, figures: gatedFigures, model: 'gpt-5.4', promptVersion: 'sales_brief_v1', costUsd: 0.9, timings: {},
+  }).data
+
+  it('drops the history clause from the heard line and leaves the finding no pill to print', () => {
+    expect(composed.pages[1].blocks.find((b) => b.field === 'heard')!.text)
+      .toBe("20 conversations across 2 strands of the research · heard from Ossur's audience, the category.")
+    expect(composed.pages[1].meta?.history).toBe('')
+  })
+
+  it('tells the writer the history is unknown rather than handing it a direction', () => {
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: gatedFigures, signals: gated, answers, previous: null, thin: false })
+    expect(user).toContain("S1 (count key [[s1_conversations]]; heard from Ossur's audience, the category; history unknown)")
+    expect(user).not.toContain('updates running')
+    expect(user).not.toContain('rising')
+  })
+
+  it('leaves the standing page’s concern rows empty-worded, which the deck renders as no pill', () => {
+    const page = composeDocument({
+      template: LEADERSHIP_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 't', period: 'p',
+      signals: gated, answers, written: { ...written, standing: 'A small share of a loud category.' }, figures: gatedFigures, model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data.pages.find((p) => p.kind === 'standing')!
+    expect(JSON.parse(page.meta!.concerns)).toEqual([{ label: 'Insurance and Medicare barriers', total: 11, trajectory: '' }])
+  })
+})
+
 describe('pickQuote and thinWeek', () => {
   it('prefers a comment that reads as English and skips one already used', () => {
     const used = new Set<string>(['c:aaa'])

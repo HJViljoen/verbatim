@@ -130,14 +130,27 @@ describe('initiativeLine', () => {
     )
 
   it('says what the share did and never that it worked', () => {
-    expect(initiativeLine(measure([10, 14]), '1 Aug')).toBe('Up 4.0 points since 1 Aug · 2 updates')
-    expect(initiativeLine(measure([20, 12]), '1 Aug')).toBe('Down 8.0 points since 1 Aug · 2 updates')
-    expect(initiativeLine(measure([10, 10]), '1 Aug')).toBe('Holding steady since 1 Aug · 2 updates')
+    expect(initiativeLine(measure([10, 14]), '1 Aug', true)).toBe('Up 4.0 points since 1 Aug · 2 updates')
+    expect(initiativeLine(measure([20, 12]), '1 Aug', true)).toBe('Down 8.0 points since 1 Aug · 2 updates')
+    expect(initiativeLine(measure([10, 10]), '1 Aug', true)).toBe('Holding steady since 1 Aug · 2 updates')
   })
 
   it('is honest about having too little to say', () => {
     expect(initiativeLine(measure([]), '1 Aug')).toBe('Nothing heard on this since 1 Aug — it lands with the next update.')
     expect(initiativeLine(measure([10]), '1 Aug')).toBe('One update in since 1 Aug — movement needs a second.')
+  })
+
+  // D1: one point per UPDATE against a denominator that grows with every
+  // gather. The line says what is true either way — since when, and how much
+  // has been read — and "holding steady" goes with "up" and "down", because a
+  // claim that nothing moved is a direction claim too.
+  it('names the tracking and the readings, and no direction, while the direction words are gated off', () => {
+    expect(initiativeLine(measure([10, 14]), '1 Aug', false)).toBe('Tracked since 1 Aug · 2 updates read')
+    expect(initiativeLine(measure([20, 12]), '1 Aug', false)).toBe('Tracked since 1 Aug · 2 updates read')
+    expect(initiativeLine(measure([10, 10]), '1 Aug')).toBe('Tracked since 1 Aug · 2 updates read') // the shipped default
+    // The two honest-silence sentences are already direction-free and stay.
+    expect(initiativeLine(measure([]), '1 Aug', false)).toBe('Nothing heard on this since 1 Aug — it lands with the next update.')
+    expect(initiativeLine(measure([10]), '1 Aug', false)).toBe('One update in since 1 Aug — movement needs a second.')
   })
 })
 
@@ -147,10 +160,18 @@ describe('wentTheirWay', () => {
   const flat = measureInitiative([obs('r1', '2026-08-03', 10), obs('r2', '2026-08-10', 10)], { r1: 100, r2: 100 }, '2026-08-01')
 
   it('answers only when there is a movement to judge', () => {
-    expect(wentTheirWay(up, 'up')).toBe(true)
-    expect(wentTheirWay(up, 'down')).toBe(false)
-    expect(wentTheirWay(down, 'down')).toBe(true)
-    expect(wentTheirWay(flat, 'up')).toBeNull()
+    expect(wentTheirWay(up, 'up', true)).toBe(true)
+    expect(wentTheirWay(up, 'down', true)).toBe(false)
+    expect(wentTheirWay(down, 'down', true)).toBe(true)
+    expect(wentTheirWay(flat, 'up', true)).toBeNull()
+  })
+
+  // D1: its one reader is the sparkline's stroke colour, which paints the
+  // rival's clay on a `false` — a direction said in colour.
+  it('judges nothing while the direction words are gated off', () => {
+    expect(wentTheirWay(up, 'up', false)).toBeNull()
+    expect(wentTheirWay(down, 'up', false)).toBeNull()
+    expect(wentTheirWay(up, 'up')).toBeNull() // the shipped default
   })
 })
 
@@ -181,7 +202,8 @@ describe('an update that heard nothing about it', () => {
       [run('r1', '2026-08-03'), run('r2', '2026-08-10'), run('r3', '2026-08-17'), run('r4', '2026-08-24')],
     )
     expect(m.points.map((p) => p.share)).toEqual([10, 0, 0, 10])
-    expect(initiativeLine(m, '1 Aug')).toBe('Holding steady since 1 Aug · 4 updates')
+    expect(initiativeLine(m, '1 Aug', true)).toBe('Holding steady since 1 Aug · 4 updates')
+    expect(initiativeLine(m, '1 Aug')).toBe('Tracked since 1 Aug · 4 updates read') // gated (D1)
   })
 
   it('never counts an update from before it was declared', () => {

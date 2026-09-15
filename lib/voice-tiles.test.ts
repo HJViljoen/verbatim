@@ -104,8 +104,22 @@ describe('theme trajectories (registry_id join + label bridge + movement rule)',
       row('running', 'a', 'A', 9, 99), // in-flight update: ignored
     ], runDates)
     expect(trajectories.find((t) => t.key === 'a')!.evidence).toEqual([4, 9])
-    const movers = themeMovers(trajectories)
+    const movers = themeMovers(trajectories, true)
     expect(movers.map((t) => t.key)).toEqual(['a', 'b', 'd', 'c'])
+  })
+
+  // D1: the list is a direction read off a series indexed by UPDATE, so while
+  // RUN_INDEXED_DIRECTION_WORDS is off there is nothing honest to show — and
+  // the page has neither tile nor drawer to put it in.
+  it('hands back no movers at all while the run-indexed direction words are gated off', () => {
+    const { trajectories } = themeTrajectories([
+      row('r1', 'a', 'A', 5, 4), row('r2', 'a', 'A', 7, 9), // gaining +2
+      row('r1', 'b', 'B', 8, 9), row('r2', 'b', 'B', 7, 5), // fading −1
+      row('r2', 'd', 'D', 6, 3, true), row('r3', 'd', 'D', 6, 4), // emerging
+    ], runDates)
+    expect(trajectories).toHaveLength(3) // the series itself is still built
+    expect(themeMovers(trajectories, false)).toEqual([])
+    expect(themeMovers(trajectories)).toEqual([]) // the shipped default
   })
 })
 

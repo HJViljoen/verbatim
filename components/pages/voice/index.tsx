@@ -4,6 +4,7 @@ import { PREVALENCE_BADGE } from '@/lib/ui-colors'
 import { PREVALENCE_LABEL, glossaryRule } from '@/lib/calibration'
 import { fmtInt, fmtPct, weekdayDate, shortDate, platformLabel, cap } from '@/lib/format'
 import { categoryLabel, categoryChip, emotionTone, bucketKind, moverDirection, type Trajectory } from '@/lib/voice-tiles'
+import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
 
 import { VoiceFilters } from '@/components/voice-filters'
 import { HowToRead } from '@/components/how-to-read'
@@ -27,8 +28,18 @@ const MOVER_COLOR = { up: 'var(--positive)', down: 'var(--negative)', new: 'var(
 // 2026-08-29, Reports & Exports T4), one pure function per tile. `mode`
 // changes only what has no meaning on paper: links, the filter selects, the
 // drawers, the "Next five" rotation.
+//
+// D1 (2026-09-15): while RUN_INDEXED_DIRECTION_WORDS is off, "Gaining and
+// fading" is not registered as a tile at all — it is out of the grid, out of
+// the Studio's picker, out of the export deck, and its drawer is not rendered,
+// so ?detail=movers simply opens nothing on a page that is otherwise whole.
+// The two tiles that shared its row widen to fill it. The tile and its drawer
+// are kept intact behind the constant for the Phase 1 flip.
 
 const MOVER_ROWS = 6
+/** Columns the phrase and mood tiles take: four each beside the movers tile,
+ *  six each when it is gated off, so the row still closes at twelve. */
+const HALF_ROW_COL = RUN_INDEXED_DIRECTION_WORDS ? 4 : 6
 const chip = 'inline-flex h-[18px] items-center rounded-full px-[7px] text-[10.5px] font-medium whitespace-nowrap'
 const MOOD_COLOR = { positive: 'var(--positive)', negative: 'var(--negative)', neutral: 'var(--neutral-seg)' } as const
 
@@ -185,7 +196,7 @@ const movers: R = (d, mode) => {
 
 // ── how your customers talk ────────────────────────────────────────────────
 const phrases: R = (d, mode) => (
-  <Tile exportKey="voice.phrases" col={4} row={2} eyebrow="How your customers talk" meta={d.phrases.total > 0 ? `${fmtInt(d.phrases.total)} phrases` : undefined} distribute="center"
+  <Tile exportKey="voice.phrases" col={HALF_ROW_COL} row={2} eyebrow="How your customers talk" meta={d.phrases.total > 0 ? `${fmtInt(d.phrases.total)} phrases` : undefined} distribute="center"
     footer={mode === 'app' && d.phrases.total > 0 ? <Link href={voiceHref(d.filters, { detail: 'language' })} scroll={false}>Borrow the language →</Link> : undefined}
   >
     {d.phrases.shown.length > 0 ? (
@@ -207,7 +218,7 @@ const phrases: R = (d, mode) => (
 const mood: R = (d) => {
   const moodMax = d.moods[0]?.pct ?? 0
   return (
-    <Tile exportKey="voice.mood" col={4} row={2} eyebrow="Audience mood" meta={d.moods.length > 0 ? `of ${fmtInt(d.moods[0].total)} read` : undefined} distribute="center">
+    <Tile exportKey="voice.mood" col={HALF_ROW_COL} row={2} eyebrow="Audience mood" meta={d.moods.length > 0 ? `of ${fmtInt(d.moods[0].total)} read` : undefined} distribute="center">
       {d.moods.length > 0 ? (
         <div className="flex flex-col gap-1.5">
           {d.moods.map((m) => (
@@ -330,13 +341,16 @@ const THEME_SLIDE_PREFIX = 'voice.theme:'
 const renderables: Record<string, Renderable<D>> = {
   'voice.map': { key: 'voice.map', title: 'The conversation, by theme', render: map },
   'voice.theme': { key: 'voice.theme', title: 'Theme', render: theme },
-  'voice.movers': { key: 'voice.movers', title: 'Gaining and fading', render: movers },
+  // Unregistered while the direction words are gated (D1): the Studio's picker
+  // reads these keys, so a tile nobody may see must not be offerable either.
+  ...(RUN_INDEXED_DIRECTION_WORDS ? { 'voice.movers': { key: 'voice.movers', title: 'Gaining and fading', render: movers } } : {}),
   'voice.phrases': { key: 'voice.phrases', title: 'How your customers talk', render: phrases },
   'voice.mood': { key: 'voice.mood', title: 'Audience mood', render: mood },
   'voice.ribbon': { key: 'voice.ribbon', title: 'Hear these voices', render: ribbon },
 }
 
 const GRID_ORDER = ['voice.map', 'voice.theme', 'voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon']
+  .filter((k) => RUN_INDEXED_DIRECTION_WORDS || k !== 'voice.movers')
 
 /** A renderable for a full-export theme slide; the registry resolves the
  *  `voice.theme:<n>` keys through this so the module stays a fixed catalogue. */
@@ -365,7 +379,12 @@ export const voicePage: PageModule<D> = {
   slides(d, variant): Slide[] {
     const slides: Slide[] = [
       { title: 'The conversation, by theme', keys: ['voice.map', 'voice.theme'], layout: 'grid' },
-      { title: 'What is moving, and how they say it', keys: ['voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon'], layout: 'grid' },
+      RUN_INDEXED_DIRECTION_WORDS
+        ? { title: 'What is moving, and how they say it', keys: ['voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon'], layout: 'grid' }
+        // Without the movers tile the slide is no longer about movement, and a
+        // title that promises it would be the direction word the deck no longer
+        // carries (D1).
+        : { title: 'How they say it, and how they feel', keys: ['voice.phrases', 'voice.mood', 'voice.ribbon'], layout: 'grid' },
     ]
     if (variant === 'full') for (let n = 0; n < (d.allThemes?.length ?? 0); n++) slides.push({ title: `Theme · ${d.allThemes![n].label}`, keys: [`${THEME_SLIDE_PREFIX}${n}`], layout: 'single' })
     return slides
@@ -428,6 +447,9 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
         </div>
       </DetailDrawer>
 
+      {/* Gated with the tile (D1): ?detail=movers then matches no drawer and
+          the page renders whole, rather than opening an empty sheet. */}
+      {RUN_INDEXED_DIRECTION_WORDS && (
       <DetailDrawer value="movers" closeHref={closeHref} title="Gaining and fading" description={`themes heard in ≥2 of your ${d.updatesCount} updates · conversations per update, delta vs last`}>
         <div className="space-y-5">
           {(['gaining', 'fading', 'emerging'] as const).map((m) => {
@@ -448,6 +470,7 @@ export function VoicePage({ data: d, detail, params }: { data: VoiceData | Voice
           {d.movers.rows.length === 0 && <p className="text-muted-foreground">Nothing has moved clearly yet.</p>}
         </div>
       </DetailDrawer>
+      )}
 
       <DetailDrawer open={detail === 'language'} closeHref={closeHref} title="How your customers talk" description={`${fmtInt(d.phrases.total)} phrases, verbatim — the words to borrow`}>
         <div className="flex flex-wrap gap-1.5">
