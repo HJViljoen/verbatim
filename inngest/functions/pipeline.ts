@@ -1298,7 +1298,15 @@ export const runPipeline = inngest.createFunction(
     // Persist with first_seen from mini theme-matching — the themes table is
     // the boundary the synthesis step reads back across.
     const persisted = await step.run('persist-themes', () =>
-      persistThemes(clientId, runId, themed.allThemes, { themeRegistry: flags.themeRegistry }),
+      // The RUN's Pass A version, off its frozen flags — not the environment's.
+      // A flag flipped mid-run would otherwise stamp observations with a regime
+      // the corpus was never read under, which is the one thing the stamp is
+      // for (the same reason flags.themeRegistry travels rather than being
+      // re-read here).
+      persistThemes(clientId, runId, themed.allThemes, {
+        themeRegistry: flags.themeRegistry,
+        promptVersion: passAPromptVersion(flags.transcripts),
+      }),
     )
     // COUNTED, though the step itself succeeded. The registry block inside
     // persistThemes catches its own failures so a client's update never dies on

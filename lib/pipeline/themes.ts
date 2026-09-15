@@ -1,8 +1,10 @@
 import { createAdminClient, selectAll, isMissingColumnError } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled } from '../config'
+import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled, transcriptsEnabled } from '../config'
+import { audienceFold } from '../rivals'
 import { embedTexts, cosine } from './cluster'
-import { matchThemes, dormantIds, matchTally, type MatchKind, type RegistryEntry } from './theme-registry'
+import { passAPromptVersion } from './pass-a'
+import { matchThemes, dormantIds, matchTally, themedRunWindow, type MatchKind, type RegistryEntry } from './theme-registry'
 import type { AggregatedTheme } from './types'
 
 // Theme persistence + mini theme-matching (Redesign Spec 2026-07-03 §8).
@@ -97,6 +99,15 @@ function matchText(t: AggregatedTheme): string {
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6
 
+/** A registry entry as persistThemes reads it: the matcher's shape plus the
+ *  bookkeeping only the writer needs. */
+type RegistryRow = RegistryEntry & {
+  last_seen_run_id: string | null
+  last_seen_at: string | null
+  first_seen_run_id: string | null
+  observation_count: number | null
+}
+
 /** Theme rows per INSERT statement. See insertThemesChunked: an embedding makes
  *  each row ~14KB, so the body — not the row count — is what times out. */
 export const THEMES_INSERT_CHUNK = 100
@@ -128,11 +139,52 @@ export async function insertThemesChunked<E>(
   return null
 }
 
+/**
+ * The share of a theme's members this run re-analysed.
+ *
+ * Videos, not insight rows: `videos.analyzed_run_id` is the pointer the plan
+ * step sets, the theme's own `supportingVideoIds` is the distinct set behind
+ * it, and no extra read is needed to weight by insight. Null for a theme with
+ * no videos at all — no denominator, so no share, and a 0 there would read as
+ * "nothing was re-analysed", which is a different claim.
+ *
+ * It has to be computed at persist time: `prune-stale-analysis` runs after
+ * close-run and the NEXT run's pointer overwrites this one, so neither half of
+ * the fraction survives to be derived later.
+ */
+export function rereadShare(videoIds: readonly string[], reRead: ReadonlySet<string>): number | null {
+  const unique = [...new Set(videoIds)]
+  if (unique.length === 0) return null
+  return unique.filter((id) => reRead.has(id)).length / unique.length
+}
+
+/**
+ * The match a theme's observation records for this run: the one the FIRST
+ * attempt made, where there is one.
+ *
+ * A retried persist-themes replays the whole registry block, and by then the
+ * entries the first attempt created hold this run's membership — so they score
+ * 1.0, and `upsert(onConflict: 'theme_id,run_id')` overwrites `new` with
+ * `exact`. It has already happened twice in production: Össur's d346b0f7 stores
+ * 757 `exact` observations while 303 of its registry entries were first seen in
+ * that very run, and Sealand's cb0d97b2 stores 914 `exact` against 644.
+ * `themes.first_seen` was right both times, because it is derived from the
+ * entry's own `first_seen_run_id`; only the observation lied.
+ */
+export function firstMatch(
+  prior: { match_kind: MatchKind; match_score: number | null } | undefined,
+  fresh: { kind: MatchKind; score: number },
+): { match_kind: MatchKind; match_score: number | null } {
+  return prior
+    ? { match_kind: prior.match_kind, match_score: prior.match_score }
+    : { match_kind: fresh.kind, match_score: fresh.score }
+}
+
 export async function persistThemes(
   clientId: string,
   runId: string,
   themes: AggregatedTheme[],
-  opts?: { themeRegistry?: boolean },
+  opts?: { themeRegistry?: boolean; promptVersion?: string },
 ): Promise<PersistThemesResult> {
   const admin = createAdminClient()
 
@@ -193,32 +245,72 @@ export async function persistThemes(
   let registryFailed: string | null = null
 
   if (registryOn) try {
-    const entries = await selectAll<RegistryEntry & { last_seen_run_id: string | null; first_seen_run_id: string | null; observation_count: number | null }>(() =>
-      admin.from('theme_registry')
-        .select('id, bucket, member_insight_ids, embedding, status, canonical_label, last_seen_run_id, first_seen_run_id, observation_count')
-        .eq('client_id', clientId).order('id', { ascending: true }),
-    )
+    // Is the video key in this database yet? M2 is applied by hand, so a deploy
+    // can land before it — and without this probe every run would close
+    // 'partial' until someone applied it, because the registry block's catch
+    // would swallow a 42703 on member_video_ids as a registry failure. One
+    // cheap query governs the three writes below; the columns move together
+    // (one migration) so one answer covers them all.
+    const probe = await admin.from('theme_registry')
+      .select('member_video_ids').eq('client_id', clientId).limit(1)
+    const videoKey = !(probe.error && isMissingColumnError(probe.error, 'member_video_ids'))
+    if (!videoKey) {
+      console.warn('[theme-registry] theme_registry.member_video_ids does not exist — apply supabase/migrations/20260918091000_theme_key.sql. Matching on insight row ids alone until it lands, which is what every run did before 2026-09-18.')
+    } else if (probe.error) {
+      throw new Error(`probe theme_registry: ${probe.error.message}`)
+    }
+
+    // Two spelled-out selects rather than one built string: the client types
+    // the select list, and a column list it cannot read as a literal comes back
+    // as an error type. Named columns either way (never select('*')).
+    const entries = videoKey
+      ? await selectAll<RegistryRow>(() =>
+        admin.from('theme_registry')
+          .select('id, bucket, member_insight_ids, member_video_ids, embedding, status, canonical_label, last_seen_run_id, last_seen_at, first_seen_run_id, observation_count')
+          .eq('client_id', clientId).order('id', { ascending: true }),
+      )
+      : await selectAll<RegistryRow>(() =>
+        admin.from('theme_registry')
+          .select('id, bucket, member_insight_ids, embedding, status, canonical_label, last_seen_run_id, last_seen_at, first_seen_run_id, observation_count')
+          .eq('client_id', clientId).order('id', { ascending: true }),
+      )
     seeding = entries.length === 0
     // A retried step replays this whole block. Anything already written for THIS
     // run must not be counted twice or re-interpreted: entries created by the
     // first attempt now hold this run's membership, so they would match `exact`
     // and silently turn "new" into "unchanged".
-    const priorObs = await selectAll<{ theme_id: string }>(() =>
-      admin.from('theme_observations').select('theme_id').eq('client_id', clientId).eq('run_id', runId)
+    const priorObs = await selectAll<{ theme_id: string; match_kind: MatchKind; match_score: number | null }>(() =>
+      admin.from('theme_observations').select('theme_id, match_kind, match_score').eq('client_id', clientId).eq('run_id', runId)
         .order('theme_id', { ascending: true }),
     )
-    const alreadyObserved = new Set(priorObs.map((o) => o.theme_id))
+    const alreadyObserved = new Map(priorObs.map((o) => [o.theme_id, o]))
+
+    // What this run re-analysed, which is the numerator of every observation's
+    // reread_share. Read here rather than derived later: prune-stale-analysis
+    // runs after close-run and moves the denominator, and videos.analyzed_run_id
+    // is overwritten by the next run that re-reads the video. One narrow query —
+    // the ids this run's own Pass A pointed at, 508 rows on the largest run in
+    // production — not the whole videos table.
+    const reRead = new Set((await selectAll<{ id: string }>(() =>
+      admin.from('videos').select('id').eq('client_id', clientId).eq('analyzed_run_id', runId)
+        .order('id', { ascending: true }),
+    )).map((v) => v.id))
+    const promptVersion = opts?.promptVersion ?? passAPromptVersion(transcriptsEnabled())
 
     const results = matchThemes(
       themes.map((t, i) => ({
         key: String(i),
         bucket: t.bucket,
         memberInsightIds: t.supportingInsightIds,
+        memberVideoIds: t.supportingVideoIds,
         label: t.label ?? t.theme,
         embedding: embeddings[i],
       })),
       entries,
-      { cosine },
+      // The fold is injected rather than imported by the matcher, which stays
+      // pure. It lets an exact title carry an identity across two spellings of
+      // one rival — and nothing else cross a bucket.
+      { cosine, bucketKey: audienceFold },
     )
     const nowIso = new Date().toISOString()
     const updates: Record<string, unknown>[] = []
@@ -240,6 +332,7 @@ export async function persistThemes(
           canonical_label: label,
           description: t.description ?? null,
           member_insight_ids: t.supportingInsightIds,
+          ...(videoKey ? { member_video_ids: t.supportingVideoIds } : {}),
           member_slugs: t.memberThemes,
           embedding: embeddings[i].map(round6),
           status: 'active',
@@ -257,6 +350,7 @@ export async function persistThemes(
           canonical_label: label,
           description: t.description ?? null,
           member_insight_ids: t.supportingInsightIds,
+          ...(videoKey ? { member_video_ids: t.supportingVideoIds } : {}),
           member_slugs: t.memberThemes,
           embedding: embeddings[i].map(round6),
           status: 'active',
@@ -281,37 +375,48 @@ export async function persistThemes(
 
     // One observation per (theme, run). Upsert so a step retry is idempotent.
     if (themes.length) {
-      const obs = themes.map((t, i) => ({
-        theme_id: registryIds[i],
-        client_id: clientId,
-        run_id: runId,
-        evidence_count: t.evidenceCount,
-        strength_score: t.strengthScore,
-        rank_score: t.rankScore,
-        mean_strength: t.meanStrength,
-        dominant_emotion: t.dominantEmotion,
-        dominant_sentiment_impact: t.dominantSentimentImpact,
-        single_source: t.singleSource,
-        category: t.category,
-        label: t.label ?? t.theme,
-        member_insight_ids: t.supportingInsightIds,
-        match_kind: registryKinds[i],
-        match_score: registryScores[i],
-        merged_from: results.find((r) => Number(r.key) === i)?.mergedFrom ?? [],
-        split_from: results.find((r) => Number(r.key) === i)?.splitFrom ?? null,
-        run_date: nowIso.slice(0, 10),
-      }))
+      const obs = themes.map((t, i) => {
+        // A replayed step may not rewrite how this theme was first matched —
+        // see firstMatch, and the two production runs it names.
+        const prior = registryIds[i] ? alreadyObserved.get(registryIds[i] as string) : undefined
+        const match = firstMatch(prior, { kind: registryKinds[i], score: registryScores[i] })
+        return {
+          theme_id: registryIds[i],
+          client_id: clientId,
+          run_id: runId,
+          evidence_count: t.evidenceCount,
+          strength_score: t.strengthScore,
+          rank_score: t.rankScore,
+          mean_strength: t.meanStrength,
+          dominant_emotion: t.dominantEmotion,
+          dominant_sentiment_impact: t.dominantSentimentImpact,
+          single_source: t.singleSource,
+          category: t.category,
+          label: t.label ?? t.theme,
+          member_insight_ids: t.supportingInsightIds,
+          ...(videoKey ? {
+            member_video_ids: t.supportingVideoIds,
+            prompt_version: promptVersion,
+            reread_share: rereadShare(t.supportingVideoIds, reRead),
+          } : {}),
+          ...match,
+          merged_from: results.find((r) => Number(r.key) === i)?.mergedFrom ?? [],
+          split_from: results.find((r) => Number(r.key) === i)?.splitFrom ?? null,
+          run_date: nowIso.slice(0, 10),
+        }
+      })
       const { error } = await admin.from('theme_observations').upsert(obs, { onConflict: 'theme_id,run_id' })
       if (error) throw new Error(`insert theme_observations: ${error.message}`)
     }
 
-    // Dormancy: unseen across the last REGISTRY_DORMANT_RUNS runs. The window
-    // comes from pipeline_runs (a bounded, tiny query) rather than paging the
-    // observations table, which grows ~540 rows per run forever.
-    const { data: recent } = await admin.from('pipeline_runs')
-      .select('id').eq('client_id', clientId).in('status', ['completed', 'partial'])
-      .order('started_at', { ascending: false }).limit(REGISTRY_DORMANT_RUNS)
-    const ordered = [runId, ...((recent ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== runId)]
+    // Dormancy: unseen across the last REGISTRY_DORMANT_RUNS runs that THEMED.
+    // The window used to come from pipeline_runs — the last three closed runs of
+    // any kind — while both the migration comment and the JSDoc said "themed
+    // runs". Össur's history holds five completed runs with zero themes, and a
+    // gather-only "Run now" or a run that dies before persist-themes does the
+    // same thing: it consumes a dormancy slot and retires live themes early.
+    // The registry answers it off its own last_seen stamps, with no query.
+    const ordered = themedRunWindow(entries, runId, REGISTRY_DORMANT_RUNS)
     const stale = dormantIds(
       entries.map((e) => ({ id: e.id, last_seen_run_id: registryIds.includes(e.id) ? runId : e.last_seen_run_id, status: e.status })),
       ordered,

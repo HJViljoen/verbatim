@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { insertThemesChunked, THEMES_INSERT_CHUNK } from './themes'
+import { firstMatch, insertThemesChunked, rereadShare, THEMES_INSERT_CHUNK } from './themes'
 
 /** A stand-in for `admin.from('themes').insert(part)` that records batch sizes. */
 function fakeInsert(failOn?: number) {
@@ -43,5 +43,41 @@ describe('insertThemesChunked (run d346b0f7, 2026-09-13)', () => {
     const err = await insertThemesChunked(f.insert, rows(757))
     expect(err).toEqual({ message: 'canceling statement due to statement timeout' })
     expect(f.sizes).toEqual([100, 100, 100])
+  })
+})
+
+describe('rereadShare — how much of this theme the run re-analysed', () => {
+  const reRead = new Set(['v1', 'v2'])
+
+  it('is the share of the DISTINCT videos this run re-read', () => {
+    expect(rereadShare(['v1', 'v2', 'v3', 'v4'], reRead)).toBe(0.5)
+    expect(rereadShare(['v1', 'v1', 'v2'], reRead)).toBe(1)
+    expect(rereadShare(['v9'], reRead)).toBe(0)
+  })
+
+  it('is null, not 0, for a theme with no videos at all', () => {
+    // No denominator, so no share. 0 would claim nothing was re-analysed.
+    expect(rereadShare([], reRead)).toBeNull()
+  })
+
+  it('reads 1.0 across a corpus-wide re-read — the break marker input', () => {
+    expect(rereadShare(['v1', 'v2'], reRead)).toBe(1)
+  })
+})
+
+describe('firstMatch — a retried step may not rewrite how a theme was matched', () => {
+  it('keeps the stored kind and score when this run already observed the theme', () => {
+    expect(firstMatch({ match_kind: 'new', match_score: 0 }, { kind: 'exact', score: 1 }))
+      .toEqual({ match_kind: 'new', match_score: 0 })
+  })
+
+  it('takes this attempt match when there is no stored one', () => {
+    expect(firstMatch(undefined, { kind: 'strong', score: 0.75 }))
+      .toEqual({ match_kind: 'strong', match_score: 0.75 })
+  })
+
+  it('keeps a stored null score rather than replacing it with a fresh number', () => {
+    expect(firstMatch({ match_kind: 'revived', match_score: null }, { kind: 'exact', score: 1 }))
+      .toEqual({ match_kind: 'revived', match_score: null })
   })
 })
