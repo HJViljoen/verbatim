@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { STARTER_TEMPLATES, instantiate, starterTemplate } from './templates'
+import { STARTER_TEMPLATES, instantiate, starterTemplate, templateKeys } from './templates'
 import { isStaticKey } from './compose'
 import { SECTION_PAGES } from './types'
 
@@ -17,6 +17,16 @@ describe('starter templates', () => {
       }
     }
   })
+  // D1: `voice.movers` is no longer registered by the Voice module, and the
+  // Studio's picker is exactly that registry — a starter that still named it
+  // stored a tile nobody could show and made the outline count "6 of 5 tiles".
+  it('names no tile the pages no longer register while the direction words are gated off', () => {
+    for (const t of STARTER_TEMPLATES) for (const s of t.sections) expect(s.keys ?? []).not.toContain('voice.movers')
+    expect(templateKeys(['voice.map', 'voice.movers', 'voice.mood'], false)).toEqual(['voice.map', 'voice.mood'])
+    expect(templateKeys(['voice.map', 'voice.movers'], true)).toEqual(['voice.map', 'voice.movers'])
+    expect(templateKeys(['voice.movers'])).toEqual([]) // the shipped default
+  })
+
   it('instantiates with fresh ids', () => {
     const secs = instantiate(starterTemplate('leadership_one_pager')!.sections)
     expect(secs).toHaveLength(1)
