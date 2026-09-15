@@ -173,6 +173,13 @@ export interface Subject {
   calibrated_at: string | null
   calibration_precision: number | null
   calibration_n: number | null
+  /** WHICH judge that precision was measured under. Declared here, and selected
+   *  by every loader, because `subjectCalibration` cannot tell "nobody recorded
+   *  one" from "this read did not ask" unless the column is always asked for —
+   *  and the first of those is exactly the untrustworthy case the column exists
+   *  for. Null means a figure from before the column, or from a writer that did
+   *  not stamp it: not evidence about the numbers this subject carries now. */
+  calibration_judge_version: string | null
 }
 
 /** One decided (subject, insight) pair, ready to upsert. */
@@ -245,15 +252,22 @@ export type SubjectCalibration = 'calibrating' | 'ready'
  * precision was measured under a DIFFERENT judge — a threshold moved, the
  * prompt changed — has not been calibrated for the numbers it is carrying now,
  * and an 85% from a band that no longer exists is not evidence about this one.
+ *
+ * THE JUDGE VERSION IS REQUIRED, and that is the whole gate. Accepting an
+ * absent one as "close enough" fails OPEN: every path that writes
+ * `calibrated_at` writes the judge version beside it, so a row with a figure
+ * and no judge version is precisely the legacy case — a figure from a band
+ * nobody can name. A loader that does not select the column would then read
+ * `ready` for every subject however far the judge had drifted, which is the
+ * gate quietly doing nothing. Null is `calibrating`.
  */
 export function subjectCalibration(
-  s: Pick<Subject, 'calibrated_at' | 'calibration_precision'> & { calibration_judge_version?: string | null },
+  s: Pick<Subject, 'calibrated_at' | 'calibration_precision' | 'calibration_judge_version'>,
   judgeVersion: string = JUDGE_VERSION,
 ): SubjectCalibration {
   if (!s.calibrated_at) return 'calibrating'
   if ((s.calibration_precision ?? 0) < SUBJECT_PRECISION_FLOOR) return 'calibrating'
-  const measuredUnder = s.calibration_judge_version
-  if (measuredUnder !== undefined && measuredUnder !== null && measuredUnder !== judgeVersion) return 'calibrating'
+  if (s.calibration_judge_version !== judgeVersion) return 'calibrating'
   return 'ready'
 }
 

@@ -292,7 +292,7 @@ export async function loadActiveSubjects(admin: Admin, clientId: string): Promis
   return selectAll<Subject>(() =>
     admin
       .from(TABLE_SUBJECTS)
-      .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n')
+      .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
       .eq('client_id', clientId)
       .eq('status', 'active')
       .order('named_at', { ascending: true })

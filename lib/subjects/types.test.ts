@@ -71,7 +71,8 @@ describe('subjectCalibration', () => {
   })
 
   it('is calibrating when nothing has been measured', () => {
-    expect(subjectCalibration({ calibrated_at: null, calibration_precision: null })).toBe('calibrating')
+    expect(subjectCalibration({ calibrated_at: null, calibration_precision: null, calibration_judge_version: null }))
+      .toBe('calibrating')
   })
 
   it('is calibrating when the measurement missed the floor', () => {
@@ -89,11 +90,12 @@ describe('subjectCalibration', () => {
       .toBe('calibrating')
   })
 
-  it('treats a row read before the column existed as unjudged rather than stale', () => {
-    // `undefined` is "this read did not ask for the column"; null is "nobody
-    // recorded one". The first must not fail a subject that is otherwise fine.
-    expect(subjectCalibration({ calibrated_at: ready.calibrated_at, calibration_precision: 0.9 })).toBe('ready')
-    expect(subjectCalibration({ ...ready, calibration_judge_version: null })).toBe('ready')
+  it('is calibrating when a figure names no judge at all — the gate fails CLOSED', () => {
+    // Every writer of calibrated_at writes the judge version beside it
+    // (scripts/subject-calibration.ts), so a figure with none is a figure from
+    // a band nobody can name. Reading that as `ready` would empty the gate of
+    // its meaning for every subject a loader forgot to select the column for.
+    expect(subjectCalibration({ ...ready, calibration_judge_version: null })).toBe('calibrating')
   })
 })
 
