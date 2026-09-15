@@ -251,14 +251,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         '2,359 videos carried conversation in this window — TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%.',
         '41 videos of your own named a tracked rival as well as you.',
         'Nothing about what we track changed in this window.',
+        // Composed by recordLines from the render's own refusals, reasons and
+        // all (lib/reading/record.ts refusedSentence).
+        '2 comparisons were refused on this page: 1 because the two sides were grouped differently and 1 because too little was read on one side or both.',
       ],
       href: '/dashboard/settings',
       freezesOn: '2026-10-31',
-      refused: 2,
-      refusals: [
-        { state: 'too_little_data' as const, reason: null },
-        { state: 'refused' as const, reason: 'clustering_changed' as const },
-      ],
     },
     ...over,
   }

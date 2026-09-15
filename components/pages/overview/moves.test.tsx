@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { overviewMoves } from './moves'
-import { overviewRecord, refusedSentence } from './record'
+import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -81,7 +81,11 @@ describe('OV6 · how sound is this month', () => {
 
   it('says so when nothing was refused', () => {
     const data = overviewFixture()
-    const text = renderText(overviewRecord.render({ ...data, record: { ...data.record, refused: 0, refusals: [] } }, 'app', ctx))
+    const lines = data.record.lines.filter((l) => !l.includes('refused on this page'))
+    const text = renderText(overviewRecord.render(
+      { ...data, record: { ...data.record, lines: [...lines, 'Every comparison this page asked for was drawn.'] } },
+      'app', ctx,
+    ))
     expect(text).toContain('Every comparison this page asked for was drawn.')
   })
 
@@ -94,22 +98,6 @@ describe('OV6 · how sound is this month', () => {
       expect(text, mode).toContain('too little was read on one side or both')
       expect(text, mode).toContain('the two sides were grouped differently')
     }
-  })
-
-  it('composes the refusal sentence from the reasons, pooling the repeats', () => {
-    expect(refusedSentence([])).toBe('Every comparison this page asked for was drawn.')
-    expect(refusedSentence([{ state: 'too_little_data', reason: null }])).toBe(
-      '1 comparison was refused on this page, because too little was read on one side or both.',
-    )
-    expect(
-      refusedSentence([
-        { state: 'too_little_data', reason: null },
-        { state: 'too_little_data', reason: null },
-        { state: 'refused', reason: 'rename' },
-      ]),
-    ).toBe(
-      '3 comparisons were refused on this page: 2 because too little was read on one side or both and 1 because the two sides are two names for one rival.',
-    )
   })
 
   it('links to the record, absolutely, in an email', () => {

@@ -173,6 +173,9 @@ export interface RecordInputs {
    *  corpus: the same month refuses three comparisons on Overview and none on a
    *  tile that only prints levels. `countRefused` does the counting. */
   comparisonsRefused: number | null
+  /** The same comparisons, with the reason each was not drawn — so the record
+   *  can print the reasons rather than promise them. */
+  refusals: Refusal[]
   /** "Reading as at" — the instant the page was built. */
   readingAt: string
   /** The newest freeze in the window, or null while every month in it is still
@@ -204,9 +207,63 @@ export function refusals(verdicts: readonly Verdict[]): Refusal[] {
     .map((v) => ({ state: v.state, reason: v.refusedReason ?? null }))
 }
 
+/**
+ * Why a comparison that could be drawn is not being drawn, in the reader's
+ * words. Shared with the badge (components/delta-badge.tsx), which prints the
+ * same sentence as its `title`, so the hover and the record cannot come to say
+ * different things about one refusal.
+ */
+export const REFUSAL_WHY: Record<RefusedReason, string> = {
+  unlogged_era: 'this window reaches back before we were recording what changed',
+  tracking_change: 'what we track changed inside this window',
+  clustering_changed: 'the two sides were grouped differently',
+  rename: 'the two sides are two names for one rival',
+}
+
+/** The other two ways a comparison goes undrawn. Not refusals of the record —
+ *  one is about this reading's thinness and one resolves on the calendar
+ *  (lib/reading/verdicts.ts) — but a reader owed a reason is owed one for all
+ *  three. */
+const NOT_DRAWN_WHY: Record<string, string> = {
+  too_little_data: 'too little was read on one side or both',
+  baseline_forming: 'there are not enough months behind it yet',
+  refused: 'our record of what changed does not reach across it',
+}
+
+/**
+ * "3 comparisons were refused on this page: 2 because … and 1 because …"
+ *
+ * THE REASON IS PRINTED, NOT PROMISED. The line said "N comparisons on this
+ * page could not be drawn and say why in their place" while the why reached
+ * the page only as the badge's `title` — a hover tooltip, invisible in print,
+ * and dropped altogether by the email arm, which prints the word alone. So the
+ * sentence was true on screen for a mouse user and false on paper and in the
+ * inbox, on the block that is the page's guarantee. The design asks OV6 for
+ * "comparisons refused this month and why"; this is the why.
+ */
+export function refusedSentence(refusals: readonly Refusal[]): string {
+  if (refusals.length === 0) return 'Every comparison this page asked for was drawn.'
+  const counts = new Map<string, number>()
+  for (const r of refusals) {
+    const why = (r.state === 'refused' && r.reason ? REFUSAL_WHY[r.reason] : NOT_DRAWN_WHY[r.state]) ?? NOT_DRAWN_WHY.refused
+    counts.set(why, (counts.get(why) ?? 0) + 1)
+  }
+  const head =
+    refusals.length === 1
+      ? '1 comparison was refused on this page'
+      : `${fmtInt(refusals.length)} comparisons were refused on this page`
+  const reasons = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  if (reasons.length === 1 && refusals.length === 1) return `${head}, because ${reasons[0][0]}.`
+  const parts = reasons.map(([why, n]) => `${fmtInt(n)} because ${why}`)
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+  return `${head}: ${list}.`
+}
+
 export interface RecordOptions {
   /** The render's own refusal counter. */
   comparisonsRefused?: number | null
+  /** The render's own refusals, with their reasons. */
+  refusals?: readonly Refusal[]
   /** Overridable for tests and for a snapshot that re-renders as at its own
    *  reading date rather than as at now. */
   now?: string
@@ -251,6 +308,7 @@ export async function loadRecordInputs(
     instrument,
     changes,
     comparisonsRefused: options.comparisonsRefused ?? null,
+    refusals: [...(options.refusals ?? [])],
     readingAt,
     frozenAt,
   }
@@ -776,13 +834,7 @@ export function recordLines(input: RecordInputs): string[] {
       : `No change record before ${c.loggedFrom}${c.reconstructed > 0 ? `, though ${fmtInt(c.reconstructed)} ${c.reconstructed === 1 ? 'entry was' : 'entries were'} reconstructed from what each update searched` : ''}.`,
   )
 
-  if (input.comparisonsRefused != null) {
-    lines.push(
-      input.comparisonsRefused === 0
-        ? 'Every comparison this page asked for could be drawn.'
-        : `${plural(input.comparisonsRefused, 'comparison')} on this page could not be drawn and ${input.comparisonsRefused === 1 ? 'says why in its place' : 'say why in their place'}.`,
-    )
-  }
+  if (input.comparisonsRefused != null) lines.push(refusedSentence(input.refusals))
 
   lines.push(`Reading as at ${input.readingAt.slice(0, 10)}.`)
   lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${input.frozenAt.slice(0, 10)}.`)

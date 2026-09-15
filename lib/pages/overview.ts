@@ -33,7 +33,7 @@ import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonth
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow, type Refusal } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -349,12 +349,10 @@ export interface RecordBlock {
   line: string
   lines: string[]
   href: string
-  /** The day this month stops moving. */
+  /** The day this month stops moving — the one fact about this month that a
+   *  window-shaped record does not hold, and the only line OV6 adds of its
+   *  own. The refusals and their reasons are inside `lines`. */
   freezesOn: string
-  refused: number
-  /** Every comparison this page did not draw, as tokens — so OV6 can print
-   *  each one's reason rather than promising it. */
-  refusals: Refusal[]
 }
 
 export interface OverviewData {
@@ -1171,15 +1169,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     reading.client,
     clientId,
     recordWindow(month, readingAt),
-    { comparisonsRefused: countRefused(pageVerdicts), now: readingAt },
+    { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
   )
   const record: RecordBlock = {
     line: howSoundLine(recordInputs),
     lines: recordLines(recordInputs),
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),
-    refused: countRefused(pageVerdicts),
-    refusals: refusals(pageVerdicts),
   }
 
   return {
