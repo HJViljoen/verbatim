@@ -115,10 +115,24 @@ function trackedTerms(i: ReadinessInputs): ReadinessRow {
   // them to "tell us what to add or drop" would not move the pill by a word,
   // which is exactly the confusion the owner column exists to prevent.
   const heldByLogOnly = termsStatus === 'exists' && !i.changeLog.available
+
+  // `tracking_configs.updated_at` IS NOT A LAST-EDIT DATE, and printing it as
+  // one was wrong by 26 days on the paying workspace. Four of the ten write
+  // paths deliberately skip the column (`lib/gather/subreddit-discovery.ts`:
+  // "the log is the record now, and `updated_at` never was one") — Össur's row
+  // carries a community discovered on 13 Sep while the stamp still reads
+  // 18 Aug. So the stamp is printed as what it is, a floor, and the change log
+  // takes the sentence over the moment there is one, because the log is the
+  // record.
+  const changed = i.changeLog.available && i.changeLog.lastChangeAt
+    ? `last change recorded ${fullDate(i.changeLog.lastChangeAt)}`
+    : t.updatedAt
+      ? `last stamped ${fullDate(t.updatedAt)} — not every edit stamps that date, so they may have changed since`
+      : 'no edit has ever been stamped on them'
   const detail =
     `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}` +
     (t.exclude > 0 ? `, ${plural(t.exclude, 'exception')}` : '') +
-    ` · last edited ${dateOrNever(t.updatedAt, 'never')}.`
+    ` · ${changed}.`
 
   return row(
     'tracked-terms', 'Tracking', 'the words each update searches, and a record of when they changed',

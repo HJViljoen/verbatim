@@ -226,8 +226,31 @@ describe('tracked terms', () => {
   it('counts the three buckets and stays partly there while no change is recorded', () => {
     const row = find(computeReadiness(ossur()), 'tracked-terms')
     expect(row.status).toBe('partial')
-    expect(row.detail).toBe('1 brand term, 1 rival term, 5 category terms · last edited 18 Aug 2026.')
+    expect(row.detail).toBe(
+      '1 brand term, 1 rival term, 5 category terms · last stamped 18 Aug 2026 — not every edit stamps that date, so they may have changed since.',
+    )
     expect(row.notes[0]).toContain('No configuration change has been recorded yet')
+  })
+
+  it('does not print the config stamp as a last-edit date', () => {
+    // `tracking_configs.updated_at` is skipped by four of the ten write paths.
+    // Össur's row carries a community discovered on 13 Sep 2026 and a stamp of
+    // 18 Aug 2026 — 26 days apart, verified read-only. Stating the stamp
+    // flatly would answer "has anything changed recently?" wrongly, as a
+    // measurement, on the paying workspace.
+    const row = find(computeReadiness(ossur()), 'tracked-terms')
+    expect(row.detail).not.toContain('last edited')
+    expect(row.detail).toContain('not every edit stamps that date')
+  })
+
+  it('hands the sentence to the change log once there is one', () => {
+    const inputs = ossur({
+      changeLog: { available: true, rows: 33, firstLoggedAt: '2026-07-01T00:00:00Z', lastChangeAt: '2026-09-13T10:00:58Z' },
+    })
+    const row = find(computeReadiness(inputs), 'tracked-terms')
+    expect(row.detail).toContain('last change recorded 13 Sep 2026')
+    expect(row.detail).not.toContain('18 Aug 2026')
+    expect(row.detail).not.toContain('stamps that date')
   })
 
   it('is in place once terms exist in every bucket and changes are recorded', () => {
@@ -263,7 +286,7 @@ describe('tracked terms', () => {
     const inputs = ossur({ terms: { brand: 0, competitor: 0, industry: 0, exclude: 0, updatedAt: null } })
     const row = find(computeReadiness(inputs), 'tracked-terms')
     expect(row.status).toBe('missing')
-    expect(row.detail).toContain('last edited never')
+    expect(row.detail).toContain('no edit has ever been stamped on them')
   })
 })
 

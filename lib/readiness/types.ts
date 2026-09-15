@@ -87,7 +87,11 @@ export interface TermsInput {
   industry: number
   /** Senses of a name that are NOT this brand ("Cotopaxi the volcano"). */
   exclude: number
-  /** `tracking_configs.updated_at` — when the row last changed, not who. */
+  /** `tracking_configs.updated_at` — A FLOOR, NOT A LAST-EDIT DATE. Four of
+   *  the ten write paths skip the column on purpose (subreddit discovery and
+   *  its probe among them), so the row can change without it moving: on Össur
+   *  it reads 18 Aug against a community discovered 13 Sep. The row prints it
+   *  as a floor and defers to the change log wherever one exists. */
   updatedAt: string | null
 }
 
