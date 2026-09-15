@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { recordConfigChange, type ConfigActor } from '../config-log'
+import { CONFIG_CHANGES_TABLE, isMissingConfigLog, recordConfigChange, type ConfigActor } from '../config-log'
 import { audienceOf } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { TABLE_ATTENTION_PANELS, type PlatformMix } from './types'
@@ -179,9 +179,49 @@ export const samePanelEra = (a: string | null | undefined, b: string | null | un
 export function panelStale(
   panel: Pick<AttentionPanel, 'frozen_at'>,
   changes: readonly { changed_at: string; surface: string }[],
-  surfaces: readonly string[] = ['terms', 'rivals', 'handles', 'platforms', 'subreddits', 'rival_rename', 'entity_retag'],
+  surfaces: readonly string[] = PANEL_STALING_SURFACES,
 ): boolean {
   return changes.some((c) => surfaces.includes(c.surface) && c.changed_at > panel.frozen_at)
+}
+
+/** The `config_changes.surface` values that move which accounts we gather at
+ *  all, and therefore re-base a panel. `cadence`, `knobs`, `schedule`,
+ *  `subjects` and `prompt_version` are deliberately absent: they change how
+ *  often or how deeply we look, not WHERE, and a panel that re-froze on every
+ *  one of them would draw a rule on the axis for a schedule edit. */
+export const PANEL_STALING_SURFACES: readonly string[] = [
+  'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'rival_rename', 'entity_retag', 'regate',
+]
+
+/**
+ * The tracking changes logged since an instant — the input `panelStale` reads.
+ *
+ * Two surfaces' worth of columns and nothing else: this asks "has WHERE we look
+ * moved", not "what moved", and the whole log is read elsewhere
+ * (lib/reading/read.ts). An absent log reads as no change, the readiness
+ * precedent: a reader says "not recorded", it does not fail — which is also the
+ * conservative direction here, because it leaves the panel alone rather than
+ * re-freezing on a missing table.
+ */
+export async function trackingChangesSince(
+  admin: SupabaseClient,
+  clientId: string,
+  since: string,
+): Promise<{ changed_at: string; surface: string }[]> {
+  try {
+    return await selectAll<{ changed_at: string; surface: string }>(() =>
+      admin
+        .from(CONFIG_CHANGES_TABLE)
+        .select('changed_at, surface')
+        .eq('client_id', clientId)
+        .gt('changed_at', since)
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingConfigLog(error)) return []
+    throw error
+  }
 }
 
 // ---- The index itself --------------------------------------------------------

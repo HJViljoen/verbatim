@@ -7,6 +7,7 @@ import {
   derivePanel,
   isMissingKindMoodAttention,
   onPanel,
+  PANEL_STALING_SURFACES,
   panelCutoff,
   panelStale,
   samePanelEra,
@@ -118,6 +119,21 @@ describe('panelStale', () => {
     expect(panelStale(panel, [{ changed_at: '2026-07-01T00:00:00Z', surface: 'rivals' }])).toBe(false)
     expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface: 'cadence' }])).toBe(false)
     expect(panelStale(panel, [])).toBe(false)
+  })
+
+  // The list is what `freezeMonths` re-freezes on, so it is pinned here rather
+  // than left to a default argument nobody reads: every surface that moves
+  // WHERE we gather, and no surface that only moves how often or how deeply.
+  it('names every surface that moves where we gather, and none that does not', () => {
+    for (const surface of PANEL_STALING_SURFACES) {
+      expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(true)
+    }
+    expect(PANEL_STALING_SURFACES).toContain('regate')
+    expect(PANEL_STALING_SURFACES).toContain('entity_retag')
+    for (const surface of ['cadence', 'knobs', 'schedule', 'subjects', 'prompt_version', 'other']) {
+      expect(PANEL_STALING_SURFACES).not.toContain(surface)
+      expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
+    }
   })
 })
 

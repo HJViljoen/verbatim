@@ -3,7 +3,15 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { chunk } from '../chunk'
 import type { ConfigActor } from '../config-log'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
-import { currentPanel, freezePanel, isMissingKindMoodAttention, panelCutoff } from './attention'
+import {
+  currentPanel,
+  freezePanel,
+  isMissingKindMoodAttention,
+  panelCutoff,
+  panelStale,
+  trackingChangesSince,
+  type PanelReason,
+} from './attention'
 import {
   FREEZE_AFTER_DAYS,
   RPC_AUDIENCE_STATS,
@@ -768,6 +776,9 @@ export interface FreezeSummary {
    *  which is Sealand's state until an October reading. */
   panelId: string | null
   panelFrozen: boolean
+  /** Why this visit froze one, when it did: the tenant's first, or a logged
+   *  tracking change that re-based it. Null when nothing was frozen. */
+  panelReason: PanelReason | null
   skippedKindMoodAttention: boolean
 }
 
@@ -837,6 +848,7 @@ export async function freezeMonths(
     stats: noSide(),
     panelId: null,
     panelFrozen: false,
+    panelReason: null,
     skippedKindMoodAttention: false,
   }
   const window = windowOf(months)
@@ -882,8 +894,19 @@ export async function freezeMonths(
   //
   // THE PANEL IS READ, AND FROZEN ONLY WITH AN ACTOR. A tenant with no panel
   // gets its first one here when the caller says who is asking; a tenant whose
-  // accounts are all too new gets none at all and its attention half reads zero
-  // over a null panel, which is the honest state rather than an invented set.
+  // accounts are all too new gets none at all and its attention half reads
+  // nothing over a null panel, which is the honest state rather than an
+  // invented set.
+  //
+  // AND IT IS RE-FROZEN WHEN THE TRACKING MOVES. That is the design's rule
+  // ("frozen into attention_panels, re-frozen and logged at every tracking
+  // change") and without it a tenant's FIRST panel is its panel for ever: the
+  // index would never admit a newly tracked account, never react to a rival
+  // rename or a re-gate, and the rule on the axis that `samePanelEra` and
+  // `month_audience_stats.panel_id` are built around could never be drawn.
+  // `panelStale` answers from the change log — the only place those moves are
+  // recorded — and the new panel is a new dated row with reason
+  // `tracking_change`, never an edit of the old one.
   let kindMerge: MergeResult<KindReading> = {
     writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0, refusedLate: [],
   }
@@ -894,26 +917,46 @@ export async function freezeMonths(
   let statsRows: AudienceStatsRow[] = []
   let panelId: string | null = null
   let panelFrozen = false
+  let panelReason: PanelReason | null = null
   let skippedKindMoodAttention = false
   const closedAudienceMonths = storedDenoms.filter((d) => d.status === 'frozen').map(denominatorKey)
   try {
     const existing = await currentPanel(admin, opts.clientId)
     panelId = existing?.id ?? null
-    if (!existing && opts.actor && !opts.dryRun) {
+    const readMonth = months[months.length - 1]
+    // A panel is frozen for two reasons and neither of them is "it is missing":
+    // the first freeze, and a logged change to WHERE we gather. A change we
+    // never recorded reads as no change and leaves the panel alone, which is
+    // the conservative direction — a re-freeze starts an era and an era break
+    // costs a reader every comparison across it.
+    const stale = existing
+      ? panelStale(existing, await trackingChangesSince(admin, opts.clientId, existing.frozen_at))
+      : false
+    const reason: PanelReason | null = !existing ? 'first_freeze' : stale ? 'tracking_change' : null
+    if (reason && opts.actor && !opts.dryRun) {
       const frozen = await freezePanel(admin, {
         clientId: opts.clientId,
-        month: months[months.length - 1],
-        reason: 'first_freeze',
+        month: readMonth,
+        reason,
         actor: opts.actor,
       })
-      panelId = frozen.panel?.id ?? null
-      panelFrozen = frozen.panel != null
-      if (frozen.refused === 'empty') {
+      if (frozen.panel) {
+        panelId = frozen.panel.id
+        panelFrozen = true
+        panelReason = reason
+      } else if (frozen.refused === 'empty') {
+        // An empty derivation never replaces a panel that exists: the stale one
+        // is a worse denominator than it was and still a better one than none.
         console.log(
           `[monthly-reading] no attention panel for ${opts.clientId}: no account was first seen before ` +
-          `${panelCutoff(months[months.length - 1])}, so the attention half reads nothing this visit.`,
+          `${panelCutoff(readMonth)}, so the attention half ${existing ? 'stays on the panel frozen at ' + existing.frozen_at : 'reads nothing this visit'}.`,
         )
       }
+    } else if (reason === 'tracking_change') {
+      console.log(
+        `[monthly-reading] the attention panel for ${opts.clientId} is overtaken by a logged tracking change ` +
+        `and was NOT re-frozen this visit (${opts.dryRun ? 'dry run' : 'no actor'}); the index still reads over the panel frozen at ${existing!.frozen_at}.`,
+      )
     }
 
     const freshKinds = await readKindReadings(admin, opts.clientId, window)
@@ -973,6 +1016,7 @@ export async function freezeMonths(
     },
     panelId,
     panelFrozen,
+    panelReason,
     skippedKindMoodAttention,
   }
   // An empty reading is a failure, not a result, and the rows it did not delete

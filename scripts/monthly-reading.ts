@@ -240,7 +240,7 @@ async function main() {
         `${side((x) => x.deleted)} stale filling rows dropped, ` +
         `${side((x) => x.heldStale)} held because a reading came back empty, ` +
         `${side((x) => x.refusedLate)} refused because their months have closed.` +
-        `${done.panelFrozen ? ` An attention panel was frozen (${done.panelId}).` : ''}`,
+        `${done.panelFrozen ? ` An attention panel was frozen (${done.panelReason}: ${done.panelId}).` : ''}`,
       )
     }
     console.log()
