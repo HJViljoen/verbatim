@@ -327,9 +327,27 @@ async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, siz
  *     more join away, and an `h:` hero quote has no comment row at all);
  *   * the hash IS the identity of a text, so two comments that say the same
  *     thing share one reading and that is correct rather than a collision;
- *   * comment_translations carries a tenant SELECT policy, so a session client
- *     reads only its own tenant's rows and a service-role read is already
- *     tenant-scoped by its caller.
+ *   * a row IS its text's reading, so serving it across tenants is correct
+ *     rather than a leak.
+ *
+ * THAT LAST POINT IS THE DELICATE ONE, and it is not the same as saying this
+ * read is tenant-scoped, because it is not. With a session client RLS injects
+ * client_id = get_my_client_id() and comment_translations_client_hash_idx
+ * serves it. With the ADMIN client — a snapshot hydrate (lib/snapshots.ts), a
+ * document build (lib/reports/documents/steps.ts), a scheduled digest and a
+ * share link at /r/<token> — there is no client predicate at all, so two
+ * tenants whose commenters wrote byte-identical text share whichever row is
+ * found first, and tenant A's erasure (which cascades A's row away) leaves B's
+ * row answering A's hash. That is harmless HERE and only here: the row holds a
+ * machine translation of the exact bytes asked about and nothing tenant-shaped,
+ * and a quote whose ORIGINAL does not resolve is dropped before this is
+ * consulted (fetchQuoteTextsByRefs resolves through insight_evidence, which the
+ * erasure empties). It would stop being harmless the moment a row carried
+ * anything a tenant owns — so it must not.
+ *
+ * 20260918095000 carries comment_translations_hash_idx for the unscoped read:
+ * the primary key leads with comment_id and PostgreSQL 17 has no skip scan, so
+ * without it every admin chunk sequentially scans the table.
  *
  * Degrades to "nothing is known" on any read failure, including the one that
  * matters before 20260918095000 is applied. A quote with no reading renders as

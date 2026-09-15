@@ -170,8 +170,19 @@ comment on column public.comment_translations.english is
 comment on column public.comment_translations.language is
   'The language the model detected in this text, or ''und'' where there is none to detect. The only per-comment language signal in the schema; videos.transcript_lang is the creator''s speech and is 34–58% precise used as a per-comment decider.';
 
+-- TWO INDEXES, because the cache is read two different ways and the primary
+-- key serves neither (it leads with comment_id, and PostgreSQL 17 has no skip
+-- scan).
+--   * a SESSION client reads it with RLS injecting client_id = get_my_client_id(),
+--     so the tenant-led index is the one that serves a page;
+--   * the ADMIN client reads it by text hash with no client predicate at all
+--     (lib/quotes.ts readTranslations, reached from a snapshot hydrate, a
+--     scheduled digest and a share link at /r/<token>), and without a
+--     hash-led index every one of those chunks sequentially scans the table.
 create index if not exists comment_translations_client_hash_idx
   on public.comment_translations (client_id, text_hash);
+create index if not exists comment_translations_hash_idx
+  on public.comment_translations (text_hash);
 
 alter table public.comment_translations enable row level security;
 
