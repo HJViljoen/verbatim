@@ -6,6 +6,7 @@ import {
   freezeFor,
   freezeStateFor,
   isMissingMonthlyReading,
+  kindReadingKey,
   mergeMonthRows,
   monthEndInstant,
   monthStartOf,
@@ -737,5 +738,52 @@ describe('mergeMonthRows — a closed audience-month takes no fresh key', () => 
     })
     expect(result.writes).toHaveLength(1)
     expect(result.refusedLate).toEqual([])
+  })
+})
+
+describe('the kind and audience-stat siblings (WP5)', () => {
+  const now = '2026-10-05T00:00:00.000Z'
+  const RUN = '11111111-2222-3333-4444-555555555555'
+
+  it('keys a kind row on the month, the audience and the kind', () => {
+    expect(kindReadingKey({ month: '2026-08-01', audience: 'industry-other', kind: 'question' }))
+      .toBe('2026-08-01|industry-other|question')
+    // Different tables, different third column, and the keys cannot collide
+    // across them because each merge is handed only its own table's rows.
+    expect(kindReadingKey({ month: '2026-08-15', audience: 'client', kind: 'praise' }))
+      .toBe('2026-08-01|client|praise')
+  })
+
+  it('folds kind rows through the same merge as themes, with the same freeze rule', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'industry-other', kind: 'question', videos: 138 },
+      { month: '2026-08-01', audience: 'industry-other', kind: 'question', videos: 261 },
+    ]
+    const stored = [{
+      key: '2026-08-01|industry-other|question',
+      month: '2026-08-01', audience: 'industry-other', theme_id: null, kind: 'question',
+      status: 'frozen' as const, origin: 'live' as const, frozen_at: '2026-09-30T00:00:00.000Z',
+    }]
+    const result = mergeMonthRows({
+      months: ['2026-08-01', '2026-09-01'], fresh, stored, keyOf: kindReadingKey, now, runId: RUN,
+    })
+    expect(result.keptFrozen).toBe(1)
+    expect(result.writes.map((w) => w.month)).toEqual(['2026-09-01'])
+  })
+
+  it('keys an audience-stat row exactly as a denominator, because it has no third column', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'client', judged: 7 },
+      { month: '2026-07-01', audience: 'client', judged: 3 },
+    ]
+    const result = mergeMonthRows({
+      months: ['2026-07-01', '2026-09-01'], fresh, stored: [], keyOf: denominatorKey, now, runId: RUN,
+    })
+    expect(result.writes).toHaveLength(2)
+    // September is still filling on 5 October; July closed on 30 August, so a
+    // first write of it now is a back-read and freezes at once.
+    expect(result.writes.find((w) => w.month === '2026-09-01')!.status).toBe('filling')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.status).toBe('frozen')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.origin).toBe('back_read')
   })
 })

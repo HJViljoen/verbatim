@@ -1,3 +1,4 @@
+import { scriptActor } from '../lib/config-log'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   fillingMonths,
@@ -187,14 +188,23 @@ async function main() {
       `(${plan.themes.frozen} frozen at once); ` +
       `${plan.denominators.keptFrozen + plan.themes.keptFrozen} stored rows are already frozen and would be left alone.`,
     )
-    const held = plan.denominators.heldStale + plan.themes.heldStale
+    if (plan.skippedKindMoodAttention) {
+      console.log('  kinds, mood and attention: skipped — 20260918094000_kind_mood_attention.sql is not applied here.')
+    } else {
+      console.log(
+        `  …and ${plan.kinds.written} kind rows (${plan.kinds.frozen} frozen at once) and ` +
+        `${plan.stats.written} mood/attention rows (${plan.stats.frozen} frozen at once), read over ` +
+        `${plan.panelId ? `panel ${plan.panelId}` : 'no attention panel — the attention half would read nothing'}.`,
+      )
+    }
+    const held = plan.denominators.heldStale + plan.themes.heldStale + plan.kinds.heldStale + plan.stats.heldStale
     if (held > 0) {
       console.log(
         `  ${held} stored filling rows would be held rather than dropped: a reading came back empty, ` +
         'which is a reading that did not happen, not a month that emptied.',
       )
     }
-    const late = plan.denominators.refusedLate + plan.themes.refusedLate
+    const late = plan.denominators.refusedLate + plan.themes.refusedLate + plan.kinds.refusedLate + plan.stats.refusedLate
     if (late > 0) {
       console.log(
         `  ${late} fresh rows would NOT be written: their audience-months have closed and this table ` +
@@ -216,13 +226,21 @@ async function main() {
           'Name one with --run <uuid>, or pass --denominators-only if that is genuinely what you want.',
         )
       }
-      const done = await freezeMonths(admin, { clientId: id, runId, months, now })
+      // The actor lets the seed freeze the tenant's first attention panel —
+      // a configuration write, which never happens unattributed.
+      const done = await freezeMonths(admin, {
+        clientId: id, runId, months, now, actor: scriptActor('scripts/monthly-reading.ts --write'),
+      })
+      const side = (pick: (s: typeof done.themes) => number) =>
+        pick(done.denominators) + pick(done.themes) + pick(done.kinds) + pick(done.stats)
       console.log(
-        `  WROTE ${done.denominators.written} denominator rows and ${done.themes.written} theme rows; ` +
-        `${done.denominators.keptFrozen + done.themes.keptFrozen} frozen rows untouched, ` +
-        `${done.denominators.deleted + done.themes.deleted} stale filling rows dropped, ` +
-        `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty, ` +
-        `${done.denominators.refusedLate + done.themes.refusedLate} refused because their months have closed.`,
+        `  WROTE ${done.denominators.written} denominator rows, ${done.themes.written} theme rows, ` +
+        `${done.kinds.written} kind rows and ${done.stats.written} mood/attention rows; ` +
+        `${side((x) => x.keptFrozen)} frozen rows untouched, ` +
+        `${side((x) => x.deleted)} stale filling rows dropped, ` +
+        `${side((x) => x.heldStale)} held because a reading came back empty, ` +
+        `${side((x) => x.refusedLate)} refused because their months have closed.` +
+        `${done.panelFrozen ? ` An attention panel was frozen (${done.panelId}).` : ''}`,
       )
     }
     console.log()

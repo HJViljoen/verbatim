@@ -1,18 +1,28 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
+import type { ConfigActor } from '../config-log'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
+import { currentPanel, freezePanel, isMissingKindMoodAttention, panelCutoff } from './attention'
 import {
   FREEZE_AFTER_DAYS,
+  RPC_AUDIENCE_STATS,
   RPC_DENOMINATORS,
+  RPC_KIND_READINGS,
   RPC_THEME_READINGS,
   RPC_WINDOW_DENOMINATORS,
   RPC_WINDOW_THEME_READINGS,
+  TABLE_AUDIENCE_STATS,
   TABLE_DENOMINATORS,
+  TABLE_KIND_READINGS,
   TABLE_THEME_READINGS,
+  type AudienceStatsReading,
+  type AudienceStatsRow,
   type DenominatorReading,
   type DenominatorRow,
   type FreezeColumns,
+  type KindReading,
+  type KindReadingRow,
   type MonthOrigin,
   type MonthStatus,
   type StoredFreeze,
@@ -293,6 +303,12 @@ export const denominatorKey = (r: { month: string; audience: string }): string =
 export const themeReadingKey = (r: { month: string; audience: string; theme_id: string }): string =>
   `${monthStartOf(r.month)}|${r.audience}|${r.theme_id}`
 
+/** A kind reading's identity. The kind values are the pipeline's enum, so they
+ *  cannot hold the separator; the audience can, which is why every key here is
+ *  built rather than parsed. */
+export const kindReadingKey = (r: { month: string; audience: string; kind: string }): string =>
+  `${monthStartOf(r.month)}|${r.audience}|${r.kind}`
+
 /**
  * The bookkeeping a row gets on this write.
  *
@@ -534,6 +550,38 @@ export async function readThemeReadings(
   )
 }
 
+/** The kinds a month carried, per audience. No run: a kind is an enum Pass A
+ *  writes, not a clustering artefact (20260918094000, head). */
+export async function readKindReadings(
+  admin: SupabaseClient,
+  clientId: string,
+  window: { from: string; to: string },
+): Promise<KindReading[]> {
+  return callRpc<KindReading>(
+    admin,
+    RPC_KIND_READINGS,
+    { p_client: clientId, p_from: window.from, p_to: window.to },
+    ['month', 'audience', 'kind'],
+  )
+}
+
+/** The mood counts and, over the given panel, the attention counts. `panelId`
+ *  null reads the mood half alone — which is the right answer for a tenant with
+ *  no panel yet, and not the same as reading zero attention. */
+export async function readAudienceStats(
+  admin: SupabaseClient,
+  clientId: string,
+  panelId: string | null,
+  window: { from: string; to: string },
+): Promise<AudienceStatsReading[]> {
+  return callRpc<AudienceStatsReading>(
+    admin,
+    RPC_AUDIENCE_STATS,
+    { p_client: clientId, p_panel: panelId, p_from: window.from, p_to: window.to },
+    ['month', 'audience'],
+  )
+}
+
 /** The freeze columns of the stored rows — never their numbers. The merge
  *  decides from status and origin alone, so this reads what it needs and
  *  nothing else. */
@@ -541,6 +589,7 @@ interface StoredRow {
   month: string
   audience: string
   theme_id?: string | null
+  kind?: string | null
   status: MonthStatus
   origin: MonthOrigin
   frozen_at: string | null
@@ -549,11 +598,17 @@ interface StoredRow {
 const toStoredFreeze = (rows: readonly StoredRow[]): StoredFreeze[] =>
   rows.map((r) => {
     const theme_id = r.theme_id ?? null
+    const kind = r.kind ?? null
+    const key =
+      theme_id !== null ? themeReadingKey({ ...r, theme_id })
+        : kind !== null ? kindReadingKey({ ...r, kind })
+          : denominatorKey(r)
     return {
-      key: theme_id === null ? denominatorKey(r) : themeReadingKey({ ...r, theme_id }),
+      key,
       month: monthStartOf(r.month),
       audience: r.audience,
       theme_id,
+      kind,
       status: r.status,
       origin: r.origin,
       frozen_at: r.frozen_at ?? null,
@@ -593,6 +648,39 @@ async function storedThemeReadings(
   return toStoredFreeze(rows)
 }
 
+async function storedKindReadings(
+  admin: SupabaseClient, clientId: string, months: readonly string[],
+): Promise<StoredFreeze[]> {
+  if (months.length === 0) return []
+  const rows = await selectAll<StoredRow>(() =>
+    admin
+      .from(TABLE_KIND_READINGS)
+      .select('month, audience, kind, status, origin, frozen_at')
+      .eq('client_id', clientId)
+      .in('month', [...months])
+      .order('month', { ascending: true })
+      .order('audience', { ascending: true })
+      .order('kind', { ascending: true }),
+  )
+  return toStoredFreeze(rows)
+}
+
+async function storedAudienceStats(
+  admin: SupabaseClient, clientId: string, months: readonly string[],
+): Promise<StoredFreeze[]> {
+  if (months.length === 0) return []
+  const rows = await selectAll<StoredRow>(() =>
+    admin
+      .from(TABLE_AUDIENCE_STATS)
+      .select('month, audience, status, origin, frozen_at')
+      .eq('client_id', clientId)
+      .in('month', [...months])
+      .order('month', { ascending: true })
+      .order('audience', { ascending: true }),
+  )
+  return toStoredFreeze(rows)
+}
+
 /** The months this tenant still has open, from the stored rows themselves.
  *  A month with a filling row has to be visited again even after its 30-day
  *  line passes — that visit is what freezes it.
@@ -601,29 +689,35 @@ async function storedThemeReadings(
  *  minus the tenant): a page break on a non-unique key can skip rows, and a
  *  skipped row here is a month that never freezes. */
 export async function fillingMonths(admin: SupabaseClient, clientId: string): Promise<string[]> {
-  const [denoms, themes] = await Promise.all([
-    selectAll<{ month: string }>(() =>
-      admin
-        .from(TABLE_DENOMINATORS)
-        .select('month')
-        .eq('client_id', clientId)
-        .eq('status', 'filling')
-        .order('month', { ascending: true })
-        .order('audience', { ascending: true }),
-    ),
-    selectAll<{ month: string }>(() =>
-      admin
-        .from(TABLE_THEME_READINGS)
+  const open = (table: string, ...keys: string[]) =>
+    selectAll<{ month: string }>(() => {
+      let q = admin
+        .from(table)
         .select('month')
         .eq('client_id', clientId)
         .eq('status', 'filling')
         .order('month', { ascending: true })
         .order('audience', { ascending: true })
-        .order('theme_id', { ascending: true }),
-    ),
+      for (const k of keys) q = q.order(k, { ascending: true })
+      return q
+    })
+  const [denoms, themes] = await Promise.all([
+    open(TABLE_DENOMINATORS),
+    open(TABLE_THEME_READINGS, 'theme_id'),
   ])
+  // WP5's two tables are asked separately and their absence is not an error:
+  // M5 is applied by hand in the same window as M3, so a deploy can reach
+  // production with the month tables present and these two missing, and a
+  // month that is open for a theme is open for its kinds anyway.
+  let kinds: { month: string }[] = []
+  let stats: { month: string }[] = []
+  try {
+    ;[kinds, stats] = await Promise.all([open(TABLE_KIND_READINGS, 'kind'), open(TABLE_AUDIENCE_STATS)])
+  } catch (e) {
+    if (!isMissingKindMoodAttention(e)) throw e
+  }
   const out = new Set<string>()
-  for (const r of [...denoms, ...themes]) out.add(monthStartOf(r.month))
+  for (const r of [...denoms, ...themes, ...kinds, ...stats]) out.add(monthStartOf(r.month))
   return [...out].sort()
 }
 
@@ -665,6 +759,16 @@ export interface FreezeSummary {
   months: string[]
   denominators: FreezeSide
   themes: FreezeSide
+  /** WP5's two siblings. `skipped` is true when M5 has not been applied yet —
+   *  a no-op, not a failure, and the theme record still lands. */
+  kinds: FreezeSide
+  stats: FreezeSide
+  /** The panel the attention half of `stats` was read over, and whether this
+   *  visit froze it. Null when the tenant has no panel that can be frozen —
+   *  which is Sealand's state until an October reading. */
+  panelId: string | null
+  panelFrozen: boolean
+  skippedKindMoodAttention: boolean
 }
 
 /**
@@ -712,6 +816,11 @@ export async function freezeMonths(
      *  clustering was, and a caller that recomputed it would be recomputing it
      *  at a different moment from the one that produced the themes. */
     clusteringKey?: string | null
+    /** Who is writing. Given, this visit may FREEZE the attention panel when
+     *  the tenant has none — a configuration write, and every configuration
+     *  write carries an actor (AGENTS.md). Omitted, an existing panel is still
+     *  read and used; none is ever created. */
+    actor?: ConfigActor
   },
 ): Promise<FreezeSummary> {
   const now = opts.now ?? new Date().toISOString()
@@ -719,10 +828,16 @@ export async function freezeMonths(
     ? opts.clusteringKey
     : await runClusteringKey(admin, opts.runId)
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
+  const noSide = (): FreezeSide => ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 })
   const empty: FreezeSummary = {
     months,
-    denominators: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 },
-    themes: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 },
+    denominators: noSide(),
+    themes: noSide(),
+    kinds: noSide(),
+    stats: noSide(),
+    panelId: null,
+    panelFrozen: false,
+    skippedKindMoodAttention: false,
   }
   const window = windowOf(months)
   if (!window) return empty
@@ -757,6 +872,71 @@ export async function freezeMonths(
   }
   const themeRows: ThemeReadingRow[] = themeMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))
 
+  // WP5's two siblings. Read, merged and frozen by the same rules as the theme
+  // rows — same keys, same freeze columns, same guards in the database — and
+  // wrapped in ONE test for "M5 has not been applied yet", because they land in
+  // the same window as M3 but a deploy can arrive before either. A miss here
+  // costs the kind and mood record for this visit and nothing else: the theme
+  // rows and the denominators still land, and the next visit after the apply
+  // back-reads whatever is still open.
+  //
+  // THE PANEL IS READ, AND FROZEN ONLY WITH AN ACTOR. A tenant with no panel
+  // gets its first one here when the caller says who is asking; a tenant whose
+  // accounts are all too new gets none at all and its attention half reads zero
+  // over a null panel, which is the honest state rather than an invented set.
+  let kindMerge: MergeResult<KindReading> = {
+    writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0, refusedLate: [],
+  }
+  let statsMerge: MergeResult<AudienceStatsReading> = {
+    writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0, refusedLate: [],
+  }
+  let kindRows: KindReadingRow[] = []
+  let statsRows: AudienceStatsRow[] = []
+  let panelId: string | null = null
+  let panelFrozen = false
+  let skippedKindMoodAttention = false
+  const closedAudienceMonths = storedDenoms.filter((d) => d.status === 'frozen').map(denominatorKey)
+  try {
+    const existing = await currentPanel(admin, opts.clientId)
+    panelId = existing?.id ?? null
+    if (!existing && opts.actor && !opts.dryRun) {
+      const frozen = await freezePanel(admin, {
+        clientId: opts.clientId,
+        month: months[months.length - 1],
+        reason: 'first_freeze',
+        actor: opts.actor,
+      })
+      panelId = frozen.panel?.id ?? null
+      panelFrozen = frozen.panel != null
+      if (frozen.refused === 'empty') {
+        console.log(
+          `[monthly-reading] no attention panel for ${opts.clientId}: no account was first seen before ` +
+          `${panelCutoff(months[months.length - 1])}, so the attention half reads nothing this visit.`,
+        )
+      }
+    }
+
+    const freshKinds = await readKindReadings(admin, opts.clientId, window)
+    const storedKinds = await storedKindReadings(admin, opts.clientId, months)
+    kindMerge = mergeMonthRows({
+      months, fresh: freshKinds, stored: storedKinds, keyOf: kindReadingKey, now, runId: opts.runId,
+      clusteringKey, closedAudienceMonths,
+    })
+    kindRows = kindMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))
+
+    const freshStats = await readAudienceStats(admin, opts.clientId, panelId, window)
+    const storedStats = await storedAudienceStats(admin, opts.clientId, months)
+    statsMerge = mergeMonthRows({
+      months, fresh: freshStats, stored: storedStats, keyOf: denominatorKey, now, runId: opts.runId,
+      clusteringKey, closedAudienceMonths,
+    })
+    statsRows = statsMerge.writes.map((r) => ({ ...r, client_id: opts.clientId, panel_id: panelId }))
+  } catch (e) {
+    if (!isMissingKindMoodAttention(e)) throw e
+    skippedKindMoodAttention = true
+    console.log('[monthly-reading] kinds, mood and attention skipped: 20260918094000_kind_mood_attention.sql has not been applied yet')
+  }
+
   const summary: FreezeSummary = {
     months,
     denominators: {
@@ -775,11 +955,33 @@ export async function freezeMonths(
       heldStale: themeMerge.heldStale,
       refusedLate: themeMerge.refusedLate.length,
     },
+    kinds: {
+      written: kindRows.length,
+      frozen: kindRows.filter((r) => r.status === 'frozen').length,
+      keptFrozen: kindMerge.keptFrozen,
+      deleted: kindMerge.stale.length,
+      heldStale: kindMerge.heldStale,
+      refusedLate: kindMerge.refusedLate.length,
+    },
+    stats: {
+      written: statsRows.length,
+      frozen: statsRows.filter((r) => r.status === 'frozen').length,
+      keptFrozen: statsMerge.keptFrozen,
+      deleted: statsMerge.stale.length,
+      heldStale: statsMerge.heldStale,
+      refusedLate: statsMerge.refusedLate.length,
+    },
+    panelId,
+    panelFrozen,
+    skippedKindMoodAttention,
   }
   // An empty reading is a failure, not a result, and the rows it did not delete
   // are the only copy of those months. Say so wherever this runs — the pipeline
   // step, the inspector, a backfill — rather than leaving it to a caller.
-  for (const [what, merge] of [['denominator', denomMerge], ['theme', themeMerge]] as const) {
+  const sides = [
+    ['denominator', denomMerge], ['theme', themeMerge], ['kind', kindMerge], ['audience-stat', statsMerge],
+  ] as const
+  for (const [what, merge] of sides) {
     if (merge.emptyReading && merge.heldStale > 0) {
       console.error(
         `[monthly-reading] the ${what} reading for ${opts.clientId} came back EMPTY over ` +
@@ -792,7 +994,7 @@ export async function freezeMonths(
   // current clustering has outgrown, and the record will not take it. Say so
   // wherever this runs — the number is otherwise invisible, because the rows
   // simply never appear.
-  for (const [what, merge] of [['denominator', denomMerge], ['theme', themeMerge]] as const) {
+  for (const [what, merge] of sides) {
     if (merge.refusedLate.length === 0) continue
     const where = [...new Set(merge.refusedLate.map((r) => `${r.month.slice(0, 7)} ${r.audience}`))].join(', ')
     console.warn(
@@ -822,6 +1024,11 @@ export async function freezeMonths(
   // visit writes it from the same corpus while the frozen numerators are kept
   // as they are.
   if (themeRows.length > 0) await writeRows(admin, TABLE_THEME_READINGS, themeRows, 'client_id,month,audience,theme_id')
+  // Same side of the line as the theme rows, and for the same reason: the
+  // denominator is the commit marker, so everything that hangs off it is
+  // written before it freezes.
+  if (kindRows.length > 0) await writeRows(admin, TABLE_KIND_READINGS, kindRows, 'client_id,month,audience,kind')
+  if (statsRows.length > 0) await writeRows(admin, TABLE_AUDIENCE_STATS, statsRows, 'client_id,month,audience')
   if (denomRows.length > 0) {
     try {
       await writeRows(admin, TABLE_DENOMINATORS, denomRows, 'client_id,month,audience')
@@ -838,6 +1045,8 @@ export async function freezeMonths(
     }
   }
   await deleteStale(admin, TABLE_THEME_READINGS, opts.clientId, themeMerge.stale)
+  await deleteStale(admin, TABLE_KIND_READINGS, opts.clientId, kindMerge.stale)
+  await deleteStale(admin, TABLE_AUDIENCE_STATS, opts.clientId, statsMerge.stale)
   await deleteStale(admin, TABLE_DENOMINATORS, opts.clientId, denomMerge.stale)
   return summary
 }
@@ -861,6 +1070,7 @@ async function deleteStale(
       .eq('audience', s.audience)
       .eq('status', 'filling')
     if (s.theme_id !== null) q = q.eq('theme_id', s.theme_id)
+    if (s.kind != null) q = q.eq('kind', s.kind)
     const { error } = await q
     if (error) throw new Error(`${table} delete: ${(error as { message?: string }).message ?? String(error)}`)
   }

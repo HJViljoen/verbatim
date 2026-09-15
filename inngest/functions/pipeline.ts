@@ -31,6 +31,7 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { pipelineActor } from '@/lib/config-log'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
@@ -1368,22 +1369,34 @@ export const runPipeline = inngest.createFunction(
         const admin = createAdminClient()
         try {
           const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
-          const r = await freezeMonths(admin, { clientId, runId, months })
+          // The actor lets this visit freeze the tenant's first attention panel
+          // (WP5). It is a configuration write and every configuration write
+          // carries one; without it an existing panel is still read and none is
+          // ever created.
+          const r = await freezeMonths(admin, {
+            clientId, runId, months, actor: pipelineActor(runId, 'freeze-months'),
+          })
           console.log(
             `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
             `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
             `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
             `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
-            `${r.themes.deleted} dropped)`,
+            `${r.themes.deleted} dropped) · kinds ${r.kinds.written} written (${r.kinds.frozen} now frozen) ` +
+            `· audience stats ${r.stats.written} written (${r.stats.frozen} now frozen)` +
+            `${r.panelFrozen ? ' · attention panel frozen' : ''}` +
+            `${r.skippedKindMoodAttention ? ' · kinds/mood/attention skipped: M5 not applied' : ''}`,
           )
           return {
             months: r.months.length,
             denominators: r.denominators.written,
             themes: r.themes.written,
-            frozen: r.denominators.frozen + r.themes.frozen,
-            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
-            heldStale: r.denominators.heldStale + r.themes.heldStale,
-            refusedLate: r.denominators.refusedLate + r.themes.refusedLate,
+            kinds: r.kinds.written,
+            stats: r.stats.written,
+            panelFrozen: r.panelFrozen,
+            frozen: r.denominators.frozen + r.themes.frozen + r.kinds.frozen + r.stats.frozen,
+            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen + r.kinds.keptFrozen + r.stats.keptFrozen,
+            heldStale: r.denominators.heldStale + r.themes.heldStale + r.kinds.heldStale + r.stats.heldStale,
+            refusedLate: r.denominators.refusedLate + r.themes.refusedLate + r.kinds.refusedLate + r.stats.refusedLate,
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.
