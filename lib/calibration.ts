@@ -138,7 +138,15 @@ export const GLOSSARY = {
   // monthly series with the page that prints it, and the code that already
   // reads the months calls the flag by the same name (VerdictFlag 'new').
   // ---- Legacy · each retires with the page that prints it -------------------
-  conversations: ['Conversations', 'one video and the comments written under it that month — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
+  // The LEGACY unit, and deliberately not the month-scoped one. Every figure
+  // this tooltip sits behind — dominant, widespread, a theme's share, the
+  // dashboard's video total — is computed per RUN over the cumulative corpus,
+  // not per month. The month-scoped definition is correct for the monthly
+  // reading and belongs to `video` above; printing it here would put a
+  // month-scoped sentence under a figure that is not month-scoped, which is
+  // the copy-matches-code rule broken in the helpful direction. It retires
+  // with the pages that print it.
+  conversations: ['Conversations', 'one video and the comments it sparked — the unit behind every "heard in…" and share figure; comments are always counted separately as comments'],
   dominant: ['Dominant', "at least 40% of the group's analysed conversations (minimum 10)"],
   widespread: ['Widespread', "at least 15% of the group's analysed conversations (minimum 5)"],
   recurring: ['Recurring', 'heard in more than one conversation, below Widespread'],

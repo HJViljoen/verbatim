@@ -45,7 +45,15 @@ describe('the thirteen words', () => {
     // The unit the whole reading rests on: a video belongs to a month because
     // someone commented under it that month, so it can belong to two.
     expect(glossaryRule('video')).toContain('written under it that month')
-    expect(glossaryRule('conversations')).toContain('written under it that month')
+  })
+
+  it('leave the legacy noun month-free, because the figures behind it are not', () => {
+    // `conversations` is the tooltip on dominant / widespread and on the
+    // Dashboard's video total — all computed per RUN over the cumulative
+    // corpus. A month-scoped definition there describes a figure nothing
+    // computes month by month.
+    expect(glossaryRule('conversations')).not.toContain('that month')
+    expect(glossaryRule('dominant')).not.toContain('month')
   })
 
   it('state the band’s real floors, because copy claims must match code', () => {
