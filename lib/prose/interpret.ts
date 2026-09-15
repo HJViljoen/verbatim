@@ -12,11 +12,22 @@ import { INTERPRETATION_SLOTS, scrubProse, splitSentences, type ProseScrub } fro
 // apart from the record.
 //
 // WHAT IT IS ALLOWED TO ARGUE FROM, and nothing else: the verdicts code issued
-// and the figures code computed, named by token. It never sees a number (it
-// would round one), never earns a direction word (three readings do that), and
-// never holds a quote's words — a quote travels as a ref and resolves at
-// render, so the freeze discipline holds and a digit inside somebody's sentence
-// cannot cost the product its own.
+// and the figures code computed. It never earns a direction word (three
+// readings do that), and never holds a quote's words — a quote travels as a ref
+// and resolves at render, so the freeze discipline holds and a digit inside
+// somebody's sentence cannot cost the product its own.
+//
+// THE NUMBERS IT DOES AND DOES NOT SEE. A FIGURE is a key and a label and never
+// a value: a figure is what the prose will cite, the surface substitutes it at
+// render, and a model that had seen "3.42%" would type "about 3%" into a
+// sentence the product then has to stand behind. A VERDICT carries its numbers
+// — change, band and n — because a verdict is what the prose may ARGUE FROM,
+// and an argument from a claim without its n is not checkable: whether 5.4
+// points against a band of ±4.1 on 28 videos is worth a sentence is exactly
+// the judgement these three slots exist to make. Those numbers are the model's
+// evidence and not its output; any it types into prose is deleted with its
+// sentence by the digit rule, which is what keeps the distinction honest
+// rather than hoped-for.
 //
 // WHAT HAPPENS WHEN IT SAYS NOTHING USABLE. The scrubbers can empty a slot, and
 // the model can be unavailable, refuse, or have nothing to work with because
