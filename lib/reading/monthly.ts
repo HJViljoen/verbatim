@@ -29,6 +29,7 @@ import {
   RPC_SUBJECT_READINGS,
   RPC_THEME_READINGS,
   RPC_WINDOW_DENOMINATORS,
+  RPC_WINDOW_KIND_READINGS,
   RPC_WINDOW_SUBJECT_READINGS,
   RPC_WINDOW_THEME_READINGS,
   TABLE_AUDIENCE_STATS,
@@ -594,6 +595,56 @@ export async function readKindReadings(
     RPC_KIND_READINGS,
     { p_client: clientId, p_from: window.from, p_to: window.to },
     ['month', 'audience', 'kind'],
+  )
+}
+
+// ---- The window siblings ------------------------------------------------------
+// The same three reads with the month grouping taken out (20260918092000 and
+// M5's sibling). A week is read through these and NEVER summed out of month
+// rows: `videos` is a count of distinct videos and a video whose thread spans a
+// boundary is a member of both months' sets, which overstated Össur's week 36
+// by 28%. Comments would sum exactly; videos are what every share divides by.
+
+/** One window's denominators, per audience. */
+export async function readWindowDenominators(
+  admin: SupabaseClient,
+  clientId: string,
+  window: { from: string; to: string },
+): Promise<Omit<DenominatorReading, 'month'>[]> {
+  return callRpc<Omit<DenominatorReading, 'month'>>(
+    admin,
+    RPC_WINDOW_DENOMINATORS,
+    { p_client: clientId, p_from: window.from, p_to: window.to },
+    ['audience'],
+  )
+}
+
+/** One window's themes under one clustering, per audience. */
+export async function readWindowThemeReadings(
+  admin: SupabaseClient,
+  clientId: string,
+  runId: string,
+  window: { from: string; to: string },
+): Promise<Omit<ThemeReading, 'month'>[]> {
+  return callRpc<Omit<ThemeReading, 'month'>>(
+    admin,
+    RPC_WINDOW_THEME_READINGS,
+    { p_client: clientId, p_run: runId, p_from: window.from, p_to: window.to },
+    ['audience', 'theme_id'],
+  )
+}
+
+/** One window's kinds, per audience. No run, for `readKindReadings`'s reason. */
+export async function readWindowKindReadings(
+  admin: SupabaseClient,
+  clientId: string,
+  window: { from: string; to: string },
+): Promise<Omit<KindReading, 'month'>[]> {
+  return callRpc<Omit<KindReading, 'month'>>(
+    admin,
+    RPC_WINDOW_KIND_READINGS,
+    { p_client: clientId, p_from: window.from, p_to: window.to },
+    ['audience', 'kind'],
   )
 }
 

@@ -212,6 +212,15 @@ export interface RetentionInput {
 
 /** Everything the thirteen rows are computed from. One object, so `compute`
  *  can be exercised on a workspace's shape without a database. */
+/** What the weekly anomaly check has actually said. `available` is false until
+ *  20260918096000 is applied — which is a different answer from "the rule has
+ *  never fired", and the row says which. */
+export interface AnomalyInput {
+  available: boolean
+  /** Flags raised, newest first, as `anomaly_flags` holds them. */
+  flags: { weekStart: string; objectKind: string; label: string }[]
+}
+
 export interface ReadinessInputs {
   tenant: string
   /** The instant the page was drawn, ISO. Passed in rather than read, so the
@@ -225,6 +234,8 @@ export interface ReadinessInputs {
   /** The subject set: null while the product has no such concept. */
   subjectSet: { defined: number | null }
   monthly: MonthlyInput | null
+  /** The check's own record. */
+  anomaly: AnomalyInput
   reads: ReadInput
   /** Every update this workspace has had, newest first. */
   updates: UpdateInput[]

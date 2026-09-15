@@ -305,9 +305,25 @@ function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
       : `No audience has a baseline yet — the fullest is ${Math.max(...shaped.map((s) => s.clearing), 0)} of ${BASELINE_MONTHS} months.`
 
   const notes = shaped.map((s) => `${audienceLabel(s.audience)} — ${baselineLabel(s.clearing)}`)
+  // WHAT THE CHECK HAS ACTUALLY SAID, not only whether it could speak. A
+  // baseline that is ready and a check that has never raised anything are two
+  // different states of this row, and until WP8 the page could only show the
+  // first. The flags are the record the check writes (`anomaly_flags`); "not
+  // recorded yet" is the answer before its migration is applied, and is not the
+  // same sentence as "nothing has been unusual".
+  notes.push(anomalyRecordLine(i.anomaly))
 
   return row('anomaly-baseline', 'Unusual weeks', `${BASELINE_MONTHS} complete months behind each audience`,
     status, detail, 'ops', unlocks, notes)
+}
+
+/** The one line the row prints about the check's own record. */
+function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
+  if (!a.available) return 'Flags raised — not recorded yet.'
+  if (a.flags.length === 0) return 'Flags raised — none so far.'
+  const newest = a.flags[0]
+  const word = a.flags.length === 1 ? 'one' : fmtInt(a.flags.length)
+  return `Flags raised — ${word} so far, the most recent ${newest.label} in the week of ${fullDate(newest.weekStart)}.`
 }
 
 // ---- 8 · how much of each video was read ------------------------------------

@@ -28,12 +28,16 @@ import {
 } from '../reading/anomaly'
 import { SLICE } from '../reading/coverage'
 import { kindLabel } from '../reading/kinds'
-import { isMissingMonthTable, monthStartOf, trailingCompleteMonths } from '../reading/monthly'
 import {
-  RPC_WINDOW_DENOMINATORS,
-  RPC_WINDOW_KIND_READINGS,
-  RPC_WINDOW_SUBJECT_READINGS,
-  RPC_WINDOW_THEME_READINGS,
+  isMissingMonthTable,
+  monthStartOf,
+  readWindowDenominators,
+  readWindowKindReadings,
+  readWindowThemeReadings,
+  trailingCompleteMonths,
+} from '../reading/monthly'
+import { readSubjectWindow } from '../subjects/read'
+import {
   TABLE_DENOMINATORS,
   TABLE_KIND_READINGS,
   TABLE_SUBJECT_READINGS,
@@ -437,19 +441,6 @@ interface WindowRow {
   kind?: string
   subject_id?: string
   theme_id?: string
-}
-
-async function readWindow(
-  admin: Admin,
-  fn: string,
-  params: Record<string, unknown>,
-  order: readonly string[],
-): Promise<WindowRow[]> {
-  return selectAll<WindowRow>(() => {
-    let q = admin.rpc(fn, params)
-    for (const column of order) q = q.order(column, { ascending: true })
-    return q
-  })
 }
 
 /** Sum a window read's per-audience rows into the pooled slice, per object. */
@@ -862,15 +853,10 @@ export async function buildReading(
 
   // ---- the week, off the window functions ----
   const [weekDenominators, weekKinds, weekSubjects, weekThemes] = await Promise.all([
-    readWindow(admin, RPC_WINDOW_DENOMINATORS, { p_client: clientId, p_from: window.from, p_to: window.to }, ['audience']),
-    readWindow(admin, RPC_WINDOW_KIND_READINGS, { p_client: clientId, p_from: window.from, p_to: window.to }, ['audience', 'kind']),
-    readWindow(admin, RPC_WINDOW_SUBJECT_READINGS, { p_client: clientId, p_from: window.from, p_to: window.to }, ['audience', 'subject_id']),
-    readWindow(
-      admin,
-      RPC_WINDOW_THEME_READINGS,
-      { p_client: clientId, p_run: runId, p_from: window.from, p_to: window.to },
-      ['audience', 'theme_id'],
-    ),
+    readWindowDenominators(admin, clientId, window),
+    readWindowKindReadings(admin, clientId, window),
+    readSubjectWindow(admin, clientId, window),
+    readWindowThemeReadings(admin, clientId, runId, window),
   ])
 
   const series = {

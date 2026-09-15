@@ -2,6 +2,7 @@ import { embeddingCoverage } from '../agent/retrieve'
 import { YOUTUBE_REFRESH_NIGHTLY_CAP } from '../config'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog } from '../config-log'
 import { parseSubreddits, subredditKey } from '../gather/subreddits'
+import { ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { isMissingMonthlyReading } from '../reading/monthly'
 import { TABLE_DENOMINATORS } from '../reading/types'
@@ -10,6 +11,7 @@ import { SHARE_BAND } from '../report-bands'
 import { YOUTUBE_REFRESH_DUE_DAYS } from '../retention/youtube-refresh'
 import { type createAdminClient, selectAll } from '../supabase-admin'
 import type {
+  AnomalyInput,
   CommunityInput,
   MonthCountRow,
   ReadinessInputs,
@@ -132,6 +134,28 @@ async function loadMonths(admin: Admin, clientId: string): Promise<MonthCountRow
   }
 }
 
+/** Every flag the weekly check has raised, newest first — or `available:
+ *  false` when 20260918096000 has not been applied and nothing could have been
+ *  recorded. "Not recorded yet" and "nothing has been unusual" are two answers
+ *  and the row prints whichever is true. */
+async function loadAnomalyFlags(admin: Admin, clientId: string): Promise<AnomalyInput> {
+  try {
+    type Row = { week_start: string; object_kind: string; label: string }
+    const rows = await selectAll<Row>(() =>
+      admin.from(ANOMALY_FLAGS_TABLE).select('week_start, object_kind, label').eq('client_id', clientId)
+        .order('week_start', { ascending: false })
+        .order('object_kind', { ascending: true })
+        .order('label', { ascending: true }))
+    return {
+      available: true,
+      flags: rows.map((r) => ({ weekStart: r.week_start, objectKind: r.object_kind, label: r.label })),
+    }
+  } catch (e) {
+    if (isMissingAnomalyFlags(e)) return { available: false, flags: [] }
+    throw e
+  }
+}
+
 /** Each tracked rival's own accounts, and what has come of them. Read as rows
  *  rather than counted per rival so one query answers for every rival and the
  *  arithmetic stays where it can be seen. */
@@ -250,7 +274,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
   const slotsRecorded = await slotsAreRecorded(admin)
 
   const [
-    rivals, community, embeddings, months, updates,
+    rivals, community, embeddings, months, anomaly, updates,
     readCount, speech, translated, onScreenText, unflagged,
     gateRows, gateKept, gateFirst,
     schedules, changeLog, recTotal, recLineage, decisions, cohort,
@@ -259,6 +283,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
     loadCommunities(admin, clientId, tc?.subreddits),
     embeddingCoverage(admin, clientId),
     loadMonths(admin, clientId),
+    loadAnomalyFlags(admin, clientId),
     loadUpdates(admin, clientId, slotsRecorded),
     headCount(analysed),
     headCount(() => analysed().eq('analyzed_with_transcript', true)),
@@ -300,6 +325,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
     // exist yet, which is a different answer from "none named".
     subjectSet: { defined: null },
     monthly: months === null ? null : { months, tracked: trackedAudiences(rivalNames) },
+    anomaly,
     reads: {
       analysed: readCount,
       speech,

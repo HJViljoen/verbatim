@@ -68,6 +68,9 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     reddit: { postsStored: 149, postsFromUnconfigured: 99 },
     embeddings: { embedded: 1680, total: 3129, lastEmbeddedAt: null },
     subjectSet: { defined: null },
+    // The table is there and the check has never fired — Össur's state on
+    // 2026-09-15, and a different answer from "not recorded yet".
+    anomaly: { available: true, flags: [] },
     monthly: {
       tracked: ['client', 'competitor:Ottobock', 'industry-other'],
       months: months(
@@ -434,7 +437,29 @@ describe('the baseline behind an unusual week', () => {
       'Your own brand — baseline forming — 0 of 3 months',
       'Ottobock — baseline forming — 0 of 3 months',
       'The category — baseline ready',
+      'Flags raised — none so far.',
     ])
+  })
+
+  it('tells "nothing has been unusual" apart from "nobody was writing it down"', () => {
+    const never = find(computeReadiness(ossur({ anomaly: { available: false, flags: [] } })), 'anomaly-baseline')
+    expect(never.notes.at(-1)).toBe('Flags raised — not recorded yet.')
+
+    const raised = find(
+      computeReadiness(
+        ossur({
+          anomaly: {
+            available: true,
+            flags: [
+              { weekStart: '2026-09-07T00:00:00.000Z', objectKind: 'kind', label: 'Objections' },
+              { weekStart: '2026-08-10T00:00:00.000Z', objectKind: 'kind', label: 'Praise' },
+            ],
+          },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 so far, the most recent Objections in the week of /)
   })
 
   it('is one month of three on the trial workspace', () => {
