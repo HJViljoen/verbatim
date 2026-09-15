@@ -55,6 +55,14 @@ export function shortDate(iso: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
+/** "2026-08-16T07:07:51Z" → "16 Aug 2026" (UTC). The year is not decoration
+ *  here: the readiness page dates things four years apart on one screen, and
+ *  "16 Aug" beside "16 Aug" is two different Augusts. */
+export function fullDate(iso: string): string {
+  const d = new Date(iso)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
 /** "2026-08-16T07:07:51Z" → "Sun 16 Aug" (UTC). */
 export function weekdayDate(iso: string): string {
   const d = new Date(iso)

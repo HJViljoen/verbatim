@@ -1,0 +1,520 @@
+import { fmtInt, fmtPct, fullDate, listNames } from '../format'
+import { changeLogBoundary } from '../config-log'
+import { baselineLabel, BASELINE_MONTHS } from '../reading/anomaly'
+import { shapeCoverage, type MonthCounts } from '../reading/coverage'
+import { monthStartOf, trailingCompleteMonths } from '../reading/monthly'
+import {
+  audienceLabel,
+  type ReadinessInputs,
+  type ReadinessRow,
+  type ReadinessStatus,
+  type OwnerRole,
+} from './types'
+
+// The thirteen rows (Phase 0 WP10, design item 18). Pure: every number here
+// comes from the `ReadinessInputs` object `load.ts` fills, and nothing in this
+// file reads a clock, a database or an environment variable.
+//
+// THE RULE EVERY ROW FOLLOWS. `exists` means the block can be built and drawn
+// for this workspace today. `partial` means the input is there but does not
+// cover what the block will be asked to draw — half a corpus embedded, a
+// discard record that starts after updates already sent. `missing` means the
+// block has nothing to stand on. A row whose table is not there yet is
+// `missing` and says so in words ("not recorded yet"), because a page that
+// throws on an unapplied migration is a page nobody can use to decide whether
+// to apply it.
+//
+// WHY THE NOTES MATTER MORE THAN THE PILL. Three of these rows are green or
+// amber in aggregate and red for one rival, one community or one audience —
+// Sealand's rival accounts are configured for all three and read for one, and
+// Rareform has never appeared in a month at all. The per-item lines under each
+// row are where that lives; the pill is the summary, never the whole answer.
+
+const pct = (part: number, whole: number): string => (whole > 0 ? fmtPct((part / whole) * 100) : '—')
+
+const plural = (n: number, word: string, many = `${word}s`): string => `${fmtInt(n)} ${n === 1 ? word : many}`
+
+const dateOrNever = (iso: string | null | undefined, never: string): string => (iso ? fullDate(iso) : never)
+
+/** The worst of a set of statuses — a block is only as ready as its weakest
+ *  input. Used where one row summarises several things. */
+function worst(...statuses: ReadinessStatus[]): ReadinessStatus {
+  if (statuses.includes('missing')) return 'missing'
+  if (statuses.includes('partial')) return 'partial'
+  return 'exists'
+}
+
+function row(
+  id: string,
+  block: string,
+  input: string,
+  status: ReadinessStatus,
+  detail: string,
+  owner: OwnerRole,
+  unlocks: string,
+  notes: string[] = [],
+): ReadinessRow {
+  return { id, block, input, status, detail, owner, unlocks, notes }
+}
+
+// ---- 1 · the rival accounts --------------------------------------------------
+
+/** The cheapest red on the page and the only one a client can close without an
+ *  engineering day, which is why it is first (design l.1778, and the research's
+ *  own recommendation). Configured, captured and read are three states: a row
+ *  that stops at "configured" reads green while the block it gates still has
+ *  nothing to say. */
+function rivalAccounts(i: ReadinessInputs): ReadinessRow {
+  const rivals = i.rivals
+  const configured = rivals.filter((r) => r.handlePlatforms.length > 0)
+  const read = rivals.filter((r) => r.analysed > 0)
+  const captured = rivals.reduce((n, r) => n + r.captured, 0)
+  const analysed = rivals.reduce((n, r) => n + r.analysed, 0)
+
+  const status: ReadinessStatus =
+    rivals.length === 0 || configured.length === 0 ? 'missing'
+      : read.length === rivals.length ? 'exists'
+        : 'partial'
+
+  const detail = rivals.length === 0
+    ? 'No rival is named for this workspace.'
+    : configured.length === 0
+      ? `No accounts configured for ${plural(rivals.length, 'tracked rival')} — nothing they publish is being read.`
+      : `${configured.length} of ${rivals.length} tracked rivals have accounts configured · ${plural(captured, 'post')} of their own captured, ${fmtInt(analysed)} read.`
+
+  const notes = rivals.map((r) => {
+    if (r.handlePlatforms.length === 0) return `${r.name} — no accounts configured`
+    const where = listNames(r.handlePlatforms)
+    const recent = r.capturedRecently > 0 ? `, ${fmtInt(r.capturedRecently)} in the last 30 days` : ''
+    const readPart = r.analysed > 0 ? `${fmtInt(r.analysed)} read` : 'none read yet'
+    return `${r.name} — ${where} · ${plural(r.captured, 'post')} captured${recent}, ${readPart}`
+  })
+
+  return row(
+    'rival-accounts', 'Competitive', 'the rival accounts we read',
+    status, detail, 'client',
+    'Give us each rival’s account name per platform — the next update reads what they publish themselves.',
+    notes,
+  )
+}
+
+// ---- 2 · the tracked terms ---------------------------------------------------
+
+function trackedTerms(i: ReadinessInputs): ReadinessRow {
+  const t = i.terms
+  const buckets = [t.brand, t.competitor, t.industry]
+  const empty = buckets.filter((n) => n === 0).length
+  const status: ReadinessStatus = worst(
+    buckets.every((n) => n === 0) ? 'missing' : empty > 0 ? 'partial' : 'exists',
+    // Terms with no record of when they changed are terms nobody can audit.
+    i.changeLog.available && i.changeLog.rows > 0 ? 'exists' : 'partial',
+  )
+  const detail =
+    `${plural(t.brand, 'brand term')}, ${plural(t.competitor, 'rival term')}, ${plural(t.industry, 'category term')}` +
+    (t.exclude > 0 ? `, ${plural(t.exclude, 'exception')}` : '') +
+    ` · last edited ${dateOrNever(t.updatedAt, 'never')}.`
+
+  return row(
+    'tracked-terms', 'Tracking', 'the words each update searches, and a record of when they changed',
+    status, detail, 'client',
+    'Tell us what to add or drop; the change log then carries who changed it and when.',
+    [changeLogBoundary(i.changeLog.firstLoggedAt)],
+  )
+}
+
+// ---- 3 · the watched communities --------------------------------------------
+
+/** "Unprobed" is not the same as "needs probing": `r/onebag` was set watched by
+ *  hand, deliberately and with a reason, and a row that counts it as a gap
+ *  marks an operator decision as an oversight. So the count is of PROPOSED
+ *  communities nobody has sampled, and a watched one with no sample is named
+ *  instead. */
+function communities(i: ReadinessInputs): ReadinessRow {
+  const active = i.communities.filter((c) => c.status === 'active')
+  const proposedUnsampled = i.communities.filter((c) => c.status === 'candidate' && !c.probed)
+  const ruledOut = i.communities.filter((c) => c.status === 'rejected')
+  const silent = active.filter((c) => c.postsStored === 0)
+  const handSet = active.filter((c) => !c.probed)
+  const unconfiguredShare = i.reddit.postsStored > 0
+    ? (i.reddit.postsFromUnconfigured / i.reddit.postsStored) * 100
+    : 0
+
+  const status: ReadinessStatus =
+    active.length === 0 ? 'missing'
+      : silent.length > 0 || unconfiguredShare >= 50 ? 'partial'
+        : 'exists'
+
+  const detail =
+    `${fmtInt(active.length)} watched, ${fmtInt(proposedUnsampled.length)} proposed and not yet sampled, ${fmtInt(ruledOut.length)} ruled out` +
+    (i.reddit.postsStored > 0
+      ? ` · ${fmtPct(unconfiguredShare, 0)} of stored Reddit posts come from communities nobody configured.`
+      : ' · no Reddit post stored yet.')
+
+  const notes = [
+    ...silent.map((c) => `r/${c.name} — watched, nothing stored from it yet`),
+    ...handSet.filter((c) => c.postsStored > 0).map((c) => `r/${c.name} — watched by hand, never sampled`),
+  ]
+
+  return row(
+    'communities', 'Reddit', 'the communities worth watching, and what they return',
+    status, detail, 'ops',
+    'Sample the proposed communities, drop the silent ones, and add the ones already producing posts from outside the list.',
+    notes,
+  )
+}
+
+// ---- 4 · the searchable corpus ----------------------------------------------
+
+function embeddings(i: ReadinessInputs): ReadinessRow {
+  const { embedded, total, lastEmbeddedAt } = i.embeddings
+  const status: ReadinessStatus =
+    total === 0 ? 'missing'
+      : embedded === 0 ? 'missing'
+        : embedded >= total ? 'exists'
+          : 'partial'
+  const detail = total === 0
+    ? 'Nothing has been read for this workspace yet, so there is nothing to search.'
+    : `${fmtInt(embedded)} of ${fmtInt(total)} findings are searchable (${pct(embedded, total)}) · ` +
+      (lastEmbeddedAt ? `last written ${fullDate(lastEmbeddedAt)}.` : 'no date recorded.')
+
+  return row(
+    'searchable-findings', 'Ask', 'every finding searchable, and kept that way',
+    status, detail, 'ops',
+    'Run the one-off backfill; from then on each update makes its own findings searchable.',
+    embedded < total && embedded > 0
+      ? [`${fmtInt(total - embedded)} findings cannot be found by a question asked about them`]
+      : [],
+  )
+}
+
+// ---- 5 · the subject set -----------------------------------------------------
+
+function subjectSet(i: ReadinessInputs): ReadinessRow {
+  const defined = i.subjectSet.defined
+  const status: ReadinessStatus = defined === null || defined === 0 ? 'missing' : 'exists'
+  const detail = defined === null
+    ? 'There is no subject set — the product holds no such thing yet.'
+    : defined === 0
+      ? 'No subject has been named for this workspace yet.'
+      : `${plural(defined, 'subject')} named.`
+
+  return row(
+    'subject-set', 'Subjects', 'the five to eight subjects this workspace is read against',
+    status, detail, 'engineering',
+    'Phase 1 builds the subject set and the form that names them; nothing can be entered before it.',
+  )
+}
+
+// ---- 6 · the months of history ----------------------------------------------
+
+/** One audience's months, shaped against the floor. Separated out because rows
+ *  6 and 7 read the same stored months and must never disagree about them. */
+function byAudience(i: ReadinessInputs): Map<string, MonthCounts[]> {
+  const out = new Map<string, MonthCounts[]>()
+  for (const audience of i.monthly?.tracked ?? []) out.set(audience, [])
+  for (const m of i.monthly?.months ?? []) {
+    out.set(m.audience, [...(out.get(m.audience) ?? []), { month: m.month, videos: m.videos, comments: m.comments }])
+  }
+  return out
+}
+
+const NOT_SEEDED = 'Not seeded yet — nothing has been written down month by month for this workspace.'
+
+function monthsOfHistory(i: ReadinessInputs): ReadinessRow {
+  const unlocks = 'Apply the monthly reading and seed it once per workspace; every update after that keeps it.'
+  if (!i.monthly) {
+    return row('months-of-history', 'History', `months carrying ${i.floor} videos, audience by audience`,
+      'missing', NOT_SEEDED, 'ops', unlocks)
+  }
+
+  const shaped = [...byAudience(i).entries()]
+    .map(([audience, months]) => shapeCoverage(audience, months, i.floor))
+    .sort((a, b) => a.audience.localeCompare(b.audience))
+  const clearing = shaped.filter((s) => s.monthsVideos > 0)
+  const comparable = shaped.filter((s) => s.monthsVideos >= BASELINE_MONTHS)
+
+  const status: ReadinessStatus =
+    comparable.length > 0 ? 'exists' : clearing.length > 0 ? 'partial' : 'missing'
+  const best = shaped.reduce((a, b) => (b.monthsVideos > a.monthsVideos ? b : a), shaped[0])
+  const detail = shaped.length === 0
+    ? NOT_SEEDED
+    : clearing.length === 0
+      ? `No month yet carries ${i.floor} videos in any audience — the biggest holds ${fmtInt(Math.max(...shaped.map((s) => s.biggestVideos), 0))}.`
+      : `${plural(best.monthsVideos, 'month')} clear ${i.floor} videos in ${audienceLabel(best.audience).toLowerCase()}; ${clearing.length} of ${shaped.length} audiences clear any.`
+
+  const notes = shaped.map((s) =>
+    `${audienceLabel(s.audience)} — ${s.monthsVideos} of ${s.monthsWithAny} months clear ${i.floor} videos (${s.monthsComments} clear ${i.floor} comments)` +
+    (s.monthsWithAny === 0 ? ' · no month at all' : ''))
+
+  return row('months-of-history', 'History', `months carrying ${i.floor} videos, audience by audience`,
+    status, detail, 'ops', unlocks, notes)
+}
+
+// ---- 7 · the baseline the unusual-week check needs ---------------------------
+
+function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
+  const unlocks = `Seed the monthly reading, then wait: a baseline is ${BASELINE_MONTHS} complete months carrying ${i.floor} videos.`
+  if (!i.monthly) {
+    return row('anomaly-baseline', 'Unusual weeks', `${BASELINE_MONTHS} complete months behind each audience`,
+      'missing', NOT_SEEDED, 'ops', unlocks)
+  }
+
+  const trailing = new Set(trailingCompleteMonths(i.now, BASELINE_MONTHS))
+  const shaped = [...byAudience(i).entries()].map(([audience, months]) => {
+    const clearing = months.filter((m) => trailing.has(monthStartOf(m.month)) && m.videos >= i.floor).length
+    return { audience, clearing }
+  }).sort((a, b) => a.audience.localeCompare(b.audience))
+
+  const ready = shaped.filter((s) => s.clearing >= BASELINE_MONTHS)
+  const status: ReadinessStatus =
+    ready.length > 0 ? 'exists' : shaped.some((s) => s.clearing > 0) ? 'partial' : 'missing'
+  const detail = shaped.length === 0
+    ? NOT_SEEDED
+    : ready.length > 0
+      ? `Baseline ready in ${ready.length} of ${shaped.length} audiences; the rest are still forming.`
+      : `No audience has a baseline yet — the fullest is ${Math.max(...shaped.map((s) => s.clearing), 0)} of ${BASELINE_MONTHS} months.`
+
+  const notes = shaped.map((s) => `${audienceLabel(s.audience)} — ${baselineLabel(s.clearing)}`)
+
+  return row('anomaly-baseline', 'Unusual weeks', `${BASELINE_MONTHS} complete months behind each audience`,
+    status, detail, 'ops', unlocks, notes)
+}
+
+// ---- 8 · how much of each video was read ------------------------------------
+
+/** Reddit is out of the denominator by construction: a Reddit post has no
+ *  speech and no screen, and leaving it in understates every share by the
+ *  6–13% of the corpus it holds. */
+function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
+  const r = i.reads
+  const firstUpdate = [...i.updates].reverse().find((u) => u.status === 'completed' || u.status === 'partial')
+  const recordCoversHistory = Boolean(r.gateFirstAt && firstUpdate && r.gateFirstAt <= firstUpdate.startedAt)
+  const status: ReadinessStatus =
+    r.analysed === 0 ? 'missing'
+      : r.gateFirstAt === null ? 'missing'
+        : recordCoversHistory && r.unflagged === 0 ? 'exists'
+          : 'partial'
+
+  const detail = r.analysed === 0
+    ? 'No video has been read for this workspace yet.'
+    : `Speech read on ${fmtInt(r.speech)} of ${fmtInt(r.analysed)} videos (${pct(r.speech, r.analysed)}), translated ${fmtInt(r.translated)} (${pct(r.translated, r.analysed)}), on-screen text ${fmtInt(r.onScreenText)} (${pct(r.onScreenText, r.analysed)}) · Reddit excluded.`
+
+  const notes: string[] = []
+  if (r.gateFirstAt === null) {
+    notes.push('What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.')
+  } else {
+    notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside — recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)
+  }
+  if (r.unflagged > 0) notes.push(`${fmtInt(r.unflagged)} videos were read before the product recorded which of the three it managed`)
+
+  return row(
+    'read-depth', 'How sound is this', 'what each update managed to read of a video, and what it set aside',
+    status, detail, 'engineering',
+    'Nothing to configure: the shares rise as transcripts, translation and on-screen text reach more videos, and the set-aside record only covers months after it began.',
+    notes,
+  )
+}
+
+// ---- 9 · the delivery record -------------------------------------------------
+
+const SETTLED = new Set(['completed', 'partial'])
+
+/** The longest stretch between two updates that produced something, in whole
+ *  days. Null when there are fewer than two. */
+export function longestGapDays(updates: readonly { status: string; startedAt: string }[]): number | null {
+  const times = updates
+    .filter((u) => SETTLED.has(u.status))
+    .map((u) => Date.parse(u.startedAt))
+    .filter((t) => Number.isFinite(t))
+    .sort((a, b) => a - b)
+  if (times.length < 2) return null
+  let longest = 0
+  for (let n = 1; n < times.length; n++) longest = Math.max(longest, times[n] - times[n - 1])
+  return Math.round(longest / 86_400_000)
+}
+
+function updateRecord(i: ReadinessInputs): ReadinessRow {
+  const all = i.updates
+  const settled = all.filter((u) => SETTLED.has(u.status))
+  const recent = all.slice(0, i.recentUpdates)
+  const recentSettled = recent.filter((u) => SETTLED.has(u.status))
+  const stalled = recent.filter((u) => u.stalled === true)
+  const first = settled.at(-1) ?? null
+  const gap = longestGapDays(all)
+
+  const status: ReadinessStatus =
+    settled.length === 0 ? 'missing'
+      : recentSettled.length < recent.length || stalled.length > 0 ? 'partial'
+        : 'exists'
+
+  const detail = settled.length === 0
+    ? 'No update has finished for this workspace yet.'
+    : `${recentSettled.length} of the last ${recent.length} updates finished · ` +
+      `${plural(settled.length, 'update')} since ${first ? fullDate(first.startedAt) : '—'}` +
+      (gap === null ? '.' : `, longest gap ${plural(gap, 'day')}.`)
+
+  const notes: string[] = []
+  if (stalled.length > 0) notes.push(`${fmtInt(stalled.length)} of the last ${recent.length} took longer than the stretch they covered`)
+  if (!i.slotsRecorded) notes.push('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.')
+  else {
+    const served = recent.filter((u) => u.scheduledFor).length
+    notes.push(`${fmtInt(served)} of the last ${recent.length} served a scheduled slot`)
+  }
+
+  return row(
+    'update-record', 'Updates', 'a record of what ran, when, and over what stretch',
+    status, detail, 'ops',
+    'Nothing to configure: every finished update writes its own row, and the slot it served is recorded once the delivery record ships.',
+    notes,
+  )
+}
+
+// ---- 10 · where the update goes ---------------------------------------------
+
+function delivery(i: ReadinessInputs): ReadinessRow {
+  const paused = i.delivery.period === 'paused'
+  const live = i.delivery.schedules.filter((s) => s.active && s.recipients > 0)
+  const addresses = live.reduce((n, s) => n + s.recipients, 0)
+  const lastSent = i.delivery.schedules
+    .map((s) => s.lastSentAt)
+    .filter((d): d is string => Boolean(d))
+    .sort()
+    .at(-1) ?? null
+
+  const status: ReadinessStatus =
+    paused || live.length === 0 ? 'missing'
+      : lastSent === null ? 'partial'
+        : 'exists'
+
+  const detail = paused
+    ? 'Updates are paused for this workspace, so nothing is sent.'
+    : live.length === 0
+      ? 'No schedule has an address on it, so nothing is sent.'
+      : `${plural(live.length, 'schedule')} · ${plural(addresses, 'address', 'addresses')} · ` +
+        (lastSent ? `last sent ${fullDate(lastSent)}.` : 'nothing sent yet.')
+
+  return row(
+    'delivery', 'Delivery', 'somewhere for the update to go',
+    status, detail, 'client',
+    'Add the people who should get it in Studio, and turn the schedule on.',
+    i.delivery.schedules
+      .filter((s) => !s.active || s.recipients === 0)
+      .map((s) => `${s.name} — ${s.active ? 'on' : 'off'}, ${s.recipients === 0 ? 'no addresses' : plural(s.recipients, 'address', 'addresses')}`),
+  )
+}
+
+// ---- 11 · the change record --------------------------------------------------
+
+function changeRecord(i: ReadinessInputs): ReadinessRow {
+  const c = i.changeLog
+  const status: ReadinessStatus = !c.available || c.rows === 0 ? 'missing' : 'exists'
+  const detail = !c.available
+    ? 'Not recorded yet — nothing in the product writes down a configuration change.'
+    : c.rows === 0
+      ? 'Nothing has been recorded yet.'
+      : `${plural(c.rows, 'change')} recorded · last on ${dateOrNever(c.lastChangeAt, '—')}.`
+
+  return row(
+    'change-record', 'Change log', 'a record of every change to what we track',
+    status, detail, 'ops',
+    'Apply the change log, then reconstruct what each update searched to give it a labelled prehistory.',
+    [changeLogBoundary(c.firstLoggedAt)],
+  )
+}
+
+// ---- 12 · what was decided ---------------------------------------------------
+
+function decisions(i: ReadinessInputs): ReadinessRow {
+  const r = i.recommendations
+  const status: ReadinessStatus =
+    r.decisions === null || r.decisions === 0 ? 'missing'
+      : r.withLineage < r.total ? 'partial'
+        : 'exists'
+
+  const lineage = r.total === 0
+    ? 'nothing recommended yet'
+    : `${fmtInt(r.withLineage)} of ${fmtInt(r.total)} carry a link to the one before (${pct(r.withLineage, r.total)})`
+  const decided = r.decisions === null
+    ? 'nothing can record a decision yet'
+    : r.decisions === 0
+      ? 'no decision recorded'
+      : `${plural(r.decisions, 'decision')} recorded`
+
+  return row(
+    'decisions', 'Recommendations', 'what was decided about each one',
+    status, `${decided.charAt(0).toUpperCase()}${decided.slice(1)} · ${lineage}.`, 'client',
+    'Mark a recommendation done, working on it, or not now — the next update then carries the answer forward instead of asking again.',
+  )
+}
+
+// ---- 13 · the comments due a re-read ----------------------------------------
+
+function retention(i: ReadinessInputs): ReadinessRow {
+  const r = i.retention
+  const due = r.cohortDay
+    ? new Date(Date.parse(`${r.cohortDay}T00:00:00.000Z`) + r.dueAfterDays * 86_400_000).toISOString()
+    : null
+
+  const status: ReadinessStatus =
+    r.cohortDay === null ? 'exists'
+      : r.cohortRows > r.nightlyCap ? 'partial'
+        : 'exists'
+
+  const detail = r.cohortDay === null || due === null
+    ? 'Nothing is waiting to be read again.'
+    : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)} — ` +
+      (r.cohortRows > r.nightlyCap
+        ? `more than one night covers (${fmtInt(r.nightlyCap)}), so the rest waits.`
+        : 'one night covers it.')
+
+  return row(
+    'retention', 'Retention', 'comments read again before they age out',
+    status, detail, 'ops',
+    'Nothing to configure: each batch is read again nightly, and what the platform has removed is deleted with it.',
+    r.cohortDay ? [`Deleting a comment changes any month it was counted in — the count stays as it was written down`] : [],
+  )
+}
+
+// ---- The page ----------------------------------------------------------------
+
+/** The thirteen rows, in the order the page prints them. */
+export function computeReadiness(i: ReadinessInputs): ReadinessRow[] {
+  return [
+    rivalAccounts(i),
+    trackedTerms(i),
+    communities(i),
+    embeddings(i),
+    subjectSet(i),
+    monthsOfHistory(i),
+    anomalyBaseline(i),
+    howMuchWasRead(i),
+    updateRecord(i),
+    delivery(i),
+    changeRecord(i),
+    decisions(i),
+    retention(i),
+  ]
+}
+
+export interface ReadinessSummary {
+  exists: number
+  partial: number
+  missing: number
+  /** The sentence the page bar carries. */
+  label: string
+}
+
+/** How the workspace reads at a glance — the mock's "Readiness · 3 missing"
+ *  badge, with the middle state it leaves out. */
+export function summarise(rows: readonly ReadinessRow[]): ReadinessSummary {
+  const count = (s: ReadinessStatus) => rows.filter((r) => r.status === s).length
+  const summary = { exists: count('exists'), partial: count('partial'), missing: count('missing') }
+  const parts = [
+    summary.missing > 0 ? `${summary.missing} missing` : null,
+    summary.partial > 0 ? `${summary.partial} partly there` : null,
+  ].filter(Boolean)
+  return {
+    ...summary,
+    label: parts.length === 0 ? 'everything in place' : parts.join(' · '),
+  }
+}

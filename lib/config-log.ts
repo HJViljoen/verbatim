@@ -37,6 +37,9 @@ import { isMissingColumnError } from './supabase-admin'
 
 // ---- Vocabulary -------------------------------------------------------------
 
+/** The log's table, named once so a reader and a writer cannot disagree. */
+export const CONFIG_CHANGES_TABLE = 'config_changes'
+
 /** Which configuration moved — grouped by what a reader goes looking for, not
  *  by column. Mirrors the config_changes surface CHECK. */
 export const CONFIG_SURFACES = [
@@ -366,7 +369,7 @@ export async function recordConfigChange(admin: InsertableClient, input: ConfigC
 /** The same, for a set of changes written together. Returns how many landed. */
 export async function recordConfigChanges(admin: InsertableClient, inputs: ConfigChangeInput[]): Promise<number> {
   if (inputs.length === 0) return 0
-  const { error } = await admin.from('config_changes').insert(inputs.map(changeRow))
+  const { error } = await admin.from(CONFIG_CHANGES_TABLE).insert(inputs.map(changeRow))
   if (error) {
     console.error(`[config-log] ${inputs.length} change(s) NOT logged for ${inputs[0].clientId}: ${error.message ?? 'unknown error'}`)
     return 0
@@ -459,6 +462,28 @@ export function retagChange(args: {
       `were left as they were, because there the account says whose post it is.` +
       `${args.note ? ` ${args.note}` : ''}`,
   }
+}
+
+// ---- Reading the log ---------------------------------------------------------
+
+/**
+ * Is this error "the change log is not there yet"?
+ *
+ * `20260915091000_config_changes.sql` is applied by hand, so a deploy can reach
+ * production before it does. `recordConfigChanges` already survives that by
+ * logging loudly and carrying on; a READER cannot — the readiness page has to
+ * say "not recorded yet" and name what would record it, which is a different
+ * answer from "no change has been made". Narrow on purpose: the same shape as
+ * `isMissingRecDecisions` and `isMissingMonthlyReading` — this table's own
+ * name, and one of the codes that means "no such relation".
+ */
+export function isMissingConfigLog(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!text.includes(CONFIG_CHANGES_TABLE)) return false
+  if (code && ['PGRST205', 'PGRST204', '42P01', '42703'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
 // ---- The boundary -----------------------------------------------------------
