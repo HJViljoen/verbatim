@@ -376,6 +376,33 @@ export function isMissingQuoteTranslations(error: unknown): boolean {
 
 type Admin = ReturnType<typeof createAdminClient>
 
+/** How many chunked reads this module has in flight at once.
+ *
+ *  The planning reads are the same shape as lib/quotes.ts fetchChunks, and were
+ *  written the way that one used to be: `for (const part of chunk(…)) await`.
+ *  That is 5–30 serial round trips on a page and considerably worse here — the
+ *  whole current corpus of insight ids, plus every cited comment, is roughly
+ *  200–300 chunks per tenant, paid on EVERY run inside a 300 s step, usually to
+ *  discover there is nothing to translate. Serial is also the worst shape for
+ *  it: each trip pays the connection's wake-up price after an idle spell.
+ *
+ *  BOUNDED rather than one Promise.all over everything, which is where this
+ *  parts company with fetchChunks: a page fans out over tens of chunks, this
+ *  fans out over hundreds, and 300 simultaneous PostgREST requests from a step
+ *  that shares five concurrency slots with the rest of the pipeline is a
+ *  different kind of bad day. Eight is enough to turn ~250 serial trips into
+ *  ~31 waves. */
+const READ_PARALLEL = 8
+
+/** Run `fetch` over every chunk, at most READ_PARALLEL at a time, and return
+ *  the results in chunk order — which is the order the serial loop produced. */
+async function mapChunks<T, R>(items: readonly T[], size: number, fetch: (part: T[]) => Promise<R[]>): Promise<R[]> {
+  const parts = chunk(items, size)
+  const out: R[][] = []
+  for (const wave of chunk(parts, READ_PARALLEL)) out.push(...await Promise.all(wave.map(fetch)))
+  return out.flat()
+}
+
 /** Every displayable text of every comment this tenant's CURRENT analysis
  *  cites, with the comment it belongs to.
  *
@@ -390,44 +417,44 @@ async function citedTexts(admin: Admin, clientId: string): Promise<{ commentId: 
   )
   const out: { commentId: string; text: string | null }[] = []
   const commentIds = new Set<string>()
-  for (const part of chunk(insights.map((i) => i.id), 120)) {
-    const rows = await selectAll<{ comment_id: string | null; quote: string | null }>(() =>
+  const evidence = await mapChunks(insights.map((i) => i.id), 120, (part) =>
+    selectAll<{ comment_id: string | null; quote: string | null }>(() =>
       admin.from('insight_evidence')
         .select('comment_id, quote')
         .in('audience_insight_id', part)
         .eq('redacted', false)
         .eq('source', 'comment')
         .order('id', { ascending: true }),
-    )
-    for (const r of rows) {
-      if (!r.comment_id) continue
-      commentIds.add(r.comment_id)
-      out.push({ commentId: r.comment_id, text: r.quote })
-    }
+    ),
+  )
+  for (const r of evidence) {
+    if (!r.comment_id) continue
+    commentIds.add(r.comment_id)
+    out.push({ commentId: r.comment_id, text: r.quote })
   }
   // The comment AS POSTED, for the refs that render it whole. Usually the same
   // words as the excerpt above, in which case the hash dedups it away.
-  for (const part of chunk([...commentIds], 120)) {
-    const rows = await selectAll<{ id: string; text: string | null }>(() =>
+  const posted = await mapChunks([...commentIds], 120, (part) =>
+    selectAll<{ id: string; text: string | null }>(() =>
       admin.from('comments').select('id, text').in('id', part).order('id', { ascending: true }),
-    )
-    for (const r of rows) out.push({ commentId: r.id, text: r.text })
-  }
+    ),
+  )
+  for (const r of posted) out.push({ commentId: r.id, text: r.text })
   return out
 }
 
 /** The cache keys already held for a set of comments. */
 async function cachedKeys(admin: Admin, commentIds: readonly string[]): Promise<Set<string>> {
   const keys = new Set<string>()
-  for (const part of chunk([...commentIds], 120)) {
-    const rows = await selectAll<{ comment_id: string; text_hash: string }>(() =>
+  const rows = await mapChunks([...commentIds], 120, (part) =>
+    selectAll<{ comment_id: string; text_hash: string }>(() =>
       admin.from('comment_translations')
         .select('comment_id, text_hash')
         .in('comment_id', part)
         .order('comment_id', { ascending: true }),
-    )
-    for (const r of rows) keys.add(targetKey({ commentId: r.comment_id, hash: r.text_hash }))
-  }
+    ),
+  )
+  for (const r of rows) keys.add(targetKey({ commentId: r.comment_id, hash: r.text_hash }))
   return keys
 }
 
