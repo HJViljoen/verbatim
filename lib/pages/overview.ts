@@ -34,7 +34,7 @@ import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, type RecordWindow } from '../reading/record'
 import {
   mergeSeriesNotes,
   pointsByMonth,
@@ -362,6 +362,33 @@ export function daysInto(month: string, now: string): number | null {
   if (at >= next) return null
   if (at < start) return 0
   return Number(at.slice(8, 10))
+}
+
+/**
+ * The window OV6 reads over: THE MONTH, and never the horizon's.
+ *
+ * OV6 asks "how sound is this MONTH" — the design's own list for it is "updates
+ * this month and the dates; videos analysed against the trailing median…" — and
+ * the block prints the day this month freezes underneath. Handing the record
+ * the drawn axis instead made it answer a different question badly: the windowed
+ * denominator function (M3) is unapplied, `loadCoverage` refuses to sum month
+ * rows into a video count (a video whose thread spans two months belongs to
+ * both), and the only window it can still answer exactly off a stored row is a
+ * SINGLE MONTH. So on every horizon but "This month" the page bar read "9
+ * updates · coverage not recorded yet" and OV6's paragraph read "The
+ * month-by-month reading has not been recorded for this workspace yet" — under
+ * a tile printing "437 category videos this month" off `month_denominators`,
+ * and on the one block whose whole job is provenance. Production holds 119
+ * denominator months for Össur and 95 for Sealand; the sentence was false.
+ *
+ * The month it is, then, which the stored rows answer exactly on every horizon,
+ * and which is the month every other number on the page is about.
+ */
+export function recordWindow(month: string, readingAt: string): RecordWindow {
+  const start = monthStartOf(month)
+  const lastDay = new Date(Date.parse(`${nextMonth(start)}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10)
+  const at = readingAt.slice(0, 10)
+  return { kind: 'month', from: start, to: at < lastDay ? at : lastDay }
 }
 
 /** The median of the numbers that exist — a month with no row is not a zero. */
@@ -923,7 +950,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const recordInputs = await loadRecordInputs(
     reading.client,
     clientId,
-    { kind: window.kind === 'since' ? 'since' : window.kind, from: axis[0], to: readingAt.slice(0, 10) },
+    recordWindow(month, readingAt),
     { comparisonsRefused: countRefused(pageVerdicts), now: readingAt },
   )
   const record: RecordBlock = {

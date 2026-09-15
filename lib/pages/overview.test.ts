@@ -15,6 +15,7 @@ import {
   medianOf,
   moveLine,
   MOVES_EMPTY,
+  recordWindow,
   splitMovers,
   subjectsNote,
   type Mover,
@@ -55,6 +56,17 @@ describe('daysInto', () => {
   })
   it('is zero before the month begins', () => {
     expect(daysInto('2026-10-01', '2026-09-15T08:00:00.000Z')).toBe(0)
+  })
+})
+
+describe('recordWindow', () => {
+  it('is the month, on every horizon — the only window the stored rows answer exactly', () => {
+    expect(recordWindow('2026-09-01', '2026-09-15T08:00:00.000Z')).toEqual({
+      kind: 'month', from: '2026-09-01', to: '2026-09-15',
+    })
+  })
+  it('stops at the last day of the month rather than running past it', () => {
+    expect(recordWindow('2026-08-01', '2026-09-15T08:00:00.000Z').to).toBe('2026-08-31')
   })
 })
 
