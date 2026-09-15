@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { overviewMoves } from './moves'
-import { overviewRecord } from './record'
+import { overviewRecord, refusedSentence } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -81,8 +81,35 @@ describe('OV6 · how sound is this month', () => {
 
   it('says so when nothing was refused', () => {
     const data = overviewFixture()
-    const text = renderText(overviewRecord.render({ ...data, record: { ...data.record, refused: 0 } }, 'app', ctx))
+    const text = renderText(overviewRecord.render({ ...data, record: { ...data.record, refused: 0, refusals: [] } }, 'app', ctx))
     expect(text).toContain('Every comparison this page asked for was drawn.')
+  })
+
+  it('prints each refusal\u2019s reason, in every mode — not only in a hover title', () => {
+    // The block promised "each with its reason beside it" while the reason
+    // lived in the badge's `title`: invisible in print, and dropped entirely by
+    // the email arm, which prints the word alone.
+    for (const mode of MODES) {
+      const text = renderText(overviewRecord.render(overviewFixture(), mode, ctx))
+      expect(text, mode).toContain('too little was read on one side or both')
+      expect(text, mode).toContain('the two sides were grouped differently')
+    }
+  })
+
+  it('composes the refusal sentence from the reasons, pooling the repeats', () => {
+    expect(refusedSentence([])).toBe('Every comparison this page asked for was drawn.')
+    expect(refusedSentence([{ state: 'too_little_data', reason: null }])).toBe(
+      '1 comparison was refused on this page, because too little was read on one side or both.',
+    )
+    expect(
+      refusedSentence([
+        { state: 'too_little_data', reason: null },
+        { state: 'too_little_data', reason: null },
+        { state: 'refused', reason: 'rename' },
+      ]),
+    ).toBe(
+      '3 comparisons were refused on this page: 2 because too little was read on one side or both and 1 because the two sides are two names for one rival.',
+    )
   })
 
   it('links to the record, absolutely, in an email', () => {

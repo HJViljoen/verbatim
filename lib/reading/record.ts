@@ -8,7 +8,7 @@ import { selectAll } from '../supabase-admin'
 import { isMissingMonthlyReading, monthStartOf } from './monthly'
 import { loadWindowReading } from './read'
 import { TABLE_DENOMINATORS, type PlatformMix } from './types'
-import { isAnswer, type Verdict } from './verdicts'
+import { isAnswer, type RefusedReason, type Verdict, type VerdictState } from './verdicts'
 
 // Item 7 — the record, and the one line on every page that opens it.
 //
@@ -185,6 +185,23 @@ export interface RecordInputs {
  *  that is the number a reader needs: how often the product declined to say. */
 export function countRefused(verdicts: readonly Verdict[]): number {
   return verdicts.filter((v) => !isAnswer(v.state)).length
+}
+
+/** One comparison a render asked for and did not draw, as TOKENS. The words
+ *  are the surface's (components/delta-badge.tsx holds the product's movement
+ *  vocabulary); this is the record of what to say them about. */
+export interface Refusal {
+  state: VerdictState
+  reason: RefusedReason | null
+}
+
+/** Every comparison a render declined, in the order it asked them, so a
+ *  surface that promises "each with its reason beside it" can print the
+ *  reasons instead of hiding them in a hover title. */
+export function refusals(verdicts: readonly Verdict[]): Refusal[] {
+  return verdicts
+    .filter((v) => !isAnswer(v.state))
+    .map((v) => ({ state: v.state, reason: v.refusedReason ?? null }))
 }
 
 export interface RecordOptions {

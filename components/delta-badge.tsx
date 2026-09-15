@@ -55,7 +55,7 @@ export const MOVEMENT_WORDS: Record<Exclude<VerdictState, 'moved'> | 'unchanged'
 /** Why a refused comparison was refused, in the reader's words — printed as the
  *  badge's `title`, because the word alone ("comparison refused") tells a
  *  reader that something is wrong without telling them what. */
-const REFUSED_WHY: Record<NonNullable<Verdict['refusedReason']>, string> = {
+export const REFUSED_WHY: Record<NonNullable<Verdict['refusedReason']>, string> = {
   unlogged_era: 'this window reaches back before we were recording what changed',
   tracking_change: 'what we track changed inside this window',
   clustering_changed: 'the two sides were grouped differently',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   countRefused,
+  refusals,
   discardCaveat,
   halfOpenInstants,
   isMissingThemeMembers,
@@ -76,6 +77,21 @@ describe('countRefused', () => {
   })
   it('counts every comparison the product declined to answer, whatever the reason', () => {
     expect(countRefused([v('moved'), v('no_clear_change'), v('too_little_data'), v('refused'), v('baseline_forming')])).toBe(3)
+  })
+})
+
+describe('refusals', () => {
+  const v = (state: Verdict['state'], reason?: Verdict['refusedReason']): Verdict => ({
+    objectKind: 'theme', objectId: 'a', objectLabel: 'A', audience: 'client',
+    window: { kind: 'month', from: '2026-09-01', to: '2026-10-01' },
+    value: { k: 1, n: 10 }, changePts: null, bandPts: null, state, flags: [],
+    ...(reason ? { refusedReason: reason } : {}),
+  })
+  it('hands back every comparison that was not drawn, with its reason as a token', () => {
+    expect(refusals([v('moved'), v('too_little_data'), v('refused', 'rename'), v('no_clear_change')])).toEqual([
+      { state: 'too_little_data', reason: null },
+      { state: 'refused', reason: 'rename' },
+    ])
   })
 })
 

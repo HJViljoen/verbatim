@@ -34,7 +34,7 @@ import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, type RecordWindow } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow, type Refusal } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -316,6 +316,9 @@ export interface RecordBlock {
   /** The day this month stops moving. */
   freezesOn: string
   refused: number
+  /** Every comparison this page did not draw, as tokens — so OV6 can print
+   *  each one's reason rather than promising it. */
+  refusals: Refusal[]
 }
 
 export interface OverviewData {
@@ -1050,6 +1053,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),
     refused: countRefused(pageVerdicts),
+    refusals: refusals(pageVerdicts),
   }
 
   return {

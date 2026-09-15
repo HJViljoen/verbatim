@@ -250,6 +250,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       href: '/dashboard/settings',
       freezesOn: '2026-10-31',
       refused: 2,
+      refusals: [
+        { state: 'too_little_data' as const, reason: null },
+        { state: 'refused' as const, reason: 'clustering_changed' as const },
+      ],
     },
     ...over,
   }
