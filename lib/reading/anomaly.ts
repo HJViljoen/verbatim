@@ -291,9 +291,21 @@ function daysInMonth(month: string): number {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
 }
 
-/** The median of the numbers that are actually there. A month with no row is
- *  not a zero: counting it drags the median towards nothing and would call a
- *  normal week's worth of conversation untestable. */
+/**
+ * The median of the finite values given; non-finite entries are dropped and
+ * null comes back when nothing is left.
+ *
+ * IT DOES NOT DECIDE WHAT AN ABSENT MONTH IS — the caller does, before the
+ * values reach here, and the two callers decide differently. `thinUpdate`
+ * filters its own list first, so an update with no `videos_scraped` is
+ * genuinely absent. `medianWeekVideos` is handed `pooledMonths`
+ * (lib/pipeline/anomaly-check.ts), which fills EVERY month the baseline asked
+ * for, so a month with no row arrives as a zero and is counted: the typical
+ * week comes out lower, the implied count comes out lower, and the trim is
+ * stricter. That is the right answer — a baseline month that carried nothing is
+ * a fact about the baseline — but it is the opposite of what this comment
+ * claimed until 2026-09-15, and the claim is the sort that gets believed.
+ */
 function median(values: readonly number[]): number | null {
   const present = [...values].filter((v) => Number.isFinite(v)).sort((a, b) => a - b)
   if (present.length === 0) return null
