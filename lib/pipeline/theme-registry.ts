@@ -23,16 +23,26 @@ import { REGISTRY_MATCH_STRONG, REGISTRY_MATCH_WEAK, THEME_MATCH_THRESHOLD, REGI
 // video_id) and retention tombstones rather than deletes. Measured on the two
 // corpus-wide re-reads this database already holds (2026-08-09→16, 08-16→23),
 // the insight key carries 0 of 334 and 0 of 444 identities where the video key
-// carries 192 and 238.
+// carries 36 and 41 — every one of them above the evidence floor, where the
+// insight key carried none. (The plan expected ~192/238. That figure is
+// refute-03 §3.2's upper bound: best-match Jaccard over all same-bucket pairs
+// with no greedy one-to-one assignment, no size damp and no floor gate, which
+// is mostly single-video themes colliding at 1.0. The key as built refuses
+// those deliberately. Re-run the measurement with
+// scripts/theme-key-backtest.ts rather than trusting this paragraph.)
 //
 // AND WHY IT IS A PREFERENCE, NOT A REPLACEMENT. A bare video key is degenerate
 // below the evidence floor: 58.5% of Össur's themes have a single supporting
 // video and 218 of 757 share an identical video set with another theme in the
-// same bucket (Sealand: 507 of 1,053). Above the floor the video key is a
-// strict superset — on both tenants it re-assigned NOTHING and only rescued
-// identities the insight key had dropped. So the video arm leads where the
-// candidate's own set clears the floor and is damped below it, the insight arm
-// is the second reading, and the label's embedding breaks what is left.
+// same bucket (Sealand: 507 of 1,053). Above the floor it is very nearly a
+// strict superset: on Össur it has re-assigned nothing on any transition
+// measured, and on Sealand it re-assigns 2 identities on 09-10 → 09-15 and 3
+// on the cutover — each a two-video theme whose video set matches one entry
+// exactly while its label matches another, which is evidence and words
+// disagreeing, and this key believes the evidence. Everything else it does is
+// rescue. So the video arm leads where the candidate's own set clears the floor
+// and is damped below it, the insight arm is the second reading, and the
+// label's embedding breaks what is left.
 
 export type MatchKind = 'exact' | 'strong' | 'weak' | 'new' | 'revived'
 
@@ -157,11 +167,12 @@ export interface PairScore {
  *
  * The video arm leads wherever the CANDIDATE's stored set clears the floor,
  * which is the population the measurement covers: above it the video key
- * re-assigned zero identities on either tenant and rescued 40 (Össur) / 56
- * (Sealand) per run that the insight key had dropped. The insight arm is not a
- * fallback in the "only when the other is absent" sense — it is read every
- * time and wins when it reads higher, which is what keeps the change a strict
- * improvement rather than a re-keying.
+ * rescued 43 (Össur 09-06 → 09-13) and 55 (Sealand 09-10 → 09-15) identities
+ * the insight key had dropped, against 0 and 2 re-assignments —
+ * scripts/theme-key-backtest.ts prints the whole table. The insight arm is not
+ * a fallback in the "only when the other is absent" sense — it is read every
+ * time and wins when it reads higher, which is what keeps the change a rescue
+ * rather than a re-keying.
  */
 export function scorePair(
   t: Pick<IncomingTheme, 'memberInsightIds' | 'memberVideoIds'>,

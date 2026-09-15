@@ -30,9 +30,13 @@ import { CLUSTER_SIMILARITY_THRESHOLD, EVIDENCE_FLOOR, SYNTHESIS_MODEL } from '.
 //   m  the merge model — a gpt-5.4 call with no temperature decides which
 //      clusters fuse, so its identity is part of the clustering
 //   k  the theme-key rule — the cutover to the video key is itself an identity
-//      event (measured: 83 Össur and 107 Sealand themes land on a different
-//      entry the first time it runs), and a marker that does not carry it
-//      would make the one run that needs the marker look unremarkable
+//      event, and a marker that does not carry it would make the one run that
+//      needs the marker look unremarkable. Measured with
+//      scripts/theme-key-backtest.ts: on the first run under it, 46 Össur and
+//      57 Sealand themes stop being `new` and continue an entry the old key had
+//      dropped, and 0 / 3 land on a DIFFERENT entry than the old key gave them.
+//      The re-assignments are small; the hundred-odd changes of hand are not,
+//      and both are the clustering answering differently on the same corpus
 //
 // Deliberately NOT in it: the re-read share (a property of the run, stamped per
 // observation — a regime can be identical while the corpus underneath moves),

@@ -138,11 +138,14 @@ describe('matchThemes', () => {
 })
 
 // ---- The re-analysis-stable key (item 3, 2026-09-18) ------------------------
-// Every case below is one the production measurement named: the corpus-wide
-// re-mint (0 of 334 identities carried on insight ids, 192 on video ids), the
-// strict-superset property above the evidence floor (zero re-assignments on
-// either tenant), and the collision the video key brings with it (58.5% of
-// Össur's themes stand on one video, 218 of 757 share it with another theme).
+// Every case below is one the production measurement named (re-run it with
+// scripts/theme-key-backtest.ts): the corpus-wide re-mint (0 of 334 identities
+// carried on insight ids, 36 on video ids — all of them above the evidence
+// floor, where the insight key carried none), the near-superset property above
+// that floor (Össur re-assigns nothing on any transition; Sealand re-assigns 2
+// and 3, each a two-video theme whose videos and whose label point at different
+// entries), and the collision the video key brings with it (58.5% of Össur's
+// themes stand on one video, 218 of 757 share it with another theme).
 
 const withVideos = (e: RegistryEntry, ids: string[]): RegistryEntry => ({ ...e, member_video_ids: ids })
 
