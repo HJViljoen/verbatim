@@ -355,7 +355,10 @@ export function ProfilePage({ data: d, params }: { data: ProfileData | ProfileEm
         <div className="absolute right-0 top-0 z-10"><ExportMenu /></div>
         {renderables['profile.persona'].render(d, 'app')}
         {renderables['profile.platformMix'].render(d, 'app')}
-        {renderables['profile.shareOverTime'].render(d, 'app')}
+        {/* Optional: unregistered while profile.mix is gated (D1). `renderables`
+            is indexed, so TypeScript will not miss it for you — the page throws
+            if this reads the key without asking. */}
+        {renderables['profile.shareOverTime']?.render(d, 'app')}
       </div>
     </ExportScope>
   )
