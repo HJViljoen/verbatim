@@ -127,5 +127,10 @@ export interface StoredFreeze {
 /** The database names, in one place so a rename is one edit. */
 export const RPC_DENOMINATORS = 'monthly_denominators'
 export const RPC_THEME_READINGS = 'monthly_theme_readings'
+/** The window siblings (20260918092000_reading_windows.sql): the same bodies
+ *  with the month grouping taken out, for the one figure a page states over a
+ *  window rather than a month. Service-role only, like the month pair. */
+export const RPC_WINDOW_DENOMINATORS = 'window_denominators'
+export const RPC_WINDOW_THEME_READINGS = 'window_theme_readings'
 export const TABLE_DENOMINATORS = 'month_denominators'
 export const TABLE_THEME_READINGS = 'month_theme_readings'

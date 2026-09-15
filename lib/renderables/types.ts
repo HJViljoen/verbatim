@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { EmailTheme } from '../email/theme'
+import type { ReadingHandle } from '../reading/read'
 
 /**
  * The spine of Reports & Exports (Stage 1, 2026-08-29).
@@ -29,6 +30,23 @@ export interface Scope {
    *  export path — where the tenant is already pinned by the session and the
    *  loader runs server-to-server. Loaders never widen their own reads. */
   supabase: unknown
+  /**
+   * The comment-dated reading, when this path has one (Phase 1 WP3, decision N).
+   *
+   * A SECOND CLIENT, ON PURPOSE. `supabase` above is the session client on the
+   * app path, and the four reading functions are `revoke all … from
+   * authenticated` — they take `p_client` as a parameter, so a function a
+   * tenant could call is a function a tenant could call with someone else's id.
+   * A reading therefore needs the service role, with the tenant id taken from
+   * `getSessionContext()` and never from the URL; `ReadingHandle` carries the
+   * pair together so a loader cannot separate them.
+   *
+   * Optional while the pages are being re-based one at a time: a loader that
+   * reads no month does not need one, and every construction site that does not
+   * supply one yet keeps working. The loaders that read months take it as
+   * required in their own signature.
+   */
+  reading?: ReadingHandle
   clientId: string
   /** The page's own URL params, verbatim. Selection lives here (`?item=`,
    *  `?theme=`, `?vs=`, `?persona=`…), so a loader resolves the same selection

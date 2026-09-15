@@ -6,6 +6,8 @@ import {
   FREEZE_AFTER_DAYS,
   RPC_DENOMINATORS,
   RPC_THEME_READINGS,
+  RPC_WINDOW_DENOMINATORS,
+  RPC_WINDOW_THEME_READINGS,
   TABLE_DENOMINATORS,
   TABLE_THEME_READINGS,
   type DenominatorReading,
@@ -409,10 +411,15 @@ export function mergeMonthRows<T extends { month: string }>(args: {
 
 // ---- Surviving a deploy that lands before its migration -----------------------
 
-/** The four database objects 20260915092000_monthly_reading.sql creates. */
+/** The four database objects 20260915092000_monthly_reading.sql creates, and
+ *  the two window siblings 20260918092000_reading_windows.sql adds. One list:
+ *  they are applied in separate windows, so a deploy can arrive with either
+ *  missing, and a reader survives both the same way. */
 const MONTHLY_READING_OBJECTS = [
   RPC_DENOMINATORS,
   RPC_THEME_READINGS,
+  RPC_WINDOW_DENOMINATORS,
+  RPC_WINDOW_THEME_READINGS,
   TABLE_DENOMINATORS,
   TABLE_THEME_READINGS,
 ] as const

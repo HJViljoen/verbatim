@@ -1,0 +1,403 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { chunk } from '../chunk'
+import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { renameFrom, type RenameRecord } from '../rivals'
+import { createAdminClient, selectAll } from '../supabase-admin'
+import { isMissingMonthlyReading, monthStartOf } from './monthly'
+import {
+  buildSeries,
+  monthAxis,
+  type DenominatorPoint,
+  type MonthSeries,
+  type NumeratorPoint,
+  type SeriesChange,
+  type Substrate,
+} from './series'
+import {
+  RPC_WINDOW_DENOMINATORS,
+  RPC_WINDOW_THEME_READINGS,
+  TABLE_DENOMINATORS,
+  TABLE_THEME_READINGS,
+  type Audience,
+  type PlatformMix,
+} from './types'
+import type { ObjectKind } from './verdicts'
+
+// The reading layer's I/O — the only file here that touches a database
+// (decision N).
+//
+// WHICH CLIENT, AND WHY IT IS THE SERVICE ROLE. The two month tables are
+// readable by `authenticated` under a per-tenant SELECT policy, so a session
+// client could select them. The four SQL functions cannot be: they take
+// `p_client` as a PARAMETER, which makes a function a tenant could call a
+// function a tenant could call with someone else's client id, so all four are
+// `revoke all … from public, anon, authenticated` with execute granted to
+// `service_role` only. A session-client reader is therefore permanently stuck
+// with whatever the last run happened to write — no window, no week, no
+// month-to-date — and a page and its own export would compute a horizon two
+// different ways.
+//
+// So the reading takes the service role, inside a server component, with the
+// tenant id taken from `getSessionContext()` and NEVER from a request
+// parameter. That is the shape `/dashboard/ops/readiness` has used since it
+// shipped. `ReadingHandle` is a client and a tenant id travelling together for
+// exactly that reason: a loader that is handed the pair cannot accidentally
+// read with a tenant id that came off the URL.
+//
+// THE THREE EMPTY ANSWERS ARE THREE ANSWERS. A read that finds nothing can mean
+// the migration is not applied, the tenant has never been seeded, or the months
+// asked for genuinely carried no conversation, and a reader that renders 0 for
+// any of them is lying. `substrate` is settled here, once, and `buildSeries`
+// spends it.
+//
+// COLUMNS THAT MAY NOT EXIST YET. `clustering_key` (M2) and
+// `config_changes.affects_audiences` / `.affects_months` (M1) are applied by
+// hand in one window before R1, and a deploy can land first. Every read here is
+// `select('*')` rather than a column list, so an absent column arrives as an
+// absent key on a plain object instead of a 42703 that takes the page down —
+// and every type that names those columns has them optional.
+
+export interface ReadingHandle {
+  client: SupabaseClient
+  clientId: string
+}
+
+/** The reading client: the service role. Never built from a request; a caller
+ *  pairs it with the tenant id the session already pinned. */
+export function readingClient(): SupabaseClient {
+  return createAdminClient()
+}
+
+/** The handle a loader is given. `client` is injectable so an operator script
+ *  or a test can pass its own. */
+export function readingHandle(clientId: string, client: SupabaseClient = readingClient()): ReadingHandle {
+  return { client, clientId }
+}
+
+// ---- The stored month series -------------------------------------------------
+
+export interface MonthSeriesOptions {
+  /** The audience keys to read. Every audience the tenant has when omitted —
+   *  which is what a coverage or "since we started" read wants. */
+  audiences?: readonly Audience[]
+  /** What the numerators are. Only `theme` has a table today; `subject` and
+   *  `kind` get theirs in M4 and M5, and this is where they attach. */
+  objectKind?: ObjectKind
+  /** The objects to read numerators for. With none, the result is the
+   *  denominator series alone — an audience's own conversation, month by
+   *  month. */
+  objectIds?: readonly string[]
+  /** The axis, inclusive at both ends. Any day in a month names the month. */
+  from: string
+  to: string
+  /** `min(config_changes.changed_at)` is read here too unless a caller has it. */
+  changeLogFrom?: string | null
+}
+
+export interface MonthSeriesSet {
+  substrate: Substrate
+  /** One per audience asked for, per object asked for. */
+  series: MonthSeries[]
+  /** Every denominator row read, unfolded — what `sinceStart` and a coverage
+   *  line are computed from. */
+  denominators: DenominatorPoint[]
+  /** The renames stitched into the series above, for a caller that wants to
+   *  name them in prose. */
+  renames: RenameRecord[]
+  changeLogFrom: string | null
+}
+
+type StoredDenominator = DenominatorPoint & { platform_mix?: PlatformMix }
+type StoredNumerator = NumeratorPoint & { theme_id?: string; platform_mix?: PlatformMix }
+
+const NUMERATOR_TABLE: Partial<Record<ObjectKind, string>> = {
+  theme: TABLE_THEME_READINGS,
+}
+
+/** `month_theme_readings.theme_id` is the stable `theme_registry` identity, and
+ *  the id column the sibling tables of M4/M5 will carry is their own. */
+const NUMERATOR_ID_COLUMN: Partial<Record<ObjectKind, string>> = {
+  theme: 'theme_id',
+}
+
+/**
+ * The stored months for one axis, one set of audiences and one set of objects.
+ *
+ * Paged with `selectAll` on a UNIQUE order — each table's primary key minus the
+ * tenant — because a page break on a non-unique key can skip a row, and a
+ * skipped row here is a month that silently disappears from a chart. Össur's
+ * whole-history theme read is 1,346 rows and Sealand's 1,526, so the 1,000-row
+ * cap is not hypothetical: it is crossed by both tenants at "last 12 months".
+ */
+export async function loadMonthSeries(
+  client: SupabaseClient,
+  clientId: string,
+  options: MonthSeriesOptions,
+): Promise<MonthSeriesSet> {
+  const from = monthStartOf(options.from)
+  const to = monthStartOf(options.to)
+  const audiences = options.audiences ? [...new Set(options.audiences)] : null
+  const objectIds = options.objectIds ? [...new Set(options.objectIds)] : null
+  const objectKind = options.objectKind ?? null
+
+  let substrate: Substrate = 'seeded'
+  let denominators: StoredDenominator[] = []
+  try {
+    denominators = await selectAll<StoredDenominator>(() => {
+      let q = client
+        .from(TABLE_DENOMINATORS)
+        .select('*')
+        .eq('client_id', clientId)
+        .gte('month', from)
+        .lte('month', to)
+      if (audiences) q = q.in('audience', audiences)
+      return q.order('month', { ascending: true }).order('audience', { ascending: true })
+    })
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) throw error
+    substrate = 'missing'
+  }
+
+  // Nothing in the window is not nothing at all: ask the tenant-wide question
+  // before deciding which silence this is. One row is enough to answer it.
+  if (substrate === 'seeded' && denominators.length === 0) {
+    const probe = await client.from(TABLE_DENOMINATORS).select('month').eq('client_id', clientId).limit(1)
+    if (probe.error) {
+      if (!isMissingMonthlyReading(probe.error)) throw new Error(`${TABLE_DENOMINATORS} probe: ${probe.error.message}`)
+      substrate = 'missing'
+    } else if ((probe.data ?? []).length === 0) {
+      substrate = 'not_seeded'
+    }
+  }
+
+  const table = objectKind ? NUMERATOR_TABLE[objectKind] : undefined
+  const idColumn = objectKind ? NUMERATOR_ID_COLUMN[objectKind] : undefined
+  const numerators: StoredNumerator[] = []
+  if (substrate === 'seeded' && table && idColumn && objectIds && objectIds.length > 0) {
+    for (const ids of chunk(objectIds, 100)) {
+      const part = await selectAll<StoredNumerator>(() => {
+        let q = client
+          .from(table)
+          .select('*')
+          .eq('client_id', clientId)
+          .gte('month', from)
+          .lte('month', to)
+          .in(idColumn, ids)
+        if (audiences) q = q.in('audience', audiences)
+        return q
+          .order('month', { ascending: true })
+          .order('audience', { ascending: true })
+          .order(idColumn, { ascending: true })
+      })
+      numerators.push(...part)
+    }
+  }
+
+  const changes = await loadChanges(client, clientId)
+  const renames = changes.map(renameFrom).filter((r): r is RenameRecord => r != null)
+  const changeLogFrom =
+    options.changeLogFrom !== undefined ? options.changeLogFrom : firstLoggedAt(changes)
+  const seriesChanges: SeriesChange[] = changes.map((c) => ({
+    changed_at: c.changed_at,
+    surface: c.surface,
+    note: c.note ?? null,
+    months: c.affects_months ?? null,
+    source: c.source ?? null,
+  }))
+
+  const labels = table && objectIds ? await loadLabels(client, clientId, objectKind, objectIds) : new Map<string, string>()
+
+  const keys = audiences ?? [...new Set(denominators.map((d) => d.audience))]
+  const numeratorById = new Map<string, StoredNumerator[]>()
+  for (const row of numerators) {
+    const id = String((row as unknown as Record<string, unknown>)[idColumn as string] ?? '')
+    numeratorById.set(id, [...(numeratorById.get(id) ?? []), row])
+  }
+
+  const axis = monthAxis(from, to)
+  const series: MonthSeries[] = []
+  for (const audience of keys.length > 0 ? keys : ['']) {
+    if (!objectIds || objectIds.length === 0) {
+      series.push(
+        buildSeries({
+          axis,
+          audience,
+          denominators,
+          changes: seriesChanges,
+          renames,
+          substrate,
+          changeLogFrom,
+        }),
+      )
+      continue
+    }
+    for (const objectId of objectIds) {
+      series.push(
+        buildSeries({
+          axis,
+          audience,
+          denominators,
+          readings: numeratorById.get(objectId) ?? [],
+          changes: seriesChanges,
+          renames,
+          substrate,
+          changeLogFrom,
+          objectId,
+          objectLabel: labels.get(objectId) ?? null,
+        }),
+      )
+    }
+  }
+
+  return { substrate, series, denominators, renames, changeLogFrom }
+}
+
+/** Every change this tenant has logged, oldest first. An empty list when the
+ *  log does not exist yet — the readiness precedent: a reader says "not
+ *  recorded", it does not fail. */
+async function loadChanges(client: SupabaseClient, clientId: string): Promise<ConfigChange[]> {
+  try {
+    return await selectAll<ConfigChange>(() =>
+      client
+        .from(CONFIG_CHANGES_TABLE)
+        .select('*')
+        .eq('client_id', clientId)
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingConfigLog(error)) return []
+    throw error
+  }
+}
+
+/** The first REAL entry: reconstructed rows are inference from what each update
+ *  searched, and dating the boundary from one would say the log begins before
+ *  anything was actually recorded. */
+function firstLoggedAt(changes: readonly ConfigChange[]): string | null {
+  const logged = changes.filter((c) => c.source !== 'reconstructed').map((c) => c.changed_at).sort()
+  return logged[0] ?? null
+}
+
+/** The objects' display labels. Never a key — theme labels churn ~88% run to
+ *  run, which is the whole reason `theme_registry.id` exists. */
+async function loadLabels(
+  client: SupabaseClient,
+  clientId: string,
+  objectKind: ObjectKind | null,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (objectKind !== 'theme') return out
+  for (const part of chunk([...ids], 100)) {
+    const { data, error } = await client
+      .from('theme_registry')
+      .select('id, canonical_label')
+      .eq('client_id', clientId)
+      .in('id', part)
+    if (error) throw new Error(`theme_registry labels: ${error.message}`)
+    for (const row of (data ?? []) as { id: string; canonical_label: string | null }[]) {
+      if (row.canonical_label) out.set(row.id, row.canonical_label)
+    }
+  }
+  return out
+}
+
+// ---- The windowed figure -----------------------------------------------------
+
+export interface WindowDenominator {
+  audience: Audience
+  videos: number
+  comments: number
+  platform_mix: PlatformMix
+  dual_mention: number
+  excluded_undated: number
+}
+
+export interface WindowThemeReading {
+  audience: Audience
+  theme_id: string
+  videos: number
+  comments: number
+  platform_mix: PlatformMix
+  excluded_on_camera: number
+  excluded_undated: number
+}
+
+export interface WindowReadingOptions {
+  from: string
+  to: string
+  audiences?: readonly Audience[]
+  /** The clustering to read theme numerators under. With none, only the
+   *  denominators are read — which is the shape most pages want, and the one
+   *  that costs a single cheap call. */
+  runId?: string | null
+  objectIds?: readonly string[]
+}
+
+export interface WindowReading {
+  /** Null when the functions are not applied yet — told apart from an empty
+   *  read, exactly as the month series tells its silences apart. */
+  denominators: WindowDenominator[] | null
+  themes: WindowThemeReading[] | null
+}
+
+/**
+ * The one windowed figure a page states in prose.
+ *
+ * Not a sum of month rows, ever: `videos` is a count of DISTINCT videos and a
+ * video whose thread spans two months is a member of both months' sets.
+ * Measured on the seeded rows, summing overstates Össur's own brand by 38.7%
+ * over twelve months and by 90.9% since its first stored month — which crosses
+ * the 100-video floor and turns a refusal into an answer. Comments do sum
+ * exactly, so a comment-denominated figure could be taken off the series; a
+ * video-denominated one could not, and the product's unit is videos.
+ */
+export async function loadWindowReading(
+  client: SupabaseClient,
+  clientId: string,
+  options: WindowReadingOptions,
+): Promise<WindowReading> {
+  const audiences = options.audiences ? new Set(options.audiences) : null
+  const objectIds = options.objectIds ? new Set(options.objectIds) : null
+
+  let denominators: WindowDenominator[] | null = null
+  try {
+    denominators = await selectAll<WindowDenominator>(() =>
+      client
+        .rpc(RPC_WINDOW_DENOMINATORS, { p_client: clientId, p_from: options.from, p_to: options.to })
+        .order('audience', { ascending: true }),
+    )
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) throw error
+  }
+
+  let themes: WindowThemeReading[] | null = null
+  if (options.runId) {
+    try {
+      themes = await selectAll<WindowThemeReading>(() =>
+        client
+          .rpc(RPC_WINDOW_THEME_READINGS, {
+            p_client: clientId,
+            p_run: options.runId,
+            p_from: options.from,
+            p_to: options.to,
+          })
+          .order('audience', { ascending: true })
+          .order('theme_id', { ascending: true }),
+      )
+    } catch (error) {
+      if (!isMissingMonthlyReading(error)) throw error
+    }
+  }
+
+  return {
+    denominators: denominators
+      ? denominators.filter((d) => !audiences || audiences.has(d.audience))
+      : null,
+    themes: themes
+      ? themes.filter((t) => (!audiences || audiences.has(t.audience)) && (!objectIds || objectIds.has(t.theme_id)))
+      : null,
+  }
+}
