@@ -51,7 +51,8 @@ export default async function InitiativesSettingsPage() {
 
   return (
     <SettingsFrame
-      active="initiatives"
+      // Parked, and not one of the seven: the rail lights nothing here (WP16).
+      active={null}
       title="Settings"
       context={client?.company_name ?? 'Client'}
       contentTitle="Initiatives"

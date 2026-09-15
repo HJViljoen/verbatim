@@ -9,7 +9,8 @@ import { TABLE_DENOMINATORS } from '../reading/types'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '../rec-decisions'
 import { SHARE_BAND } from '../report-bands'
 import { YOUTUBE_REFRESH_DUE_DAYS } from '../retention/youtube-refresh'
-import { type createAdminClient, selectAll } from '../supabase-admin'
+import type { SessionContext } from '../auth'
+import { selectAll } from '../supabase-admin'
 import type {
   AnomalyInput,
   CommunityInput,
@@ -19,11 +20,25 @@ import type {
   UpdateInput,
 } from './types'
 
-// Reading the readiness inputs (Phase 0 WP10). Service role throughout: three
-// of the thirteen rows read tables a tenant session cannot see at all —
-// `gate_verdicts` is superadmin-only by policy, and the change log and the
-// decision ledger are written by the service role and read under RLS the page's
-// operator is not inside when viewing another workspace.
+// Reading the readiness inputs (Phase 0 WP10; the client re-read, Phase 1
+// WP16).
+//
+// ONE CLIENT PARAMETER, TWO ENFORCEMENT REGIMES. This module used to be
+// service-role by signature, on the grounds that three of the thirteen rows
+// read tables a tenant session cannot see. Two of those three were wrong: the
+// change log and the decision ledger each ship a tenant SELECT policy, and what
+// they are closed to is an OPERATOR VIEWING ANOTHER WORKSPACE — a different
+// problem, already solved in lib/auth.ts applyOperatorView, which hands such a
+// session the service-role client. `gate_verdicts` was the only genuinely
+// closed table, and M8 gives it a tenant policy with the scraped caption
+// withheld by column grant.
+//
+// So the parameter is now `SessionContext['supabase']`, which IS the
+// service-role client for an operator and the tenant's own client for a tenant
+// admin, and `/dashboard/ops/readiness` and Settings › Readiness run the same
+// code with no branch. The narrowing that used to live in the type — "this
+// module is service-role" — is stated here instead, because it stopped being
+// true and a type that lies is worse than a comment that does not.
 //
 // THREE MIGRATIONS ARE APPLIED BY HAND, so this module's job is as much about
 // what is NOT there as what is. Every read that touches an object those
@@ -77,7 +92,10 @@ function allRows<T>(result: { data: T[] | null; error: unknown }): T[] {
   return result.data ?? []
 }
 
-type Admin = ReturnType<typeof createAdminClient>
+/** Either client. Both are untyped Supabase clients (AGENTS.md: no `Database`
+ *  generic), so the reads below compile the same way against either; what
+ *  differs is whether RLS is applied, which is the point. */
+type Admin = SessionContext['supabase']
 
 /** Is the delivery record's bookkeeping there? One cheap probe rather than a
  *  failed wide read: `selectAll` flattens a PostgREST error into a plain Error

@@ -1,37 +1,41 @@
 import type { ReactNode } from 'react'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
 import { PaneHeader, PaneBody, RailGroup, RailLink } from '@/components/shell/master-list'
+import { SETTINGS_SUBPAGES, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
 
-// The settings rail (component-map §3): one frame shared by Settings, Billing
-// and Team so the account pages read as one place. Workspace settings are
-// owner/admin-editable and member-readable, as before; Team holds the
-// member-level pages. Two panes, not resizable — settings don't need it.
+// The settings area (Phase 1 WP16, design item 29, revision 3): a rail of
+// seven sub-pages and a content pane, shared by everything under
+// /dashboard/settings plus Team and Billing, so the account pages read as one
+// place. The rail's labels and addresses come from lib/settings/rail.ts — this
+// file draws them and decides nothing.
+//
+// ONE GROUP, NOT TWO. The rail carried a "Workspace" / "Help" split when the
+// Guide was a page of its own; the Guide is now the seventh sub-page and the
+// mock's rail is flat. A group label over a single group is furniture.
+//
+// FORMS, NOT TILES (revision 3). The vocabulary below is the whole of it:
+// SettingsCard is an inner block with a title and a line of explanation,
+// FactRow is label-left value-right, ConnectionRow is name · what · status.
+// None of them is the elevated `bg-tile shadow-tile` card the reading pages
+// use, and nothing in a sub-page should introduce one.
 
-export type SettingsSection = 'tracking' | 'initiatives' | 'billing' | 'team'
-
-// WP9: Connections and the Guide left the rail with their pages — both
-// redirect (lib/nav.ts RETIRED_ADDRESSES), and a rail entry that bounces is
-// worse than no entry. Initiatives stayed, because its page is parked rather
-// than retired: it is the only place to rename, finish or stop one until
-// Market's moves panel lands in WP14. Team and Billing stay, and they are why
-// dropping the other two from the sidebar orphaned nothing. WP16 rebuilds this
-// rail as the seven sub-pages.
-const RAIL: { key: SettingsSection; href: string; label: string; group: 'Workspace' }[] = [
-  { key: 'tracking', href: '/dashboard/settings', label: 'Tracking & reports', group: 'Workspace' },
-  { key: 'initiatives', href: '/dashboard/settings/initiatives', label: 'Initiatives', group: 'Workspace' },
-  { key: 'billing', href: '/dashboard/billing', label: 'Plan & billing', group: 'Workspace' },
-  { key: 'team', href: '/dashboard/team', label: 'Team', group: 'Workspace' },
-]
+export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, children, controls,
+  active, title, context, contentTitle, contentMeta, children, controls, counts,
 }: {
-  active: SettingsSection
+  /** Which rail entry is lit. `null` lights none — the parked Initiatives
+   *  page is inside this frame and is not one of the seven, and lighting
+   *  Tracking from it would tell a reader they were somewhere they are not. */
+  active: SettingsSection | null
   title: string
   context?: ReactNode
   contentTitle?: ReactNode
   contentMeta?: ReactNode
   controls?: ReactNode
+  /** Rail counts, where the page that drew the rail happens to know them. A
+   *  key that is absent prints nothing rather than a zero. */
+  counts?: RailCounts
   children: ReactNode
 }) {
   return (
@@ -39,15 +43,15 @@ export function SettingsFrame({
       <PageBar title={title} context={context}>{controls}</PageBar>
       <div className="flex min-h-0 flex-col gap-3 md:h-[calc(100dvh_-_6.75rem)] md:flex-none md:flex-row">
         <section className="flex shrink-0 flex-col overflow-hidden rounded-lg bg-tile shadow-tile md:w-[220px]">
-          <PaneHeader title="Account" />
+          <PaneHeader title="Settings" />
           <PaneBody>
-            {(['Workspace'] as const).map((g) => (
-              <RailGroup key={g} label={g}>
-                {RAIL.filter((r) => r.group === g).map((r) => (
-                  <RailLink key={r.key} href={r.href} active={active === r.key}>{r.label}</RailLink>
-                ))}
-              </RailGroup>
-            ))}
+            <RailGroup>
+              {SETTINGS_SUBPAGES.map((s) => (
+                <RailLink key={s.key} href={s.href} active={active === s.key} count={counts?.[s.key] ?? null}>
+                  {s.label}
+                </RailLink>
+              ))}
+            </RailGroup>
           </PaneBody>
         </section>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-tile shadow-tile">
@@ -61,10 +65,13 @@ export function SettingsFrame({
 
 /** A settings card: an inner block with a title, a one-line description and
  *  its fields — the nesting level under the content pane. */
-export function SettingsCard({ title, description, children, className }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) {
+export function SettingsCard({ title, description, children, className, action }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string; action?: ReactNode }) {
   return (
     <section className={`rounded-md bg-inner px-4 py-3.5 ${className ?? ''}`}>
-      <h3 className="text-[13px] font-semibold">{title}</h3>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-[13px] font-semibold">{title}</h3>
+        {action}
+      </div>
       {description && <p className="mt-0.5 text-[12px] text-muted-foreground">{description}</p>}
       <div className="mt-3">{children}</div>
     </section>
@@ -95,5 +102,39 @@ export function ConnectionRow({ name, what, status, action }: { name: ReactNode;
       {action}
       <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-px text-[10.5px] font-medium ${cls}`}>{label}</span>
     </div>
+  )
+}
+
+/** A row of a settings table: the mock's idiom for the Rivals, Communities and
+ *  recipient blocks. Cells are supplied by the caller; the grid is one place so
+ *  five tables cannot drift apart. */
+export function SettingsTable({ head, children, empty }: { head: readonly string[]; children: ReactNode; empty?: ReactNode }) {
+  const hasRows = Array.isArray(children) ? children.flat().filter(Boolean).length > 0 : Boolean(children)
+  if (!hasRows && empty) return <p className="text-[12px] text-muted-foreground">{empty}</p>
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[420px] border-collapse text-[12.5px]">
+        <thead>
+          <tr className="border-b border-border/70">
+            {head.map((h, i) => (
+              <th key={h} className={`pb-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.06em] text-muted-foreground ${i === 0 ? 'text-left' : 'text-right'}`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  )
+}
+
+/** One row of a SettingsTable. The first cell reads left, the rest read right
+ *  and set tabular figures, because every one of them is a count. */
+export function SettingsRow({ cells }: { cells: readonly ReactNode[] }) {
+  return (
+    <tr className="border-b border-border/50 last:border-b-0">
+      {cells.map((c, i) => (
+        <td key={i} className={`py-1.5 align-top ${i === 0 ? 'pr-3 text-left' : 'pl-3 text-right tabular-nums'}`}>{c}</td>
+      ))}
+    </tr>
   )
 }
