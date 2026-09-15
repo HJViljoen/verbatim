@@ -73,6 +73,7 @@ export type MonthLabelKind =
   | 'clustering_changed'
   | 'tracking_change'
   | 'renamed'
+  | 'split_keys'
 
 /** One caveat, in the words a client reads. `kind` is the token a surface
  *  styles by (a dated rule, a hatched bar, a faint band); `text` is the
@@ -310,10 +311,28 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
   const names = [...mine.names]
   const mineKeys = new Set(names)
 
+  // ONE ROW PER MONTH, AND A SECOND ONE IS NOT SUMMED AND NOT SWALLOWED.
+  // A renamed rival's months arrive from ALL its keys, so a month carrying a
+  // row under two of them would, with a bare `Map.set`, keep whichever came
+  // last and drop the other with no signal — the month's videos and k then a
+  // fraction of the truth, drawn as fact. Summing is not the answer either:
+  // `videos` is a count of DISTINCT videos and the two rows' sets overlap, so
+  // the sum overstates (the same arithmetic that makes a wider window a SQL
+  // call rather than a sum of months). So the FIRST row wins — the reads are
+  // ordered month, audience, so that is deterministic — and the month carries
+  // a caveat saying part of it is filed elsewhere.
+  //
+  // I could not construct this state from the shipped writers (mergeMonthRows
+  // deletes the stale filling row when the key changes, and frozen months are
+  // never rewritten), so this is defence in depth. It is also the one shape in
+  // this layer that could not tell one row from two.
+  const splitMonths = new Set<string>()
   const denomByMonth = new Map<string, DenominatorPoint>()
   for (const row of mine.points) {
     const month = monthStartOf(row.month)
-    if (onAxis.has(month)) denomByMonth.set(month, { ...row, month })
+    if (!onAxis.has(month)) continue
+    if (denomByMonth.has(month)) { splitMonths.add(month); continue }
+    denomByMonth.set(month, { ...row, month })
   }
 
   const readingByMonth = new Map<string, NumeratorPoint>()
@@ -321,7 +340,9 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
     const month = monthStartOf(row.month)
     // A numerator row belongs to this line only if its audience is one of the
     // names the line has worn: a theme can hold rows in several audiences.
-    if (onAxis.has(month) && mineKeys.has(row.audience)) readingByMonth.set(month, { ...row, month })
+    if (!onAxis.has(month) || !mineKeys.has(row.audience)) continue
+    if (readingByMonth.has(month)) { splitMonths.add(month); continue }
+    readingByMonth.set(month, { ...row, month })
   }
 
   const hasReadings = input.readings != null
@@ -367,6 +388,13 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
       labels.push({
         kind: 'clustering_changed',
         text: 'Themes were re-grouped from this month, so a comparison across it is not like for like.',
+      })
+    }
+
+    if (splitMonths.has(month)) {
+      labels.push({
+        kind: 'split_keys',
+        text: 'Part of this month is filed under another name for this one, so the figure here is only part of it.',
       })
     }
 

@@ -319,6 +319,30 @@ describe('buildSeries · labels', () => {
     expect(thin).toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
   })
 
+  it('keeps one row per month and says so when a second one exists', () => {
+    // A renamed rival's months arrive from all its keys. A bare Map.set kept
+    // whichever came last and dropped the other with no signal, so the month
+    // drew a fraction of itself as fact. Summing overstates — videos are
+    // distinct and the two sets overlap — so the first row wins and the month
+    // carries a caveat.
+    const axis2 = monthAxis('2026-06-01', '2026-07-01')
+    const renames = [{ from: 'competitor:Topo', to: 'competitor:Topo Designs', at: '2026-06-15T00:00:00.000Z' }]
+    const s = buildSeries({
+      axis: axis2,
+      audience: 'competitor:Topo Designs',
+      renames,
+      denominators: [
+        den('2026-06-01', 182, { audience: 'competitor:Topo' }),
+        den('2026-06-01', 40, { audience: 'competitor:Topo Designs' }),
+        den('2026-07-01', 200, { audience: 'competitor:Topo Designs' }),
+      ],
+    })
+    const june = s.points[0]
+    expect(june.videos).toBe(182)
+    expect(kinds(june.labels)).toContain('split_keys')
+    expect(kinds(s.points[1].labels)).not.toContain('split_keys')
+  })
+
   it('names the unit the thin rule actually measures', () => {
     const wide = monthAxis('2025-10-01', '2026-09-01')
     const s = buildSeries({
