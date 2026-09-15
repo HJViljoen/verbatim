@@ -357,3 +357,16 @@ export const STATE_LABEL: Record<CalendarPointState, string> = {
   hollow: 'no conversation',
   filling: 'still filling',
 }
+
+/** The same five states in a table cell, where there is room for two words and
+ *  a blank cell is indistinguishable from a rendering failure. An em dash is
+ *  the cell's way of saying "nothing was said", which is what a hollow month
+ *  is; a below-floor month says "too few", because something WAS said and it
+ *  cannot be read. */
+export const STATE_SHORT: Record<CalendarPointState, string> = {
+  read: '',
+  below_floor: 'too few',
+  below_numerator: 'too few',
+  hollow: '—',
+  filling: 'filling',
+}
