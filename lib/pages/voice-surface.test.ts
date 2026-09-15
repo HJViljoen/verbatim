@@ -18,8 +18,8 @@ import {
   onCameraReach,
   pickAudience,
   platformShares,
+  repliesNote,
   searchRegistry,
-  unnamedShare,
   voiceSurfaceHref,
   type AudienceBlock,
   type CastBlock,
@@ -195,18 +195,26 @@ describe('moversNote', () => {
 })
 
 describe('heardLine', () => {
-  it('reads the registry for "first heard" and the drawn axis for "seen in"', () => {
-    expect(heardLine({ firstHeard: '2026-06-01', monthsSeen: 3, monthsDrawn: 3 }))
+  it('says "first heard" only where the axis reaches the beginning of the record', () => {
+    expect(heardLine({ firstHeard: '2026-06-01', axisFromRecordStart: true, monthsSeen: 3, monthsDrawn: 3 }))
       .toBe('first heard June 2026 · seen in 3 of 3 months drawn')
   })
 
-  it('says only what it can when the registry has no first sighting', () => {
-    expect(heardLine({ firstHeard: null, monthsSeen: 1, monthsDrawn: 2 }))
-      .toBe('seen in 1 of 2 months drawn')
+  it('says "first read here" where it does not, and says the record goes further back', () => {
+    // The claim the drawn months cannot support is not softened, it is not
+    // made: on "this month" the axis is one month long and nothing on it can
+    // establish when a theme was first said.
+    expect(heardLine({ firstHeard: '2026-09-01', axisFromRecordStart: false, monthsSeen: 1, monthsDrawn: 1 }))
+      .toBe('first read here in September 2026 · seen in 1 of 1 month drawn · the record reaches further back')
+  })
+
+  it('says only what it can when no drawn month carried a reading', () => {
+    expect(heardLine({ firstHeard: null, axisFromRecordStart: true, monthsSeen: 0, monthsDrawn: 2 }))
+      .toBe('seen in 0 of 2 months drawn')
   })
 
   it('agrees with itself about one month', () => {
-    expect(heardLine({ firstHeard: null, monthsSeen: 1, monthsDrawn: 1 })).toContain('1 of 1 month drawn')
+    expect(heardLine({ firstHeard: null, axisFromRecordStart: true, monthsSeen: 1, monthsDrawn: 1 })).toContain('1 of 1 month drawn')
   })
 })
 
@@ -255,23 +263,10 @@ describe('searchRegistry', () => {
   })
 })
 
-describe('unnamedShare', () => {
-  it('is the audience a persona was not named on', () => {
-    expect(unnamedShare([527, 374, 263], 1388)).toBe(16.1)
-  })
-
-  it('is null rather than 0 where there is no denominator', () => {
-    expect(unnamedShare([10], null)).toBeNull()
-    expect(unnamedShare([10], 0)).toBeNull()
-  })
-
-  it('refuses to print a negative remainder when the personas overlap past the month', () => {
-    // Personas are read on OVERLAPPING video sets; their counts can exceed the
-    // audience. A remainder computed from that would be negative, which is not
-    // a share of anything.
-    expect(unnamedShare([900, 900], 1000)).toBeNull()
-  })
-})
+// `unnamedShare` was removed with the mock's "No persona 16%" line. It is the
+// remainder of a partition, and a stored profile's groups do not partition
+// anything — Össur's five sum to 674 videos against a 388-video category
+// month. The block states the overlap instead; see CastPersona.videos.
 
 describe('fillingLine and daysInto', () => {
   it('says the month is still filling and how far in', () => {
@@ -305,6 +300,29 @@ describe('firstSentences', () => {
   })
 })
 
+describe('repliesNote', () => {
+  it('says the instrument\u2019s limit out loud when every reply is a Reddit reply', () => {
+    // Production, both tenants: 835 of 835 and 842 of 842. Reddit is the only
+    // source that records a reply at all.
+    expect(repliesNote({ comments: 11712, replies: 835, pct: 7.1, reddit: 835 }))
+      .toContain('Every reply we can see is a Reddit reply')
+  })
+
+  it('says the weaker thing where the platforms actually differ', () => {
+    expect(repliesNote({ comments: 9397, replies: 1972, pct: 21, reddit: 812 }))
+      .toContain('materially a Reddit signal')
+  })
+
+  it('does not claim it on a month with no replies at all', () => {
+    expect(repliesNote({ comments: 100, replies: 0, pct: 0, reddit: 0 }))
+      .toContain('materially a Reddit signal')
+  })
+
+  it('says the figure is not readable rather than printing nothing', () => {
+    expect(repliesNote(null)).toBe('How much of this month was argued rather than said once is not readable here.')
+  })
+})
+
 describe('audienceFigures', () => {
   const block = (over: Partial<AudienceBlock>): AudienceBlock => ({
     options: [], selected: 'industry-other', label: 'The category',
@@ -335,8 +353,9 @@ describe('audienceFigures', () => {
 
 describe('castMasthead', () => {
   const cast = (over: Partial<CastBlock>): CastBlock => ({
-    state: 'ready', personas: [], selected: null, denominator: 1388,
-    unnamedPct: 16, profileDate: '2026-09-13', stale: false,
+    state: 'ready', personas: [], selected: null, population: 3129,
+    overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
+    profileDate: '2026-09-13', stale: false,
     floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it · current state, not a trend.`,
     empty: null,
     ...over,

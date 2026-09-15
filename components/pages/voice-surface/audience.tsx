@@ -182,8 +182,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             {a.replies ? (
               <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
                 <span data-copy="figure">{a.replies.pct == null ? '—' : fmtPct(a.replies.pct)}</span> of this month’s comments were replies to another comment —{' '}
-                <span data-copy="figure">{fmtInt(a.replies.replies)} of {fmtInt(a.replies.comments)}</span>
-                {a.replies.reddit != null ? (
+                <span data-copy="figure">{fmtInt(a.replies.replies)} of {fmtInt(a.replies.comments)}</span>{a.replies.reddit != null ? (
                   <>, <span data-copy="figure">{fmtInt(a.replies.reddit)}</span> of them on Reddit</>
                 ) : null}.
               </p>

@@ -34,7 +34,14 @@ describe('voiceTheme', () => {
   })
 
   it('says when it was first heard and how many of the drawn months carried it', () => {
-    expect(draw()).toContain('first heard June 2026 · seen in 3 of 3 months drawn')
+    expect(draw()).toContain('first heard July 2026 · seen in 3 of 3 months drawn')
+  })
+
+  it('will not claim "first heard" on an axis that does not reach the record', () => {
+    const base = voiceFixture()
+    const text = draw({ ...base, theme: { ...base.theme, axisFromRecordStart: false } })
+    expect(text).toContain('first read here in July 2026')
+    expect(text).toContain('the record reaches further back')
   })
 
   it('heads the tone line as the AUDIENCE’s, because that is whose it is', () => {

@@ -57,6 +57,26 @@ describe('VoiceSurfacePage', () => {
     expect(markup).toContain('Who is saying what in this category?')
   })
 
+  it('gives no block a fixed height, so nothing on this page can be cut in silence', () => {
+    // The first production render of this page, drawn in row-spanned tiles,
+    // lost three of six quotes, every action link, the search box and three of
+    // five groups in the cast — `Tile` is overflow-hidden on a 116px row grid.
+    // None of these four blocks has a bounded height.
+    const markup = render(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    // `overflow-hidden` is not checked: the proportion bar clips its own
+    // segments to a rounded end, which is the primitive doing its job. What
+    // must not appear is a ROW SPAN — the thing that fixes a box's height.
+    expect(markup).not.toMatch(/data-row=/)
+    expect(markup).not.toMatch(/row-span-/)
+  })
+
+  it('prints everything the blocks hold — the evidence at the bottom of the longest one included', () => {
+    const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
+    expect(text).toContain('Track this →')
+    expect(text).toContain('Have we seen this before?')
+    expect(text).toContain('A video can carry more than one group')
+  })
+
   it('carries the record band under the bar', () => {
     const text = renderText(<VoiceSurfacePage data={voiceFixture()} params={{}} />)
     expect(text).toContain('4 updates · 2,359 videos')

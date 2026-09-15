@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
@@ -25,14 +26,40 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
   voiceCast,
 ]
 
-/** How tall each block's tile is, in the grid's 116px row units. A block that
- *  grows past its box scrolls with the page — the one-screen rule retired in
- *  2026-08 (MASTER rule 7). */
-const ROWS: Record<string, number> = {
-  'voice.audience': 2,
-  'voice.moved': 4,
-  'voice.theme': 6,
-  'voice.cast': 4,
+/**
+ * NO FIXED-HEIGHT TILES ON THIS PAGE, and the first production render is why.
+ *
+ * `PageGrid` is `auto-rows-[116px]` and `Tile` is `overflow-hidden`, so a tile
+ * is exactly as tall as the row span it asks for and everything past that is
+ * CUT — not scrolled, not shrunk, not marked. Drawn that way, Sealand's page
+ * lost three of the theme's six quotes, the spoken line, the on-screen text,
+ * all four actions, the search box and three of the five groups in the cast,
+ * with nothing on the page saying anything was missing. That is the worst
+ * failure this product has: a surface quietly showing less than it read.
+ *
+ * Not one of these four blocks has a bounded height. VO1 grows with the kinds
+ * (three today, ten when M5 lands); VO2 grows with the arms and doubles when a
+ * reader expands it — four arms of ten rows is forty; VO3 grows with the
+ * quotes and the evidence under them; VO4 grows with the cast. MASTER rule 7
+ * retired the one-screen rule in August precisely so a page could scroll, and
+ * a block whose height is its content's belongs in a box that grows. So the
+ * page is a column of full-width sections wearing the tile's own surface —
+ * one white surface, the ambient shadow, no border — rather than cells in a
+ * fixed grid.
+ */
+function GrowingTile({ children }: { children: ReactNode }) {
+  return (
+    <section
+      // print mode addresses a tile by these two attributes rather than by the
+      // xl: span classes, which do not fire in Chrome's print media
+      // (app/globals.css §Print mode).
+      data-tile=""
+      data-col={12}
+      className="flex min-w-0 flex-col gap-2.5 rounded-lg bg-tile px-4 py-3.5 text-[12.5px] leading-[1.45] shadow-tile"
+    >
+      {children}
+    </section>
+  )
 }
 
 /**
@@ -77,13 +104,9 @@ export function VoiceSurfacePage({
         context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
         record={{ line: data.record.line, lines: data.record.lines }}
       />
-      <PageGrid>
-        {VOICE_BLOCKS.map((block) => (
-          <Tile key={block.key} col={12} row={ROWS[block.key] ?? 2}>
-            {block.render(data, 'app', ctx)}
-          </Tile>
-        ))}
-      </PageGrid>
+      {VOICE_BLOCKS.map((block) => (
+        <GrowingTile key={block.key}>{block.render(data, 'app', ctx)}</GrowingTile>
+      ))}
       {data.notes.length > 0 ? (
         <p className="m-0 text-[11px] text-muted-foreground">
           {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading

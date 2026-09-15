@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockProportion } from '@/components/blocks/bars'
 import { BlockQuote } from '@/components/blocks/quote'
 import { CrowdFigure } from '@/components/crowd-figure'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { CastPersona, VoiceSurfaceData } from '@/lib/pages/voice-surface'
@@ -41,8 +41,12 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
       <span className={email ? undefined : 'text-[13px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink } : undefined}>
         {persona.name}
       </span>{' '}
+      {/* A COUNT, AND NO SHARE — see CastPersona.videos. The profile is
+          written over a run's whole insight population, across every audience
+          and whatever months that run had read, and its groups overlap; there
+          is no denominator this count is a proper part of. */}
       <span data-copy="figure" className={email ? undefined : 'font-mono text-[12px] tabular-nums'}>
-        {persona.pct == null ? '—' : fmtPct(persona.pct)} {fmtInt(persona.videos)} of {fmtInt(persona.denominator ?? 0)}
+        {fmtInt(persona.videos)} videos
       </span>
     </>
   )
@@ -51,24 +55,31 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
     <>
       <div>{head}</div>
       {persona.oneLiner ? (
-        // The model's own words about the group. Marked as prose: rule (a)
-        // checks them bare, so a digit here would be a number a model typed.
-        <p data-copy="prose" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
+        // THE MODEL'S OWN WORDS ABOUT THE GROUP, so `subject` and not `prose`.
+        // PROSE_POLICY (lib/prose/scrub.ts) marks `pass_e_persona` 'digits' and
+        // never 'direction', because in this slot a direction word is about the
+        // people rather than about a reading — production says so: Össur's cast
+        // is described as helping people "keep dignity and momentum" and
+        // stopped by "pain, falls, slow progress", and Sealand's by an
+        // "emotional pull [that] fades fast". The digit half of that policy is
+        // enforced at WRITE time, where the scrubber is wired, rather than
+        // here.
+        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
           {persona.oneLiner}
         </p>
       ) : null}
       {persona.wants ? (
-        <p data-copy="prose" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>Drives</span> {persona.wants}
         </p>
       ) : null}
       {persona.blockers ? (
-        <p data-copy="prose" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>Stops</span> {persona.blockers}
         </p>
       ) : null}
       {persona.triggers ? (
-        <p data-copy="prose" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>What made them look</span> {persona.triggers}
         </p>
       ) : null}
@@ -116,7 +127,7 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       title: voiceCast.title,
       question: voiceCast.question,
       mode,
-      meta: c.denominator != null ? `${fmtInt(c.denominator)} videos this month` : undefined,
+      meta: c.population != null ? `read over ${fmtInt(c.population)} comments' worth of insight` : undefined,
       footer: email
         ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
         : <Link href={href} className="hover:underline">{c.floorNote}</Link>,
@@ -139,11 +150,13 @@ export const voiceCast: Block<VoiceSurfaceData> = {
             </p>
           ) : null}
           {c.personas.map((p) => <Persona key={p.key} persona={p} mode={mode} />)}
-          {c.unnamedPct != null ? (
-            <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-              No group was named on <span data-copy="figure">{fmtPct(c.unnamedPct)}</span> of this audience’s videos.
-            </p>
-          ) : null}
+          {/* NOT the mock's "No persona 16% of category videos". That figure is
+              the remainder of a partition, and these groups do not partition
+              anything — a video can carry two of them. The overlap is stated
+              instead of a remainder being taken from it. */}
+          <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+            {c.overlapNote}
+          </p>
         </div>
       </BlockFrame>
     )
@@ -151,12 +164,12 @@ export const voiceCast: Block<VoiceSurfaceData> = {
 
   figures(data): FigureTable {
     const out: FigureTable = {}
-    // The largest group only. The cast is a description, not a measurement
-    // ladder, and declaring every persona's share would spend the page's
+    // The largest group only, as a COUNT. The cast is a description, not a
+    // measurement ladder, and declaring every group would spend the page's
     // number budget on the one block that is explicitly "current state".
     const lead = [...data.cast.personas].sort((a, b) => b.videos - a.videos)[0]
-    if (lead && lead.pct != null) {
-      out.cast_lead_share = { value: lead.pct, unit: 'pct', label: `${lead.name}, share of this audience's videos` }
+    if (lead) {
+      out.cast_lead_videos = { value: lead.videos, unit: 'videos', label: `videos the group "${lead.name}" was read on` }
     }
     return out
   },

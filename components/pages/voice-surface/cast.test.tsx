@@ -23,8 +23,14 @@ describe('voiceCast', () => {
     }
   })
 
-  it('prints each group against the month it was read in', () => {
-    expect(draw()).toContain('The one-bag commuter 38% 527 of 1,388')
+  it('prints the count and no share — there is no denominator the count is part of', () => {
+    const text = draw()
+    expect(text).toContain('The one-bag commuter 527 videos')
+    expect(text).not.toMatch(/527 of /)
+  })
+
+  it('says the groups overlap instead of taking a remainder from them', () => {
+    expect(draw()).toContain('A video can carry more than one group, so these counts overlap and do not add up to a whole.')
   })
 
   it('says the group floor on the block rather than implying it', () => {
@@ -40,8 +46,9 @@ describe('voiceCast', () => {
     expect(draw({ ...base, cast: { ...base.cast, stale: true } })).toContain('a later update has landed since')
   })
 
-  it('names the share no group was named on', () => {
-    expect(draw()).toContain('No group was named on 16% of this audience’s videos')
+  it('never prints the mock\u2019s "No persona 16%" line — it is a remainder of a partition these groups are not', () => {
+    expect(draw()).not.toMatch(/No group was named on/)
+    expect(draw()).not.toMatch(/No persona/)
   })
 
   it('keeps the crowd figure — decoration the owner chose, once per group', () => {
@@ -76,10 +83,10 @@ describe('voiceCast', () => {
     expect(draw(refusedVoiceFixture())).toContain('A group is named only where at least 3 videos carry it')
   })
 
-  it('declares one figure — the cast is a description, not a ladder', () => {
+  it('declares one figure, and it is a count — the cast is a description, not a ladder', () => {
     const table = blockAnswers(voiceCast, voiceFixture()).figures
-    expect(Object.keys(table)).toEqual(['cast_lead_share'])
-    expect(table.cast_lead_share.value).toBe(38)
+    expect(Object.keys(table)).toEqual(['cast_lead_videos'])
+    expect(table.cast_lead_videos).toMatchObject({ value: 527, unit: 'videos' })
   })
 
   it('declares no verdicts at all: current state carries no comparison', () => {

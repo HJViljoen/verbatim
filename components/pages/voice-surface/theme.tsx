@@ -89,7 +89,12 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
   const points = t.points.filter((p) => t.axis.includes(p.month))
   if (points.length === 0) return null
   return {
-    label: t.label,
+    // THE CHART'S LABEL IS SHORTENED, THE BLOCK'S IS NOT. `CalendarLine` draws
+    // the series name at the right-hand end of the line, outside the plot area
+    // — so a long theme label runs off the tile. Össur's "Admiration for
+    // personal resilience" did, in the production render. The full label is
+    // the heading two lines above; this one only has to identify the line.
+    label: t.label.length > 28 ? `${t.label.slice(0, 27).trimEnd()}…` : t.label,
     color: 'var(--cat)',
     endNote: t.n != null ? `of ${fmtInt(t.n)}` : undefined,
     points: points.map((p) => ({
@@ -163,11 +168,12 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               {t.label}
             </h3>
             {t.description ? (
-              // THE MODEL'S OWN WORDS, marked as prose so rule (a) checks them
-              // bare — a digit inside this sentence would be a number a model
-              // typed (lib/calibration.ts's policy table: a theme's label and
-              // description are never direction-scrubbed either).
-              <p data-copy="prose" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
+              // THE MODEL'S OWN WORDS ABOUT THE SUBJECT, so `subject` and not
+              // `prose`: PROSE_POLICY marks `pass_b_theme` 'none' — a theme's
+              // label and description are the one slot the product never
+              // direction-scrubs, because a direction word in them is about
+              // the thing rather than about a reading of it.
+              <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
                 {t.description}
               </p>
             ) : null}
@@ -198,7 +204,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           </div>
 
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-            {heardLine({ firstHeard: t.firstHeard, monthsSeen: t.monthsSeen, monthsDrawn: t.monthsDrawn })}
+            {heardLine({ firstHeard: t.firstHeard, axisFromRecordStart: t.axisFromRecordStart, monthsSeen: t.monthsSeen, monthsDrawn: t.monthsDrawn })}
             {t.onCamera ? <> · <span data-copy="figure">{t.onCamera}</span></> : null}
           </p>
 
@@ -211,6 +217,11 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                 mode={mode}
                 ctx={ctx}
                 format={(v) => fmtPct(v)}
+                // A LINE, NOT A POSTER. The default draws tall enough to
+                // dominate the pane; the mock's own chart is a band under the
+                // figure, and the six quotes below it are the evidence the
+                // block exists for.
+                height={150}
                 label={`${t.label}, share of ${t.audienceLabel.toLowerCase()} videos, by month`}
               />
             </Line>

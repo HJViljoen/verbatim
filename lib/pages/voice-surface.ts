@@ -255,9 +255,20 @@ export interface ThemeBlock {
   prevalence: PrevalenceTier | null
   verdict: Verdict | null
   direction: Direction | null
-  /** The month this theme was first read in, on the record — `theme_registry.
-   *  first_seen_at`, which reaches back past the drawn axis. */
+  /** The first month ON THE DRAWN AXIS that carried a reading for this theme.
+   *
+   *  NOT `theme_registry.first_seen_at`, which is when a RUN first opened the
+   *  registry entry — a delivery date, and a period is dated by the comment
+   *  and never by the run (AGENTS.md). The two disagree in production and the
+   *  page printed the disagreement: Sealand's lead theme reads in July and
+   *  August and its registry entry was opened in September, so the line said
+   *  "first heard September 2026 · seen in 3 of 3 months". */
   firstHeard: string | null
+  /** Whether the drawn axis reaches the beginning of this tenant's readable
+   *  record. Only then may `firstHeard` be called first heard AT ALL rather
+   *  than first heard on the months in front of the reader — a claim the drawn
+   *  months cannot support is not softened, it is not made (WP11's rule). */
+  axisFromRecordStart: boolean
   /** Months on the drawn axis it carried a reading in, and how many were drawn. */
   monthsSeen: number
   monthsDrawn: number
@@ -292,10 +303,27 @@ export interface CastPersona {
   key: string
   name: string
   oneLiner: string
-  /** Videos this persona was read on, and the month's audience denominator. */
+  /**
+   * Videos this group was read on, as Pass E counted them — A COUNT, AND NO
+   * SHARE.
+   *
+   * The design asks for "38 of 469": the group against the month's analysed
+   * population. There is no such denominator to divide by, and the first cut
+   * of this block invented one and printed nonsense. A stored profile is
+   * written over the RUN's whole insight population, across every audience and
+   * across whatever months that run had read — Össur's five groups sum to 674
+   * videos against a September category of 388 — and the groups overlap, so
+   * they do not partition anything either. Dividing a run-wide, multi-month,
+   * overlapping count by one audience's month gave "First-time buyer 59.3%"
+   * beside "Caretaker 59.5%", two numbers that cannot both be shares of the
+   * same thing.
+   *
+   * A per-month persona reading would fix it and is a Pass E change this phase
+   * does not make — the same boundary decision W draws around `dropped`. Until
+   * then the count is printed and the share is not, and the block says which
+   * update the count was read on.
+   */
   videos: number
-  denominator: number | null
-  pct: number | null
   wants: string
   blockers: string
   triggers: string
@@ -313,9 +341,14 @@ export interface CastBlock {
   state: 'ready' | 'no_personas' | 'not_run'
   personas: CastPersona[]
   selected: string | null
-  denominator: number | null
-  /** The share of the audience's videos no persona was named on. */
-  unnamedPct: number | null
+  /** The insights the profile was read over — its own population, named as
+   *  what it is. Null on a profile written before the column existed. */
+  population: number | null
+  /** Said on the block: these groups overlap, so their counts do not add up to
+   *  a whole and no remainder can be taken from them. The mock's "No persona
+   *  16%" line is exactly that remainder, and it is omitted for the same
+   *  reason the share is. */
+  overlapNote: string
   /** The update the stored profile is from, and whether it lags the newest. */
   profileDate: string | null
   stale: boolean
@@ -452,22 +485,29 @@ export function moversNote(input: {
 }
 
 /**
- * "first heard June · seen in 3 of 3 months", as the design writes it.
+ * "first heard June · seen in 3 of 3 months", as the design writes it — and
+ * only where the drawn months can support the first half of it.
  *
- * TWO DIFFERENT CLAIMS IN ONE LINE, and they rest on two different records.
- * "First heard" is `theme_registry.first_seen_at` — the day the registry
- * opened the entry — and it reaches back past whatever axis is drawn, which is
- * the point of a registry. "Seen in N of M" counts the DRAWN months, because
- * that is the only span the reader can check against the line beside it.
+ * BOTH CLAIMS COME OFF THE DRAWN AXIS, which is the only span a reader can
+ * check against the line beside them. "First heard" therefore states what it
+ * is: where the axis begins at the tenant's own record, the first readable
+ * month IS the first time this was said; where it does not, the line says the
+ * theme was first read HERE and that the record goes further back. The
+ * registry's `first_seen_at` is not used for either — it is the day a RUN
+ * opened the entry, and a period is dated by the comment (AGENTS.md).
  */
 export function heardLine(input: {
   firstHeard: string | null
+  axisFromRecordStart: boolean
   monthsSeen: number
   monthsDrawn: number
 }): string {
   const seen = `seen in ${fmtInt(input.monthsSeen)} of ${fmtInt(input.monthsDrawn)} ${input.monthsDrawn === 1 ? 'month' : 'months'} drawn`
   if (!input.firstHeard) return seen
-  return `first heard ${longMonth(input.firstHeard)} ${input.firstHeard.slice(0, 4)} · ${seen}`
+  const month = `${longMonth(input.firstHeard)} ${input.firstHeard.slice(0, 4)}`
+  return input.axisFromRecordStart
+    ? `first heard ${month} · ${seen}`
+    : `first read here in ${month} · ${seen} · the record reaches further back`
 }
 
 /**
@@ -528,6 +568,25 @@ export function daysInto(month: string, now: string): number | null {
   if (at >= next) return null
   if (at < start) return 0
   return Number(at.slice(8, 10))
+}
+
+/**
+ * What the replies figure actually is, said on the block.
+ *
+ * MEASURED, NOT ASSUMED. On both tenants every reply this month is a Reddit
+ * reply — 835 of 835 on Össur, 842 of 842 on Sealand — because Reddit is the
+ * only gather that records one at all: the other three platforms' comments
+ * come back with `is_reply` false whatever the thread did (checked read-only,
+ * four platforms, both tenants). "Materially a Reddit signal" understates that
+ * to the point of being wrong, so when the counts show the instrument's limit
+ * the line says it out loud instead.
+ */
+export function repliesNote(replies: RepliesRead | null): string {
+  if (!replies) return 'How much of this month was argued rather than said once is not readable here.'
+  if (replies.reddit != null && replies.replies > 0 && replies.reddit === replies.replies) {
+    return 'Every reply we can see is a Reddit reply: Reddit is the only source that records one, so this counts arguing on Reddit and nothing else. Counted across every audience — a comment carries no audience of its own.'
+  }
+  return 'Counted across every audience: a comment carries no audience of its own, and replies are materially a Reddit signal.'
 }
 
 /** The figures VO1 declares, by token — what a model may name about the
@@ -852,9 +911,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     kindsNote,
     reddit,
     replies,
-    repliesNote: replies
-      ? 'Counted across every audience: a comment carries no audience of its own, and replies are materially a Reddit signal.'
-      : 'How much of this month was argued rather than said once is not readable here.',
+    repliesNote: repliesNote(replies),
   }
 
   // ── the movers ──────────────────────────────────────────────────────────
@@ -950,7 +1007,8 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     prevMonth,
     thin: thin,
     denominator: selectedDenom?.videos ?? null,
-    redditVideos: platformMix.find((p) => p.platform === 'reddit')?.videos ?? (selectedDenom ? 0 : null),
+    axisFromRecordStart: started.from != null && monthStartOf(axis[0]) <= monthStartOf(started.from),
+    reading,
   })
 
   // ── the cast ────────────────────────────────────────────────────────────
@@ -959,10 +1017,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     insight_population: number | null; theme_population: number | null
   }>(profileRes, 'voice.consumerProfile')
   const newestRun = row<{ id: string }>(newestRunRes, 'voice.newestRun')
-  const cast = await buildCast({
-    supabase, params, profile, newestRunId: newestRun?.id ?? null,
-    denominator: selectedDenom?.videos ?? null,
-  })
+  const cast = await buildCast({ supabase, params, profile, newestRunId: newestRun?.id ?? null })
 
   // ── the record ──────────────────────────────────────────────────────────
   const pageVerdicts = [
@@ -1029,7 +1084,8 @@ interface ThemeInput {
   statsRows: StoredStatsRow[] | null
   thin: boolean
   denominator: number | null
-  redditVideos: number | null
+  axisFromRecordStart: boolean
+  reading: ReadingHandle
 }
 
 /** VO3 — a theme in full. Everything a reader needs to check the number above
@@ -1062,7 +1118,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     audienceLabel: audienceLabel(audience),
     k: null, n: null, pct: null, prevalence: null,
     verdict: null, direction: null,
-    firstHeard: null, monthsSeen: 0, monthsDrawn: axis.length,
+    firstHeard: null, axisFromRecordStart: input.axisFromRecordStart, monthsSeen: 0, monthsDrawn: axis.length,
     axis, points: [],
     tone: null,
     toneNote: null,
@@ -1083,7 +1139,12 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
 
   const label = input.registry?.canonical_label ?? input.series.objectLabel ?? input.openId
   const points = input.series.points
-  const readable = points.filter((p) => p.k != null && p.k > 0)
+  // ON THE DRAWN AXIS, and only there. The page reads one month wider than it
+  // draws (the month-on-month comparison needs it), so counting readable
+  // months over the read axis printed "seen in 2 of 1 month drawn" on the
+  // default horizon — a line that cannot be true of anything.
+  const drawn = new Set(input.axis)
+  const drawnReadable = points.filter((p) => drawn.has(p.month) && p.k != null && p.k > 0)
 
   // ---- the tone line: the audience's mood around this theme ----
   // THE AUDIENCE'S, NOT THE THEME'S, AND THE HEADING SAYS SO. Sentiment is
@@ -1210,10 +1271,29 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     }
   }
 
+  // THIS THEME'S OWN REDDIT COUNT, not the audience's. Read straight off the
+  // theme's month row: the first cut of this line divided by the AUDIENCE's
+  // Reddit videos (66 of Össur's 388) against the theme's 34, and printed
+  // "read from 0 of 34 videos" on every theme on the page — a refusal
+  // manufactured out of the wrong denominator.
+  let themeReddit: number | null = null
+  try {
+    const mixRes = await input.reading.client
+      .from('month_theme_readings')
+      .select('platform_mix')
+      .eq('client_id', input.clientId).eq('month', input.month)
+      .eq('audience', input.audience).eq('theme_id', input.openId)
+      .maybeSingle()
+    const mix = row<{ platform_mix: Record<string, number> | null }>(mixRes, 'voice.themeMix')?.platform_mix ?? null
+    if (mix) themeReddit = Number(mix.reddit ?? 0)
+  } catch (error) {
+    if (!isMissingMonthTable(error)) throw error
+  }
+
   const notes: string[] = []
   if (!input.themedRunId) notes.push('No update has grouped this month’s conversation into themes yet, so the evidence behind this theme cannot be shown.')
   if (!spoken && !onScreen && input.themedRunId) notes.push('No video behind this theme carries readable speech or on-screen text.')
-  const reach = onCameraReach({ videos: input.mover?.k ?? 0, reddit: input.redditVideos })
+  const reach = onCameraReach({ videos: input.mover?.k ?? 0, reddit: themeReddit })
   if (onCamera && reach) notes.push(reach)
 
   return {
@@ -1229,8 +1309,9 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     prevalence: input.mover ? prevalenceTier(input.mover.k, input.mover.n) : null,
     verdict: input.mover?.verdict ?? null,
     direction: input.mover?.direction ?? null,
-    firstHeard: input.registry?.first_seen_at ? monthStartOf(input.registry.first_seen_at) : null,
-    monthsSeen: readable.length,
+    firstHeard: drawnReadable[0]?.month ?? null,
+    axisFromRecordStart: input.axisFromRecordStart,
+    monthsSeen: drawnReadable.length,
     monthsDrawn: axis.length,
     axis,
     points,
@@ -1273,7 +1354,6 @@ interface CastInput {
     insight_population: number | null; theme_population: number | null
   } | null
   newestRunId: string | null
-  denominator: number | null
 }
 
 /**
@@ -1287,15 +1367,12 @@ interface CastInput {
  * call, as the page's one piece of decoration.
  */
 async function buildCast(input: CastInput): Promise<CastBlock> {
-  // NOT the mock's "current state, not a trend": "trend" is on the product's
-  // own direction-word list (lib/calibration.ts), and rule (c) refuses one
-  // outside a node carrying a band. The sentence says the same thing without
-  // borrowing the vocabulary of the comparison it is refusing to make.
   const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it · this month as it stands, never compared with another month.`
+  const overlapNote = 'A video can carry more than one group, so these counts overlap and do not add up to a whole.'
   if (!input.profile) {
     return {
-      state: 'not_run', personas: [], selected: null, denominator: input.denominator,
-      unnamedPct: null, profileDate: null, stale: false, floorNote,
+      state: 'not_run', personas: [], selected: null, population: null,
+      overlapNote, profileDate: null, stale: false, floorNote,
       empty: 'Reading who is talking is not switched on for this workspace yet.',
     }
   }
@@ -1304,18 +1381,18 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     .filter((p): p is Persona => Boolean(p))
   if (personas.length === 0) {
     return {
-      state: 'no_personas', personas: [], selected: null, denominator: input.denominator,
-      unnamedPct: null, profileDate: input.profile.run_date, stale: false, floorNote,
+      state: 'no_personas', personas: [], selected: null,
+      population: input.profile.insight_population ?? null,
+      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote,
       empty: 'Too little conversation in this update to describe who is talking.',
     }
   }
 
-  // One voice per persona, from the quote the persona already cites. Read by
-  // evidence id off the base table so a row a newer in-flight update has
+  // One voice per group, from the evidence the group already cites. Read by
+  // evidence id off the BASE table so a row a newer in-flight update has
   // superseded still resolves (AGENTS.md).
-  const wanted = personas.map((p) => p.insightIds.slice(0, 4))
-  const ids = [...new Set(wanted.flat())]
-  const quoteByInsight = new Map<string, { id: string; quote: string; platform: string | null }>()
+  const ids = [...new Set(personas.flatMap((p) => p.insightIds.slice(0, 4)))]
+  const quoteByInsight = new Map<string, { id: string; quote: string }>()
   if (ids.length > 0) {
     const res = await input.supabase
       .from('insight_evidence')
@@ -1325,7 +1402,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     for (const ev of readRows<EvidenceRow>(res, 'voice.castEvidence')) {
       if (ev.redacted || !ev.quote) continue
       if (quoteByInsight.has(ev.audience_insight_id)) continue
-      quoteByInsight.set(ev.audience_insight_id, { id: ev.id, quote: cleanQuote(ev.quote), platform: null })
+      quoteByInsight.set(ev.audience_insight_id, { id: ev.id, quote: cleanQuote(ev.quote) })
     }
   }
   const readings = await readTranslations(input.supabase, [...quoteByInsight.values()].map((q) => q.quote))
@@ -1340,14 +1417,12 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
       name: p.name,
       oneLiner: p.oneLiner,
       videos: p.sourceVideoCount,
-      denominator: input.denominator,
-      pct: pctOf(p.sourceVideoCount, input.denominator),
       wants: p.wants,
       blockers: p.blockers,
       triggers: p.triggers,
       platformMix: platformShares(mix, mixTotal > 0 ? mixTotal : null),
       quote: hit ? { ref: quoteRef.evidence(hit.id), text: hit.quote, ...readingOf(readings, hit.quote) } : null,
-      quoteCite: hit ? 'one of this group’s own comments' : null,
+      quoteCite: hit ? 'one of this group\u2019s own comments' : null,
       selected: p.key === selectedKey,
       href: voiceSurfaceHref(input.params, { persona: p.key }),
     }
@@ -1357,8 +1432,8 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     state: 'ready',
     personas: cast,
     selected: selectedKey,
-    denominator: input.denominator,
-    unnamedPct: unnamedShare(cast.map((c) => c.videos), input.denominator),
+    population: input.profile.insight_population ?? null,
+    overlapNote,
     profileDate: input.profile.run_date,
     stale: Boolean(input.newestRunId) && input.profile.run_id !== input.newestRunId,
     floorNote,
