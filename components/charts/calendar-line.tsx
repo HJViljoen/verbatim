@@ -131,6 +131,11 @@ export function CalendarLine({
     { min: g.top + 4, max: g.baseline },
   )
   const showLegend = legend && (series.length >= 2 || states.length > 0)
+  // The gutter tokens are drawn in the ENTITY's colour, so the legend swatch is
+  // too — while there is one entity to be. With several lines on the axis no
+  // single colour is the right one and the swatch goes neutral, which is also
+  // the only reading that is true of all of them.
+  const tokenColor = series.length === 1 ? series[0].color : 'var(--muted-foreground)'
 
   // A month nobody has a reading for gets a fainter label, the way the mock
   // draws April: the axis still says the month happened.
@@ -164,7 +169,7 @@ export function CalendarLine({
           ))}
           {states.map((state) => (
             <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <LegendToken state={state} />
+              <LegendToken state={state} color={tokenColor} />
               {STATE_LABEL[state]}
             </span>
           ))}
@@ -418,16 +423,24 @@ function FillingBar({
   )
 }
 
-/** The legend swatch for a gutter token — the same shape the chart draws, so a
- *  reader matches them by eye rather than by caption. */
-function LegendToken({ state }: { state: 'below_floor' | 'below_numerator' | 'filling' | 'read' | 'hollow' }) {
+/** The legend swatch for a gutter token — the same shape AND the same colour
+ *  the chart draws, so a reader matches them by eye rather than by caption. The
+ *  mock rings the below-floor token in the entity's own green
+ *  (`box-shadow: inset 0 0 0 1.5px #0E8A5F`), and the chart does; a legend
+ *  ringed in grey beside it is a different mark.
+ *
+ *  The filling swatch is the one place the legend cannot be literal: the chart's
+ *  bar is the entity colour at `opacity .14` over 150px of plot, and .14 over an
+ *  8px swatch is nothing at all. It is drawn at .3, which is the same colour at
+ *  the smallest opacity that survives the size. */
+function LegendToken({ state, color }: { state: 'below_floor' | 'below_numerator' | 'filling' | 'read' | 'hollow'; color: string }) {
   if (state === 'below_floor') {
-    return <span className="size-2 rounded-full bg-tile ring-[1.5px] ring-inset ring-foreground/60" aria-hidden />
+    return <span className="size-2 rounded-full bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
   }
   if (state === 'below_numerator') {
-    return <span className="size-2 bg-tile ring-[1.5px] ring-inset ring-foreground/60" aria-hidden />
+    return <span className="size-2 bg-tile" style={{ boxShadow: `inset 0 0 0 1.5px ${color}` }} aria-hidden />
   }
-  return <span className="h-2 w-2.5 rounded-[1px] bg-foreground/15" aria-hidden />
+  return <span className="h-2 w-2.5 rounded-[1px]" style={{ background: color, opacity: 0.3 }} aria-hidden />
 }
 
 /** "Apr" — the axis is already dated by the run of months, so the year is

@@ -149,6 +149,13 @@ describe('CalendarLine', () => {
     expect(words).toContain('below the floor')
   })
 
+  it('draws its gutter swatches in the colour the chart draws the tokens in', () => {
+    const markup = render(CalendarLine({ axis: AXIS, series: [you] }))
+    // The mock rings the below-floor token in the entity's own colour.
+    expect(markup).toContain('inset 0 0 0 1.5px var(--you)')
+    expect(markup).toContain('background:var(--you);opacity:0.3')
+  })
+
   it('draws no legend for one ordinary series with nothing to explain', () => {
     const one: CalendarSeries = { label: 'Category', color: 'var(--cat)', points: [p('2026-08-01', 20), p('2026-09-01', 22)] }
     const markup = render(CalendarLine({ axis: monthAxis('2026-08-01', '2026-09-01'), series: [one] }))
