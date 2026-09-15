@@ -309,7 +309,7 @@ export function flagRows(input: FlagRowInput): Record<string, unknown>[] {
     // a reader of one row is never handed half a sentence.
     explanation: input.explanation ? explanationJson(input.explanation) : null,
     explanation_model: input.explanation && !input.explanation.fallback ? input.explanationModel ?? null : null,
-    quote_refs: (input.quoteRefs?.get(`${flag.kind} ${flag.id}`) ?? input.explanation?.quotes ?? []).map((q) => ({
+    quote_refs: (input.quoteRefs?.get(objectKey(flag.kind, flag.id)) ?? input.explanation?.quotes ?? []).map((q) => ({
       ref: q.ref,
       ...(q.context ? { context: q.context } : {}),
     })),
@@ -317,7 +317,28 @@ export function flagRows(input: FlagRowInput): Record<string, unknown>[] {
   }))
 }
 
-const regimeKey = (flag: AnomalyRow): string => `${flag.kind} ${flag.id}`
+/**
+ * The one key a flagged object is held under in every map this step passes
+ * around — `regimes`, `quoteRefs` — and the one a later caller has to be able
+ * to build for itself.
+ *
+ * IT IS A PLAIN, VISIBLE SEPARATOR ON PURPOSE. The first version used U+0000,
+ * which made this file and its test BINARY to git and invisible to grep: a
+ * diff showed "Bin 0 -> 12966 bytes" instead of 26 tests, ripgrep skipped the
+ * file in every repo-wide sweep, and a column name that did not exist survived
+ * review inside it. The repo already carries that lesson once —
+ * lib/pipeline/ai-log.ts:44-49, where one U+0000 400'd an ai_call_log insert
+ * and silently cost the ledger a paid-for row.
+ *
+ * `::` cannot collide: `kind` is one of four fixed slugs that contain no
+ * colon, so the first `::` always delimits, whatever a rival's free-text name
+ * holds after it.
+ */
+export function objectKey(kind: string, id: string): string {
+  return `${kind}::${id}`
+}
+
+const regimeKey = (flag: AnomalyRow): string => objectKey(flag.kind, flag.id)
 
 /** The interpretation as it is stored: the sentences with their figure tokens
  *  intact, who wrote them, and what the scrubbers took out. Never a comment's
@@ -541,9 +562,9 @@ async function candidateQuotes(
     }
     const wantedKinds = new Set(kinds)
     for (const i of insights) {
-      if (i.category && wantedKinds.has(i.category)) attach(i.id, `kind ${i.category}`)
+      if (i.category && wantedKinds.has(i.category)) attach(i.id, objectKey('kind', i.category))
       const audience = i.source_video_id ? rivalVideos.get(i.source_video_id) : undefined
-      if (audience) attach(i.id, `rival ${audience}`)
+      if (audience) attach(i.id, objectKey('rival', audience))
     }
   }
 
@@ -559,7 +580,7 @@ async function candidateQuotes(
         .in('subject_id', subjects)
         .order('audience_insight_id', { ascending: true }),
     )
-    for (const m of members) attach(m.audience_insight_id, `subject ${m.subject_id}`)
+    for (const m of members) attach(m.audience_insight_id, objectKey('subject', m.subject_id))
   }
 
   if (themes.length > 0) {
@@ -572,7 +593,7 @@ async function candidateQuotes(
         .in('registry_id', themes)
         .order('registry_id', { ascending: true }),
     )
-    for (const o of observations) for (const id of o.member_insight_ids ?? []) attach(id, `theme ${o.registry_id}`)
+    for (const o of observations) for (const id of o.member_insight_ids ?? []) attach(id, objectKey('theme', o.registry_id))
   }
 
   const insightIds = [...insightToObjects.keys()]
@@ -586,14 +607,14 @@ async function candidateQuotes(
     for (const q of quotes) {
       if (!q.commentId || !commentIds.has(q.commentId)) continue
       const order = rank.get(q.commentId) ?? Number.MAX_SAFE_INTEGER
-      const objectKey = [...objects][0]
+      const belongsTo = [...objects][0]
       const held = best.get(q.commentId)
       if (!held || order < held.order) {
         best.set(q.commentId, {
           text: q.quote.replace(/\s+/g, ' ').trim(),
           context: platformOf.get(q.commentId) ?? 'unknown',
           ref: q.commentId,
-          objectKey,
+          objectKey: belongsTo,
           order,
         })
       }
@@ -978,10 +999,10 @@ export async function buildReading(
   // subject's is the judge that decided its membership.
   const regimes = new Map<string, BaselineRegime>()
   for (const [id, r] of regimesByObject(themeMonths, (row) => (row as { theme_id?: string }).theme_id ?? null, (row) => row.clustering_key, months)) {
-    regimes.set(`theme ${id}`, r)
+    regimes.set(objectKey('theme', id), r)
   }
   for (const [id, r] of regimesByObject(subjectMonths, (row) => (row as { subject_id?: string }).subject_id ?? null, (row) => row.judge_version, months)) {
-    regimes.set(`subject ${id}`, r)
+    regimes.set(objectKey('subject', id), r)
   }
 
   return { reading, registration, regimes }
