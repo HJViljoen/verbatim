@@ -32,7 +32,11 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
+import { embeddingCoverage } from '@/lib/agent/retrieve'
+import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
+import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
 import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
@@ -1267,6 +1271,98 @@ export const runPipeline = inngest.createFunction(
         return null
       })
 
+    // 4c. Subject membership (Phase 1, design item 4). Directly after
+    //     embed-insights, because it reads the vectors that step writes; well
+    //     before themes:<bucket>, the step that cannot afford more work.
+    //
+    //     TWO ADDITIVE IDS, each in its own position, never a rename or a
+    //     reorder: `plan-subject-membership` and `subject-membership:N-of-M`.
+    //     The plan step exists for the same reason plan-classify, plan-pass-a
+    //     and plan-themes do — Inngest needs the fan-out width before it can
+    //     create the steps, and a read outside a step would re-run at every
+    //     step boundary for the rest of the function.
+    //
+    //     M is the number of ACTIVE SUBJECTS, not a batch count: 5-8, bounded,
+    //     and the same on a retry because loadActiveSubjects orders by
+    //     (named_at, id). Each step reads its own band with one RPC call and
+    //     judges it in batches of twenty inside the step, so a subject's whole
+    //     decision is one retryable unit and one bad subject does not cost the
+    //     other seven.
+    //
+    //     Logged, NOT noteError'd — the keyword-discovery precedent, the same
+    //     one embed-insights and freeze-months take. A subject reading is a
+    //     record the run maintains alongside the report, and a clean run must
+    //     not close `partial` because a judgement pass had a bad day; the pairs
+    //     are still undecided next run, which IS the retry.
+    //
+    //     No-op when M4 is not applied, and a REFUSAL rather than a low number
+    //     when insight embedding coverage is short — see lib/subjects/membership.ts.
+    const subjectPlan = await step
+      .run('plan-subject-membership', async () => {
+        const admin = createAdminClient()
+        try {
+          const named = await loadActiveSubjects(admin, clientId)
+          // Counted once here rather than once inside each fan-out step: it is
+          // two count=exact queries over the whole insight population and it is
+          // a property of the PASS, not of a subject.
+          const coverage = named.length > 0 ? await embeddingCoverage(admin, clientId) : null
+          // The phrase vectors, here rather than in each batch step: 5-8 texts
+          // is one embeddings request and about half a millionth of a dollar,
+          // and every band read below is meaningless without them. Re-read
+          // afterwards so each step carries its subject's real embedding state
+          // — a subject that has just been given a vector must not arrive at
+          // its step still looking like one that never had one.
+          if (await embedSubjects(admin, named) > 0) {
+            return { subjects: await loadActiveSubjects(admin, clientId), coverage }
+          }
+          return { subjects: named, coverage }
+        } catch (e) {
+          if (!isMissingSubjects(e)) throw e
+          console.log('[subject-membership] skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet')
+          return { subjects: [], coverage: null }
+        }
+      })
+      .catch((e) => {
+        console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return { subjects: [], coverage: null }
+      })
+    const subjects = subjectPlan.subjects
+    const subjectCoverage = subjectPlan.coverage ?? undefined
+    //
+    //     THE CEILING IS THE PASS'S, NOT EACH SUBJECT'S. subjectBudgetUsd() is
+    //     5% of RUN_MODEL_BUDGET_USD — $3 at the default $60 — and it is a
+    //     ceiling on the whole membership pass, which measures $0.17. Handing
+    //     every fan-out step the full $3 would make the real ceiling $24 at
+    //     eight subjects, eight times what SUBJECT_BUDGET_SHARE documents, and
+    //     assertWithinBudget would not catch it: it only trips at $60, by
+    //     which point the run fails and emails. So each step is given what is
+    //     LEFT of the pass, summed off the previous steps' own results. The
+    //     arithmetic is deterministic on a replay, because a memoised step
+    //     returns the same costUsd it returned the first time.
+    const passBudget = subjectBudgetUsd()
+    let subjectSpend = 0
+    const subjectOutcomes: MembershipOutcome[] = []
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i]
+      const budgetUsd = Math.max(0, passBudget - subjectSpend)
+      const r = await step
+        .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
+          const admin = createAdminClient()
+          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd, coverage: subjectCoverage })
+          console.log(`[subject-membership] ${membershipSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[subject-membership] ${subject.name} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+      subjectSpend += r?.costUsd ?? 0
+      subjectOutcomes.push(r)
+    }
+    if (subjectSpend > 0) {
+      console.log(`[subject-membership] pass spent $${subjectSpend.toFixed(4)} of its $${passBudget.toFixed(2)} ceiling`)
+    }
+
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
     const crossRef = await step.run('cross-reference', () => runCrossReference(clientId))
@@ -1363,27 +1459,46 @@ export const runPipeline = inngest.createFunction(
     // run must not read 'partial' because a bookkeeping pass had a bad day. It
     // is also the step that can run before its migration has been applied:
     // until then it is a logged no-op rather than a retry loop holding a slot.
+    const subjectHold = subjectFreezeHold(subjectOutcomes)
     await step
       .run('freeze-months', async () => {
         const admin = createAdminClient()
         try {
           const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
-          const r = await freezeMonths(admin, { clientId, runId, months })
+          // The subject side rides in the SAME visit, not beside it: the
+          // denominator's freeze is what closes an audience-month to new rows,
+          // so every numerator has to be written before it. A separate subject
+          // freeze running afterwards would be refused by the insert guard,
+          // correctly and permanently.
+          //
+          // Unless the judgement that feeds it said it was short. A membership
+          // refusal protects its own table and nothing else — memberships
+          // persist between runs, so the reading here is not empty but SHORT,
+          // and a short month frozen by this visit can never be corrected.
+          // Better no subject row: a month that closes without one keeps
+          // decision K's single later chance.
+          if (subjectHold) console.warn(`[freeze-months] subject months NOT written — ${subjectHold}`)
+          const r = await freezeMonths(admin, {
+            clientId, runId, months,
+            sides: subjectHold ? [] : [subjectMonthSide(admin, clientId)],
+          })
+          const sideCounts = Object.entries(r.sides)
+            .map(([table, side]) => `${table} ${side.written} written (${side.frozen} now frozen, ${side.keptFrozen} already frozen and left alone, ${side.deleted} dropped)`)
+            .join(' · ')
           console.log(
             `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
             `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
-            `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
-            `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
-            `${r.themes.deleted} dropped)`,
+            `${r.denominators.deleted} dropped) · ${sideCounts}`,
           )
+          const all = [r.denominators, ...Object.values(r.sides)]
           return {
             months: r.months.length,
             denominators: r.denominators.written,
             themes: r.themes.written,
-            frozen: r.denominators.frozen + r.themes.frozen,
-            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
-            heldStale: r.denominators.heldStale + r.themes.heldStale,
-            refusedLate: r.denominators.refusedLate + r.themes.refusedLate,
+            frozen: all.reduce((n, s) => n + s.frozen, 0),
+            keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
+            heldStale: all.reduce((n, s) => n + s.heldStale, 0),
+            refusedLate: all.reduce((n, s) => n + s.refusedLate, 0),
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.

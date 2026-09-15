@@ -1,0 +1,432 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { actorStamp, recordConfigChange, type ConfigActor } from '../config-log'
+import {
+  MOVE_DIRECTIONS,
+  MOVE_KINDS,
+  MOVE_MAX_THEMES,
+  SUBJECTS_MAX,
+  SUBJECTS_MIN,
+  TABLE_MOVES,
+  TABLE_SUBJECTS,
+  isMissingSubjects,
+  type Move,
+  type MoveDirection,
+  type MoveKind,
+  type SubjectOrigin,
+  type SubjectStatus,
+} from './types'
+
+// Moves — what a client declared it is trying to change — and the subject
+// writes that go with them (design item 22, decision E).
+//
+// WHY `moves` AND NOT `initiatives`. `initiatives` is the ancestor and has zero
+// rows on both tenants. Its `registry_ids` column is documented as
+// theme_registry ids, CHECKed at 1-5, and deliberately not updatable, because
+// "change either and every point already reported becomes a point about
+// something else". None of that fits a subject: a subject's membership is a set
+// that exceeds five themes and is re-decided every week, so storing a subject
+// id there would break the column's contract in three places at once — the
+// comment, the server action's ownership check, and the measurement, which
+// would silently contribute zero to both sides and read "too early" for ever.
+// `initiatives` is legacy from here: read by the old Dashboard tile, written by
+// nothing new, dropped in Phase 3.
+//
+// APPEND-ONLY FOR MEMBERS, and that is the plan's word. There is no UPDATE
+// grant on `moves` at all, so `status` is a service-role write today. A page
+// that needs a client to mark a move done is a column grant and a conversation,
+// not a quiet write — and it is one additive line when somebody wants it.
+//
+// A SUBJECT IS PROPOSED BEFORE IT IS COUNTED. `subjects.status` defaults to
+// 'proposed' and the judge, the month reading and the freeze all read only
+// `active` rows, so naming a subject is half the act: decision E says the set
+// is CONFIRMED per tenant before a single subject row is shown, and
+// `activateSubject` is that confirmation. Nothing else in this codebase writes
+// 'active' — a subject nobody confirmed is a subject nothing counts, and
+// `nameSubject`'s sentence says so rather than implying the counting has
+// already started.
+//
+// EVERY SUBJECT WRITE CARRIES AN ACTOR. `config_changes.surface` already admits
+// 'subjects' (20260915091000), and a subject IS a configuration change in the
+// sense that matters: it declares what a measurement is about. The log is
+// written with the SERVICE-ROLE client because config_changes has no insert
+// policy, and a log a tenant can append to is not a log.
+
+/** The session a browser write arrives on. Structural, so a route handler's own
+ *  context fits without importing lib/auth into a module that has no business
+ *  redirecting anybody. */
+export interface WriteContext {
+  supabase: SupabaseClient
+  clientId: string
+  userId: string
+  email?: string
+  operator?: { isHome: boolean } | null
+}
+
+export interface DeclareMoveInput {
+  kind: MoveKind
+  subjectId?: string | null
+  registryIds?: readonly string[] | null
+  lineageId?: string | null
+  title: string
+  note?: string | null
+  direction?: MoveDirection
+}
+
+export interface WriteResult<T> {
+  ok: boolean
+  message: string
+  value?: T
+}
+
+// ---- Pure -------------------------------------------------------------------
+
+/** The target columns for one move, or the reason there are none.
+ *
+ *  Exactly one target, matching the kind — the same rule the database's
+ *  `moves_one_target` CHECK states, restated here so a person gets a sentence
+ *  instead of a constraint name. */
+export function moveTarget(
+  input: Pick<DeclareMoveInput, 'kind' | 'subjectId' | 'registryIds' | 'lineageId'>,
+): { subject_id: string | null; registry_ids: string[] | null; lineage_id: string | null } | string {
+  if (!MOVE_KINDS.includes(input.kind)) return `Not something this product can track: ${input.kind}.`
+  const registryIds = input.registryIds ? [...new Set(input.registryIds)] : null
+  if (input.kind === 'subject') {
+    if (!input.subjectId) return 'Pick the subject this is about.'
+    if (registryIds?.length || input.lineageId) return 'A move is about one thing: a subject, some themes, or a piece of advice.'
+    return { subject_id: input.subjectId, registry_ids: null, lineage_id: null }
+  }
+  if (input.kind === 'theme') {
+    if (!registryIds?.length) return 'Pick at least one theme.'
+    if (registryIds.length > MOVE_MAX_THEMES) return `Track at most ${MOVE_MAX_THEMES} themes in one move.`
+    if (input.subjectId || input.lineageId) return 'A move is about one thing: a subject, some themes, or a piece of advice.'
+    return { subject_id: null, registry_ids: registryIds, lineage_id: null }
+  }
+  if (!input.lineageId) return 'Name the recommendation this came from.'
+  if (input.subjectId || registryIds?.length) return 'A move is about one thing: a subject, some themes, or a piece of advice.'
+  return { subject_id: null, registry_ids: null, lineage_id: input.lineageId }
+}
+
+/** The partial unique index's own comparison: `lower(trim(name))`, one live
+ *  subject per name per tenant. Restated here so the one place that has to
+ *  predict the index cannot drift from it. */
+export function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
+/** A title a person will read on a chart in six months. */
+export function moveTitle(raw: string): string | null {
+  const title = raw.trim().replace(/\s+/g, ' ')
+  if (title.length < 1 || title.length > 120) return null
+  return title
+}
+
+/** Where a tenant's subject set sits against the 5-8 the design asks for. Not a
+ *  database CHECK: a tenant has to be able to sit at three while it is setting
+ *  up, and this is what says so out loud instead of refusing. */
+export function subjectSetVerdict(count: number): { state: 'short' | 'ready' | 'over'; line: string } {
+  if (count > SUBJECTS_MAX) {
+    return { state: 'over', line: `${count} subjects. More than ${SUBJECTS_MAX} and no single one gets enough of the conversation to read.` }
+  }
+  if (count < SUBJECTS_MIN) {
+    return { state: 'short', line: `${count} of ${SUBJECTS_MIN}-${SUBJECTS_MAX} subjects named.` }
+  }
+  return { state: 'ready', line: `${count} subjects.` }
+}
+
+/** What confirming a subject should do, decided before anything is written.
+ *
+ *  The ceiling lives here rather than in the database for the reason
+ *  `subjectSetVerdict` gives — a tenant has to be able to sit at three while it
+ *  is setting up — but it IS enforced on the way up: past SUBJECTS_MAX no
+ *  single subject gets enough of the conversation to read, and a set that
+ *  grows past it silently is a set of numbers nobody can be given a band for. */
+export type ActivationCheck =
+  | { do: 'activate' }
+  | { do: 'nothing'; message: string }
+  | { do: 'refuse'; message: string }
+
+export function activationCheck(
+  subject: { status: SubjectStatus } | null,
+  activeCount: number,
+): ActivationCheck {
+  if (!subject) return { do: 'refuse', message: 'That subject is not yours.' }
+  if (subject.status === 'active') return { do: 'nothing', message: 'That one is already being counted.' }
+  if (subject.status === 'retired') {
+    return { do: 'refuse', message: 'You stopped tracking that one. Add it again to start a new line for it.' }
+  }
+  if (activeCount >= SUBJECTS_MAX) {
+    return {
+      do: 'refuse',
+      message: `You are already tracking ${SUBJECTS_MAX}. Stop tracking one before you add another — more than ${SUBJECTS_MAX} and no single one gets enough of the conversation to read.`,
+    }
+  }
+  return { do: 'activate' }
+}
+
+// ---- Writes -----------------------------------------------------------------
+
+const actorFor = (ctx: WriteContext, detail: string): ConfigActor =>
+  actorStamp({ userId: ctx.userId, email: ctx.email, operator: ctx.operator ?? null }, detail)
+
+/** The admin client the change log needs. Passed in rather than imported so
+ *  this module stays testable and so a caller cannot accidentally use it for
+ *  the write itself — the write goes through the SESSION client, where RLS and
+ *  the column grants are the gate. */
+export type AdminClient = SupabaseClient
+
+/**
+ * Declare a move. "Track this" on a subject or a theme, or accepting a piece of
+ * advice.
+ *
+ * Written on the SESSION client: RLS pins the tenant and the insert policy pins
+ * `declared_by` to the person actually signed in, so one member cannot file a
+ * declaration under another member's name. `declared_at` is the database's
+ * `current_date` and is never a form value — everything measured about this
+ * move is measured from the line the client drew, not from a date a request
+ * could choose.
+ */
+export async function declareMove(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: DeclareMoveInput,
+): Promise<WriteResult<Move>> {
+  const title = moveTitle(input.title)
+  if (!title) return { ok: false, message: 'Give it a name of 1 to 120 characters.' }
+  const target = moveTarget(input)
+  if (typeof target === 'string') return { ok: false, message: target }
+  const direction = input.direction ?? 'up'
+  if (!MOVE_DIRECTIONS.includes(direction)) return { ok: false, message: 'Say whether you want more of this or less.' }
+
+  // The subject must be this tenant's. The session client is RLS-scoped, so a
+  // subject belonging to someone else simply does not come back, and an absent
+  // row is the check — the initiatives precedent. Without it a crafted request
+  // would store a foreign id that the measurement would then read nothing for,
+  // and the move would print "too early" for ever with no explanation.
+  if (target.subject_id) {
+    const { data, error } = await ctx.supabase
+      .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('id', target.subject_id).maybeSingle()
+    if (error) return { ok: false, message: isMissingSubjects(error) ? 'Subjects are not switched on for this workspace yet.' : `Could not save: ${error.message}` }
+    if (!data) return { ok: false, message: 'That subject is not yours to track.' }
+  }
+  if (target.registry_ids) {
+    const { data, error } = await ctx.supabase
+      .from('theme_registry').select('id').eq('client_id', ctx.clientId).in('id', target.registry_ids)
+    if (error) return { ok: false, message: `Could not save: ${error.message}` }
+    if ((data ?? []).length !== target.registry_ids.length) return { ok: false, message: 'One of those themes is not yours to track.' }
+  }
+
+  const { data, error } = await ctx.supabase
+    .from(TABLE_MOVES)
+    .insert({
+      client_id: ctx.clientId,
+      kind: input.kind,
+      subject_id: target.subject_id,
+      registry_ids: target.registry_ids,
+      lineage_id: target.lineage_id,
+      title,
+      note: input.note?.trim() || null,
+      direction,
+      declared_by: ctx.userId,
+    })
+    .select('id, client_id, kind, subject_id, registry_ids, lineage_id, title, note, direction, declared_at, declared_by, status')
+    .maybeSingle()
+  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+
+  const move = data as Move | null
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'moves',
+    before: null,
+    after: { id: move?.id ?? null, kind: input.kind, title, direction, target },
+    actor: actorFor(ctx, 'declared a move'),
+  })
+  return { ok: true, message: 'Tracking it from today.', value: move ?? undefined }
+}
+
+export interface NameSubjectInput {
+  name: string
+  description?: string | null
+  origin: SubjectOrigin
+  sourceRef?: string | null
+  /** The subject this replaces, when this is a rename rather than a new name.
+   *  The old row is retired and points here; its months keep their line. */
+  supersedes?: string | null
+}
+
+/**
+ * Name a subject.
+ *
+ * A RENAME IS TWO ROWS, not an edit. SU1 says renaming starts a new line and
+ * keeps the old one, and the database agrees by withholding UPDATE on `name`
+ * and `description` — both are read by the judge and both feed the phrase
+ * vector, so editing either in place would re-decide membership under an
+ * unchanged judge_version and quietly change what every frozen month was about.
+ * `supersedes` is how the two rows are joined: the new one is inserted, the old
+ * one is retired and points at it.
+ */
+export async function nameSubject(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: NameSubjectInput,
+): Promise<WriteResult<{ id: string }>> {
+  const name = input.name.trim().replace(/\s+/g, ' ')
+  if (name.length < 1 || name.length > 60) return { ok: false, message: 'Give it a name of 1 to 60 characters.' }
+  const description = input.description?.trim() || null
+  if (description && description.length > 400) return { ok: false, message: 'Keep the description under 400 characters.' }
+
+  const insert = () =>
+    ctx.supabase
+      .from(TABLE_SUBJECTS)
+      .insert({
+        client_id: ctx.clientId,
+        name,
+        description,
+        origin: input.origin,
+        source_ref: input.sourceRef ?? null,
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .maybeSingle()
+
+  let { data, error } = await insert()
+
+  // A RE-DESCRIPTION KEEPS THE NAME, and the partial unique index is on the
+  // name alone — so replacing a subject's description collides with the very
+  // row it is replacing, and "You are already tracking …" would be the answer
+  // to every description edit there will ever be. When the only thing in the
+  // way IS the row being superseded, retire that one first and try again. The
+  // failed insert wrote nothing, so this costs a round trip in the collision
+  // case and changes nothing in any other.
+  let retiredFirst = false
+  if (error && (error as { code?: string }).code === '23505' && input.supersedes) {
+    const { data: old } = await ctx.supabase
+      .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.supersedes).maybeSingle()
+    const previous = old as { name: string; status: string } | null
+    if (previous && previous.status !== 'retired' && sameName(previous.name, name)) {
+      const retired = await retireSubject(ctx, admin, { id: input.supersedes })
+      if (!retired.ok) return { ok: false, message: retired.message }
+      retiredFirst = true
+      ;({ data, error } = await insert())
+    }
+  }
+
+  if (error) {
+    if (isMissingSubjects(error)) return { ok: false, message: 'Subjects are not switched on for this workspace yet.' }
+    // The partial unique index: one live subject per name per tenant.
+    if ((error as { code?: string }).code === '23505') return { ok: false, message: `You are already tracking "${name}".` }
+    const stopped = retiredFirst ? ` "${name}" has been stopped and the replacement was not saved — add it again.` : ''
+    return { ok: false, message: `Could not save: ${error.message}.${stopped}` }
+  }
+  const id = (data as { id: string } | null)?.id
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'subjects',
+    before: null,
+    after: { id: id ?? null, name, description, origin: input.origin, supersedes: input.supersedes ?? null },
+    actor: actorFor(ctx, input.supersedes ? 'renamed a subject' : 'named a subject'),
+  })
+  if (input.supersedes && id) {
+    if (retiredFirst) {
+      // Already retired above; all that is left is the pointer joining the old
+      // line to the new one. `superseded_by` is in the member's update grant
+      // for exactly this.
+      const { error: pointError } = await ctx.supabase
+        .from(TABLE_SUBJECTS)
+        .update({ superseded_by: id, updated_at: new Date().toISOString() })
+        .eq('id', input.supersedes)
+      if (pointError) return { ok: false, message: `Could not save: ${pointError.message}` }
+    } else {
+      const retired = await retireSubject(ctx, admin, { id: input.supersedes, supersededBy: id })
+      if (!retired.ok) return { ok: false, message: retired.message }
+    }
+  }
+  // NOT "it starts being counted": a named subject is `proposed`, and nothing
+  // counts a proposed subject. Confirming it is `activateSubject`.
+  return { ok: true, message: 'Added. Confirm it and it starts being counted from the next update.', value: id ? { id } : undefined }
+}
+
+/**
+ * Confirm a subject: the write that actually starts the counting.
+ *
+ * `subjects.status` defaults to 'proposed' and every reader that matters —
+ * `loadActiveSubjects`, and through it the membership judge, the month reading
+ * and the freeze — filters on 'active'. So this is decision E's confirmation
+ * step, and without it a tenant's subjects exist and measure nothing.
+ *
+ * Written on the SESSION client: the column grant on `subjects` hands a member
+ * `status` and nothing that says what the measurement is about, so this is the
+ * one thing about a subject a browser may change.
+ */
+export async function activateSubject(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: { id: string },
+): Promise<WriteResult<null>> {
+  const { data: before, error: readError } = await ctx.supabase
+    .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
+  if (readError) {
+    return { ok: false, message: isMissingSubjects(readError) ? 'Subjects are not switched on for this workspace yet.' : `Could not save: ${readError.message}` }
+  }
+  const { data: live, error: countError } = await ctx.supabase
+    .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('status', 'active')
+  if (countError) return { ok: false, message: `Could not save: ${countError.message}` }
+
+  const verdict = activationCheck(before as { status: SubjectStatus } | null, (live ?? []).length)
+  if (verdict.do === 'refuse') return { ok: false, message: verdict.message }
+  if (verdict.do === 'nothing') return { ok: true, message: verdict.message, value: null }
+
+  const { error } = await ctx.supabase
+    .from(TABLE_SUBJECTS)
+    .update({ status: 'active', updated_at: new Date().toISOString() })
+    .eq('id', input.id)
+  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'subjects',
+    before: before as Record<string, unknown>,
+    after: { id: input.id, status: 'active' },
+    actor: actorFor(ctx, 'confirmed a subject'),
+  })
+  return { ok: true, message: 'Confirmed. It starts being counted from the next update.', value: null }
+}
+
+/** Retire a subject. Never a delete: the months it already carries are the
+ *  record, and `moves.subject_id` is ON DELETE RESTRICT precisely so a
+ *  declaration cannot be quietly dropped along with it.
+ *
+ *  "The months it already carries keep their line" is true because the database
+ *  makes it true: `subjects_retirement_freeze` closes every month the subject
+ *  still had open, at this instant. A retired subject is never re-judged, so
+ *  from here its membership only decays — an open month left open would be
+ *  recomputed downward every run and freeze at a number the client never saw. */
+export async function retireSubject(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: { id: string; supersededBy?: string | null },
+): Promise<WriteResult<null>> {
+  const { data: before, error: readError } = await ctx.supabase
+    .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
+  if (readError) return { ok: false, message: `Could not save: ${readError.message}` }
+  if (!before) return { ok: false, message: 'That subject is not yours.' }
+
+  const { error } = await ctx.supabase
+    .from(TABLE_SUBJECTS)
+    .update({ status: 'retired', superseded_by: input.supersededBy ?? null, updated_at: new Date().toISOString() })
+    .eq('id', input.id)
+  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'subjects',
+    before: before as Record<string, unknown>,
+    after: { id: input.id, status: 'retired', superseded_by: input.supersededBy ?? null },
+    actor: actorFor(ctx, input.supersededBy ? 'replaced a subject' : 'stopped tracking a subject'),
+  })
+  return { ok: true, message: 'Stopped. The months it already carries keep their line.', value: null }
+}

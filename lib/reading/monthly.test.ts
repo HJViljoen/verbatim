@@ -21,6 +21,8 @@ import {
   trailingCompleteMonths,
   themeReadingKey,
   windowOf,
+  monthRowKey,
+  toStoredFreeze,
 } from './monthly'
 import {
   FREEZE_AFTER_DAYS,
@@ -32,7 +34,13 @@ import {
   TABLE_THEME_READINGS,
   type StoredFreeze,
   type ThemeReading,
+  MONTH_DENOMINATOR_TABLE,
+  MONTH_SUBJECT_TABLE,
+  MONTH_TABLES,
+  MONTH_THEME_TABLE,
 } from './types'
+import { subjectMonthSide } from '../subjects/read'
+import { JUDGE_VERSION } from '../subjects/types'
 
 // The freeze rule's pure half. The numbers themselves come out of two SQL
 // functions no test here can reach, so the last block reads the migration and
@@ -42,7 +50,7 @@ const CLIENT_MONTHS = ['2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01']
 
 const stored = (over: Partial<StoredFreeze> & { key: string; month: string }): StoredFreeze => ({
   audience: 'industry-other',
-  theme_id: null,
+  objectId: null,
   status: 'filling',
   origin: 'live',
   frozen_at: null,
@@ -199,7 +207,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     const result = mergeMonthRows({
       months,
       fresh,
-      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', theme_id: 't1', status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z' })],
+      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', objectId: 't1', status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z' })],
       keyOf: themeReadingKey,
       now,
       runId: RUN,
@@ -236,7 +244,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     const result = mergeMonthRows({
       months,
       fresh,
-      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', theme_id: 't1' })],
+      stored: [stored({ key: themeReadingKey(fresh[0]), month: '2026-08-01', objectId: 't1' })],
       keyOf: themeReadingKey,
       now,
       runId: RUN,
@@ -259,12 +267,12 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
   })
 
   it('names the filling rows the current clustering no longer produces', () => {
-    const gone = stored({ key: '2026-10-01|industry-other|t-dropped', month: '2026-10-01', theme_id: 't-dropped' })
+    const gone = stored({ key: '2026-10-01|industry-other|t-dropped', month: '2026-10-01', objectId: 't-dropped' })
     const frozenAndGone = stored({
-      key: '2026-08-01|industry-other|t-old', month: '2026-08-01', theme_id: 't-old',
+      key: '2026-08-01|industry-other|t-old', month: '2026-08-01', objectId: 't-old',
       status: 'frozen', frozen_at: '2026-10-01T00:00:00.000Z',
     })
-    const outsideWindow = stored({ key: '2026-05-01|industry-other|t-old', month: '2026-05-01', theme_id: 't-old' })
+    const outsideWindow = stored({ key: '2026-05-01|industry-other|t-old', month: '2026-05-01', objectId: 't-old' })
     const result = mergeMonthRows({
       months,
       fresh: [reading('2026-10-01', 'industry-other', 't1', 4)],
@@ -282,7 +290,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     const fresh = [{ ...reading('2026-08-15', 'client', 't1', 2), month: '2026-08-15' }]
     const result = mergeMonthRows({
       months, fresh,
-      stored: [stored({ key: '2026-08-01|client|t1', month: '2026-08-01', audience: 'client', theme_id: 't1', status: 'frozen' })],
+      stored: [stored({ key: '2026-08-01|client|t1', month: '2026-08-01', audience: 'client', objectId: 't1', status: 'frozen' })],
       keyOf: themeReadingKey, now, runId: RUN,
     })
     expect(result.writes).toEqual([])
@@ -322,8 +330,8 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     // the months for good — no filling row means no later visit, and the Pass A
     // prune makes the clustering unrecomputable.
     const held = [
-      stored({ key: '2026-08-01|industry-other|t1', month: '2026-08-01', theme_id: 't1' }),
-      stored({ key: '2026-09-01|industry-other|t2', month: '2026-09-01', theme_id: 't2' }),
+      stored({ key: '2026-08-01|industry-other|t1', month: '2026-08-01', objectId: 't1' }),
+      stored({ key: '2026-09-01|industry-other|t2', month: '2026-09-01', objectId: 't2' }),
     ]
     const result = mergeMonthRows({
       months, fresh: [] as ThemeReading[], stored: held, keyOf: themeReadingKey, now, runId: RUN,
@@ -335,7 +343,7 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
   })
 
   it('still drops a row the clustering dropped when the rest of the reading arrived', () => {
-    const gone = stored({ key: '2026-08-01|industry-other|t-dropped', month: '2026-08-01', theme_id: 't-dropped' })
+    const gone = stored({ key: '2026-08-01|industry-other|t-dropped', month: '2026-08-01', objectId: 't-dropped' })
     const result = mergeMonthRows({
       months,
       fresh: [reading('2026-09-01', 'industry-other', 't1', 5)],
@@ -676,7 +684,7 @@ describe('mergeMonthRows — a closed audience-month takes no fresh key', () => 
   // failure holds August's filling theme rows while the denominators — which do
   // not depend on the clustering — are written and frozen. The next visit
   // re-clusters and mints a key August never held.
-  const held = stored({ key: '2026-08-01|industry-other|t-held', month: '2026-08-01', theme_id: 't-held' })
+  const held = stored({ key: '2026-08-01|industry-other|t-held', month: '2026-08-01', objectId: 't-held' })
 
   it('refuses the newly minted key and still writes the row it can', () => {
     const result = mergeMonthRows({
@@ -737,5 +745,140 @@ describe('mergeMonthRows — a closed audience-month takes no fresh key', () => 
     })
     expect(result.writes).toHaveLength(1)
     expect(result.refusedLate).toEqual([])
+  })
+})
+
+// ---- The sibling tables (WP4) -------------------------------------------------
+// M4 adds a third month table and the plan adds more after it. What makes that
+// safe is that the freeze contract is now a DESCRIPTOR rather than a copied
+// block of code: one key builder, one stored read, one merge, one stale sweep,
+// one delete. These pin the descriptor's own behaviour, which is the part a
+// fourth table will lean on without reading.
+
+describe('monthRowKey', () => {
+  it('is the audience-month for a denominator, which is about no object at all', () => {
+    expect(monthRowKey(MONTH_DENOMINATOR_TABLE, { month: '2026-08-14', audience: 'client' }))
+      .toBe('2026-08-01|client')
+  })
+
+  it('appends the object column named by the descriptor, whichever it is', () => {
+    expect(monthRowKey(MONTH_THEME_TABLE, { month: '2026-08-01', audience: 'client', theme_id: 't1' }))
+      .toBe('2026-08-01|client|t1')
+    expect(monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'client', subject_id: 's1' }))
+      .toBe('2026-08-01|client|s1')
+  })
+
+  it('agrees with the key builders the theme side already used', () => {
+    const row = { month: '2026-08-01', audience: 'competitor:Topo Designs', theme_id: 't1' }
+    expect(monthRowKey(MONTH_THEME_TABLE, row)).toBe(themeReadingKey(row))
+    expect(monthRowKey(MONTH_DENOMINATOR_TABLE, row)).toBe(denominatorKey(row))
+  })
+
+  it('stays unambiguous only because an object id is a uuid — so the descriptor’s columns are uuids', () => {
+    // The key is `month|audience|object`, and `audience` is FREE TEXT: a
+    // competitor's name exactly as somebody typed it in Settings, pipe
+    // characters and all. Two audience-months could fold into one key only if
+    // an object id could also carry a pipe, which is why every object column
+    // in every month table is a uuid and not a label. That is an invariant of
+    // the schema, so it is checked against the schema.
+    const collides = monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'rival:a|b', subject_id: 's' })
+      === monthRowKey(MONTH_SUBJECT_TABLE, { month: '2026-08-01', audience: 'rival:a', subject_id: 'b|s' })
+    expect(collides).toBe(true)
+    const schema = [
+      ['supabase/migrations/20260915092000_monthly_reading.sql', 'theme_id           uuid not null'],
+      ['supabase/migrations/20260918093000_subjects.sql', 'subject_id         uuid not null'],
+    ] as const
+    for (const [file, declaration] of schema) expect(readFileSync(file, 'utf8')).toContain(declaration)
+  })
+})
+
+describe('toStoredFreeze over a descriptor', () => {
+  const row = { month: '2026-08-14', audience: 'client', status: 'frozen' as const, origin: 'back_read' as const, frozen_at: 'T' }
+
+  it('reads the object id out of whichever column the table uses', () => {
+    expect(toStoredFreeze(MONTH_SUBJECT_TABLE, [{ ...row, subject_id: 's1' }])[0])
+      .toEqual({ key: '2026-08-01|client|s1', month: '2026-08-01', audience: 'client', objectId: 's1', status: 'frozen', origin: 'back_read', frozen_at: 'T' })
+  })
+
+  it('leaves a denominator row with no object, because it is about none', () => {
+    expect(toStoredFreeze(MONTH_DENOMINATOR_TABLE, [row])[0].objectId).toBeNull()
+  })
+
+  it('normalises the month, so a row read mid-month keys the same as one read on the first', () => {
+    expect(toStoredFreeze(MONTH_THEME_TABLE, [{ ...row, theme_id: 't' }])[0].month).toBe('2026-08-01')
+  })
+})
+
+describe('MONTH_TABLES', () => {
+  it('holds every month table, so fillingMonths cannot forget one', () => {
+    // The silent, permanent bug this list exists to prevent: a month whose
+    // theme rows froze while its subject rows are still `filling` leaves
+    // fillingMonths, leaves monthsToRefresh, and is never visited again.
+    expect(MONTH_TABLES.map((t) => t.table)).toEqual([
+      'month_denominators', 'month_theme_readings', 'month_subject_readings',
+    ])
+  })
+
+  it('names exactly one denominator', () => {
+    expect(MONTH_TABLES.filter((t) => t.objectColumn === null)).toHaveLength(1)
+  })
+
+  it('spells every onConflict as the table’s real primary key', () => {
+    for (const t of MONTH_TABLES) {
+      const expected = ['client_id', 'month', 'audience', t.objectColumn].filter(Boolean).join(',')
+      expect(t.onConflict).toBe(expected)
+    }
+  })
+})
+
+describe('the subject side of a freeze visit', () => {
+  it('stamps the judge version, not a clustering key', () => {
+    // A subject reading is a judgement artefact. Stamping it with a clustering
+    // fingerprint would make two months of one subject look incomparable
+    // whenever the themes were re-clustered, which has nothing to do with it.
+    const side = subjectMonthSide({} as never, 'client-1', 'judge_vX')
+    expect(side.clustering).toBe(false)
+    expect(side.stamp).toEqual({ judge_version: 'judge_vX' })
+    expect(side.table).toBe(MONTH_SUBJECT_TABLE)
+  })
+
+  it('defaults to the shipped judge version', () => {
+    expect(subjectMonthSide({} as never, 'client-1').stamp).toEqual({ judge_version: JUDGE_VERSION })
+  })
+})
+
+describe('the subject month migration matches the module', () => {
+  const sql = readFileSync('supabase/migrations/20260918093000_subjects.sql', 'utf8')
+
+  it('names the table and the two functions this module calls', () => {
+    expect(sql).toContain('create table if not exists public.month_subject_readings')
+    expect(sql).toContain('create or replace function public.monthly_subject_readings')
+    expect(sql).toContain('create or replace function public.window_subject_readings')
+    expect(sql).toContain('create or replace function public.subject_band')
+  })
+
+  it('carries BOTH guards, reusing the generic functions rather than copying them', () => {
+    expect(sql).toContain('before update on public.month_subject_readings')
+    expect(sql).toContain('before insert on public.month_subject_readings')
+    expect(sql).toContain('execute function public.month_reading_frozen_guard()')
+    expect(sql).toContain('execute function public.month_reading_frozen_insert_guard()')
+  })
+
+  it('carries the freeze columns the merge writes, and judge_version beside run_id', () => {
+    for (const c of ['status', 'origin', 'read_at', 'run_id', 'frozen_at', 'judge_version', 'excluded_on_camera', 'excluded_undated']) {
+      expect(sql).toContain(c)
+    }
+  })
+
+  it('keeps the reads service-role only — the client_id is a parameter', () => {
+    expect(sql).toContain('revoke all on function public.monthly_subject_readings(uuid, timestamptz, timestamptz) from public, anon, authenticated')
+    expect(sql).toContain('grant execute on function public.window_subject_readings(uuid, timestamptz, timestamptz) to service_role')
+  })
+
+  it('withholds the columns that decide what a measurement means from a member', () => {
+    // A rename mints a new subject; an edit in place would re-decide membership
+    // under an unchanged judge_version.
+    expect(sql).toContain('grant update (status, superseded_by, updated_at) on public.subjects to authenticated')
+    expect(sql).not.toContain('grant update (name')
   })
 })

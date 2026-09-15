@@ -64,7 +64,7 @@ export interface DenominatorReading {
 
 /** One row of `monthly_theme_readings(p_client, p_run, p_from, p_to)`: what one
  *  theme read in one month, inside one audience. */
-export interface ThemeReading {
+export type ThemeReading = {
   month: string
   audience: Audience
   /** `theme_registry.id` — the stable cross-run identity. Never `themes.id`
@@ -118,11 +118,59 @@ export interface StoredFreeze {
   key: string
   month: string
   audience: Audience
-  theme_id: string | null
+  /** What the row is ABOUT, in whichever table it came from: a theme registry
+   *  id, a subject id, later a kind. Null for a denominator row, which is not
+   *  about an object at all — it IS the audience-month. Named for the role
+   *  rather than the column so one merge, one stale sweep and one delete serve
+   *  every month table; the table descriptor says which column it lives in. */
+  objectId: string | null
   status: MonthStatus
   origin: MonthOrigin
   frozen_at: string | null
 }
+
+/**
+ * A table that carries the freeze contract.
+ *
+ * There are three of these now and the plan adds more (kinds, attention,
+ * evidence refs), all with the same columns, the same two guards and the same
+ * merge. What differs between them is one column name and therefore one primary
+ * key, so that is what a descriptor holds — and holding it means `fillingMonths`
+ * cannot forget a table, which is the one bug in this area that is silent and
+ * permanent: a month whose theme rows froze while its subject rows are still
+ * `filling` leaves fillingMonths, leaves monthsToRefresh, and is never visited
+ * again, so those rows stay filling for ever.
+ */
+export interface MonthTable {
+  table: string
+  /** The column naming the object a row is about, or null for the denominator. */
+  objectColumn: string | null
+  /** The primary key, as PostgREST's upsert needs it spelled. */
+  onConflict: string
+}
+
+export const MONTH_DENOMINATOR_TABLE: MonthTable = {
+  table: 'month_denominators',
+  objectColumn: null,
+  onConflict: 'client_id,month,audience',
+}
+export const MONTH_THEME_TABLE: MonthTable = {
+  table: 'month_theme_readings',
+  objectColumn: 'theme_id',
+  onConflict: 'client_id,month,audience,theme_id',
+}
+export const MONTH_SUBJECT_TABLE: MonthTable = {
+  table: 'month_subject_readings',
+  objectColumn: 'subject_id',
+  onConflict: 'client_id,month,audience,subject_id',
+}
+
+/** Every month table there is. A new one is added HERE and nowhere else. */
+export const MONTH_TABLES: readonly MonthTable[] = [
+  MONTH_DENOMINATOR_TABLE,
+  MONTH_THEME_TABLE,
+  MONTH_SUBJECT_TABLE,
+]
 
 /** The database names, in one place so a rename is one edit. */
 export const RPC_DENOMINATORS = 'monthly_denominators'
@@ -132,5 +180,13 @@ export const RPC_THEME_READINGS = 'monthly_theme_readings'
  *  window rather than a month. Service-role only, like the month pair. */
 export const RPC_WINDOW_DENOMINATORS = 'window_denominators'
 export const RPC_WINDOW_THEME_READINGS = 'window_theme_readings'
-export const TABLE_DENOMINATORS = 'month_denominators'
-export const TABLE_THEME_READINGS = 'month_theme_readings'
+export const TABLE_DENOMINATORS = MONTH_DENOMINATOR_TABLE.table
+export const TABLE_THEME_READINGS = MONTH_THEME_TABLE.table
+/** M4's sibling. Named here, beside the others, because the freeze contract is
+ *  this module's and a month table that lib/reading does not know about is a
+ *  month table fillingMonths will not visit. */
+export const TABLE_SUBJECT_READINGS = MONTH_SUBJECT_TABLE.table
+/** The subject month read and its window sibling (20260918093000_subjects.sql).
+ *  Service-role only, like every other one. */
+export const RPC_SUBJECT_READINGS = 'monthly_subject_readings'
+export const RPC_WINDOW_SUBJECT_READINGS = 'window_subject_readings'

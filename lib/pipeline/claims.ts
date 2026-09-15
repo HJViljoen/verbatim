@@ -336,6 +336,12 @@ export async function loadBrandClaims(
    *  the same for each rival's own/about split. `{}` (Össur today) leaves the
    *  name rule in competitorVoice to carry it. */
   competitorHandles: Record<string, Record<string, string>> | null | undefined = {},
+  /** Per entity per voice, after dedupe. Defaults to the prompt-sized cap Pass
+   *  C needs. The subject proposer (lib/subjects/propose.ts) widens it: the
+   *  whole own-voice pool is 55-62 claims on the two tenants, and a subject
+   *  named from 12 of 62 is a subject named from whatever the newest run
+   *  happened to say. */
+  maxPerEntity: number = MAX_CLAIMS_PER_ENTITY,
 ): Promise<BrandClaims> {
   interface JoinedRow {
     run_id: string
@@ -411,5 +417,5 @@ export async function loadBrandClaims(
       url: v?.video_url ?? null,
     })
   }
-  return selectClaims(rows, trackedCompetitors)
+  return selectClaims(rows, trackedCompetitors, maxPerEntity)
 }
