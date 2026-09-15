@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildSeries,
+  mergeSeriesNotes,
   isReadable,
   monthAxis,
   pointsByMonth,
@@ -396,5 +397,38 @@ describe('the labels a client actually reads carry no ISO dates', () => {
 
   it('has no YYYY-MM or YYYY-MM-DD anywhere in what it prints', () => {
     for (const text of texts) expect(text).not.toMatch(/\d{4}-\d{2}/)
+  })
+})
+
+describe('mergeSeriesNotes — a set of series says its caveats once', () => {
+  const axis = monthAxis('2026-06-01', '2026-08-01')
+  const rows = [
+    den('2026-06-01', 400, { clustering_key: null }),
+    den('2026-07-01', 400, { clustering_key: null }),
+    den('2026-08-01', 400, { clustering_key: null }),
+  ]
+  const one = (objectId: string) =>
+    buildSeries({ axis, audience: 'industry-other', denominators: rows, objectId })
+
+  it('collapses the same sentence across twenty series into one', () => {
+    const series = Array.from({ length: 20 }, (_, i) => one(`t${i}`))
+    expect(series[0].notes.length).toBeGreaterThan(0)
+    expect(mergeSeriesNotes(series)).toEqual(series[0].notes)
+  })
+
+  it('keeps two DIFFERENT notes, first occurrence first', () => {
+    const other = buildSeries({
+      axis,
+      audience: 'client',
+      denominators: [den('2026-06-01', 400, { audience: 'client', clustering_key: 'a=v5' })],
+      changeLogFrom: '2026-09-15T07:22:47.000Z',
+    })
+    const merged = mergeSeriesNotes([one('t1'), other])
+    expect(merged.length).toBeGreaterThan(one('t1').notes.length)
+    expect(merged.slice(0, one('t1').notes.length)).toEqual(one('t1').notes)
+  })
+
+  it('answers an empty set with no notes', () => {
+    expect(mergeSeriesNotes([])).toEqual([])
   })
 })

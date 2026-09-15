@@ -421,6 +421,30 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
   }
 }
 
+/**
+ * The notes of several series, said once.
+ *
+ * `buildSeries` puts the change-log boundary and the unrecorded-grouping
+ * stretches on EVERY series it builds, because a caller drawing one line has to
+ * be told; three audiences by twenty themes is sixty copies of the same
+ * sentence for a surface to de-duplicate. A reader of a whole set prints these
+ * instead, and the per-series notes stay where they are for a reader of one
+ * line. Identical text is one note, and the first occurrence keeps its place.
+ */
+export function mergeSeriesNotes(series: readonly MonthSeries[]): MonthLabel[] {
+  const seen = new Set<string>()
+  const out: MonthLabel[] = []
+  for (const s of series) {
+    for (const note of s.notes) {
+      const key = `${note.kind}\u0000${note.text}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(note)
+    }
+  }
+  return out
+}
+
 /** Index the points of a series by month, for a caller that needs to reach one
  *  without walking the axis. */
 export function pointsByMonth(series: MonthSeries): Map<string, MonthPoint> {

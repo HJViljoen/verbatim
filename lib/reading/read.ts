@@ -7,8 +7,10 @@ import { createAdminClient, selectAll } from '../supabase-admin'
 import { isMissingMonthlyReading, monthEndInstant, monthStartOf } from './monthly'
 import {
   buildSeries,
+  mergeSeriesNotes,
   monthAxis,
   type DenominatorPoint,
+  type MonthLabel,
   type MonthSeries,
   type NumeratorPoint,
   type SeriesChange,
@@ -116,6 +118,10 @@ export interface MonthSeriesSet {
   /** The renames stitched into the series above, for a caller that wants to
    *  name them in prose. */
   renames: RenameRecord[]
+  /** Every series' notes, said once. A set of series repeats the change-log
+   *  boundary and the unrecorded-grouping stretches on each of them; a surface
+   *  reading the set prints THESE, not `series[n].notes`. */
+  notes: MonthLabel[]
   changeLogFrom: string | null
 }
 
@@ -296,7 +302,7 @@ export async function loadMonthSeries(
     }
   }
 
-  return { substrate, series, denominators, renames, changeLogFrom }
+  return { substrate, series, denominators, renames, notes: mergeSeriesNotes(series), changeLogFrom }
 }
 
 /** The runs that DELIVERED something, per month, and the month of the first one
