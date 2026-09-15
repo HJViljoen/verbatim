@@ -121,6 +121,16 @@ describe('seriesToCalendar labelling', () => {
     expect(seriesToCalendar(s, { color: 'c' }).endNote).toBe('of 1,388')
   })
 
+  it('offers no automatic "of N" for a counted measure — n is videos whatever is plotted', () => {
+    // "388 of 388" is what production printed: on a `videos` line the automatic
+    // denominator is the plotted number itself, and on a `comments` line it is
+    // a comment count over a video denominator.
+    const s = series([point('2026-07-01', { videos: 388, k: 388 })])
+    expect(seriesToCalendar(s, { color: 'c', measure: 'videos', floor: null }).endNote).toBeUndefined()
+    expect(seriesToCalendar(s, { color: 'c', measure: 'comments', floor: null }).endNote).toBeUndefined()
+    expect(seriesToCalendar(s, { color: 'c', measure: 'videos', floor: null, endNote: 'of 3 platforms' }).endNote).toBe('of 3 platforms')
+  })
+
   it('carries no "of N" at all for a line with nothing plotted', () => {
     const s = series([point('2026-08-01', { state: 'hollow', videos: null, k: null, pct: null })])
     expect(seriesToCalendar(s, { color: 'c' }).endNote).toBeUndefined()

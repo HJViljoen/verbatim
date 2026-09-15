@@ -34,6 +34,10 @@ export interface ToCalendarOptions {
    *  wants: there is no numerator to be below. */
   floor?: BandOptions | null
   excludes?: string
+  /** What follows the end label's value. A `share` line writes its own "of N"
+   *  from the end month's denominator when this is absent; a `videos` or
+   *  `comments` line writes none, because its n is not that figure's
+   *  denominator. */
   endNote?: string
   /** What this series read at this point LAST month, for the still-filling
    *  bar's tick. Nothing here computes it — it is a second window call
@@ -106,7 +110,14 @@ export function seriesToCalendar(series: MonthSeries, opts: ToCalendarOptions): 
   // percentage — and on today's corpus that is the normal case, because a
   // tenant's last axis month is usually below the floor and carries no point at
   // all (Sealand's own audience ends on 3 videos; Össur's on 19).
-  const end = [...points].reverse().find((p) => p.value != null)
+  //
+  // AND IT IS OFFERED ONLY FOR A SHARE. `n` is the audience's VIDEO count
+  // whatever the measure is, so on a `videos` line it is the plotted number
+  // itself — production rendered "industry-other 388 of 388" — and on a
+  // `comments` line it is a comment count over a video denominator. A share is
+  // the only measure whose k/n this is. A caller plotting counts that wants a
+  // denominator passes its own `endNote`.
+  const end = measure === 'share' ? [...points].reverse().find((p) => p.value != null) : undefined
   return {
     label: opts.label ?? series.objectLabel ?? series.audience,
     color: opts.color,
