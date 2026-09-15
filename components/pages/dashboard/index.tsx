@@ -437,6 +437,7 @@ function FunnelBody({ d }: { d: D }) {
           </li>
         ))}
       </ol>
+      {/* Legacy wording: the counts above this line are cumulative per run. */}
       <p className="mt-4 text-[11px] text-muted-foreground">a conversation is one video and the comments it sparked; themes are confirmed only when heard in more than one conversation</p>
     </>
   )

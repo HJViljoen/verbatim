@@ -1,6 +1,4 @@
-import { FIGURE_RE, MAGNITUDE_RE, tidy } from '../../pipeline/narrative'
-import { stripThemeRefs } from '../../pipeline/prose-rules'
-import { FIGURE_KEY_RE, splitSentences } from '../cover'
+import { allowTokens, scrubProse, stripThemeRefs } from '../../prose/scrub'
 import type { FigureTable } from '../types'
 
 /**
@@ -14,15 +12,10 @@ import type { FigureTable } from '../types'
  * week.
  */
 
-export interface ScrubResult {
-  text: string
-  dropped: number
-  leaked: boolean
-}
-
 /** Em and en dashes between clauses, and the spaced hyphen, become a comma;
  *  a hyphen inside a word (long-term) is left alone. A dash that opened a
- *  sentence-final aside becomes a full stop when nothing follows. */
+ *  sentence-final aside becomes a full stop when nothing follows. House style,
+ *  and the writer's alone — the other slots keep their dashes. */
 export function noDashes(s: string): string {
   return s
     .replace(/\s*[—–]\s*$/g, '.')
@@ -32,6 +25,12 @@ export function noDashes(s: string): string {
     .replace(/\s{2,}/g, ' ')
     .replace(/\s+([.,;:!?])/g, '$1')
     .trim()
+}
+
+export interface ScrubResult {
+  text: string
+  dropped: number
+  leaked: boolean
 }
 
 /** Cut at the last sentence end inside the cap; if no sentence fits, at the
@@ -47,21 +46,11 @@ export function capText(s: string, max: number): string {
 
 /** Paragraphs survive (a developed finding runs to two or three); each is
  *  scrubbed sentence by sentence and the whole is capped. */
-/** Tokens that carry a digit but are names, not numbers: "3R78", "C-Leg 4",
- *  "X3", "L5999". Found in the inputs (claims, theme labels and descriptions,
- *  the agent's points), so the writer may repeat them and the digit rule
- *  lets them through. Bare numbers never qualify. */
-export function productTokens(texts: string[]): string[] {
-  const out = new Set<string>()
-  for (const text of texts) {
-    for (const m of text.matchAll(/\b(?=[A-Za-z0-9-]*\d)(?=[A-Za-z0-9-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9-]{1,14}\b/g)) {
-      // A number with a unit or an ordinal (90k, 4th, 12pm) is a number.
-      if (/^\d+[A-Za-z]{1,2}$/.test(m[0])) continue
-      out.add(m[0])
-    }
-  }
-  return [...out].sort((a, b) => b.length - a.length)
-}
+/** The run's allow-list of digit-bearing NAMES ("3R78", "C-Leg 4"), mined
+ *  from this document's own inputs. The implementation is shared now — every
+ *  slot's digit rule needs the same list, and a list derived per document is a
+ *  list that differs per document. */
+export const productTokens = (texts: string[]): string[] => allowTokens(texts)
 
 export interface ScrubOptions {
   /** Product names that may carry digits. */
@@ -95,25 +84,15 @@ function capParagraphs(paragraphs: string[], max: number): string {
 }
 
 function scrubParagraph(raw: string, figures: FigureTable, allow: string[]): ScrubResult {
-  const kept: string[] = []
-  let dropped = 0
-  let leaked = false
+  // The writer's own three extras, then the shared loop: internal handles
+  // ([G3], (S1, S2), bare J7) never reach a reader, and a dash between clauses
+  // is house style enforced in code rather than asked for in a prompt.
   const source = noDashes(stripThemeRefs(raw ?? '').replace(/\[[GSJ]\d+\]/g, '').replace(/\b[GSJ]\d+\b/g, ''))
-  const allowed = allow.map((a) => new RegExp(`\\b${a.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&')}\\b`, 'gi'))
-  for (const sentence of splitSentences(source)) {
-    const keys = [...sentence.matchAll(FIGURE_KEY_RE)].map((m) => m[1])
-    if (keys.some((k) => !figures[k])) { dropped += 1; continue }
-    let withoutKeys = sentence.replace(FIGURE_KEY_RE, ' ')
-    for (const re of allowed) withoutKeys = withoutKeys.replace(re, ' ')
-    FIGURE_RE.lastIndex = 0
-    if (withoutKeys.replace(FIGURE_RE, '') !== withoutKeys) { dropped += 1; leaked = true; continue }
-    const stripped = sentence.replace(MAGNITUDE_RE, '')
-    if (stripped !== sentence) leaked = true
-    const text = tidy(stripped)
-    if (!text || text.replace(FIGURE_KEY_RE, '').replace(/[\s.,;:!?]/g, '') === '') { dropped += 1; continue }
-    kept.push(text)
-  }
-  return { text: kept.join(' '), dropped, leaked }
+  // `document_write`'s own row in the policy table, rather than a hard-wired
+  // call to one of the two rules: the table has to DRIVE its wired slots or it
+  // is a comment about them.
+  const r = scrubProse('document_write', source, { figures, allow })
+  return { text: r.text, dropped: r.dropped, leaked: r.leaked }
 }
 
 /** A short line (a headline, a list item): one sentence's worth, same rules,

@@ -3,6 +3,7 @@ import { chunk } from '../chunk'
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, estimateCost } from '../config'
+import { GATE_DEFAULT_REASONS } from './gate-verdicts'
 import { fold, str } from './util'
 import type { GatherConfig, VideoInsert } from './types'
 
@@ -143,7 +144,7 @@ export async function classifyRelevance(
   const result: ClassifyResult = { verdicts, costUsd: 0, promptTokens: 0, completionTokens: 0 }
 
   if (opts.method === 'off') {
-    for (const c of candidates) verdicts.set(c.video_id, { relevant: true, reason: 'gate off', source: 'default' })
+    for (const c of candidates) verdicts.set(c.video_id, { relevant: true, reason: GATE_DEFAULT_REASONS.off, source: 'default' })
     return result
   }
 
@@ -156,7 +157,7 @@ export async function classifyRelevance(
 
   const keepUndecided = () => {
     for (const c of undecided) {
-      if (!verdicts.has(c.video_id)) verdicts.set(c.video_id, { relevant: true, reason: 'no off-market signal in metadata', source: 'default' })
+      if (!verdicts.has(c.video_id)) verdicts.set(c.video_id, { relevant: true, reason: GATE_DEFAULT_REASONS.undecided, source: 'default' })
     }
   }
 

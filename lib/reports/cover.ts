@@ -1,3 +1,6 @@
+import { FIGURE_KEY_RE, scrubProse, splitSentences } from '../prose/scrub'
+import type { Verdict } from '../reading/verdicts'
+
 import { AUDIENCES, type Audience, type CoverText, type FigureTable } from './types'
 
 /**
@@ -13,7 +16,10 @@ import { AUDIENCES, type Audience, type CoverText, type FigureTable } from './ty
  * waits on, or fails for, the model.
  */
 
-export const FIGURE_KEY_RE = /\[\[([a-z][a-z0-9_]*)\]\]/g
+// The placeholder pattern and the sentence splitter are the scrubber's
+// (lib/prose/scrub.ts) — re-exported here because this file's importers have
+// always taken them from the cover.
+export { FIGURE_KEY_RE, splitSentences }
 
 export type CoverPart = { text: string } | { figure: string; key: string }
 
@@ -38,14 +44,6 @@ export function substituteFigures(body: string, figures: FigureTable): CoverPart
   const lastPart = parts[parts.length - 1]
   if (lastPart && 'text' in lastPart) lastPart.text = lastPart.text.replace(/\s+$/, '')
   return parts
-}
-
-export function splitSentences(body: string): string[] {
-  return body
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+(?=[A-Z\[“"])/)
-    .map((s) => s.trim())
-    .filter(Boolean)
 }
 
 /** Plain text of a substituted cover — for previews and the snapshot title. */
@@ -91,38 +89,25 @@ export function dedupeTitles(titles: string[]): string[] {
 }
 
 // ── the scrub ─────────────────────────────────────────────────────────────
-// The write-time rules of the executive brief (lib/pipeline/narrative.ts),
-// applied sentence by sentence to model prose that names figures by key.
-
-const KEYED_FIGURE_RE = /\[\[([a-z][a-z0-9_]*)\]\]/g
+// Both of item 9's rules, run by the shared implementation (lib/prose/scrub.ts).
+// The cover is one of the four slots that write prose ABOUT a reading without
+// being handed verdicts, so the direction rule with an empty `verdicts[]`
+// deletes every directional sentence — which is what the cover prompt has
+// asked for in words since it was written and has never enforced.
 
 export interface ScrubbedCover {
   body: string
-  /** Sentences dropped: an unknown key, a leaked digit that could not be re-anchored, or nothing left after the strip. */
+  /** Sentences dropped: an unknown key, a leaked digit, a direction nothing
+   *  earned, or nothing left after the strip. */
   dropped: number
   /** True when a magnitude word or a literal number had to be removed. */
   leaked: boolean
 }
 
-/** Keep only sentences that cite known keys, strip magnitude words, and
- *  drop any sentence in which the model typed a number of its own — a
- *  figure in a cover is either substituted by code or absent. */
-export function scrubCover(body: string, figures: FigureTable, rules: { magnitude: RegExp; figure: RegExp; tidy: (s: string) => string }): ScrubbedCover {
-  const kept: string[] = []
-  let dropped = 0
-  let leaked = false
-  for (const raw of splitSentences(body)) {
-    const keys = [...raw.matchAll(KEYED_FIGURE_RE)].map((m) => m[1])
-    if (keys.some((k) => !figures[k])) { dropped += 1; continue }
-    const withoutKeys = raw.replace(KEYED_FIGURE_RE, ' ')
-    // A literal number outside a placeholder: the model wrote a figure.
-    rules.figure.lastIndex = 0
-    if (withoutKeys.replace(rules.figure, '') !== withoutKeys) { dropped += 1; leaked = true; continue }
-    const stripped = raw.replace(rules.magnitude, '')
-    if (stripped !== raw) leaked = true
-    const text = rules.tidy(stripped)
-    if (!text || text.replace(KEYED_FIGURE_RE, '').replace(/[\s.,;:!?]/g, '') === '') { dropped += 1; continue }
-    kept.push(text)
-  }
-  return { body: kept.join(' '), dropped, leaked }
+export function scrubCover(body: string, figures: FigureTable, verdicts: readonly Verdict[] = []): ScrubbedCover {
+  // Through the policy table, not around it: `report_cover` is `both` there,
+  // and a table that documents a slot without driving it is a table the next
+  // policy change will not reach.
+  const out = scrubProse('report_cover', body, { figures, verdicts })
+  return { body: out.text, dropped: out.dropped, leaked: out.leaked }
 }

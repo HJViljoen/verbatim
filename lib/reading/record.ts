@@ -1,0 +1,726 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
+import { fmtInt, fmtPct } from '../format'
+import { selectAll } from '../supabase-admin'
+
+import { isMissingMonthlyReading, monthStartOf } from './monthly'
+import { loadWindowReading } from './read'
+import { TABLE_DENOMINATORS, type PlatformMix } from './types'
+import { isAnswer, type Verdict } from './verdicts'
+
+// Item 7 — the record, and the one line on every page that opens it.
+//
+// WHY THIS IS A LOADER AND NOT A PAGE. Almost everything the record line names
+// is already computed somewhere and printed nowhere a client can reach:
+// `videos.analyzed_with_transcript` / `_translation` / `_ocr` — the product's
+// stated differentiator — has exactly one non-pipeline reader in the whole
+// repo, the operator readiness page; `transcript_lang` has none; `gate_verdicts`
+// is superadmin-only. The record is those numbers, gathered once, in one
+// shape, so the "how sound is this" line and the OV6 paragraph are pure
+// composers over it rather than eight page-specific queries.
+//
+// WHY IT LIVES BESIDE read.ts RATHER THAN INSIDE IT. The reading layer's I/O is
+// one file by decision N, and that rule is about the MONTH TABLES: one place
+// decides what `substrate` is and how a silence is told apart from a zero. The
+// record reads five tables that are nobody's reading — `videos`,
+// `gate_verdicts`, `pipeline_runs`, `config_changes`, `theme_observations` —
+// and folding them into read.ts would make it the product's loader rather than
+// the reading's. It takes the same handle, reads read-only, and asks read.ts
+// for anything that comes off a month table.
+//
+// EVERY FIGURE CARRIES ITS BASIS. Three clocks meet here and a line that pools
+// them lies. The window figures are comment-dated (the product's one clock);
+// the delivery and discard records are run-dated, because a run is when
+// something was looked at; and how much of each video was read is a fact about
+// the corpus, not about a month, because a video has no date of its own. Each
+// group says which it is, and the composers print it.
+
+/** The window a record is read over. The same half-open shape the reading
+ *  layer's SQL windows take. */
+export interface RecordWindow {
+  kind: 'month' | 'quarter' | 'week' | 'since'
+  /** `YYYY-MM-DD`, inclusive. */
+  from: string
+  /** `YYYY-MM-DD`, inclusive. */
+  to: string
+}
+
+/** What was delivered, on the run clock. Never a period key for anything else
+ *  (AGENTS.md) — it is the record OF the deliveries, which is the one thing a
+ *  run's own date is the honest index for. */
+export interface DeliveryRecord {
+  delivered: number
+  /** Start dates of the delivered updates, oldest first, `YYYY-MM-DD`. */
+  dates: string[]
+  longestGapDays: number | null
+  /** Updates that ran inside the window and ended in failure — `status` neither
+   *  `completed` nor `partial`. In production that means exactly `failed`: 20
+   *  rows, every one of them with a `completed_at`. They SETTLED; they settled
+   *  badly. An update that started and never settled is
+   *  `pipeline_runs.stalled`, a different column, and nothing here reads it
+   *  yet. Not printed by any composer — it is carried for whichever surface
+   *  first wants "and two of them failed", and a field waiting to be printed
+   *  is the worst place for a wrong name. */
+  failed: number
+  basis: 'run_clock'
+}
+
+/** How much conversation the window held, comment-dated, per audience. */
+export interface CoverageRecord {
+  audience: string
+  videos: number
+  comments: number
+  platformMix: PlatformMix
+  dualMention: number
+  excludedUndated: number
+}
+
+/** How much of each video the product managed to read. A corpus fact: a video
+ *  belongs to a month through its comments, and `analyzed_with_*` is about the
+ *  video, so this is all-time and says so. Reddit is excluded by construction —
+ *  a Reddit post has no audio and no cover frame, and `analyzed_with_transcript`
+ *  is nonetheless true on 207 of them, because a post's selftext is stored in
+ *  the transcript column on purpose. Counting those would claim the product
+ *  listened to audio on Reddit. */
+export interface ReadDepthRecord {
+  analysed: number
+  speech: number
+  translated: number
+  onScreenText: number
+  /** Read before the product recorded which of the three it managed. */
+  unflagged: number
+  basis: 'all_time_non_reddit'
+}
+
+/** The share not in English — three numbers, not one. 30.8% of Össur's
+ *  analysed non-Reddit videos have no language recorded at all, and unknown is
+ *  not non-English. */
+export interface LanguageRecord {
+  analysed: number
+  unknown: number
+  english: number
+  notEnglish: number
+  /** `video_speech` until a comment-level language exists (item 8's cache). The
+   *  line prints which it is, because "27% not in English" is a statement about
+   *  what was SAID in videos, not about the quotes a reader sees. */
+  basis: 'video_speech' | 'comment'
+}
+
+/** What was looked at and set aside. Run-dated, and the record starts late:
+ *  23 Aug on Össur against a first run of 6 Apr, 9 Sep on Sealand against
+ *  28 Jun. No month before that can show a discard share at all. */
+export interface DiscardRecord {
+  judged: number
+  kept: number
+  setAside: number
+  /** The first verdict ever recorded for this tenant, `YYYY-MM-DD`. Null when
+   *  none is: then the share is not unknown, it is unrecorded. */
+  recordedFrom: string | null
+  /** Cleared by the cheap check and never put to the model — the heuristic
+   *  found no reason to drop it (`method: 'heuristic'`). A DECISION, not a
+   *  defect, and by far the commonest of the three `source: 'default'` cases:
+   *  all 295 production rows are this one. */
+  clearedByHeuristic: number
+  /** Judged while the gate was switched off for the gather. */
+  gateOff: number
+  /** Judged without a judgement — the gate ran, returned nothing for this
+   *  video, and it entered unjudged. The real fail-open, and the only one of
+   *  the three that is a defect. Counted by `reason`, never by `source`:
+   *  `source: 'default'` covers all three and separates none of them. */
+  failedOpen: number
+  basis: 'run_clock'
+}
+
+/** The instrument-stability figure: themes attached per analysed video. When it
+ *  moves, every page says so — so it has to be computed, and before this
+ *  nothing in the product computed it. */
+export interface InstrumentRecord {
+  /** Themes attached per analysed video, or null when it cannot be computed. */
+  themesPerVideo: number | null
+  themeAttachments: number
+  analysedVideos: number
+  /** The run it was measured on. A bookkeeping key, never a period. */
+  runId: string | null
+}
+
+/** What changed under the reading, and where the record of changes begins. */
+export interface ChangeRecord {
+  /** Logged changes inside the window. */
+  inWindow: number
+  /** The first REAL entry: a reconstructed row is inference from what an update
+   *  searched, and dating the boundary from one would say the log begins before
+   *  anything was written down. */
+  loggedFrom: string | null
+  /** Rows reconstructed rather than recorded at the time. */
+  reconstructed: number
+}
+
+export interface RecordInputs {
+  window: RecordWindow
+  delivery: DeliveryRecord
+  /** Per audience, comment-dated. Null when the month tables are not applied;
+   *  empty when this tenant has never been read. */
+  coverage: CoverageRecord[] | null
+  readDepth: ReadDepthRecord
+  language: LanguageRecord
+  discard: DiscardRecord
+  instrument: InstrumentRecord
+  changes: ChangeRecord
+  /** Comparisons this render asked for and did not draw. Counted by the
+   *  caller, because it is a property of what a page chose to show, not of the
+   *  corpus: the same month refuses three comparisons on Overview and none on a
+   *  tile that only prints levels. `countRefused` does the counting. */
+  comparisonsRefused: number | null
+  /** "Reading as at" — the instant the page was built. */
+  readingAt: string
+  /** The newest freeze in the window, or null while every month in it is still
+   *  filling. */
+  frozenAt: string | null
+}
+
+/** Comparisons a render asked for and did not draw. A refusal and a thin
+ *  reading are both "no answer", and the record counts them together because
+ *  that is the number a reader needs: how often the product declined to say. */
+export function countRefused(verdicts: readonly Verdict[]): number {
+  return verdicts.filter((v) => !isAnswer(v.state)).length
+}
+
+export interface RecordOptions {
+  /** The render's own refusal counter. */
+  comparisonsRefused?: number | null
+  /** Overridable for tests and for a snapshot that re-renders as at its own
+   *  reading date rather than as at now. */
+  now?: string
+}
+
+/**
+ * Every input the record line and the record page need, for one tenant and one
+ * window, read-only.
+ *
+ * Nothing here throws on a table that does not exist yet: the month tables, the
+ * change log and the theme-observation columns each land in their own window,
+ * and a record that takes the page down because a migration is a day behind is
+ * worse than a record that says "not recorded yet". The readiness page's own
+ * precedent, and the reason every group carries a null or a zero it can explain.
+ */
+export async function loadRecordInputs(
+  client: SupabaseClient,
+  clientId: string,
+  window: RecordWindow,
+  options: RecordOptions = {},
+): Promise<RecordInputs> {
+  const readingAt = options.now ?? new Date().toISOString()
+
+  const [delivery, coverage, readDepth, language, discard, instrument, changes, frozenAt] = await Promise.all([
+    loadDelivery(client, clientId, window),
+    loadCoverage(client, clientId, window),
+    loadReadDepth(client, clientId),
+    loadLanguage(client, clientId),
+    loadDiscard(client, clientId, window),
+    loadInstrument(client, clientId),
+    loadChanges(client, clientId, window),
+    loadFrozenAt(client, clientId, window),
+  ])
+
+  return {
+    window,
+    delivery,
+    coverage,
+    readDepth,
+    language,
+    discard,
+    instrument,
+    changes,
+    comparisonsRefused: options.comparisonsRefused ?? null,
+    readingAt,
+    frozenAt,
+  }
+}
+
+// ---- the reads ---------------------------------------------------------------
+
+const dayStart = (day: string): string => `${day}T00:00:00.000Z`
+const dayEnd = (day: string): string => `${day}T23:59:59.999Z`
+
+async function loadDelivery(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<DeliveryRecord> {
+  const runs = await selectAll<{ started_at: string | null; completed_at: string | null; status: string }>(() =>
+    client
+      .from('pipeline_runs')
+      .select('id, started_at, completed_at, status')
+      .eq('client_id', clientId)
+      .gte('started_at', dayStart(w.from))
+      .lte('started_at', dayEnd(w.to))
+      .order('started_at', { ascending: true })
+      .order('id', { ascending: true }),
+  )
+  const delivered = runs.filter((r) => (r.status === 'completed' || r.status === 'partial') && r.started_at)
+  const dates = delivered.map((r) => (r.started_at as string).slice(0, 10))
+  return {
+    delivered: delivered.length,
+    dates,
+    longestGapDays: longestGapDays(delivered.map((r) => r.started_at as string)),
+    failed: runs.filter((r) => r.status !== 'completed' && r.status !== 'partial').length,
+    basis: 'run_clock',
+  }
+}
+
+/** The longest stretch between two deliveries, in whole days. Null under two —
+ *  one update has no gap, and printing 0 would read as "never late". */
+export function longestGapDays(startedAt: readonly string[]): number | null {
+  const times = startedAt.map((t) => Date.parse(t)).filter(Number.isFinite).sort((a, b) => a - b)
+  if (times.length < 2) return null
+  let longest = 0
+  for (let n = 1; n < times.length; n++) longest = Math.max(longest, times[n] - times[n - 1])
+  return Math.round(longest / 86_400_000)
+}
+
+/**
+ * The window's conversation, per audience.
+ *
+ * Through the windowed SQL function, never by summing month rows: `videos` is a
+ * count of DISTINCT videos and a video whose thread spans two months belongs to
+ * both months' sets, so the sum overstates Össur's own brand by 38.7% over
+ * twelve months. Comments do sum; videos never will.
+ */
+async function loadCoverage(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<CoverageRecord[] | null> {
+  const reading = await loadWindowReading(client, clientId, { from: w.from, to: w.to })
+  if (reading.denominators) {
+    return reading.denominators.map((d) => ({
+      audience: d.audience,
+      videos: d.videos,
+      comments: d.comments,
+      platformMix: d.platform_mix ?? {},
+      dualMention: d.dual_mention ?? 0,
+      excludedUndated: d.excluded_undated ?? 0,
+    }))
+  }
+  // The windowed function lands in its own migration and a deploy can precede
+  // it. A SINGLE MONTH can still be answered off the stored row, exactly, and
+  // the record's commonest window is one month — so it is, and any wider window
+  // says "not recorded yet" rather than summing month rows into a video count
+  // that is 38.7% too high over twelve months.
+  if (monthStartOf(w.from) !== monthStartOf(w.to)) return null
+  return await loadStoredMonth(client, clientId, monthStartOf(w.from))
+}
+
+type StoredDenominator = {
+  audience: string
+  videos: number | null
+  comments: number | null
+  platform_mix: PlatformMix | null
+  dual_mention: number | null
+  excluded_undated: number | null
+}
+
+async function loadStoredMonth(client: SupabaseClient, clientId: string, month: string): Promise<CoverageRecord[] | null> {
+  try {
+    const rows = await selectAll<StoredDenominator>(() =>
+      client
+        .from(TABLE_DENOMINATORS)
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('month', month)
+        .order('audience', { ascending: true }),
+    )
+    return rows.map((d) => ({
+      audience: d.audience,
+      videos: d.videos ?? 0,
+      comments: d.comments ?? 0,
+      platformMix: d.platform_mix ?? {},
+      dualMention: d.dual_mention ?? 0,
+      excludedUndated: d.excluded_undated ?? 0,
+    }))
+  } catch (error) {
+    if (isMissingMonthlyReading(error)) return null
+    throw error
+  }
+}
+
+const headCount = async (q: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
+  const { count, error } = await q
+  if (error) throw new Error(`record head count: ${(error as { message?: string }).message ?? String(error)}`)
+  return count ?? 0
+}
+
+async function loadReadDepth(client: SupabaseClient, clientId: string): Promise<ReadDepthRecord> {
+  const analysed = () =>
+    client
+      .from('videos')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .not('analyzed_run_id', 'is', null)
+      .neq('platform', 'reddit')
+  const [total, speech, translated, onScreenText, unflagged] = await Promise.all([
+    headCount(analysed()),
+    headCount(analysed().eq('analyzed_with_transcript', true)),
+    headCount(analysed().eq('analyzed_with_translation', true)),
+    headCount(analysed().eq('analyzed_with_ocr', true)),
+    headCount(analysed().is('analyzed_with_transcript', null)),
+  ])
+  return { analysed: total, speech, translated, onScreenText, unflagged, basis: 'all_time_non_reddit' }
+}
+
+/** English, by the pipeline's own normaliser's rule — `en`, `english`, `en-*`,
+ *  case-insensitively. The column is not a clean vocabulary (ISO codes beside
+ *  `punjabi`, `nynorsk`, `javanese`), which is why only the English/not-English
+ *  split is drawn and a per-language breakdown is not. */
+export function isEnglishTag(lang: string | null | undefined): boolean {
+  const t = (lang ?? '').trim().toLowerCase()
+  return t === 'en' || t === 'english' || /^en[-_]/.test(t)
+}
+
+async function loadLanguage(client: SupabaseClient, clientId: string): Promise<LanguageRecord> {
+  const rows = await selectAll<{ transcript_lang: string | null }>(() =>
+    client
+      .from('videos')
+      .select('id, transcript_lang')
+      .eq('client_id', clientId)
+      .not('analyzed_run_id', 'is', null)
+      .neq('platform', 'reddit')
+      .order('id', { ascending: true }),
+  )
+  let unknown = 0
+  let english = 0
+  let notEnglish = 0
+  for (const row of rows) {
+    const tag = (row.transcript_lang ?? '').trim()
+    if (!tag) unknown += 1
+    else if (isEnglishTag(tag)) english += 1
+    else notEnglish += 1
+  }
+  return { analysed: rows.length, unknown, english, notEnglish, basis: 'video_speech' }
+}
+
+async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<DiscardRecord> {
+  const gate = () =>
+    client
+      .from('gate_verdicts')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .gte('created_at', dayStart(w.from))
+      .lte('created_at', dayEnd(w.to))
+  const [judged, kept, clearedByHeuristic, gateOff, failedOpen, first] = await Promise.all([
+    headCount(gate()),
+    headCount(gate().eq('kept', true)),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.undecided)),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.off)),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.failedOpen)),
+    client
+      .from('gate_verdicts')
+      .select('created_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ])
+  if (first.error) throw new Error(`gate_verdicts first: ${first.error.message}`)
+  const recordedFrom = (first.data as { created_at?: string } | null)?.created_at ?? null
+  return {
+    judged,
+    kept,
+    setAside: judged - kept,
+    clearedByHeuristic,
+    gateOff,
+    failedOpen,
+    recordedFrom: recordedFrom ? recordedFrom.slice(0, 10) : null,
+    basis: 'run_clock',
+  }
+}
+
+/**
+ * Themes attached per analysed video, on the newest run that produced any.
+ *
+ * Counted off `theme_observations.member_video_ids` (M2) — the durable member
+ * set — and off NOTHING ELSE. `member_insight_ids` is the obvious fallback and
+ * it is a trap: an insight id belongs to one insight, so the attachments and
+ * the distinct members are the same number and the figure comes back as
+ * exactly 1.00 on both tenants, every run, whatever the instrument did. Null
+ * rather than a figure that cannot move: "nobody has measured this" and "the
+ * instrument attached one theme per video" are different answers, and this one
+ * is the first until M2 is applied and a run has written the column.
+ *
+ * Two columns, not `*`: the newest run carries ~1,346 observations on Össur,
+ * and once M2 lands each of those rows carries a `member_video_ids` array
+ * beside everything else the table holds. One array column is what this reads,
+ * so one array column is what it asks for.
+ */
+async function loadInstrument(client: SupabaseClient, clientId: string): Promise<InstrumentRecord> {
+  const none: InstrumentRecord = { themesPerVideo: null, themeAttachments: 0, analysedVideos: 0, runId: null }
+  let rows: { run_id: string | null; member_video_ids?: string[] | null }[] = []
+  try {
+    const newest = await client
+      .from('theme_observations')
+      .select('run_id, run_date')
+      .eq('client_id', clientId)
+      .order('run_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (newest.error) throw newest.error
+    const runId = (newest.data as { run_id?: string | null } | null)?.run_id ?? null
+    if (!runId) return none
+    rows = await selectAll(() =>
+      client
+        .from('theme_observations')
+        .select('run_id, member_video_ids')
+        .eq('client_id', clientId)
+        .eq('run_id', runId)
+        .order('id', { ascending: true }),
+    )
+    if (rows.length === 0) return none
+    const videos = new Set<string>()
+    let attachments = 0
+    for (const row of rows) {
+      const members = row.member_video_ids ?? null
+      if (members == null) continue
+      attachments += members.length
+      for (const id of members) videos.add(id)
+    }
+    if (videos.size === 0) return { ...none, runId }
+    return {
+      themesPerVideo: Number((attachments / videos.size).toFixed(2)),
+      themeAttachments: attachments,
+      analysedVideos: videos.size,
+      runId,
+    }
+  } catch (error) {
+    // ONLY the one error this answer is true for. `member_video_ids` arrives
+    // with M2 and is absent until it is applied, and the record's honest answer
+    // to that is "not recorded yet". A permission error, a dropped connection
+    // or a bug in the query above is a different fact and printing the same
+    // sentence for it would hide a broken read behind a true-sounding one —
+    // every other loader in this file narrows the same way.
+    if (isMissingThemeMembers(error)) return none
+    throw error
+  }
+}
+
+/** The error a read of `theme_observations.member_video_ids` gets before M2 is
+ *  applied. Same shape as `isMissingMonthlyReading` / `isMissingConfigLog`:
+ *  PostgREST's schema-cache codes and Postgres's own, and the object has to be
+ *  named in the message before any of them counts. */
+export function isMissingThemeMembers(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!/member_video_ids|theme_observations/.test(text)) return false
+  if (code && ['PGRST204', 'PGRST205', '42P01', '42703'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
+}
+
+async function loadChanges(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<ChangeRecord> {
+  let all: ConfigChange[] = []
+  try {
+    all = await selectAll<ConfigChange>(() =>
+      client
+        .from(CONFIG_CHANGES_TABLE)
+        .select('*')
+        .eq('client_id', clientId)
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (!isMissingConfigLog(error)) throw error
+    return { inWindow: 0, loggedFrom: null, reconstructed: 0 }
+  }
+  const from = dayStart(w.from)
+  const to = dayEnd(w.to)
+  const logged = all.filter((c) => c.source !== 'reconstructed')
+  return {
+    inWindow: all.filter((c) => c.changed_at >= from && c.changed_at <= to).length,
+    loggedFrom: logged[0] ? logged[0].changed_at.slice(0, 10) : null,
+    reconstructed: all.length - logged.length,
+  }
+}
+
+/** The newest freeze among the window's months. Null while every month in it is
+ *  still filling — which is the honest answer for the current month and stays
+ *  the honest answer until 30 days after it ends. */
+async function loadFrozenAt(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<string | null> {
+  try {
+    const { data, error } = await client
+      .from(TABLE_DENOMINATORS)
+      .select('frozen_at')
+      .eq('client_id', clientId)
+      .gte('month', monthStartOf(w.from))
+      .lte('month', monthStartOf(w.to))
+      .not('frozen_at', 'is', null)
+      .order('frozen_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (error) throw error
+    return (data as { frozen_at?: string | null } | null)?.frozen_at ?? null
+  } catch (error) {
+    if (isMissingMonthlyReading(error)) return null
+    throw error
+  }
+}
+
+// ---- the composers -----------------------------------------------------------
+
+/** Videos in the window, across every audience. Distinct per audience and
+ *  summed across them, which is exact: an audience is a partition of the
+ *  corpus (client, else `competitor:<name>`, else the category), so no video is
+ *  in two of them. */
+export function totalVideos(coverage: readonly CoverageRecord[]): number {
+  return coverage.reduce((n, c) => n + c.videos, 0)
+}
+
+/** The platform mix of every denominator, pooled the same way. */
+export function totalPlatformMix(coverage: readonly CoverageRecord[]): PlatformMix {
+  const out: PlatformMix = {}
+  for (const c of coverage) for (const [platform, n] of Object.entries(c.platformMix)) out[platform] = (out[platform] ?? 0) + n
+  return out
+}
+
+const PLATFORM_LABEL: Record<string, string> = {
+  tiktok: 'TikTok',
+  youtube: 'YouTube',
+  instagram: 'Instagram',
+  reddit: 'Reddit',
+}
+
+/** "TikTok 163 · YouTube 212 · Instagram 82 · Reddit 12". Largest first, every
+ *  platform named: no platform is pooled silently. */
+export function platformMixLine(mix: PlatformMix): string {
+  return Object.entries(mix)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([platform, n]) => `${PLATFORM_LABEL[platform] ?? platform} ${fmtInt(n)}`)
+    .join(' · ')
+}
+
+const share = (k: number, n: number): string => (n > 0 ? fmtPct((k / n) * 100, 0) : '—')
+
+const plural = (n: number, word: string): string => `${fmtInt(n)} ${word}${n === 1 ? '' : 's'}`
+
+/**
+ * The one "how sound is this" line, in the page bar.
+ *
+ * One counter on screen and no other method text on the page. It opens to the
+ * record; everything it cannot say in a clause it says there.
+ */
+export function howSoundLine(input: RecordInputs): string {
+  const parts: string[] = []
+  parts.push(plural(input.delivery.delivered, 'update'))
+
+  if (input.coverage == null) parts.push('coverage not recorded yet')
+  else if (input.coverage.length === 0) parts.push('nothing read in this window')
+  else {
+    const videos = totalVideos(input.coverage)
+    const mix = platformMixLine(totalPlatformMix(input.coverage))
+    parts.push(mix ? `${plural(videos, 'video')} (${mix})` : plural(videos, 'video'))
+  }
+
+  const lang = input.language
+  if (lang.analysed > 0) {
+    const known = lang.english + lang.notEnglish
+    parts.push(
+      known > 0
+        ? `${share(lang.notEnglish, known)} of what was said on camera was not in English`
+        : 'no language recorded on what was said on camera',
+    )
+  }
+
+  if (input.changes.inWindow > 0) parts.push(plural(input.changes.inWindow, 'tracking change'))
+  return `${parts.join(' · ')} → the record`
+}
+
+/**
+ * What to say about the videos nothing judged. Three different facts wear one
+ * `source` value, and the record said the worst of the three about all of
+ * them: "97 videos entered without a judgement" was printed for 295 rows whose
+ * reason is "no off-market signal in metadata" — the cheap check cleared them
+ * and the model was never asked, which is the gate working. A record that
+ * reports a defect where there is none is worse than one that says nothing.
+ */
+export function discardCaveat(g: DiscardRecord): string {
+  const parts: string[] = []
+  if (g.clearedByHeuristic > 0) parts.push(`${plural(g.clearedByHeuristic, 'video')} passed the quick check and were never looked at more closely`)
+  if (g.gateOff > 0) parts.push(`${plural(g.gateOff, 'video')} came in while the check was switched off`)
+  if (g.failedOpen > 0) parts.push(`${plural(g.failedOpen, 'video')} entered without a judgement because the check itself returned none`)
+  return parts.length === 0 ? '' : `; ${parts.join(', and ')}`
+}
+
+/**
+ * The record itself, as lines (OV6 and the record page). Each line is one fact
+ * with its basis; a fact nothing has recorded says so rather than printing a
+ * zero.
+ */
+export function recordLines(input: RecordInputs): string[] {
+  const lines: string[] = []
+  const d = input.delivery
+  lines.push(
+    d.delivered === 0
+      ? 'No update was delivered in this window.'
+      : `${plural(d.delivered, 'update')} delivered${d.dates.length ? `, ${d.dates[0]} to ${d.dates[d.dates.length - 1]}` : ''}${d.longestGapDays != null ? `, longest gap ${plural(d.longestGapDays, 'day')}` : ''}.`,
+  )
+
+  if (input.coverage == null) lines.push('The month-by-month reading has not been recorded for this workspace yet.')
+  else if (input.coverage.length > 0) {
+    const videos = totalVideos(input.coverage)
+    const mix = platformMixLine(totalPlatformMix(input.coverage))
+    lines.push(`${plural(videos, 'video')} carried conversation in this window${mix ? ` — ${mix}` : ''}.`)
+    const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
+    if (dual > 0) lines.push(`${plural(dual, 'video')} of your own named a tracked rival as well as you.`)
+    const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
+    if (undated > 0) lines.push(`${plural(undated, 'comment')} carried no date and are in no month.`)
+  }
+
+  const r = input.readDepth
+  if (r.analysed > 0) {
+    lines.push(
+      `Of everything read for you, speech was read on ${share(r.speech, r.analysed)}, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)} — Reddit excluded, which has neither audio nor a cover frame.`,
+    )
+    if (r.unflagged > 0) lines.push(`${plural(r.unflagged, 'video')} were read before the product recorded which of the three it managed.`)
+  }
+
+  const lang = input.language
+  const known = lang.english + lang.notEnglish
+  if (lang.analysed > 0) {
+    lines.push(
+      known === 0
+        ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
+        : `${share(lang.notEnglish, known)} of the videos whose language we know were not in English${lang.unknown > 0 ? `, and ${plural(lang.unknown, 'video')} have no language recorded at all` : ''}. This is what was said in videos; the comments have no language of their own recorded yet.`,
+    )
+  }
+
+  const g = input.discard
+  lines.push(
+    g.recordedFrom == null
+      ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
+      : g.judged === 0
+        ? `Nothing was looked at and set aside in this window — the record of it begins ${g.recordedFrom}.`
+        : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${g.recordedFrom}, so no month before that can show it${discardCaveat(g)}.`,
+  )
+
+  const i = input.instrument
+  lines.push(
+    i.themesPerVideo == null
+      ? 'How many themes attach to each video has not been recorded yet.'
+      : `${i.themesPerVideo} themes attached per analysed video on the most recent update.`,
+  )
+
+  const c = input.changes
+  lines.push(
+    c.inWindow === 0 ? 'Nothing about what we track changed in this window.' : `${plural(c.inWindow, 'change')} to what we track fell inside this window.`,
+  )
+  lines.push(
+    c.loggedFrom == null
+      ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
+      : `No change record before ${c.loggedFrom}${c.reconstructed > 0 ? `, though ${fmtInt(c.reconstructed)} ${c.reconstructed === 1 ? 'entry was' : 'entries were'} reconstructed from what each update searched` : ''}.`,
+  )
+
+  if (input.comparisonsRefused != null) {
+    lines.push(
+      input.comparisonsRefused === 0
+        ? 'Every comparison this page asked for could be drawn.'
+        : `${plural(input.comparisonsRefused, 'comparison')} on this page could not be drawn and says why in its place.`,
+    )
+  }
+
+  lines.push(`Reading as at ${input.readingAt.slice(0, 10)}.`)
+  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${input.frozenAt.slice(0, 10)}.`)
+  return lines
+}

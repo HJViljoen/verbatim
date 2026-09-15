@@ -310,7 +310,7 @@ const playbooksBody: R = (d) => (
         ))}
       </tbody>
     </table>
-    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the conversation it sparked — never the footage.</p>
+    <p className="mt-3 text-[11px] text-muted-foreground">Hooks are read from each video’s caption, its speech transcript when captured, and the comments written under it — never the footage.</p>
   </>
 )
 
