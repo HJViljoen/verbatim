@@ -155,6 +155,11 @@ describe('headline', () => {
     expect(headline({ verdicts: [rival] }).body).toContain('of Freitag’s videos this month')
   })
 
+  it('labels the denominator with a noun, not with the sentence’s possessive', () => {
+    const labels = Object.values(headline({ verdicts: [moved('t1', 'Price', 2.0)] }).figures).map((f) => f.label)
+    expect(labels).toContain('videos read for the category')
+  })
+
   it('reads nothing that did not clear its band', () => {
     const unbanded: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'no_clear_change' }
     const h = headline({ verdicts: [unbanded] })

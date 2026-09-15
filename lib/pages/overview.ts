@@ -493,6 +493,20 @@ export function audienceInSentence(audience: string): string {
   return `${audienceLabel(audience)}’s videos`
 }
 
+/**
+ * The audience a figure LABEL names.
+ *
+ * A label is what a token prints as when it is substituted, so it is read by a
+ * reader and must be a noun rather than the sentence's possessive: the
+ * denominator token was labelled `videos read for ${audienceInSentence(...)}`
+ * and printed "videos read for the category's videos".
+ */
+export function audienceInLabel(audience: string): string {
+  if (audience === CLIENT_AUDIENCE) return 'your own brand'
+  if (audience === INDUSTRY_AUDIENCE) return 'the category'
+  return audienceLabel(audience)
+}
+
 export interface Headline {
   lead: Verdict | null
   body: string
@@ -526,7 +540,7 @@ export function headline(input: HeadlineInput): Headline {
   const figures: FigureTable = {
     [share]: { value: pctOf(lead.value.k, lead.value.n) ?? 0, unit: 'pct', label: `${lead.objectLabel}'s share of the month` },
     [videos]: { value: lead.value.k, unit: 'videos', label: `videos that raised ${lead.objectLabel}` },
-    [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${audience}` },
+    [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${audienceInLabel(lead.audience)}` },
   }
   const body =
     `${lead.objectLabel} came up in [[${share}]] of ${audience} this month — ` +
