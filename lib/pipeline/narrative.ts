@@ -1,3 +1,5 @@
+import { FIGURE_RE, MAGNITUDE_RE, tidy } from '../prose/scrub'
+
 import type { ExecutiveBrief, BriefMetric } from './schemas'
 
 // Write-time validator for Pass D-a's executive_brief (2026-07-18). The brief is
@@ -14,28 +16,10 @@ import type { ExecutiveBrief, BriefMetric } from './schemas'
 /** The literal placeholder the model must leave where a figure goes. */
 export const FIGURE_TOKEN = '[[n]]'
 
-// The CALIBRATED_PROSE_RULE banned set — magnitude/frequency words code owns,
-// never the model. Whole-word, case-insensitive.
-export const MAGNITUDE_WORDS = [
-  'very', 'extremely', 'significant', 'significantly', 'overwhelming', 'overwhelmingly',
-  'huge', 'hugely', 'strong', 'strongly', 'most', 'many', 'widespread', 'frequent',
-  'frequently', 'consistently', 'growing', 'increasingly', 'increasing', 'vast', 'majority',
-]
-export const MAGNITUDE_RE = new RegExp(`\\b(${MAGNITUDE_WORDS.join('|')})\\b`, 'gi')
-
-// A figure-like token: an optional sign, digits with separators, an optional
-// unit (%/k/m/bn/pts). Catches "71%", "12.4k", "3", "+8 pts" — anything the
-// model might type where a `[[n]]` token belongs.
-export const FIGURE_RE = /[+-]?\d[\d.,]*\s?(?:%|k|m|bn|pts?|percent)?/gi
-
-/** Collapse whitespace and tidy the punctuation a strip leaves behind. */
-export function tidy(text: string): string {
-  return text
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([.,;:!?])/g, '$1')
-    .replace(/^[\s,;:–-]+/, '')
-    .trim()
-}
+// The banned magnitude set, the figure pattern and the tidy-up now live with
+// the other scrubber (lib/prose/scrub.ts), so the three near-copies of this
+// loop are one. Re-exported because eleven files import them from here.
+export { FIGURE_RE, MAGNITUDE_RE, MAGNITUDE_WORDS, tidy } from '../prose/scrub'
 
 interface Scrubbed {
   text: string

@@ -47,23 +47,22 @@ describe('composeFallbackCover', () => {
 })
 
 describe('scrubCover', () => {
-  const rules = { magnitude: /\b(very|most|many|strong)\b/gi, figure: /[+-]?\d[\d.,]*\s?(?:%|k|m|bn|pts?|percent)?/gi, tidy: (s: string) => s.replace(/\s{2,}/g, ' ').replace(/\s+([.,;:!?])/g, '$1').trim() }
   it('keeps clean sentences, strips magnitude words, drops unknown keys and typed digits', () => {
     const out = scrubCover(
       'Sentiment stands at [[sentiment_positive_pct]] across the rated conversations. Very many people praised the fit. Share reached [[share_of_voice_pct]] this month. Ottobock drew 82 videos. Fine.',
-      figures, rules,
+      figures,
     )
     expect(out.body).toBe('Sentiment stands at [[sentiment_positive_pct]] across the rated conversations. people praised the fit. Fine.')
     expect(out.dropped).toBe(2)
     expect(out.leaked).toBe(true)
   })
   it('drops a sentence that is only placeholders after the strip', () => {
-    const out = scrubCover('[[videos]].', figures, rules)
+    const out = scrubCover('[[videos]].', figures)
     expect(out.body).toBe('')
     expect(out.dropped).toBe(1)
   })
   it('does not count a placeholder key as a typed number', () => {
-    const out = scrubCover('It rests on [[videos]] conversations.', figures, rules)
+    const out = scrubCover('It rests on [[videos]] conversations.', figures)
     expect(out).toEqual({ body: 'It rests on [[videos]] conversations.', dropped: 0, leaked: false })
   })
 })

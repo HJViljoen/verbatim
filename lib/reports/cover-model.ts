@@ -4,7 +4,6 @@ import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { COVER_MODEL } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
-import { FIGURE_RE, MAGNITUDE_RE, tidy } from '../pipeline/narrative'
 import { CALIBRATED_PROSE_RULE } from '../pipeline/prose-rules'
 import { composeFallbackCover, dedupeTitles, scrubCover, splitSentences } from './cover'
 import type { Audience, CoverText, FigureTable } from './types'
@@ -106,7 +105,7 @@ export async function generateCover(args: CoverArgs): Promise<CoverText> {
       : { prompt_tokens: 0, completion_tokens: 0 }
     const parsed = completion.choices[0]?.message?.parsed ?? null
     const raw = (parsed?.sentences ?? []).map((s) => s.trim()).filter(Boolean).flatMap(splitSentences).slice(0, 6).join(' ')
-    const scrubbed = scrubCover(raw, args.figures, { magnitude: MAGNITUDE_RE, figure: FIGURE_RE, tidy })
+    const scrubbed = scrubCover(raw, args.figures)
     const usable = splitSentences(scrubbed.body).length >= 2
     await logAiCall(args.admin, {
       clientId: args.clientId, runId: args.runId, pass: 'report_cover', callIndex: 1, model: COVER_MODEL,

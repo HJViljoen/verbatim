@@ -276,7 +276,7 @@ const wordRe = (word: string): RegExp => new RegExp(`\\b${escape(word).replace(/
  * reach inside a quotation (§6.2: the magnitude strip does, and mutilates
  * Dutch and German text every time it runs).
  */
-function quotedSpans(text: string): [number, number][] {
+export function quotedSpans(text: string): [number, number][] {
   const spans: [number, number][] = []
   for (const m of text.matchAll(/"[^"]*"|“[^”]*”|'[^']{2,}'|‘[^’]{2,}’/g)) {
     const start = m.index ?? 0
