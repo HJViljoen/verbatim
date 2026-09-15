@@ -326,7 +326,8 @@ interface ThemeRow {
 /**
  * The two pools, read for one tenant.
  *
- * The theme side reads the tenant's LATEST completed or partial run and its
+ * The theme side reads the newest THEME ROW's run (`newestThemeRun`, and its
+ * doc says why that is not the newest completed run) and its
  * `industry-other` bucket — the category audience, which is the only one whose
  * months clear the product's floor on either tenant (4 of 5 on Össur, 2 on
  * Sealand; every client and rival month is below 100 videos). A subject
