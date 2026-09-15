@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { RenderMode } from '@/lib/blocks/types'
 import type { Quote } from '@/lib/renderables/types'
 
 // ONE quote renderer, in the three places a quote is rendered (Phase 1 WP6,
@@ -19,13 +20,13 @@ import type { Quote } from '@/lib/renderables/types'
 // speaks the language can see immediately whether we got it right, and that is
 // the only check this feature has.
 //
-// `mode` is 'app' | 'print' | 'email' rather than the shared RenderMode, which
-// WP10 introduces alongside the Block contract; this component predates it
-// deliberately (the reading has to exist before the blocks that show it do) and
-// the alias is a one-line change when that lands. The email arm is table-based
-// and inline-styled because that is the only thing an email client renders
-// reliably — it is the constraint every email primitive in this repo is built
-// under, not a stylistic choice.
+// `mode` IS the shared RenderMode since WP10 (lib/blocks/types.ts): this
+// component predated the Block contract deliberately — the reading has to
+// exist before the blocks that show it do — and `QuoteMode` is now an alias of
+// it, so a block can hand its own mode straight through. The email arm is
+// table-based and inline-styled because that is the only thing an email client
+// renders reliably — it is the constraint every email primitive in this repo
+// is built under, not a stylistic choice.
 //
 // ONE OTHER FILE STILL DRAWS A QUOTE, and it draws it in table markup:
 // components/email/primitives.tsx `Quote`, which is built on the email theme
@@ -35,7 +36,7 @@ import type { Quote } from '@/lib/renderables/types'
 // surface may own its own layout, and no surface owns the sentence. Writing the
 // label out again is the fourteen-places failure in miniature.
 
-export type QuoteMode = 'app' | 'print' | 'email'
+export type QuoteMode = RenderMode
 
 /** The words a quote carries, plus the provenance a surface can hang on it.
  *  `platform`, `dateISO` and `url` are optional and mostly absent today: the

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { EmailTheme } from '../email/theme'
+import type { RenderMode } from '../blocks/types'
 import type { ReadingHandle } from '../reading/read'
 
 /**
@@ -17,7 +18,20 @@ import type { ReadingHandle } from '../reading/read'
  * August, whatever the `*_current` views say by then.
  */
 
-export type RenderMode = 'app' | 'print'
+/**
+ * Re-exported, not declared — the union lives in `lib/blocks/types.ts` since
+ * Phase 1 WP10, so the codebase has exactly ONE RenderMode and a component
+ * that takes a mode can be handed one by either spine.
+ *
+ * It gained a third member, `'email'`, and that costs the renderables nothing:
+ * every legacy `render(data, mode)` asks `mode === 'print'` and treats
+ * everything else as the screen. A legacy renderable is never CALLED with
+ * `'email'` — its email is `Renderable.email`, a separate function against a
+ * separate context — so the widened parameter is reach, not a change of
+ * behaviour. A Block (lib/blocks/types.ts) is the thing that really renders
+ * all three.
+ */
+export type { RenderMode } from '../blocks/types'
 
 /**
  * Every page key the product has ever stored, in one list (Phase 1 WP9).
