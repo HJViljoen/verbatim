@@ -91,6 +91,12 @@ alter table public.theme_observations add column if not exists match_arm text;
 alter table public.theme_observations add column if not exists prompt_version text;
 alter table public.theme_observations add column if not exists reread_share numeric;
 
+-- The same shape as theme_observations_match_kind_check: a small closed
+-- vocabulary is worth stating, and a new arm is a migration either way.
+alter table public.theme_observations drop constraint if exists theme_observations_match_arm_check;
+alter table public.theme_observations add constraint theme_observations_match_arm_check
+  check (match_arm is null or match_arm in ('video', 'insight', 'title'));
+
 alter table public.theme_observations drop constraint if exists theme_observations_reread_share_check;
 alter table public.theme_observations add constraint theme_observations_reread_share_check
   check (reread_share is null or (reread_share >= 0 and reread_share <= 1));
