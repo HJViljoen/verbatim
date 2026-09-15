@@ -1919,7 +1919,7 @@ async function runSynthesisHalf(
   const c = await runPassC({
     clientId, runId, themes,
     trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice,
-    competitorClaims: claims.competitorsOwn, persist: true,
+    competitorClaims: claims.competitorsOwn, competitorAboutClaims: claims.competitorsAbout, persist: true,
   })
   const d = await runPassD({
     clientId, runId, themes,

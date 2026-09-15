@@ -170,6 +170,7 @@ async function main() {
     brandName,
     sov: metrics.share_of_voice,
     competitorClaims: claims.competitorsOwn,
+    competitorAboutClaims: claims.competitorsAbout,
     persist,
     dryRun: args.dryRun,
   })

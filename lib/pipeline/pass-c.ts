@@ -22,7 +22,11 @@ import type { BrandClaim } from './claims'
 // anti-inflation guard on impact_level (the 3 Jul run rated 3 of 5 "high").
 // v5 (2026-08-08, Step 2b): competitor claims from video transcripts enter as
 // CONTEXT (claims block) — findings still cite themes only.
-const PROMPT_VERSION = 'pass_c_v5'
+// v6 (2026-09-15, Phase 0 D2): those claims are split by who was speaking. The
+// own-videos block now carries only the rival's own voice, and what creators
+// and reviewers say ABOUT a rival arrives in its own labelled block instead of
+// being read as that rival's marketing (206 of Sealand's 208 rows were).
+const PROMPT_VERSION = 'pass_c_v6'
 
 export interface TrackingConfig {
   brand_keywords: string[] | null
@@ -38,9 +42,14 @@ export interface RunPassCOptions {
   /** The client's display name (clients.company_name) — findings name it directly. */
   brandName?: string
   sov?: Record<string, SovEntry>
-  /** Named competitors' own video claims (Step 2b) — CONTEXT for findings,
-   *  never evidence; findings still cite T# themes only. */
+  /** Named competitors' claims from their OWN videos (Step 2b) — CONTEXT for
+   *  findings, never evidence; findings still cite T# themes only. */
   competitorClaims?: BrandClaim[]
+  /** Claims made about a named competitor by somebody else — a creator, a
+   *  reviewer, a deal account. Also context, and a different KIND of context:
+   *  it is the audience's voice, not the rival's. Trimmed to
+   *  MAX_ABOUT_CLAIMS_IN_PROMPT here so the caller cannot flood the prompt. */
+  competitorAboutClaims?: BrandClaim[]
   persist?: boolean
   dryRun?: boolean
 }
@@ -72,8 +81,20 @@ export function indexThemes(themes: AggregatedTheme[]): { label: string; theme: 
   return themes.map((theme, i) => ({ label: `T${i + 1}`, theme }))
 }
 
-/** Exported for tests (v5 claims-block pins). */
-export function buildSystemPrompt(tc: TrackingConfig | undefined, brandName?: string, hasClaims = false): string {
+/** How many "said about a rival" claims reach the prompt. The own side is
+ *  already capped at MAX_CLAIMS_PER_ENTITY (12) per rival by the loader; this
+ *  side arrives up to MAX_ABOUT_CLAIMS (24) per rival and would otherwise
+ *  outweigh the rival's own words two to one — on Sealand, where the about
+ *  side is 187 rows before the cap and the own side is 2, by far more. */
+export const MAX_ABOUT_CLAIMS_IN_PROMPT = 12
+
+/** Exported for tests (v5/v6 claims-block pins). */
+export function buildSystemPrompt(
+  tc: TrackingConfig | undefined,
+  brandName?: string,
+  hasClaims = false,
+  hasAboutClaims = false,
+): string {
   const name = brandName?.trim() || 'the client brand'
   const aliases = (tc?.brand_keywords ?? []).join(', ')
   const competitors = (tc?.competitor_names ?? []).join(', ') || '(none provided)'
@@ -105,15 +126,26 @@ export function buildSystemPrompt(tc: TrackingConfig | undefined, brandName?: st
     `- Buckets marked TOO THIN TO COMPARE hold fewer than ${COMPETITIVE_MIN_VIDEOS} videos. Never rest a finding on one. We barely gathered them, so their quiet says nothing about the brand.`,
     '- impact_level reflects how much the finding should affect the brand’s strategy. "high" is scarce: at most one or two findings per run genuinely demand a strategy response — when in doubt, medium.',
   ]
-  if (!hasClaims) return base.join('\n')
-  return [
-    ...base,
-    '',
-    'WHAT COMPETITORS SAY: the input includes claims competitors make in their OWN videos (from transcripts). Rules for using them:',
-    '- A claim is the competitor\'s marketing voice — context, NEVER audience sentiment and NEVER evidence on its own.',
-    `- Use claims to sharpen cross-bucket contrasts: a claimed strength the audience doesn't echo, a competitor pitch that exposes a gap in ${name}'s content, a claim the audience actively contradicts.`,
-    '- Findings must still cite audience themes by bracket index for support; a claim can motivate a finding but never substitutes for theme support.',
-  ].join('\n')
+  if (!hasClaims && !hasAboutClaims) return base.join('\n')
+  const rules = [...base, '']
+  if (hasClaims) {
+    rules.push(
+      'WHAT COMPETITORS SAY: the input includes claims competitors make in their OWN videos (from transcripts). Rules for using them:',
+      '- A claim is the competitor\'s marketing voice — context, NEVER audience sentiment and NEVER evidence on its own.',
+      `- Use claims to sharpen cross-bucket contrasts: a claimed strength the audience doesn't echo, a competitor pitch that exposes a gap in ${name}'s content, a claim the audience actively contradicts.`,
+      '- Findings must still cite audience themes by bracket index for support; a claim can motivate a finding but never substitutes for theme support.',
+    )
+  }
+  if (hasAboutClaims) {
+    if (hasClaims) rules.push('')
+    rules.push(
+      'WHAT OTHERS SAY ABOUT THEM: the input also includes claims made about a competitor by SOMEBODY ELSE — a creator, a reviewer, a retailer. Rules for using them:',
+      '- This is the voice of a creator or the audience, NOT the competitor\'s own marketing. Never attribute one of these to the competitor, and never call it something they claim, promise or pitch.',
+      '- It is context of the same kind as the themes: what the market says about that brand when the brand is not speaking. It is still never evidence on its own, and findings still cite audience themes by bracket index.',
+      '- Where the two blocks disagree — a brand claiming one thing and creators saying another — say who said which.',
+    )
+  }
+  return rules.join('\n')
 }
 
 /**
@@ -141,11 +173,12 @@ export function thinBuckets(
     .sort()
 }
 
-/** Exported for tests (v5 claims-block pins). */
+/** Exported for tests (v5/v6 claims-block pins). */
 export function buildUserPrompt(
   themeIndex: { label: string; theme: AggregatedTheme }[],
   sov: Record<string, SovEntry> | undefined,
   competitorClaims: BrandClaim[] = [],
+  competitorAboutClaims: BrandClaim[] = [],
 ): string {
   const lines: string[] = []
   const thin = thinBuckets(sov)
@@ -169,6 +202,18 @@ export function buildUserPrompt(
     lines.push('WHAT COMPETITORS SAY IN THEIR OWN VIDEOS (from transcripts):')
     for (const c of competitorClaims) {
       lines.push(`- [${c.competitor}] ${c.claim} — "${c.quote}"`)
+    }
+    lines.push('')
+  }
+  // Separate block, separate label, and the rule line repeated where the lines
+  // are: the model reads this list right after the one above, and the two are
+  // only distinguishable by what they are called.
+  const about = competitorAboutClaims.slice(0, MAX_ABOUT_CLAIMS_IN_PROMPT)
+  if (about.length) {
+    lines.push('WHAT OTHERS SAY ABOUT THEM (from transcripts of videos the competitor did NOT post):')
+    lines.push('This is a creator, reviewer or retailer speaking — audience voice, not the competitor\'s own marketing. Never attribute one of these lines to the competitor.')
+    for (const c of about) {
+      lines.push(`- [about ${c.competitor}${c.account ? `, said by ${c.account}` : ''}] ${c.claim} — "${c.quote}"`)
     }
     lines.push('')
   }
@@ -199,8 +244,9 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
   const themeIndex = indexThemes(themes)
   const byLabel = new Map(themeIndex.map((t) => [t.label.toLowerCase(), t.theme]))
   const competitorClaims = opts.competitorClaims ?? []
-  const systemPrompt = buildSystemPrompt(trackingConfig, opts.brandName, competitorClaims.length > 0)
-  const userPrompt = buildUserPrompt(themeIndex, sov, competitorClaims)
+  const competitorAboutClaims = (opts.competitorAboutClaims ?? []).slice(0, MAX_ABOUT_CLAIMS_IN_PROMPT)
+  const systemPrompt = buildSystemPrompt(trackingConfig, opts.brandName, competitorClaims.length > 0, competitorAboutClaims.length > 0)
+  const userPrompt = buildUserPrompt(themeIndex, sov, competitorClaims, competitorAboutClaims)
 
   const base: RunPassCResult = {
     competitiveInsights: [],
