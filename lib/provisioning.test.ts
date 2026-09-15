@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildProvisionPlan, validateSpec, validateHandles, LIMITS } from './provisioning'
+import {
+  buildProvisionPlan, validateSpec, validateHandles, normaliseHandle,
+  INSTAGRAM_HANDLE, TIKTOK_HANDLE, HANDLE_FORMAT_CAVEAT, LIMITS,
+} from './provisioning'
 
 const base = { companyName: 'Dagne Dover', competitorNames: ['Away', 'Beis', 'Calpak'] }
 
@@ -110,6 +113,59 @@ describe('validateHandles — a wrong handle credits someone else\'s posts', () 
   it('refuses a leading @ and an empty value rather than storing either', () => {
     expect(validateHandles({ instagram: '@ottobock' })[0]).toContain('drop the leading @')
     expect(validateHandles({ tiktok: '  ' })[0]).toContain('empty handle')
+  })
+
+  it('checks an Instagram username against Instagram\'s own rule (WP16)', () => {
+    // Every handle the two live tenants store passes.
+    expect(validateHandles({ instagram: 'ossur_corp' })).toEqual([])
+    expect(validateHandles({ instagram: 'cotopaxiofficial' })).toEqual([])
+    // Instagram's published rule: no leading or trailing period, no two in a
+    // row, at most 30 characters, and nothing outside [A-Za-z0-9._].
+    expect(validateHandles({ instagram: '.ossur' })[0]).toContain('not an Instagram username')
+    expect(validateHandles({ instagram: 'ossur.' })[0]).toContain('not an Instagram username')
+    expect(validateHandles({ instagram: 'os..sur' })[0]).toContain('not an Instagram username')
+    expect(validateHandles({ instagram: 'össur' })[0]).toContain('not an Instagram username')
+    expect(validateHandles({ instagram: 'a'.repeat(31) })[0]).toContain('not an Instagram username')
+  })
+
+  it('checks a TikTok username, which permits what Instagram forbids', () => {
+    expect(validateHandles({ tiktok: 'sealandgear' })).toEqual([])
+    // TikTok allows a LEADING period; Instagram does not. Two expressions, not
+    // one, precisely for this.
+    expect(INSTAGRAM_HANDLE.test('.gear')).toBe(false)
+    expect(TIKTOK_HANDLE.test('.gear')).toBe(true)
+    expect(validateHandles({ tiktok: 'gear.' })[0]).toContain('not a TikTok username')
+    expect(validateHandles({ tiktok: 'a' })[0]).toContain('not a TikTok username')
+  })
+
+  it('names a pasted link as a link instead of as a bad username', () => {
+    const errors = validateHandles({ instagram: 'https://www.instagram.com/ossur_corp/' })
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('looks like a link')
+  })
+
+  it('takes a handle out of what a person actually pastes', () => {
+    expect(normaliseHandle('instagram', 'https://www.instagram.com/ossur_corp/')).toBe('ossur_corp')
+    expect(normaliseHandle('instagram', '@ossur_corp')).toBe('ossur_corp')
+    expect(normaliseHandle('tiktok', 'https://www.tiktok.com/@sealandgear?lang=en')).toBe('sealandgear')
+    expect(validateHandles({ instagram: normaliseHandle('instagram', 'instagram.com/ossur_corp') })).toEqual([])
+  })
+
+  it('takes a YouTube channel id out of a channel URL and refuses to invent one', () => {
+    expect(normaliseHandle('youtube', 'https://www.youtube.com/channel/UCjGWYNy7xrGOJ72AeMBb-hA'))
+      .toBe('UCjGWYNy7xrGOJ72AeMBb-hA')
+    // An @name URL is handed back untouched, so the channel-id error fires
+    // rather than a bare '@name' being stored as if it were a handle.
+    const pasted = normaliseHandle('youtube', 'https://www.youtube.com/@ottobock')
+    expect(pasted).toBe('https://www.youtube.com/@ottobock')
+    expect(validateHandles({ youtube: pasted })[0]).toContain('channel id')
+  })
+
+  it('says out loud what no format check can catch', () => {
+    // @cotopaxi — a private individual named Nelson — passes TikTok's rule as
+    // cleanly as @cotopaxiofficial does. The caveat is the second check.
+    expect(validateHandles({ tiktok: 'cotopaxi' })).toEqual([])
+    expect(HANDLE_FORMAT_CAVEAT).toContain('wrong account')
   })
 
   it('carries the rival name when a spec is validated whole', () => {
