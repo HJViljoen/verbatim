@@ -354,11 +354,28 @@ All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 
 **Phase 0** (2026-09-15). Every one of these is dry by default; the flag that
 writes is named on the row. Most read a table or function the Phase 0
-migrations add, so they need those applied first: `coverage-report.ts` and
-`embed-insights.ts` say which file is missing and exit, having read and spent
-nothing; `reconstruct-config-log.ts` is deliberately tolerant, because the
-useful time to read its dry run is *before* the log table exists; the rest
-print the driver's error.
+migrations add, and each one behaves differently before its migration lands —
+written as measured, not as intended:
+
+- `embed-insights.ts` names the file and exits **having read and spent
+  nothing** (it asks whether the write path exists before it prices anything).
+- `coverage-report.ts` names the file and exits too, but only after reading the
+  tenants and printing the report header — so it has read a fair amount by
+  then. It spends nothing either way: no model, no Apify.
+- `reconstruct-config-log.ts` is deliberately tolerant, because the useful time
+  to read its dry run is *before* the log table exists.
+- `backfill-run-windows.ts` and `monthly-reading.ts` print the driver's error
+  (they select the new columns / call the new functions directly).
+- `set-cadence.ts` and `set-competitor-handles.ts` **do not fail — and that is
+  the trap.** `lib/config-log.ts` `updateWithActor` retries without the actor
+  stamp when `tracking_configs.last_actor` is absent, so an `--apply` before
+  `20260915091000_config_changes.sql` writes the change successfully,
+  unattributed, and with no `config_changes` row (the audit trigger arrives in
+  the same migration). Arming a tenant that way costs the usual $13–20 an
+  update and leaves nothing behind saying who did it. Apply migration 2 first.
+- `close-stranded-run.ts` needs no Phase 0 migration at all: it reads
+  `pipeline_runs` and writes that row's `status` / `completed_at` /
+  `error_message`, all of which have always existed.
 
 | Script | Purpose |
 | --- | --- |
