@@ -339,11 +339,56 @@ describe('stitchRenames — one line, with the change marked on it', () => {
     expect(line.breaks.map((b) => b.month)).toEqual(['2026-02', '2026-03'])
   })
 
+  it('draws one line when two names are renamed into one', () => {
+    // What a merge looks like in the log: A -> C and B -> C. Both halves belong
+    // to C's line, and the legend has to name all three or it is a line whose
+    // legend omits one of the names it draws.
+    const points: P[] = [
+      { audience: 'competitor:A', month: '2026-01', videos: 1 },
+      { audience: 'competitor:B', month: '2026-02', videos: 2 },
+      { audience: 'competitor:C', month: '2026-03', videos: 3 },
+    ]
+    const lines = stitchRenames(points, [
+      rename('competitor:A', 'competitor:C'),
+      rename('competitor:B', 'competitor:C'),
+    ])
+    expect(lines).toHaveLength(1)
+    expect(lines[0].audience).toBe('competitor:C')
+    expect(lines[0].names).toEqual(['competitor:A', 'competitor:B', 'competitor:C'])
+    expect(lines[0].points).toHaveLength(3)
+    expect(lines[0].breaks.map((b) => `${b.from}->${b.to}`))
+      .toEqual(['competitor:A->competitor:C', 'competitor:B->competitor:C'])
+  })
+
   it('terminates on a cycle, because a log is written by people', () => {
     const points: P[] = [{ audience: 'competitor:A', month: '2026-01', videos: 1 }]
     const lines = stitchRenames(points, [rename('competitor:A', 'competitor:B'), rename('competitor:B', 'competitor:A')])
     expect(lines).toHaveLength(1)
     expect(lines[0].points).toHaveLength(1)
+  })
+
+  it('keeps both halves of A -> B -> A on one line rather than swapping labels', () => {
+    // No key in a cycle is un-renamed, so neither is the "current" name by the
+    // shape alone; the newest rename's target is the best answer available and
+    // the legend still names both. Walking forward from each key put the two
+    // halves in different groups and had them swap labels.
+    const points: P[] = [
+      { audience: 'competitor:A', month: '2026-01', videos: 1 },
+      { audience: 'competitor:B', month: '2026-02', videos: 2 },
+      { audience: 'competitor:A', month: '2026-03', videos: 3 },
+    ]
+    const lines = stitchRenames(points, [
+      rename('competitor:A', 'competitor:B', '2026-01-15T00:00:00Z'),
+      rename('competitor:B', 'competitor:A', '2026-02-20T00:00:00Z'),
+    ])
+    expect(lines).toHaveLength(1)
+    expect(lines[0].audience).toBe('competitor:A')
+    expect(lines[0].names).toEqual(['competitor:B', 'competitor:A'])
+    expect(lines[0].points.map((p) => p.month)).toEqual(['2026-01', '2026-02', '2026-03'])
+    // One rule, the one that carries the line towards the name it is drawn
+    // under: "B is now called A" on a line labelled B would be worse than none.
+    expect(lines[0].breaks.map((b) => `${b.from}->${b.to}@${b.month}`))
+      .toEqual(['competitor:B->competitor:A@2026-01'])
   })
 
   it('draws no rule when the new name has no months yet', () => {

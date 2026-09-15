@@ -503,35 +503,60 @@ export function renameLabel(from: string, to: string): string {
  * untouched, one series each, so a caller can pass everything it holds.
  *
  * Pure: the points are whatever the caller has, as long as they carry an
- * `audience` and a `month`. Chains are followed (A→B→C is one line under C) and
- * a cycle terminates rather than hanging — a log is written by people and
- * A→B→A is a thing people do.
+ * `audience` and a `month`. The keys one rival has worn are found as a
+ * component, not as a chain, so all three shapes a log written by people
+ * actually contains come out as ONE line with every name in the legend:
+ * A→B→C (drawn under C), A→C together with B→C (a merge, drawn under C, both
+ * rules marked), and A→B→A (no key in a cycle is un-renamed, so the newest
+ * rename's target is the name the line takes, and only the rules that carry it
+ * towards that name are drawn).
  */
 export function stitchRenames<P extends { audience: string; month: string }>(
   series: readonly P[],
   renames: readonly RenameRecord[],
 ): StitchedSeries<P>[] {
+  // One step out of each key: a rival was renamed TO something, once. A second
+  // row for the same `from` is a correction of the first and is ignored.
   const next = new Map<string, RenameRecord>()
   for (const r of renames) if (r.from !== r.to && !next.has(r.from)) next.set(r.from, r)
 
-  // The end of each chain, and the chain that reaches it. A key renamed twice
-  // lands on the newest name; a cycle stops at the key it came back to.
+  const keys = new Set<string>(series.map((p) => p.audience))
+  for (const [from, step] of next) { keys.add(from); keys.add(step.to) }
+
+  // The keys one rival has worn, as a COMPONENT rather than a chain. Two names
+  // renamed into one (A→C and B→C, which is what a merge looks like in the log)
+  // is not a chain, and neither is A→B→A: walking forward from each key on its
+  // own put the halves of both shapes in different groups, so one line's legend
+  // lost a name and a swap drew two lines instead of one.
+  const parent = new Map<string, string>()
+  const find = (k: string): string => {
+    let root = k
+    while ((parent.get(root) ?? root) !== root) root = parent.get(root) as string
+    let walk = k
+    while ((parent.get(walk) ?? walk) !== walk) { const up = parent.get(walk) as string; parent.set(walk, root); walk = up }
+    return root
+  }
+  const union = (a: string, b: string) => { const ra = find(a); const rb = find(b); if (ra !== rb) parent.set(ra, rb) }
+  for (const k of keys) if (!parent.has(k)) parent.set(k, k)
+  for (const [from, step] of next) union(from, step.to)
+
+  const members = new Map<string, string[]>()
+  for (const k of [...keys].sort()) members.set(find(k), [...(members.get(find(k)) ?? []), k])
+
   const headOf = new Map<string, string>()
-  const chainTo = new Map<string, RenameRecord[]>()
-  for (const start of new Set([...series.map((p) => p.audience), ...next.keys()])) {
-    const walked: RenameRecord[] = []
-    const seen = new Set([start])
-    let head = start
-    for (;;) {
-      const step = next.get(head)
-      if (!step || seen.has(step.to)) break
-      walked.push(step)
-      seen.add(step.to)
-      head = step.to
-    }
-    headOf.set(start, head)
-    const stored = chainTo.get(head)
-    if (!stored || walked.length > stored.length) chainTo.set(head, walked)
+  const chainOf = new Map<string, RenameRecord[]>()
+  for (const [root, group] of members) {
+    // The name the rival wears now: the one nothing renamed away. Renames are
+    // one step out of each key, so a component has exactly one such key unless
+    // it closes a cycle — and then the newest rename's target is the best
+    // answer available, with the name as a tie-break so it is never arbitrary.
+    const edges = group.map((k) => next.get(k)).filter((r): r is RenameRecord => Boolean(r))
+    const terminal = group.filter((k) => !next.has(k)).sort()
+    const newest = [...edges].sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.to.localeCompare(b.to)))
+    const head = terminal[0] ?? newest[newest.length - 1].to
+    for (const k of group) headOf.set(k, head)
+    chainOf.set(head, edges)
+    void root
   }
 
   const grouped = new Map<string, P[]>()
@@ -540,23 +565,40 @@ export function stitchRenames<P extends { audience: string; month: string }>(
     grouped.set(head, [...(grouped.get(head) ?? []), p])
   }
 
+  // How many renames a key is from the head, so the legend reads oldest first
+  // and ends on the name the line is drawn under.
+  const stepsToHead = (key: string, head: string, size: number): number => {
+    let at = key
+    for (let n = 0; n <= size; n++) {
+      if (at === head) return n
+      const step = next.get(at)
+      if (!step) return Number.MAX_SAFE_INTEGER
+      at = step.to
+    }
+    return Number.MAX_SAFE_INTEGER
+  }
+
   const out: StitchedSeries<P>[] = []
   for (const [head, points] of grouped) {
     const sorted = [...points].sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : 0))
-    // The chain that ends at this head, oldest name first.
-    const chain = (chainTo.get(head) ?? []).filter((step) => {
-      const reached = headOf.get(step.from)
-      return reached === head
+    const group = members.get(find(head)) ?? [head]
+    const names = [...group].sort((a, b) => {
+      const d = stepsToHead(b, head, group.length) - stepsToHead(a, head, group.length)
+      return d !== 0 ? d : a.localeCompare(b)
     })
-    const names = chain.length ? [chain[0].from, ...chain.map((s) => s.to)] : [head]
     const breaks: RenameBreak[] = []
-    for (const step of chain) {
+    for (const step of chainOf.get(head) ?? []) {
+      // Only the steps that carry a name TOWARDS the one the line is drawn
+      // under. In a cycle the closing step points backwards, and a rule reading
+      // "B is now called A" on a line labelled B is worse than no rule.
+      if (stepsToHead(step.from, head, group.length) <= stepsToHead(step.to, head, group.length)) continue
       // The month the new key first appears. No months under it yet (a rival
       // renamed before its first reading) means no rule to draw.
       const first = sorted.find((p) => p.audience === step.to)
       if (!first) continue
       breaks.push({ month: first.month, from: step.from, to: step.to, at: step.at, label: renameLabel(step.from, step.to) })
     }
+    breaks.sort((a, b) => (a.month < b.month ? -1 : a.month > b.month ? 1 : a.from.localeCompare(b.from)))
     out.push({ audience: head, names, points: sorted, breaks })
   }
   return out.sort((a, b) => a.audience.localeCompare(b.audience))
