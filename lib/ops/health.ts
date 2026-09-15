@@ -211,6 +211,11 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
   // 2. Did every run that was due actually start? Absence of a pipeline_runs
   //    row is the only signal there is — nothing records "expected but never
   //    dispatched" — so the expectation has to be recomputed here.
+  //    `pipeline_runs.scheduled_for` (2026-09-15) names the slot a run SERVED,
+  //    which is the other half: it makes a started run's slot a fact instead of
+  //    an inference, but a slot nobody ran still writes no row at all. Phase 1
+  //    turns this into a join on that column and keeps this recomputation for
+  //    the rows that predate it.
   const startsByClient = new Map<string, number[]>()
   for (const r of inputs.runs) {
     const t = r.startedAt ? Date.parse(r.startedAt) : NaN
