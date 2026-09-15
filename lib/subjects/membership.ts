@@ -224,10 +224,12 @@ export function membershipRows(args: {
 /** Which subjects need their phrase re-embedded before anything can be banded:
  *  the ones with no vector, and the ones whose vector was built by a formula
  *  that is no longer the formula. */
-export function subjectsNeedingVectors(
-  subjects: readonly Pick<Subject, 'id' | 'name' | 'description' | 'embedded_at' | 'embed_input_version'>[],
+export function subjectsNeedingVectors<
+  T extends Pick<Subject, 'id' | 'name' | 'description' | 'embedded_at' | 'embed_input_version'>,
+>(
+  subjects: readonly T[],
   version = SUBJECT_EMBED_INPUT_VERSION,
-): typeof subjects {
+): T[] {
   return subjects.filter((s) => !s.embedded_at || s.embed_input_version !== version)
 }
 
@@ -328,6 +330,12 @@ export async function embedSubjects(admin: Admin, subjects: readonly Subject[]):
         updated_at: new Date().toISOString(),
       })
       .eq('id', pending[i].id)
+      // The tenant as well as the id. Safe as it stands — the ids come from a
+      // tenant-scoped read one call earlier — but this is the only write in
+      // lib/subjects, lib/reading or lib/rivals with no tenant predicate, on a
+      // service-role connection that bypasses RLS. It costs nothing and removes
+      // the one place a future refactor of the caller could go quietly wrong.
+      .eq('client_id', pending[i].client_id)
     if (error) throw new Error(`subjects.embedding write: ${(error as { message?: string }).message ?? String(error)}`)
     written++
   }
