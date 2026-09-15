@@ -1,5 +1,5 @@
 import { monthName } from '../format'
-import { monthStartOf } from '../reading/monthly'
+import { monthStartOf } from '../reading/month-key'
 
 // The calendar line's arithmetic and its copy, with no React in sight
 // (Phase 1 WP10, design item 6, decisions L, M, U).

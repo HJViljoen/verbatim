@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ConfigActor } from '../config-log'
 import { emptyEvidenceRefSummary, freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
+import { monthStartOf, nextMonth } from './month-key'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   PANEL_LEAD_MONTHS,
@@ -113,20 +114,11 @@ import {
 
 const DAY_MS = 86_400_000
 
-const pad = (n: number): string => String(n).padStart(2, '0')
-
-/** The first day of the month an instant falls in, `YYYY-MM-DD`, UTC. */
-export function monthStartOf(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) throw new Error(`monthStartOf: not a date: ${iso}`)
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-01`
-}
-
-/** The month after this one. */
-export function nextMonth(month: string): string {
-  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
-  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString())
-}
+// The month key itself lives in `./month-key`, which imports nothing: this
+// module reaches the Supabase client, and `lib/charts/calendar.ts` — on every
+// page that draws a sparkline — needs the key and nothing else. Re-exported
+// here so every existing reader keeps one import.
+export { monthStartOf, nextMonth } from './month-key'
 
 /** The instant a month ends — i.e. the first instant of the next month, which
  *  is the exclusive upper bound of its half-open window. */

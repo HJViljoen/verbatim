@@ -1,7 +1,7 @@
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import type { MonthLabel, MonthPoint, MonthSeries } from '../reading/series'
-import { monthStartOf, nextMonth } from '../reading/monthly'
+import { monthRuns } from '../reading/month-key'
 import { backReadBandLabel } from './calendar'
 import type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries } from './calendar'
 
@@ -186,16 +186,5 @@ export function calendarBandsFor(series: readonly MonthSeries[]): CalendarBand[]
   // Today every tenant has exactly one contiguous stretch (Össur 61 months,
   // Sealand 64) — that stops being true the day a rival is added to a tenant
   // that already has history, which is what the back-read exists for.
-  return monthRuns([...months].sort()).map((run) => ({ months: run, label: backReadBandLabel(run.length) }))
-}
-
-/** A sorted list of month keys, split where the calendar skips one. */
-function monthRuns(months: readonly string[]): string[][] {
-  const runs: string[][] = []
-  for (const month of months) {
-    const held = runs[runs.length - 1]
-    if (held && nextMonth(held[held.length - 1]) === monthStartOf(month)) held.push(month)
-    else runs.push([month])
-  }
-  return runs
+  return monthRuns([...months]).map((run) => ({ months: run, label: backReadBandLabel(run.length) }))
 }
