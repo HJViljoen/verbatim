@@ -1,4 +1,4 @@
-import { isAnswer, type FigureTable as VerdictFigures, type Verdict } from '../reading/verdicts'
+import { isAnswer, type Verdict } from '../reading/verdicts'
 import type { FigureTable } from '../reports/types'
 
 import { INTERPRETATION_SLOTS, scrubProse, splitSentences, type ProseScrub } from './scrub'
@@ -229,8 +229,16 @@ function refusedBecause(refused: readonly Verdict[]): string {
  * shape and a difference between two interpretations is a difference in their
  * readings. Figures are KEYS and labels, never values — the model cannot round
  * a number it has never seen.
+ *
+ * ONE FIGURE TYPE crosses this seam. A caller holding the reading layer's
+ * measured figures (`lib/reading/verdicts.ts`) converts them once with
+ * `proseFigures` (lib/prose/figures.ts) and passes the result here and to
+ * `composeInterpretation` and `scrubProse`. This used to take a union of the
+ * two shapes and cast its way to a label, which meant every later package
+ * getting figures from the reading layer would have written the conversion
+ * again, and differently.
  */
-export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable | VerdictFigures): string {
+export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable): string {
   const lines: string[] = []
   lines.push('VERDICTS — the only movement claims you may make. Each is ours, not yours.')
   if (verdicts.length === 0) lines.push('- none. You may not say anything moved, in any direction.')
@@ -251,9 +259,6 @@ export function verdictBlock(verdicts: readonly Verdict[], figures: FigureTable 
   lines.push('FIGURES — cite by placeholder, exactly as written. You do not know their values.')
   const keys = Object.keys(figures)
   if (keys.length === 0) lines.push('- none. Any digit you type deletes the sentence it is in.')
-  for (const key of keys) {
-    const f = (figures as Record<string, { label: string }>)[key]
-    lines.push(`- [[${key}]] — ${f.label}`)
-  }
+  for (const key of keys) lines.push(`- [[${key}]] — ${figures[key].label}`)
   return lines.join('\n')
 }
