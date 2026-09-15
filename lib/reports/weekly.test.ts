@@ -32,7 +32,7 @@ const flag = (over: Partial<WeekFlag> = {}): WeekFlag => ({
   changePts: 10.7,
   bandPts: 5,
   sentences: [],
-  quoteRefs: [],
+  quotes: [],
   href: '/dashboard/week',
   ...over,
 })

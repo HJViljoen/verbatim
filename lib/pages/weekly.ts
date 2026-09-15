@@ -4,7 +4,7 @@ import type { Quote } from '../renderables/types'
 import type { MonthStatus } from '../reading/types'
 import { selectAll } from '../supabase-admin'
 import { rows } from './read'
-import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { citationLink } from '../evidence-cite'
 import { shortDate } from '../format'
@@ -312,7 +312,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
       : { body: overview.sentence.body, figures: overview.sentence.figures },
     check: weekCheck({
       state,
-      flags: check.flags.map(toWeekFlag),
+      flags: await toWeekFlags(supabase, check.flags),
       flaggedCount: check.flaggedCount,
       monthsClearing,
       suppression,
@@ -420,8 +420,14 @@ export function isMissingAnomalyChecks(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
-function toWeekFlag(row: FlagRow): WeekFlag {
-  return {
+/** How many of a flag's quotes the artefact prints (design: "one paragraph of
+ *  explanation with two quotes"). */
+export const FLAG_QUOTES = 2
+
+async function toWeekFlags(supabase: SupabaseClient, flags: FlagRow[]): Promise<WeekFlag[]> {
+  const refs = [...new Set(flags.flatMap((f) => (f.quote_refs ?? []).filter((r): r is string => typeof r === 'string').slice(0, FLAG_QUOTES)))]
+  const resolved = refs.length > 0 ? await fetchQuoteResolutionsByRefs(supabase, refs, { onReadError: 'degrade' }) : new Map()
+  return flags.map((row) => ({
     objectKind: row.object_kind,
     label: row.label,
     denominator: row.denominator,
@@ -432,9 +438,17 @@ function toWeekFlag(row: FlagRow): WeekFlag {
     changePts: Number(row.change_pts),
     bandPts: Number(row.band_pts),
     sentences: row.explanation?.sentences ?? [],
-    quoteRefs: (row.quote_refs ?? []).filter((r): r is string => typeof r === 'string'),
+    quotes: (row.quote_refs ?? [])
+      .filter((r): r is string => typeof r === 'string')
+      .slice(0, FLAG_QUOTES)
+      .flatMap((ref) => {
+        const one = resolved.get(ref)
+        // A ref that no longer resolves is DROPPED, not printed empty: the
+        // comment has been erased, and the flag's arithmetic stands without it.
+        return one ? [{ ref, text: one.text, lang: one.lang ?? null, english: one.english ?? null }] : []
+      }),
     href: '/dashboard/week',
-  }
+  }))
 }
 
 /**

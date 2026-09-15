@@ -3,6 +3,7 @@ import { fmtInt, fmtPct, shortDate } from '../format'
 import { longMonth, prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
+import type { Quote } from '../renderables/types'
 
 /**
  * The weekly report — the arrangement, and the first screen's model
@@ -80,6 +81,13 @@ export const WEEKLY_RULE =
  * A DATE IS NOT A FIGURE. "September, 18 days in" and "6–13 Sep" are the
  * reading's stamp, not readings of the conversation — the same line WP11 drew
  * on Overview's moves block, where "the one number in a move's line is a date".
+ *
+ * NOR IS A DENOMINATOR, OR A BAND. The copy contract REQUIRES a level to print
+ * its "of N" (rule (b)) and this product never prints a change without the band
+ * it cleared; both are the evidence a figure must carry to be readable at all,
+ * and counting them would make the honest rendering of one reading cost three
+ * of the budget. The budget counts READINGS — the same line WP11 drew when it
+ * declared OV2's three sides per row as one figure each against thirty.
  */
 export const FIRST_SCREEN_BUDGET = 12
 
@@ -129,8 +137,10 @@ export interface WeekFlag {
   /** The model's explanation, sentence by sentence, figure tokens intact.
    *  Empty where no draft survived the scrubbers — the slot then says so. */
   sentences: string[]
-  /** Refs only. */
-  quoteRefs: string[]
+  /** The explanation's evidence. `text` is emptied on freeze and resolved at
+   *  render, so an erased voice is gone from a stored artefact at the next
+   *  look (lib/renderables/quotes-freeze.ts). */
+  quotes: Quote[]
   href: string
 }
 
