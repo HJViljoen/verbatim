@@ -1255,7 +1255,25 @@ export const REGISTRY_DORMANT_RUNS = 3
 export type DirectionReader =
   /** Voice of Customer · "Gaining and fading" — the tile, its drawer, its deck slide. */
   | 'voice.movers'
-  /** Dashboard · the themes list's "New" chip, the movement row, the email's chip. */
+  /**
+   * Dashboard · the themes list's "New" chip, the movement row, the email's chip.
+   *
+   * STILL FALSE AFTER OVERVIEW SHIPPED (Phase 1 WP11), and the plan's "the
+   * reader flips `dashboard.themes`" is answered by not flipping it. This key
+   * gates the LEGACY Dashboard's tiles and the digest's chip, and those read
+   * the run-indexed series exactly as they always did; Overview replaced the
+   * dashboard's ROUTE, not its module, which stays registered so one sent
+   * snapshot, one live share link and two weekly schedules keep rendering
+   * (WP9). Flipping this key would turn direction words back on inside those
+   * artefacts, which is the thing D1 forbids.
+   *
+   * Overview earns its own direction words a different way and reads nothing
+   * here: `directionWord` (lib/reading/bands.ts) takes three consecutive months
+   * of the comment-dated series in one clustering regime, each clearing both
+   * floors. That is the re-basing this map exists to make possible — the key
+   * flips when the surface it names re-bases, and this surface has not; it has
+   * been replaced.
+   */
   | 'dashboard.themes'
   /** Reports & briefs · a theme's trajectory word in a document block. */
   | 'documents.trajectory'
