@@ -127,8 +127,7 @@ export function subjectMonthSide(
     table: MONTH_SUBJECT_TABLE,
     clustering: false,
     stamp: { judge_version: judgeVersion },
-    read: async (window: { from: string; to: string }) =>
-      (await readSubjectMonths(admin, clientId, window)) as unknown as ({ month: string; audience: string } & Record<string, unknown>)[],
+    read: (window: { from: string; to: string }) => readSubjectMonths(admin, clientId, window),
   }
 }
 

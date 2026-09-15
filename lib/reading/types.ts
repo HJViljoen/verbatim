@@ -64,7 +64,7 @@ export interface DenominatorReading {
 
 /** One row of `monthly_theme_readings(p_client, p_run, p_from, p_to)`: what one
  *  theme read in one month, inside one audience. */
-export interface ThemeReading {
+export type ThemeReading = {
   month: string
   audience: Audience
   /** `theme_registry.id` — the stable cross-run identity. Never `themes.id`

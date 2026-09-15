@@ -24,7 +24,6 @@ import {
   type MonthTable,
   type StoredFreeze,
   type ThemeReading,
-  type ThemeReadingRow,
 } from './types'
 
 // The comment-dated monthly reading: when a month stops moving, and what gets
@@ -699,8 +698,10 @@ export interface FreezeSummary {
  */
 export interface NumeratorSide {
   table: MonthTable
-  /** The fresh reading over the whole window, in one call. */
-  read: (window: { from: string; to: string }) => Promise<MonthNumeratorRow[]>
+  /** The fresh reading over the whole window, in one call. A row type of its
+   *  own is welcome — every reading's columns are its table's — as long as it
+   *  carries the month and the audience the merge keys on. */
+  read: (window: { from: string; to: string }) => Promise<readonly MonthNumeratorRow[]>
   /** Columns every row of this side carries beyond the freeze columns and
    *  client_id — `judge_version` for subjects, nothing for themes. */
   stamp?: Record<string, unknown>
@@ -800,14 +801,14 @@ export async function freezeMonths(
     sides.push({
       table: MONTH_THEME_TABLE,
       clustering: true,
-      read: async (w) => (await readThemeReadings(admin, opts.clientId, runId, w)) as unknown as MonthNumeratorRow[],
+      read: (w) => readThemeReadings(admin, opts.clientId, runId, w),
     })
   }
   sides.push(...(opts.sides ?? []))
 
   const merges: { side: NumeratorSide; merge: MergeResult<MonthNumeratorRow>; rows: Record<string, unknown>[] }[] = []
   for (const side of sides) {
-    let fresh: MonthNumeratorRow[]
+    let fresh: readonly MonthNumeratorRow[]
     let stored: StoredFreeze[]
     try {
       fresh = await side.read(window)

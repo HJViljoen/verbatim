@@ -207,7 +207,7 @@ export interface BandedPair {
 
 /** One row of `monthly_subject_readings(p_client, p_from, p_to)`. The theme
  *  reading's columns exactly — same rule, different membership. */
-export interface SubjectReading {
+export type SubjectReading = {
   month: string
   audience: string
   subject_id: string
