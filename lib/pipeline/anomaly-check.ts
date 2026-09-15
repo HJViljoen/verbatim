@@ -6,7 +6,7 @@ import { estimateCost } from '../config'
 import { logAiCall } from './ai-log'
 import { openai, samplingParams } from '../openai'
 import { sameRegime } from './clustering'
-import { composeInterpretation, verdictBlock, type Interpretation, type QuoteRef } from '../prose/interpret'
+import { QUOTE_LIMIT, composeInterpretation, verdictBlock, type Interpretation, type QuoteRef } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import { allowTokens } from '../prose/scrub'
 import { isMissingKindMoodAttention } from '../reading/attention'
@@ -360,7 +360,17 @@ export function flagRows(input: FlagRowInput): Record<string, unknown>[] {
     // a reader of one row is never handed half a sentence.
     explanation: input.explanation ? explanationJson(input.explanation) : null,
     explanation_model: input.explanation && !input.explanation.fallback ? input.explanationModel ?? null : null,
-    quote_refs: (input.quoteRefs?.get(objectKey(flag.kind, flag.id)) ?? input.explanation?.quotes ?? []).map((q) => ({
+    // THE QUOTES ARE THIS FLAG'S, not the week's. `candidateQuotes` works out
+    // which flagged object each comment belongs to; discarding that printed
+    // one pair three times under three different headings. A flag whose object
+    // drew no comment carries none rather than borrowing another flag's — the
+    // map is keyed by `objectKey`, and a miss is an empty list, not a fallback.
+    // With no map at all (a caller that never read quotes) the explanation's
+    // own pair still travels.
+    quote_refs: (input.quoteRefs
+      ? input.quoteRefs.get(objectKey(flag.kind, flag.id)) ?? []
+      : input.explanation?.quotes ?? []
+    ).map((q) => ({
       ref: q.ref,
       ...(q.context ? { context: q.context } : {}),
     })),
@@ -988,6 +998,24 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   const shown = (chosen.length > 0 ? chosen : quotes).slice(0, MAX_FLAGS)
   const refs: QuoteRef[] = shown.map((q) => ({ ref: q.ref, context: q.context }))
 
+  // And the refs each flag ROW carries, per object. `candidateQuotes` already
+  // knows which flagged object every comment belongs to; passing that on is
+  // what keeps a surface printing three flags from printing the same pair of
+  // comments under all three headings. Preference order is the model's picks
+  // first, then most-engaged — a stable sort, so the engagement order survives
+  // inside each group — and each group is capped at what the slot will print.
+  const preferred = new Map(shown.map((q, i) => [q.ref, i]))
+  const perObject = new Map<string, QuoteRef[]>()
+  const ordered = [...quotes].sort(
+    (a, b) => (preferred.get(a.ref) ?? Number.MAX_SAFE_INTEGER) - (preferred.get(b.ref) ?? Number.MAX_SAFE_INTEGER),
+  )
+  for (const q of ordered) {
+    const held = perObject.get(q.objectKey) ?? []
+    if (held.length >= QUOTE_LIMIT.interpretation_anomaly) continue
+    held.push({ ref: q.ref, context: q.context })
+    perObject.set(q.objectKey, held)
+  }
+
   const explanation = composeInterpretation('interpretation_anomaly', verdicts, figures, refs, {
     draft: call.draft,
     allow: allowTokens(reading.flags.map((f) => f.label)),
@@ -1004,6 +1032,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     readAt,
     explanation,
     explanationModel: call.model,
+    quoteRefs: perObject,
   })
 
   // The parent row first: a flag hangs off the record of the check that raised

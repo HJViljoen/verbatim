@@ -162,7 +162,7 @@ describe('objectKey', () => {
 describe('the flag row', () => {
   const window = { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' }
 
-  const rowsFor = (over: { regimes?: Map<string, BaselineRegime>; filling?: string[] } = {}) =>
+  const rowsFor = (over: { regimes?: Map<string, BaselineRegime>; filling?: string[]; quoteRefs?: Map<string, QuoteRef[]> } = {}) =>
     flagRows({
       clientId: 'c1',
       runId: 'r1',
@@ -172,6 +172,7 @@ describe('the flag row', () => {
       baselineFillingMonths: over.filling ?? ['2026-08-01'],
       regimes: over.regimes ?? new Map<string, BaselineRegime>(),
       readAt: '2026-09-14T06:00:00.000Z',
+      ...(over.quoteRefs ? { quoteRefs: over.quoteRefs } : {}),
     })
 
   it('carries the numbers the comparison was made on, and the family it was corrected over', () => {
@@ -203,6 +204,17 @@ describe('the flag row', () => {
   it('takes the marked regime when one was computed', () => {
     const regimes = new Map<string, BaselineRegime>([[objectKey('kind', 'objection'), 'mixed']])
     expect(rowsFor({ regimes })[0].baseline_regime).toBe('mixed')
+  })
+
+  it('takes the quotes of ITS OWN object when a per-object map is given', () => {
+    const mine: QuoteRef[] = [{ ref: 'c1', context: 'youtube' }]
+    expect(rowsFor({ quoteRefs: new Map([[objectKey('kind', 'objection'), mine]]) })[0].quote_refs)
+      .toEqual([{ ref: 'c1', context: 'youtube' }])
+  })
+
+  it('carries none rather than another flag\'s when its object drew no comment', () => {
+    const someoneElses: QuoteRef[] = [{ ref: 'c9', context: 'reddit' }]
+    expect(rowsFor({ quoteRefs: new Map([[objectKey('theme', 'other'), someoneElses]]) })[0].quote_refs).toEqual([])
   })
 
   it('stores no explanation and no model when the check never called one', () => {

@@ -81,8 +81,10 @@ const FALLBACK_NOTE: Record<InterpretationSlot, string> = {
   interpretation_anomaly: 'We wrote this read ourselves this week.',
 }
 
-/** How many quotes each slot shows beside its prose. WK1 says two. */
-const QUOTE_LIMIT: Record<InterpretationSlot, number> = {
+/** How many quotes each slot shows beside its prose. WK1 says two. Exported
+ *  because a caller that groups refs per object has to cap each group at the
+ *  same number the slot will print. */
+export const QUOTE_LIMIT: Record<InterpretationSlot, number> = {
   interpretation_monthly: 2,
   interpretation_quarterly: 4,
   interpretation_anomaly: 2,
