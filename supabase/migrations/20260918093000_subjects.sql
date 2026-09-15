@@ -423,6 +423,48 @@ $$;
 comment on function public.subject_retirement_freeze() is
   'Freezes a retired subject''s still-filling months at the moment of retirement. A retired subject is not re-judged, so its membership decays with every Pass A prune; leaving its open months to be recomputed would freeze them at a number the client never saw.';
 
+-- RETIREMENT IS FINAL, AND THE DATABASE SAYS SO. The freeze above is
+-- irreversible by design — a frozen monthly reading is never rewritten, and
+-- `month_reading_frozen_guard` refuses the UPDATE — so re-activating a retired
+-- subject does not undo it: the subject goes on accruing while its last open
+-- month stays a permanent record of a partial reading that nothing, not the
+-- pipeline and not an operator, may ever correct.
+--
+-- The CHECK constraint permits retired → active and `grant update (status, …)`
+-- plus the "Members retire their subjects" policy put that in a member's hands;
+-- the only refusal was activationCheck, in TypeScript, and PostgREST is
+-- reachable directly with the member's own JWT. Verified on a cluster before
+-- this existed: as `authenticated`, `set status='retired'` then
+-- `set status='active'` both returned UPDATE 1, the subject's open month came
+-- back `frozen` with frozen_at set, and a later correction of that month raised
+-- the frozen guard. Two PATCHes, confined to the tenant's own data, defeating a
+-- database-level invariant and unrecoverable.
+--
+-- lib/subjects/moves.ts activationCheck already refuses the same move with the
+-- calibrated sentence ("Add it again to start a new line for it"), so this
+-- refuses nothing the product offers.
+create or replace function public.subjects_retirement_is_final()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if old.status = 'retired' and new.status is distinct from 'retired' then
+    raise exception 'a retired subject is never re-activated: its months are frozen and a frozen monthly reading is never rewritten'
+      using errcode = 'restrict_violation';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.subjects_retirement_is_final() is
+  'Refuses retired → anything. Retiring a subject freezes its still-filling months and a frozen monthly reading is never rewritten, so a re-activation leaves a permanent record of a partial reading behind a subject that goes on accruing. The CHECK constraint permits the move and the column is in the member update grant, so the rule has to be a trigger.';
+
+drop trigger if exists subjects_retirement_is_final on public.subjects;
+create trigger subjects_retirement_is_final
+  before update of status on public.subjects
+  for each row execute function public.subjects_retirement_is_final();
+
 drop trigger if exists subjects_retirement_freeze on public.subjects;
 create trigger subjects_retirement_freeze
   after update of status on public.subjects
