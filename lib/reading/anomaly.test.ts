@@ -9,6 +9,11 @@ import {
   baselineStateOf,
   holmRejections,
   standardErrorPts,
+  MIN_TESTABLE_K,
+  THIN_UPDATE_SHARE,
+  medianWeekVideos,
+  preRegisteredSet,
+  thinUpdate,
   topThemesByBaseline,
   twoSidedP,
   weekVsBaseline,
@@ -374,5 +379,171 @@ describe('the measurement knob', () => {
     })
     // 60 videos behind it: under SHARE_BAND.minN, so no comparison is drawn.
     expect(waived.rows[0].state).toBe('too_little_data')
+  })
+})
+
+describe('preRegisteredSet — decision S\'s trim', () => {
+  const series: DenominatorSeries = {
+    name: 'every audience together',
+    weekVideos: 205,
+    // 1,089 video-months behind, ~250 a week — the Össur shape the coverage
+    // report measured (research/anomaly-weekly-report.md §3).
+    months: [
+      { month: '2026-06-01', videos: 350 },
+      { month: '2026-07-01', videos: 380 },
+      { month: '2026-08-01', videos: 359 },
+    ],
+  }
+  const theme = (id: string, monthVideos: number): PreRegisteredObject =>
+    flatObject(id, { weekVideos: 0, monthVideos, denominator: series.name })
+
+  it('keeps a theme whose baseline share implies ten of its own videos in a typical week', () => {
+    // ~81 videos a week after the month-to-week conversion; 12.5% of that is
+    // 10.2 — just over the line, and 44 a month would be 9.9 and just under.
+    const { set, trimmed } = preRegisteredSet({
+      denominators: [{ ...series, months: series.months.map((m) => ({ ...m, videos: 360 })) }],
+      candidates: [theme('big', 45)],
+    })
+    expect(set.map((o) => o.id)).toEqual(['big'])
+    expect(trimmed).toHaveLength(0)
+  })
+
+  it('drops a theme whose baseline share could never reach the floor, and says the arithmetic', () => {
+    const { set, trimmed } = preRegisteredSet({ denominators: [series], candidates: [theme('tail', 6)] })
+    expect(set).toHaveLength(0)
+    expect(trimmed).toHaveLength(1)
+    expect(trimmed[0].id).toBe('tail')
+    expect(trimmed[0].baselineShare).toBeCloseTo(1.7, 1)
+    expect(trimmed[0].impliedWeekVideos).toBeLessThan(MIN_TESTABLE_K)
+  })
+
+  it('never trims a kind, a rival or a subject — they are the client\'s own set', () => {
+    const fixed: PreRegisteredObject[] = [
+      { kind: 'kind', id: 'objection', label: 'Objections', denominator: series.name, weekVideos: 0, months: [] },
+      { kind: 'rival', id: 'competitor:Ottobock', label: 'Ottobock', denominator: series.name, weekVideos: 0, months: [] },
+      { kind: 'subject', id: 's1', label: 'Durability', denominator: series.name, weekVideos: 0, months: [] },
+    ]
+    const { set, counts, trimmed } = preRegisteredSet({ denominators: [series], candidates: fixed })
+    expect(set).toHaveLength(3)
+    expect(counts).toEqual({ kind: 1, rival: 1, subject: 1, theme: 0 })
+    expect(trimmed).toHaveLength(0)
+  })
+
+  it('ranks before it trims: the twenty-first theme never reaches the rule', () => {
+    const many = Array.from({ length: 25 }, (_, i) => theme(`t${String(i).padStart(2, '0')}`, 40 + i))
+    const { set, ranked, trimmed } = preRegisteredSet({ denominators: [series], candidates: many })
+    expect(ranked).toBe(TOP_THEMES)
+    expect(set.length + trimmed.length).toBe(TOP_THEMES)
+    // The five smallest were cut by the ranking, not by the trim.
+    expect([...set, ...trimmed].map((o) => o.id)).not.toContain('t00')
+  })
+
+  it('looks only at the baseline — this week\'s count cannot change the set', () => {
+    const quiet = { ...theme('t', 45), weekVideos: 0 }
+    const loud = { ...theme('t', 45), weekVideos: 90 }
+    const denominators = [{ ...series, months: series.months.map((m) => ({ ...m, videos: 360 })) }]
+    expect(preRegisteredSet({ denominators, candidates: [quiet] }).set).toHaveLength(1)
+    expect(preRegisteredSet({ denominators, candidates: [loud] }).set).toHaveLength(1)
+  })
+
+  it('loosens the Holm threshold by trimming, which is the whole point', () => {
+    const kinds: PreRegisteredObject[] = KIND_SET.map((k) => ({
+      kind: 'kind' as const, id: k, label: k, denominator: series.name, weekVideos: 0, months: [],
+    }))
+    const tail = Array.from({ length: 20 }, (_, i) => theme(`tail${i}`, 5))
+    const { set } = preRegisteredSet({ denominators: [series], candidates: [...kinds, ...tail] })
+    expect(set).toHaveLength(10)
+    // 0.05/30 against 0.05/10 — a threshold three times as generous.
+    expect(FAMILY_ALPHA / set.length).toBeCloseTo(3 * (FAMILY_ALPHA / (kinds.length + tail.length)), 6)
+  })
+
+  it('refuses an object naming a denominator nobody passed, exactly as the check does', () => {
+    expect(() =>
+      preRegisteredSet({ denominators: [series], candidates: [flatObject('x', { weekVideos: 1, monthVideos: 1, denominator: 'client' })] }),
+    ).toThrow(/no denominator "client"/)
+  })
+
+  it('takes a caller\'s own typical week over the one derived from months', () => {
+    const candidates = [theme('t', 20)]
+    const derived = preRegisteredSet({ denominators: [series], candidates })
+    const measured = preRegisteredSet({
+      denominators: [series],
+      candidates,
+      options: { medianWeekVideos: { [series.name]: 400 } },
+    })
+    expect(derived.set).toHaveLength(0)
+    expect(measured.set).toHaveLength(1)
+  })
+})
+
+describe('medianWeekVideos', () => {
+  it('is the median of the months\' weekly rates, not a mean of the months', () => {
+    // 310 over 31 days = 70 a week; 280 over 28 = 70; 620 over 31 = 140.
+    const series: DenominatorSeries = {
+      name: 'every audience together',
+      weekVideos: 0,
+      months: [
+        { month: '2026-01-01', videos: 310 },
+        { month: '2026-02-01', videos: 280 },
+        { month: '2026-03-01', videos: 620 },
+      ],
+    }
+    expect(medianWeekVideos(series)).toBeCloseTo(70, 6)
+  })
+
+  it('is zero for a series with no months at all, rather than NaN', () => {
+    expect(medianWeekVideos({ name: 'x', weekVideos: 0, months: [] })).toBe(0)
+  })
+})
+
+describe('thinUpdate', () => {
+  const sizes = (...ns: number[]) => ns.map((analysedVideos) => ({ analysedVideos }))
+
+  it('runs the check on an update of a normal size', () => {
+    const v = thinUpdate({ analysedVideos: 200, status: 'completed' }, sizes(190, 210, 205))
+    expect(v.suppressed).toBe(false)
+    expect(v.reason).toBeNull()
+    expect(v.median).toBe(205)
+  })
+
+  it('suppresses an update that read well under its usual corpus', () => {
+    const v = thinUpdate({ analysedVideos: 100, status: 'completed' }, sizes(190, 210, 205))
+    expect(v.suppressed).toBe(true)
+    expect(v.reason).toBe('thin')
+    expect(v.share).toBeCloseTo(100 / 205, 6)
+    expect(v.note).toMatch(/not compared with the months behind it/)
+  })
+
+  it('draws the thin line at the same 60% a thin month is drawn at', () => {
+    expect(THIN_UPDATE_SHARE).toBe(0.6)
+    expect(thinUpdate({ analysedVideos: 59 }, sizes(100, 100, 100)).suppressed).toBe(true)
+    expect(thinUpdate({ analysedVideos: 60 }, sizes(100, 100, 100)).suppressed).toBe(false)
+  })
+
+  it('suppresses a stalled update however much it read', () => {
+    const v = thinUpdate({ analysedVideos: 900, stalled: true, status: 'completed' }, sizes(200, 200))
+    expect(v.suppressed).toBe(true)
+    expect(v.reason).toBe('stalled')
+  })
+
+  it('suppresses a failed update before it looks at the size', () => {
+    expect(thinUpdate({ analysedVideos: 900, status: 'failed' }, sizes(200)).reason).toBe('failed')
+  })
+
+  it('reads a partial update, which is an update that delivered something', () => {
+    expect(thinUpdate({ analysedVideos: 200, status: 'partial' }, sizes(200, 200)).suppressed).toBe(false)
+  })
+
+  it('runs the check when there is nothing to compare the size against', () => {
+    const v = thinUpdate({ analysedVideos: 3 }, [])
+    expect(v.suppressed).toBe(false)
+    expect(v.median).toBeNull()
+    expect(v.share).toBeNull()
+  })
+
+  it('does not read an unrecorded count as a zero, on either side', () => {
+    expect(thinUpdate({ analysedVideos: null }, sizes(200, 200)).suppressed).toBe(false)
+    // The trailing update nobody counted is left out of the median, not zeroed.
+    expect(thinUpdate({ analysedVideos: 120 }, [{ analysedVideos: null }, ...sizes(200, 200)]).median).toBe(200)
   })
 })
