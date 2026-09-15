@@ -17,7 +17,19 @@ import {
 //
 // Dry-run by default: it prints how many distinct (comment, text) pairs have no
 // cache row, how many calls that is, and what it would cost — and spends
-// nothing. --apply translates up to --limit comments and writes the rows.
+// nothing. --apply translates up to --limit TEXTS and writes the rows.
+//
+// --limit IS IN TEXTS, NOT COMMENTS, because a text is what is billed and what
+// a cache row is. A comment carries 1.22–1.24 displayable texts on this corpus
+// (an excerpt and the whole comment are two texts and two rows), so --limit 1000
+// reaches roughly 810 comments, not 1000. The dry run prints both numbers side
+// by side so the difference is on screen before anything is spent.
+//
+// It is also a backstop rather than an exact ceiling, for the reason
+// TRANSLATE_QUOTES_CAP gives: the plan hands batches on as COMMENT ids and the
+// batch re-derives every uncached text of them, including a sibling text the
+// cap cut off mid-comment. A capped run therefore spends slightly over the
+// limit — at most one comment's remaining texts per batch, fractions of a cent.
 //
 // The count it prints is the honest one and it is larger than the design's:
 // there is no stored per-comment language signal to pre-filter on (the video's
@@ -43,7 +55,7 @@ export function parseArgs(argv: string[]): { clientId: string; limit: number | n
   if (args.limit !== null && (!Number.isInteger(args.limit) || args.limit < 1)) throw new Error('--limit must be a positive integer')
   // Spending defaults are not defaults (translate-transcripts.ts's rule).
   if (args.apply && !named) throw new Error('--apply requires an explicit --client <uuid> — it writes to a real tenant')
-  if (args.apply && args.limit === null) throw new Error('--apply requires an explicit --limit N — it spends per comment')
+  if (args.apply && args.limit === null) throw new Error('--apply requires an explicit --limit N — N is TEXTS, not comments, and it spends per text')
   return args
 }
 
@@ -70,7 +82,7 @@ async function main(): Promise<void> {
   const cost = estimateQuoteTranslationCost(calls, plan.needing)
 
   console.log(`client            ${args.clientId}`)
-  console.log(`uncached texts    ${plan.needing} across ${plan.comments} comments`)
+  console.log(`uncached texts    ${plan.needing} across ${plan.comments} comments (the cap and --limit are in TEXTS)`)
   console.log(`deferred by cap   ${plan.deferred} (cap ${cap})`)
   console.log(`calls @${TRANSLATE_QUOTES_BATCH}         ${calls} on ${TRANSLATE_QUOTES_MODEL}`)
   console.log(`estimated cost    $${cost.low.toFixed(3)} – $${cost.high.toFixed(3)} (a bound; billing is the truth)`)

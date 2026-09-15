@@ -337,8 +337,18 @@ export const TRANSLATE_QUOTES_CALLS_PER_STEP = 8
  *  step maintains a cache rather than producing the report. */
 export const TRANSLATE_QUOTES_PARALLEL = 2
 
-/** Runaway BACKSTOP in COMMENTS per run — TRANSLATE_CAP's shape, not a quality
- *  budget. Measured on production 2026-09-15, one update newly cites 2,386
+/** Runaway BACKSTOP in TEXTS per run — TRANSLATE_CAP's shape, not a quality
+ *  budget. TEXTS, because a text is what is billed and what a cache row is:
+ *  `planQuoteCalls` slices the uncached (comment, text) targets, so at the
+ *  measured 1.22–1.24 texts per comment 3,000 reaches about 2,450 comments.
+ *
+ *  It is a backstop and not an exact ceiling, deliberately. The plan step hands
+ *  its batches on as COMMENT ids, and translateQuotesBatch re-derives every
+ *  uncached text of those comments — including a sibling text the cap cut off
+ *  mid-comment. So a capped run spends slightly OVER the cap, by at most one
+ *  comment's remaining texts per batch. Splitting a comment across two runs to
+ *  hold the line exactly would cost a second planning pass over the whole
+ *  corpus to save a fraction of a cent. Measured on production 2026-09-15, one update newly cites 2,386
  *  (Össur) / 3,988 (Sealand) distinct comments, of which 627–684 are
  *  confidently not English; the design's "~400 newly-cited non-English
  *  comments per update" is 1.6× low. Everything cited and uncached goes to the
