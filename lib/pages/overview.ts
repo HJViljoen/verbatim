@@ -1,0 +1,1520 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
+import { fmtInt, monthName, shortDate } from '../format'
+import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
+import { composeInterpretation, type Interpretation } from '../prose/interpret'
+import { proseFigures } from '../prose/figures'
+import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, type QuoteCitation } from '../quotes'
+import { quoteRef } from '../renderables/quotes-freeze'
+import type { Quote, Scope } from '../renderables/types'
+import { SHARE_BAND } from '../report-bands'
+import {
+  CLIENT_AUDIENCE,
+  INDUSTRY_AUDIENCE,
+  isMissingCompetitors,
+  isRivalAudience,
+  loadCompetitors,
+  rivalKey,
+  type Competitor,
+} from '../rivals'
+import { audienceLabel } from '../readiness/types'
+import {
+  isMissingKindMoodAttention,
+  attentionRowsOf,
+  currentPanel,
+  type AttentionPanel,
+  type AttentionRow,
+} from '../reading/attention'
+import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
+import { HORIZON_LABEL, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { kindShares, redditRead, kindChange, KIND_ORDER, type KindShare, type RedditRead } from '../reading/kinds'
+import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { monthStartOf, nextMonth } from '../reading/month-key'
+import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
+import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines } from '../reading/record'
+import {
+  mergeSeriesNotes,
+  pointsByMonth,
+  type MonthLabel,
+  type MonthSeries,
+  type Substrate,
+} from '../reading/series'
+import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
+import type { MonthStatus } from '../reading/types'
+import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
+import { isMissingSubjects, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { selectAll } from '../supabase-admin'
+import { row, rows } from './read'
+import { fetchRunningRunIds } from './latest-video-run'
+import { fetchThemedRunId } from './themed-run'
+
+// Overview — the front page, and the first surface built on the comment-dated
+// monthly reading (Phase 1 WP11, design §3 OV0–OV6).
+//
+// SEVEN BLOCKS, ONE LOADER. `components/pages/overview/` holds one `Block` per
+// section and this file holds everything they print. The split is the block
+// contract's (lib/blocks/types.ts): a block renders once, in three modes, out
+// of data it is handed — so the same OV2 that draws the subjects table on
+// screen draws it in the weekly email, and there is no second loader for the
+// report to disagree with.
+//
+// WHAT THIS PAGE READS, AND WHAT IT REFUSES TO INVENT. Every figure comes off
+// the stored month tables through lib/reading — never off a run. Five of the
+// seven blocks depend on a migration that is authored and NOT YET APPLIED
+// (subjects and moves on M4; kinds, mood, attention and the standings on M5;
+// the "at this point last month" tick on M3; the anomaly line on M7). Each of
+// those reads is guarded by its own named `isMissing*` test and degrades to a
+// SENTENCE saying what is not recorded yet — the precedent every Block A
+// package set, and the reason this page renders honestly on production today
+// rather than throwing or, worse, printing zeros.
+//
+// Calibrated (lib/calibration.ts): a reading surface counts VIDEOS. No run, no
+// pass, no window, no score. A direction word is only ever earned by
+// `directionWord` over three consecutive months in one regime, and it travels
+// as a `Verdict`/`Direction` so the renderer can mark it.
+
+/** How many themes the movers lines are chosen from, per audience. */
+export const MOVER_POOL = 20
+
+/** Growing and fading, three each (design §3 OV3 b). */
+export const MOVERS_SHOWN = 3
+
+/** How many months a sparkline on a subject row draws. */
+export const SPARK_MONTHS = 6
+
+/** The two voices of OV1 (design §3 OV1). */
+export const VOICES_SHOWN = 2
+
+/** The page's whole number budget (the mock's "about 30 printed numbers above
+ *  the fold"), asserted over the blocks' figure tables and not over rendered
+ *  digits — the same count `figureCount` makes. */
+export const NUMBER_BUDGET = 30
+
+// ---- the shapes ---------------------------------------------------------------
+
+/** One side of a subject row: you, your lead rival, or the category. */
+export interface SideReading {
+  /** The object's videos in this audience-month. Null where nothing was read. */
+  k: number | null
+  /** The audience's videos that month. */
+  n: number | null
+  pct: number | null
+  /** The banded month-on-month change, or null where none was drawn. */
+  verdict: Verdict | null
+  /** False where this audience carried no row at all — "— not tracked". */
+  observed: boolean
+}
+
+export interface SubjectRow {
+  id: string
+  label: string
+  you: SideReading
+  rival: SideReading | null
+  category: SideReading
+  /** Earned over three consecutive months in one regime, on the category side —
+   *  the only side with the n to carry one on today's corpus. */
+  direction: Direction | null
+  /** The last `SPARK_MONTHS` category readings, nulls where unreadable. */
+  spark: (number | null)[]
+  href: string
+}
+
+export interface SubjectCandidate {
+  name: string
+  origin: string
+  /** Where it came from, in the reader's words. */
+  because: string
+}
+
+export interface SubjectsBlock {
+  /** `ready` — confirmed subjects with readings. `candidates` — the proposer
+   *  has something to confirm. `none` — nothing named and nothing proposed.
+   *  `not_recorded` — M4 is not applied here. */
+  state: 'ready' | 'candidates' | 'none' | 'not_recorded'
+  rows: SubjectRow[]
+  candidates: SubjectCandidate[]
+  rivalLabel: string | null
+  categoryLabel: string
+  /** The line under the table about which column carries the month. */
+  note: string | null
+}
+
+export interface Mover {
+  id: string
+  label: string
+  k: number
+  n: number
+  pct: number | null
+  verdict: Verdict
+  direction: Direction | null
+  /** First month this object has a reading in, when it is this month. */
+  isNew: boolean
+}
+
+export interface MoodBlock {
+  shares: MoodShare[]
+  judged: number
+  verdict: Verdict | null
+  /** How much of the month was judged on framing instead — the footnote. */
+  framingPct: number | null
+}
+
+export interface AttentionBlock {
+  /** Panel comments per month, oldest first. */
+  months: { month: string; comments: number; videos: number }[]
+  panel: AttentionPanel | null
+  verdict: Verdict | null
+}
+
+export interface CategoryBlock {
+  audience: string
+  label: string
+  denominator: number | null
+  /** The three kinds printed, with the rest one click down. */
+  kinds: KindShare[]
+  kindVerdicts: Record<string, Verdict | null>
+  reddit: RedditRead | null
+  /** Said instead of the kinds when M5 is not applied here. */
+  kindsNote: string | null
+  growing: Mover[]
+  fading: Mover[]
+  moversNote: string | null
+  mood: MoodBlock | null
+  moodNote: string | null
+  attention: AttentionBlock | null
+  attentionNote: string | null
+}
+
+export interface RivalRow {
+  audience: string
+  label: string
+  role: StandingRow['role']
+  observed: boolean
+  attention: StandingRow['attention']
+  content: StandingRow['content']
+  attentionVerdict: Verdict | null
+  contentVerdict: Verdict | null
+  /** What they said on their own posts, or the honest absence. */
+  ownPosts: string | null
+  /** The subject raised most under their content this month. */
+  raisedMost: { label: string; k: number; n: number; pct: number | null } | null
+  retiredAt: string | null
+}
+
+export interface RivalsBlock {
+  rows: RivalRow[]
+  /** Said instead of the shares when M5 is not applied here. */
+  standingsNote: string | null
+  /** Videos of the client's own that also name a tracked rival. */
+  dualMention: number | null
+  caveat: string
+}
+
+export interface MoveRow {
+  id: string
+  title: string
+  kind: Move['kind']
+  declaredAt: string
+  line: string
+}
+
+export interface MovesBlock {
+  rows: MoveRow[]
+  /** The unlock, named on the block. */
+  unlock: string
+  masthead: string
+  /** The one sentence when there is nothing dated, or M4 is not applied. */
+  empty: string | null
+  recorded: boolean
+}
+
+export interface LedgerRow {
+  id: string
+  title: string
+  /** Months since the recommendation was first made; null until lineage has
+   *  two runs behind it. */
+  monthsOld: number | null
+  status: RecStatus
+  statusLabel: string
+  decidedAt: string | null
+  href: string
+}
+
+export interface AnomalyLine {
+  label: string
+  objectKind: string
+  weekStart: string
+  weekEnd: string
+  k: number
+  n: number
+  changePts: number
+  bandPts: number
+  denominator: string
+  /** The model's explanation, when one was written; sentences with figure
+   *  tokens intact. */
+  sentences: string[]
+  quote: Quote | null
+  href: string
+}
+
+export interface Voice {
+  quote: Quote
+  /** Platform · date · where it was said. */
+  cite: string
+}
+
+export interface SentenceBlock {
+  /** The largest banded change this month among subjects and themes. */
+  lead: Verdict | null
+  /** The code sentence, with `[[token]]` figure placeholders. */
+  body: string
+  figures: FigureTable
+  anomaly: AnomalyLine | null
+  interpretation: Interpretation
+  ledger: LedgerRow | null
+  voices: Voice[]
+  /** Every comparison this block may speak from. */
+  verdicts: Verdict[]
+}
+
+export interface BarBlock {
+  month: string
+  status: MonthStatus
+  /** Days of the month elapsed at the reading, or null on a complete month. */
+  daysIn: number | null
+  updates: number
+  updateDates: string[]
+  /** The month's videos so far, pooled across audiences (a video sits in
+   *  exactly one audience). Null where nothing has been read. */
+  videos: number | null
+  /** The trailing median of the same quantity. */
+  expected: number | null
+  /** The same point last month, from one window call. Null when M3 is not
+   *  applied here — told apart by `atLastMonthKnown`. */
+  atLastMonth: number | null
+  atLastMonthKnown: boolean
+  thin: boolean
+  /** The still-filling line, composed once. */
+  line: string
+  /** "your 3rd monthly reading" — months with a reading, counted. */
+  readings: number
+  horizonLabel: string
+}
+
+export interface RecordBlock {
+  line: string
+  lines: string[]
+  href: string
+  /** The day this month stops moving. */
+  freezesOn: string
+  refused: number
+}
+
+export interface OverviewData {
+  brand: string
+  /** The month the reading is of — the last month on the axis. */
+  month: string
+  monthStatus: MonthStatus
+  readingAt: string
+  horizon: Horizon
+  window: HorizonWindow
+  axis: string[]
+  substrate: Substrate
+  /** The reading's caveats, said once for the whole page. */
+  notes: MonthLabel[]
+  bar: BarBlock
+  sentence: SentenceBlock
+  subjects: SubjectsBlock
+  category: CategoryBlock
+  rivals: RivalsBlock
+  moves: MovesBlock
+  record: RecordBlock
+}
+
+// ---- the pure half ------------------------------------------------------------
+
+const round1 = (n: number): number => Math.round(n * 10) / 10
+
+/**
+ * The month in full — "September", not "Sep".
+ *
+ * `monthName` (lib/format.ts) is the product's short form and is what the chart
+ * axis and every caption use; this one line is the mock's own wording and reads
+ * as a sentence, so it takes the long form (WP10: "a surface that wants the
+ * long form writes it in its own caption"). Written here rather than widened in
+ * lib/format, because one caption is not a vocabulary change.
+ */
+export function longMonth(month: string): string {
+  return new Date(`${monthStartOf(month)}T00:00:00.000Z`).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
+}
+
+const pctOf = (k: number | null, n: number | null): number | null =>
+  k == null || n == null || n <= 0 ? null : round1((k / n) * 100)
+
+/** Days of `month` elapsed at `now`, or null when the month is behind us. */
+export function daysInto(month: string, now: string): number | null {
+  const start = monthStartOf(month)
+  const next = nextMonth(start)
+  const at = now.slice(0, 10)
+  if (at >= next) return null
+  if (at < start) return 0
+  return Number(at.slice(8, 10))
+}
+
+/** The median of the numbers that exist — a month with no row is not a zero. */
+export function medianOf(values: readonly (number | null | undefined)[]): number | null {
+  const present = values.filter((v): v is number => typeof v === 'number').sort((a, b) => a - b)
+  if (present.length === 0) return null
+  const mid = Math.floor(present.length / 2)
+  return present.length % 2 === 1 ? present[mid] : (present[mid - 1] + present[mid]) / 2
+}
+
+export interface FillingLineInput {
+  month: string
+  status: MonthStatus
+  daysIn: number | null
+  updates: number
+  videos: number | null
+  expected: number | null
+  atLastMonth: number | null
+  atLastMonthKnown: boolean
+  thin: boolean
+}
+
+/**
+ * OV0's still-filling line (design §3 OV0).
+ *
+ * "September, 18 days in · 3 updates · 271 of an expected ~469 videos · last
+ * month at this point: 244" — the growth of a month shown against the same
+ * point in the month before it rather than against nothing, which is what makes
+ * Overview worth opening between months without printing a weekly figure.
+ *
+ * THE LAST CLAUSE IS THREE DIFFERENT SENTENCES. A comparison that exists prints
+ * it; a comparison the window functions cannot answer yet says so; a complete
+ * month is not filling and says nothing at all. A zero here would read as "last
+ * month we had nothing at this point", which is a claim about the conversation
+ * and not about our own bookkeeping.
+ */
+export function fillingLine(input: FillingLineInput): string {
+  const parts: string[] = []
+  const name = longMonth(input.month)
+  if (input.status === 'frozen' || input.daysIn == null) {
+    parts.push(`${name}, complete`)
+  } else {
+    parts.push(`${name}, ${input.daysIn} ${input.daysIn === 1 ? 'day' : 'days'} in`)
+  }
+  parts.push(`${fmtInt(input.updates)} ${input.updates === 1 ? 'update' : 'updates'}`)
+  if (input.videos == null) parts.push('nothing read into this month yet')
+  else if (input.expected != null && input.expected > 0) {
+    parts.push(`${fmtInt(input.videos)} of an expected ~${fmtInt(Math.round(input.expected))} videos`)
+  } else {
+    parts.push(`${fmtInt(input.videos)} ${input.videos === 1 ? 'video' : 'videos'}`)
+  }
+  if (input.status === 'filling') {
+    parts.push(
+      !input.atLastMonthKnown
+        ? 'last month at this point: not recorded yet'
+        : input.atLastMonth == null
+          ? 'no reading of last month at this point'
+          : `last month at this point: ${fmtInt(input.atLastMonth)}`,
+    )
+  }
+  if (input.thin) parts.push('thin month — every change below is suppressed')
+  return parts.join(' · ')
+}
+
+/** What the largest change is measured against, as a figure table key. */
+const figureKey = (objectId: string, suffix: string): string =>
+  `${objectId.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_${suffix}`
+
+export interface HeadlineInput {
+  /** The verdicts OV1 chooses its sentence from — subjects and themes. */
+  verdicts: readonly Verdict[]
+  /** What the audience is called, for the sentence. */
+  audienceLabel: string
+}
+
+export interface Headline {
+  lead: Verdict | null
+  body: string
+  figures: FigureTable
+}
+
+/**
+ * The one sentence: the single largest BANDED change this month among subjects
+ * and themes, with the figures left as tokens for the surface to substitute.
+ *
+ * `moved` only. A change that did not clear its band is not a change this
+ * product will name, and the design's own gate sentence is what stands in its
+ * place: "Nothing moved clearly this month. Here is where you stand." Neither
+ * sentence carries a direction word — the word is the badge's, drawn from the
+ * verdict beside it, which is the only place rule (c) allows one.
+ */
+export function headline(input: HeadlineInput): Headline {
+  const moved = input.verdicts.filter((v) => v.state === 'moved' && v.changePts != null)
+  const lead = [...moved].sort(
+    (a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0) || a.objectId.localeCompare(b.objectId),
+  )[0] ?? null
+
+  if (!lead) {
+    return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} }
+  }
+
+  const share = figureKey(lead.objectId, 'share')
+  const videos = figureKey(lead.objectId, 'videos')
+  const denominator = figureKey(lead.objectId, 'of')
+  const figures: FigureTable = {
+    [share]: { value: pctOf(lead.value.k, lead.value.n) ?? 0, unit: 'pct', label: `${lead.objectLabel}'s share of the month` },
+    [videos]: { value: lead.value.k, unit: 'videos', label: `videos that raised ${lead.objectLabel}` },
+    [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${input.audienceLabel}` },
+  }
+  const body =
+    `${lead.objectLabel} came up in [[${share}]] of ${input.audienceLabel} this month — ` +
+    `[[${videos}]] of [[${denominator}]] videos.`
+  return { lead, body, figures }
+}
+
+/** Rank the movers of one audience: the largest banded changes, up and down. */
+export function splitMovers(movers: readonly Mover[], shown: number = MOVERS_SHOWN): { growing: Mover[]; fading: Mover[] } {
+  const answered = movers.filter((m) => m.verdict.state === 'moved' && m.verdict.changePts != null)
+  const up = answered.filter((m) => (m.verdict.changePts ?? 0) > 0)
+  const down = answered.filter((m) => (m.verdict.changePts ?? 0) < 0)
+  const by = (a: Mover, b: Mover) =>
+    Math.abs(b.verdict.changePts ?? 0) - Math.abs(a.verdict.changePts ?? 0) || a.label.localeCompare(b.label)
+  return { growing: [...up].sort(by).slice(0, shown), fading: [...down].sort(by).slice(0, shown) }
+}
+
+/** The month a move declared today is first scored in: the month after the one
+ *  it was declared in, because the month it was declared in is already part
+ *  filled when the declaration lands. */
+export function firstScoringMonth(declaredAt: string): string {
+  return nextMonth(monthStartOf(declaredAt.slice(0, 10)))
+}
+
+/** One move, on one line (design §3 OV5, Phase 1). */
+export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
+  return `${move.title} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${monthName(firstScoringMonth(move.declared_at))} reading.`
+}
+
+/** What OV5 says when nothing has been dated. */
+export const MOVES_EMPTY =
+  'Nothing dated yet. Press Track this on a subject or a theme and this block starts scoring it from the following month.'
+
+/** What OV5 says about what is not here yet. `{month}` is the month Market's
+ *  bottom section arrives in. */
+export const movesUnlock = (month: string): string =>
+  `Scoring, and the pre-filled monthly card, arrive with Market's bottom section in ${monthName(month)}.`
+
+/** The masthead OV5 and Market both carry, code-written. */
+export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
+
+/** The precedence caveat OV4 carries (§7, bucket precedence). */
+export const RIVALS_CAVEAT =
+  'A video that names both you and a rival counts in your audience only; the count of those is in the record.'
+
+/** The subjects block's line about which column carries the month. */
+export function subjectsNote(rows: readonly SubjectRow[]): string | null {
+  if (rows.length === 0) return null
+  const yourN = rows[0].you.n
+  const thin = rows.every((r) => r.you.verdict == null || !isAnswer(r.you.verdict.state))
+  if (!thin) return null
+  return yourN == null
+    ? 'Your own side carries no reading this month — the category column carries the month.'
+    : `Your side reads "too few to compare" on ${fmtInt(yourN)} videos — the category column carries the month.`
+}
+
+/** The "not a blank form" line (design §3 OV2, empty state). */
+export function candidateLine(candidates: readonly SubjectCandidate[]): string {
+  return candidates.length === 0
+    ? 'No subjects are named yet, and nothing has been proposed — name the five to eight things you want to be known for in Settings.'
+    : `We have proposed ${fmtInt(candidates.length)} ${candidates.length === 1 ? 'subject' : 'subjects'} from your own claims and your category's top themes. Confirm, rename or replace them.`
+}
+
+// ---- the loader ---------------------------------------------------------------
+
+interface RunRow {
+  id: string
+  started_at: string
+}
+
+interface RecRow {
+  id: string
+  title: string
+  lineage_id: string | null
+  first_seen_run_date: string | null
+  status: string | null
+  rank_score: number | null
+}
+
+interface AnomalyFlagRow {
+  run_id: string
+  week_start: string
+  week_end: string
+  object_kind: string
+  object_id: string
+  label: string
+  denominator: string
+  week_k: number
+  week_n: number
+  change_pts: number
+  band_pts: number
+  rank: number
+  explanation: { sentences?: string[] } | null
+  quote_refs: string[] | null
+}
+
+/** Months between two month starts, as a count. */
+function monthsApart(from: string, to: string): number {
+  const a = new Date(`${monthStartOf(from)}T00:00:00.000Z`)
+  const b = new Date(`${monthStartOf(to)}T00:00:00.000Z`)
+  return (b.getUTCFullYear() - a.getUTCFullYear()) * 12 + (b.getUTCMonth() - a.getUTCMonth())
+}
+
+/** The tenant's rivals, from `competitors` where M1 has landed and from the
+ *  tracked list where it has not. One shape either way, so nothing downstream
+ *  has to know which of the two answered. */
+async function loadRivals(
+  supabase: SupabaseClient,
+  clientId: string,
+): Promise<{ name: string; retiredAt: string | null }[]> {
+  let stored: Competitor[] = []
+  try {
+    stored = await loadCompetitors(supabase, clientId)
+  } catch (error) {
+    if (!isMissingCompetitors(error)) throw error
+  }
+  if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
+  const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
+  const tc = row<{ competitor_names: string[] | null }>(res, 'overview.rivals')
+  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
+}
+
+/** A stored month table, read straight (not recomputed). Null — never [] —
+ *  when the migration that creates it has not been applied here. */
+async function readStoredMonths<T>(
+  client: SupabaseClient,
+  table: string,
+  clientId: string,
+  months: readonly string[],
+  order: readonly string[],
+  missing: (error: unknown) => boolean,
+): Promise<T[] | null> {
+  if (months.length === 0) return []
+  try {
+    return await selectAll<T>(() => {
+      let q = client
+        .from(table)
+        .select('*')
+        .eq('client_id', clientId)
+        .gte('month', months[0])
+        .lte('month', months[months.length - 1])
+      for (const col of order) q = q.order(col, { ascending: true })
+      return q
+    })
+  } catch (error) {
+    if (missing(error) || isMissingMonthTable(error)) return null
+    throw error
+  }
+}
+
+/** A stored `month_kind_readings` row, as the block builder takes it. */
+export type StoredKindRow = {
+  month: string
+  audience: string
+  kind: string
+  videos: number
+  comments: number
+  platform_mix: Record<string, number> | null
+  run_id: string | null
+}
+
+/** A stored `month_audience_stats` row, as the block builders take it. */
+export type StoredStatsRow = {
+  month: string
+  audience: string
+  judged: number
+  positive: number
+  negative: number
+  neutral: number
+  mixed: number
+  judged_framing: number | null
+  panel_videos: number | null
+  attention_comments: number | null
+  panel_platform_mix: Record<string, number> | null
+  panel_id: string | null
+}
+
+/** A stored `month_subject_readings` row, as OV2 takes it. */
+export type StoredSubjectRow = {
+  month: string
+  audience: string
+  subject_id: string
+  videos: number
+  comments: number
+}
+
+/**
+ * The Overview, for one tenant and one horizon.
+ *
+ * Null is the first-run empty state: a tenant with no delivered update has no
+ * reading of anything, and the page says so rather than drawing seven blocks of
+ * refusals.
+ */
+export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
+  const supabase = scope.supabase as SupabaseClient
+  const { clientId, params } = scope
+  const reading: ReadingHandle = scope.reading
+  const readingAt = new Date().toISOString()
+  const horizon = parseHorizon(params.horizon)
+
+  // ── wave 1: who this is, and what has been delivered ───────────────────
+  const [clientRes, runsRaw, runningIds, rivals] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    selectAll<RunRow>(() =>
+      supabase.from('pipeline_runs').select('id, started_at')
+        .eq('client_id', clientId).in('status', ['completed', 'partial'])
+        .order('started_at', { ascending: true }),
+    ),
+    fetchRunningRunIds(supabase, clientId, 'overview'),
+    loadRivals(supabase, clientId),
+  ])
+  const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
+  const brand = client?.company_name ?? 'Your brand'
+  if (runsRaw.length === 0) return null
+
+  const updatesByMonth: Record<string, number> = {}
+  for (const r of runsRaw) {
+    const m = monthStartOf(r.started_at)
+    updatesByMonth[m] = (updatesByMonth[m] ?? 0) + 1
+  }
+  const firstRunMonth = monthStartOf(runsRaw[0].started_at)
+
+  // ── wave 2: the whole denominator history, for the axis ────────────────
+  // Cheap (a hundred-odd rows) and it decides everything else: `sinceStart`
+  // is what "since we started" means (decision M), and the horizon window is
+  // computed from it rather than from the first month with any row at all.
+  const history = await loadMonthSeries(reading.client, clientId, {
+    from: '2019-01-01',
+    to: readingAt,
+    updatesByMonth,
+    firstRunMonth,
+  })
+  const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
+  const window = horizonWindow(horizon, readingAt, started.from)
+  const axis = window.months
+  const month = axis[axis.length - 1]
+  const prevMonth = axis.length > 1 ? axis[axis.length - 2] : null
+  const monthStatus = freezeStateFor(month, readingAt)
+  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'overview')
+
+  // ── wave 3: the readings ───────────────────────────────────────────────
+  const rivalAudiences = rivals.map((r) => rivalKey(r.name))
+  const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
+  const top = themedRunId
+    ? await loadTopObjects(reading.client, clientId, {
+        objectKind: 'theme',
+        audiences: [INDUSTRY_AUDIENCE],
+        from: axis[0],
+        to: month,
+        limit: MOVER_POOL,
+      })
+    : []
+
+  const [themeSet, kindRows, statsRows, subjectMonths, subjectRows, moveRows, panel, lastMonthSoFar, flags] =
+    await Promise.all([
+      loadMonthSeries(reading.client, clientId, {
+        from: axis[0],
+        to: month,
+        audiences,
+        objectKind: 'theme',
+        objectIds: top.map((t) => t.objectId),
+        updatesByMonth,
+        firstRunMonth,
+        changeLogFrom: history.changeLogFrom,
+      }),
+      readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, axis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
+      readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, axis, ['month', 'audience'], isMissingKindMoodAttention),
+      readStoredMonths<StoredSubjectRow>(reading.client, 'month_subject_readings', clientId, axis, ['month', 'audience', 'subject_id'], isMissingSubjects),
+      loadSubjects(supabase, clientId),
+      loadMoves(supabase, clientId),
+      currentPanel(reading.client, clientId).catch((error: unknown) => {
+        if (isMissingKindMoodAttention(error)) return null
+        throw error
+      }),
+      readAtThisPointLastMonth(reading, month, readingAt),
+      loadFlags(supabase, clientId, month),
+    ])
+
+  // ── OV0 · the page bar and the still-filling line ──────────────────────
+  const denominatorByMonth = new Map<string, number>()
+  for (const d of history.denominators) {
+    denominatorByMonth.set(d.month, (denominatorByMonth.get(d.month) ?? 0) + d.videos)
+  }
+  const monthVideos = denominatorByMonth.get(month) ?? null
+  const trailing = axis
+    .slice(0, -1)
+    .slice(-12)
+    .map((m) => denominatorByMonth.get(m) ?? null)
+  const expected = medianOf(trailing)
+  const daysIn = daysInto(month, readingAt)
+  const thin = thinMonth(
+    { month, videos: monthVideos, k: null },
+    [...denominatorByMonth.entries()].filter(([m]) => m < month).slice(-12).map(([, v]) => v),
+    { updates: updatesByMonth[month] ?? 0, firstRunMonth },
+  )
+  const updateDates = runsRaw.filter((r) => monthStartOf(r.started_at) === month).map((r) => shortDate(r.started_at))
+  const bar: BarBlock = {
+    month,
+    status: monthStatus,
+    daysIn,
+    updates: updatesByMonth[month] ?? 0,
+    updateDates,
+    videos: monthVideos,
+    expected,
+    atLastMonth: lastMonthSoFar.videos,
+    atLastMonthKnown: lastMonthSoFar.known,
+    thin,
+    line: fillingLine({
+      month,
+      status: monthStatus,
+      daysIn,
+      updates: updatesByMonth[month] ?? 0,
+      videos: monthVideos,
+      expected,
+      atLastMonth: lastMonthSoFar.videos,
+      atLastMonthKnown: lastMonthSoFar.known,
+      thin,
+    }),
+    readings: denominatorByMonth.size,
+    horizonLabel: HORIZON_LABEL[horizon],
+  }
+
+  // ── OV2 · your subjects ────────────────────────────────────────────────
+  const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
+  const subjects = buildSubjects({
+    subjects: subjectRows,
+    months: subjectMonths,
+    denominators: denominatorByMonth,
+    perAudience: audienceMonthVideos(history.denominators),
+    axis,
+    month,
+    prevMonth,
+    leadRival: leadRival?.name ?? null,
+    thin,
+  })
+
+  // ── OV3 · what the category is saying ─────────────────────────────────
+  const category = buildCategory({
+    audience: INDUSTRY_AUDIENCE,
+    axis,
+    month,
+    prevMonth,
+    series: themeSet.series,
+    kindRows,
+    statsRows,
+    panel,
+    perAudience: audienceMonthVideos(history.denominators),
+    thin,
+  })
+
+  // ── OV4 · rivals ───────────────────────────────────────────────────────
+  const dual = history.denominators.find((d) => d.month === month && d.audience === CLIENT_AUDIENCE) ?? null
+  const rivalsBlock = buildRivals({
+    rivals,
+    statsRows,
+    month,
+    prevMonth,
+    brand,
+    series: themeSet.series,
+    dualMention: (dual as { dual_mention?: number } | null)?.dual_mention ?? null,
+  })
+
+  // ── OV5 · your moves ───────────────────────────────────────────────────
+  const moves: MovesBlock = {
+    rows: (moveRows ?? []).filter((m) => m.status === 'active').map((m) => ({
+      id: m.id,
+      title: m.title,
+      kind: m.kind,
+      declaredAt: m.declared_at,
+      line: moveLine(m),
+    })),
+    unlock: movesUnlock(nextMonth(month)),
+    masthead: MOVES_MASTHEAD,
+    empty: null,
+    recorded: moveRows != null,
+  }
+  moves.empty = moveRows == null
+    ? 'What you are doing about it is not recorded for this workspace yet.'
+    : moves.rows.length === 0
+      ? MOVES_EMPTY
+      : null
+
+  // ── OV1 · the one sentence ─────────────────────────────────────────────
+  const sentenceVerdicts = [
+    ...subjects.rows.flatMap((r) => [r.category.verdict, r.you.verdict].filter((v): v is Verdict => v != null)),
+    ...category.growing.map((m) => m.verdict),
+    ...category.fading.map((m) => m.verdict),
+  ]
+  const head = headline({
+    verdicts: thin ? [] : sentenceVerdicts,
+    audienceLabel: 'the category’s videos',
+  })
+  const ledger = await loadLedger(supabase, clientId, month)
+  const voices = await loadVoices(supabase, head.lead, top, themedRunId)
+  const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null
+  const interpretation = composeInterpretation(
+    'interpretation_monthly',
+    sentenceVerdicts,
+    proseFigures(head.figures),
+    voices.map((v) => ({ ref: v.quote.ref })),
+  )
+  const sentence: SentenceBlock = {
+    lead: head.lead,
+    body: head.body,
+    figures: head.figures,
+    anomaly,
+    interpretation,
+    ledger,
+    voices,
+    verdicts: sentenceVerdicts,
+  }
+
+  // ── OV6 · how sound is this ────────────────────────────────────────────
+  const pageVerdicts = [
+    ...sentenceVerdicts,
+    ...rivalsBlock.rows.flatMap((r) => [r.attentionVerdict, r.contentVerdict].filter((v): v is Verdict => v != null)),
+    ...(category.mood?.verdict ? [category.mood.verdict] : []),
+    ...Object.values(category.kindVerdicts).filter((v): v is Verdict => v != null),
+  ]
+  const recordInputs = await loadRecordInputs(
+    reading.client,
+    clientId,
+    { kind: window.kind === 'since' ? 'since' : window.kind, from: axis[0], to: readingAt.slice(0, 10) },
+    { comparisonsRefused: countRefused(pageVerdicts), now: readingAt },
+  )
+  const record: RecordBlock = {
+    line: howSoundLine(recordInputs),
+    lines: recordLines(recordInputs),
+    href: '/dashboard/settings',
+    freezesOn: freezesOn(month),
+    refused: countRefused(pageVerdicts),
+  }
+
+  return {
+    brand,
+    month,
+    monthStatus,
+    readingAt,
+    horizon,
+    window,
+    axis,
+    substrate: themeSet.substrate,
+    notes: mergeSeriesNotes(themeSet.series),
+    bar,
+    sentence,
+    subjects,
+    category,
+    rivals: rivalsBlock,
+    moves,
+    record,
+  }
+}
+
+/** The day a month stops moving — 30 days after it ends (FREEZE_AFTER_DAYS). */
+function freezesOn(month: string): string {
+  const end = new Date(`${nextMonth(month)}T00:00:00.000Z`)
+  end.setUTCDate(end.getUTCDate() + 30)
+  return end.toISOString().slice(0, 10)
+}
+
+/** Videos per audience per month, off the denominator rows. */
+function audienceMonthVideos(
+  denominators: readonly { month: string; audience: string; videos: number }[],
+): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const d of denominators) out.set(`${d.month}|${d.audience}`, d.videos)
+  return out
+}
+
+/** "At this point last month", in one window call (design §3 OV0). */
+async function readAtThisPointLastMonth(
+  reading: ReadingHandle,
+  month: string,
+  now: string,
+): Promise<{ videos: number | null; known: boolean }> {
+  const days = daysInto(month, now)
+  if (days == null) return { videos: null, known: true }
+  const prev = previousMonthOf(month)
+  const to = new Date(`${prev}T00:00:00.000Z`)
+  to.setUTCDate(to.getUTCDate() + days)
+  const answer = await loadWindowReading(reading.client, reading.clientId, {
+    from: prev,
+    to: to.toISOString(),
+  })
+  if (answer.denominators == null) return { videos: null, known: false }
+  return { videos: answer.denominators.reduce((total, d) => total + (d.videos ?? 0), 0), known: true }
+}
+
+function previousMonthOf(month: string): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
+}
+
+/** The tenant's named subjects. Null — never [] — before M4 is applied. */
+async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
+  try {
+    return await selectAll<Subject>(() =>
+      supabase
+        .from(TABLE_SUBJECTS)
+        .select('id, client_id, name, description, origin, source_ref, named_at, status, superseded_by, embedded_at, embed_input_version, calibrated_at, calibration_precision, calibration_n, calibration_judge_version')
+        .eq('client_id', clientId)
+        .in('status', ['active', 'proposed'])
+        .order('named_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** The moves this tenant has dated. Null — never [] — before M4 is applied. */
+async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Move[] | null> {
+  try {
+    return await selectAll<Move>(() =>
+      supabase
+        .from(TABLE_MOVES)
+        .select('*')
+        .eq('client_id', clientId)
+        .order('declared_at', { ascending: false })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** The top row of Market's ledger, with its age and the decision on it. */
+async function loadLedger(supabase: SupabaseClient, clientId: string, month: string): Promise<LedgerRow | null> {
+  const [recRes, decisionRes] = await Promise.all([
+    supabase
+      .from('recommendations')
+      .select('id, title, lineage_id, first_seen_run_date, status, rank_score')
+      .eq('client_id', clientId)
+      .order('rank_score', { ascending: false, nullsFirst: false })
+      .limit(1),
+    selectAll<RecDecision>(() =>
+      supabase
+        .from(REC_DECISIONS_TABLE)
+        .select('id, lineage_id, status, decided_at')
+        .eq('client_id', clientId)
+        .order('decided_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(200),
+    ).catch(() => [] as RecDecision[]),
+  ])
+  const rec = rows<RecRow>(recRes, 'overview.recommendation')[0]
+  if (!rec) return null
+  const decided = rec.lineage_id
+    ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
+    : null
+  const inherited = rec.lineage_id ? inheritedStatus(rec.lineage_id, decisionRes) : null
+  return {
+    id: rec.id,
+    title: rec.title,
+    // Age needs a lineage; it is null on every stored row today and the block
+    // prints nothing rather than dating a recommendation from its newest copy.
+    monthsOld: rec.lineage_id && rec.first_seen_run_date ? monthsApart(rec.first_seen_run_date, month) : null,
+    status: recStatus(inherited ?? rec.status),
+    statusLabel: REC_STATUS_LABEL[recStatus(inherited ?? rec.status)],
+    decidedAt: decided?.decided_at ?? null,
+    href: '/dashboard/market',
+  }
+}
+
+/** The flags that fired this month, largest first. Empty before M7 lands. */
+async function loadFlags(supabase: SupabaseClient, clientId: string, month: string): Promise<AnomalyFlagRow[]> {
+  try {
+    return await selectAll<AnomalyFlagRow>(() =>
+      supabase
+        .from('anomaly_flags')
+        .select('run_id, week_start, week_end, object_kind, object_id, label, denominator, week_k, week_n, change_pts, band_pts, rank, explanation, quote_refs')
+        .eq('client_id', clientId)
+        .gte('week_start', monthStartOf(month))
+        .order('week_start', { ascending: false })
+        .order('rank', { ascending: true }),
+    )
+  } catch {
+    // Narrow by name is not available here — the table is WP8's and the guard
+    // it ships (`isMissingAnomalyFlags`) lives beside the writer, which pulls
+    // the OpenAI client into a page bundle. The flag line is decoration on a
+    // page whose every other block stands on its own, so a failed read costs
+    // the line and nothing else.
+    return []
+  }
+}
+
+async function buildAnomaly(supabase: SupabaseClient, flag: AnomalyFlagRow): Promise<AnomalyLine> {
+  const refs = (flag.quote_refs ?? []).filter((r): r is string => typeof r === 'string').slice(0, 1)
+  let quote: Quote | null = null
+  if (refs.length > 0) {
+    const resolved = await fetchQuoteResolutionsByRefs(supabase, refs, { onReadError: 'degrade' })
+    const one = resolved.get(refs[0])
+    if (one) quote = { ref: refs[0], text: one.text, lang: one.lang ?? null, english: one.english ?? null }
+  }
+  return {
+    label: flag.label,
+    objectKind: flag.object_kind,
+    weekStart: flag.week_start,
+    weekEnd: flag.week_end,
+    k: flag.week_k,
+    n: flag.week_n,
+    changePts: Number(flag.change_pts),
+    bandPts: Number(flag.band_pts),
+    denominator: flag.denominator,
+    sentences: flag.explanation?.sentences ?? [],
+    quote,
+    href: '/dashboard/week',
+  }
+}
+
+/** Two voices from the videos behind the sentence (design §3 OV1). */
+async function loadVoices(
+  supabase: SupabaseClient,
+  lead: Verdict | null,
+  top: readonly { objectId: string }[],
+  themedRunId: string | null,
+): Promise<Voice[]> {
+  if (!themedRunId) return []
+  const registryId = lead?.objectKind === 'theme' ? lead.objectId : top[0]?.objectId
+  if (!registryId) return []
+  const themeRes = await supabase
+    .from('themes')
+    .select('id, label, supporting_insight_ids')
+    .eq('run_id', themedRunId)
+    .eq('registry_id', registryId)
+    .limit(1)
+  const theme = rows<{ id: string; label: string; supporting_insight_ids: string[] | null }>(themeRes, 'overview.voicesTheme')[0]
+  const insightIds = (theme?.supporting_insight_ids ?? []).slice(0, 40)
+  if (insightIds.length === 0) return []
+
+  const citations = await fetchQuoteCitationsByAudience(supabase, insightIds)
+  const pool: QuoteCitation[] = []
+  const seen = new Set<string>()
+  for (const id of insightIds) {
+    for (const c of (citations.get(id) ?? []).sort((a, b) => a.rank - b.rank)) {
+      const text = cleanQuote(c.quote)
+      const key = text.toLowerCase()
+      if (!text || seen.has(key)) continue
+      seen.add(key)
+      pool.push({ ...c, quote: text })
+    }
+  }
+  const shown = pool.slice(0, VOICES_SHOWN)
+  const commentIds = shown.map((c) => c.commentId).filter((id): id is string => Boolean(id))
+  const meta = new Map<string, { platform: string | null; comment_date: string | null }>()
+  if (commentIds.length > 0) {
+    const res = await supabase.from('comments').select('id, platform, comment_date').in('id', commentIds)
+    for (const c of rows<{ id: string; platform: string | null; comment_date: string | null }>(res, 'overview.voiceComments')) {
+      meta.set(c.id, c)
+    }
+  }
+  return shown.map((c) => {
+    const m = c.commentId ? meta.get(c.commentId) : undefined
+    const cite = [
+      m?.platform ? m.platform : null,
+      m?.comment_date ? shortDate(m.comment_date) : null,
+      'under a video we read',
+    ].filter(Boolean).join(' · ')
+    return {
+      quote: {
+        ref: quoteRef.evidence(c.evidenceId),
+        text: c.quote,
+        ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+      },
+      cite,
+    }
+  })
+}
+
+// ---- the blocks' own shaping ---------------------------------------------------
+
+interface SubjectsInput {
+  subjects: Subject[] | null
+  months: StoredSubjectRow[] | null
+  denominators: Map<string, number>
+  perAudience: Map<string, number>
+  axis: readonly string[]
+  month: string
+  prevMonth: string | null
+  leadRival: string | null
+  thin: boolean
+}
+
+export function buildSubjects(input: SubjectsInput): SubjectsBlock {
+  const categoryLabel = audienceLabel(INDUSTRY_AUDIENCE)
+  const rivalLabel = input.leadRival
+  if (input.subjects == null || input.months == null) {
+    return { state: 'not_recorded', rows: [], candidates: [], rivalLabel, categoryLabel, note: null }
+  }
+  const active = input.subjects.filter((s) => s.status === 'active')
+  const proposed = input.subjects.filter((s) => s.status === 'proposed')
+  if (active.length === 0) {
+    const candidates = proposed.map((s) => ({
+      name: s.name,
+      origin: s.origin,
+      because:
+        s.origin === 'own_claims'
+          ? 'you said this in your own posts'
+          : s.origin === 'category_theme'
+            ? 'the category raised it in the videos we read'
+            : 'you named it',
+    }))
+    return {
+      state: candidates.length > 0 ? 'candidates' : 'none',
+      rows: [],
+      candidates,
+      rivalLabel,
+      categoryLabel,
+      note: candidateLine(candidates),
+    }
+  }
+
+  const byKey = new Map<string, StoredSubjectRow>()
+  for (const r of input.months) byKey.set(`${monthStartOf(r.month)}|${r.audience}|${r.subject_id}`, r)
+  const rivalAudience = input.leadRival ? rivalKey(input.leadRival) : null
+
+  const side = (subjectId: string, audience: string, month: string | null): SideReading => {
+    if (!month) return { k: null, n: null, pct: null, verdict: null, observed: false }
+    const n = input.perAudience.get(`${month}|${audience}`) ?? null
+    const k = byKey.get(`${month}|${audience}|${subjectId}`)?.videos ?? (n == null ? null : 0)
+    return { k, n, pct: pctOf(k, n), verdict: null, observed: n != null }
+  }
+
+  const rows: SubjectRow[] = active.map((s) => {
+    const you = side(s.id, CLIENT_AUDIENCE, input.month)
+    const rival = rivalAudience ? side(s.id, rivalAudience, input.month) : null
+    const category = side(s.id, INDUSTRY_AUDIENCE, input.month)
+    const point = (audience: string, month: string): SeriesPoint => ({
+      month,
+      videos: input.perAudience.get(`${month}|${audience}`) ?? null,
+      k: byKey.get(`${month}|${audience}|${s.id}`)?.videos ?? null,
+      audience,
+      // A subject's membership is not a clustering artefact, so its months are
+      // comparable across a boundary a theme's are not (lib/subjects/read.ts).
+      regime: 'n/a',
+    })
+    const compare = (audience: string, reading: SideReading): Verdict | null => {
+      if (input.thin || !input.prevMonth || !reading.observed) return null
+      return monthChange({
+        object: { kind: 'subject', id: s.id, label: s.name },
+        audience,
+        curr: point(audience, input.month),
+        prev: point(audience, input.prevMonth),
+      })
+    }
+    you.verdict = compare(CLIENT_AUDIENCE, you)
+    if (rival && rivalAudience) rival.verdict = compare(rivalAudience, rival)
+    category.verdict = compare(INDUSTRY_AUDIENCE, category)
+
+    const axisPoints = input.axis.map((m) => point(INDUSTRY_AUDIENCE, m))
+    return {
+      id: s.id,
+      label: s.name,
+      you,
+      rival,
+      category,
+      direction: input.thin ? null : directionWord(axisPoints),
+      spark: axisPoints.slice(-SPARK_MONTHS).map((p) => pctOf(p.k, p.videos)),
+      href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
+    }
+  })
+
+  return {
+    state: 'ready',
+    rows,
+    candidates: [],
+    rivalLabel,
+    categoryLabel,
+    note: subjectsNote(rows),
+  }
+}
+
+interface CategoryInput {
+  audience: string
+  axis: readonly string[]
+  month: string
+  prevMonth: string | null
+  series: readonly MonthSeries[]
+  kindRows: StoredKindRow[] | null
+  statsRows: StoredStatsRow[] | null
+  panel: AttentionPanel | null
+  perAudience: Map<string, number>
+  thin: boolean
+}
+
+export function buildCategory(input: CategoryInput): CategoryBlock {
+  const label = audienceLabel(input.audience)
+  const denominator = input.perAudience.get(`${input.month}|${input.audience}`) ?? null
+
+  // (a) the kinds
+  let kinds: KindShare[] = []
+  let reddit: RedditRead | null = null
+  const kindVerdicts: Record<string, Verdict | null> = {}
+  let kindsNote: string | null = null
+  if (input.kindRows == null) {
+    kindsNote = 'What kind of thing is being said is not recorded month by month for this workspace yet.'
+  } else {
+    const thisMonth = input.kindRows.filter((r) => monthStartOf(r.month) === input.month && r.audience === input.audience)
+    const lastMonth = input.prevMonth
+      ? input.kindRows.filter((r) => monthStartOf(r.month) === input.prevMonth && r.audience === input.audience)
+      : []
+    const all = kindShares(
+      thisMonth.map((r) => ({ kind: r.kind, videos: r.videos, comments: r.comments, platform_mix: r.platform_mix ?? {} })),
+      denominator,
+    )
+    kinds = all.slice(0, 3)
+    reddit = redditRead(thisMonth.map((r) => ({ kind: r.kind, videos: r.videos, platform_mix: r.platform_mix ?? {} })))
+    if (all.length === 0) kindsNote = 'Nothing was read into this month’s kinds yet.'
+    for (const k of kinds) {
+      const prev = lastMonth.find((r) => r.kind === k.kind)
+      const prevN = input.prevMonth ? input.perAudience.get(`${input.prevMonth}|${input.audience}`) ?? null : null
+      kindVerdicts[k.kind] =
+        input.thin || prev == null || prevN == null || denominator == null
+          ? null
+          : kindChange({
+              kind: k.kind,
+              audience: input.audience,
+              curr: { month: input.month, k: k.videos, videos: denominator },
+              prev: { month: input.prevMonth as string, k: prev.videos, videos: prevN },
+            })
+    }
+  }
+
+  // (b) growing and fading
+  const movers: Mover[] = []
+  let moversNote: string | null = null
+  const audienceSeries = input.series.filter((s) => s.audience === input.audience && s.objectId)
+  if (audienceSeries.length === 0) {
+    moversNote = 'No theme carried enough of this month to be compared.'
+  }
+  for (const s of audienceSeries) {
+    const byMonth = pointsByMonth(s)
+    const curr = byMonth.get(input.month)
+    const prev = input.prevMonth ? byMonth.get(input.prevMonth) : null
+    if (!curr || !prev || curr.k == null || curr.videos == null) continue
+    const verdict = monthChange({
+      object: { kind: 'theme', id: s.objectId as string, label: s.objectLabel ?? (s.objectId as string) },
+      audience: s.audience,
+      curr,
+      prev,
+    })
+    const readable = s.points.filter((p) => p.k != null && p.k > 0)
+    movers.push({
+      id: s.objectId as string,
+      label: s.objectLabel ?? (s.objectId as string),
+      k: curr.k,
+      n: curr.videos,
+      pct: curr.pct,
+      verdict,
+      direction: input.thin ? null : directionWord(s.points),
+      isNew: readable.length > 0 && readable[0].month === input.month,
+    })
+  }
+  const { growing, fading } = input.thin ? { growing: [], fading: [] } : splitMovers(movers)
+  if (!moversNote && growing.length === 0 && fading.length === 0) {
+    moversNote = input.thin
+      ? 'Too little conversation this month to say what moved.'
+      : 'Nothing moved clearly this month.'
+  }
+
+  // (c) mood and (d) attention
+  let mood: MoodBlock | null = null
+  let moodNote: string | null = null
+  let attention: AttentionBlock | null = null
+  let attentionNote: string | null = null
+  if (input.statsRows == null) {
+    moodNote = 'How the month was received is not recorded month by month for this workspace yet.'
+    attentionNote = 'Attention under a fixed panel is not recorded for this workspace yet.'
+  } else {
+    const curr = input.statsRows.find((r) => monthStartOf(r.month) === input.month && r.audience === input.audience) ?? null
+    const prev = input.prevMonth
+      ? input.statsRows.find((r) => monthStartOf(r.month) === input.prevMonth && r.audience === input.audience) ?? null
+      : null
+    if (!curr) moodNote = 'Nothing in this month has been judged yet.'
+    else {
+      const counts = {
+        judged: curr.judged,
+        positive: curr.positive,
+        negative: curr.negative,
+        neutral: curr.neutral,
+        mixed: curr.mixed,
+        judged_framing: curr.judged_framing ?? 0,
+      }
+      mood = {
+        shares: moodShares(counts),
+        judged: curr.judged,
+        framingPct: framingShare(counts),
+        verdict:
+          input.thin || !prev || !input.prevMonth
+            ? null
+            : moodChange({
+                audience: input.audience,
+                curr: { month: input.month, ...counts },
+                prev: {
+                  month: input.prevMonth,
+                  judged: prev.judged,
+                  positive: prev.positive,
+                  negative: prev.negative,
+                  neutral: prev.neutral,
+                  mixed: prev.mixed,
+                  judged_framing: prev.judged_framing ?? 0,
+                },
+              }),
+      }
+    }
+
+    const panelMonths = input.axis
+      .map((m) => {
+        const r = input.statsRows?.find((x) => monthStartOf(x.month) === m && x.audience === input.audience)
+        return r && r.panel_videos != null && r.attention_comments != null
+          ? { month: m, comments: r.attention_comments, videos: r.panel_videos }
+          : null
+      })
+      .filter((m): m is { month: string; comments: number; videos: number } => m != null)
+    if (panelMonths.length === 0) {
+      attentionNote = input.panel
+        ? 'The panel has no reading in this window yet.'
+        : 'No panel has been frozen for this workspace yet, so attention is not read.'
+    } else {
+      attention = { months: panelMonths, panel: input.panel, verdict: null }
+    }
+  }
+
+  return {
+    audience: input.audience,
+    label,
+    denominator,
+    kinds,
+    kindVerdicts,
+    reddit,
+    kindsNote,
+    growing,
+    fading,
+    moversNote,
+    mood,
+    moodNote,
+    attention,
+    attentionNote,
+  }
+}
+
+interface RivalsInput {
+  rivals: readonly { name: string; retiredAt: string | null }[]
+  statsRows: StoredStatsRow[] | null
+  month: string
+  prevMonth: string | null
+  brand: string
+  series: readonly MonthSeries[]
+  dualMention: number | null
+}
+
+export function buildRivals(input: RivalsInput): RivalsBlock {
+  const caveat = RIVALS_CAVEAT
+  const retiredBy = new Map(input.rivals.map((r) => [rivalKey(r.name), r.retiredAt]))
+
+  /** The subject raised most under this rival's content this month. */
+  const raisedMost = (audience: string) => {
+    let best: { label: string; k: number; n: number; pct: number | null } | null = null
+    for (const s of input.series) {
+      if (s.audience !== audience || !s.objectId) continue
+      const point = pointsByMonth(s).get(input.month)
+      if (!point || point.k == null || point.k <= 0 || point.videos == null) continue
+      if (!best || point.k > best.k) {
+        best = { label: s.objectLabel ?? s.objectId, k: point.k, n: point.videos, pct: point.pct }
+      }
+    }
+    return best
+  }
+
+  if (input.statsRows == null) {
+    return {
+      rows: input.rivals.map((r) => ({
+        audience: rivalKey(r.name),
+        label: r.name,
+        role: 'rival' as const,
+        observed: false,
+        attention: null,
+        content: null,
+        attentionVerdict: null,
+        contentVerdict: null,
+        ownPosts: null,
+        raisedMost: raisedMost(rivalKey(r.name)),
+        retiredAt: r.retiredAt,
+      })),
+      standingsNote:
+        'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
+      dualMention: input.dualMention,
+      caveat,
+    }
+  }
+
+  const rowsOf = (month: string): AttentionRow[] =>
+    attentionRowsOf(
+      (input.statsRows ?? [])
+        .filter((r) => monthStartOf(r.month) === month)
+        .map((r) => ({
+          audience: r.audience,
+          panel_videos: r.panel_videos,
+          attention_comments: r.attention_comments,
+          panel_platform_mix: r.panel_platform_mix,
+        })),
+    )
+  const panelIdOf = (month: string): string | null =>
+    (input.statsRows ?? []).find((r) => monthStartOf(r.month) === month)?.panel_id ?? null
+
+  const standings = buildStandings({
+    month: input.month,
+    rows: rowsOf(input.month),
+    prevRows: input.prevMonth ? rowsOf(input.prevMonth) : undefined,
+    prevMonth: input.prevMonth,
+    rivals: input.rivals.map((r) => ({ name: r.name })),
+    clientLabel: input.brand,
+    categoryLabel: audienceLabel(INDUSTRY_AUDIENCE),
+    dualMention: input.dualMention,
+    panelId: panelIdOf(input.month),
+    prevPanelId: input.prevMonth ? panelIdOf(input.prevMonth) : null,
+  })
+
+  return {
+    rows: standings.map((s) => ({
+      audience: s.audience,
+      label: s.label,
+      role: s.role,
+      observed: s.observed,
+      attention: s.attention,
+      content: s.content,
+      attentionVerdict: s.attentionVerdict,
+      contentVerdict: s.contentVerdict,
+      // Their own posts are read through `video_claims`, which no tenant may
+      // select until M8 adds the policy (WP16). The honest answer is the
+      // design's own words for an untracked side.
+      ownPosts: isRivalAudience(s.audience) ? null : null,
+      raisedMost: raisedMost(s.audience),
+      retiredAt: retiredBy.get(s.audience) ?? null,
+    })),
+    standingsNote: standings.every((s) => !s.observed) ? `Nothing was ${NOT_OBSERVED} on this month’s panel.` : null,
+    dualMention: input.dualMention,
+    caveat,
+  }
+}
+
+/** Every kind the block may print, in the order it prints them. Exported for
+ *  the "more, one click down" link and for the tests. */
+export const OVERVIEW_KINDS = KIND_ORDER
+
+/** The floor every band on this page is drawn against. */
+export const OVERVIEW_FLOOR = SHARE_BAND
