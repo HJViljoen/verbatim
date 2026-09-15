@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest'
+import { readdirSync, readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { voicePage } from './voice'
 import { profilePage } from './profile'
 import { directionWordsFor } from '@/lib/config'
@@ -43,9 +45,34 @@ describe.each(modules)('$name — gated tiles', ({ mod, gatedKey, reader }) => {
     expect(Boolean(mod.renderables[gatedKey])).toBe(directionWordsFor(reader))
   })
 
-  it('keeps the gated key out of every slide while the reader is off', () => {
+  it('keeps the gated key out of every slide, in every variant, while the reader is off', () => {
     if (directionWordsFor(reader)) return
-    const named = mod.slides(data, 'default').flatMap((s) => s.keys)
-    expect(named).not.toContain(gatedKey)
+    for (const variant of ['default', 'full'] as const) {
+      const named = mod.slides(data, variant).flatMap((s) => s.keys)
+      expect(named, variant).not.toContain(gatedKey)
+    }
+  })
+})
+
+// The list above is hand-written, so something has to notice when a later
+// package gates a third tile off its catalogue. This reads the page modules and
+// fails if one registers a renderable behind `...(directionWordsFor(…)` — the
+// idiom that takes a key OUT of the registry, which is the bug class these
+// tests exist for — without being covered here. A `directionWordsFor` call
+// INSIDE a tile's JSX (dashboard's New chip, competitive's footer note) changes
+// no key and is deliberately not matched.
+describe('the gated-tile list', () => {
+  const dir = fileURLToPath(new URL('.', import.meta.url))
+  const covered = new Set(modules.map((m) => m.name as string))
+
+  it('covers every page that gates a tile out of its registry', () => {
+    const gating = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .filter((e) => /\.\.\.\(\s*directionWordsFor\(/.test(readFileSync(`${dir}${e.name}/index.tsx`, 'utf8')))
+      .map((e) => e.name)
+    expect(gating.length).toBeGreaterThan(0)
+    for (const name of gating) {
+      expect(covered, `${name} gates a tile out of its registry — add it to the modules list above`).toContain(name)
+    }
   })
 })
