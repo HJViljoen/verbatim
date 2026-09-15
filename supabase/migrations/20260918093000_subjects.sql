@@ -324,7 +324,15 @@ create table if not exists public.month_subject_readings (
   client_id          uuid not null references public.clients(id) on delete cascade,
   month              date not null,
   audience           text not null,
-  subject_id         uuid not null references public.subjects(id) on delete cascade,
+  -- NO ACTION, not cascade: a frozen month is the record, and a service-role
+  -- `delete from subjects` would otherwise erase the very rows the freeze
+  -- contract exists to protect — silently, and with no way back. A subject with
+  -- months is retired (status + superseded_by), never deleted, the same rule
+  -- moves.subject_id states one table over. NO ACTION rather than RESTRICT so
+  -- that deleting a CLIENT still works: both sides cascade from `clients` in
+  -- one statement, and NO ACTION is checked at the end of it, when the
+  -- referencing rows are already gone.
+  subject_id         uuid not null references public.subjects(id) on delete no action,
   videos             int not null,
   comments           int not null,
   platform_mix       jsonb not null,
@@ -841,5 +849,7 @@ revoke delete, truncate on public.moves from service_role;
 --   select has_table_privilege('authenticated', 'public.moves', 'update');              -- false
 --   select has_table_privilege('authenticated', 'public.moves', 'delete');              -- false
 --   select has_column_privilege('authenticated', 'public.subjects', 'name', 'update');  -- false
+--   select confdeltype from pg_constraint where conrelid = 'public.month_subject_readings'::regclass
+--     and confrelid = 'public.subjects'::regclass;   -- 'a' (no action)
 --   select tgname from pg_trigger where not tgisinternal and tgrelid = 'public.subjects'::regclass;
 --     -- subjects_lineage_same_tenant, subjects_retirement_freeze
