@@ -89,7 +89,14 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
         >
           {s.precedence}
-          {s.dualMention != null && s.dualMention > 0 ? <> <span data-copy="figure">{fmtInt(s.dualMention)}</span> did this month.</> : null}
+          {/* THE COUNT, OR THE WORD. The sentence promises the number is beside
+              it, so a zero has to be said out loud — "the count of those is
+              beside this table." with nothing after it is the sentence
+              breaking its own promise. Null is a third state: the month holds
+              no client row at all, and there is nothing to count. */}
+          {s.dualMention == null ? null : s.dualMention > 0
+            ? <> <span data-copy="figure">{fmtInt(s.dualMention)}</span> did this month.</>
+            : <> None did this month.</>}
         </p>
         {s.caveat ? (
           <p
