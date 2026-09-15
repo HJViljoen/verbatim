@@ -26,9 +26,26 @@ This version has breaking changes — APIs, conventions, and file structure may 
   against windows 18 and 9 days apart. Instagram and YouTube take the dates;
   TikTok and Reddit take enums (`tiktokRangeFor` / `redditTimeFor`) and the
   `inWindow` post-filter trims the surplus.
-- **Tests are pure-logic only** (`lib/**/*.test.ts`, vitest — no network, DB,
-  or GPT). New pure pipeline logic gets a test; don't mock the world to test
-  I/O glue.
+- **Tests are offline, in two tiers** (vitest — no network, DB, or GPT).
+  `lib/**/*.test.ts` is pure logic: new pure pipeline logic gets a test, and
+  don't mock the world to test I/O glue. `components/**/*.test.tsx` is the
+  render tier: one static `renderToStaticMarkup` per block (`lib/test/render.ts`)
+  asserted against the copy contract (`lib/test/copy-contract.ts` — no digit in
+  a model-prose node, every level prints "of N", no direction word outside a
+  verdict node, marked with `data-copy="prose|figure|level|verdict"`). Every
+  block gets one. No jsdom, no testing-library, no new dependency: the tier
+  checks what a block PRINTS.
+- **The build runs in CI, and in a worktree it needs a flag.** `npm run build`
+  fails inside a git worktree — `node_modules` is a symlink out of the project
+  root and Turbopack will not resolve through it. Use `npx next build --webpack`
+  (also `next dev --webpack`), or `TURBOPACK_ROOT=<dir holding both> npx next
+  build` for production parity; `next.config.ts` reads that env var and is inert
+  without it. CI builds with Turbopack, the bundler Vercel uses, because that is
+  the only gate that catches a bundler-only break before a deploy does.
+- **`next.config.ts` declares no redirects.** Config-level redirects run BEFORE
+  `proxy.ts`, which is what routes the apex between the marketing site and the
+  app by host. A redirect added here silently wins over that routing; send it
+  through the proxy instead.
 - **Insights belong to videos, not runs (incremental Pass A, 2026-08-17).**
   `videos.analyzed_run_id` names the run whose `audience_insights` /
   `language_samples` rows are a video's current analysis. Population reads
@@ -49,10 +66,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (`theme_observations.run_date` is the wall clock at persist — one run has
   carried two dates). The series is per calendar month by `comments.comment_date`
   through `lib/reading/monthly.ts` into `month_denominators` /
-  `month_theme_readings`. A month is `filling` until 30 days after it ends and
-  `frozen` after; a frozen row is never rewritten — the `month_reading_frozen_guard`
-  trigger refuses the UPDATE, so a late-discovered video shows as accrual and no
-  artefact is silently corrected. Two limits come with that, and a reader has to
+  `month_theme_readings` — which exist once `20260915092000_monthly_reading.sql`
+  is applied AND the tables are seeded, not before; a fresh database has the
+  code and no rows, and every reader has to survive that. (Production: applied
+  and seeded 2026-09-15 — 214 denominator months, 2,872 theme readings, both
+  tenants.) A month is `filling` until 30 days after it ends and `frozen` after;
+  a frozen row is never rewritten — a BEFORE UPDATE trigger per table
+  (`month_denominators_frozen_guard`, `month_theme_readings_frozen_guard`, both
+  running `month_reading_frozen_guard()`) refuses it, so a late-discovered video
+  shows as accrual and no artefact is silently corrected. Two limits come with that, and a reader has to
   carry them: months freeze under whatever clustering was current when each
   passed its line, so rows of different months may carry different `run_id`s and
   a cross-month comparison is like-for-like only where `run_id` is equal; and
@@ -74,15 +96,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
   no raw scores; "comments" vs "conversations" have fixed meanings
   (`lib/calibration.ts` GLOSSARY). Copy claims about behavior must match the
   code (a page once claimed "no email is sent" while Resend sent).
-- **No direction word on the run-indexed series** (`RUN_INDEXED_DIRECTION_WORDS`
-  in `lib/config.ts`, false since 2026-09-15). Gaining / fading / New compares
-  two readings of one cumulative corpus taken at two arbitrary moments, not two
-  periods — a missed week moves the number as much as the conversation does.
-  Gated branches read the constant instead of deleting the code and gated pure
-  functions take it as an argument, so both answers stay tested and Phase 1
-  flips it one reader at a time as each re-bases on the monthly reading. Levels
-  are untouched, as is any period reading with an n and a band (the digest's
-  sentiment and share verdicts).
+- **No direction word on the run-indexed series** (`directionWordsFor(reader)`
+  in `lib/config.ts`, all seven readers false since 2026-09-15). Gaining /
+  fading / New compares two readings of one cumulative corpus taken at two
+  arbitrary moments, not two periods — a missed week moves the number as much
+  as the conversation does. One flag PER READER (`voice.movers`,
+  `dashboard.themes`, `documents.trajectory`, `agent.movement`, `initiatives`,
+  `competitive.deltas`, `profile.mix`) so a reader flips the day its own series
+  is re-based on the monthly reading and not before; never read the map
+  directly. Gated branches read the flag instead of deleting the code and gated
+  pure functions take it as an argument, so both answers stay tested. A CHART is
+  a direction claim too — `profile.mix` gates a line across `run_date` that
+  printed no direction word at all. Levels are untouched, as is any period
+  reading with an n and a band (the digest's sentiment and share verdicts).
 - **Costs are real**: gather scripts spend Apify money; synthesis calls spend
   OpenAI. Prefer inspectors/dry-run flags (`run-relevance.ts`, `--no-merge`,
   send-report's default preview) when iterating.
