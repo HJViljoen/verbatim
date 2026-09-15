@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { validateSayVsHear, buildSystemPromptA, buildUserPromptA, buildSystemPromptB, buildUserPromptB, stripOnCameraLabel, ON_CAMERA_LABEL } from './pass-d'
+import { validateSayVsHear, buildSystemPromptA, buildUserPromptA, buildSystemPromptB, buildUserPromptB, sovOrderingBlock, stripOnCameraLabel, ON_CAMERA_LABEL } from './pass-d'
 import { stripThemeRefs } from './prose-rules'
 import { indexThemes } from './pass-c'
 import type { AggregatedTheme } from './types'
@@ -202,5 +202,46 @@ describe('when the recommendations of an update are allowed to disappear', () =>
     // `id` is selected because it is the tiebreaker both the order and
     // inheritedStatus use.
     expect(read).toContain("select('id, lineage_id, status, decided_at')")
+  })
+})
+
+describe('share of voice — both Pass D prompts get the ordering and neither gets the sizes (item 9)', () => {
+  const sov = {
+    'industry-other': { videos: 797, pct_videos: 89.1 },
+    'competitor:Ottobock': { videos: 107, pct_videos: 12 },
+    client: { videos: 56, pct_videos: 6.3 },
+  } as never
+
+  it('ranks the buckets and states no size', () => {
+    expect(sovOrderingBlock(sov)).toEqual([
+      'WHO THE TRACKED CONVERSATION IS ABOUT, most talked about first:',
+      '1. industry-other',
+      '2. competitor:Ottobock',
+      '3. client',
+      'You have the ORDER and not the sizes. Never state, estimate or imply a share, a count or a',
+      'gap between two of them: the product prints every one of those figures beside your text.',
+      '',
+    ])
+  })
+
+  // D-b is the pass whose stored reasoning carries the leaks — four rows, one
+  // of them "only 6.3% of videos compared to Ottobock's 12%". The first pass
+  // at item 9 changed D-a alone, so D-b kept reading them the numbers while
+  // the new digit rule deleted the sentence they landed in.
+  it('is the same block in D-a and D-b, with no percentage in either', () => {
+    const a = buildUserPromptA([], new Map(), sov)
+    const b = buildUserPromptB([], new Map(), sov)
+    for (const prompt of [a, b]) {
+      expect(prompt).toContain('WHO THE TRACKED CONVERSATION IS ABOUT, most talked about first:')
+      expect(prompt).not.toContain('SHARE OF VOICE')
+      expect(prompt).not.toContain('89.1')
+      expect(prompt).not.toContain('797 videos')
+      expect(prompt).not.toMatch(/\d+(\.\d+)?%/)
+    }
+  })
+
+  it('says nothing at all when there is no share of voice', () => {
+    expect(sovOrderingBlock(undefined)).toEqual([])
+    expect(sovOrderingBlock({})).toEqual([])
   })
 })

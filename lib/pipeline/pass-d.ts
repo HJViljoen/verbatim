@@ -62,7 +62,11 @@ const PROMPT_VERSION_A_V5 = 'pass_d_a_v7'
 // audience quotes now appear LABELLED, for competitive context only; the hero
 // validation map is built from client + category voices exclusively, so a
 // competitor voice can never lead a client-facing card.
-const PROMPT_VERSION_B = 'pass_d_b_v6'
+// v7 (2026-09-15, item 9): the share-of-voice block stops carrying
+// percentages here too — D-a lost them first and D-b is where every stored
+// leak was measured, so the two prompts share one block and one regime, and
+// ai_call_log can tell a v7 recommendation from a v6 one.
+const PROMPT_VERSION_B = 'pass_d_b_v7'
 
 /** Max verbatim quotes retrieved per market insight for the D-b prompt. */
 const QUOTES_PER_INSIGHT = 6
@@ -219,6 +223,34 @@ function themeLine(label: string, theme: AggregatedTheme): string {
   )
 }
 
+/**
+ * WHO IS TALKED ABOUT MOST, IN ORDER — AND NOT BY HOW MUCH (item 9).
+ *
+ * This block used to print "- industry-other: 797 videos (89.1%)" to BOTH
+ * Pass D prompts, and every model-typed share figure in production is one of
+ * those numbers read back: "only 1.1% share of voice", "89.1% (797 videos)",
+ * "Ossur producing only 6.3% of videos compared to Ottobock's 12%". A
+ * percentage in prose is a figure no code substitutes and no reader can check,
+ * so the ordering — which code computed — is handed over and the sizes are not.
+ *
+ * One helper for both prompts, because the first pass at this changed D-a
+ * alone: D-b writes the recommendations, and D-b is where all four stored
+ * percentage leaks were measured. Leaving the number in one prompt while the
+ * digit rule deletes the sentence it lands in turns a leaked figure into a
+ * deleted recommendation, which is worse than either.
+ */
+export function sovOrderingBlock(sov: Record<string, SovEntry> | undefined): string[] {
+  if (!sov || Object.keys(sov).length === 0) return []
+  const ranked = Object.entries(sov).sort((a, b) => (b[1].videos ?? 0) - (a[1].videos ?? 0))
+  return [
+    'WHO THE TRACKED CONVERSATION IS ABOUT, most talked about first:',
+    ...ranked.map(([bucket], i) => `${i + 1}. ${bucket}`),
+    'You have the ORDER and not the sizes. Never state, estimate or imply a share, a count or a',
+    'gap between two of them: the product prints every one of those figures beside your text.',
+    '',
+  ]
+}
+
 /** Exported for tests (v5 say-vs-hear pins). */
 export function buildUserPromptA(
   themeIndex: { label: string; theme: AggregatedTheme }[],
@@ -226,21 +258,7 @@ export function buildUserPromptA(
   sov: Record<string, SovEntry> | undefined,
   clientClaims: BrandClaim[] = [],
 ): string {
-  const lines: string[] = []
-  if (sov && Object.keys(sov).length) {
-    // WHO IS TALKED ABUT MOST, IN ORDER — AND NOT BY HOW MUCH (item 9). This
-    // block used to print "- industry-other: 797 videos (89.1%)", and every
-    // model-typed share figure in production is one of those numbers read back:
-    // "only 1.1% share of voice", "89.1% (797 videos)". A percentage in prose
-    // is a figure no code substitutes and no reader can check, so the ordering
-    // — which code computed — is handed over and the sizes are not.
-    const ranked = Object.entries(sov).sort((a, b) => (b[1].videos ?? 0) - (a[1].videos ?? 0))
-    lines.push('WHO THE TRACKED CONVERSATION IS ABOUT, most talked about first:')
-    ranked.forEach(([bucket], i) => lines.push(`${i + 1}. ${bucket}`))
-    lines.push('You have the ORDER and not the sizes. Never state, estimate or imply a share, a count or a')
-    lines.push('gap between two of them: the product prints every one of those figures beside your text.')
-    lines.push('')
-  }
+  const lines: string[] = [...sovOrderingBlock(sov)]
   if (clientClaims.length) {
     lines.push('WHAT THE BRAND SAYS IN ITS OWN VIDEOS (from transcripts):')
     clientClaims.forEach((c, i) => lines.push(`[S${i + 1}] ${c.claim} — "${c.quote}"`))
@@ -356,12 +374,7 @@ export function buildUserPromptB(
   ciIndex: Map<string, PersistedCompetitiveInsight>,
   sov: Record<string, SovEntry> | undefined,
 ): string {
-  const lines: string[] = []
-  if (sov && Object.keys(sov).length) {
-    lines.push('SHARE OF VOICE (by bucket):')
-    for (const [bucket, e] of Object.entries(sov)) lines.push(`- ${bucket}: ${e.videos} videos (${e.pct_videos}%)`)
-    lines.push('')
-  }
+  const lines: string[] = [...sovOrderingBlock(sov)]
   lines.push(`MARKET INSIGHTS (${insights.length})`)
   for (const mi of insights) {
     lines.push(`[${mi.index}] ${mi.title} — ${mi.description}`)
