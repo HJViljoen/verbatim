@@ -1,3 +1,4 @@
+import { favourability, type Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
 
@@ -69,10 +70,19 @@ function NonAnswer({ word, title }: { word: string; title: string }) {
   return <span className={NON_ANSWER} title={title}>{word}</span>
 }
 
-/** An arrowed, coloured movement. */
-function Moved({ change, unit, title }: { change: number; unit?: string; title: string }) {
+/** An arrowed movement, coloured on the caller's favourability axis.
+ *
+ *  THE ARROW IS THE SIGN; THE COLOUR IS THE JUDGEMENT. Up is not always good —
+ *  a rival's share, a negative-mood share and a standing all move the wrong way
+ *  when they rise — so the axis is the caller's to state, exactly as `<Delta>`
+ *  has always taken it (`good`, components/charts/stat.tsx). `neutral` prints
+ *  the movement in muted ink: it moved, and we are not saying whether that is
+ *  good. The default stays `up`, which is what every call site meant before
+ *  the axis existed. */
+function Moved({ change, unit, title, good = 'up' }: { change: number; unit?: string; title: string; good?: Good }) {
+  const fav = favourability(change, good)
   return (
-    <span title={title} className={`${MOVED} ${change > 0 ? 'text-positive' : 'text-negative'}`}>
+    <span title={title} className={`${MOVED} ${fav === null ? 'text-muted-foreground' : fav ? 'text-positive' : 'text-negative'}`}>
       {change > 0 ? '▲' : '▼'} {Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
     </span>
   )
@@ -83,17 +93,21 @@ function Moved({ change, unit, title }: { change: number; unit?: string; title: 
  *
  * Takes the WP3 `Verdict` (five states, carries its own counts and the reason a
  * comparison was refused) or the band's `DeltaVerdict` (three states), so a
- * legacy tile and a Phase 1 block hand it the same component. A `Verdict` whose
+ * legacy tile and a Phase 1 block hand it the same component. `good` is the
+ * favourability axis: a rival's share, a negative-mood share and a standing all
+ * rise the wrong way, and this is the badge every Phase 1 block uses.
+ *
+ * A `Verdict` whose
  * `direction` is set is still NOT a direction word here — this badge prints a
  * magnitude and a sign, and the words "growing" and "fading" are earned over
  * three readings and printed by the surface, not by a badge.
  */
-export function MovementBadge({ verdict, unit }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string }) {
+export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict | DeltaVerdict | null | undefined; unit?: string; good?: Good }) {
   if (!verdict) return null
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state === 'moved' && change != null) {
-    return <Moved change={change} unit={unit} title={band != null ? `moved beyond the ${band} pt margin of this measurement` : 'moved'} />
+    return <Moved change={change} unit={unit} good={good} title={band != null ? `moved beyond the ${band} pt margin of this measurement` : 'moved'} />
   }
   const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
   const inside = change != null && band != null
@@ -114,8 +128,8 @@ export function MovementBadge({ verdict, unit }: { verdict: Verdict | DeltaVerdi
  * compare with yet" and renders nothing; an exact zero is the count's honest
  * non-answer and gets the muted word.
  */
-export function CountBadge({ delta, unit }: { delta: number | null | undefined; unit?: string }) {
+export function CountBadge({ delta, unit, good = 'up' }: { delta: number | null | undefined; unit?: string; good?: Good }) {
   if (delta == null) return null
   if (delta === 0) return <NonAnswer word={MOVEMENT_WORDS.unchanged} title="no change since your last update" />
-  return <Moved change={delta} unit={unit} title="movement since your last update" />
+  return <Moved change={delta} unit={unit} good={good} title="movement since your last update" />
 }
