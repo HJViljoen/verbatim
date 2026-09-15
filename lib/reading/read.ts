@@ -73,10 +73,30 @@ export function readingClient(): SupabaseClient {
   return createAdminClient()
 }
 
-/** The handle a loader is given. `client` is injectable so an operator script
- *  or a test can pass its own. */
-export function readingHandle(clientId: string, client: SupabaseClient = readingClient()): ReadingHandle {
-  return { client, clientId }
+/**
+ * The handle a loader is given. `client` is injectable so an operator script or
+ * a test can pass its own.
+ *
+ * BUILT ON FIRST READ, not on construction. `Scope.reading` is required, so
+ * every dashboard route now fills it — including three loaders that read no
+ * month at all (the thread page, Content, Voice). Eagerly, that meant
+ * `createAdminClient()` on every render of every page: a service-role client in
+ * scope for every loader in the app, one careless
+ * `reading.client.from('<not a month table>')` away from an RLS bypass, and a
+ * hard requirement for SUPABASE_SERVICE_ROLE_KEY at render time on pages that
+ * never needed it (lib/supabase-admin.ts asserts the key with `!` and
+ * createClient throws on undefined). The getter keeps decision N's pairing —
+ * the client and the tenant id still travel together, and a loader still cannot
+ * separate them — and costs nothing where no month is read.
+ */
+export function readingHandle(clientId: string, client?: SupabaseClient): ReadingHandle {
+  let made = client
+  return {
+    clientId,
+    get client(): SupabaseClient {
+      return (made ??= readingClient())
+    },
+  }
 }
 
 // ---- The stored month series -------------------------------------------------
