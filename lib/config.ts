@@ -298,6 +298,59 @@ export const TRANSLATE_PARALLEL = 4
  *  clear the backlog instead of the first one. */
 export const TRANSLATE_CAP = 400
 
+// --- Quote translation (Phase 1 WP6, item 8, decision A, 2026-09-18) ---------
+// A DIFFERENT THING FROM THE FOUR CONSTANTS ABOVE, and the numbers look alike
+// enough to be wired together by accident. Those translate a TRANSCRIPT — a
+// creator's speech, one 2,400-char text per call, on the full gpt-4.1, as a
+// reading aid the extraction model consumes and nobody ever sees. These
+// translate a QUOTED COMMENT — a stranger's 90 characters, twenty-five of them
+// per call, shown to a client beside the original. TRANSLATE_CAP is 400 VIDEOS
+// per run and has nothing to do with the design's "~400 comments per update",
+// which is itself a measurement error (see below).
+
+/** Model for the quote-translation call. gpt-4.1-mini, not the full gpt-4.1 the
+ *  transcript wave uses, and the asymmetry is deliberate: a transcript
+ *  translation is what Pass A REASONS from for a quarter of the corpus, so a
+ *  mistranslation there becomes a wrong finding nothing downstream can catch. A
+ *  quote translation is shown to a reader beside the words it renders, stamped
+ *  as a machine translation, with the original above it — the reader is the
+ *  check, and a comment is short, whole and unclipped where a transcript is
+ *  machine-made, garbled and cut. */
+export const TRANSLATE_QUOTES_MODEL = 'gpt-4.1-mini'
+
+/** Comments per model call. 25 is the design's number and it survives
+ *  measurement: the non-English cited comments run 87–94 characters (25.7–28.8
+ *  tokens) each, so a 25-item call is ~550 tokens of fixed system block plus
+ *  ~700 of source — near the transcript call's measured 752-token input, which
+ *  is the shape the live ledger says is efficient. */
+export const TRANSLATE_QUOTES_BATCH = 25
+
+/** Calls per Inngest step. The step cap is 300 s and this is the only bound
+ *  that matters: 27–28 calls of ~1,100 output tokens cannot ride one step, and
+ *  a translate-quotes step that times out is a step that re-bills every call in
+ *  it on the retry. Eight calls of a measured few seconds each leaves the cap
+ *  an order of magnitude of headroom. */
+export const TRANSLATE_QUOTES_CALLS_PER_STEP = 8
+
+/** Steps dispatched per parallel wave. Two, not four: the account has a hard
+ *  5-slot Inngest concurrency shared with the rest of the pipeline, and this
+ *  step maintains a cache rather than producing the report. */
+export const TRANSLATE_QUOTES_PARALLEL = 2
+
+/** Runaway BACKSTOP in COMMENTS per run — TRANSLATE_CAP's shape, not a quality
+ *  budget. Measured on production 2026-09-15, one update newly cites 2,386
+ *  (Össur) / 3,988 (Sealand) distinct comments, of which 627–684 are
+ *  confidently not English; the design's "~400 newly-cited non-English
+ *  comments per update" is 1.6× low. Everything cited and uncached goes to the
+ *  model (there is no stored language signal to pre-filter on — the video's
+ *  transcript_lang is 34–58% precise per comment), so the first run after this
+ *  ships faces the whole ever-cited backlog: ~7,000 comments a tenant.
+ *
+ *  3,000 caps that at roughly $1.20 a run and lets the rest come on the next
+ *  one. At $0.40/$1.60 per 1M on gpt-4.1-mini and the measured token shape,
+ *  steady state after the cache fills is ~$0.05–0.15 per tenant per update. */
+export const TRANSLATE_QUOTES_CAP = 3000
+
 // --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------
 // The 2026-09-02 blind benchmark found, independently and twice, that every
 // incumbent listening tool misses on-screen text on TikTok/YouTube — and that
