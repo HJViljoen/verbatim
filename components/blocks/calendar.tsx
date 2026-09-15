@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import type { BlockContext, RenderMode } from '@/lib/blocks/types'
 import { CalendarLine } from '@/components/charts/calendar-line'
 import type { CalendarBand, CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { STATE_SHORT } from '@/lib/charts/calendar'
+import { chartId, STATE_SHORT } from '@/lib/charts/calendar'
 import { monthName } from '@/lib/format'
 import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
 
@@ -67,7 +67,11 @@ export function BlockCalendar({
         caption={caption}
         label={label}
         height={height}
-        id={`k${blockKey.replace(/[^a-zA-Z0-9]/g, '')}`}
+        // The block key alone is not an identity: it is stripped of its
+        // punctuation (so `overview.line` and `overview-line` collide) and WP12
+        // draws one calendar per audience under ONE key, which is exactly the
+        // <pattern> collision chartId() was written to prevent.
+        id={chartId([blockKey, ...series.map((s) => s.label), axis[0], axis[axis.length - 1]])}
       />
     )
   }

@@ -241,6 +241,19 @@ describe('BlockCalendar', () => {
     for (const mode of ['app', 'print'] as const) expect(render(chart(mode))).toContain('<svg')
   })
 
+  it('gives two calendars under ONE block key two pattern ids', () => {
+    // WP12 draws one line per audience inside one block, and the block key is
+    // stripped of punctuation, so it cannot be the identity by itself.
+    const other = [{ ...series[0], label: 'The category' }]
+    const idOf = (m: string) => /<pattern id="([^"]+)"/.exec(m)?.[1]
+    const bands = [{ months: axis, label: 'Read back at setup' }]
+    const a = render(<BlockCalendar blockKey="overview.line" axis={axis} series={series} bands={bands} />)
+    const b = render(<BlockCalendar blockKey="overview.line" axis={axis} series={other} bands={bands} />)
+    const c = render(<BlockCalendar blockKey="overview-line" axis={axis} series={series} bands={bands} />)
+    expect(idOf(a)).toBeTruthy()
+    expect(new Set([idOf(a), idOf(b), idOf(c)]).size).toBe(3)
+  })
+
   it('never puts inline SVG in an email', () => {
     const markup = render(chart('email'))
     expect(markup).not.toContain('<svg')
@@ -284,10 +297,4 @@ describe('BlockCalendar', () => {
     expect(BlockCalendar({ blockKey: 'k', axis, series: [] })).toBeNull()
   })
 
-  it('gives two calendars on one page two ids, from their block keys', () => {
-    const a = render(<BlockCalendar blockKey="subjects.line" axis={axis} series={series} />)
-    const b = render(<BlockCalendar blockKey="overview.line" axis={axis} series={series} />)
-    expect(a).toContain('ksubjectsline')
-    expect(b).toContain('koverviewline')
-  })
 })
