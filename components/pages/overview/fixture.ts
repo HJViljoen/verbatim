@@ -3,7 +3,7 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, RIVALS_CAVEAT, fillingLine, movesUnlock } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine } from '@/lib/pages/overview'
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -234,7 +234,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       rows: [
         { id: 'm1', title: 'Advanced technology', kind: 'subject', declaredAt: '2026-09-14', line: 'Advanced technology · tracked 14 Sep · first scoring lands with the Oct 2026 reading.' },
       ],
-      unlock: movesUnlock('2026-10-01'),
+      unlock: MOVES_UNLOCK,
       masthead: MOVES_MASTHEAD,
       empty: null,
       recorded: true,

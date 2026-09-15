@@ -612,10 +612,21 @@ export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
 export const MOVES_EMPTY =
   'Nothing dated yet. Press Track this on a subject or a theme and this block starts scoring it from the following month.'
 
-/** What OV5 says about what is not here yet. `{month}` is the month Market's
- *  bottom section arrives in. */
-export const movesUnlock = (month: string): string =>
-  `Scoring, and the pre-filled monthly card, arrive with Market’s bottom section in ${monthName(month)}.`
+/**
+ * What OV5 says about what is not here yet.
+ *
+ * AND IT NAMES NO MONTH. The design writes the unlock as "…in {month}", and it
+ * was filled with the month after the one being read — so production printed
+ * "arrive with Market's bottom section in Oct 2026" in September and would
+ * print November in November, for ever. A delivery date computed from the
+ * calendar is not a delivery date: it is a promise to a paying client,
+ * recomputed monthly, wrong the first time it is read. Scoring and the
+ * pre-filled card are Phase 2 and nothing in the product knows their month, so
+ * the unlock names what it waits for and not when — and gains a month here the
+ * day there is one to name, beside OLD_PAGES_RETIRE_ON.
+ */
+export const MOVES_UNLOCK =
+  'Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.'
 
 /** The masthead OV5 and Market both carry, code-written. */
 export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
@@ -968,7 +979,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       declaredAt: m.declared_at,
       line: moveLine(m),
     })),
-    unlock: movesUnlock(nextMonth(month)),
+    unlock: MOVES_UNLOCK,
     masthead: MOVES_MASTHEAD,
     empty: null,
     recorded: moveRows != null,
