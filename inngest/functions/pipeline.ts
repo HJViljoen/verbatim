@@ -1383,6 +1383,7 @@ export const runPipeline = inngest.createFunction(
             frozen: r.denominators.frozen + r.themes.frozen,
             keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
             heldStale: r.denominators.heldStale + r.themes.heldStale,
+            refusedLate: r.denominators.refusedLate + r.themes.refusedLate,
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.

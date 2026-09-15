@@ -660,3 +660,82 @@ describe('dayInWindow — a comment date against a half-open window', () => {
     expect(() => dayInWindow('2026-08-02', { from: 'whenever', to: august.to })).toThrow(/not a window/)
   })
 })
+
+describe('mergeMonthRows — a closed audience-month takes no fresh key', () => {
+  const now = '2026-10-02T06:00:00.000Z'
+  const RUN = 'd346b0f7-5b2b-4b46-a60c-db0c83ecfda7'
+  const months = ['2026-08-01']
+  const AUG = '2026-08-01|industry-other'
+
+  const reading = (theme_id: string, videos: number): ThemeReading => ({
+    month: '2026-08-01', audience: 'industry-other', theme_id, videos, comments: videos * 2,
+    platform_mix: { tiktok: videos }, excluded_on_camera: 0, excluded_undated: 0,
+  })
+
+  // The state mergeMonthRows' own empty-reading path produces: a registry
+  // failure holds August's filling theme rows while the denominators — which do
+  // not depend on the clustering — are written and frozen. The next visit
+  // re-clusters and mints a key August never held.
+  const held = stored({ key: '2026-08-01|industry-other|t-held', month: '2026-08-01', theme_id: 't-held' })
+
+  it('refuses the newly minted key and still writes the row it can', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-held', 97), reading('t-fresh', 12)],
+      stored: [held],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    // Without this the database refuses the batch IN WHOLE — the legitimate
+    // update of t-held never lands either, on every run, for ever.
+    expect(result.writes.map((w) => w.theme_id)).toEqual(['t-held'])
+    expect(result.refusedLate).toEqual([{ month: '2026-08-01', audience: 'industry-other', key: '2026-08-01|industry-other|t-fresh' }])
+  })
+
+  it('allows the first back-read of a table that holds nothing of that month (decision K)', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-fresh', 12), reading('t-other', 4)],
+      stored: [],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    expect(result.writes).toHaveLength(2)
+    expect(result.refusedLate).toEqual([])
+  })
+
+  it('leaves an audience-month that is still filling alone', () => {
+    const result = mergeMonthRows({
+      months,
+      fresh: [reading('t-fresh', 12)],
+      stored: [held],
+      keyOf: themeReadingKey,
+      now,
+      runId: RUN,
+      closedAudienceMonths: [],
+    })
+    expect(result.writes).toHaveLength(1)
+    expect(result.refusedLate).toEqual([])
+  })
+
+  it('judges the audience-month, not the month: a rival closed elsewhere is unaffected', () => {
+    const fresh = { ...reading('t-fresh', 12), audience: 'competitor:Topo' }
+    const result = mergeMonthRows({
+      months, fresh: [fresh], stored: [held], keyOf: themeReadingKey, now, runId: RUN,
+      closedAudienceMonths: [AUG],
+    })
+    expect(result.writes).toHaveLength(1)
+  })
+
+  it('refuses nothing when the caller names no closed months', () => {
+    const result = mergeMonthRows({
+      months, fresh: [reading('t-fresh', 12)], stored: [held], keyOf: themeReadingKey, now, runId: RUN,
+    })
+    expect(result.writes).toHaveLength(1)
+    expect(result.refusedLate).toEqual([])
+  })
+})

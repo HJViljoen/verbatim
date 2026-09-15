@@ -194,6 +194,14 @@ async function main() {
         'which is a reading that did not happen, not a month that emptied.',
       )
     }
+    const late = plan.denominators.refusedLate + plan.themes.refusedLate
+    if (late > 0) {
+      console.log(
+        `  ${late} fresh rows would NOT be written: their audience-months have closed and this table ` +
+        'already holds a reading of them. A late discovery is an accrual against a fresh reading, ' +
+        'never an addition to a month that is already the record.',
+      )
+    }
 
     if (write) {
       // A freeze is permanent (`month_denominators_frozen_guard` refuses any
@@ -213,7 +221,8 @@ async function main() {
         `  WROTE ${done.denominators.written} denominator rows and ${done.themes.written} theme rows; ` +
         `${done.denominators.keptFrozen + done.themes.keptFrozen} frozen rows untouched, ` +
         `${done.denominators.deleted + done.themes.deleted} stale filling rows dropped, ` +
-        `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty.`,
+        `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty, ` +
+        `${done.denominators.refusedLate + done.themes.refusedLate} refused because their months have closed.`,
       )
     }
     console.log()

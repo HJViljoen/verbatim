@@ -334,6 +334,12 @@ export interface MergeResult<T> {
    *  standing, because the reading was empty. Loud on purpose: a run in this
    *  state wrote nothing and kept everything, and someone has to know. */
   heldStale: number
+  /** Fresh rows this merge did NOT attempt because their audience-month has
+   *  already closed and this table already holds a reading of it — a late
+   *  discovery, which is written down as an accrual against a fresh reading and
+   *  never added to the record. Loud on purpose (see `closedAudienceMonths`):
+   *  anything but 0 is a month the current clustering has outgrown. */
+  refusedLate: { month: string; audience: string; key: string }[]
 }
 
 /**
@@ -350,6 +356,20 @@ export interface MergeResult<T> {
  * them, which would make a frozen April look new and overwrite it. A fresh row
  * whose month was not asked for is therefore dropped here.
  *
+ * A FRESH KEY IN A CLOSED AUDIENCE-MONTH IS NOT WRITTEN, and the database
+ * would refuse it anyway. `month_reading_frozen_insert_guard`
+ * (20260918092000) refuses an INSERT into an audience-month whose denominator
+ * is frozen once the table already holds a reading of it, and the refusal
+ * takes the WHOLE statement with it: the legitimate UPDATE of a filling row
+ * sitting in the same batched upsert never lands either. That state is reached
+ * by this file's own documented recoverable path — a registry failure holds
+ * filling theme rows (`emptyReading && heldStale`) while the denominators,
+ * which do not depend on the clustering, are written and frozen — and it is
+ * self-perpetuating, because the held filling row keeps bringing the month
+ * back and re-clustering mints a fresh key on every visit. So the merge drops
+ * those rows itself, names them in `refusedLate`, and lets the rest of the
+ * batch through. The caller says so loudly; nothing is silently corrected.
+ *
  * A reading that comes back completely empty is NOT "the clustering dropped
  * every theme" — it is no reading at all, and it deletes nothing. The shape
  * that produces it is ordinary: `persist-themes` writes `theme_observations`
@@ -362,7 +382,7 @@ export interface MergeResult<T> {
  * row means no later visit, and the Pass A prune makes it unrecomputable for
  * that clustering. The rows are held instead, and the caller says so.
  */
-export function mergeMonthRows<T extends { month: string }>(args: {
+export function mergeMonthRows<T extends { month: string; audience: string }>(args: {
   /** The months the fresh reading covered. Stored rows outside them are not
    *  this merge's business and are left alone. */
   months: readonly string[]
@@ -373,6 +393,14 @@ export function mergeMonthRows<T extends { month: string }>(args: {
   runId: string | null
   /** The run's clustering fingerprint, when it recorded one. */
   clusteringKey?: string | null
+  /** The audience-months that have CLOSED — `denominatorKey` over the stored
+   *  `month_denominators` rows whose status is `frozen`. A fresh key in one of
+   *  them is refused rather than written, exactly as the database's INSERT
+   *  guard would refuse it, but one row at a time instead of one statement at a
+   *  time. Omitted, nothing is refused — which is the right answer for the
+   *  denominator merge itself, where the closed row IS the stored row and is
+   *  already kept by `keptFrozen`. */
+  closedAudienceMonths?: readonly string[]
 }): MergeResult<T> {
   const { months, fresh, stored, keyOf, now, runId } = args
   const clustering = args.clusteringKey ? { clustering_key: args.clusteringKey } : {}
@@ -382,6 +410,14 @@ export function mergeMonthRows<T extends { month: string }>(args: {
 
   const writes: (T & FreezeColumns)[] = []
   let keptFrozen = 0
+  const refusedLate: { month: string; audience: string; key: string }[] = []
+
+  // The guard's two predicates, read off what has already been read: the
+  // audience-month has closed, and this table already holds a reading of it
+  // (so this is not the first back-read of a table that did not exist when the
+  // month closed — decision K, which both the guard and this allow).
+  const closed = new Set(args.closedAudienceMonths ?? [])
+  const held = new Set(stored.map(denominatorKey))
 
   for (const row of fresh) {
     const month = monthStartOf(row.month)
@@ -391,6 +427,11 @@ export function mergeMonthRows<T extends { month: string }>(args: {
     const prior = storedByKey.get(key)
     if (prior?.status === 'frozen') {
       keptFrozen++
+      continue
+    }
+    const audienceMonth = denominatorKey({ month, audience: row.audience })
+    if (!prior && closed.has(audienceMonth) && held.has(audienceMonth)) {
+      refusedLate.push({ month, audience: row.audience, key })
       continue
     }
     writes.push({ ...row, month, ...freezeFor(month, now, prior), read_at: now, run_id: runId, ...clustering })
@@ -406,6 +447,7 @@ export function mergeMonthRows<T extends { month: string }>(args: {
     stale: emptyReading ? [] : dropped,
     emptyReading,
     heldStale: emptyReading ? dropped.length : 0,
+    refusedLate,
   }
 }
 
@@ -613,6 +655,10 @@ export interface FreezeSide {
   /** Filling rows left standing because the reading came back empty — see
    *  `mergeMonthRows`. Anything but 0 means this run read nothing. */
   heldStale: number
+  /** Fresh rows dropped because their audience-month has already closed — see
+   *  `mergeMonthRows`. Anything but 0 is a late discovery the record will not
+   *  take, and the database would have refused the whole batch for it. */
+  refusedLate: number
 }
 
 export interface FreezeSummary {
@@ -675,8 +721,8 @@ export async function freezeMonths(
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
   const empty: FreezeSummary = {
     months,
-    denominators: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0 },
-    themes: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0 },
+    denominators: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 },
+    themes: { written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 },
   }
   const window = windowOf(months)
   if (!window) return empty
@@ -693,7 +739,7 @@ export async function freezeMonths(
   // Theme readings. A run is required: a theme number without a clustering to
   // attribute it to is not a reading of anything.
   let themeMerge: MergeResult<ThemeReading> = {
-    writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0,
+    writes: [], keptFrozen: 0, stale: [], emptyReading: false, heldStale: 0, refusedLate: [],
   }
   if (opts.runId) {
     const freshThemes = await readThemeReadings(admin, opts.clientId, opts.runId, window)
@@ -701,6 +747,12 @@ export async function freezeMonths(
     themeMerge = mergeMonthRows({
       months, fresh: freshThemes, stored: storedThemes, keyOf: themeReadingKey, now, runId: opts.runId,
       clusteringKey,
+      // The audience-months that closed before this visit. A theme key the
+      // current clustering has just minted for one of them cannot be written —
+      // and if it were sent, the INSERT guard would refuse the whole upsert,
+      // taking the legitimate refresh of every filling row in the same chunk
+      // with it, on every run, for ever.
+      closedAudienceMonths: storedDenoms.filter((d) => d.status === 'frozen').map(denominatorKey),
     })
   }
   const themeRows: ThemeReadingRow[] = themeMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))
@@ -713,6 +765,7 @@ export async function freezeMonths(
       keptFrozen: denomMerge.keptFrozen,
       deleted: denomMerge.stale.length,
       heldStale: denomMerge.heldStale,
+      refusedLate: denomMerge.refusedLate.length,
     },
     themes: {
       written: themeRows.length,
@@ -720,6 +773,7 @@ export async function freezeMonths(
       keptFrozen: themeMerge.keptFrozen,
       deleted: themeMerge.stale.length,
       heldStale: themeMerge.heldStale,
+      refusedLate: themeMerge.refusedLate.length,
     },
   }
   // An empty reading is a failure, not a result, and the rows it did not delete
@@ -733,6 +787,19 @@ export async function freezeMonths(
         'Nothing was written for those months; find out why before the next run freezes them.',
       )
     }
+  }
+  // A late discovery is not an error and not a result either: it is a month the
+  // current clustering has outgrown, and the record will not take it. Say so
+  // wherever this runs — the number is otherwise invisible, because the rows
+  // simply never appear.
+  for (const [what, merge] of [['denominator', denomMerge], ['theme', themeMerge]] as const) {
+    if (merge.refusedLate.length === 0) continue
+    const where = [...new Set(merge.refusedLate.map((r) => `${r.month.slice(0, 7)} ${r.audience}`))].join(', ')
+    console.warn(
+      `[monthly-reading] ${merge.refusedLate.length} ${what} rows were NOT written for ${opts.clientId}: ` +
+      `their audience-months have closed (${where}). A reading discovered after a month froze is an accrual ` +
+      'against a fresh reading, never an addition to the record.',
+    )
   }
   if (opts.dryRun) return summary
 

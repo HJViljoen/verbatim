@@ -107,6 +107,20 @@
 -- raise. A tenant's newly tracked rival is allowed for the plainer reason that
 -- its audience has no denominator row in those months at all.
 --
+-- AND THE WRITER MUST NOT SEND ONE. A raise takes the WHOLE statement with it,
+-- and `freezeMonths` upserts a month's theme rows in chunks of 500: one refused
+-- new key would kill the legitimate refresh of every filling row beside it in
+-- the chunk. That is not hypothetical — it is this file's own recoverable
+-- state, reached when a registry failure holds filling theme rows while the
+-- denominators (which do not depend on the clustering) are written and frozen,
+-- and it is self-perpetuating, because the held filling row brings the month
+-- back on every later run and re-clustering mints a fresh key each time. So
+-- `mergeMonthRows` takes `closedAudienceMonths` and drops exactly the rows this
+-- guard would refuse, one row rather than one statement at a time, and names
+-- them in `refusedLate` for the caller to log. The guard is the backstop for
+-- hand-run SQL and for a writer that has not learnt the rule; it is not the
+-- mechanism by which the rule is kept.
+--
 -- NO `added_after_freeze` ESCAPE (decision K). A row that arrived after the
 -- month closed is not a row with a flag on it; it is a number nobody read at
 -- the time. The guard raises, the writer's step fails loudly, and a person
