@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { activationCheck, moveTarget, moveTitle, subjectSetVerdict } from './moves'
+import { activationCheck, moveTarget, moveTitle, sameName, subjectSetVerdict } from './moves'
 import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN } from './types'
 
 describe('moveTarget', () => {
@@ -121,5 +121,18 @@ describe('activationCheck', () => {
     for (const line of lines) {
       for (const word of ['run', 'Pass', 'cluster', 'embedding', 'judge', 'status']) expect(line).not.toContain(word)
     }
+  })
+})
+
+describe('sameName', () => {
+  it('compares the way the partial unique index does — lower(trim(name))', () => {
+    expect(sameName('Comfort', ' comfort ')).toBe(true)
+    expect(sameName('COMFORT', 'Comfort')).toBe(true)
+  })
+
+  it('does not call two different subjects one', () => {
+    // A re-description keeps the name and retires the row it replaces; a name
+    // already taken by a DIFFERENT live subject is still refused.
+    expect(sameName('Comfort', 'Comfort under load')).toBe(false)
   })
 })

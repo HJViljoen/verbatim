@@ -107,6 +107,13 @@ export function moveTarget(
   return { subject_id: null, registry_ids: null, lineage_id: input.lineageId }
 }
 
+/** The partial unique index's own comparison: `lower(trim(name))`, one live
+ *  subject per name per tenant. Restated here so the one place that has to
+ *  predict the index cannot drift from it. */
+export function sameName(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
 /** A title a person will read on a chart in six months. */
 export function moveTitle(raw: string): string | null {
   const title = raw.trim().replace(/\s+/g, ' ')
@@ -269,23 +276,48 @@ export async function nameSubject(
   const description = input.description?.trim() || null
   if (description && description.length > 400) return { ok: false, message: 'Keep the description under 400 characters.' }
 
-  const { data, error } = await ctx.supabase
-    .from(TABLE_SUBJECTS)
-    .insert({
-      client_id: ctx.clientId,
-      name,
-      description,
-      origin: input.origin,
-      source_ref: input.sourceRef ?? null,
-      created_by: ctx.userId,
-    })
-    .select('id')
-    .maybeSingle()
+  const insert = () =>
+    ctx.supabase
+      .from(TABLE_SUBJECTS)
+      .insert({
+        client_id: ctx.clientId,
+        name,
+        description,
+        origin: input.origin,
+        source_ref: input.sourceRef ?? null,
+        created_by: ctx.userId,
+      })
+      .select('id')
+      .maybeSingle()
+
+  let { data, error } = await insert()
+
+  // A RE-DESCRIPTION KEEPS THE NAME, and the partial unique index is on the
+  // name alone — so replacing a subject's description collides with the very
+  // row it is replacing, and "You are already tracking …" would be the answer
+  // to every description edit there will ever be. When the only thing in the
+  // way IS the row being superseded, retire that one first and try again. The
+  // failed insert wrote nothing, so this costs a round trip in the collision
+  // case and changes nothing in any other.
+  let retiredFirst = false
+  if (error && (error as { code?: string }).code === '23505' && input.supersedes) {
+    const { data: old } = await ctx.supabase
+      .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.supersedes).maybeSingle()
+    const previous = old as { name: string; status: string } | null
+    if (previous && previous.status !== 'retired' && sameName(previous.name, name)) {
+      const retired = await retireSubject(ctx, admin, { id: input.supersedes })
+      if (!retired.ok) return { ok: false, message: retired.message }
+      retiredFirst = true
+      ;({ data, error } = await insert())
+    }
+  }
+
   if (error) {
     if (isMissingSubjects(error)) return { ok: false, message: 'Subjects are not switched on for this workspace yet.' }
     // The partial unique index: one live subject per name per tenant.
     if ((error as { code?: string }).code === '23505') return { ok: false, message: `You are already tracking "${name}".` }
-    return { ok: false, message: `Could not save: ${error.message}` }
+    const stopped = retiredFirst ? ` "${name}" has been stopped and the replacement was not saved — add it again.` : ''
+    return { ok: false, message: `Could not save: ${error.message}.${stopped}` }
   }
   const id = (data as { id: string } | null)?.id
   await recordConfigChange(admin, {
@@ -297,8 +329,19 @@ export async function nameSubject(
     actor: actorFor(ctx, input.supersedes ? 'renamed a subject' : 'named a subject'),
   })
   if (input.supersedes && id) {
-    const retired = await retireSubject(ctx, admin, { id: input.supersedes, supersededBy: id })
-    if (!retired.ok) return { ok: false, message: retired.message }
+    if (retiredFirst) {
+      // Already retired above; all that is left is the pointer joining the old
+      // line to the new one. `superseded_by` is in the member's update grant
+      // for exactly this.
+      const { error: pointError } = await ctx.supabase
+        .from(TABLE_SUBJECTS)
+        .update({ superseded_by: id, updated_at: new Date().toISOString() })
+        .eq('id', input.supersedes)
+      if (pointError) return { ok: false, message: `Could not save: ${pointError.message}` }
+    } else {
+      const retired = await retireSubject(ctx, admin, { id: input.supersedes, supersededBy: id })
+      if (!retired.ok) return { ok: false, message: retired.message }
+    }
   }
   // NOT "it starts being counted": a named subject is `proposed`, and nothing
   // counts a proposed subject. Confirming it is `activateSubject`.
