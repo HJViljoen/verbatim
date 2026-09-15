@@ -34,6 +34,12 @@ describe('checkStateOf', () => {
     expect(checkStateOf({ ...base, recorded: false })).toBe('not_recorded')
   })
 
+  it('says the baseline is forming before it says nothing is recorded', () => {
+    // The order is the argument: a new workspace is told when the check starts
+    // working, not that something is missing (see checkStateOf).
+    expect(checkStateOf({ ...base, recorded: false, monthsClearing: 1 })).toBe('baseline_forming')
+  })
+
   it('is not_recorded when the table exists but this update left no row', () => {
     expect(checkStateOf({ ...base, outcome: null })).toBe('not_recorded')
   })

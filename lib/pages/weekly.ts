@@ -4,12 +4,14 @@ import type { Quote } from '../renderables/types'
 import type { MonthStatus } from '../reading/types'
 import { selectAll } from '../supabase-admin'
 import { rows } from './read'
+import { isMissingMonthlyReading, readDenominators } from '../reading/monthly'
+import type { ReadingHandle } from '../reading/read'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { citationLink } from '../evidence-cite'
 import { shortDate } from '../format'
 import { monthStartOf, prevMonth } from '../reading/month-key'
-import { baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
+import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { loadOverview, audienceInSentence, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import {
@@ -178,12 +180,25 @@ export function checkStateOf(input: {
   /** The thin-update verdict computed over this update and the eight behind it. */
   suppression: ThinUpdateVerdict | null
 }): WeekCheckState {
-  if (!input.recorded) return 'not_recorded'
+  // THE ORDER IS THE ARGUMENT, and it runs from what we did, to what we have,
+  // to what was written down.
+  //
+  //   suppressed        we did not look, and here is why — the strongest claim,
+  //                     and the one a reader is owed before any other.
+  //   baseline_forming  there is nothing to look AGAINST. A fact about the
+  //                     workspace's data, true whether or not M7 is applied, and
+  //                     more use to a reader than "not recorded": it says when
+  //                     the check starts working.
+  //   not_recorded      the check itself has never run here.
+  //
+  // Putting `not_recorded` first read as a fault on a new workspace, where the
+  // honest answer is "this takes three months and you have one".
   if (input.suppression?.suppressed) return 'suppressed'
   if (input.outcome === 'suppressed') return 'suppressed'
+  if (input.monthsClearing < BASELINE_MONTHS) return 'baseline_forming'
+  if (!input.recorded) return 'not_recorded'
   if (input.outcome === 'no_window') return 'no_window'
   if (input.outcome === 'missing_migration' || input.outcome == null) return 'not_recorded'
-  if (input.monthsClearing < 3) return 'baseline_forming'
   return input.outcome === 'flagged' ? 'flagged' : 'nothing_unusual'
 }
 
@@ -297,10 +312,14 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
         runsRaw.slice(1, THIN_TRAILING + 1).map((r) => ({ analysedVideos: r.videos_scraped })),
       )
     : null
-  const [check, monthsClearing] = await Promise.all([
+  const [check, clearing] = await Promise.all([
     run ? loadCheck(supabase, clientId, run.id) : Promise.resolve({ recorded: false, outcome: null, flags: [] as FlagRow[], flaggedCount: 0 }),
-    Promise.resolve(baselineMonths(overview, month)),
+    baselineMonths(scope.reading, clientId, month, readingAt),
   ])
+  // A baseline nobody could READ is not a baseline of zero months: the check
+  // then stands on whatever the record said, and the record is allowed to say
+  // it has never run.
+  const monthsClearing = clearing ?? BASELINE_MONTHS
   const state = checkStateOf({ outcome: check.outcome, recorded: check.recorded, monthsClearing, suppression })
   const head = headlineObject(overview)
   const section1: Section1 = {
@@ -314,7 +333,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
       state,
       flags: await toWeekFlags(supabase, check.flags),
       flaggedCount: check.flaggedCount,
-      monthsClearing,
+      monthsClearing: clearing ?? 0,
       suppression,
     }),
   }
@@ -455,33 +474,46 @@ async function toWeekFlags(supabase: SupabaseClient, flags: FlagRow[]): Promise<
  * How many of the trailing three complete months carry enough conversation to
  * be compared against.
  *
- * READ OFF THE MONTH DENOMINATORS THE PAGE ALREADY HAS, not off a second query
- * — the axis Overview drew is the same months, and `baselineStateOf` is the
- * readiness row's own arithmetic. Sealand's answer today is what puts the
- * weekly report into its baseline-forming state.
+ * READ OFF `month_denominators`, THE SAME ROWS THE CHECK ITSELF DIVIDES BY —
+ * through the reading layer's own function, pooled across audiences exactly as
+ * `weekVsBaseline`'s pooled slice is. The first version of this read the page's
+ * subject rows instead, and answered "0 of 3" on both tenants for the unrelated
+ * reason that M4 is unapplied: a workspace with six seeded months was told its
+ * baseline was empty.
+ *
+ * A READ THAT FAILS IS NOT A ZERO. Zero says "this workspace has no history",
+ * which is a claim about the client; a failed read is a claim about us. The
+ * caller gets null and the check stands on whatever the record said.
  */
-function baselineMonths(data: OverviewData, month: string): number {
-  const wanted = new Set([prevMonth(month), prevMonth(prevMonth(month)), prevMonth(prevMonth(prevMonth(month)))])
-  const pooled = new Map<string, number>()
-  for (const r of data.subjects.rows) {
-    r.sparkMonths.forEach((m, i) => {
-      if (!wanted.has(m)) return
-      const n = r.category.n
-      if (n != null && (pooled.get(m) ?? 0) < n && r.spark[i] != null) pooled.set(m, n)
-    })
+async function baselineMonths(
+  reading: ReadingHandle,
+  clientId: string,
+  month: string,
+  readingAt: string,
+): Promise<number | null> {
+  const months = [prevMonth(month), prevMonth(prevMonth(month)), prevMonth(prevMonth(prevMonth(month)))].sort()
+  try {
+    const denominators = await readDenominators(reading.client, clientId, { from: months[0], to: monthStartOf(readingAt) })
+    if (denominators.length === 0) return null
+    const pooled = new Map<string, number>()
+    for (const d of denominators) {
+      if (!months.includes(d.month)) continue
+      pooled.set(d.month, (pooled.get(d.month) ?? 0) + d.videos)
+    }
+    return baselineStateOf({
+      name: 'every audience together',
+      // `weekVideos` is what the check divides the WEEK by; this call only asks
+      // how many MONTHS clear the floor, so it is stated as zero rather than
+      // guessed at from a window nothing here has read.
+      weekVideos: 0,
+      months: [...pooled.entries()].map(([m, videos]) => ({ month: m, videos })),
+    }).monthsClearing
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) {
+      console.error(`[pages] weekly.baseline: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
+    return null
   }
-  // The subjects table is the only per-month denominator the page carries; when
-  // it is silent (M4 unapplied) the bar's own month is all there is, and one
-  // month is not three. Answering 0 keeps the check in its forming state, which
-  // is the honest answer for a workspace whose baseline nobody has read.
-  return baselineStateOf({
-    name: 'every audience together',
-    // `weekVideos` is what the check divides the week by; this call only asks
-    // how many MONTHS clear the floor, so it is stated as zero rather than
-    // guessed at from a window nothing here has read.
-    weekVideos: 0,
-    months: [...pooled.entries()].map(([m, videos]) => ({ month: m, videos })),
-  }).monthsClearing
 }
 
 // ---- section 3 ----------------------------------------------------------------
@@ -577,25 +609,47 @@ async function loadIncoming(
   }
 }
 
-/** Themes this update heard for the first time — `themes.match_kind = 'new'`,
- *  which is the pipeline's own answer and not a second guess at it. */
+/**
+ * Themes this update heard for the first time.
+ *
+ * `theme_observations.match_kind = 'new'` is the MATCHER's own answer, recorded
+ * per run beside the registry entry, and it is the only honest source: a theme
+ * is new relative to the REGISTRY, not relative to a label nobody has seen
+ * before, and labels churn ~88% run to run (AGENTS.md). `themes.match_kind`,
+ * which the first version of this read, does not exist.
+ *
+ * The count beside it is `themes.supporting_video_ids` — the per-run membership
+ * the reading layer counts in videos. `theme_observations.evidence_count` is
+ * evidence ROWS, a different unit, and printing it as videos is exactly the
+ * mismatch the thirteen words exist to stop.
+ */
 async function newThemesOf(supabase: SupabaseClient, clientId: string, runId: string): Promise<{ label: string; videos: number }[]> {
-  try {
-    const res = await supabase
-      .from('themes')
-      .select('label, match_kind, supporting_video_ids')
-      .eq('client_id', clientId)
-      .eq('run_id', runId)
-      .eq('match_kind', 'new')
-      .limit(50)
-    const list = rows<{ label: string; supporting_video_ids: string[] | null }>(res, 'weekly.newThemes')
-    return list
-      .map((t) => ({ label: t.label, videos: (t.supporting_video_ids ?? []).length }))
-      .sort((a, b) => b.videos - a.videos)
-      .slice(0, 3)
-  } catch {
-    return []
+  const obsRes = await supabase
+    .from('theme_observations')
+    .select('theme_id, label')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+    .eq('match_kind', 'new')
+    .limit(50)
+  const observed = rows<{ theme_id: string; label: string }>(obsRes, 'weekly.newThemes')
+  if (observed.length === 0) return []
+  const videosRes = await supabase
+    .from('themes')
+    .select('registry_id, supporting_video_ids')
+    .eq('client_id', clientId)
+    .eq('run_id', runId)
+    .in('registry_id', observed.map((o) => o.theme_id))
+  const byRegistry = new Map<string, number>()
+  for (const t of rows<{ registry_id: string | null; supporting_video_ids: string[] | null }>(videosRes, 'weekly.newThemeVideos')) {
+    if (t.registry_id) byRegistry.set(t.registry_id, (t.supporting_video_ids ?? []).length)
   }
+  return observed
+    .map((o) => ({ label: o.label, videos: byRegistry.get(o.theme_id) ?? 0 }))
+    // A theme whose membership this run did not retain cannot be stated in
+    // videos, and "heard for the first time, in 0 videos" is not a sentence.
+    .filter((t) => t.videos > 0)
+    .sort((a, b) => b.videos - a.videos)
+    .slice(0, 3)
 }
 
 // ---- section 4 ----------------------------------------------------------------

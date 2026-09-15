@@ -155,7 +155,7 @@ describe('WR3 · what came in this week', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
     expect(text).toContain('271 videos gathered')
     expect(text).toContain('264 analysed')
-    expect(text).toContain('into 2,359 this month so far')
+    expect(text).toContain('the month so far holds 2,359 videos, dated by when people wrote')
   })
 
   it('draws no share over one update', () => {
