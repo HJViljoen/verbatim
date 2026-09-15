@@ -136,6 +136,19 @@ describe('moodChange', () => {
     expect(v.value).toEqual({ k: 245, n: 338 })
   })
 
+  it('refuses a rename, so a mood never prints a band the theme series would not', () => {
+    const v = moodChange({
+      audience: 'competitor:Rareform Bags',
+      prevAudience: 'competitor:Rareform',
+      curr: { ...OSSUR_SEP },
+      prev: { ...OSSUR_AUG },
+    })
+    expect(v.state).toBe('refused')
+    expect(v.refusedReason).toBe('rename')
+    expect(v.flags).toContain('renamed')
+    expect(v.value).toEqual({ k: 19, n: 338 })
+  })
+
   it('earns no clustering caveat — a re-grouping cannot move how a video was received', () => {
     const v = moodChange({ audience: 'industry-other', curr: OSSUR_SEP, prev: OSSUR_AUG })
     expect(v.flags).not.toContain('clustering_unknown')

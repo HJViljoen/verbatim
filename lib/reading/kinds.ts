@@ -164,7 +164,17 @@ export const kindMixTotalPct = (shares: readonly KindShare[]): number =>
 
 export interface KindChangeInput {
   kind: string
+  /** The audience key this month is filed under — and, with no
+   *  `prevAudience`, the key both months are filed under. */
   audience: string
+  /** The key the PREVIOUS month was filed under, when it differs. A rival
+   *  renamed between the two months gives one line two keys, and the shared
+   *  rule refuses a comparison across that break (`monthChange`, decision L):
+   *  the record cannot say whether the kind's share moved or the string did.
+   *  Without this the two sides always carried one key, the rename arm could
+   *  never fire, and a kind comparison printed a band where the theme series
+   *  refuses one. Omitted, the months are two readings of one name. */
+  prevAudience?: string
   /** This month: the kind's videos and the audience's. */
   curr: { month: string; videos: number | null; k: number | null }
   /** The month before it. */
@@ -184,17 +194,17 @@ export interface KindChangeInput {
  * measurement predicted.
  */
 export function kindChange(input: KindChangeInput): Verdict {
-  const point = (p: KindChangeInput['curr']): SeriesPoint => ({
+  const point = (p: KindChangeInput['curr'], audience: string): SeriesPoint => ({
     month: p.month,
     videos: p.videos,
     k: p.k,
-    audience: input.audience,
+    audience,
   })
   const verdict = monthChange({
     object: { kind: 'kind', id: input.kind, label: kindLabel(input.kind) },
     audience: input.audience,
-    curr: point(input.curr),
-    prev: point(input.prev),
+    curr: point(input.curr, input.audience),
+    prev: point(input.prev, input.prevAudience ?? input.audience),
     floor: input.floor ?? SHARE_BAND,
     flags: input.flags,
   })

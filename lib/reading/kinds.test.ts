@@ -148,15 +148,35 @@ describe('kindChange', () => {
     expect(v.state).toBe('too_little_data')
   })
 
-  it('marks a rename as a refusal, through the shared rule', () => {
+  it('refuses a rename, through the shared rule, from the two keys alone', () => {
+    // Sealand's rival set was rewritten on 2026-09-09 and the re-tag moved 253
+    // videos between buckets. A kind comparison across that break cannot say
+    // whether the share moved or the string did, and neither can the theme
+    // series — so it answers the same way.
+    const v = kindChange({
+      kind: 'question',
+      audience: 'competitor:Rareform Bags',
+      prevAudience: 'competitor:Rareform',
+      curr: { month: '2026-09-01', videos: 400, k: 40 },
+      prev: { month: '2026-08-01', videos: 400, k: 20 },
+    })
+    expect(v.state).toBe('refused')
+    expect(v.refusedReason).toBe('rename')
+    expect(v.flags).toContain('renamed')
+    // The counts still print: a refusal is not a hidden row.
+    expect(v.value).toEqual({ k: 40, n: 400 })
+    expect(v.changePts).toBeNull()
+  })
+
+  it('is one name, and one comparison, when nothing was renamed', () => {
     const v = kindChange({
       kind: 'question',
       audience: 'competitor:Rareform',
       curr: { month: '2026-09-01', videos: 400, k: 40 },
       prev: { month: '2026-08-01', videos: 400, k: 20 },
-      flags: ['renamed'],
     })
-    expect(v.flags).toContain('renamed')
+    expect(v.state).not.toBe('refused')
+    expect(v.flags).not.toContain('renamed')
   })
 })
 

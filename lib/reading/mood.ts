@@ -145,7 +145,15 @@ export function crossesSentimentBreak(from: string, to: string): boolean {
 }
 
 export interface MoodChangeInput {
+  /** The audience key this month is filed under — and, with no
+   *  `prevAudience`, the key both months are filed under. */
   audience: string
+  /** The key the PREVIOUS month was filed under, when it differs. A rival
+   *  renamed between the two months gives one line two keys and the shared rule
+   *  refuses the comparison (`monthChange`, decision L) — the record cannot say
+   *  whether the mood moved or the string did. Omitted, the months are two
+   *  readings of one name. */
+  prevAudience?: string
   /** This month's counts and the month they are for. */
   curr: { month: string } & MoodCounts
   prev: { month: string } & MoodCounts
@@ -189,11 +197,11 @@ export interface MoodChangeInput {
  */
 export function moodChange(input: MoodChangeInput): Verdict {
   const mood = input.mood ?? 'negative'
-  const point = (p: { month: string } & MoodCounts): SeriesPoint => ({
+  const point = (p: { month: string } & MoodCounts, audience: string): SeriesPoint => ({
     month: p.month,
     videos: p.judged,
     k: p[mood],
-    audience: input.audience,
+    audience,
   })
   const flags = [...(input.flags ?? [])]
   // The span of the comparison, not the two month starts: the break falls
@@ -208,8 +216,8 @@ export function moodChange(input: MoodChangeInput): Verdict {
   const verdict = monthChange({
     object: { kind: 'mood', id: mood, label: MOOD_LABELS[mood] },
     audience: input.audience,
-    curr: point(input.curr),
-    prev: point(input.prev),
+    curr: point(input.curr, input.audience),
+    prev: point(input.prev, input.prevAudience ?? input.audience),
     floor: input.floor ?? SENTIMENT_BAND,
     flags,
   })
