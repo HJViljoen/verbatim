@@ -89,6 +89,18 @@ import { createAdminClient, selectAll } from '../supabase-admin'
 // not of its own audience, so the flag row stores the denominator's NAME and
 // every surface prints it.
 //
+// WHAT IT COSTS, MEASURED. The detection is arithmetic over rows: four RPC
+// calls and four indexed table reads, no model, no Apify, nothing per-object.
+// The explainer is one `gpt-4.1-mini` call at ~2,000 in / ~400 out —
+// $0.0014 — and only on an update that flagged. Replayed over the 22
+// tenant-weeks that exist (read-only, 2026-09-15) the rule fired ONCE, so the
+// realised bill over that quarter would have been $0.0014 for both tenants
+// together. Even at the design's worst case — every update of every month
+// flagging — it is $0.006 per tenant-month against a $5–17 run, a $60 run
+// budget and a ~$205 price. The line that matters is not the price: it is that
+// "nothing was unusual this week" is composed in code from an empty flag list
+// and always will be, because it is the answer most weeks give.
+//
 // NON-FATAL, AND A NO-OP BEFORE ITS MIGRATION LANDS. The keyword-discovery and
 // freeze-months precedent: a record kept alongside the report must not make a
 // clean run read `partial`, and a step whose table does not exist yet logs one
