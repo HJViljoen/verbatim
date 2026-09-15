@@ -51,6 +51,13 @@ jobs:
       # it exits 0 and prerenders all 52 routes. Nothing is fetched at build
       # time (every page that reads a tenant is dynamic), so a real key would
       # buy nothing and risk everything.
+      #
+      # THIS .next IS A TEST ARTIFACT, NEVER A DEPLOYABLE ONE. `NEXT_PUBLIC_*`
+      # is inlined into the client JS at build time, so promoting this output
+      # with `vercel deploy --prebuilt` would ship a bundle pointing at
+      # http://localhost:54321. The job uploads nothing and deploys nothing —
+      # it exits after the build, and Vercel builds its own. Any deploy
+      # checklist that mentions --prebuilt says the same.
       - run: npx next build
         env:
           OPENAI_API_KEY: ci-build-dummy

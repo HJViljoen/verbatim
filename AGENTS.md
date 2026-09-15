@@ -41,7 +41,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (also `next dev --webpack`), or `TURBOPACK_ROOT=<dir holding both> npx next
   build` for production parity; `next.config.ts` reads that env var and is inert
   without it. CI builds with Turbopack, the bundler Vercel uses, because that is
-  the only gate that catches a bundler-only break before a deploy does.
+  the only gate that catches a bundler-only break before a deploy does. CI's
+  build output is a TEST artifact and is never promoted: it is built with dummy
+  `NEXT_PUBLIC_*` values, which Next inlines into the client JS, so a
+  `vercel deploy --prebuilt` of it would ship a bundle pointing at localhost.
+  Vercel builds its own.
 - **`next.config.ts` declares no redirects.** Config-level redirects run BEFORE
   `proxy.ts`, which is what routes the apex between the marketing site and the
   app by host. A redirect added here silently wins over that routing; send it
