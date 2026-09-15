@@ -393,6 +393,23 @@ export function stateNote(state: CalendarPointState): string | null {
   }
 }
 
+/**
+ * What the read-back hatch says over a STRETCH of months.
+ *
+ * `read_back_at_setup` is a per-POINT caveat and its sentence is written for
+ * one month — "this month had already closed when we started". Lifted verbatim
+ * onto a band it named 61 months of Össur's axis "this month". A band is one
+ * shape over a run, so it says how many months it covers and says it in the
+ * plural; the per-month sentence stays where it belongs, on the point.
+ */
+export function backReadBandLabel(count: number): string {
+  return count === 1
+    ? 'Read back at setup — this month had already closed when we started, so this is what it reads today, ' +
+      'not what we would have reported at the time.'
+    : `Read back at setup — these ${count.toLocaleString('en-US')} months had already closed when we started, so this is ` +
+      'what they read today, not what we would have reported at the time.'
+}
+
 /** A stable id for one chart's `<defs>`, so two calendar lines on one page do
  *  not share a hatch pattern. Deterministic (the same chart renders the same id
  *  on the server and in a snapshot test), and hydration-safe for the same

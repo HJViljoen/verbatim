@@ -1,5 +1,6 @@
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import type { MonthLabel, MonthPoint, MonthSeries } from '../reading/series'
+import { backReadBandLabel } from './calendar'
 import type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries } from './calendar'
 
 // The reading layer → the chart (Phase 1 WP10).
@@ -163,19 +164,17 @@ export function calendarRulesFor(series: readonly MonthSeries[]): CalendarRule[]
  *
  * `read_back_at_setup` is a per-point label carrying one shared sentence, so a
  * six-month back-read would otherwise be six identical caveats. The band says
- * it once, over the stretch it covers.
+ * it once, over the stretch it covers — IN ITS OWN WORDS, because the point's
+ * sentence says "this month" and a band is a run of them (`backReadBandLabel`).
  */
 export function calendarBandsFor(series: readonly MonthSeries[]): CalendarBand[] {
   const months = new Set<string>()
-  let label: string | null = null
   for (const s of series) {
     for (const p of s.points) {
-      const back = p.labels.find((l) => l.kind === 'read_back_at_setup')
-      if (!back) continue
-      months.add(p.month)
-      label ??= back.text
+      if (p.labels.some((l) => l.kind === 'read_back_at_setup')) months.add(p.month)
     }
   }
-  if (!months.size || !label) return []
-  return [{ months: [...months].sort(), label }]
+  const sorted = [...months].sort()
+  if (!sorted.length) return []
+  return [{ months: sorted, label: backReadBandLabel(sorted.length) }]
 }
