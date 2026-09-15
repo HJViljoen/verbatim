@@ -513,6 +513,18 @@ describe('the update record', () => {
     const updates = ossur().updates.map((u) => ({ ...u, status: 'completed' }))
     expect(find(computeReadiness(ossur({ updates })), 'update-record').status).toBe('exists')
   })
+
+  it('repeats a line when two updates share a day and an outcome — so nothing may key on the text', () => {
+    // Live on the trial workspace: three updates finished on 17 Aug 2026
+    // (15:05, 13:42, 10:47). Each is a separate update and each has to appear,
+    // so the notes are deliberately NOT unique and the renderer keys on
+    // position. Pinned here because the collision is invisible in an array
+    // comparison and costs a dropped line in the browser.
+    const notes = find(computeReadiness(sealand()), 'update-record').notes
+    const repeated = notes.filter((n) => n === '17 Aug 2026 — finished')
+    expect(repeated).toHaveLength(3)
+    expect(new Set(notes).size).toBeLessThan(notes.length)
+  })
 })
 
 describe('longestGapDays', () => {

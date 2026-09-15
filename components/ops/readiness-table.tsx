@@ -44,10 +44,15 @@ function Row({ row }: { row: ReadinessRow }) {
         <StatusPill status={row.status} />
       </div>
 
+      {/* Keyed by position, not by text: two notes on one row are identical
+          whenever two updates share a day and an outcome, which is live today
+          (three updates finished on 17 Aug 2026 on the trial workspace). A
+          duplicate key makes React drop or mis-reuse a line on re-render, and
+          a silently missing line is the one thing this row must never do. */}
       {row.notes.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-3">
-          {row.notes.map((note) => (
-            <li key={note} className="font-mono text-[11px] leading-[1.45] text-muted-foreground">{note}</li>
+          {row.notes.map((note, index) => (
+            <li key={`${row.id}-${index}`} className="font-mono text-[11px] leading-[1.45] text-muted-foreground">{note}</li>
           ))}
         </ul>
       )}
