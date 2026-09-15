@@ -166,6 +166,22 @@ describe('anomalyVerdict', () => {
     expect(anomalyVerdict(row({ state: 'flagged' }), WEEK).state).toBe('moved')
   })
 
+  it('carries the baseline\'s caveats so the prompt sees them, not only the flag row', () => {
+    // verdictBlock prints flags= off the Verdict; with an empty list the model
+    // was handed "verdict=moved, n=…, direction=NONE" and no hint that the
+    // baseline was read under a mixed grouping or had not frozen.
+    expect(anomalyVerdict(row(), WEEK, BASIS, { regime: 'mixed' }).flags).toEqual(['clustering_changed'])
+    expect(anomalyVerdict(row(), WEEK, BASIS, { regime: 'unknown' }).flags).toEqual(['clustering_unknown'])
+    expect(anomalyVerdict(row(), WEEK, BASIS, { regime: 'unknown', baselineFillingMonths: 2 }).flags)
+      .toEqual(['clustering_unknown', 'thin'])
+  })
+
+  it('says nothing about a grouping it was told nothing about', () => {
+    expect(anomalyVerdict(row(), WEEK, BASIS).flags).toEqual([])
+    expect(anomalyVerdict(row(), WEEK, BASIS, { regime: 'one', baselineFillingMonths: 0 }).flags).toEqual([])
+    expect(anomalyVerdict(row(), WEEK, BASIS, { regime: 'not_grouped' }).flags).toEqual([])
+  })
+
   it('takes the ROW state, not the band state — a Holm refusal is no_clear_change', () => {
     // Both gates are the rule: the band said moved, the correction did not.
     const held = row({ verdict: { state: 'moved', change: -9.4, band: 5.1 }, state: 'no_clear_change' })

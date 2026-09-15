@@ -1,7 +1,7 @@
 import { INSIGHT_CATEGORIES } from '../pipeline/schemas'
 import { proportionDelta, SHARE_BAND, type BandOptions, type DeltaVerdict } from '../report-bands'
 import { THIN_MONTH_SHARE } from './bands'
-import type { Verdict } from './verdicts'
+import type { Verdict, VerdictFlag } from './verdicts'
 
 // The anomaly check — is this week unusual against the months behind it?
 // (Phase 0 WP4, design item 40 + §9.20, 2026-09-15. Pure: no DB, no clock.)
@@ -699,11 +699,33 @@ export function weekVsBaseline(input: {
  * No `direction`: three consecutive readings are what earn a direction word,
  * and a week against a pooled baseline is one reading.
  */
+export interface AnomalyVerdictInput {
+  /** What the baseline's clustering looked like across its months, as
+   *  `regimesByObject` folds it: 'one' | 'mixed' | 'unknown' | 'not_grouped'.
+   *  `mixed` and `unknown` become the caveat the reader is owed. */
+  regime?: 'one' | 'mixed' | 'unknown' | 'not_grouped'
+  /** How many of the baseline's months had not frozen when it was read. Any is
+   *  a baseline that can still move under the comparison. */
+  baselineFillingMonths?: number
+}
+
 export function anomalyVerdict(
   row: AnomalyRow,
   window: { from: string; to: string },
   basis?: { from: string; to: string },
+  input: AnomalyVerdictInput = {},
 ): Verdict {
+  // THE CAVEATS REACH THE PROMPT, not only the flag row. `verdictBlock` prints
+  // `flags=` off the Verdict, so with an empty list the model was handed
+  // "verdict=moved, n=…, direction=NONE" and no hint that the baseline was read
+  // under an unknown or a mixed grouping, or that two thirds of it had not
+  // frozen (Össur 721 of 1,089 months, Sealand 407 of 493, measured). The claim
+  // is true of whatever grouping produced it — which is why this is a caveat
+  // and not a refusal — but a reader of the paragraph is owed it.
+  const flags: VerdictFlag[] = []
+  if (input.regime === 'mixed') flags.push('clustering_changed')
+  if (input.regime === 'unknown') flags.push('clustering_unknown')
+  if ((input.baselineFillingMonths ?? 0) > 0) flags.push('thin')
   return {
     objectKind: row.kind,
     objectId: row.id,
@@ -718,6 +740,6 @@ export function anomalyVerdict(
     changePts: row.verdict?.change ?? null,
     bandPts: row.verdict?.band ?? null,
     state: row.state === 'flagged' ? 'moved' : row.state,
-    flags: [],
+    flags,
   }
 }

@@ -1083,7 +1083,12 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     console.error(`[anomaly-check] quotes unavailable, flags still recorded: ${e instanceof Error ? e.message : String(e)}`)
   }
   const figures = proseFigures(anomalyFigures(reading))
-  const verdicts = reading.flags.map((f) => anomalyVerdict(f, window, { from: months[0], to: window.from }))
+  const verdicts = reading.flags.map((f) =>
+    anomalyVerdict(f, window, { from: months[0], to: window.from }, {
+      regime: regimes.get(regimeKey(f)) ?? 'not_grouped',
+      baselineFillingMonths: filling.length,
+    }),
+  )
   const explainer = args.explainer ?? openAiExplainer(admin, args.clientId, args.runId, persist)
   const call = await explainer({
     system: explainerSystemPrompt(),
