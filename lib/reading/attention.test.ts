@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { scriptActor } from '../config-log'
+
 import {
   PANEL_EXCLUDED_PLATFORMS,
   PANEL_LEAD_MONTHS,
@@ -11,6 +13,7 @@ import {
   PANEL_STALING_SURFACES,
   attentionRowOf,
   attentionRowsOf,
+  freezePanel,
   panelCutoff,
   panelStale,
   samePanelEra,
@@ -137,6 +140,47 @@ describe('panelStale', () => {
       expect(PANEL_STALING_SURFACES).not.toContain(surface)
       expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
     }
+  })
+})
+
+describe('freezePanel, on the two paths that never reach the database', () => {
+  // AGENTS.md: tests are pure logic only — no network, no DB, and no mocking
+  // the world to test I/O glue. So the insert, the config_changes row and the
+  // actor are exercised on a throwaway cluster and written up in the status
+  // note, not here. These two exits ARE pure: freezePanel returns from both
+  // before it touches the client, and `admin` below throws if it is used, which
+  // is the assertion.
+  const admin = new Proxy({}, {
+    get() { throw new Error('freezePanel must not reach the database on this path') },
+  }) as never
+
+  it('refuses to freeze an empty panel rather than storing "0 of 0"', async () => {
+    const result = await freezePanel(admin, {
+      clientId: 'c1',
+      month: '2026-09-01',
+      reason: 'first_freeze',
+      actor: scriptActor('script:test'),
+      // Sealand's state for a September reading: every account too new.
+      accounts: [account('tiktok', 'a', '2026-06-28T00:00:00Z')],
+    })
+    expect(result.refused).toBe('empty')
+    expect(result.panel).toBeNull()
+    expect(result.derived.tooNew).toBe(1)
+  })
+
+  it('derives without writing on a dry run', async () => {
+    const result = await freezePanel(admin, {
+      clientId: 'c1',
+      month: '2026-09-01',
+      reason: 'tracking_change',
+      actor: scriptActor('script:test'),
+      accounts: [account('tiktok', 'a', '2026-04-01T00:00:00Z'), account('reddit', 'r', '2026-01-01T00:00:00Z')],
+      dryRun: true,
+    })
+    expect(result.refused).toBeNull()
+    expect(result.panel).toBeNull()
+    expect(result.derived.members.map((m) => m.account_name)).toEqual(['a'])
+    expect(result.derived.excluded).toEqual({ reddit: 1 })
   })
 })
 
