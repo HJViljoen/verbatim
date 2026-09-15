@@ -277,7 +277,6 @@ async function main() {
     say('|---|---|---|---|---|---|')
 
     const flagDetail: string[] = []
-    const notes: string[] = []
     for (const week of weeks) {
       const weekRows = await readWindowDenominators(admin, id, week)
       const weekByAudience = new Map(weekRows.map((r) => [r.audience, r]))
@@ -383,10 +382,6 @@ async function main() {
     say()
     if (flagDetail.length === 0) say('Nothing unusual in any week.')
     else for (const line of flagDetail) say(line)
-    if (notes.length > 0) {
-      say()
-      for (const line of notes) say(line)
-    }
   }
 
   if (out) {
