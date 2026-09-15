@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import {
   ACTOR_KINDS,
+  CONFIG_CHANGES_TABLE,
   CONFIG_SURFACES,
   WATCHED_CONFIG_COLUMNS,
   actorStamp,
@@ -9,6 +10,7 @@ import {
   changeLogBoundary,
   changeRow,
   diffConfigRows,
+  isMissingConfigLog,
   pipelineActor,
   recordConfigChange,
   recordConfigChanges,
@@ -433,6 +435,66 @@ describe('the corpus re-tag', () => {
     })
     expect(row.actor.label).toBe('scripts/run-tagging.ts --write --method gpt · OpenAI $0.31200')
     expect(row.note).not.toMatch(/\$|OpenAI|scripts\/|--write|gpt|substring|corpus/)
+  })
+})
+
+describe('isMissingConfigLog — which of two sentences the readiness page prints', () => {
+  // This predicate decides between "nothing has been recorded yet" (the log is
+  // there, nobody has changed anything) and "nothing in the product writes
+  // down a configuration change" (the migration has not landed) — two answers
+  // with two different owners. Widen it and a grants problem on
+  // `config_changes` reads forever after as an unapplied migration, with the
+  // person who applied it blamed.
+  //
+  // The shapes are the live ones, checked read-only against production on
+  // 2026-09-15 before the readiness page was built: a GET on a table PostgREST
+  // has never heard of comes back 404 / PGRST205 with the table named. (A HEAD
+  // count comes back 204 / count null / error null — no error at all, which is
+  // why the page probes with a GET first.)
+  it('knows the table missing, by any of the four ways it is said', () => {
+    expect(isMissingConfigLog({
+      code: 'PGRST205',
+      message: `Could not find the table 'public.${CONFIG_CHANGES_TABLE}' in the schema cache`,
+    })).toBe(true)
+    expect(isMissingConfigLog({ code: '42P01', message: `relation "public.${CONFIG_CHANGES_TABLE}" does not exist` })).toBe(true)
+    expect(isMissingConfigLog({
+      code: 'PGRST204',
+      message: `Could not find the 'actor_label' column of '${CONFIG_CHANGES_TABLE}' in the schema cache`,
+    })).toBe(true)
+    expect(isMissingConfigLog({ code: '42703', message: `column ${CONFIG_CHANGES_TABLE}.source does not exist` })).toBe(true)
+  })
+
+  it('still knows it once the code has been flattened away', () => {
+    // `selectAll` wraps a PostgREST error in a plain Error, so by the time a
+    // reader sees it the sentence is all that is left.
+    expect(isMissingConfigLog(new Error(`relation "public.${CONFIG_CHANGES_TABLE}" does not exist`))).toBe(true)
+    expect(isMissingConfigLog(
+      new Error(`selectAll: Could not find the table 'public.${CONFIG_CHANGES_TABLE}' in the schema cache`),
+    )).toBe(true)
+  })
+
+  it('is not a blanket swallow — a grants or constraint failure is a real failure', () => {
+    expect(isMissingConfigLog({ code: '42501', message: `permission denied for table ${CONFIG_CHANGES_TABLE}` })).toBe(false)
+    expect(isMissingConfigLog({
+      code: '23514',
+      message: `new row for relation "${CONFIG_CHANGES_TABLE}" violates check constraint "config_changes_surface_check"`,
+    })).toBe(false)
+    expect(isMissingConfigLog({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe(false)
+    expect(isMissingConfigLog(new Error('fetch failed'))).toBe(false)
+  })
+
+  it('never answers for another table', () => {
+    expect(isMissingConfigLog({ code: '42P01', message: 'relation "public.tracking_configs" does not exist' })).toBe(false)
+    expect(isMissingConfigLog({
+      code: 'PGRST205',
+      message: "Could not find the table 'public.rec_decisions' in the schema cache",
+    })).toBe(false)
+  })
+
+  it('treats no error as no error', () => {
+    expect(isMissingConfigLog(null)).toBe(false)
+    expect(isMissingConfigLog(undefined)).toBe(false)
+    expect(isMissingConfigLog('PGRST205')).toBe(false)
   })
 })
 
