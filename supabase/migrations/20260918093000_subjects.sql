@@ -561,6 +561,12 @@ create policy "Members read their month subject readings" on public.month_subjec
 revoke all on public.month_subject_readings from authenticated, anon;
 grant select on public.month_subject_readings to authenticated;
 grant select, insert, update, delete on public.month_subject_readings to service_role;
+-- Not TRUNCATE. Supabase's default ACL hands service_role arwdDxtm on every new
+-- public table and `revoke all … from authenticated, anon` does not touch it.
+-- Emptying the record in one statement is not an operation any writer needs —
+-- the freeze upserts and the stale sweep deletes one key at a time — and the
+-- clients cascade is a foreign key, which needs DELETE and not TRUNCATE.
+revoke truncate on public.month_subject_readings from service_role;
 
 -- 5. The reads ------------------------------------------------------------------
 -- monthly_theme_readings' body with exactly one hop swapped: `mem` comes from

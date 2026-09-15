@@ -329,6 +329,25 @@ grant select, insert, update, delete on public.month_audience_stats to service_r
 revoke update, delete, truncate on public.attention_panels from service_role;
 grant select, insert on public.attention_panels to service_role;
 
+-- NO TRUNCATE ON ANY MONTH TABLE, and the five siblings get the answer this
+-- file and month_evidence_refs already reached separately. Supabase's default
+-- ACL grants arwdDxtm on every new public table to service_role and
+-- `revoke all … from authenticated, anon` does not touch it, so production's
+-- relacl on both applied month tables reads service_role=arwdDxtm/postgres —
+-- i.e. TRUNCATE. Emptying the record in one statement is not an operation any
+-- writer here needs: the freeze upserts, the stale sweep deletes one key at a
+-- time with `status = 'filling'` restated, and the clients cascade is a foreign
+-- key that needs DELETE and not TRUNCATE.
+--
+-- month_denominators and month_theme_readings are Phase 0's and their grants
+-- live in 20260915092000, which is applied — so the revoke has to be stated
+-- somewhere later, and this is where the rest of the month ACL is written.
+-- month_subject_readings is M4's; it is revoked in its own file.
+revoke truncate on public.month_kind_readings  from service_role;
+revoke truncate on public.month_audience_stats from service_role;
+revoke truncate on public.month_denominators    from service_role;
+revoke truncate on public.month_theme_readings  from service_role;
+
 -- 6. The kind read, month by month ---------------------------------------------
 -- The body is monthly_theme_readings (20260915092000:396-...) with the
 -- theme_observations hop removed and `ai.category` in its place. Line for line
