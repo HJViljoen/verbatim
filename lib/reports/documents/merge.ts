@@ -1,3 +1,4 @@
+import { RUN_INDEXED_DIRECTION_WORDS } from '../../config'
 import { cosine } from '../../pipeline/cluster'
 import { keywordsOf } from '../../quotes'
 import type { Trajectory } from '../../voice-tiles'
@@ -152,9 +153,16 @@ function pickTrajectory(words: string[]): string {
 
 /** A theme's history in words (voice-tiles' trajectories). An arrow needs
  *  three points; before that the honest words are "new this update" or
- *  "seen N updates running". */
-export function trajectoryWord(t: Trajectory | null | undefined): string | null {
-  if (!t) return null
+ *  "seen N updates running".
+ *
+ *  NULL for every theme while `RUN_INDEXED_DIRECTION_WORDS` is off (D1). This
+ *  is the document side's single gate, and everything downstream already
+ *  handles a concern with no word: `pickTrajectory([])` gives `''`, the deck
+ *  renders no pill on an empty string, `heardLine` drops its history clause,
+ *  the workings drawer drops its suffix, and the writer is told "history
+ *  unknown" rather than given a direction to write from. */
+export function trajectoryWord(t: Trajectory | null | undefined, directionWords = RUN_INDEXED_DIRECTION_WORDS): string | null {
+  if (!t || !directionWords) return null
   const points = t.dates.length
   if (t.movement === 'emerging' || (points === 1 && t.strength.length === 1)) return points <= 1 ? 'new this update' : `seen ${points} updates running`
   if (points >= 3 && t.movement === 'gaining') return 'rising'

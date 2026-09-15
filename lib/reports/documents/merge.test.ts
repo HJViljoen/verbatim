@@ -79,11 +79,28 @@ describe('mergeAcrossBuckets', () => {
 describe('trajectoryWord', () => {
   const traj = (o: Partial<Trajectory>): Trajectory => ({ key: 'k', label: 'l', category: 'pain_point', bucket: 'client', dates: ['2026-08-23'], strength: [5], evidence: [3], latestEvidence: 3, movement: 'steady', strengthDelta: 0, evidenceDelta: null, ...o })
   it('says new, then seen N, and arrows only from three points', () => {
-    expect(trajectoryWord(traj({}))).toBe('new this update')
-    expect(trajectoryWord(traj({ dates: ['a', 'b'], strength: [5, 7], movement: 'gaining' }))).toBe('seen 2 updates running')
-    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [5, 6, 7], movement: 'gaining' }))).toBe('rising')
-    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [7, 6, 5], movement: 'fading' }))).toBe('fading')
-    expect(trajectoryWord(null)).toBeNull()
+    expect(trajectoryWord(traj({}), true)).toBe('new this update')
+    expect(trajectoryWord(traj({ dates: ['a', 'b'], strength: [5, 7], movement: 'gaining' }), true)).toBe('seen 2 updates running')
+    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [5, 6, 7], movement: 'gaining' }), true)).toBe('rising')
+    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [7, 6, 5], movement: 'fading' }), true)).toBe('fading')
+    expect(trajectoryWord(null, true)).toBeNull()
+  })
+
+  // D1: the document side's one gate. Every word above is a direction read off
+  // a series indexed by UPDATE — including "seen 3 updates running", which
+  // counts readings, not weeks.
+  it('says nothing at all while the run-indexed direction words are gated off', () => {
+    expect(trajectoryWord(traj({}), false)).toBeNull()
+    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [5, 6, 7], movement: 'gaining' }), false)).toBeNull()
+    expect(trajectoryWord(traj({ dates: ['a', 'b', 'c'], strength: [7, 6, 5], movement: 'fading' }))).toBeNull() // the shipped default
+  })
+
+  // What the gate leaves the rest of the document pipeline holding.
+  it('leaves a merged concern with an empty trajectory, which every renderer already drops', () => {
+    const themes = [row({ id: 'a', bucket: 'client', embedding: INS, evidenceCount: 5 })]
+    const rising = traj({ dates: ['a', 'b', 'c'], strength: [5, 6, 7], movement: 'gaining' })
+    const out = mergeAcrossBuckets(themes, { threshold: 0.9, trajectoryOf: () => trajectoryWord(rising) })
+    expect(out[0].trajectory).toBe('')
   })
 })
 
