@@ -108,8 +108,16 @@ export const subjectsKinds: Block<SubjectsData> = {
   },
 
   emptyState(data) {
+    // THE REASON, NOT THE SYMPTOM. "Nothing is selected" is true on a tenant
+    // whose subjects table does not exist yet, and it is the wrong sentence:
+    // it reads as "click one" at a client who has nothing to click.
+    if (data.list.notRecorded) return data.list.notRecorded
     const pane = data.selected
-    if (!pane) return 'Nothing is selected.'
+    if (!pane) {
+      return data.list.proposed.length > 0
+        ? 'Confirm a subject and this is what the audiences are saying around it.'
+        : 'Name a subject and this is what the audiences are saying around it.'
+    }
     if (pane.sides.every((s) => s.kinds.length === 0)) {
       return 'What kind of thing is being said is not recorded month by month for this workspace yet.'
     }

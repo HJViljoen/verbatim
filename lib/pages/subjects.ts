@@ -358,10 +358,20 @@ export function answeredBy(label: string, haystack: readonly string[]): boolean 
 /**
  * SU3's sentence, in the design's own shape minus the share.
  *
- * "The category asked X in N of the videos we have read — none of your M posts
- * touched it." The share is absent deliberately: the k is taken from the
+ * "Questions grouped as X came up in N of the videos we have read — none of
+ * your M posts touched it."
+ *
+ * TWO DEPARTURES FROM THE DESIGN'S EXAMPLE SENTENCE, both forced by what the
+ * label actually is. The share is absent because the k is taken from the
  * current analysis and every other n on this page is comment-dated, and this
- * product does not print a fraction whose two halves are dated two ways.
+ * product does not print a fraction whose two halves are dated two ways. And
+ * the verb is "grouped as" rather than "the category asked", because the label
+ * is the CLUSTERING's summary of a set of questions, not a question anybody
+ * typed — measured on production, one of Össur's largest groups of question
+ * insights sits under a theme the model called "Praise for prosthetic look",
+ * and "the category asked 'Praise for prosthetic look'" is a sentence that is
+ * simply not true. A verbatim question belongs to 31b's evidence freeze, not
+ * to a label.
  */
 export function unansweredLead(
   rows: readonly UnansweredRow[],
@@ -373,7 +383,7 @@ export function unansweredLead(
   const posts = yourPosts > 0
     ? `none of your ${fmtInt(yourPosts)} ${monthLabel} post${yourPosts === 1 ? '' : 's'} touched it`
     : `you published nothing in ${monthLabel}`
-  return `The category asked “${top.label}” in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
+  return `Questions grouped as “${top.label}” came up in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
 }
 
 /** The words above the axis about which lines carry an n (design §3 SU2's
@@ -435,6 +445,12 @@ interface InsightRow {
   category: string
   theme: string | null
   source_video_id: string | null
+}
+
+interface ThemeRow {
+  registry_id: string | null
+  label: string | null
+  supporting_insight_ids: string[] | null
 }
 
 interface VideoRow {
@@ -696,6 +712,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         window: { from: window.from, to: window.to },
         population: perAudience.get(`${month}|${INDUSTRY_AUDIENCE}`) ?? null,
         monthLabel: monthName(month).split(' ')[0],
+        themedRunId,
       }),
     ])
 
@@ -726,7 +743,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
         ? 'This subject has no monthly reading recorded for this workspace yet.'
         : null,
     }
-    void themedRunId
   }
 
   // ── the record ────────────────────────────────────────────────────────
@@ -982,6 +998,10 @@ interface UnansweredInput {
   window: { from: string; to: string }
   population: number | null
   monthLabel: string
+  /** The update whose clustering names the questions. Null where no update has
+   *  produced themes — then there is nothing to group by and the block says so
+   *  rather than printing pipeline slugs. */
+  themedRunId: string | null
 }
 
 /**
@@ -991,6 +1011,19 @@ interface UnansweredInput {
  * taken from the current analysis and every other n on this page is
  * comment-dated. The gate is the design's — fewer than ten question videos on
  * the subject and the block says so rather than ranking noise.
+ *
+ * THE QUESTION IS NAMED BY THE CLUSTERING, NOT BY THE INSIGHT. The obvious key
+ * is `audience_insights.theme`, and it is wrong twice over: it is a snake_case
+ * machine slug ("prosthetic_functionality", "product_availability"), which is
+ * pipeline vocabulary in front of a client, and it is nearly unique — measured
+ * read-only on 2026-09-16, Össur's 696 live question insights carry 547
+ * distinct values over 553 videos, so grouping by it is barely grouping at all.
+ * The clustering's own label is a sentence a person wrote the product's way
+ * ("Which backpack should I choose", "Questions about prosthetic function"),
+ * and every one of both tenants' live question insights is reachable from the
+ * newest themed update's `supporting_insight_ids` — 696 of 696 and 567 of 567.
+ * So the key is the REGISTRY id (labels churn ~88% run to run, AGENTS.md) and
+ * the words are the registry's canonical label.
  */
 async function loadUnanswered(
   supabase: SupabaseClient,
@@ -1058,23 +1091,13 @@ async function loadUnanswered(
     ...ownClaims.map((c) => c.claim),
   ]
 
-  // One row per question, keyed on the insight's own short label. Themes are
-  // not used as the key here for the reason AGENTS.md gives: a theme label
-  // churns ~88% run to run, and this list is read against your own posts, not
-  // against last month's list.
-  const groups = new Map<string, { label: string; videos: Set<string>; reddit: Set<string> }>()
   const nonOwned = new Set<string>()
+  const questionInsights: InsightRow[] = []
   for (const i of insights) {
     const v = i.source_video_id ? byId.get(i.source_video_id) : null
     if (!v || v.is_client) continue
     nonOwned.add(v.id)
-    const label = (i.theme ?? '').trim()
-    if (!label) continue
-    const key = label.toLowerCase()
-    const g = groups.get(key) ?? { label, videos: new Set<string>(), reddit: new Set<string>() }
-    g.videos.add(v.id)
-    if ((v.platform ?? '').toLowerCase() === 'reddit') g.reddit.add(v.id)
-    groups.set(key, g)
+    questionInsights.push(i)
   }
 
   const questionVideos = nonOwned.size
@@ -1089,15 +1112,40 @@ async function loadUnanswered(
     }
   }
 
-  const ranked = [...groups.values()]
-    .sort((a, b) => b.videos.size - a.videos.size || a.label.localeCompare(b.label))
-    .map((g) => ({
-      id: g.label.toLowerCase(),
+  const named = await nameQuestions(supabase, clientId, input.themedRunId, questionInsights.map((i) => i.id))
+  if (named.size === 0) {
+    return {
+      ...empty,
+      questionVideos,
+      yourPosts: ownVideos.length,
+      refusal:
+        `${fmtInt(questionVideos)} videos asked something about this subject, and no update has grouped those ` +
+        'questions yet — they are counted here and named with the next update.',
+    }
+  }
+
+  const groups = new Map<string, { label: string; videos: Set<string>; reddit: Set<string> }>()
+  for (const i of questionInsights) {
+    const at = named.get(i.id)
+    if (!at) continue
+    const v = i.source_video_id ? byId.get(i.source_video_id) : null
+    if (!v) continue
+    const g = groups.get(at.registryId) ?? { label: at.label, videos: new Set<string>(), reddit: new Set<string>() }
+    g.videos.add(v.id)
+    if ((v.platform ?? '').toLowerCase() === 'reddit') g.reddit.add(v.id)
+    groups.set(at.registryId, g)
+  }
+
+  const ranked = [...groups.entries()]
+    .sort((a, b) => b[1].videos.size - a[1].videos.size || a[1].label.localeCompare(b[1].label))
+    .map(([registryId, g]) => ({
+      id: registryId,
       label: g.label,
       videos: g.videos.size,
       reddit: g.reddit.size,
       answered: answeredBy(g.label, haystack),
-      href: null,
+      // Onward to the theme in full, which is where the comments are (VO3).
+      href: `/dashboard/voice?themes=${encodeURIComponent(registryId)}`,
     }))
   const shown = ranked.filter((r) => !r.answered).slice(0, UNANSWERED_SHOWN)
   const redditVideos = [...groups.values()].reduce((n, g) => n + g.reddit.size, 0)
@@ -1114,6 +1162,69 @@ async function loadUnanswered(
       ? 'Your posts touch every question the category asks on this subject.'
       : null,
   }
+}
+
+/**
+ * Which grouped question each insight belongs to, in the reader's words.
+ *
+ * `themes.supporting_insight_ids` is the durable link — the one WP2's research
+ * settled on for the same reason, and the one measured at 100% coverage of both
+ * tenants' live question insights. The registry id is the KEY and the
+ * registry's canonical label is the words; the run's own label is the fallback,
+ * because a registry row can be newer than its canonical label.
+ */
+async function nameQuestions(
+  supabase: SupabaseClient,
+  clientId: string,
+  themedRunId: string | null,
+  insightIds: readonly string[],
+): Promise<Map<string, { registryId: string; label: string }>> {
+  const out = new Map<string, { registryId: string; label: string }>()
+  if (!themedRunId || insightIds.length === 0) return out
+
+  const themes = await selectAll<ThemeRow>(() =>
+    supabase
+      .from('themes')
+      .select('registry_id, label, supporting_insight_ids')
+      .eq('client_id', clientId)
+      .eq('run_id', themedRunId)
+      .not('registry_id', 'is', null)
+      .order('id', { ascending: true }),
+  )
+  const wanted = new Set(insightIds)
+  const labelOf = new Map<string, string>()
+  for (const t of themes) {
+    if (!t.registry_id) continue
+    labelOf.set(t.registry_id, t.label ?? '')
+    for (const id of t.supporting_insight_ids ?? []) {
+      // FIRST THEME WINS. One insight can support two themes in one run, and a
+      // reader counting a video under two questions would see the same video
+      // twice in one list. The rows are ordered by id, so the choice is stable
+      // across two renders of the same reading.
+      if (wanted.has(id) && !out.has(id)) out.set(id, { registryId: t.registry_id, label: t.label ?? '' })
+    }
+  }
+  if (out.size === 0) return out
+
+  // The registry's own words where it has them — the run's label churns ~88%
+  // run to run and the registry is what VO3 and the ledger name (AGENTS.md).
+  const registryIds = [...new Set([...out.values()].map((v) => v.registryId))]
+  const canonical = new Map<string, string>()
+  const { data, error } = await supabase
+    .from('theme_registry')
+    .select('id, canonical_label')
+    .eq('client_id', clientId)
+    .in('id', registryIds.slice(0, 1000))
+  if (!error) {
+    for (const r of (data ?? []) as { id: string; canonical_label: string | null }[]) {
+      if (r.canonical_label) canonical.set(r.id, r.canonical_label)
+    }
+  }
+  for (const [id, at] of out) {
+    const label = canonical.get(at.registryId) ?? labelOf.get(at.registryId) ?? at.label
+    if (label) out.set(id, { registryId: at.registryId, label })
+  }
+  return out
 }
 
 // ---- what the blocks declare ----------------------------------------------------

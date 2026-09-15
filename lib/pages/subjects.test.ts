@@ -132,9 +132,16 @@ describe('matchWords / answeredBy', () => {
 describe('unansweredLead', () => {
   const row = { id: 'q', label: 'Will it survive a wet commute', videos: 130, reddit: 40, answered: false, href: null }
 
+  it('says "grouped as", never "the category asked" — the label is the clustering\'s summary', () => {
+    // Measured on production: a large group of Össur question insights sits
+    // under a theme the model called "Praise for prosthetic look". "The
+    // category asked ‘Praise for prosthetic look’" is not true of anything.
+    expect(unansweredLead([row], 9, 'September')).toContain('Questions grouped as')
+  })
+
   it('says the count and the population, and no share', () => {
     const line = unansweredLead([row], 9, 'September')!
-    expect(line).toBe('The category asked “Will it survive a wet commute” in 130 of the videos we have read — none of your 9 September posts touched it.')
+    expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read — none of your 9 September posts touched it.')
     expect(line).not.toContain('%')
   })
 

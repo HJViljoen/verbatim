@@ -61,8 +61,13 @@ export const subjectsVoices: Block<SubjectsData> = {
   },
 
   emptyState(data) {
+    if (data.list.notRecorded) return data.list.notRecorded
     const pane = data.selected
-    if (!pane) return 'Nothing is selected.'
+    if (!pane) {
+      return data.list.proposed.length > 0
+        ? 'Confirm a subject and this is where we quote what was said about it.'
+        : 'Name a subject and this is where we quote what was said about it.'
+    }
     if (pane.voices.length === 0) {
       return pane.notRecorded
         ? pane.notRecorded

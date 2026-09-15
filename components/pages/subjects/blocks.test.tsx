@@ -223,7 +223,7 @@ describe('SU2 · the voices', () => {
 describe('SU3 · questions your posts did not answer', () => {
   it('says the count and the population, and prints no share', () => {
     const text = renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('in 130 of the videos we have read')
+    expect(text).toContain('came up in 130 of the videos we have read')
     expect(text).toContain('none of your 9 September posts touched it')
     expect(text).toContain('counts, not shares')
   })
