@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadCompetitive, type CompetitiveParams } from '@/lib/pages/competitive'
 import { CompetitivePage } from '@/components/pages/competitive'
 
@@ -9,6 +10,6 @@ import { CompetitivePage } from '@/components/pages/competitive'
 export default async function Page({ searchParams }: { searchParams?: Promise<CompetitiveParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const data = await loadCompetitive({ supabase, clientId, params: sp })
+  const data = await loadCompetitive({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <CompetitivePage data={data} detail={sp.detail} params={sp} />
 }

@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadProfile, type ProfileParams } from '@/lib/pages/profile'
 import { ProfilePage } from '@/components/pages/profile'
 
@@ -8,6 +9,6 @@ import { ProfilePage } from '@/components/pages/profile'
 export default async function Page({ searchParams }: { searchParams: Promise<ProfileParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = await searchParams
-  const data = await loadProfile({ supabase, clientId, params: sp })
+  const data = await loadProfile({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <ProfilePage data={data} params={sp} />
 }

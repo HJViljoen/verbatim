@@ -63,12 +63,16 @@ export interface Scope {
    * `getSessionContext()` and never from the URL; `ReadingHandle` carries the
    * pair together so a loader cannot separate them.
    *
-   * Optional while the pages are being re-based one at a time: a loader that
-   * reads no month does not need one, and every construction site that does not
-   * supply one yet keeps working. The loaders that read months take it as
-   * required in their own signature.
+   * REQUIRED since Phase 1 WP9. It was optional while WP3 shipped the reading
+   * layer with no surface reading it; the moment a loader reads months, an
+   * optional handle means every caller that forgot one gets a page that is
+   * silently thinner than the same page reached another way — the app route
+   * with a reading and the export route without it, answering the same
+   * question two ways. Eight construction sites supply it: the six dashboard
+   * page routes, /api/export and lib/reports/build.ts. A loader that reads no
+   * month simply ignores it.
    */
-  reading?: ReadingHandle
+  reading: ReadingHandle
   clientId: string
   /** The page's own URL params, verbatim. Selection lives here (`?item=`,
    *  `?theme=`, `?vs=`, `?persona=`…), so a loader resolves the same selection

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { Card, CardContent } from '@/components/ui/card'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentAnswerView } from '@/components/agent-answer'
@@ -21,7 +22,7 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
   const { supabase, clientId, userId } = await getSessionContext()
   const [canSend, data] = await Promise.all([
     isPlatformAdmin(userId),
-    loadAgentThread({ supabase, clientId, params: { thread: id } }),
+    loadAgentThread({ supabase, clientId, reading: readingHandle(clientId), params: { thread: id } }),
   ])
   if (!data) notFound()
 

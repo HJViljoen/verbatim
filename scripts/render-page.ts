@@ -19,6 +19,7 @@ import type { PageKey, PrintVariant } from '../lib/renderables/types'
 import { snapshotReport } from '../lib/reports/build'
 import { instantiate, starterTemplate } from '../lib/reports/templates'
 import { isAudience, type ReportRow } from '../lib/reports/types'
+import { readingHandle } from '../lib/reading/read'
 
 const args = process.argv.slice(2)
 const flag = (name: string, dflt = '') => {
@@ -86,7 +87,7 @@ async function main() {
   const admin = createAdminClient()
   mkdirSync(out, { recursive: true })
   const t0 = Date.now()
-  const data = await mod.load({ supabase: admin, clientId, params, variant })
+  const data = await mod.load({ supabase: admin, clientId, reading: readingHandle(clientId, admin), params, variant })
   if (!data) throw new Error('loader returned null (empty state)')
   const title = tileKey ? `${tileKey} · ${mod.snapshotTitle(data)}` : mod.snapshotTitle(data)
   const snap = await createSnapshot(admin, { clientId, userId: null, kind: tileKey ? 'tile' : page === 'agent' ? 'agent_thread' : 'page', ref: { page, ...(tileKey ? { tileKey } : {}), params, variant }, title, runId: null, data })

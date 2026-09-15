@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadContent, type ContentParams } from '@/lib/pages/content'
 import { ContentPage } from '@/components/pages/content'
 
@@ -9,6 +10,6 @@ import { ContentPage } from '@/components/pages/content'
 export default async function Page({ searchParams }: { searchParams?: Promise<ContentParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const data = await loadContent({ supabase, clientId, params: sp })
+  const data = await loadContent({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <ContentPage data={data} params={sp} />
 }

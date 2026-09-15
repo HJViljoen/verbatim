@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadVoice, type VoiceParams } from '@/lib/pages/voice'
 import { VoicePage } from '@/components/pages/voice'
 
@@ -8,6 +9,6 @@ import { VoicePage } from '@/components/pages/voice'
 export default async function Page({ searchParams }: { searchParams?: Promise<VoiceParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const data = await loadVoice({ supabase, clientId, params: sp })
+  const data = await loadVoice({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <VoicePage data={data} detail={sp.detail} params={sp} />
 }

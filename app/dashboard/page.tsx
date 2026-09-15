@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadDashboard } from '@/lib/pages/dashboard'
 import { DashboardPage } from '@/components/pages/dashboard'
 
@@ -10,6 +11,6 @@ import { DashboardPage } from '@/components/pages/dashboard'
 export default async function Page({ searchParams }: { searchParams?: Promise<{ detail?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
-  const data = await loadDashboard({ supabase, clientId, params: sp })
+  const data = await loadDashboard({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <DashboardPage data={data} detail={sp.detail} params={sp} />
 }

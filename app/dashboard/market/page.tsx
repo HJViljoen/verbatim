@@ -1,4 +1,5 @@
 import { getSessionContext } from '@/lib/auth'
+import { readingHandle } from '@/lib/reading/read'
 import { loadMarket, type MarketParams } from '@/lib/pages/market'
 import { MarketPage } from '@/components/pages/market'
 
@@ -8,6 +9,6 @@ import { MarketPage } from '@/components/pages/market'
 export default async function Page({ searchParams }: { searchParams?: Promise<MarketParams> }) {
   const { supabase, clientId } = await getSessionContext()
   const sp = (await searchParams) ?? {}
-  const data = await loadMarket({ supabase, clientId, params: sp })
+  const data = await loadMarket({ supabase, clientId, reading: readingHandle(clientId), params: sp })
   return <MarketPage data={data} detail={sp.detail} params={sp} />
 }

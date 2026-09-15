@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
+import { readingHandle } from '@/lib/reading/read'
 import { getBaseUrl } from '@/lib/site'
 import { pageModule } from '@/components/pages/registry'
 import { createSnapshot, type SnapshotKind } from '@/lib/snapshots'
@@ -97,7 +98,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const data = await mod.load({ supabase, clientId, params, variant })
+    const data = await mod.load({ supabase, clientId, reading: readingHandle(clientId), params, variant })
     if (!data) return NextResponse.json({ error: 'Nothing to export yet — your first update has not landed.' }, { status: 409 })
     const d = data as { runId?: string | null }
     const title = tileKey ? `${mod.renderables[tileKey].title} · ${mod.snapshotTitle(data)}` : mod.snapshotTitle(data)
