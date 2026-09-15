@@ -60,11 +60,21 @@ async function main() {
   const clientId = args.clientId as string
   const admin = createAdminClient()
 
-  const [{ data: client }, { data: cfg }, { data: schedules }] = await Promise.all([
+  const [clientRes, cfgRes, schedulesRes] = await Promise.all([
     admin.from('clients').select('company_name, is_active, approved_at').eq('id', clientId).maybeSingle(),
     admin.from('tracking_configs').select('report_period, report_day').eq('client_id', clientId).maybeSingle(),
     admin.from('report_schedules').select('name, active, recipients, is_default').eq('client_id', clientId).order('is_default', { ascending: false }),
   ])
+  // Checked, all three: what this script prints decides whether a tenant is
+  // armed for $13–20 an update, and a dropped error would read as "no client",
+  // "no configuration" or — the dangerous one — "no schedule", which is the
+  // sentence the operator uses to decide that no email goes out.
+  for (const [what, res] of [['clients', clientRes], ['tracking_configs', cfgRes], ['report_schedules', schedulesRes]] as const) {
+    if (res.error) throw new Error(`${what}: ${res.error.message}`)
+  }
+  const client = clientRes.data
+  const cfg = cfgRes.data
+  const schedules = schedulesRes.data
   if (!client) throw new Error(`no client ${clientId}`)
   if (!cfg) throw new Error(`no tracking_configs row for ${clientId}`)
 
@@ -99,6 +109,20 @@ async function main() {
     console.log(`    ${live.length
       ? `${live.length} schedule(s) would email: ${live.map((s) => `${s.name} (${s.recipients.length})`).join(', ')}`
       : 'no schedule is both active and addressed, so no email goes out'}`)
+    // An armed tenant with no ACTIVE schedule is silent in a way the ops check
+    // reads as a failure: the dispatcher sends `sendReport: true`, the send
+    // path drops an inactive schedule before it writes anything
+    // (lib/schedules/due.ts), and no report_sends row exists — so
+    // cadenceReliability counts the run as owed and unsettled and
+    // assessPipelineHealth raises `report_missed`, "A finished update reached
+    // nobody", every week. An ACTIVE schedule with no recipients is the quiet
+    // state: run.ts marks the send 'skipped' before anything renders, which
+    // SETTLED_SEND_STATUSES accepts — no email, no Chromium, no alert.
+    if (!rows.some((s) => s.active)) {
+      console.log('    ! no schedule is active, so no send is recorded at all and every finished update will raise')
+      console.log('      a `report_missed` ops alert. To arm the runs and stay quiet, set the default schedule')
+      console.log('      active with no recipients: the send is then recorded as skipped, and nothing renders or sends.')
+    }
   }
   if (!client.is_active || !client.approved_at) {
     console.log('    ! the tenant is not active/approved, so the dispatcher skips it whatever the cadence says')
