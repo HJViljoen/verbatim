@@ -112,15 +112,26 @@ export async function embeddingCoverage(admin: Admin, clientId: string): Promise
       .eq('client_id', clientId).not('embedded_at', 'is', null)
       .order('embedded_at', { ascending: false }).limit(1).maybeSingle(),
   ])
+  // Throw rather than count a failed read as zero. PostgREST hands back
+  // `count: null` on every failure, so `count ?? 0` here would reach the
+  // readiness page as "0 of 0" — which compute.ts reads as status `missing`
+  // and prints as "Nothing has been read for this workspace yet, so there is
+  // nothing to search" for a tenant with thousands of live insights. That is
+  // lib/readiness/load.ts's stated rule ("thirteen rows of confident falsehood
+  // with nothing anywhere saying a read failed is worse than a page that does
+  // not load"), and this reader lives one import outside that file.
+  if (all.error) throw all.error
+  if (embedded.error) throw embedded.error
+  // The ONE deliberate swallow: a deploy can land before the migration (they
+  // are applied by hand here), and the readiness page must render the two
+  // counts it CAN read rather than 500 on a column that is not there yet.
+  // Narrow: this column only — any other failure of this read throws too.
+  const columnNotThere = isMissingColumnError(last.error, 'embedded_at')
+  if (last.error && !columnNotThere) throw last.error
   return {
     embedded: embedded.count ?? 0,
     total: all.count ?? 0,
-    // A deploy can land before the migration (they are applied by hand here),
-    // and the readiness page must render the two counts it CAN read rather
-    // than 500 on a column that is not there yet. Narrow: this column only.
-    lastEmbeddedAt: isMissingColumnError(last.error, 'embedded_at')
-      ? null
-      : ((last.data?.embedded_at as string | undefined) ?? null),
+    lastEmbeddedAt: columnNotThere ? null : ((last.data?.embedded_at as string | undefined) ?? null),
   }
 }
 
