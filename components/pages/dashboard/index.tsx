@@ -21,6 +21,8 @@ import { dashboardEmail } from '@/components/email/tiles'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '@/lib/format'
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
+import { movementRows } from '@/lib/dashboard-tiles'
+import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
 import { initiativesOf, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -86,7 +88,11 @@ const strip: R = ({ strip: s }, mode) => {
           <StatSentence
             value={s.tiers.confirmed}
             unit="confirmed"
-            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
+            // "N followed over time" counts theme_registry identities — the
+            // spine of the per-update series and the only part of this cell
+            // that speaks across updates. Gated with the rest (D1); the three
+            // tier counts are this update's own and stay.
+            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{RUN_INDEXED_DIRECTION_WORDS && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
           />
         ) : <TileEmpty>Themes land with the first analysed update.</TileEmpty>}
       </StripCell>
@@ -241,7 +247,10 @@ const themes: R = ({ themes: t }, mode) => {
               color={BUCKET_COLOR[row.bucket]}
               pct={(row.conversations / t.max) * 100}
               count={row.conversations}
-              badge={row.isNew ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
+              // The badge is gated at render as well as at compute (D1): a
+              // snapshot frozen before the gate still carries isNew, and it is
+              // re-rendered forever.
+              badge={row.isNew && RUN_INDEXED_DIRECTION_WORDS ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
               href={app ? `/dashboard/voice?themes=${encodeURIComponent(row.memberThemes.join(','))}` : undefined}
             />
           ))}
@@ -261,7 +270,9 @@ const movement: R = ({ movement: mv, updatesCount }, mode) => (
   >
     {mv ? (
       <div className="flex flex-col gap-3">
-        {mv.rows.map((r) => {
+        {/* movementRows, not mv.rows: the themes-confirmed row is gated (D1)
+            at render too, so a snapshot that froze it does not print it. */}
+        {movementRows(mv).map((r) => {
           const st = MOVE_STYLE[r.key]
           return <Mover key={r.key} label={r.label} series={r.series} value={st.fmt(r.value)} delta={r.delta} unit={st.unit} good={st.good} color={st.color} />
         })}

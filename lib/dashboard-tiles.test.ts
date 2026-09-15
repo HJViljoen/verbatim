@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   themeTiers, topThemes, bucketKind, platformSplit, sentimentSplit, shareBreakdown, pointDelta,
-  movement, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
+  movement, movementRows, accountSeries, topRecommendation, latestPerDay, type HistoryRow,
 } from './dashboard-tiles'
 
 describe('themeTiers', () => {
@@ -23,14 +23,22 @@ describe('topThemes', () => {
   const row = (label: string, rank: number | null, ev: number, str: number, bucket = 'industry-other', first = false) =>
     ({ label, description: null, category: 'praise', bucket, member_themes: [label], evidence_count: ev, strength_score: str, rank_score: rank, first_seen: first })
   it('orders by rank_score, falls back to evidence × strength, maps buckets', () => {
-    const out = topThemes([row('b', 5, 1, 1), row('a', 9, 1, 1, 'client', true), row('c', null, 10, 1, 'competitor:Ottobock')], 2, true)
+    const out = topThemes([row('b', 5, 1, 1), row('a', 9, 1, 1, 'client', true), row('c', null, 10, 1, 'competitor:Ottobock')], 2, true, true)
     expect(out.map((t) => t.label)).toEqual(['c', 'a']) // 10 > 9 > 5
     expect(out[1].bucket).toBe('client')
     expect(out[1].isNew).toBe(true)
     expect(out[0].bucket).toBe('competitor')
   })
   it('hides New badges when there is nothing earlier to compare with', () => {
-    expect(topThemes([row('a', 1, 1, 1, 'client', true)], 3, false)[0].isNew).toBe(false)
+    expect(topThemes([row('a', 1, 1, 1, 'client', true)], 3, false, true)[0].isNew).toBe(false)
+  })
+  // D1: first_seen means "this registry entry was opened by this update", and
+  // the badge's glossary line promises "not present in your previous update".
+  it('hides New badges while the run-indexed direction words are gated off, earlier update or not', () => {
+    expect(topThemes([row('a', 1, 1, 1, 'client', true)], 3, true, false)[0].isNew).toBe(false)
+    expect(topThemes([row('a', 1, 1, 1, 'client', true)], 3, true)[0].isNew).toBe(false) // the shipped default
+    // Everything else about the row is unchanged.
+    expect(topThemes([row('a', 1, 1, 1, 'client', true)], 3, true)[0]).toMatchObject({ label: 'a', bucket: 'client', conversations: 1 })
   })
   it('bucketKind', () => {
     expect(bucketKind('client')).toBe('client')
@@ -123,7 +131,7 @@ describe('movement', () => {
     expect(movement([row('a', '2026-08-09', 3.5, 10.7, 5059, 81)], new Map())).toBeNull()
   })
   it('uses the period layer when every row has it; deltas vs previous update', () => {
-    const m = movement([row('a', '2026-08-02', 3.9, 10.1, 3600, 83), row('b', '2026-08-09', 3.5, 10.7, 5059, 81), row('c', '2026-08-16', 5.8, 16, 6163, 85)], new Map([['a', 88], ['b', 104], ['c', 120]]))
+    const m = movement([row('a', '2026-08-02', 3.9, 10.1, 3600, 83), row('b', '2026-08-09', 3.5, 10.7, 5059, 81), row('c', '2026-08-16', 5.8, 16, 6163, 85)], new Map([['a', 88], ['b', 104], ['c', 120]]), true)
     expect(m?.layer).toBe('period')
     expect(m?.leadCompetitor).toBe('Ottobock')
     const by = Object.fromEntries(m!.rows.map((r) => [r.key, r]))
@@ -136,13 +144,37 @@ describe('movement', () => {
     expect(by.themes.series).toEqual([88, 104, 120])
   })
   it('falls back to cumulative when any row lacks the period layer and drops sentiment when any row lacks the audience family', () => {
-    const m = movement([row('a', '2026-08-02', 3.9, 10.1, 3600, null, false), row('b', '2026-08-09', 3.5, 10.7, 5059, 81)], new Map([['a', 1]]))
+    const m = movement([row('a', '2026-08-02', 3.9, 10.1, 3600, null, false), row('b', '2026-08-09', 3.5, 10.7, 5059, 81)], new Map([['a', 1]]), true)
     expect(m?.layer).toBe('cumulative')
     const keys = m!.rows.map((r) => r.key)
     expect(keys).not.toContain('positive')
     expect(keys).not.toContain('themes') // not every run counted
     expect(m!.rows.find((r) => r.key === 'yourShare')!.series).toEqual([4.9, 4.5])
     expect(m!.rows.find((r) => r.key === 'volume')!.series).toEqual([10800, 15177])
+  })
+  // D1: "Themes confirmed, +12" counts a cumulative corpus at two arbitrary
+  // moments. The other four rows are period figures and stay.
+  it('drops the themes row while the run-indexed direction words are gated off, and keeps the other four', () => {
+    const summaries = [row('a', '2026-08-02', 3.9, 10.1, 3600, 83), row('b', '2026-08-09', 3.5, 10.7, 5059, 81)]
+    const counted = new Map([['a', 88], ['b', 104]])
+    const gated = movement(summaries, counted, false)
+    expect(gated!.rows.map((r) => r.key)).toEqual(['yourShare', 'compShare', 'positive', 'volume'])
+    expect(movement(summaries, counted)!.rows.map((r) => r.key)).not.toContain('themes') // the shipped default
+    expect(movement(summaries, counted, true)!.rows.map((r) => r.key)).toContain('themes')
+  })
+})
+
+describe('movementRows', () => {
+  const mv = (keys: string[]) => ({
+    dates: ['2026-08-02', '2026-08-09'], leadCompetitor: 'Ottobock', layer: 'period' as const,
+    rows: keys.map((key) => ({ key, label: key, series: [1, 2], value: 2, delta: 1 })) as never,
+  })
+  // A snapshot frozen before the gate still carries the row, and "the email as
+  // sent" re-renders from it — so the tiles read their rows through here.
+  it('keeps a frozen themes row off the tile while the direction words are gated off', () => {
+    expect(movementRows(mv(['yourShare', 'positive', 'themes']), false).map((r) => r.key)).toEqual(['yourShare', 'positive'])
+    expect(movementRows(mv(['yourShare', 'themes'])).map((r) => r.key)).toEqual(['yourShare']) // the shipped default
+    expect(movementRows(mv(['yourShare', 'themes']), true).map((r) => r.key)).toEqual(['yourShare', 'themes'])
   })
 })
 
