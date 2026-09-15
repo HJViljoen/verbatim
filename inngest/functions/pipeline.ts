@@ -34,6 +34,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
+import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
 import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
@@ -307,6 +308,14 @@ export const runPipeline = inngest.createFunction(
         stored: windowInput.stored,
       })
       const snapshot = buildConfigSnapshot(tc)
+      // The regime this invocation will cluster under, frozen beside the window
+      // and the flags for the same reason: a month row's run_id says WHICH run
+      // produced it and nothing about whether two runs grouped themes the same
+      // way, and one run id can span a change (Össur 29a56395 → d346b0f7 moved
+      // the Pass A flags with nothing but a JSON blob recording it).
+      const clusteringKey = clusteringKeyOf(currentClusteringRegime({
+        promptVersion: passAPromptVersion(flags.transcripts),
+      }))
       // The bookkeeping migration is applied by hand (a schema change on a live
       // pipeline is not a deploy side effect), so the code CAN reach production
       // first. Every one of these columns is additive, so a write that names
@@ -328,7 +337,7 @@ export const runPipeline = inngest.createFunction(
         // served and the config it gathered under are its facts, not this
         // invocation's (lib/pipeline/run-bookkeeping.ts).
         const bookkeeping = openRunBookkeeping({
-          period, window, snapshot,
+          period, window, snapshot, clusteringKey,
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
@@ -351,7 +360,7 @@ export const runPipeline = inngest.createFunction(
         admin
           .from('pipeline_runs')
           .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...extra })
-      let { error } = await open(openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }))
+      let { error } = await open(openRunBookkeeping({ period, window, snapshot, clusteringKey, scheduledFor: options.scheduledFor }))
       if (error && isMissingBookkeepingColumn(error)) {
         console.warn('[open-run] run bookkeeping columns are not in the database yet; opening without them')
         recorded = false

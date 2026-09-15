@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
-import { selectAll } from '../supabase-admin'
+import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   FREEZE_AFTER_DAYS,
   RPC_DENOMINATORS,
@@ -369,8 +369,11 @@ export function mergeMonthRows<T extends { month: string }>(args: {
   keyOf: (row: T) => string
   now: string
   runId: string | null
+  /** The run's clustering fingerprint, when it recorded one. */
+  clusteringKey?: string | null
 }): MergeResult<T> {
   const { months, fresh, stored, keyOf, now, runId } = args
+  const clustering = args.clusteringKey ? { clustering_key: args.clusteringKey } : {}
   const inWindow = new Set(months.map(monthStartOf))
   const storedByKey = new Map(stored.map((s) => [s.key, s]))
   const freshKeys = new Set<string>()
@@ -388,7 +391,7 @@ export function mergeMonthRows<T extends { month: string }>(args: {
       keptFrozen++
       continue
     }
-    writes.push({ ...row, month, ...freezeFor(month, now, prior), read_at: now, run_id: runId })
+    writes.push({ ...row, month, ...freezeFor(month, now, prior), read_at: now, run_id: runId, ...clustering })
   }
 
   const dropped = stored.filter(
@@ -612,6 +615,30 @@ export interface FreezeSummary {
 }
 
 /**
+ * The clustering fingerprint the run recorded at open, or null.
+ *
+ * Null covers three different things, and a reader may not tell them apart —
+ * which is the point of `sameRegime` refusing to call two nulls equal: the run
+ * predates 2026-09-18, the column is not in this database yet (M2 applied by
+ * hand, so a deploy can reach production first — the same seatbelt open-run
+ * itself carries), or there is no run at all because a seed is writing
+ * denominators alone.
+ */
+export async function runClusteringKey(admin: SupabaseClient, runId: string | null): Promise<string | null> {
+  if (!runId) return null
+  const { data, error } = await admin
+    .from('pipeline_runs').select('clustering_key').eq('id', runId).maybeSingle()
+  if (error) {
+    if (isMissingColumnError(error, 'clustering_key')) {
+      console.warn('[monthly-reading] pipeline_runs.clustering_key does not exist — apply supabase/migrations/20260918091000_theme_key.sql. Months are written without it; a reader reads that as "regime unknown".')
+      return null
+    }
+    throw new Error(`read clustering key: ${(error as { message?: string }).message ?? String(error)}`)
+  }
+  return (data as { clustering_key?: string | null } | null)?.clustering_key ?? null
+}
+
+/**
  * Read the given months and write them down.
  *
  * `runId` is the run whose clustering the theme numbers come from; pass null to
@@ -627,9 +654,17 @@ export async function freezeMonths(
     months: readonly string[]
     now?: string
     dryRun?: boolean
+    /** The run's clustering fingerprint. Read off the run row when not given,
+     *  which is what every caller wants — the row is the record of what the
+     *  clustering was, and a caller that recomputed it would be recomputing it
+     *  at a different moment from the one that produced the themes. */
+    clusteringKey?: string | null
   },
 ): Promise<FreezeSummary> {
   const now = opts.now ?? new Date().toISOString()
+  const clusteringKey = opts.clusteringKey !== undefined
+    ? opts.clusteringKey
+    : await runClusteringKey(admin, opts.runId)
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
   const empty: FreezeSummary = {
     months,
@@ -644,6 +679,7 @@ export async function freezeMonths(
   const storedDenoms = await storedDenominators(admin, opts.clientId, months)
   const denomMerge = mergeMonthRows({
     months, fresh: freshDenoms, stored: storedDenoms, keyOf: denominatorKey, now, runId: opts.runId,
+    clusteringKey,
   })
   const denomRows: DenominatorRow[] = denomMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))
 
@@ -657,6 +693,7 @@ export async function freezeMonths(
     const storedThemes = await storedThemeReadings(admin, opts.clientId, months)
     themeMerge = mergeMonthRows({
       months, fresh: freshThemes, stored: storedThemes, keyOf: themeReadingKey, now, runId: opts.runId,
+      clusteringKey,
     })
   }
   const themeRows: ThemeReadingRow[] = themeMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))

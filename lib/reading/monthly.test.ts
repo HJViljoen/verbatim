@@ -209,6 +209,28 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect(result.stale).toEqual([])
   })
 
+  it('stamps the run clustering key on every row it writes', () => {
+    const fresh = [reading('2026-10-01', 'industry-other', 't1', 4)]
+    const key = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
+    const result = mergeMonthRows({
+      months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN, clusteringKey: key,
+    })
+    expect(result.writes[0]).toMatchObject({ run_id: RUN, clustering_key: key })
+  })
+
+  it('OMITS the column when the run recorded no key, rather than writing null', () => {
+    // M2 is applied by hand, so a deploy can reach production before the column
+    // does. An omitted key is an omitted column, which lands on a database
+    // either way; `clustering_key: null` would be 42703 until the migration ran.
+    const fresh = [reading('2026-10-01', 'industry-other', 't1', 4)]
+    const result = mergeMonthRows({
+      months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN, clusteringKey: null,
+    })
+    expect('clustering_key' in result.writes[0]).toBe(false)
+    const unset = mergeMonthRows({ months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN })
+    expect('clustering_key' in unset.writes[0]).toBe(false)
+  })
+
   it('rewrites a filling row and freezes it when its line has passed', () => {
     const fresh = [reading('2026-08-01', 'industry-other', 't1', 97), reading('2026-10-01', 'industry-other', 't1', 4)]
     const result = mergeMonthRows({

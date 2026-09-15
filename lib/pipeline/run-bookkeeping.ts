@@ -122,7 +122,11 @@ export function previousRunEnd(
   return best
 }
 
-/** The columns 20260915090000_run_bookkeeping.sql adds to `pipeline_runs`. */
+/** The columns a run writes about itself at open whose migration is applied by
+ *  hand: 20260915090000_run_bookkeeping.sql's seven, plus `clustering_key`
+ *  (20260918091000_theme_key.sql). They share this list because they share the
+ *  fate — one write, one 42703 if the migration has not landed, and the same
+ *  answer without them that every earlier run had. */
 export const BOOKKEEPING_COLUMNS = [
   'scheduled_for',
   'window_start',
@@ -131,6 +135,7 @@ export const BOOKKEEPING_COLUMNS = [
   'period',
   'stalled',
   'config_snapshot',
+  'clustering_key',
 ] as const
 
 /**
@@ -159,6 +164,11 @@ export interface OpenRunBookkeepingInput {
   scheduledFor?: string | null
   /** The config slice read at open — `buildConfigSnapshot`'s output. */
   snapshot: Record<string, unknown>
+  /** The clustering regime this invocation will theme under
+   *  (lib/pipeline/clustering.ts clusteringKey). Written on a resume too: the
+   *  resume re-runs the analysis half, so the themes it persists are this
+   *  invocation's clustering, not the original one's. */
+  clusteringKey: string
   /** Present when this is an analysis-only resume of a row that already exists. */
   resume?: { hasConfigSnapshot: boolean } | null
 }
@@ -188,6 +198,7 @@ export function openRunBookkeeping(input: OpenRunBookkeepingInput): Record<strin
     window_start: input.window.start,
     window_end: input.window.end,
     window_basis: input.window.basis,
+    clustering_key: input.clusteringKey,
   }
   if (!input.resume) {
     return { ...window, scheduled_for: input.scheduledFor ?? null, config_snapshot: input.snapshot }

@@ -157,21 +157,34 @@ describe('openRunBookkeeping — what a resume may and may not rewrite', () => {
     basis: 'anchored',
   }
   const snapshot = { brand_keywords: ['össur'] }
+  const clusteringKey = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
 
   it('writes the whole set on a fresh run, with the slot explicitly null when manual', () => {
-    expect(openRunBookkeeping({ period: 'weekly', window, snapshot })).toEqual({
+    expect(openRunBookkeeping({ period: 'weekly', window, snapshot, clusteringKey })).toEqual({
       period: 'weekly',
       window_start: window.start,
       window_end: window.end,
       window_basis: 'anchored',
+      clustering_key: clusteringKey,
       scheduled_for: null,
       config_snapshot: snapshot,
     })
   })
 
+  it('writes the clustering regime on a resume too — the resume does the clustering', () => {
+    // A resumed run keeps its id, its slot and its gathered configuration, but
+    // it re-runs Step A2 and persist-themes under TODAY's constants. The themes
+    // it writes came from this invocation's clustering, and the month rows
+    // frozen from them have to say so.
+    const w = openRunBookkeeping({
+      period: 'weekly', window, snapshot, clusteringKey, resume: { hasConfigSnapshot: true },
+    })
+    expect(w.clustering_key).toBe(clusteringKey)
+  })
+
   it('records the dispatcher slot a scheduled run served', () => {
     const w = openRunBookkeeping({
-      period: 'weekly', window, snapshot, scheduledFor: '2026-09-20T04:00:00.000Z',
+      period: 'weekly', window, snapshot, clusteringKey, scheduledFor: '2026-09-20T04:00:00.000Z',
     })
     expect(w.scheduled_for).toBe('2026-09-20T04:00:00.000Z')
   })
@@ -182,7 +195,7 @@ describe('openRunBookkeeping — what a resume may and may not rewrite', () => {
     // which names no slot. Writing null there would read as "nobody started
     // Sunday's run" for a slot that was served.
     const w = openRunBookkeeping({
-      period: 'weekly', window: { ...window, basis: 'resume' }, snapshot,
+      period: 'weekly', window: { ...window, basis: 'resume' }, snapshot, clusteringKey,
       resume: { hasConfigSnapshot: true },
     })
     expect('scheduled_for' in w).toBe(false)
@@ -193,7 +206,7 @@ describe('openRunBookkeeping — what a resume may and may not rewrite', () => {
     // The snapshot's whole purpose is explaining the configuration the run
     // GATHERED under; today's config is a different fact.
     const w = openRunBookkeeping({
-      period: 'weekly', window, snapshot, resume: { hasConfigSnapshot: true },
+      period: 'weekly', window, snapshot, clusteringKey, resume: { hasConfigSnapshot: true },
     })
     expect('config_snapshot' in w).toBe(false)
   })
@@ -202,14 +215,14 @@ describe('openRunBookkeeping — what a resume may and may not rewrite', () => {
     // A run opened before the columns existed. The resume's analysis half does
     // read today's config, so recording it beats recording nothing.
     const w = openRunBookkeeping({
-      period: 'weekly', window, snapshot, resume: { hasConfigSnapshot: false },
+      period: 'weekly', window, snapshot, clusteringKey, resume: { hasConfigSnapshot: false },
     })
     expect(w.config_snapshot).toBe(snapshot)
   })
 
   it('writes a slot on a resume that genuinely has one', () => {
     const w = openRunBookkeeping({
-      period: 'weekly', window, snapshot, scheduledFor: '2026-09-27T04:00:00.000Z',
+      period: 'weekly', window, snapshot, clusteringKey, scheduledFor: '2026-09-27T04:00:00.000Z',
       resume: { hasConfigSnapshot: true },
     })
     expect(w.scheduled_for).toBe('2026-09-27T04:00:00.000Z')

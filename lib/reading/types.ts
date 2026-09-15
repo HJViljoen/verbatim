@@ -95,6 +95,13 @@ export interface FreezeColumns {
   /** The run whose clustering produced it; null for a seed with no run. */
   run_id: string | null
   frozen_at: string | null
+  /** That run's clustering fingerprint (`pipeline_runs.clustering_key`,
+   *  lib/pipeline/clustering.ts). OMITTED — not null — when the run carries
+   *  none, so a write still lands on a database where M2 has not been applied:
+   *  an absent key is an absent column, and PostgREST rejects a bulk insert
+   *  whose objects have differing keys, which is safe here because every row of
+   *  one visit carries one run's answer. */
+  clustering_key?: string
 }
 
 /** A `month_denominators` row, ready to upsert. */
