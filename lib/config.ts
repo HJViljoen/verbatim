@@ -346,9 +346,13 @@ export const TRANSLATE_QUOTES_PARALLEL = 2
  *  transcript_lang is 34–58% precise per comment), so the first run after this
  *  ships faces the whole ever-cited backlog: ~7,000 comments a tenant.
  *
- *  3,000 caps that at roughly $1.20 a run and lets the rest come on the next
- *  one. At $0.40/$1.60 per 1M on gpt-4.1-mini and the measured token shape,
- *  steady state after the cache fills is ~$0.05–0.15 per tenant per update. */
+ *  Measured read-only 2026-09-15: the current analysis cites 7,019 (Össur) /
+ *  7,543 (Sealand) comments, carrying 8,574 / 9,342 distinct displayable texts
+ *  (an excerpt and its whole comment are two texts, and about a quarter of
+ *  cited comments are quoted in part). 3,000 caps a run at roughly $0.25–0.55
+ *  and clears a tenant's backlog over three runs, or in one invocation of
+ *  scripts/translate-quotes.ts. Steady state after the cache fills is
+ *  ~$0.015–0.05 per tenant per update. */
 export const TRANSLATE_QUOTES_CAP = 3000
 
 // --- On-screen text from the cover frame (WP7b, 2026-09-12) ------------------

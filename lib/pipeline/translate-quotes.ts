@@ -37,17 +37,33 @@ import {
 // a snapshot — it resolves at render from this cache exactly as the original
 // resolves from insight_evidence.
 //
-// WHAT IT COSTS. gpt-4.1-mini at $0.40/$1.60 per 1M, 25 comments a call,
-// measured source at 87–94 chars (25.7–28.8 tokens) per comment and a ~550-token
-// system block:
+// WHAT IT COSTS. gpt-4.1-mini at $0.40/$1.60 per 1M, 25 texts a call. Measured
+// read-only against production 2026-09-15, over every comment the CURRENT
+// analysis cites and every distinct displayable text of it:
 //
-//   | tenant  | population                              | comments | calls | cost   |
-//   |---------|-----------------------------------------|----------|-------|--------|
-//   | Össur   | first run — every ever-cited comment     |    7,019 |   281 | $0.35  |
-//   | Sealand | first run — every ever-cited comment     |    7,543 |   302 | $0.38  |
-//   | Össur   | steady state — newly cited, uncached     |    ~140  |     6 | $0.007 |
-//   | Sealand | steady state — newly cited, uncached     |    ~220  |     9 | $0.011 |
-//   | both    | backfill script over ever-cited comments |   14,562 |   583 | $0.73  |
+//   | tenant  | cited comments | distinct texts | texts/comment | avg chars | calls |
+//   |---------|----------------|----------------|---------------|-----------|-------|
+//   | Össur   |          7,019 |          8,574 |          1.22 |        93 |   343 |
+//   | Sealand |          7,543 |          9,342 |          1.24 |       103 |   374 |
+//
+// The 1.22–1.24 is the excerpt-versus-whole-comment split measured, not
+// assumed: about a quarter of cited comments are quoted in part, so they carry
+// two texts and two rows.
+//
+//   | population                          | cost (Latin bound – CJK bound) |
+//   |-------------------------------------|--------------------------------|
+//   | Össur,   first run over the backlog  |               $0.68 – $1.50    |
+//   | Sealand, first run over the backlog  |               $0.80 – $1.75    |
+//   | Össur,   steady state (~172 texts)   |               $0.014 – $0.030  |
+//   | Sealand, steady state (~276 texts)   |               $0.024 – $0.052  |
+//   | backfill script, both tenants        |               $1.48 – $3.25    |
+//
+// A RANGE, not a number, and for the reason scripts/translate-transcripts.ts
+// gives: the tokenizer costs Latin text about 4 characters a token and CJK,
+// Indic and Arabic closer to 1.5, and the non-English half of this population
+// is disproportionately the second kind. Billing is the truth; these are
+// bounds. At TRANSLATE_QUOTES_CAP the first tenant's backlog clears over three
+// runs, or in one invocation of the backfill script.
 //
 // The first-run figures are the honest worst case and the reason
 // TRANSLATE_QUOTES_CAP exists: everything cited and not in the cache goes to
@@ -60,11 +76,12 @@ import {
 // `english: null`, which is a RESULT that gets cached like any other, so it is
 // paid for exactly once.
 //
-// The steady-state rows above are lower bounds: they count comments a run's own
-// gather first inserted (141 Össur / 223 Sealand on the last run). The true
-// figure is between those and the 627/684 confidently-non-English comments the
-// run cites, and the cache makes it fall towards the lower bound over the first
-// few weeks. Nothing here is material against a $5–17 run and a $60 budget.
+// The steady-state rows are lower bounds: they count the comments a run's own
+// gather first inserted (141 Össur / 223 Sealand on the last run), scaled by
+// the measured texts-per-comment. The true figure sits between those and the
+// 627/684 confidently-non-English comments the run cites, and the cache makes
+// it fall towards the lower bound over the first few weeks. Nothing here is
+// material against a $5–17 run and a $60 budget.
 
 /** A text to translate, and the cache row it will become. `commentId` is what
  *  the row cascades from; `hash` is what makes it findable at render. */
