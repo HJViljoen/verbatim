@@ -88,6 +88,14 @@ export interface MatchResult {
   themeId: string | null
   kind: MatchKind
   score: number
+  /** WHICH reading claimed the identity, stored beside the kind
+   *  (`theme_observations.match_arm`). Absent on a `new` theme, which claimed
+   *  nothing. Without it `match_kind = 'exact'` means either "identical insight
+   *  sets" — all it could ever mean before 2026-09-18 — or "identical video
+   *  sets with entirely different insights", and no stored column tells the two
+   *  apart. The re-read break marker reads match_kind; it must be able to see
+   *  that the meaning changed at the cutover. */
+  arm?: MatchArm
   /** Diagnostics only (no genealogy UI in v1): other entries that overlapped. */
   mergedFrom?: string[]
   splitFrom?: string
@@ -342,6 +350,7 @@ export function matchThemes(
       themeId: c.entryId,
       kind: dormantById.get(c.entryId) ? ('revived' as MatchKind) : c.kind,
       score: c.score,
+      arm: c.arm,
       ...(others.length ? { mergedFrom: others } : {}),
     }
   })

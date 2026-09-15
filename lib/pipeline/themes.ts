@@ -4,7 +4,7 @@ import { THEME_MATCH_THRESHOLD, REGISTRY_DORMANT_RUNS, themeRegistryEnabled, tra
 import { audienceFold } from '../rivals'
 import { embedTexts, cosine } from './cluster'
 import { passAPromptVersion } from './pass-a'
-import { matchThemes, dormantIds, matchTally, themedRunWindow, type MatchKind, type RegistryEntry } from './theme-registry'
+import { matchThemes, dormantIds, matchTally, themedRunWindow, type MatchArm, type MatchKind, type RegistryEntry } from './theme-registry'
 import type { AggregatedTheme } from './types'
 
 // Theme persistence + mini theme-matching (Redesign Spec 2026-07-03 §8).
@@ -172,12 +172,15 @@ export function rereadShare(videoIds: readonly string[], reRead: ReadonlySet<str
  * entry's own `first_seen_run_id`; only the observation lied.
  */
 export function firstMatch(
-  prior: { match_kind: MatchKind; match_score: number | null } | undefined,
-  fresh: { kind: MatchKind; score: number },
-): { match_kind: MatchKind; match_score: number | null } {
+  prior: { match_kind: MatchKind; match_score: number | null; match_arm?: MatchArm | null } | undefined,
+  fresh: { kind: MatchKind; score: number; arm?: MatchArm },
+): { match_kind: MatchKind; match_score: number | null; match_arm: MatchArm | null } {
+  // The arm travels with the kind, not beside it: they are one answer, and a
+  // row carrying the first attempt's kind with the replay's arm would be worse
+  // than either alone.
   return prior
-    ? { match_kind: prior.match_kind, match_score: prior.match_score }
-    : { match_kind: fresh.kind, match_score: fresh.score }
+    ? { match_kind: prior.match_kind, match_score: prior.match_score, match_arm: prior.match_arm ?? null }
+    : { match_kind: fresh.kind, match_score: fresh.score, match_arm: fresh.arm ?? null }
 }
 
 export async function persistThemes(
@@ -232,6 +235,7 @@ export async function persistThemes(
   const registryIds: (string | null)[] = themes.map(() => null)
   const registryKinds: MatchKind[] = themes.map(() => 'new')
   const registryScores: number[] = themes.map(() => 0)
+  const registryArms: (MatchArm | undefined)[] = themes.map(() => undefined)
   const registryFirstSeen: boolean[] = themes.map(() => false)
   let registrySummary: PersistThemesResult['registry']
   // Seeding = the client has no registry yet. Every theme is trivially "new",
@@ -279,10 +283,19 @@ export async function persistThemes(
     // run must not be counted twice or re-interpreted: entries created by the
     // first attempt now hold this run's membership, so they would match `exact`
     // and silently turn "new" into "unchanged".
-    const priorObs = await selectAll<{ theme_id: string; match_kind: MatchKind; match_score: number | null }>(() =>
-      admin.from('theme_observations').select('theme_id, match_kind, match_score').eq('client_id', clientId).eq('run_id', runId)
-        .order('theme_id', { ascending: true }),
-    )
+    // `match_arm` is one of M2's columns, so the select is spelled out twice for
+    // the same reason the registry's is — naming it before the migration lands
+    // raises 42703 and the catch below would read that as a registry failure.
+    type PriorObs = { theme_id: string; match_kind: MatchKind; match_score: number | null; match_arm?: MatchArm | null }
+    const priorObs = videoKey
+      ? await selectAll<PriorObs>(() =>
+        admin.from('theme_observations').select('theme_id, match_kind, match_score, match_arm')
+          .eq('client_id', clientId).eq('run_id', runId).order('theme_id', { ascending: true }),
+      )
+      : await selectAll<PriorObs>(() =>
+        admin.from('theme_observations').select('theme_id, match_kind, match_score')
+          .eq('client_id', clientId).eq('run_id', runId).order('theme_id', { ascending: true }),
+      )
     const alreadyObserved = new Map(priorObs.map((o) => [o.theme_id, o]))
 
     // What this run re-analysed, which is the numerator of every observation's
@@ -366,6 +379,7 @@ export async function persistThemes(
       }
       registryKinds[i] = r.kind
       registryScores[i] = r.score
+      registryArms[i] = r.arm
     }
     // One round trip per 200 matched entries instead of ~540 sequential updates.
     for (const part of chunk(updates, 200)) {
@@ -379,7 +393,7 @@ export async function persistThemes(
         // A replayed step may not rewrite how this theme was first matched —
         // see firstMatch, and the two production runs it names.
         const prior = registryIds[i] ? alreadyObserved.get(registryIds[i] as string) : undefined
-        const match = firstMatch(prior, { kind: registryKinds[i], score: registryScores[i] })
+        const match = firstMatch(prior, { kind: registryKinds[i], score: registryScores[i], arm: registryArms[i] })
         return {
           theme_id: registryIds[i],
           client_id: clientId,
@@ -398,8 +412,14 @@ export async function persistThemes(
             member_video_ids: t.supportingVideoIds,
             prompt_version: promptVersion,
             reread_share: rereadShare(t.supportingVideoIds, reRead),
+            // Which reading claimed the identity. Stored beside the kind
+            // because after the cutover `exact` means either "the same insight
+            // rows" or "the same videos, different insight rows", and the
+            // re-read break marker reads match_kind.
+            match_arm: match.match_arm,
           } : {}),
-          ...match,
+          match_kind: match.match_kind,
+          match_score: match.match_score,
           merged_from: results.find((r) => Number(r.key) === i)?.mergedFrom ?? [],
           split_from: results.find((r) => Number(r.key) === i)?.splitFrom ?? null,
           run_date: nowIso.slice(0, 10),

@@ -67,17 +67,26 @@ describe('rereadShare — how much of this theme the run re-analysed', () => {
 
 describe('firstMatch — a retried step may not rewrite how a theme was matched', () => {
   it('keeps the stored kind and score when this run already observed the theme', () => {
-    expect(firstMatch({ match_kind: 'new', match_score: 0 }, { kind: 'exact', score: 1 }))
-      .toEqual({ match_kind: 'new', match_score: 0 })
+    expect(firstMatch({ match_kind: 'new', match_score: 0, match_arm: null }, { kind: 'exact', score: 1, arm: 'video' }))
+      .toEqual({ match_kind: 'new', match_score: 0, match_arm: null })
   })
 
   it('takes this attempt match when there is no stored one', () => {
-    expect(firstMatch(undefined, { kind: 'strong', score: 0.75 }))
-      .toEqual({ match_kind: 'strong', match_score: 0.75 })
+    expect(firstMatch(undefined, { kind: 'strong', score: 0.75, arm: 'insight' }))
+      .toEqual({ match_kind: 'strong', match_score: 0.75, match_arm: 'insight' })
   })
 
   it('keeps a stored null score rather than replacing it with a fresh number', () => {
     expect(firstMatch({ match_kind: 'revived', match_score: null }, { kind: 'exact', score: 1 }))
-      .toEqual({ match_kind: 'revived', match_score: null })
+      .toEqual({ match_kind: 'revived', match_score: null, match_arm: null })
+  })
+
+  it('carries the arm with the kind, not one attempt kind and another arm', () => {
+    // After the cutover `exact` means either "the same insight rows" or "the
+    // same videos, different insight rows", so the arm is half the answer.
+    expect(firstMatch({ match_kind: 'exact', match_score: 1, match_arm: 'insight' }, { kind: 'exact', score: 1, arm: 'video' }))
+      .toEqual({ match_kind: 'exact', match_score: 1, match_arm: 'insight' })
+    // A theme that claimed nothing has no arm to record.
+    expect(firstMatch(undefined, { kind: 'new', score: 0 }).match_arm).toBeNull()
   })
 })

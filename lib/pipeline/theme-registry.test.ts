@@ -66,7 +66,7 @@ describe('matchThemes', () => {
   it('keeps identity when only the LABEL changed — the 48-false-new case', () => {
     const reg = [entry('r1', ['i1', 'i2', 'i3'], { canonical_label: 'Is the lodge easy to reach' })]
     const [m] = matchThemes([theme('t1', ['i1', 'i2', 'i3'], { label: 'Access road and trail questions' })], reg)
-    expect(m).toEqual({ key: 't1', themeId: 'r1', kind: 'exact', score: 1 })
+    expect(m).toEqual({ key: 't1', themeId: 'r1', kind: 'exact', score: 1, arm: 'insight' })
   })
 
   it('opens a new entry when nothing overlaps', () => {
@@ -288,6 +288,27 @@ describe('matchThemes — the video arm', () => {
     const small = res.find((r) => r.key === 'small')!
     expect(small.themeId).toBeNull()
     expect(small.splitFrom).toBe('r1')
+  })
+
+  it('reports which arm claimed the identity, so the record can say', () => {
+    // `exact` alone is ambiguous after the cutover: it means "identical insight
+    // sets" or "identical video sets with entirely different insight rows".
+    const reg = [
+      withVideos(entry('rv', ['old1', 'old2'], { bucket: 'client' }), ['v1', 'v2']),
+      entry('ri', ['i1', 'i2'], { bucket: 'industry-other' }),
+    ]
+    const res = matchThemes([
+      theme('onVideos', ['new1', 'new2'], { bucket: 'client', memberVideoIds: ['v1', 'v2'] }),
+      theme('onInsights', ['i1', 'i2'], { bucket: 'industry-other' }),
+      theme('unclaimed', ['z1'], { bucket: 'client', memberVideoIds: ['z9'] }),
+    ], reg)
+    const by = (k: string) => res.find((r) => r.key === k)!
+    expect(by('onVideos').kind).toBe('exact')
+    expect(by('onVideos').arm).toBe('video')
+    expect(by('onInsights').kind).toBe('exact')
+    expect(by('onInsights').arm).toBe('insight')
+    expect(by('unclaimed').themeId).toBeNull()
+    expect(by('unclaimed').arm).toBeUndefined()
   })
 
   it('does not call a shared video a split — lineage needs the weak band', () => {

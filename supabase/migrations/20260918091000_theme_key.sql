@@ -30,6 +30,11 @@
 --     the lapsed and dormant entries a stable key exists to revive. Changing
 --     the matcher before the column is filled would read as the corpus-wide
 --     identity reset item 3 exists to prevent.
+--   * `theme_observations.match_arm` — which reading claimed the identity
+--     (video · insight · title). match_kind's meaning changes at the cutover:
+--     `exact` used to mean "identical insight sets" and now means that OR
+--     "identical video sets with entirely different insight rows". The re-read
+--     break marker reads match_kind, so the row has to carry which one it was.
 --   * `theme_observations.prompt_version` / `.reread_share` — what regime
 --     produced this reading and how much of its membership was re-analysed by
 --     the run that wrote it. Neither is derivable afterwards:
@@ -82,6 +87,7 @@ comment on column public.theme_observations.member_video_ids is
   'The distinct source videos behind this observation, as stored at persist time. Durable where member_insight_ids is not: 20.2% of one-run-old member references already point at pruned rows.';
 
 -- 2. What regime produced the reading ------------------------------------------
+alter table public.theme_observations add column if not exists match_arm text;
 alter table public.theme_observations add column if not exists prompt_version text;
 alter table public.theme_observations add column if not exists reread_share numeric;
 
@@ -89,6 +95,8 @@ alter table public.theme_observations drop constraint if exists theme_observatio
 alter table public.theme_observations add constraint theme_observations_reread_share_check
   check (reread_share is null or (reread_share >= 0 and reread_share <= 1));
 
+comment on column public.theme_observations.match_arm is
+  'Which reading of the membership claimed this identity: video (the durable set, primary above the evidence floor), insight (the row-id set, the second arm and all there is below the floor), title (an exact normalised label across two spellings of one rival), or NULL for a new theme, a row written before 2026-09-18, or a run whose first attempt predates this column. Stored because match_kind''s meaning CHANGED at the cutover: ''exact'' used to mean one thing — identical insight sets — and now means either that or identical video sets with entirely different insight rows. The re-read break marker reads match_kind, so it has to be able to tell them apart. Written by the FIRST attempt of persist-themes only (lib/pipeline/themes.ts firstMatch), like match_kind and match_score.';
 comment on column public.theme_observations.prompt_version is
   'The Pass A prompt version the RUN that wrote this observation was booking against (lib/pipeline/pass-a.ts passAPromptVersion — v4 with transcripts, v3 without). NULL on every row written before 2026-09-18; not reconstructable from videos.analyzed_prompt_version, which is overwritten in place, though ai_call_log dates each regime if anyone ever needs the history.';
 comment on column public.theme_observations.reread_share is
