@@ -142,6 +142,16 @@ update public.theme_registry tr
 -- 757/757 on Össur's d346b0f7 and 1,053/1,053 on Sealand's 5a2ebc43, because
 -- aggregate() builds both arrays from one cluster — so this is a lift, not a
 -- re-derivation. A run whose themes rows were deleted by a retry keeps '{}'.
+--
+-- Coverage, measured on production 2026-09-15: 4,989 of 5,109 observations take
+-- a set; 120 keep '{}' — 69 from Sealand's cb0d97b2 (09-10) and 51 from its
+-- 5a2ebc43 (09-15), both retried runs, none on Össur. That is the same debris
+-- as the 67 registry entries above and the same cause: the retry's
+-- delete-then-insert took the first attempt's themes rows while the
+-- observations upsert kept the observation. A later reader of
+-- theme_observations.member_video_ids needs to know those 120 are empty by
+-- construction and not by a bug, and that the number grows with every retried
+-- run of that size.
 update public.theme_observations o
    set member_video_ids = src.supporting_video_ids
   from (
