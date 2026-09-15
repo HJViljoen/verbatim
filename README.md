@@ -341,14 +341,14 @@ All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 | `run-a2.ts` | Step A2 inspector (`--debug` prints similarity matrices) |
 | `run-cd.ts` | Back half locally: metrics → A2 → Pass B/C/D → run_summary (A2 reads the corpus's *current* insights via `audience_insights_current`; `--run` is the run the output is written under) |
 | `run-recs.ts` | Regenerate one run's recommendations only |
-| `run-relevance.ts` | Relevance gate dry-run over stored videos (no spend) |
+| `run-relevance.ts` | Relevance gate dry-run over stored videos — no Apify spend and no writes without `--prune`, but `--method` defaults to `gpt` and that call is real OpenAI money; `--method heuristic` is the free one |
 | `run-tagging.ts` | Entity-tagging strategy comparison; `--write` re-stamps the stored corpus after `competitor_names` changes |
 | `run-owned-events.ts` | Owned-account event detection |
 | `diagnose-owned.ts` | Replays the owned-posts step outside Inngest — prints the in-window census per platform with dates; read-only unless `--commit` |
 | `sealand-config-2026-09.ts` | Sealand's tracking config for the census pass (keywords, subreddits, competitor handles); dry by default, `--apply` writes |
 | `send-report.ts` | A schedule's digest: preview / test send / real send |
 | `seed-demo.ts` | Idempotent demo-tenant seeder (careful: doesn't recreate account_events/weekly_reports; after a re-seed, re-run the backfill block of `supabase/migrations/20260818090000_incremental_pass_a.sql` so the demo videos' `analyzed_run_id` points at W6 — the `*_current` views are empty until it does) |
-| `regate-corpus.ts` | Re-apply the relevance gate post-hoc (`--apply` deletes) |
+| `regate-corpus.ts` | Re-apply the relevance gate post-hoc (`--apply` deletes). **The dry run is not free**: the gate's batched GPT call produces the would-drop list, so it runs before the `--apply` gate and a dry run spends the same OpenAI money an apply does |
 | `backfill-transcripts.ts` | Transcript backfill for stored corpus |
 | `ab-pass-a.ts` | Pass A transcript A/B harness (runs with `trackAnalysis: false` — arms write rows under throwaway runs without moving the corpus pointer) |
 | `citation-floor.ts` | Citation-relevance floor calibrator (read-only). Aimed at an OLD run it now under-reports: that run's insights are pruned once a newer run supersedes them (incremental Pass A) |

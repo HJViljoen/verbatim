@@ -14,7 +14,12 @@ import type { GatherConfig } from '../lib/gather/types'
 // Aggregates (themes, market_insights, run_summary) are left alone — the
 // analysis-only re-run regenerates them from the cleaned corpus.
 //
-// Dry-run by default: prints the would-drop list. The client's OWN videos
+// Dry-run by default: prints the would-drop list. DRY DOES NOT MEAN FREE —
+// the gate's batched GPT call (lib/gather/relevance.ts, 60 videos a batch)
+// happens BEFORE the --apply gate, because the would-drop list is its output.
+// So a dry run spends the same OpenAI money an apply does, and the `gpt cost
+// $x` it prints is what this run just cost, not what a later --apply would.
+// Iterate on scripts/run-relevance.ts --method heuristic instead. The client's OWN videos
 // (is_client) are reported but NEVER deleted — attribution already confirmed
 // them as the company's; a gate drop there is a flag for human eyes, not a
 // delete. Run with env loaded:
