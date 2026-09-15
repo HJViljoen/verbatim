@@ -9,6 +9,7 @@ import {
   type RunWindow,
 } from './window'
 import { periodWindowDays, MAX_ANCHOR_DAYS } from '../config'
+import { RUN_STALE_AFTER_HOURS } from './run-guard'
 
 // The window rule, locked against the production history it was written for.
 // Dates below are the real Össur/Sealand runs from 2026-08/09 (research
@@ -216,5 +217,52 @@ describe('isStalled', () => {
     expect(
       isStalled({ startedAt: '2026-07-03T10:31:23.000Z', completedAt: '2026-07-21T12:03:22.000Z' }),
     ).toBe(false)
+  })
+
+  it('does not call a same-day rerun stalled for outrunning a minutes-wide window', () => {
+    // The floor. 29a56395 reran 13 minutes after the window it anchored on
+    // closed: the span alone says "longer than the period it covered", which is
+    // arithmetic rather than a fact about the run.
+    expect(
+      isStalled({
+        startedAt: '2026-09-06T12:28:50.672Z',
+        completedAt: '2026-09-06T12:41:40.114Z',
+        window: { start: '2026-09-06T12:20:00.000Z', end: '2026-09-06T12:28:50.672Z', basis: 'anchored' },
+      }),
+    ).toBe(false)
+    // Sealand 5a2ebc43: 3.1 hours on a window three hours wide — still under
+    // the floor, still not a stall.
+    expect(
+      isStalled({
+        startedAt: '2026-09-13T10:03:04.451Z',
+        completedAt: '2026-09-13T13:07:52.340Z',
+        window: { start: '2026-09-13T07:00:00.000Z', end: '2026-09-13T10:03:04.451Z', basis: 'anchored' },
+      }),
+    ).toBe(false)
+  })
+
+  it('is the floor, not the span, that decides under six hours', () => {
+    const window: RunWindow = { start: '2026-09-06T12:20:00.000Z', end: '2026-09-06T12:28:50.672Z', basis: 'anchored' }
+    const ran = (hours: number) =>
+      isStalled({
+        startedAt: '2026-09-06T12:28:50.672Z',
+        completedAt: new Date(Date.parse('2026-09-06T12:28:50.672Z') + hours * 3600_000).toISOString(),
+        window,
+      })
+    expect(ran(RUN_STALE_AFTER_HOURS - 0.01)).toBe(false)
+    expect(ran(RUN_STALE_AFTER_HOURS + 0.01)).toBe(true)
+  })
+
+  it('still measures against the window once the window is wider than the floor', () => {
+    // Sealand 6077c21d: 25 hours against a 7-day window is not a stall; the
+    // same 25 hours against a 12-hour window is.
+    const startedAt = '2026-08-08T16:24:00.000Z'
+    const completedAt = '2026-08-09T17:22:00.000Z'
+    expect(
+      isStalled({ startedAt, completedAt, window: { start: '2026-08-01T16:24:00.000Z', end: startedAt, basis: 'anchored' } }),
+    ).toBe(false)
+    expect(
+      isStalled({ startedAt, completedAt, window: { start: '2026-08-08T04:24:00.000Z', end: startedAt, basis: 'anchored' } }),
+    ).toBe(true)
   })
 })

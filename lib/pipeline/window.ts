@@ -1,4 +1,5 @@
 import { MAX_ANCHOR_DAYS, periodWindowDays } from '../config'
+import { RUN_STALE_AFTER_HOURS } from './run-guard'
 
 // A run's window — decided ONCE, at open-run, and carried from there.
 //
@@ -152,13 +153,19 @@ export function redditTimeFor(w?: RunWindow | null): 'week' | 'month' | null {
 }
 
 /**
- * Did the run take longer than the window it covered? Recorded at close-run on
- * `pipeline_runs.stalled`; nothing alerts on it yet.
+ * Did the run take longer than it had any business taking? Recorded at
+ * close-run on `pipeline_runs.stalled`; nothing alerts on it yet.
  *
- * Note what this does NOT mean: a same-day rerun anchors on a window minutes
- * wide, so any rerun of ordinary length is `stalled` by this rule. That is the
- * rule stated honestly — the run did take longer than the period it covered —
- * and it is why the column is a fact rather than a finding.
+ * Two bounds, whichever is wider. The window it covered is the first: a run
+ * that spends longer gathering a week than the week it gathered is behind its
+ * own cadence, which is what the column is for (Össur `f9548a97` took 18 days
+ * over a 7-day window). The FLOOR is the second, and it is there because
+ * anchoring made the first bound meaningless at the short end: a same-day rerun
+ * anchors on a window minutes wide, so every rerun of ordinary length — the 13
+ * minutes of `29a56395`, the 22 of `093acddb` — would be marked stalled by the
+ * span alone. Below the floor a run is simply a run; `RUN_STALE_AFTER_HOURS` is
+ * the same six hours the single-flight sweep and the health check already use
+ * for "this is not coming back", so the product holds one number for it.
  */
 export function isStalled(run: {
   startedAt: string
@@ -169,5 +176,5 @@ export function isStalled(run: {
   if (span === null) return false
   const ranMs = Date.parse(run.completedAt) - Date.parse(run.startedAt)
   if (!Number.isFinite(ranMs)) return false
-  return ranMs > span * 86_400_000
+  return ranMs > Math.max(span * 86_400_000, RUN_STALE_AFTER_HOURS * 3600_000)
 }

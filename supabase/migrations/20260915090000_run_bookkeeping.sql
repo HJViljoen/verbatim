@@ -62,8 +62,10 @@ end $$;
 -- unrecoverable.
 alter table public.pipeline_runs add column if not exists period text;
 
--- The run took longer than the window it covered (close-run). Recorded, not
--- alerted on: nothing reads this column yet.
+-- The run took longer than the window it covered AND longer than the six hours
+-- after which a run is treated as abandoned (close-run; the floor keeps a
+-- same-day rerun, whose window is minutes wide, from reading as stalled).
+-- Recorded, not alerted on: nothing reads this column yet.
 alter table public.pipeline_runs add column if not exists stalled boolean not null default false;
 
 -- The tracking_configs slice this run acted on: terms, rivals, handles,

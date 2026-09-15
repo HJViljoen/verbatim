@@ -1444,10 +1444,12 @@ export const runPipeline = inngest.createFunction(
     await step.run('close-run', async () => {
       const admin = createAdminClient()
       const completedAt = new Date().toISOString()
-      // Did the run take longer than the window it covered? A fact on the row,
-      // not a finding: nothing alerts on it yet, and on a same-day rerun (whose
-      // anchored window is minutes wide) it is true and harmless. The two runs
-      // that made this worth recording took 18.1 and 8.9 days to close a week.
+      // Did the run take longer than the window it covered, or than the six
+      // hours anything takes to be called abandoned? A fact on the row, not a
+      // finding: nothing alerts on it yet. The floor is what keeps it a fact —
+      // without it a same-day rerun, whose anchored window is minutes wide,
+      // reads as stalled for finishing in thirteen. The two runs that made this
+      // worth recording took 18.1 and 8.9 days to close a week.
       const { data: row } = await admin.from('pipeline_runs')
         .select('started_at').eq('id', runId).maybeSingle()
       const startedAt = (row?.started_at as string | undefined) ?? completedAt
