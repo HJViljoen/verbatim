@@ -806,6 +806,55 @@ comment on column public.moves.declared_at is
 comment on column public.moves.subject_id is
   'ON DELETE RESTRICT, not cascade: a subject with a declared move against it is retired (status + superseded_by), never deleted, and the database should say so rather than quietly dropping the declaration.';
 
+-- THE TARGET IS PINNED TO THE TENANT TOO, and it has to be a trigger for the
+-- reason subjects_lineage_same_tenant states: the foreign key admits ANY
+-- subjects row, FK validation runs with the constraint's rights rather than the
+-- caller's so RLS does not stand in for the missing predicate, and subject_id
+-- is in the member insert grant. The "Members declare their own moves" policy
+-- pins client_id and declared_by and said nothing about the target.
+--
+-- What it cost: as `authenticated` holding tenant A's JWT, inserting a move
+-- naming TENANT B's subject id succeeded, and tenant B could then never be
+-- deleted — the ON DELETE RESTRICT foreign key refuses the subjects delete that
+-- a clients delete cascades into. One member of one tenant could permanently
+-- block another tenant's account closure. lib/subjects/moves.ts declareMove
+-- does check ownership on the RLS-scoped session client, but PostgREST is
+-- directly reachable with the member's own JWT, so that check is not the
+-- boundary.
+--
+-- registry_ids is left unkeyed: theme_registry ids are per-tenant but the
+-- column is an array with no foreign key at all, and the moves_one_target
+-- CHECK already caps it at five. It admits arbitrary uuids, which is a row
+-- that reads as nothing rather than a row that holds another tenant's account
+-- open; the reader Block B builds is where that is worth closing.
+create or replace function public.moves_target_same_tenant()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+  if new.subject_id is null then
+    return new;
+  end if;
+  if not exists (
+    select 1 from public.subjects s
+    where s.id = new.subject_id and s.client_id = new.client_id
+  ) then
+    raise exception 'moves.subject_id must name a subject of the same tenant'
+      using errcode = 'foreign_key_violation';
+  end if;
+  return new;
+end;
+$$;
+
+comment on function public.moves_target_same_tenant() is
+  'Keeps a move''s target inside one tenant: subject_id must name a subject of the same client. The foreign key admits any subjects row and the column is in the member insert grant, so the rule has to be a trigger — and without it a member of one tenant could name another tenant''s subject and, through ON DELETE RESTRICT, hold that tenant''s account open for ever.';
+
+drop trigger if exists moves_target_same_tenant on public.moves;
+create trigger moves_target_same_tenant
+  before insert or update of subject_id, client_id on public.moves
+  for each row execute function public.moves_target_same_tenant();
+
 create index if not exists moves_client_status_idx
   on public.moves (client_id, status, declared_at desc);
 create index if not exists moves_subject_idx
