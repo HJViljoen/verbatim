@@ -35,6 +35,19 @@ describe('which artefact a schedule sends', () => {
   })
 })
 
+describe('the weekly starter', () => {
+  it('resolves, so a guard asking "is this a template we know?" answers yes', () => {
+    // Without this, editing the recipients of the one schedule that matters is
+    // refused with "Pick a template." (app/dashboard/studio/actions.ts).
+    expect(starterTemplate(WEEKLY_STARTER_KEY)?.key).toBe(WEEKLY_STARTER_KEY)
+  })
+
+  it('is never offered as a starting point for a report — it has no sections', () => {
+    expect(starterTemplates().some((t) => t.key === WEEKLY_STARTER_KEY)).toBe(false)
+    expect(starterTemplate(WEEKLY_STARTER_KEY)?.sections).toEqual([])
+  })
+})
+
 describe('the retiring starter', () => {
   it('still resolves, because stored rows name it', () => {
     expect(starterTemplate(RETIRED_DIGEST_KEY)?.key).toBe(RETIRED_DIGEST_KEY)

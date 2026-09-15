@@ -153,6 +153,12 @@ export interface ReportTemplate {
    *  new report. `starterTemplates()` is the picker's list; `starterTemplate()`
    *  is the resolver and answers retired keys too. */
   retired?: boolean
+  /** An ARTEFACT rather than an arrangement of page sections (Phase 1 WP17):
+   *  the weekly report is composed from block keys, so it has no `sections` and
+   *  must never be offered as a starting point for a report. It is here so that
+   *  a schedule may NAME it — `starter_key` is what the send path branches on
+   *  until M8's `artefact` column lands. */
+  artefact?: boolean
 }
 
 /** One frozen section inside a report snapshot. `data` is the page loader's

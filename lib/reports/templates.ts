@@ -29,6 +29,21 @@ export function templateKeys(keys: string[], directionWords = directionWordsFor(
  */
 export const STARTER_TEMPLATES: ReportTemplate[] = [
   {
+    // THE WEEKLY REPORT, AND IT IS NOT AN ARRANGEMENT OF PAGES (Phase 1 WP17).
+    // It is composed from block keys (lib/reports/weekly.ts), so it carries no
+    // sections and is never offered as a starting point for a report. It is in
+    // this list for one reason: a schedule names what it sends through
+    // `starter_key`, and every guard that asks "is this a template we know?"
+    // must answer yes for it — otherwise editing the recipients of the one
+    // schedule that matters is refused with "Pick a template."
+    key: 'weekly_report',
+    artefact: true,
+    name: 'Weekly report',
+    audience: 'general',
+    description: 'The state of the week, every number stated against the month: the six sections that go to everyone after every update.',
+    sections: [],
+  },
+  {
     // RETIRED (Phase 1 WP17). The weekly REPORT replaces it — an arranged
     // report over block keys, stated month-to-date against the trailing
     // baseline, rather than the dashboard's run-indexed tiles. It stays here,
@@ -107,7 +122,7 @@ export const starterTemplate = (key: string): ReportTemplate | null => STARTER_T
 /** What the picker offers: everything that has not retired. A retired starter
  *  still RESOLVES (a stored schedule names it and keeps sending), it is just
  *  never handed to somebody starting a new report. */
-export const starterTemplates = (): ReportTemplate[] => STARTER_TEMPLATES.filter((t) => !t.retired)
+export const starterTemplates = (): ReportTemplate[] => STARTER_TEMPLATES.filter((t) => !t.retired && !t.artefact)
 
 /** Mint section ids for a fresh report from a template's sections. */
 export function instantiate(sections: Omit<ReportSection, 'id'>[]): ReportSection[] {
