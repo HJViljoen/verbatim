@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, RUN_INDEXED_DIRECTION_WORDS, OLD_PAGES_RETIRE_ON } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, DIRECTION_WORDS_BY_READER, OLD_PAGES_RETIRE_ON } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -160,7 +160,7 @@ describe('directionWordsFor', () => {
   })
 
   it('lists exactly the readers the map holds — a reader added to one and not the other is the bug', () => {
-    expect([...DIRECTION_READERS].sort()).toEqual(Object.keys(RUN_INDEXED_DIRECTION_WORDS).sort())
+    expect([...DIRECTION_READERS].sort()).toEqual(Object.keys(DIRECTION_WORDS_BY_READER).sort())
   })
 
   it('carries the seven surfaces that read a run-indexed series', () => {
@@ -174,7 +174,7 @@ describe('directionWordsFor', () => {
     // If the values were inferred as the literal `false`, TypeScript would
     // stop checking the half Phase 1 turns back on. Asserted at runtime
     // because that is where a literal would show up as an unreachable branch.
-    expect(typeof RUN_INDEXED_DIRECTION_WORDS['voice.movers']).toBe('boolean')
+    expect(typeof DIRECTION_WORDS_BY_READER['voice.movers']).toBe('boolean')
   })
 })
 

@@ -1200,7 +1200,15 @@ export const DIRECTION_READERS = [
   'initiatives', 'competitive.deltas', 'profile.mix',
 ] as const satisfies readonly DirectionReader[]
 
-export const RUN_INDEXED_DIRECTION_WORDS: Record<DirectionReader, boolean> = {
+/**
+ * NOT named `RUN_INDEXED_DIRECTION_WORDS`. Phase 0's constant of that name was
+ * a `boolean = false`, and `main` still exports it as one; an object under the
+ * same identifier would make every `RUN_INDEXED_DIRECTION_WORDS ? on : off`
+ * merged in from main — or written from memory by a later package — silently
+ * take the ON branch, with tsc and eslint both quiet about it. The rename is
+ * the gate; "never read the map directly" is only a rule.
+ */
+export const DIRECTION_WORDS_BY_READER: Record<DirectionReader, boolean> = {
   'voice.movers': false,
   'dashboard.themes': false,
   'documents.trajectory': false,
@@ -1212,7 +1220,7 @@ export const RUN_INDEXED_DIRECTION_WORDS: Record<DirectionReader, boolean> = {
 
 /** May this reader print a direction? Read it; never read the map directly. */
 export function directionWordsFor(reader: DirectionReader): boolean {
-  return RUN_INDEXED_DIRECTION_WORDS[reader]
+  return DIRECTION_WORDS_BY_READER[reader]
 }
 
 /**

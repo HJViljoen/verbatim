@@ -104,7 +104,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `dashboard.themes`, `documents.trajectory`, `agent.movement`, `initiatives`,
   `competitive.deltas`, `profile.mix`) so a reader flips the day its own series
   is re-based on the monthly reading and not before; never read the map
-  directly. Gated branches read the flag instead of deleting the code and gated
+  (`DIRECTION_WORDS_BY_READER`) directly. Phase 0's boolean of the SAME name,
+  `RUN_INDEXED_DIRECTION_WORDS`, is deliberately gone rather than renamed in
+  place: a `RUN_INDEXED_DIRECTION_WORDS ? … : …` merged in from an older branch
+  must fail to compile, not read an always-truthy object and turn all seven
+  readers on. Gated branches read the flag instead of deleting the code and gated
   pure functions take it as an argument, so both answers stay tested. A CHART is
   a direction claim too — `profile.mix` gates a line across `run_date` that
   printed no direction word at all. Levels are untouched, as is any period
