@@ -355,7 +355,7 @@ export function weeklyPeriod(window: { from: string; to: string } | null, month:
  * The month's own share is not put in it: a level with no denominator beside
  * it is exactly the number the calibration rule forbids.
  */
-export function weeklySubject(company: string, check: WeekCheck, month: string): string {
+export function weeklySubject(company: string, check: WeekCheck): string {
   if (check.state === 'flagged' && check.flags.length > 0) {
     const first = check.flags[0].label
     return check.flags.length === 1

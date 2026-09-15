@@ -243,16 +243,16 @@ describe('the masthead', () => {
   })
 
   it('names the flagged object in the subject line, and no direction word', () => {
-    const one = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag()] }), '2026-09-01')
+    const one = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag()] }))
     expect(one).toBe('Össur: Objections is unusual this week')
-    const two = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag(), flag({ label: 'Praise' })] }), '2026-09-01')
+    const two = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag(), flag({ label: 'Praise' })] }))
     expect(two).toContain('and 1 more')
     for (const s of [one, two]) expect(s).not.toMatch(/growing|fading|up |down /i)
   })
 
   it('says nothing unusual when nothing fired, and that the check is forming when it is', () => {
-    expect(weeklySubject('Sealand', weekCheck({ state: 'nothing_unusual', flags: [] }), '2026-09-01')).toContain('nothing unusual')
-    expect(weeklySubject('Sealand', weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }), '2026-09-01')).toContain('still forming')
+    expect(weeklySubject('Sealand', weekCheck({ state: 'nothing_unusual', flags: [] }))).toContain('nothing unusual')
+    expect(weeklySubject('Sealand', weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }))).toContain('still forming')
   })
 })
 
