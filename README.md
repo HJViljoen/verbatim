@@ -56,8 +56,19 @@ each sized to fit the 300s cap:
    per keyword** (`search:instagram:<kw>:reels` / `:posts`) — the variant rides
    on the adapter (`searchVariants`), and the keyword itself is never split, so
    `keyword_performance` still keeps one row per (run, platform, keyword,
-   bucket). `periodSince` in `lib/config.ts` is the one date the window filter,
-   the actor bounds and the census all read.
+   bucket).
+
+   **And the window is frozen once, at `open-run`** (2026-09-15):
+   `pipeline_runs.window_start` / `window_end` / `window_basis`, anchored on the
+   previous run's `window_end` and capped 30 days back (`lib/pipeline/window.ts`).
+   Every step reads that one window — the filter, the actor bounds and the owned
+   census alike — instead of re-reading the clock, which is how two multi-day
+   runs came to gather and synthesise 18 and 9 days apart. Instagram and YouTube
+   take the dates; TikTok and Reddit can only take enums, so they get
+   `THIS_WEEK`/`week` for a window of 8 days or less and `THIS_MONTH`/`month`
+   otherwise, with the `inWindow` post-filter trimming the surplus before
+   anything is paid for. `periodSince` in `lib/config.ts` remains the fallback
+   where there is no window: a baseline run, and the CLI callers.
 
    **Owned reads are a census, not a sample.** Each configured account's posts
    *for the window* are stored (`OWN_POSTS_CEILING` = 200 is a runaway guard, not
@@ -89,6 +100,13 @@ each sized to fit the 300s cap:
    pre-2026-08-17 behaviour) on the same bookkeeping. "Current corpus" reads go
    through the `audience_insights_current` / `language_samples_current` views;
    stale rows are pruned after `close-run`.
+
+   **`embed-insights`** (2026-09-15) follows the wave: every insight still
+   carrying a NULL `embedding` is embedded in 512s and written back through the
+   `set_insight_embeddings` RPC (a bulk single-column write PostgREST cannot
+   express). It is what keeps the agent's retrieval index whole; it is logged,
+   never `noteError`'d, so an index pass having a bad day cannot make a clean
+   run read `partial`.
 3. **Cross-reference** — deterministic client-brand mention detection.
 4. **Themes** — fan-out per entity bucket (`plan-themes` → `themes:<bucket>`
    clustering + LLM label-merge → `pass-b` labels → `persist-themes`).
@@ -100,6 +118,15 @@ each sized to fit the 300s cap:
    writes a `theme_observations` row and stamps `themes.registry_id`;
    `first_seen` then means *genuinely new*. Trends and the Voice history join on
    that id instead of the label string.
+
+   **`freeze-months`** (2026-09-15) follows `persist-themes`: this run's
+   clustering is read back month by calendar month, dated by
+   `comments.comment_date`, into `month_denominators` / `month_theme_readings`
+   (`lib/reading/monthly.ts`). A month is `filling` until 30 days after it ends
+   and every run rewrites it; then it freezes and is never rewritten — a
+   `before update` trigger refuses it, so a late-discovered video shows as
+   accrual and no artefact is silently corrected. Non-fatal, like the step
+   above.
 5. **Synthesize** — metrics → Pass C (competitive) → Pass D (market insights,
    recommendations, executive brief) → `run_summary`.
 6. **Close run** → `prune-stale-analysis` → optionally emit
@@ -194,9 +221,22 @@ functions (defined in the baseline).
   Content page's field tile, which keeps its separate "Your own posts" row —
   each filters at its own call site (`isDiscoveredVideo` in
   `lib/pipeline/metrics.ts`; `source = 'discovered'` in the Content read).
+- **Readiness (operator only, 2026-09-15)**: `/dashboard/ops/readiness` — one
+  row per input the product needs (rival accounts, tracked terms, Reddit
+  communities, embeddings, months of history, coverage, updates, delivery, the
+  change log, decisions, retention), each saying whether it is in place, who
+  can move it, and what it unlocks. Gated on `getSessionContext().operator`,
+  `notFound()` for anyone else; the workspace switcher chooses the tenant. It
+  becomes a Settings section in Phase 1.
 - Run state lives in `pipeline_runs.status`
   (`running`/`completed`/`partial`/`failed`); a run failure also emails
-  `ALERT_EMAIL` when configured.
+  `ALERT_EMAIL` when configured. A fifth value exists: `analyzing`, which
+  `runPassA` opens a standalone analysis run at (`lib/pipeline/pass-a.ts`) and
+  only `run-cd.ts`, the terminal stage of that CLI path, ever flips. Nothing in
+  the pipeline closes it — `decideOpenRun` and `onFailure` both act on `running`
+  alone, and the ops check's 14-day lookback is the only reason a run abandoned
+  mid-path is not an alert every morning forever. `close-stranded-run.ts` is how
+  one gets closed.
 
 ## Reports & Exports
 
@@ -311,3 +351,22 @@ All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 | `keyword-roi.ts` | Keyword ROI pruning table, worst first |
 | `keyword-candidates.ts` | The add side of the same config: terms the corpus keeps showing (classifier topics + hashtags, minus everything already tracked), pooled over the last N runs. Read-only |
 | `backfill-keyword-candidates.ts` | Recompute `keyword_candidates` for one run or every completed/partial run of a client (repairs a swallowed `keyword-discovery` step). Dry-run prints the top 30; `--apply` writes |
+
+**Phase 0** (2026-09-15). Every one of these is dry by default; the flag that
+writes is named on the row. Most read a table or function the Phase 0
+migrations add, so they need those applied first: `coverage-report.ts` and
+`embed-insights.ts` say which file is missing and exit, having read and spent
+nothing; `reconstruct-config-log.ts` is deliberately tolerant, because the
+useful time to read its dry run is *before* the log table exists; the rest
+print the driver's error.
+
+| Script | Purpose |
+| --- | --- |
+| `backfill-run-windows.ts` | Label the window each historical run covered — after the fact and marked `window_basis = 'reconstructed'`, because it is the rule those runs followed, not a record of what they gathered. Skips any run that wrote its own window. `--apply` writes |
+| `set-cadence.ts` | A tenant's `report_period` / `report_day` — the pair that decides whether the dispatcher picks it up (≈ $13–20 an update). The settings form cannot express `paused` and a save silently rewrote it; this can. Prints the cost and the recipients first. `--apply` writes, stamped |
+| `set-competitor-handles.ts` | One rival's own accounts, merged into `competitor_handles` (what the census reads). Refuses a rival not in `competitor_names`, a platform no account can be read on, and a YouTube value that is not a channel id. Verify each handle by hand first. `--apply` writes, stamped |
+| `reconstruct-config-log.ts` | The configuration history that predates the change log, inferred from `keyword_performance`, subreddit `discovered_at` and the repo's own git — every row `source = 'reconstructed'` with a note naming its evidence. Refuses to write a tenant twice. `--apply` writes |
+| `monthly-reading.ts` | The comment-dated monthly reading, printed: one clustering asked of every month. `--write` seeds the back-read — months past their 30-day line stored `frozen` / `back_read`, the rest `filling` for the pipeline's `freeze-months` step to take over |
+| `coverage-report.ts` | How much history clears the floor (months ≥ 100 videos and ≥ 100 comments, per audience) and what the anomaly rule would have flagged, replayed week by week. Writes a markdown report and nothing else — never a table, a model or a cent |
+| `embed-insights.ts` | Drains the `audience_insights.embedding` backlog through the `set_insight_embeddings` RPC; the pipeline's own `embed-insights` step keeps it current from 2026-09-15, so this is the one-off and the catch-up after a failed step. `--apply` writes |
+| `close-stranded-run.ts` | Close a run nothing else will. `analyzing` is what the standalone Pass A script parks a run at, and neither `decideOpenRun` nor `onFailure` knows that status. Closes it `failed` with a dated epitaph. `--apply` writes one UPDATE to one row |
