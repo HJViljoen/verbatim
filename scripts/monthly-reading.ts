@@ -126,6 +126,12 @@ function printEvidenceRefs(refs: EvidenceRefSummary | undefined, verb: 'would' |
     console.log('    The months are frozen and their ids are not. A month that closes without its ids cannot be given them later, so this is the one shot for every audience-month this visit closed. Fix the cause and re-run BEFORE any further month freezes.')
     return
   }
+  if (refs.stillFilling > 0) {
+    console.log(
+      `  WARNING: ${refs.stillFilling} evidence-id rows are still 'filling' in audience-months that have already closed. ` +
+      'They hold mid-month values beside a month that is the record, and nothing revisits them — month_evidence_refs is not in MONTH_TABLES, so fillingMonths never brings their month back. Re-run this command over every month to repair them.',
+    )
+  }
   if (refs.missing) {
     console.log('  evidence ids: not read — apply supabase/migrations/20260918095000_quote_translations.sql first. The months seed without them, and a month that closes without its ids cannot be given them later.')
     return

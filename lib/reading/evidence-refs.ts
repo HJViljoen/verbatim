@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { selectAll } from '../supabase-admin'
 import { chunk } from '../chunk'
-import { chunkByAudienceMonth, mergeMonthRows, monthStartOf, windowOf, type MergeResult } from './monthly'
+import { chunkByAudienceMonth, denominatorKey, mergeMonthRows, monthStartOf, windowOf, type MergeResult } from './monthly'
 import type {
   Audience, FreezeColumns, MonthOrigin, MonthStatus, PlatformMix, StoredFreeze,
 } from './types'
@@ -306,10 +306,30 @@ export interface EvidenceRefSummary {
    * had already named the run. Exit code 0.
    */
   failed: string | null
+  /**
+   * Rows left at `status = 'filling'` in an audience-month that has already
+   * CLOSED — stranded, and nothing will revisit them.
+   *
+   * This table is the sixth month table and the only one outside MONTH_TABLES,
+   * because its four-column key is one no MonthTable descriptor can spell.
+   * That is sound, but it has a consequence MonthTable's own docblock names as
+   * the bug the descriptor exists to prevent: `fillingMonths` never looks here,
+   * so a month whose rows froze in the other five leaves `monthsToRefresh` and
+   * is never visited again. The refs freeze is deliberately non-fatal, so it
+   * can fail on the very visit that closes a month — a timeout or a 5xx does
+   * it too — and earlier visits' rows then sit at mid-month values, beside a
+   * month that is the record, permanently, while the guard refuses every new
+   * key for that month for ever.
+   *
+   * Nothing counted them. Now the step log does, and a hand-run
+   * `scripts/monthly-reading.ts --write` over all months still repairs them
+   * (a filling row can be UPDATEd).
+   */
+  stillFilling: number
 }
 
 export const emptyEvidenceRefSummary = (): EvidenceRefSummary =>
-  ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, refusedLate: 0, videoIds: 0, commentIds: 0, missing: false, failed: null })
+  ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, refusedLate: 0, videoIds: 0, commentIds: 0, missing: false, failed: null, stillFilling: 0 })
 
 /**
  * Write down which videos and which comments this visit's theme numbers rested
@@ -371,6 +391,14 @@ export async function freezeEvidenceRefs(
   out.refusedLate = merge.refusedLate.length
   out.videoIds = new Set(rows.flatMap((r) => r.video_ids)).size
   out.commentIds = new Set(rows.flatMap((r) => r.comment_ids)).size
+  // What this visit leaves stranded — see `EvidenceRefSummary.stillFilling`.
+  // A filling row in a closed audience-month that this merge neither rewrote
+  // nor deleted is a row no later visit returns to.
+  const closedHere = new Set(opts.closedAudienceMonths ?? [])
+  const touched = new Set([...merge.writes.map(evidenceRefKey), ...merge.stale.map((st) => st.key)])
+  out.stillFilling = stored.filter(
+    (st) => st.status === 'filling' && closedHere.has(denominatorKey(st)) && !touched.has(st.key),
+  ).length
   if (opts.dryRun) return out
 
   // Batched on audience-month boundaries, never a flat `chunk`: decision K's
