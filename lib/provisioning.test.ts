@@ -83,6 +83,13 @@ describe('validateHandles — a wrong handle credits someone else\'s posts', () 
     expect(validateHandles({ instagram: 'cotopaxi', tiktok: 'cotopaxiofficial', youtube: 'UCjGWYNy7xrGOJ72AeMBb-hA' })).toEqual([])
   })
 
+  it("accepts Ottobock's set as resolved for Össur (Phase 0 decision D3)", () => {
+    // The set awaiting Heinrich's go-ahead: @ottobock's channel id, plus the
+    // Instagram and TikTok handles read off the brand's own accounts. Pinned
+    // here so the validator and the decision cannot drift apart unnoticed.
+    expect(validateHandles({ instagram: 'ottobock', tiktok: 'ottobock', youtube: 'UCPTbB5O4fdDTYeZNaj5ihFQ' })).toEqual([])
+  })
+
   it('refuses a YouTube @name, which the owned reader silently reads nothing for', () => {
     const errors = validateHandles({ youtube: 'ottobock' })
     expect(errors).toHaveLength(1)
