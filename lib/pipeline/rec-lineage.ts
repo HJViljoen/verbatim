@@ -1,4 +1,5 @@
 import { cosine } from './cluster'
+import { RECOMMENDATION_TYPES } from './schemas'
 
 // Recommendation lineage (WP7c, 2026-09-11) — the cross-update identity
 // `recommendations` never had.
@@ -15,14 +16,39 @@ import { cosine } from './cluster'
 // churn; a recommendation has no membership at all — `based_on.insight_ids`
 // point at market_insights rows that are themselves regenerated every update.
 // What a recommendation has is a type and a sentence, so that is what matches:
-// type equality (never crossed — "post more shorts" and "answer the insurance
-// question" are different actions however similarly phrased) AND either an
-// exact normalised title or a title embedding above REC_LINEAGE_THRESHOLD.
+// an exact normalised title, or a title embedding above the bar its type pair
+// sets.
 //
-// The asymmetry that sets the threshold: a false match silently transfers a
+// TYPE IS A PREFERENCE, NOT A GATE (decision D11, 2026-09-15). It was a hard
+// gate until now — a pair of different types was never even scored. Measured on
+// production: `type` is not a closed vocabulary at all. The D-b prompt turns
+// 'other' into a free-form slug (pass-d.ts), so 53 of 121 stored rows (44%)
+// carry a label the model invented — 16 distinct invented labels across two
+// tenants (22 distinct values in the column overall, the other 6 being enum
+// names in use), nine of them appearing in exactly one update ever. The 16 are
+// the list `rec-lineage.test.ts` pins. The gate's own near-misses are
+// visible in the data: `audience_target` vs `audience_targeting`,
+// `competitive_move` vs `competitive_response`, `content_idea` vs
+// `content_communication` — the same category, renamed by a later prompt
+// version, and unrelated as far as an equality test is concerned. Across the 22
+// consecutive update pairs in production the gate left 41 of 107 new
+// recommendations with no candidate to score at all.
+//
+// So: every label outside RECOMMENDATION_TYPES folds to `other` before the
+// comparison (which by itself takes those 66 candidates to 78), and a pair
+// whose folded types still differ is scored against a HIGHER bar rather than
+// refused. Same type 0.55, different type 0.62.
+//
+// The asymmetry that sets both bars: a false match silently transfers a
 // client's "Done" onto an action they have never seen, while a missed one costs
 // only a recommendation that reads New for one more update — which is exactly
 // today's behaviour. When in doubt this starts a new lineage.
+//
+// WHERE THE STATUS ITSELF NOW COMES FROM. Until 2026-09-15 the only record of a
+// client's decision was `recommendations.status` on the prior row, so a missed
+// match erased it. `rec_decisions` is the record now, keyed on the lineage; the
+// prior row's status is kept here as the fallback for a decision that was never
+// filed. Which of the two answers, and when, is `statusForLineage`.
 //
 // Pure: the caller embeds (or, in tests, supplies vectors). No I/O here.
 
@@ -44,6 +70,51 @@ import { cosine } from './cluster'
  * carried a single status. Re-measure if the D-b prompt's title style changes.
  */
 export const REC_LINEAGE_THRESHOLD = 0.55
+
+/**
+ * The same bar for a pair whose folded types differ (decision D11).
+ *
+ * Not measured — there is no labelled cross-type pair to measure against, the
+ * gate having refused to score one for as long as it existed. It is set by the
+ * calibration's shape instead: 0.62 sits above the highest FALSE pair the
+ * labelling saw (0.472) with room to spare, and above the lowest TRUE pair it
+ * kept (0.605) — so a cross-type pair has to look MORE alike than the weakest
+ * same-type match that was accepted by hand before it inherits a client's word.
+ * Re-measure when there are real cross-type matches to label; until then this is
+ * a deliberately conservative guess, not a reading.
+ */
+export const REC_LINEAGE_CROSS_TYPE_THRESHOLD = 0.62
+
+/**
+ * The type as the matcher compares it: one of the seven `RECOMMENDATION_TYPES`
+ * names, or `other` for everything else.
+ *
+ * `pass-d.ts` persists `slugify(custom_category)` whenever the model answers
+ * 'other', so the column holds whatever a reasoning model felt like naming a
+ * category that week — `creator_clinic_distribution`, `maker_program`,
+ * `assortment_architecture`. Folding those together does not pretend they are
+ * the same thing; it says the label carries no information worth comparing, and
+ * leaves the decision to the title.
+ *
+ * Note what that costs, because the fold is the loosest half of D11: two
+ * invented labels as unrelated as `maker_program` and `urgent_topic` are both
+ * `other`, i.e. the SAME type, and so meet at the lower 0.55 bar. The higher
+ * 0.62 applies only to a folded-vs-enum pair or two different enum names. That
+ * is the trade the 44% buys — a vocabulary this unstable carries no signal to
+ * gate on — and the reason the bar it hands over to is the measured one.
+ */
+export function normaliseRecType(type: string | null | undefined): string {
+  const t = (type ?? '').trim().toLowerCase()
+  return (RECOMMENDATION_TYPES as readonly string[]).includes(t) ? t : 'other'
+}
+
+/** The cosine two titles must reach to be the same recommendation, given what
+ *  their types say. */
+export function lineageThresholdFor(a: string, b: string): number {
+  return normaliseRecType(a) === normaliseRecType(b)
+    ? REC_LINEAGE_THRESHOLD
+    : REC_LINEAGE_CROSS_TYPE_THRESHOLD
+}
 
 /** A recommendation as the previous update left it. */
 export interface PriorRec {
@@ -92,7 +163,8 @@ export function normaliseTitle(title: string): string {
  *
  * Matching is greedy over the best available pair, so one prior is claimed
  * once: two near-identical new recommendations cannot both inherit the same
- * "Done". An exact title match always outranks a similarity match.
+ * "Done". An exact title match always outranks a similarity match, and a
+ * same-type pair wins a tie against a cross-type one at the same score.
  */
 export function assignLineage(
   next: NewRec[],
@@ -110,24 +182,39 @@ export function assignLineage(
 
   const normNext = next.map((r) => normaliseTitle(r.title))
   const normPrior = priors.map((r) => normaliseTitle(r.title))
+  const typeNext = next.map((r) => normaliseRecType(r.type))
+  const typePrior = priors.map((r) => normaliseRecType(r.type))
   const canEmbed = newVectors.length === next.length && priorVectors.length === priors.length
 
-  // Every candidate pair that clears the bar, best first. `exact` scores above
-  // any cosine so an identical title is never outbid by a paraphrase.
-  const pairs: { n: number; p: number; score: number; kind: 'exact' | 'similar' }[] = []
+  // Every candidate pair that clears ITS bar, best first. `exact` scores above
+  // any cosine so an identical title is never outbid by a paraphrase — and an
+  // identical title is allowed to cross types, because a model that re-tagged
+  // the same sentence has changed its filing, not its recommendation. (Not one
+  // of the 107 consecutive pairs in production shares a normalised title, so
+  // this costs nothing today and is the one signal strong enough to spend.)
+  const pairs: { n: number; p: number; score: number; kind: 'exact' | 'similar'; sameType: boolean }[] = []
   for (let n = 0; n < next.length; n++) {
     for (let p = 0; p < priors.length; p++) {
-      if (next[n].type !== priors[p].type) continue
+      const sameType = typeNext[n] === typePrior[p]
       if (normNext[n].length > 0 && normNext[n] === normPrior[p]) {
-        pairs.push({ n, p, score: 2, kind: 'exact' })
+        pairs.push({ n, p, score: 2, kind: 'exact', sameType })
         continue
       }
       if (!canEmbed) continue
       const score = cosine(newVectors[n], priorVectors[p])
-      if (score >= REC_LINEAGE_THRESHOLD) pairs.push({ n, p, score, kind: 'similar' })
+      if (score >= (sameType ? REC_LINEAGE_THRESHOLD : REC_LINEAGE_CROSS_TYPE_THRESHOLD)) {
+        pairs.push({ n, p, score, kind: 'similar', sameType })
+      }
     }
   }
-  pairs.sort((a, b) => b.score - a.score || a.n - b.n || a.p - b.p)
+  // Ranked by similarity, not by how far each pair cleared its own bar: the bar
+  // says whether a pair may be considered, the score says which of two is the
+  // better reading of the same prior. Same type breaks a tie, because the label
+  // does carry something when the sentences are equally alike.
+  pairs.sort((a, b) =>
+    b.score - a.score ||
+    Number(b.sameType) - Number(a.sameType) ||
+    a.n - b.n || a.p - b.p)
 
   const takenNew = new Set<number>()
   const takenPrior = new Set<number>()
@@ -141,6 +228,12 @@ export function assignLineage(
       // 'new' is the column default, i.e. "the client has not touched this" —
       // inheriting it would be a no-op, and inheriting null would overwrite
       // nothing. Only a status the client actually set carries forward.
+      //
+      // Since 2026-09-15 this is the FALLBACK: `rec_decisions` is where a
+      // decision is recorded, and `statusForLineage` reads it by lineage. This
+      // still answers for a lineage the ledger has never heard of — a status
+      // written before the ledger existed, or one whose decision row failed to
+      // land while the column write succeeded.
       status: prior.status && prior.status !== 'new' ? prior.status : null,
       matchedPriorId: prior.id,
       matchKind: pair.kind,
@@ -148,6 +241,15 @@ export function assignLineage(
   }
   return out
 }
+
+// ---- The decision ledger (rec_decisions, 2026-09-15) ------------------------
+// Defined in `lib/rec-decisions.ts` and re-exported here, so the pipeline reads
+// as one module while the browser's write site can have the ledger without
+// this file's embedding client. See the header there.
+export {
+  REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
+  inheritedStatus, statusForLineage, isMissingRecDecisions, type RecDecision,
+} from '../rec-decisions'
 
 /** A `pipeline_runs` row, as the lineage read hands it over. */
 export interface RunRow {
@@ -169,9 +271,35 @@ export interface RunRow {
  */
 export function previousRunId(runs: RunRow[], currentRunId: string): string | null {
   const visible = runs
-    .filter((r) => r.id !== currentRunId && (r.status === 'completed' || r.status === 'partial'))
+    .filter((r) => r.id !== currentRunId && isVisibleRun(r))
     .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
   return visible[0]?.id ?? null
+}
+
+/**
+ * Has THIS run ever been shown to the client?
+ *
+ * The caller asks because a run that has been shown and is being rewritten — a
+ * `rerunPassDb`, a resume — carries the rows the client is looking at right now,
+ * and those are the priors to match. A run still `analyzing` does not: the
+ * recommendations a first attempt of the step left behind have been seen by
+ * nobody, and matching them would put a second cosine hop between a decision and
+ * the row inheriting it.
+ *
+ * Same two statuses as `previousRunId`, from the same predicate, so "visible"
+ * cannot come to mean two things. A run that is not in `runs` at all reads as
+ * not visible — the conservative answer, and the only one available.
+ */
+export function runIsVisible(runs: RunRow[], runId: string): boolean {
+  const run = runs.find((r) => r.id === runId)
+  return !!run && isVisibleRun(run)
+}
+
+/** The one definition of "the client has seen this update": the same anchor
+ *  `lib/pages/dashboard.ts` and `lib/pages/market.ts` use to decide what a
+ *  tenant is looking at. */
+function isVisibleRun(run: RunRow): boolean {
+  return run.status === 'completed' || run.status === 'partial'
 }
 
 /**

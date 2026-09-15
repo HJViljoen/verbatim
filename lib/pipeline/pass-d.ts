@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, previousRunId, withoutLineageColumn, type PriorRec, type RunRow } from './rec-lineage'
+import { assignLineage, previousRunId, runIsVisible, withoutLineageColumn, statusForLineage, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -630,9 +630,16 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
 
   const miById: string[] = []
   if (persist) {
-    // Idempotent per (client, run) — invariant 6.
+    // Idempotent per (client, run) — invariant 6. The market insights go now,
+    // because this function is about to reinsert them and a retry of the same
+    // run must not end with two sets.
+    //
+    // The RECOMMENDATIONS delete used to sit here too, and that was the bug: it
+    // ran before the D-b call at :719, so a call that threw or refused left the
+    // update with ZERO recommendations — contradicting the comment two hundred
+    // lines down that says "a failed call leaves the old rows". It is now
+    // runDbCall's, after a successful parse, on both paths.
     await admin.from('market_insights').delete().eq('client_id', clientId).eq('run_id', runId)
-    await admin.from('recommendations').delete().eq('client_id', clientId).eq('run_id', runId)
 
     if (miRows.length) {
       const { data: insertedMi, error } = await admin
@@ -691,9 +698,6 @@ interface RunDbCallArgs {
   miById: string[]
   ciIndex: Map<string, PersistedCompetitiveInsight>
   persist: boolean
-  /** Rerun path: clear the run's existing recommendations before inserting
-   * (runPassD already cleared them alongside market_insights). */
-  replaceExisting?: boolean
   /** Carried over from D-a's reference resolution so the D-b log stays cumulative. */
   initialRejectedRefs?: number
 }
@@ -799,14 +803,41 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
   // Pass D-b deletes and reinserts every recommendation, so without this a
   // status the client set on Monday is gone by Sunday. Best-effort by design:
   // continuity is worth an embedding call, never worth a failed update.
+  //
+  // BEFORE the delete below, and it has to stay there: when this run already
+  // has recommendations (a D-b rerun, a retried step) those rows are the match
+  // pool, and the delete is what is about to remove them.
   let lineageLog: Record<string, number> = {}
   if (persist && recRows.length) {
     lineageLog = await applyLineage(admin, clientId, runId, recRows)
   }
 
   if (persist) {
-    // Replace only after a successful parse — a failed call leaves the old rows.
-    if (args.replaceExisting) {
+    // Replace only after a successful parse — a failed call leaves the old
+    // rows. Both callers arrive here: the D-b rerun always did, and since
+    // 2026-09-15 the full Pass D does too (it used to delete before the call,
+    // so a refusal emptied the update). The delete is unconditional on
+    // `recRows.length`: a parse that returned no recommendations is a real
+    // answer for this update, and leaving the previous attempt's rows behind
+    // would report it as this one's.
+    //
+    // WHICH HALF SURVIVES, AND WHICH DOES NOT — the cost of that choice, said
+    // out loud. Only the RECOMMENDATIONS are left standing. `runPassD` deleted
+    // and reinserted this run's `market_insights` with fresh ids long before the
+    // D-b call, so on a RETRY that then fails (`!b.parsed` above, or the
+    // insights/competitive early return before the call), the surviving rows'
+    // `based_on` ids point at market_insights that no longer exist. Both readers
+    // resolve a dangling id to nothing — `lib/market-tiles.ts` recEvidenceTier
+    // gives tier `archive`, `lib/pages/market.ts` recSupportIds gives no
+    // evidence chips — so those recommendations render ungrounded and sunk in
+    // the agenda, and the step reports `recommendations: 0`.
+    //
+    // Degraded beats empty: the words are still the client's last real answer,
+    // where the old behaviour showed an update with no recommendations at all.
+    // Moving the delete above the `!b.parsed` return would buy the empty state
+    // back and re-open exactly the bug this replaced, so it is a judgement to
+    // revisit deliberately (2026-09-15, WP7), not a line to quietly move.
+    {
       const { error } = await admin.from('recommendations').delete().eq('client_id', clientId).eq('run_id', runId)
       if (error) throw new Error(`clear recommendations: ${error.message}`)
     }
@@ -861,9 +892,10 @@ interface LineageTarget {
 }
 
 /**
- * Read the previous update's recommendations and carry their identity — and
- * any status the client set — onto the rows about to be inserted. Mutates
- * `rows` in place; returns counters for the AI log.
+ * Read the recommendations the client is currently looking at, carry their
+ * identity onto the rows about to be inserted, and give each row whatever the
+ * decision ledger says that identity is. Mutates `rows` in place; returns
+ * counters for the AI log.
  *
  * The I/O half of `rec-lineage.ts` (the matching itself is pure and tested
  * there). Everything here is best-effort: a missing previous update or a failed
@@ -879,19 +911,42 @@ async function applyLineage(
   runId: string,
   rows: LineageTarget[],
 ): Promise<Record<string, number>> {
+  const counters: Record<string, number> = {}
   try {
-    // "The previous update" has to mean the update the CLIENT saw, because what
-    // is being carried across is a status the client set on that page. So it is
-    // the newest run with `status in ('completed','partial')` — the same anchor
-    // every client-facing loader uses (lib/pages/dashboard.ts, lib/pages/market.ts,
-    // the schedule send) — and never an `analyzing` or `failed` run.
+    // `recommendations` holds a handful of rows per update, so these reads never
+    // approach the 1000-row cap that would need selectAll.
+    const readRecs = async (run: string): Promise<PriorRec[]> => {
+      const { data, error } = await admin
+        .from('recommendations')
+        .select('id, lineage_id, type, title, status')
+        .eq('client_id', clientId)
+        .eq('run_id', run)
+      if (error) throw new Error(error.message)
+      return (data ?? []) as PriorRec[]
+    }
+
+    // THE PRIORS ARE THE SET THAT IS ON SCREEN FOR THIS TENANT RIGHT NOW.
     //
-    // Two ways the old rule (newest recommendation by created_at) was wrong:
-    // a run still analysing already holds recommendations, so a set nobody has
-    // seen would have become the only match pool and every status set on the
-    // last visible update would have been silently dropped; and `rerunPassDb`
-    // re-stamps an old run's rows, which would make an old run look like the
-    // most recent one.
+    // Which is the previous update, except when this run is ITSELF on screen and
+    // being rewritten: `rerunPassDb` (scripts/run-recs.ts, the operator's
+    // prompt-iteration tool) and a resume both re-run D-b against a run the
+    // client has already been shown. There the client marks something Done at
+    // 09:00, the operator re-runs D-b at 09:05, and matching the PREVIOUS update
+    // would inherit a status set two updates ago and drop the one set on the
+    // update being re-run.
+    //
+    // "On screen" is the test, not "has recommendations". A run still
+    // `analyzing` may well have rows — a first attempt of a retried synthesis
+    // step left them — but nobody has seen them, and taking them as the pool
+    // puts TWO 0.55 cosine hops between a decision and the row inheriting it
+    // (new → attempt 1 → previous update) where the previous update alone is
+    // one. Titles are re-rolled every call (0 of 107 production pairs share even
+    // a normalised title), so each hop is a real chance to miss, and a miss
+    // restarts the lineage — orphaning the decision filed against the old one
+    // permanently, since the ledger is keyed on the lineage that just broke.
+    //
+    // The run list is the same read `previousRunId` needs, so asking it about
+    // this run too costs nothing.
     const { data: runRows, error: runError } = await admin
       .from('pipeline_runs')
       .select('id, status, started_at')
@@ -899,19 +954,25 @@ async function applyLineage(
       .order('started_at', { ascending: false })
       .limit(20)
     if (runError) throw new Error(runError.message)
-    const prevRunId = previousRunId((runRows ?? []) as RunRow[], runId)
-    if (!prevRunId) return { lineage_priors: 0 }
+    const runs = (runRows ?? []) as RunRow[]
 
-    // `recommendations` holds a handful of rows per update, so this never
-    // approaches the 1000-row cap that would need selectAll.
-    const { data, error } = await admin
-      .from('recommendations')
-      .select('id, lineage_id, type, title, status')
-      .eq('client_id', clientId)
-      .eq('run_id', prevRunId)
-    if (error) throw new Error(error.message)
-    const priors = (data ?? []) as PriorRec[]
-    if (priors.length === 0) return { lineage_priors: 0 }
+    let priors: PriorRec[] = []
+    if (runIsVisible(runs, runId)) {
+      priors = await readRecs(runId)
+      if (priors.length > 0) counters.lineage_priors_this_run = 1
+    }
+    if (priors.length === 0) {
+      // "The previous update" has to mean the update the CLIENT saw, because
+      // what is being carried across is a status they set on that page. So it is
+      // the newest run with `status in ('completed','partial')` — the same
+      // anchor every client-facing loader uses (lib/pages/dashboard.ts,
+      // lib/pages/market.ts, the schedule send) — and never an `analyzing` or
+      // `failed` run.
+      const prevRunId = previousRunId(runs, runId)
+      if (!prevRunId) return { ...counters, lineage_priors: 0 }
+      priors = await readRecs(prevRunId)
+    }
+    if (priors.length === 0) return { ...counters, lineage_priors: 0 }
 
     let newVectors: number[][] = []
     let priorVectors: number[][] = []
@@ -920,27 +981,80 @@ async function applyLineage(
       newVectors = vecs.slice(0, rows.length)
       priorVectors = vecs.slice(rows.length)
     } catch {
-      // Exact-title matching still works without vectors.
+      // Exact-title matching still works without vectors — but on this corpus it
+      // finds nothing (0 of 107 consecutive pairs in production share a
+      // normalised title), so an embedding outage and an honest "no pair cleared
+      // the bar" both end at lineage_matched: 0. Counted, so the two stop
+      // looking identical in the log.
+      counters.lineage_embed_failed = 1
     }
 
     const assigned = assignLineage(rows, priors, newVectors, priorVectors)
-    let inheritedStatus = 0
+
+    // THE LEDGER, not the prior row's column. A status only ever reached the
+    // next update by riding on a row the matcher happened to re-find; a miss
+    // erased it. rec_decisions is keyed on the lineage, so a decision survives
+    // however many updates go by without a match.
+    const lineageIds = [...new Set(assigned.map((a) => a.lineageId))]
+    let decisions: RecDecision[] | null = null
+    try {
+      const { data, error } = await admin
+        .from(REC_DECISIONS_TABLE)
+        .select('id, lineage_id, status, decided_at')
+        .eq('client_id', clientId)
+        .in('lineage_id', lineageIds)
+        // NEWEST FIRST, under a stated cap. The ledger is append-only and never
+        // pruned, so this read grows for the life of a tenant and will one day
+        // meet PostgREST's silent 1000-row ceiling. Read oldest-first, as this
+        // was, the rows that ceiling drops are the NEWEST ones — so a lineage
+        // with a long history would inherit a superseded status, re-applying a
+        // "Done" the client has since reset, with nothing in the log to say so.
+        // Newest-first can only ever lose decisions a later one has already
+        // superseded; `id` settles two at the same instant, and inheritedStatus
+        // takes the max itself rather than trusting either order.
+        .order('decided_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(REC_DECISIONS_READ_LIMIT)
+      if (error) throw error
+      decisions = (data ?? []) as RecDecision[]
+      counters.lineage_decisions = decisions.length
+      // And say so when the cap is reached, rather than letting a truncated read
+      // look like a healthy one. (A tenant's dozen lineages need years of weekly
+      // decisions to get here; if it ever fires, the read wants a per-lineage
+      // shape rather than a bigger number.)
+      if (decisions.length >= REC_DECISIONS_READ_LIMIT) counters.lineage_decisions_capped = 1
+    } catch (e) {
+      // Two ways here, one sentence: the migration has not landed yet, or the
+      // read failed. Either way the prior row's own status is the fallback —
+      // exactly what this did before the ledger existed — and the lineage
+      // itself is still written.
+      counters[isMissingRecDecisions(e) ? 'lineage_decisions_absent' : 'lineage_decisions_failed'] = 1
+    }
+    let statusCarried = 0
     assigned.forEach((a, i) => {
       rows[i].lineage_id = a.lineageId
-      if (a.status) {
-        rows[i].status = a.status
-        inheritedStatus++
+      // The ledger answers for a lineage it has heard of, including when the
+      // answer is "back to New" (null); the prior row's column answers only for
+      // one it has not, and for a read that failed. That rule is
+      // `statusForLineage` in lib/rec-decisions.ts, where its four branches are
+      // tested — it was four lines of inline logic here, in an I/O function
+      // nothing pure could reach.
+      const carried = statusForLineage(a.lineageId, decisions, a.status)
+      if (carried) {
+        rows[i].status = carried
+        statusCarried++
       }
     })
     return {
+      ...counters,
       lineage_priors: priors.length,
       lineage_matched: assigned.filter((a) => a.matchKind !== 'new').length,
-      lineage_status_carried: inheritedStatus,
+      lineage_status_carried: statusCarried,
     }
   } catch {
     // Logged as a counter rather than thrown: the update ships, every
     // recommendation reads New for one more week.
-    return { lineage_error: 1 }
+    return { ...counters, lineage_error: 1 }
   }
 }
 
@@ -991,6 +1105,6 @@ export async function rerunPassDb(opts: { clientId: string; runId: string; persi
   return runDbCall({
     admin, clientId, runId,
     brandName: clientRes.data?.company_name ?? undefined, sov,
-    insightsForB, miById, ciIndex, persist, replaceExisting: true,
+    insightsForB, miById, ciIndex, persist,
   })
 }

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { validateSayVsHear, buildSystemPromptA, buildUserPromptA, buildSystemPromptB, buildUserPromptB, stripOnCameraLabel, ON_CAMERA_LABEL } from './pass-d'
 import { stripThemeRefs } from './prose-rules'
@@ -141,5 +142,65 @@ describe('D-b — the brief knows who is speaking (WP7a)', () => {
     expect(stripOnCameraLabel('I sized up after measuring twice')).toBe('I sized up after measuring twice')
     // Only a trailing label goes — a verbatim that really contains the words is left alone.
     expect(stripOnCameraLabel('He literally (said on camera) that it broke')).toBe('He literally (said on camera) that it broke')
+  })
+})
+
+describe('when the recommendations of an update are allowed to disappear', () => {
+  // NOT a behaviour test — the delete is I/O glue and this repo does not mock
+  // the world to test glue. It is a position test, on the one ordering that
+  // decides whether a failed D-b call costs a client their recommendations.
+  //
+  // What it guards: `runPassD` used to delete the run's recommendations before
+  // the D-b call, so a call that threw (a 500 from OpenAI) or returned no parsed
+  // output (a refusal) left a completed update showing ZERO recommendations —
+  // while the comment beside the OTHER delete promised "a failed call leaves the
+  // old rows", which was true only for the operator's rerun path. Both paths now
+  // delete after a successful parse. Nothing else in this file notices if that
+  // moves back.
+  const src = readFileSync(new URL('./pass-d.ts', import.meta.url), 'utf8')
+  const at = (needle: string) => {
+    const i = src.indexOf(needle)
+    expect(i, `pass-d.ts no longer contains ${needle}`).toBeGreaterThan(-1)
+    return i
+  }
+
+  it('deletes the run’s recommendations in exactly one place', () => {
+    expect([...src.matchAll(/from\('recommendations'\)\s*\.delete\(\)/g)]).toHaveLength(1)
+  })
+
+  it('does it only after the D-b call has parsed', () => {
+    const del = at("from('recommendations').delete()")
+    expect(del).toBeGreaterThan(at('b = await structuredCall<PassDbOutput>'))
+    expect(del).toBeGreaterThan(at('if (!b.parsed) {'))
+  })
+
+  it('reads the priors before removing them', () => {
+    // applyLineage matches against this run's own rows when it has some (a D-b
+    // rerun). If the delete ran first there would be nothing left to match.
+    expect(at('await applyLineage(')).toBeLessThan(at("from('recommendations').delete()"))
+  })
+
+  it('still clears the market insights before reinserting them', () => {
+    // The other half of invariant 6, unchanged: these ARE rewritten in the same
+    // breath, so their delete belongs where it is.
+    expect(at("from('market_insights').delete()")).toBeLessThan(at("from('market_insights')\n        .insert(miRows)"))
+  })
+
+  it('reads the decision ledger newest-first, under its stated cap', () => {
+    // Also a source test, and for the same reason: the read is I/O glue, but
+    // which THOUSAND rows it gets back decides whether a client's status is the
+    // one they set or one they have since changed. `rec_decisions` is
+    // append-only and never pruned, so it will meet PostgREST's silent 1000; at
+    // that point oldest-first drops the newest decisions — the ones that decide
+    // the answer — and logs `lineage_decisions: 1000` as if all were well.
+    // (`inheritedStatus` takes the max itself, so the order is not load-bearing
+    // for correctness within the page; WHICH page is.)
+    const read = src.slice(at('.from(REC_DECISIONS_TABLE)'), at('if (error) throw error'))
+    expect(read).toContain(".order('decided_at', { ascending: false })")
+    expect(read).toContain(".order('id', { ascending: false })")
+    expect(read).toContain('.limit(REC_DECISIONS_READ_LIMIT)')
+    // `id` is selected because it is the tiebreaker both the order and
+    // inheritedStatus use.
+    expect(read).toContain("select('id, lineage_id, status, decided_at')")
   })
 })
