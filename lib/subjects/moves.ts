@@ -14,6 +14,7 @@ import {
   type MoveDirection,
   type MoveKind,
   type SubjectOrigin,
+  type SubjectStatus,
 } from './types'
 
 // Moves — what a client declared it is trying to change — and the subject
@@ -35,6 +36,15 @@ import {
 // grant on `moves` at all, so `status` is a service-role write today. A page
 // that needs a client to mark a move done is a column grant and a conversation,
 // not a quiet write — and it is one additive line when somebody wants it.
+//
+// A SUBJECT IS PROPOSED BEFORE IT IS COUNTED. `subjects.status` defaults to
+// 'proposed' and the judge, the month reading and the freeze all read only
+// `active` rows, so naming a subject is half the act: decision E says the set
+// is CONFIRMED per tenant before a single subject row is shown, and
+// `activateSubject` is that confirmation. Nothing else in this codebase writes
+// 'active' — a subject nobody confirmed is a subject nothing counts, and
+// `nameSubject`'s sentence says so rather than implying the counting has
+// already started.
 //
 // EVERY SUBJECT WRITE CARRIES AN ACTOR. `config_changes.surface` already admits
 // 'subjects' (20260915091000), and a subject IS a configuration change in the
@@ -115,6 +125,36 @@ export function subjectSetVerdict(count: number): { state: 'short' | 'ready' | '
     return { state: 'short', line: `${count} of ${SUBJECTS_MIN}-${SUBJECTS_MAX} subjects named.` }
   }
   return { state: 'ready', line: `${count} subjects.` }
+}
+
+/** What confirming a subject should do, decided before anything is written.
+ *
+ *  The ceiling lives here rather than in the database for the reason
+ *  `subjectSetVerdict` gives — a tenant has to be able to sit at three while it
+ *  is setting up — but it IS enforced on the way up: past SUBJECTS_MAX no
+ *  single subject gets enough of the conversation to read, and a set that
+ *  grows past it silently is a set of numbers nobody can be given a band for. */
+export type ActivationCheck =
+  | { do: 'activate' }
+  | { do: 'nothing'; message: string }
+  | { do: 'refuse'; message: string }
+
+export function activationCheck(
+  subject: { status: SubjectStatus } | null,
+  activeCount: number,
+): ActivationCheck {
+  if (!subject) return { do: 'refuse', message: 'That subject is not yours.' }
+  if (subject.status === 'active') return { do: 'nothing', message: 'That one is already being counted.' }
+  if (subject.status === 'retired') {
+    return { do: 'refuse', message: 'You stopped tracking that one. Add it again to start a new line for it.' }
+  }
+  if (activeCount >= SUBJECTS_MAX) {
+    return {
+      do: 'refuse',
+      message: `You are already tracking ${SUBJECTS_MAX}. Stop tracking one before you add another — more than ${SUBJECTS_MAX} and no single one gets enough of the conversation to read.`,
+    }
+  }
+  return { do: 'activate' }
 }
 
 // ---- Writes -----------------------------------------------------------------
@@ -260,7 +300,56 @@ export async function nameSubject(
     const retired = await retireSubject(ctx, admin, { id: input.supersedes, supersededBy: id })
     if (!retired.ok) return { ok: false, message: retired.message }
   }
-  return { ok: true, message: 'Named. It starts being counted from the next update.', value: id ? { id } : undefined }
+  // NOT "it starts being counted": a named subject is `proposed`, and nothing
+  // counts a proposed subject. Confirming it is `activateSubject`.
+  return { ok: true, message: 'Added. Confirm it and it starts being counted from the next update.', value: id ? { id } : undefined }
+}
+
+/**
+ * Confirm a subject: the write that actually starts the counting.
+ *
+ * `subjects.status` defaults to 'proposed' and every reader that matters —
+ * `loadActiveSubjects`, and through it the membership judge, the month reading
+ * and the freeze — filters on 'active'. So this is decision E's confirmation
+ * step, and without it a tenant's subjects exist and measure nothing.
+ *
+ * Written on the SESSION client: the column grant on `subjects` hands a member
+ * `status` and nothing that says what the measurement is about, so this is the
+ * one thing about a subject a browser may change.
+ */
+export async function activateSubject(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: { id: string },
+): Promise<WriteResult<null>> {
+  const { data: before, error: readError } = await ctx.supabase
+    .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
+  if (readError) {
+    return { ok: false, message: isMissingSubjects(readError) ? 'Subjects are not switched on for this workspace yet.' : `Could not save: ${readError.message}` }
+  }
+  const { data: live, error: countError } = await ctx.supabase
+    .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('status', 'active')
+  if (countError) return { ok: false, message: `Could not save: ${countError.message}` }
+
+  const verdict = activationCheck(before as { status: SubjectStatus } | null, (live ?? []).length)
+  if (verdict.do === 'refuse') return { ok: false, message: verdict.message }
+  if (verdict.do === 'nothing') return { ok: true, message: verdict.message, value: null }
+
+  const { error } = await ctx.supabase
+    .from(TABLE_SUBJECTS)
+    .update({ status: 'active', updated_at: new Date().toISOString() })
+    .eq('id', input.id)
+  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'subjects',
+    before: before as Record<string, unknown>,
+    after: { id: input.id, status: 'active' },
+    actor: actorFor(ctx, 'confirmed a subject'),
+  })
+  return { ok: true, message: 'Confirmed. It starts being counted from the next update.', value: null }
 }
 
 /** Retire a subject. Never a delete: the months it already carries are the

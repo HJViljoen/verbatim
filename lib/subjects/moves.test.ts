@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { moveTarget, moveTitle, subjectSetVerdict } from './moves'
+import { activationCheck, moveTarget, moveTitle, subjectSetVerdict } from './moves'
 import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN } from './types'
 
 describe('moveTarget', () => {
@@ -78,6 +78,48 @@ describe('subjectSetVerdict', () => {
     for (const n of [0, 3, 6, 12]) {
       const { line } = subjectSetVerdict(n)
       for (const word of ['run', 'Pass', 'cluster', 'embedding', 'judge']) expect(line).not.toContain(word)
+    }
+  })
+})
+
+describe('activationCheck', () => {
+  it('confirms a proposed subject — the one write that starts the counting', () => {
+    // Everything downstream filters on `active`: the judge, the month reading
+    // and the freeze. A named subject is `proposed` and measures nothing until
+    // this returns `activate`.
+    expect(activationCheck({ status: 'proposed' }, 4)).toEqual({ do: 'activate' })
+  })
+
+  it('does nothing to a subject that is already being counted', () => {
+    expect(activationCheck({ status: 'active' }, 6).do).toBe('nothing')
+  })
+
+  it('refuses to bring a stopped subject back under its old line', () => {
+    const v = activationCheck({ status: 'retired' }, 2)
+    expect(v.do).toBe('refuse')
+    expect(v.do === 'refuse' && v.message).toContain('new line')
+  })
+
+  it('refuses a subject that is not this tenant\u2019s', () => {
+    expect(activationCheck(null, 0).do).toBe('refuse')
+  })
+
+  it('holds the ceiling on the way up, and only on the way up', () => {
+    expect(activationCheck({ status: 'proposed' }, SUBJECTS_MAX - 1).do).toBe('activate')
+    const over = activationCheck({ status: 'proposed' }, SUBJECTS_MAX)
+    expect(over.do).toBe('refuse')
+    expect(over.do === 'refuse' && over.message).toContain('enough of the conversation to read')
+  })
+
+  it('carries no pipeline jargon in anything it says', () => {
+    const lines = [
+      activationCheck(null, 0),
+      activationCheck({ status: 'active' }, 1),
+      activationCheck({ status: 'retired' }, 1),
+      activationCheck({ status: 'proposed' }, SUBJECTS_MAX),
+    ].map((v) => (v.do === 'activate' ? '' : v.message))
+    for (const line of lines) {
+      for (const word of ['run', 'Pass', 'cluster', 'embedding', 'judge', 'status']) expect(line).not.toContain(word)
     }
   })
 })
