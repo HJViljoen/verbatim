@@ -7,6 +7,7 @@ import {
   previousRunEnd,
   rowWindow,
   reconstructWindow,
+  closingMessage,
   CONFIG_SNAPSHOT_COLUMNS,
 } from './run-bookkeeping'
 import { periodWindowDays } from '../config'
@@ -262,5 +263,21 @@ describe('reconstructWindow — the backfill label', () => {
   it('normalises the end to an ISO instant, whatever the row spelled', () => {
     // pipeline_runs.started_at comes back from PostgREST as '+00:00', not 'Z'.
     expect(reconstructWindow('2026-07-03 10:31:23+00', 'weekly').end).toBe('2026-07-03T10:31:23.000Z')
+  })
+})
+
+describe('closingMessage — the epitaph on a stranded run', () => {
+  it('is dated, names the status it was stuck at and the day it opened', () => {
+    // Össur 06706296: 'analyzing' since 2026-06-13, closed by the operator
+    // under D5. The message is the only record of a hand-made decision.
+    expect(closingMessage('analyzing', '2026-06-13T08:20:25.805Z', new Date('2026-09-17T19:30:00.000Z')))
+      .toBe('closed by operator on 2026-09-17: stranded at analyzing since 2026-06-13')
+  })
+
+  it('reads a PostgREST timestamp as happily as an ISO one', () => {
+    // started_at comes back '2026-06-13 08:20:25.80529+00'; the day is the day
+    // either way, and no parsing is involved — only the first ten characters.
+    expect(closingMessage('running', '2026-06-13 08:20:25.80529+00', new Date('2026-09-17T00:00:00.000Z')))
+      .toBe('closed by operator on 2026-09-17: stranded at running since 2026-06-13')
   })
 })

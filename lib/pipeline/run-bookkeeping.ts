@@ -200,6 +200,20 @@ export function openRunBookkeeping(input: OpenRunBookkeepingInput): Record<strin
 }
 
 /**
+ * The epitaph an operator writes on a run nothing will ever close.
+ *
+ * A run parked at 'analyzing' is reclaimed by nothing — the single-flight sweep
+ * and onFailure both know 'running' only — so closing one is a hand-made
+ * decision, and the message is the whole record of it. Dated, and it says what
+ * the row was doing when it stopped: ten April rows were once bulk-closed at a
+ * single timestamp with no message at all, and their durations have been
+ * unreadable ever since.
+ */
+export function closingMessage(status: string, startedAt: string, now: Date): string {
+  return `closed by operator on ${now.toISOString().slice(0, 10)}: stranded at ${status} since ${startedAt.slice(0, 10)}`
+}
+
+/**
  * The window a historical run covered, from the rule its own code was
  * following: [started_at − periodWindowDays(period), started_at]. A label, not
  * a record — the real window was a reading of `Date.now()` inside a step that
