@@ -166,6 +166,25 @@ export function activationCheck(
 
 // ---- Writes -----------------------------------------------------------------
 
+/**
+ * What a client is told when a write fails, and where the cause actually goes.
+ *
+ * These ten sites returned "Could not save: " followed by the PostgREST
+ * message, putting constraint names, table names and "violates row-level
+ * security policy for table …" in front of a client. The pattern was inherited
+ * — app/dashboard/settings/actions.ts does it too — but main also carries the
+ * calibrated shape this copies: "Could not save your search terms. Try again,
+ * and tell us if it keeps happening."
+ *
+ * The raw text is not thrown away: it is logged with the operation named, so an
+ * operator still has everything they had before.
+ */
+function couldNotSave(where: string, error: unknown, extra = ''): string {
+  const message = (error as { message?: string } | null)?.message ?? String(error)
+  console.error(`[subjects] ${where} failed: ${message}`)
+  return extra ? `Could not save.${extra}` : 'Could not save. Try again, and tell us if it keeps happening.'
+}
+
 const actorFor = (ctx: WriteContext, detail: string): ConfigActor =>
   actorStamp({ userId: ctx.userId, email: ctx.email, operator: ctx.operator ?? null }, detail)
 
@@ -206,13 +225,13 @@ export async function declareMove(
   if (target.subject_id) {
     const { data, error } = await ctx.supabase
       .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('id', target.subject_id).maybeSingle()
-    if (error) return { ok: false, message: isMissingSubjects(error) ? 'Subjects are not switched on for this workspace yet.' : `Could not save: ${error.message}` }
+    if (error) return { ok: false, message: isMissingSubjects(error) ? 'Subjects are not switched on for this workspace yet.' : couldNotSave('declareMove subject read', error) }
     if (!data) return { ok: false, message: 'That subject is not yours to track.' }
   }
   if (target.registry_ids) {
     const { data, error } = await ctx.supabase
       .from('theme_registry').select('id').eq('client_id', ctx.clientId).in('id', target.registry_ids)
-    if (error) return { ok: false, message: `Could not save: ${error.message}` }
+    if (error) return { ok: false, message: couldNotSave('declareMove theme read', error) }
     if ((data ?? []).length !== target.registry_ids.length) return { ok: false, message: 'One of those themes is not yours to track.' }
   }
 
@@ -231,7 +250,7 @@ export async function declareMove(
     })
     .select('id, client_id, kind, subject_id, registry_ids, lineage_id, title, note, direction, declared_at, declared_by, status')
     .maybeSingle()
-  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+  if (error) return { ok: false, message: couldNotSave('declareMove insert', error) }
 
   const move = data as Move | null
   await recordConfigChange(admin, {
@@ -317,7 +336,7 @@ export async function nameSubject(
     // The partial unique index: one live subject per name per tenant.
     if ((error as { code?: string }).code === '23505') return { ok: false, message: `You are already tracking "${name}".` }
     const stopped = retiredFirst ? ` "${name}" has been stopped and the replacement was not saved — add it again.` : ''
-    return { ok: false, message: `Could not save: ${error.message}.${stopped}` }
+    return { ok: false, message: couldNotSave('nameSubject insert', error, stopped) }
   }
   const id = (data as { id: string } | null)?.id
   await recordConfigChange(admin, {
@@ -337,7 +356,7 @@ export async function nameSubject(
         .from(TABLE_SUBJECTS)
         .update({ superseded_by: id, updated_at: new Date().toISOString() })
         .eq('id', input.supersedes)
-      if (pointError) return { ok: false, message: `Could not save: ${pointError.message}` }
+      if (pointError) return { ok: false, message: couldNotSave('nameSubject point update', pointError) }
     } else {
       const retired = await retireSubject(ctx, admin, { id: input.supersedes, supersededBy: id })
       if (!retired.ok) return { ok: false, message: retired.message }
@@ -368,11 +387,11 @@ export async function activateSubject(
   const { data: before, error: readError } = await ctx.supabase
     .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
   if (readError) {
-    return { ok: false, message: isMissingSubjects(readError) ? 'Subjects are not switched on for this workspace yet.' : `Could not save: ${readError.message}` }
+    return { ok: false, message: isMissingSubjects(readError) ? 'Subjects are not switched on for this workspace yet.' : couldNotSave('confirmSubject read', readError) }
   }
   const { data: live, error: countError } = await ctx.supabase
     .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('status', 'active')
-  if (countError) return { ok: false, message: `Could not save: ${countError.message}` }
+  if (countError) return { ok: false, message: couldNotSave('confirmSubject count', countError) }
 
   const verdict = activationCheck(before as { status: SubjectStatus } | null, (live ?? []).length)
   if (verdict.do === 'refuse') return { ok: false, message: verdict.message }
@@ -382,7 +401,7 @@ export async function activateSubject(
     .from(TABLE_SUBJECTS)
     .update({ status: 'active', updated_at: new Date().toISOString() })
     .eq('id', input.id)
-  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+  if (error) return { ok: false, message: couldNotSave('confirmSubject update', error) }
 
   // NOT LOGGED HERE. `subjects_status_audit` writes the config_changes row for
   // every status move, from identity, and it cannot be gone round: the update
@@ -408,14 +427,14 @@ export async function retireSubject(
 ): Promise<WriteResult<null>> {
   const { data: before, error: readError } = await ctx.supabase
     .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
-  if (readError) return { ok: false, message: `Could not save: ${readError.message}` }
+  if (readError) return { ok: false, message: couldNotSave('retireSubject read', readError) }
   if (!before) return { ok: false, message: 'That subject is not yours.' }
 
   const { error } = await ctx.supabase
     .from(TABLE_SUBJECTS)
     .update({ status: 'retired', superseded_by: input.supersededBy ?? null, updated_at: new Date().toISOString() })
     .eq('id', input.id)
-  if (error) return { ok: false, message: `Could not save: ${error.message}` }
+  if (error) return { ok: false, message: couldNotSave('retireSubject update', error) }
 
   // Logged by `subjects_status_audit`, not here — see confirmSubject. This is
   // the write that permanently freezes the subject's open months, so the record
