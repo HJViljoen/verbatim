@@ -1446,9 +1446,15 @@ async function loadVoices(
   if (!themedRunId) return { voices: [], from: 0 }
   const registryId = lead?.objectKind === 'theme' ? lead.objectId : top[0]?.objectId
   if (!registryId) return { voices: [], from: 0 }
+  // EVERY READ CARRIES THE TENANT, even where the ids came from the tenant's
+  // own run. The session client is RLS-scoped, so this changes nothing for a
+  // signed-in reader — but `loadOverview` takes any SupabaseClient, and a
+  // service-role caller (a report build, a scratchpad, this package's own
+  // verification) is scoped by what the query says and by nothing else.
   const themeRes = await supabase
     .from('themes')
     .select('id, label, supporting_insight_ids')
+    .eq('client_id', clientId)
     .eq('run_id', themedRunId)
     .eq('registry_id', registryId)
     .limit(1)
@@ -1480,7 +1486,11 @@ async function loadVoices(
   type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
   const meta = new Map<string, CommentMeta>()
   if (commentIds.length > 0) {
-    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id').in('id', commentIds)
+    const res = await supabase
+      .from('comments')
+      .select('id, platform, comment_date, video_id, comment_id')
+      .eq('client_id', clientId)
+      .in('id', commentIds)
     for (const c of rows<CommentMeta & { id: string }>(res, 'overview.voiceComments')) meta.set(c.id, c)
   }
   // WHERE TO GO AND READ IT. The design asks the cite for "platform · date ·
