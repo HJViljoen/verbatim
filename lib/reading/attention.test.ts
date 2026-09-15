@@ -138,7 +138,11 @@ describe('panelStale', () => {
     }
     expect(PANEL_STALING_SURFACES).toContain('regate')
     expect(PANEL_STALING_SURFACES).toContain('entity_retag')
-    for (const surface of ['cadence', 'knobs', 'schedule', 'subjects', 'prompt_version', 'other']) {
+    // `subreddits` is the one that would have bitten: Reddit accounts are never
+    // panel members, and discovery rewrites the community list on roughly every
+    // weekly gather (66 rows in four weeks across two tenants, production,
+    // read-only 2026-09-15). An era per week refuses every standings verdict.
+    for (const surface of ['subreddits', 'cadence', 'knobs', 'schedule', 'subjects', 'prompt_version', 'other']) {
       expect(PANEL_STALING_SURFACES).not.toContain(surface)
       expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
     }

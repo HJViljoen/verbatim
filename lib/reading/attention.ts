@@ -222,13 +222,26 @@ export function panelStale(
   return changes.some((c) => surfaces.includes(c.surface) && c.changed_at > panel.frozen_at)
 }
 
-/** The `config_changes.surface` values that move which accounts we gather at
- *  all, and therefore re-base a panel. `cadence`, `knobs`, `schedule`,
- *  `subjects` and `prompt_version` are deliberately absent: they change how
- *  often or how deeply we look, not WHERE, and a panel that re-froze on every
- *  one of them would draw a rule on the axis for a schedule edit. */
+/**
+ * The `config_changes.surface` values that move which accounts we gather at
+ * all, and therefore re-base a panel.
+ *
+ * `cadence`, `knobs`, `schedule`, `subjects` and `prompt_version` are absent
+ * because they change how often or how deeply we look, not WHERE: a panel that
+ * re-froze on a schedule edit would draw a rule on the axis for nothing.
+ *
+ * `subreddits` IS ABSENT, AND IT IS THE ONE THAT MATTERS. Reddit accounts are
+ * never panel members (`PANEL_EXCLUDED_PLATFORMS`), so a change to the tracked
+ * community list cannot move a single member — and subreddit discovery rewrites
+ * that list on roughly every weekly gather: 66 `subreddits` rows across four
+ * weeks and two tenants in production, measured read-only 2026-09-15. Keeping
+ * it here would re-freeze the panel most visits, and an era per week means
+ * `samePanelEra` is false for every month-over-month pair, which refuses every
+ * standings verdict there is. A rule on the axis costs a reader a comparison;
+ * a rule every week costs them the series.
+ */
 export const PANEL_STALING_SURFACES: readonly string[] = [
-  'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'rival_rename', 'entity_retag', 'regate',
+  'terms', 'rivals', 'handles', 'platforms', 'rival_rename', 'entity_retag', 'regate',
 ]
 
 /**
