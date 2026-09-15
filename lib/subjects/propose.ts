@@ -46,8 +46,14 @@ import {
  *  MAX_CLAIMS_PER_ENTITY = 12, which is the prompt-sized side for Pass C; here
  *  the whole pool is 55-62 claims and the wider view is the point — a subject
  *  named from 12 of 62 is a subject named from whatever the newest run happened
- *  to say. */
-export const PROPOSE_CLAIM_CAP = 40
+ *  to say, and a cap of 40 would have said exactly that about the other 22.
+ *
+ *  120 is a ceiling, not a selection: it is twice today's largest pool, so it
+ *  binds on neither tenant and the prompt stays one call (a claim is ~15 tokens;
+ *  120 of them is under 2,000, well inside the ~$0.002 this pass costs). It
+ *  exists at all so a tenant that one day has 4,000 claims does not silently
+ *  send them. */
+export const PROPOSE_CLAIM_CAP = 120
 
 /** Category themes to put in the prompt, by share of the bucket's videos. Deep
  *  enough that a real subject sitting at rank 11 is reachable; shallow enough
