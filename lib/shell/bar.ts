@@ -75,3 +75,30 @@ export function horizonOptions(basePath: string, params: Record<string, string |
     active: h === current,
   }))
 }
+
+/** The parameter that opens a drawer over a page (`?detail=record`, and
+ *  HowToRead's `?detail=legend`). */
+export const DETAIL_PARAM = 'detail'
+
+/**
+ * Where the "how sound is this" band points, and where closing the record
+ * returns to.
+ *
+ * The page's OWN params again, for the same reason the horizon carries them:
+ * `DrawerLink` pushes these with `history.pushState` and nothing re-renders, so
+ * an href that drops the selection leaves the address bar describing a reading
+ * the screen is not showing. Opening the record on
+ * `/dashboard/voice?horizon=last_3&themes=x` and closing it must not silently
+ * turn the page into the default reading of everything the next time that link
+ * is opened, refreshed or reached with the back button.
+ */
+export function detailHref(basePath: string, params: Record<string, string | undefined>, detail: string | null): string {
+  const q = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (k === DETAIL_PARAM) continue
+    if (typeof v === 'string' && v !== '') q.set(k, v)
+  }
+  if (detail) q.set(DETAIL_PARAM, detail)
+  const s = q.toString()
+  return s ? `${basePath}?${s}` : basePath
+}

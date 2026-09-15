@@ -52,7 +52,7 @@ export function SurfacePageBar({ nav, params = {}, context = null, updates = nul
   return (
     <PageBar title={s.label} context={line ?? undefined} subtitle={s.question ?? undefined}>
       {hasHorizon(s) && <HorizonControl basePath={s.href} params={params} current={horizon} />}
-      {record && <HowSound basePath={s.href} line={record.line} lines={record.lines} />}
+      {record && <HowSound basePath={s.href} params={params} line={record.line} lines={record.lines} />}
       {children}
     </PageBar>
   )

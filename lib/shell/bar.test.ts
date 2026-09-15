@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contextLine, horizonHref, horizonOptions, updateLine } from './bar'
+import { contextLine, detailHref, horizonHref, horizonOptions, updateLine } from './bar'
 import { directionHits } from '../calibration'
 
 describe('contextLine', () => {
@@ -67,5 +67,22 @@ describe('horizonOptions', () => {
     expect(o.filter((x) => x.active).map((x) => x.horizon)).toEqual(['last_3'])
     expect(o[0].href).toBe('/dashboard')
     expect(o[3].href).toBe('/dashboard?horizon=since_start')
+  })
+})
+
+describe('detailHref', () => {
+  it('opens the record at the reading the reader is looking at', () => {
+    expect(detailHref('/dashboard/voice', { themes: 'product_usefulness', horizon: 'last_3' }, 'record'))
+      .toBe('/dashboard/voice?themes=product_usefulness&horizon=last_3&detail=record')
+  })
+
+  it('closes back to the same reading, not to the page’s default', () => {
+    expect(detailHref('/dashboard/voice', { themes: 'product_usefulness', horizon: 'last_3', detail: 'record' }, null))
+      .toBe('/dashboard/voice?themes=product_usefulness&horizon=last_3')
+  })
+
+  it('leaves a plain page plain', () => {
+    expect(detailHref('/dashboard', {}, null)).toBe('/dashboard')
+    expect(detailHref('/dashboard', { item: '' }, 'record')).toBe('/dashboard?detail=record')
   })
 })
