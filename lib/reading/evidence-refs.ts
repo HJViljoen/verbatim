@@ -201,13 +201,18 @@ export async function resolveRefs(
  * weigh and "some" is not.
  */
 export function quotableLine(r: PointResolution): string {
-  // CONVERSATIONS, not videos. lib/calibration.ts's GLOSSARY pins the word —
-  // "one video and the comments it sparked — the unit behind every 'heard in…'
-  // and share figure" — and this sentence sits beside exactly those figures.
-  // The plan pins only the "8 of 31 voices still quotable" half, so the other
-  // half was a free choice, and "videos" is the pipeline's word for it, not
-  // the product's.
-  const videos = r.videos.resolvable === 1 ? '1 conversation' : `${r.videos.resolvable} conversations`
+  // VIDEOS, not conversations, and the earlier reasoning here was backwards.
+  // It cited GLOSSARY.conversations — but lib/calibration.ts labels that entry
+  // LEGACY in its own words and says printing it beside a month-scoped figure
+  // "would put a month-scoped sentence under a figure that is not
+  // month-scoped". The figure under this line IS month-scoped: it is a frozen
+  // month's evidence. So the month-scoped word is the right one, and it is the
+  // convention the reading surfaces settled on — new surfaces say `video`, the
+  // legacy pages keep `conversations` until they retire. Two neighbours had
+  // already gone this way and written down why: attention.ts refuses the word
+  // outright ("would put two meanings under one word on the same block") and
+  // record.ts says "videos" for this exact quantity.
+  const videos = r.videos.resolvable === 1 ? '1 video' : `${r.videos.resolvable} videos`
   const gone = r.unavailableVideos > 0
     ? `${r.unavailableVideos === r.videos.resolvable ? 'no longer' : `${r.unavailableVideos} no longer`} on the platform`
     : null
