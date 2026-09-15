@@ -1,0 +1,396 @@
+import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
+import { shortDate, monthName } from '@/lib/format'
+import {
+  axisLabels, calendarGeometry, chartId, collapseRules, hoverTitle, legendStates, lineSegments,
+  spanOf, STATE_LABEL, valueScale,
+  type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
+} from '@/lib/charts/calendar'
+
+// The calendar-spaced line (Phase 1 WP10, design item 6, decisions L, M, U).
+// Server SVG, no library, no client JS — the house rule since the redesign.
+//
+// WHAT IS NEW HERE, AND WHY EACH PIECE HAD TO BE.
+//
+// 1. A DATED AXIS. `LineChart` and `Sparkline` space by INDEX, so a month with
+//    no reading has no slot and the line closes the hole up. On production that
+//    is 16 of Ottobock's 36 months and 17 of the Össur category's 72: a
+//    two-year gap and a one-month gap draw identically and every point after
+//    them is misdated. The axis is generated from the calendar
+//    (`lib/reading/series.ts` monthAxis) and every month owns its x whether or
+//    not anything was said in it. The arithmetic is `lib/charts/calendar.ts`.
+//
+// 2. A GAP IS A GAP. `(number | null)` per month, drawn as segmented polylines.
+//    `components/profile-stats.tsx:270` is the only code in the repo that
+//    already did this and it was private to one tile; this is that behaviour,
+//    shared, and `Sparkline` now has it too.
+//
+// 3. THREE NON-READINGS IN THE GUTTER, NOT ON THE LINE. A month below the
+//    audience floor, a month where the object itself is below the numerator
+//    floor, and a month still filling are all things a reader must be able to
+//    SEE without being able to read a comparison off them. The two below-floor
+//    states are marks under the baseline; the filling month keeps its point and
+//    gains a part-height bar. Drawing a below-floor month as an ordinary point
+//    is the lie the whole reading layer exists to stop — on Sealand it would be
+//    66 of 68 industry-other months.
+//
+// 4. DATED RULES AND AN AFFECTED BAND. A tracking change, a clustering change
+//    and a rename each draw a vertical rule at their own month, and the months
+//    the change MOVED are shaded behind the lines (decision U: `affects_months`
+//    is stored at save time and is rarely the month of the save). A
+//    reconstructed row — one nobody logged, inferred afterwards — draws in a
+//    second, fainter token, because "we worked out that this probably happened"
+//    is not the same claim as "this was recorded".
+//
+// 5. READ-BACK SHADING. Months that had already closed when the tenant was set
+//    up are hatched: what they read TODAY, not what we would have reported at
+//    the time.
+//
+// THE SPEC THIS AMENDS. `mock-sealand/spec/design-system.md` §3.9 says: "No
+// gridlines beyond baseline + midline, no axis rules, no tick marks, no filled
+// areas. Points are solid, ringed in the surface colour, never hollow. Event
+// markers are the only ringed-hollow circle." A dated rule IS an axis rule, an
+// affected band IS a filled area, and the hollow circle is spent on event
+// markers. The amendment (decision U, recorded in
+// design-system/verbatim/MASTER.md §Chart rules) moves the CHANGE off the data
+// line entirely — into the gutter below the baseline — which keeps "points are
+// solid" true of every data point and confines the new tokens to axis
+// furniture.
+//
+// EVERY NUMBER THIS CHART PRINTS IS MARKED `data-copy="figure"`, so a block
+// that sets the chart inside a prose node still keeps rule (a) of the copy
+// contract: the model's sentence is checked on its own words and code's figures
+// are code's (lib/test/copy-contract.ts).
+
+export type { CalendarBand, CalendarPoint, CalendarRule, CalendarSeries }
+
+/** How many dated rules can carry a printed date before the labels collide.
+ *  Past it the rules are still drawn and still carry their `<title>`; only the
+ *  printed tick label is dropped, because four overlapping 9px dates are less
+ *  readable than none. */
+const MAX_PRINTED_RULE_LABELS = 4
+
+const RULE_STROKE: Record<CalendarRule['kind'], { stroke: string; dash: string; opacity: number }> = {
+  tracking_change: { stroke: 'var(--border)', dash: '2 3', opacity: 1 },
+  clustering_changed: { stroke: 'var(--border)', dash: '2 3', opacity: 1 },
+  renamed: { stroke: 'var(--border)', dash: '2 3', opacity: 1 },
+  // The second token: inferred, not recorded.
+  reconstructed: { stroke: 'var(--muted-foreground)', dash: '1 4', opacity: 0.5 },
+}
+
+export function CalendarLine({
+  axis, series, rules = [], bands = [], format = (v) => `${v}`,
+  width = 880, height = 210, padL = 56, padR = 180,
+  zeroBase = true, legend = true, maxLabels = 12,
+  caption, label, id, className,
+}: {
+  /** Every month to draw, ascending — `monthAxis(from, to)`. */
+  axis: readonly string[]
+  series: readonly CalendarSeries[]
+  rules?: readonly CalendarRule[]
+  /** Stretches shaded behind the lines in the hatch — "read back at setup". */
+  bands?: readonly CalendarBand[]
+  format?: (v: number) => string
+  width?: number
+  height?: number
+  padL?: number
+  padR?: number
+  zeroBase?: boolean
+  /** Drawn whenever there are two or more series, or any gutter token to
+   *  explain. Identity is never colour-alone (MASTER.md). */
+  legend?: boolean
+  maxLabels?: number
+  /** The line under the chart, in the caller's words — a `MonthLabel.text`
+   *  from lib/reading/series.ts, never a sentence invented here. */
+  caption?: ReactNode
+  /** What the chart is, for a screen reader. */
+  label?: string
+  /** Unique per chart on a page; derived from the series labels when omitted. */
+  id?: string
+  className?: string
+}) {
+  const months = axis.map((m) => m)
+  if (!months.length || !series.length) return null
+
+  const g = calendarGeometry({ axis: months, width, height, padL, padR })
+  const scale = valueScale(series, { zeroBase, top: g.top, baseline: g.baseline })
+  const drawn = collapseRules(months, rules)
+  const uid = id ?? chartId([...series.map((s) => s.label), months[0], months[months.length - 1]])
+  const hatch = `${uid}-back`
+  const labelled = new Set(axisLabels(months, maxLabels))
+  const printRuleLabels = drawn.length <= MAX_PRINTED_RULE_LABELS
+  const states = legendStates(series)
+  const showLegend = legend && (series.length >= 2 || states.length > 0)
+
+  // A month nobody has a reading for gets a fainter label, the way the mock
+  // draws April: the axis still says the month happened.
+  const read = new Set<string>()
+  for (const s of series) for (const p of s.points) if (p.value != null) read.add(p.month)
+
+  const bandRect = (span: { from: number; to: number }, key: string, fill: string, title: string) => {
+    const half = g.slot / 2
+    const x1 = Math.max(g.padL - half, g.xAt(span.from) - half)
+    const x2 = Math.min(g.padR + half, g.xAt(span.to) + half)
+    return (
+      <rect key={key} x={x1} y={g.top} width={Math.max(2, x2 - x1)} height={g.baseline - g.top} fill={fill}>
+        <title>{title}</title>
+      </rect>
+    )
+  }
+
+  return (
+    <div className={cn('flex min-w-0 flex-col gap-2', className)}>
+      {showLegend && (
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          {series.map((s) => (
+            <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
+              {s.label}
+              {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
+            </span>
+          ))}
+          {states.map((state) => (
+            <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <LegendToken state={state} />
+              {STATE_LABEL[state]}
+            </span>
+          ))}
+        </div>
+      )}
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        width="100%"
+        height={height}
+        preserveAspectRatio="none"
+        style={{ overflow: 'visible', display: 'block' }}
+        role="img"
+        aria-label={label ?? `${series.map((s) => s.label).join(' vs ')}, month by month`}
+      >
+        <defs>
+          <pattern id={hatch} width={6} height={6} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1={0} y1={0} x2={0} y2={6} stroke="var(--border)" strokeWidth={1} />
+          </pattern>
+        </defs>
+
+        {/* The months a change moved, behind everything. */}
+        {drawn.map((r, i) => {
+          const span = r.affects?.length ? spanOf(months, r.affects) : null
+          return span ? bandRect(span, `aff${i}`, 'var(--inner)', `${r.label} — affects ${monthName(months[span.from])} to ${monthName(months[span.to])}`) : null
+        })}
+        {/* Months that had already closed when we started. */}
+        {bands.map((b, i) => {
+          const span = spanOf(months, b.months)
+          return span ? bandRect(span, `band${i}`, `url(#${hatch})`, b.label) : null
+        })}
+
+        <line x1={g.padL} y1={g.baseline} x2={g.padR} y2={g.baseline} stroke="var(--border)" strokeWidth={1} />
+        <line x1={g.padL} y1={scale.y(scale.mid)} x2={g.padR} y2={scale.y(scale.mid)} stroke="var(--muted)" strokeWidth={1} />
+        <text data-copy="figure" x={g.padL - 10} y={g.baseline + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.lo)}</text>
+        <text data-copy="figure" x={g.padL - 10} y={scale.y(scale.mid) + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">{format(scale.mid)}</text>
+
+        {/* Dated rules. */}
+        {drawn.map((r, i) => {
+          const x = g.x(r.month)
+          if (x == null) return null
+          const pen = RULE_STROKE[r.kind]
+          return (
+            <g key={`rule${i}`}>
+              <line x1={x} y1={g.top - 4} x2={x} y2={g.baseline} stroke={pen.stroke} strokeWidth={1} strokeDasharray={pen.dash} opacity={pen.opacity}>
+                <title>{r.label}</title>
+              </line>
+              {printRuleLabels && (
+                <text x={x - 3} y={g.top} textAnchor="end" fontSize={9} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                  {r.at ? shortDate(r.at) : monthName(r.month)}
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+        {series.map((s) => (
+          <SeriesMarks
+            key={s.label}
+            series={s}
+            geometry={g}
+            y={scale.y}
+            format={format}
+            padR={g.padR}
+          />
+        ))}
+
+        {/* Month labels, thinned so a 68-month axis is still readable. */}
+        {months.map((m, i) =>
+          labelled.has(i) ? (
+            <text
+              key={m}
+              x={g.xAt(i)}
+              y={g.labelY}
+              textAnchor="middle"
+              fontSize={10}
+              fontFamily="var(--font-plex-mono), monospace"
+              fill={read.has(m) ? 'var(--muted-foreground)' : 'var(--border)'}
+            >
+              {shortMonth(m)}
+            </text>
+          ) : null,
+        )}
+      </svg>
+
+      {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
+    </div>
+  )
+}
+
+/** One series: its segments, its points, its gutter marks, its filling bar and
+ *  its end label. Split out so the chart body reads as a list of layers. */
+function SeriesMarks({
+  series, geometry: g, y, format, padR,
+}: {
+  series: CalendarSeries
+  geometry: ReturnType<typeof calendarGeometry>
+  y: (v: number) => number
+  format: (v: number) => string
+  padR: number
+}) {
+  const points = series.points
+  const runs = lineSegments(points)
+  const at = (p: CalendarPoint): number | null => g.x(p.month)
+  const lastPlotted = runs.length ? runs[runs.length - 1][runs[runs.length - 1].length - 1] : null
+  const end = lastPlotted != null ? points[lastPlotted] : null
+  const endX = end ? at(end) : null
+
+  return (
+    <g>
+      {runs.map((run, i) => {
+        const coords = run
+          .map((k) => ({ x: at(points[k]), v: points[k].value }))
+          .filter((c): c is { x: number; v: number } => c.x != null && c.v != null)
+        if (coords.length < 2) return null
+        return (
+          <polyline
+            key={`seg${i}`}
+            points={coords.map((c) => `${c.x.toFixed(1)},${y(c.v).toFixed(1)}`).join(' ')}
+            fill="none"
+            stroke={series.color}
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        )
+      })}
+
+      {points.map((p, i) => {
+        const x = at(p)
+        if (x == null) return null
+        const title = hoverTitle(series, p, format)
+        if (p.value == null) {
+          // Nothing on the line. A below-floor month is a mark in the gutter; a
+          // hollow month is the gap itself, with a hover so the reader can ask.
+          return (
+            <g key={`m${i}`}>
+              {p.state === 'below_floor' && (
+                <circle cx={x} cy={g.gutterY} r={3.5} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+              )}
+              {p.state === 'below_numerator' && (
+                <rect x={x - 3} y={g.gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
+              )}
+              <rect x={x - g.slot / 2} y={g.top} width={Math.max(4, g.slot)} height={g.baseline - g.top + 12} fill="transparent">
+                <title>{title}</title>
+              </rect>
+            </g>
+          )
+        }
+        const isEnd = i === lastPlotted
+        return (
+          <g key={`m${i}`}>
+            {p.state === 'filling' && (
+              <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} color={series.color} format={format} padR={padR} />
+            )}
+            <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
+            <circle cx={x} cy={y(p.value)} r={9} fill="transparent"><title>{title}</title></circle>
+          </g>
+        )
+      })}
+
+      {end && endX != null && end.value != null && (
+        <text x={padR + 10} y={y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
+          {series.label}{' '}
+          <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
+          {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
+        </text>
+      )}
+    </g>
+  )
+}
+
+/**
+ * The still-filling month: a part-height bar under its point, and — where the
+ * caller actually computed it — a tick at what the same month read at this
+ * point last month.
+ *
+ * The bar is the affordance item 6 asks for and §3.9 forbids ("no filled
+ * areas"); it is part of the amendment. It is the ONE filled shape on the
+ * chart and it means one thing: this number is not finished.
+ */
+function FillingBar({
+  x, value, atLastMonth, y, baseline, slot, color, format, padR,
+}: {
+  x: number
+  value: number
+  atLastMonth: number | null
+  y: (v: number) => number
+  baseline: number
+  slot: number
+  color: string
+  format: (v: number) => string
+  padR: number
+}) {
+  const w = Math.max(6, Math.min(18, slot * 0.36))
+  const top = y(value)
+  return (
+    <g>
+      <rect x={x - w / 2} y={top} width={w} height={Math.max(0, baseline - top)} fill={color} opacity={0.14}>
+        <title>Still filling — this month is still taking comments</title>
+      </rect>
+      {atLastMonth != null && (
+        <g>
+          <line x1={x - w} y1={y(atLastMonth)} x2={x + w} y2={y(atLastMonth)} stroke="var(--muted-foreground)" strokeWidth={1} strokeDasharray="3 2">
+            <title>{`At this point last month: ${format(atLastMonth)}`}</title>
+          </line>
+          {/* The filling month is the LAST one, so the label usually has no
+              room to its right and goes to the left of the bar instead. */}
+          <text
+            x={x + w + 6 < padR ? x + w + 6 : x - w - 6}
+            y={y(atLastMonth) + 3}
+            textAnchor={x + w + 6 < padR ? 'start' : 'end'}
+            fontSize={9}
+            fontFamily="var(--font-plex-mono), monospace"
+            fill="var(--muted-foreground)"
+          >
+            at this point last month
+          </text>
+        </g>
+      )}
+    </g>
+  )
+}
+
+/** The legend swatch for a gutter token — the same shape the chart draws, so a
+ *  reader matches them by eye rather than by caption. */
+function LegendToken({ state }: { state: 'below_floor' | 'below_numerator' | 'filling' | 'read' | 'hollow' }) {
+  if (state === 'below_floor') {
+    return <span className="size-2 rounded-full bg-tile ring-[1.5px] ring-inset ring-foreground/60" aria-hidden />
+  }
+  if (state === 'below_numerator') {
+    return <span className="size-2 bg-tile ring-[1.5px] ring-inset ring-foreground/60" aria-hidden />
+  }
+  return <span className="h-2 w-2.5 rounded-[1px] bg-foreground/15" aria-hidden />
+}
+
+/** "Apr" — the axis is already dated by the run of months, so the year is
+ *  carried by the chart's own context line and not repeated twelve times. */
+function shortMonth(month: string): string {
+  return monthName(month).split(' ')[0]
+}
