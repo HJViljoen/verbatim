@@ -181,11 +181,17 @@ export function initiativeLine(m: InitiativeMeasure, startedLabel: string, direc
       ? `Nothing heard on this since ${startedLabel} — it lands with the next update.`
       : `One update in since ${startedLabel} — movement needs a second.`
   }
-  if (!directionWords) return `Tracked since ${startedLabel} · ${updates} updates read`
+  if (!directionWords) return trackedLine(startedLabel, updates)
   const size = Math.abs(m.delta ?? 0).toFixed(1)
   if (m.verdict === 'flat') return `Holding steady since ${startedLabel} · ${updates} updates`
   return `${m.verdict === 'moving_up' ? 'Up' : 'Down'} ${size} points since ${startedLabel} · ${updates} updates`
 }
+
+/** The direction-free sentence, said in one place: `initiativeLine` writes it
+ *  while the direction words are gated off, and the tile re-says it over a row
+ *  frozen with a direction sentence before the gate. */
+export const trackedLine = (startedLabel: string, updates: number): string =>
+  `Tracked since ${startedLabel} · ${updates} updates read`
 
 /** Whether a movement went the way the client said they wanted. Null when
  *  there is nothing to judge — never a green tick on a flat line.

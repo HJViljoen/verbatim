@@ -1,4 +1,5 @@
-import type { InitiativeVerdict } from './measure'
+import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { trackedLine, type InitiativeVerdict } from './measure'
 // Initiatives (WP7c, 2026-09-11) — the shapes the table, the actions and the
 // measurement all agree on.
 //
@@ -120,3 +121,51 @@ export const initiativesOf = (data: { initiatives?: InitiativesData }): Initiati
  *  print slide and the email section. */
 export const isTrackingSomething = (data: { initiatives?: InitiativesData }): boolean =>
   initiativesOf(data).total > 0
+
+/** The tile's rows plus whether it may draw movement at all. */
+export interface InitiativeTileData extends InitiativesData {
+  movement: boolean
+}
+
+/**
+ * The initiatives tile as it may be DRAWN, run-indexed direction words and all
+ * (D1).
+ *
+ * The sentence was gated where it is written (`initiativeLine`), but the row
+ * says direction three more ways, and gating only the sentence made one of
+ * them worse: the SPARKLINE is share per UPDATE, the same x-axis Voice's
+ * per-theme spark lost — a direction the reader's eye draws whether or not a
+ * word sits beside it; its STROKE COLOUR paints the line the rival's clay when
+ * the share went against what the client declared, so a null `theirWay` drew
+ * every losing initiative in the client's own green; and the MOOD delta is
+ * signed, printing "unchanged" at zero, and a claim that nothing moved is a
+ * direction claim too. What is left is what stays everywhere else: the
+ * subject, the level, and how long it has been tracked.
+ *
+ * Gated here rather than in the loader, so a row frozen with a series and a
+ * direction sentence is drawn like a live one — this tile is rendered from
+ * stored data on the report deck, on a share link and in the "email as sent"
+ * re-render. The stored numbers are untouched; Phase 1 flips the constant and
+ * the tile draws them again.
+ */
+export function initiativeTile(
+  data: { initiatives?: InitiativesData },
+  directionWords = RUN_INDEXED_DIRECTION_WORDS,
+): InitiativeTileData {
+  const { rows, total } = initiativesOf(data)
+  if (directionWords) return { rows, total, movement: true }
+  return {
+    total,
+    movement: false,
+    rows: rows.map((r) => ({
+      ...r,
+      series: [],
+      theirWay: null,
+      sentimentDelta: null,
+      // A row frozen before the gate carries "Up 4.0 points since 1 Aug · 2
+      // updates" as stored text. The two too-early sentences are already
+      // direction-free and are left as they were written.
+      line: r.verdict === 'too_early' ? r.line : trackedLine(r.startedLabel, r.series.length),
+    })),
+  }
+}

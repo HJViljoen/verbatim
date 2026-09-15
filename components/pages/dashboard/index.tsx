@@ -23,7 +23,7 @@ import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
 import { movementRows } from '@/lib/dashboard-tiles'
 import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
-import { initiativesOf, isTrackingSomething } from '@/lib/initiatives/types'
+import { initiativeTile, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
 // Dashboard renderers — the JSX half of the old app/dashboard/page.tsx
@@ -343,7 +343,10 @@ const initiatives: R = ({ initiatives }, mode) => {
   // before this tile existed has no `initiatives` key at all, and reaching
   // through it would 500 the reports list, the Studio, the share link and the
   // PDF build. Frozen data renders forever — that is the contract.
-  const t = initiativesOf({ initiatives })
+  // Through `initiativeTile`, not `initiativesOf`: while D1's direction words
+  // are gated the sparkline, its verdict colour and the mood delta come off
+  // the row with the sentence, live or frozen (see its own comment).
+  const t = initiativeTile({ initiatives })
   return (
     <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
       meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
@@ -363,17 +366,30 @@ const initiatives: R = ({ initiatives }, mode) => {
               <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
               <span className="order-last w-full min-w-0 text-[11.5px] text-muted-foreground md:order-none md:w-auto md:flex-[2] md:truncate">{r.line}</span>
               {/* Labelled, because it sits one column from a percentage and a
-                  bare "+0.3" reads as share points. Mood is a −1…+1 scale. */}
-              <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
-                <span className="text-[10.5px] text-muted-foreground">mood</span>
-                {r.sentimentDelta != null && r.sentimentDelta !== 0
-                  ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
-                  : <span className="text-[11px] text-muted-foreground">unchanged</span>}
-              </span>
+                  bare "+0.3" reads as share points. Mood is a −1…+1 scale.
+                  The whole cell is gated (D1): a signed delta across updates is
+                  a direction, and "unchanged" is a direction claim too. */}
+              {t.movement && (
+                <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
+                  <span className="text-[10.5px] text-muted-foreground">mood</span>
+                  {r.sentimentDelta != null && r.sentimentDelta !== 0
+                    ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
+                    : <span className="text-[11px] text-muted-foreground">unchanged</span>}
+                </span>
+              )}
             </div>
           ))}
         </div>
-      ) : <TileEmpty>Track a theme from Voice of Customer to see whether the conversation is moving.</TileEmpty>}
+      ) : (
+        // The invitation promises what the tile can currently show: while the
+        // direction words are gated it follows a theme's share, and says
+        // nothing about whether that share is moving (D1).
+        <TileEmpty>
+          {t.movement
+            ? 'Track a theme from Voice of Customer to see whether the conversation is moving.'
+            : 'Track a theme from Voice of Customer to follow its share of the conversation here.'}
+        </TileEmpty>
+      )}
     </Tile>
   )
 }
