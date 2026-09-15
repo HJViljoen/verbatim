@@ -15,8 +15,23 @@
  *  drift apart. */
 export const REC_DECISIONS_TABLE = 'rec_decisions'
 
+/**
+ * How many decisions the pipeline reads per update, newest first.
+ *
+ * Not a choice about how much to read: PostgREST caps a select at 1000 rows and
+ * says nothing when it does, so this is that cap written down, where the read
+ * living under it can be DESIGNED for it. The ledger is append-only and never
+ * pruned — a tenant who reclassifies weekly passes a thousand decisions
+ * eventually, and the only question then is which thousand come back.
+ * Newest-first makes the answer "the ones that decide the status", and every row
+ * lost is one a later decision has already superseded.
+ */
+export const REC_DECISIONS_READ_LIMIT = 1000
+
 /** One row of `rec_decisions`, as a read hands it over. */
 export interface RecDecision {
+  /** The primary key — what settles two decisions at the same instant. */
+  id: string
   lineage_id: string
   /** One of REC_STATUSES — the DB CHECK is the guarantee. */
   status: string
@@ -34,17 +49,30 @@ export interface RecDecision {
  * update, silently. 'new' is the column default, so returning null for it says
  * the same thing the ledger does — take the default.
  *
- * Ties at the same instant fall to whichever row arrives last; the caller reads
- * them in the database's own order, oldest first.
+ * Latest by (`decided_at`, `id`), worked out here rather than taken from the
+ * order the rows arrived in. The caller reads newest-first under a LIMIT, so
+ * that order is the opposite of what it was when this function was written, and
+ * a pure function whose answer flips with someone else's ORDER BY is a trap. Two
+ * decisions at the same instant fall to the higher `id` — which is also the one
+ * the database's own `decided_at desc, id desc` read returns first.
  */
 export function inheritedStatus(lineageId: string, decisions: RecDecision[]): string | null {
   let latest: RecDecision | null = null
   for (const d of decisions) {
     if (d.lineage_id !== lineageId) continue
-    if (!latest || (d.decided_at ?? '') >= (latest.decided_at ?? '')) latest = d
+    if (!latest || isLaterDecision(d, latest)) latest = d
   }
   if (!latest || latest.status === 'new') return null
   return latest.status
+}
+
+/** Is `a` the later of two decisions? `decided_at` decides it; `id` settles the
+ *  same instant. Rows carrying neither fall to whichever was passed last, which
+ *  is all the caller's own order can tell us. */
+function isLaterDecision(a: RecDecision, b: RecDecision): boolean {
+  const at = a.decided_at ?? '', bt = b.decided_at ?? ''
+  if (at !== bt) return at > bt
+  return (a.id ?? '') >= (b.id ?? '')
 }
 
 /**

@@ -185,4 +185,22 @@ describe('when the recommendations of an update are allowed to disappear', () =>
     // breath, so their delete belongs where it is.
     expect(at("from('market_insights').delete()")).toBeLessThan(at("from('market_insights')\n        .insert(miRows)"))
   })
+
+  it('reads the decision ledger newest-first, under its stated cap', () => {
+    // Also a source test, and for the same reason: the read is I/O glue, but
+    // which THOUSAND rows it gets back decides whether a client's status is the
+    // one they set or one they have since changed. `rec_decisions` is
+    // append-only and never pruned, so it will meet PostgREST's silent 1000; at
+    // that point oldest-first drops the newest decisions — the ones that decide
+    // the answer — and logs `lineage_decisions: 1000` as if all were well.
+    // (`inheritedStatus` takes the max itself, so the order is not load-bearing
+    // for correctness within the page; WHICH page is.)
+    const read = src.slice(at('.from(REC_DECISIONS_TABLE)'), at('if (error) throw error'))
+    expect(read).toContain(".order('decided_at', { ascending: false })")
+    expect(read).toContain(".order('id', { ascending: false })")
+    expect(read).toContain('.limit(REC_DECISIONS_READ_LIMIT)')
+    // `id` is selected because it is the tiebreaker both the order and
+    // inheritedStatus use.
+    expect(read).toContain("select('id, lineage_id, status, decided_at')")
+  })
 })

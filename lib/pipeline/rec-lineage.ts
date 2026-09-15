@@ -23,8 +23,10 @@ import { RECOMMENDATION_TYPES } from './schemas'
 // gate until now — a pair of different types was never even scored. Measured on
 // production: `type` is not a closed vocabulary at all. The D-b prompt turns
 // 'other' into a free-form slug (pass-d.ts), so 53 of 121 stored rows (44%)
-// carry a label the model invented, 22 distinct values across two tenants, nine
-// of them appearing in exactly one update ever. The gate's own near-misses are
+// carry a label the model invented — 16 distinct invented labels across two
+// tenants (22 distinct values in the column overall, the other 6 being enum
+// names in use), nine of them appearing in exactly one update ever. The 16 are
+// the list `rec-lineage.test.ts` pins. The gate's own near-misses are
 // visible in the data: `audience_target` vs `audience_targeting`,
 // `competitive_move` vs `competitive_response`, `content_idea` vs
 // `content_communication` — the same category, renamed by a later prompt
@@ -92,7 +94,14 @@ export const REC_LINEAGE_CROSS_TYPE_THRESHOLD = 0.62
  * category that week — `creator_clinic_distribution`, `maker_program`,
  * `assortment_architecture`. Folding those together does not pretend they are
  * the same thing; it says the label carries no information worth comparing, and
- * lets the title decide at the cross-type bar.
+ * leaves the decision to the title.
+ *
+ * Note what that costs, because the fold is the loosest half of D11: two
+ * invented labels as unrelated as `maker_program` and `urgent_topic` are both
+ * `other`, i.e. the SAME type, and so meet at the lower 0.55 bar. The higher
+ * 0.62 applies only to a folded-vs-enum pair or two different enum names. That
+ * is the trade the 44% buys — a vocabulary this unstable carries no signal to
+ * gate on — and the reason the bar it hands over to is the measured one.
  */
 export function normaliseRecType(type: string | null | undefined): string {
   const t = (type ?? '').trim().toLowerCase()
@@ -238,7 +247,8 @@ export function assignLineage(
 // as one module while the browser's write site can have the ledger without
 // this file's embedding client. See the header there.
 export {
-  REC_DECISIONS_TABLE, inheritedStatus, isMissingRecDecisions, type RecDecision,
+  REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
+  inheritedStatus, isMissingRecDecisions, type RecDecision,
 } from '../rec-decisions'
 
 /** A `pipeline_runs` row, as the lineage read hands it over. */
@@ -261,9 +271,35 @@ export interface RunRow {
  */
 export function previousRunId(runs: RunRow[], currentRunId: string): string | null {
   const visible = runs
-    .filter((r) => r.id !== currentRunId && (r.status === 'completed' || r.status === 'partial'))
+    .filter((r) => r.id !== currentRunId && isVisibleRun(r))
     .sort((a, b) => (b.started_at ?? '').localeCompare(a.started_at ?? ''))
   return visible[0]?.id ?? null
+}
+
+/**
+ * Has THIS run ever been shown to the client?
+ *
+ * The caller asks because a run that has been shown and is being rewritten — a
+ * `rerunPassDb`, a resume — carries the rows the client is looking at right now,
+ * and those are the priors to match. A run still `analyzing` does not: the
+ * recommendations a first attempt of the step left behind have been seen by
+ * nobody, and matching them would put a second cosine hop between a decision and
+ * the row inheriting it.
+ *
+ * Same two statuses as `previousRunId`, from the same predicate, so "visible"
+ * cannot come to mean two things. A run that is not in `runs` at all reads as
+ * not visible — the conservative answer, and the only one available.
+ */
+export function runIsVisible(runs: RunRow[], runId: string): boolean {
+  const run = runs.find((r) => r.id === runId)
+  return !!run && isVisibleRun(run)
+}
+
+/** The one definition of "the client has seen this update": the same anchor
+ *  `lib/pages/dashboard.ts` and `lib/pages/market.ts` use to decide what a
+ *  tenant is looking at. */
+function isVisibleRun(run: RunRow): boolean {
+  return run.status === 'completed' || run.status === 'partial'
 }
 
 /**

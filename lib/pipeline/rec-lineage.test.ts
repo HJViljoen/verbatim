@@ -3,7 +3,8 @@ import { describe, it, expect } from 'vitest'
 import {
   assignLineage, normaliseTitle, normaliseRecType, lineageThresholdFor, previousRunId,
   withoutLineageColumn, inheritedStatus, isMissingRecDecisions,
-  REC_LINEAGE_THRESHOLD, REC_LINEAGE_CROSS_TYPE_THRESHOLD, REC_DECISIONS_TABLE,
+  REC_LINEAGE_THRESHOLD, REC_LINEAGE_CROSS_TYPE_THRESHOLD,
+  REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
   type PriorRec, type NewRec, type RunRow, type RecDecision,
 } from './rec-lineage'
 import { isMissingColumnError } from '../supabase-admin'
@@ -278,6 +279,7 @@ describe('normaliseRecType — the label, as much of it as is worth comparing', 
 
 describe('inheritedStatus — what the ledger says this lineage is', () => {
   const d = (over: Partial<RecDecision> = {}): RecDecision => ({
+    id: 'dec-1',
     lineage_id: 'lin-1',
     status: 'acted_on',
     decided_at: '2026-09-15T08:00:00.000Z',
@@ -322,10 +324,41 @@ describe('inheritedStatus — what the ledger says this lineage is', () => {
     expect(inheritedStatus('lin-2', rows)).toBe('dismissed')
   })
 
-  it('breaks a same-instant tie on the row that arrives last', () => {
+  it('breaks a same-instant tie on the higher id, whichever way round they come', () => {
+    // `decided_at` has a default of now() and two clicks can share it. The id is
+    // the only other thing the row carries, and it is what the read's own
+    // `decided_at desc, id desc` orders by — so the pure function agrees with
+    // the database instead of with whoever wrote the ORDER BY.
     const at = '2026-09-15T08:00:00.000Z'
-    expect(inheritedStatus('lin-1', [d({ status: 'acted_on', decided_at: at }), d({ status: 'dismissed', decided_at: at })]))
-      .toBe('dismissed')
+    const rows = [
+      d({ id: 'dec-a', status: 'acted_on', decided_at: at }),
+      d({ id: 'dec-b', status: 'dismissed', decided_at: at }),
+    ]
+    expect(inheritedStatus('lin-1', rows)).toBe('dismissed')
+    expect(inheritedStatus('lin-1', [...rows].reverse())).toBe('dismissed')
+  })
+
+  it('answers the same from the capped page the pipeline actually reads', () => {
+    // The read is `decided_at desc, id desc` under REC_DECISIONS_READ_LIMIT
+    // (PostgREST's silent 1000, written down). A cap on THAT order can only take
+    // decisions a later one has already superseded, so the page answers what the
+    // whole ledger would. Ordered oldest-first — as this read was until
+    // 2026-09-15 — the same cap keeps the first thousand and returns a status
+    // the client changed hundreds of decisions ago.
+    const all: RecDecision[] = Array.from({ length: REC_DECISIONS_READ_LIMIT + 500 }, (_, i) => d({
+      id: `dec-${String(i).padStart(5, '0')}`,
+      status: i === REC_DECISIONS_READ_LIMIT + 499 ? 'acted_on' : 'acknowledged',
+      decided_at: new Date(Date.UTC(2026, 0, 1) + i * 3_600_000).toISOString(),
+    }))
+    const page = (ascending: boolean) =>
+      [...all]
+        .sort((x, y) => (ascending ? 1 : -1) * (x.decided_at.localeCompare(y.decided_at) || x.id.localeCompare(y.id)))
+        .slice(0, REC_DECISIONS_READ_LIMIT)
+
+    expect(page(false)).toHaveLength(REC_DECISIONS_READ_LIMIT)
+    expect(inheritedStatus('lin-1', page(false))).toBe('acted_on')
+    expect(inheritedStatus('lin-1', page(false))).toBe(inheritedStatus('lin-1', all))
+    expect(inheritedStatus('lin-1', page(true))).toBe('acknowledged')
   })
 })
 

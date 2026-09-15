@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, previousRunId, withoutLineageColumn, inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
+import { assignLineage, previousRunId, withoutLineageColumn, inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -968,16 +968,29 @@ async function applyLineage(
     try {
       const { data, error } = await admin
         .from(REC_DECISIONS_TABLE)
-        .select('lineage_id, status, decided_at')
+        .select('id, lineage_id, status, decided_at')
         .eq('client_id', clientId)
         .in('lineage_id', lineageIds)
-        // Oldest first, and `id` to settle two decisions at the same instant —
-        // inheritedStatus takes the last row that arrives.
-        .order('decided_at', { ascending: true })
-        .order('id', { ascending: true })
+        // NEWEST FIRST, under a stated cap. The ledger is append-only and never
+        // pruned, so this read grows for the life of a tenant and will one day
+        // meet PostgREST's silent 1000-row ceiling. Read oldest-first, as this
+        // was, the rows that ceiling drops are the NEWEST ones — so a lineage
+        // with a long history would inherit a superseded status, re-applying a
+        // "Done" the client has since reset, with nothing in the log to say so.
+        // Newest-first can only ever lose decisions a later one has already
+        // superseded; `id` settles two at the same instant, and inheritedStatus
+        // takes the max itself rather than trusting either order.
+        .order('decided_at', { ascending: false })
+        .order('id', { ascending: false })
+        .limit(REC_DECISIONS_READ_LIMIT)
       if (error) throw error
       decisions = (data ?? []) as RecDecision[]
       counters.lineage_decisions = decisions.length
+      // And say so when the cap is reached, rather than letting a truncated read
+      // look like a healthy one. (A tenant's dozen lineages need years of weekly
+      // decisions to get here; if it ever fires, the read wants a per-lineage
+      // shape rather than a bigger number.)
+      if (decisions.length >= REC_DECISIONS_READ_LIMIT) counters.lineage_decisions_capped = 1
     } catch (e) {
       // Two ways here, one sentence: the migration has not landed yet, or the
       // read failed. Either way the prior row's own status is the fallback —
