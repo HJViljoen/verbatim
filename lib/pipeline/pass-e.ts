@@ -12,7 +12,7 @@ import {
 } from '../config'
 import { PassESchema, type PassEOutput } from './schemas'
 import { allowTokens } from '../prose/scrub'
-import { CALIBRATED_PROSE_RULE, NO_DIRECTION_RULE, slotScrubber, stripThemeRefs } from './prose-rules'
+import { CALIBRATED_PROSE_RULE, noDirectionRule, slotScrubber, stripThemeRefs } from './prose-rules'
 import { logAiCall } from './ai-log'
 import { bucketByAudienceId, createQuotePicker, fetchInsightsByIds, fetchQuotesByAudience } from '../quotes'
 import { platformRows } from '../profile-tiles'
@@ -114,7 +114,7 @@ export function buildSystemPrompt(companyName: string): string {
     '- Never infer who someone is from a name, a platform, or a stereotype, and never quote a person to evidence a demographic. Where the conversation states a condition, life stage or use-case, the product counts it and renders the count itself — you do not describe it.',
     '- Do not state how many people a persona represents. The product counts that from your citations and renders it.',
     CALIBRATED_PROSE_RULE,
-    NO_DIRECTION_RULE,
+    noDirectionRule('pass_e_persona'),
     '',
     'Also return a headline: one plain sentence naming who is talking in this category. No numbers.',
   ].join('\n')

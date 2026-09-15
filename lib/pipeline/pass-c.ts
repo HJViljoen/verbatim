@@ -5,7 +5,7 @@ import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, COMPETITIVE_MIN_VIDEOS, esti
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
 import { allowTokens } from '../prose/scrub'
-import { CALIBRATED_PROSE_RULE, NO_DIRECTION_RULE, slotScrubber } from './prose-rules'
+import { CALIBRATED_PROSE_RULE, noDirectionRule, slotScrubber } from './prose-rules'
 import { embedTexts, cosine } from './cluster'
 import type { AggregatedTheme, SovEntry } from './types'
 import type { BrandClaim } from './claims'
@@ -141,7 +141,7 @@ export function buildSystemPrompt(
     '- Reference every supporting theme by its bracket index (e.g. "T3"), using ONLY indices present in the input.',
     '- Do NOT invent counts, percentages, or metrics.',
     CALIBRATED_PROSE_RULE,
-    NO_DIRECTION_RULE,
+    noDirectionRule('pass_c_finding'),
     `- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or ${name} data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.`,
     `- Buckets marked TOO THIN TO COMPARE hold fewer than ${COMPETITIVE_MIN_VIDEOS} videos. Never rest a finding on one. We barely gathered them, so their quiet says nothing about the brand.`,
     '- impact_level reflects how much the finding should affect the brand’s strategy. "high" is scarce: at most one or two findings per run genuinely demand a strategy response — when in doubt, medium.',

@@ -60,7 +60,7 @@ export interface Interpretation {
   scrub: ProseScrub
 }
 
-const EMPTY_SCRUB: ProseScrub = { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, leaked: false }
+const EMPTY_SCRUB: ProseScrub = { text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false }
 
 /** What a slot says when the product wrote it. Calibrated: it names the
  *  mechanism, not the machinery — no "model", no "fallback", no pass names. */

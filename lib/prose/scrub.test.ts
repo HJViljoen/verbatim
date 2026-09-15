@@ -216,6 +216,27 @@ describe('scrubProse', () => {
   })
 
   it('answers an empty string with an empty result rather than a dropped sentence', () => {
-    expect(scrubProse('report_cover', '   ')).toEqual({ text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, leaked: false })
+    expect(scrubProse('report_cover', '   ')).toEqual({ text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false })
+  })
+
+  // A `digits` slot keeps the sentence AND reports it. Before this the prompt
+  // banned the word, nothing enforced the ban, and nothing counted a breach —
+  // so the only evidence a prompt had started claiming movement was a reader
+  // finding it. The number goes into the call's ai_call_log response.
+  it('counts an unearned direction on a digits slot instead of deleting it', () => {
+    const out = scrubProse('pass_d_b_recommendation', 'Durability is growing. Buyers ask about fit.', { figures })
+    expect(out.text).toBe('Durability is growing. Buyers ask about fit.')
+    expect(out.droppedDirection).toBe(0)
+    expect(out.flaggedDirection).toBe(1)
+    expect(out.leaked).toBe(false)
+  })
+
+  it('does not count one an earned verdict licenses', () => {
+    const out = scrubProse('pass_d_b_recommendation', 'Durability is growing.', { figures, verdicts: [verdict('durability', 'growing')] })
+    expect(out.flaggedDirection).toBe(0)
+  })
+
+  it('counts nothing on a slot whose words are the model\u2019s by right', () => {
+    expect(scrubProse('pass_b_theme', 'Practical skills like growing food come up.').flaggedDirection).toBe(0)
   })
 })

@@ -1,4 +1,4 @@
-import { scrubProse, type ProseSlot, type ScrubProseInput } from '../prose/scrub'
+import { PROSE_POLICY, scrubProse, type ProseSlot, type ScrubProseInput } from '../prose/scrub'
 
 // Shared prompt rule (Calibrated-Language doc 2026-07-04): magnitude words are
 // assigned by code from measured data (lib/calibration.ts) — the model's prose
@@ -28,22 +28,64 @@ export function stripThemeRefs(text: string): string {
     .trim()
 }
 
+/** What a slot is called inside its own prompt. Used only to say WHICH
+ *  deliverable a rule is enforced on, when one prompt writes several. */
+const DELIVERABLE: Partial<Record<ProseSlot, string>> = {
+  pass_c_finding: 'a finding',
+  pass_d_a_insight: 'a market insight',
+  pass_d_a_consumer_summary: 'the consumer summary',
+  pass_d_a_brief: 'the executive brief',
+  pass_d_a_say_vs_hear: 'a say-vs-hear gap',
+  pass_d_b_recommendation: 'a recommendation',
+  pass_e_persona: 'a persona',
+  step_2c_event_explanation: 'the explanation',
+  report_cover: 'the cover',
+  document_write: 'the document',
+  agent_answer: 'an answer',
+}
+
+const nameOf = (slot: ProseSlot): string => DELIVERABLE[slot] ?? 'this prose'
+
+const andList = (parts: string[]): string =>
+  parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+
 /**
- * The prompt rule that pairs with the direction scrubber (item 9).
+ * The prompt rule that pairs with the direction scrubber (item 9) — written
+ * for the slots THIS prompt writes, because the enforcement differs per slot.
  *
  * The magnitude half above has been in eleven prompts since July and four of
- * them enforce it. This half is enforced everywhere its slot's policy asks for
- * it (lib/prose/scrub.ts), so the sentence in the prompt and the rule in the
- * code are the same rule — and a model that ignores it loses the sentence
- * rather than shipping a claim the product cannot stand behind.
+ * them enforce it. This half promised in its first draft that "a sentence that
+ * names one without a verdict behind it is deleted before the reader sees it",
+ * and was then added to four prompts — Pass C, Pass D-a, Pass D-b, Pass E —
+ * of which only Pass D-a's executive brief runs the direction rule at all. The
+ * other seven slots are `digits` in PROSE_POLICY and nothing deletes anything.
+ * A sentence in a prompt that nothing enforces is the exact defect item 9
+ * exists to end, and writing it into four more prompts would have been the
+ * defect with a wider blast radius.
+ *
+ * So the sentence is generated from the policy: where the rule bites it says
+ * so, where it does not it says what actually happens (the claim is a defect
+ * and the run's counters log it), and a prompt writing several deliverables
+ * names the ones the deletion reaches. Change a slot's policy and its prompt
+ * changes with it.
  */
-export const NO_DIRECTION_RULE =
-  '- You may NOT say which WAY anything is going. Not "growing", "fading", "rising", "declining", ' +
-  '"gaining", "losing ground", "momentum", "steady", "trending", "picking up", "up", "down", ' +
-  '"more and more", or any synonym — and not a comparison that implies one ("stronger than last time"). ' +
-  'A direction takes three consecutive monthly readings to earn and is assigned by code; a sentence ' +
-  'that names one without a verdict behind it is deleted before the reader sees it. Describe WHAT ' +
-  'people say and why it matters, in the present tense.'
+export function noDirectionRule(...slots: ProseSlot[]): string {
+  const enforced = slots.filter((s) => PROSE_POLICY[s] === 'direction' || PROSE_POLICY[s] === 'both')
+  const earned =
+    'A direction takes three consecutive monthly readings to earn and is assigned by code'
+  const consequence =
+    enforced.length === 0
+      ? `${earned}, which prints the word itself wherever it has earned one; a direction word in your prose is a claim the product cannot stand behind, and every one is counted against this prompt.`
+      : enforced.length === slots.length
+        ? `${earned}; a sentence that names one without a verdict behind it is deleted before the reader sees it.`
+        : `${earned}; in ${andList(enforced.map(nameOf))} a sentence that names one without a verdict behind it is deleted before the reader sees it, and everywhere else it is counted against this prompt as a defect.`
+  return (
+    '- You may NOT say which WAY anything is going. Not "growing", "fading", "rising", "declining", ' +
+    '"gaining", "losing ground", "momentum", "steady", "trending", "picking up", "increasing", "up", "down", ' +
+    '"more and more", or any synonym — and not a comparison that implies one ("stronger than last time"). ' +
+    `${consequence} Describe WHAT people say and why it matters, in the present tense.`
+  )
+}
 
 /**
  * One slot's scrubber, holding its own counters.
@@ -57,6 +99,7 @@ export function slotScrubber(slot: ProseSlot, input: ScrubProseInput = {}) {
   let dropped = 0
   let droppedDigits = 0
   let droppedDirection = 0
+  let flaggedDirection = 0
   let leaked = false
   return {
     run(raw: string | null | undefined): string {
@@ -64,6 +107,7 @@ export function slotScrubber(slot: ProseSlot, input: ScrubProseInput = {}) {
       dropped += out.dropped
       droppedDigits += out.droppedDigits
       droppedDirection += out.droppedDirection
+      flaggedDirection += out.flaggedDirection
       leaked = leaked || out.leaked
       return out.text
     },
@@ -73,6 +117,6 @@ export function slotScrubber(slot: ProseSlot, input: ScrubProseInput = {}) {
       const text = this.run(raw)
       return text || null
     },
-    counts: () => ({ prose_dropped: dropped, prose_dropped_digits: droppedDigits, prose_dropped_direction: droppedDirection, prose_leaked: leaked }),
+    counts: () => ({ prose_dropped: dropped, prose_dropped_digits: droppedDigits, prose_dropped_direction: droppedDirection, prose_direction_flagged: flaggedDirection, prose_leaked: leaked }),
   }
 }

@@ -138,19 +138,29 @@ export interface ProseScrub {
   droppedDigits: number
   /** …of which, dropped because they named a direction nothing earned. */
   droppedDirection: number
+  /** Sentences that named a direction nothing earned and were KEPT, because
+   *  this slot's policy does not run the direction rule. Counted so a prompt
+   *  that starts claiming movement is visible in `ai_call_log` on the slots
+   *  where deleting the sentence would cost more than the claim does — a
+   *  recommendation's "Increase short-form output" is an instruction to the
+   *  reader, not a reading (8 of 121 stored recommendation titles are one, and
+   *  the rule would empty every one of them). Never a reason to call a call
+   *  `leaked`: nothing was removed. */
+  flaggedDirection: number
   /** Something had to be removed or dropped — the flag that belongs in this
    *  call's `ai_call_log.response`, so a prompt that starts leaking is visible
    *  before a reader finds it. */
   leaked: boolean
 }
 
-const EMPTY: ProseScrub = { text: '', dropped: 0, leaked: false, droppedDigits: 0, droppedDirection: 0 }
+const EMPTY: ProseScrub = { text: '', dropped: 0, leaked: false, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0 }
 
 const merge = (a: ProseScrub, b: ProseScrub): ProseScrub => ({
   text: b.text,
   dropped: a.dropped + b.dropped,
   droppedDigits: a.droppedDigits + b.droppedDigits,
   droppedDirection: a.droppedDirection + b.droppedDirection,
+  flaggedDirection: a.flaggedDirection + b.flaggedDirection,
   leaked: a.leaked || b.leaked,
 })
 
@@ -196,7 +206,7 @@ export function dropDigitSentences(raw: string, figures: FigureTable, opts: Digi
     if (!text || text.replace(FIGURE_KEY_RE, '').replace(/[\s.,;:!?"“”'‘’]/g, '') === '') { dropped += 1; continue }
     kept.push(text)
   }
-  return { text: kept.join(' '), dropped, droppedDigits: dropped, droppedDirection: 0, leaked }
+  return { text: kept.join(' '), dropped, droppedDigits: dropped, droppedDirection: 0, flaggedDirection: 0, leaked }
 }
 
 // ---- Rule 2 · the direction scrubber ---------------------------------------
@@ -222,19 +232,47 @@ export function dropDigitSentences(raw: string, figures: FigureTable, opts: Digi
  * at all ("Attention is fading.") is licensed by nothing and drops.
  */
 export function dropUnverdictedDirection(raw: string, verdicts: readonly Verdict[] = []): ProseScrub {
+  const { kept, offending } = scanDirection(raw, verdicts)
+  return {
+    text: kept.join(' '),
+    dropped: offending.length,
+    droppedDigits: 0,
+    droppedDirection: offending.length,
+    flaggedDirection: 0,
+    leaked: offending.length > 0,
+  }
+}
+
+/**
+ * The same scan, reporting instead of deleting — for a slot whose policy is
+ * `digits`.
+ *
+ * Those slots keep the sentence, and before this nothing knew they had one:
+ * the prompt banned direction words, no code enforced the ban, and no counter
+ * recorded a breach, so "the prompt says so" was the whole of the rule. Now a
+ * breach is a number in this call's `ai_call_log` response, which is what lets
+ * the policy be flipped later on evidence rather than on taste.
+ */
+export function countUnverdictedDirection(raw: string, verdicts: readonly Verdict[] = []): number {
+  return scanDirection(raw, verdicts).offending.length
+}
+
+/** One scan, two consequences. `offending` are the sentences that name a
+ *  direction no verdict earned; `kept` is everything else, in order. */
+function scanDirection(raw: string, verdicts: readonly Verdict[]): { kept: string[]; offending: string[] } {
   const earned = verdicts
     .filter((v) => v.direction != null)
     .map((v) => (v.objectLabel ?? '').trim().toLowerCase())
     .filter((label) => label.length >= 3)
   const kept: string[] = []
-  let dropped = 0
+  const offending: string[] = []
   for (const sentence of splitSentences(raw ?? '')) {
     if (directionHits(sentence).length === 0) { kept.push(sentence); continue }
     const lower = sentence.toLowerCase()
     if (earned.some((label) => lower.includes(label))) { kept.push(sentence); continue }
-    dropped += 1
+    offending.push(sentence)
   }
-  return { text: kept.join(' '), dropped, droppedDigits: 0, droppedDirection: dropped, leaked: dropped > 0 }
+  return { kept, offending }
 }
 
 // ---- The policy table -------------------------------------------------------
@@ -380,6 +418,10 @@ export function scrubProse(slot: ProseSlot, raw: string, input: ScrubProseInput 
   }
   if (policy === 'direction' || policy === 'both') {
     out = merge(out, dropUnverdictedDirection(out.text, input.verdicts ?? []))
+  } else {
+    // `digits`. The direction rule does not run here, so the breach is counted
+    // and the sentence kept — see `flaggedDirection`.
+    out = { ...out, flaggedDirection: countUnverdictedDirection(out.text, input.verdicts ?? []) }
   }
   return out
 }

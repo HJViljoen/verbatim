@@ -7,7 +7,7 @@ import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../conf
 import { PassDaSchema, PassDaSchemaV5, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief, type SayVsHearItemOut, type SayVsHearEntry } from './schemas'
 import { priorityForRank } from '../calibration'
 import { allowTokens } from '../prose/scrub'
-import { CALIBRATED_PROSE_RULE, NO_DIRECTION_RULE, slotScrubber } from './prose-rules'
+import { CALIBRATED_PROSE_RULE, noDirectionRule, slotScrubber } from './prose-rules'
 import { validateBrief } from './narrative'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
@@ -186,7 +186,7 @@ export function buildSystemPromptA(brandName?: string, hasClaims = false): strin
     '- Some insights are NOT distilled from comment themes at all — insights about who the conversation is about, content volume, posting presence, or platform coverage come from the ordering above, not from comments. For these, return an EMPTY supporting_themes array. Say what the ordering means and why it matters; never state the sizes, which the product prints for you. Never back-fill them with comment themes.',
     '- Do NOT invent counts or percentages. confidence_score and opportunity_score are 1–10 judgments, not measured quantities.',
     CALIBRATED_PROSE_RULE,
-    NO_DIRECTION_RULE,
+    noDirectionRule('pass_d_a_insight', 'pass_d_a_consumer_summary', 'pass_d_a_brief', 'pass_d_a_say_vs_hear'),
     '- If the data is thin, produce fewer, honest insights rather than padding. Fewer, tightly-grounded insights beat many loosely-grounded ones.',
   ]
   if (!hasClaims) return base.join('\n')
@@ -332,7 +332,7 @@ export function buildSystemPromptB(brandName?: string): string {
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
     CALIBRATED_PROSE_RULE,
-    NO_DIRECTION_RULE,
+    noDirectionRule('pass_d_b_recommendation'),
     '- ORDER IS PRIORITY: return recommendations ranked, most important first. There is no priority field —',
     '  the product labels your first recommendation "Act now" and the next two "Plan next", so rank deliberately.',
     '- Fewer, sharper recommendations beat a padded list. Every one must be worth the client\'s time.',
