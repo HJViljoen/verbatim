@@ -50,9 +50,12 @@
 --   * `month_denominators.clustering_key` / `month_theme_readings.clustering_key`
 --     — the run's fingerprint copied onto the month rows freeze-months writes,
 --     so a reader can ask the like-for-like question without joining
---     pipeline_runs across a dozen months. Nullable and additive: NULL is the
---     honest value on every row already frozen (2,957 theme readings and 214
---     denominators, seeded 2026-09-15), and no frozen row is touched here.
+--     pipeline_runs across a dozen months. Nullable and additive, and no frozen
+--     row is touched here: NULL is the permanent, honest value on the 925 theme
+--     readings and 201 denominators already FROZEN (401 Sealand + 524 Össur,
+--     seeded 2026-09-15 — the guard refuses an UPDATE, so they can never take a
+--     key), while the other 2,032 theme readings and 13 denominators are still
+--     `filling` and will take one at the next freeze.
 --   * The ACL on the three theme tables, brought in line with the Phase 0
 --     tables. All three have RLS on with exactly one SELECT policy, but their
 --     grants are the project default — anon and authenticated hold all seven
