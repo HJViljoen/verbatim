@@ -177,6 +177,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       },
       moodNote: null,
       attention: {
+        // The line's own calendar: every month from the panel's first reading
+        // to this one, gaps included.
+        axis: ['2026-07-01', '2026-08-01', REAL_MONTH],
         months: [
           { month: '2026-07-01', comments: 50300, videos: 900 },
           { month: '2026-08-01', comments: 46000, videos: 880 },

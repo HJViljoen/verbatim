@@ -442,6 +442,31 @@ describe('buildCategory', () => {
     expect(c.moversNote).toBe('Too little conversation this month to say what moved.')
   })
 
+  it('gives the attention line a calendar axis, so a missing month stays missing', () => {
+    // calendarGeometry positions by INDEX into the axis it is handed, so
+    // handing it the months that carried a panel reading draws July and
+    // September adjacent — the gap closes and every point after it is
+    // misdated. Sealand, which has no panel until October, is the tenant that
+    // meets this first.
+    const panelRow = (month: string, comments: number | null): StoredStatsRow => ({
+      month, audience: INDUSTRY_AUDIENCE, judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0,
+      judged_framing: null,
+      panel_videos: comments == null ? null : 40,
+      attention_comments: comments,
+      panel_platform_mix: null,
+      panel_id: 'p1',
+    })
+    const c = buildCategory({
+      audience: INDUSTRY_AUDIENCE, axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      series, recordFrom: AXIS[0],
+      kindRows: null,
+      statsRows: [panelRow('2026-07-01', 50300), panelRow('2026-08-01', null), panelRow('2026-09-01', 41200)],
+      panel: null, perAudience, thin: false,
+    })
+    expect(c.attention?.months.map((m) => m.month)).toEqual(['2026-07-01', '2026-09-01'])
+    expect(c.attention?.axis).toEqual(AXIS)
+  })
+
   it('reads mood off the stored counts, with the framing footnote', () => {
     const statsRows: StoredStatsRow[] = [
       { month: '2026-08-01', audience: INDUSTRY_AUDIENCE, judged: 1000, positive: 610, negative: 160, neutral: 210, mixed: 20, judged_framing: 100, panel_videos: null, attention_comments: null, panel_platform_mix: null, panel_id: null },

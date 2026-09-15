@@ -161,11 +161,15 @@ export const overviewCategory: Block<OverviewData> = {
       <>
         <BlockCalendar
           blockKey={overviewCategory.key}
-          // THE ATTENTION LINE KEEPS ITS OWN AXIS. The panel is read month by
-          // month whatever horizon the page is on, and drawing it on a
-          // one-month axis would leave a single dot where the question is
-          // whether attention is going anywhere.
-          axis={c.attention?.months.map((m) => m.month) ?? data.axis}
+          // THE ATTENTION LINE KEEPS ITS OWN AXIS, generated as a calendar
+          // (lib/pages/overview.ts): the panel is read month by month whatever
+          // horizon the page is on, and drawing it on a one-month axis would
+          // leave a single dot where the question is whether attention is
+          // going anywhere. The months it carries a READING in are not that
+          // axis — the chart positions by index, so a June reading and a
+          // September one drawn on two adjacent slots close the gap and
+          // misdate every point after it.
+          axis={c.attention?.axis ?? data.axis}
           series={[series]}
           mode={mode}
           ctx={ctx}

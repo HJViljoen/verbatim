@@ -37,6 +37,7 @@ import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle 
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, type RecordWindow } from '../reading/record'
 import {
   mergeSeriesNotes,
+  monthAxis,
   pointsByMonth,
   type MonthLabel,
   type MonthSeries,
@@ -163,8 +164,12 @@ export interface MoodBlock {
 }
 
 export interface AttentionBlock {
-  /** Panel comments per month, oldest first. */
+  /** Panel comments per month, oldest first. A month with no panel reading is
+   *  ABSENT from this list and present on `axis` — the gap is the point. */
   months: { month: string; comments: number; videos: number }[]
+  /** The calendar the line is drawn on: every month from the panel's first
+   *  reading to this one, whether or not it carried one. */
+  axis: string[]
   panel: AttentionPanel | null
   verdict: Verdict | null
 }
@@ -1535,7 +1540,21 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
         ? 'The panel has no reading in this window yet.'
         : 'No panel has been frozen for this workspace yet, so attention is not read.'
     } else {
-      attention = { months: panelMonths, panel: input.panel, verdict: null }
+      // THE PANEL LINE KEEPS ITS OWN AXIS, AND THE AXIS IS A CALENDAR.
+      // `panelMonths` is already filtered to the months that carried a panel
+      // reading, and `calendarGeometry` positions by INDEX into whatever axis
+      // it is handed — so passing the filtered months drew a June reading and a
+      // September one side by side, closing the gap and misdating every point
+      // after it. That is the defect components/charts/calendar-line.tsx exists
+      // to end. The axis is generated as a calendar from the panel's first
+      // reading to this month; `CalendarSeries` matches its points to it by
+      // month key, so a month with no reading is simply absent from the line.
+      attention = {
+        months: panelMonths,
+        axis: monthAxis(panelMonths[0].month, input.month),
+        panel: input.panel,
+        verdict: null,
+      }
     }
   }
 
