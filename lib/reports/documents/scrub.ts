@@ -1,5 +1,4 @@
-import { stripThemeRefs } from '../../pipeline/prose-rules'
-import { allowTokens, dropDigitSentences } from '../../prose/scrub'
+import { allowTokens, scrubProse, stripThemeRefs } from '../../prose/scrub'
 import type { FigureTable } from '../types'
 
 /**
@@ -89,7 +88,10 @@ function scrubParagraph(raw: string, figures: FigureTable, allow: string[]): Scr
   // ([G3], (S1, S2), bare J7) never reach a reader, and a dash between clauses
   // is house style enforced in code rather than asked for in a prompt.
   const source = noDashes(stripThemeRefs(raw ?? '').replace(/\[[GSJ]\d+\]/g, '').replace(/\b[GSJ]\d+\b/g, ''))
-  const r = dropDigitSentences(source, figures, { allow })
+  // `document_write`'s own row in the policy table, rather than a hard-wired
+  // call to one of the two rules: the table has to DRIVE its wired slots or it
+  // is a comment about them.
+  const r = scrubProse('document_write', source, { figures, allow })
   return { text: r.text, dropped: r.dropped, leaked: r.leaked }
 }
 

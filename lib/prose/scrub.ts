@@ -86,6 +86,25 @@ export const MAGNITUDE_WORDS = [
 ]
 export const MAGNITUDE_RE = new RegExp(`\\b(${MAGNITUDE_WORDS.join('|')})\\b`, 'gi')
 
+/** Defensive strip for internal handles that leak into client-facing prose
+ *  despite the prompt rule (seen live: Pass C findings citing "[T18]",
+ *  2026-07-09). Covers T# (themes), C# (competitive insights), and S# (client
+ *  claims, Step 2b) — the same leak class for every bracket-labelled input.
+ *  Removes bracketed refs and tidies the whitespace/punctuation left behind.
+ *
+ *  It lives here, and `scrubProse` runs it under EVERY policy, because the
+ *  table defines `none` as "handles are stripped and nothing else". It used to
+ *  run one level up in `slotScrubber`, so a caller reaching `scrubProse`
+ *  directly got a documented strip that never happened. */
+export function stripThemeRefs(text: string): string {
+  return text
+    .replace(/\s*\[[TSC]\d+\](\[[TSC]\d+\])*/g, '')
+    .replace(/\s*\([TSC]\d+(,\s*[TSC]\d+)*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([.,;:])/g, '$1')
+    .trim()
+}
+
 /** Collapse whitespace and tidy the punctuation a strip leaves behind. */
 export function tidy(text: string): string {
   return text
@@ -328,6 +347,11 @@ function clausesOf(sentence: string): string[] {
  * were discoverable only by reading sixteen files. A new model call adds itself
  * here or it does not ship — `scrub.test.ts` asserts the table is total.
  *
+ * WIRED means the table DRIVES the slot, not that it describes it: `scrubCover`,
+ * the document writer's `scrubText` and `validateBrief` each read their own row
+ * here rather than hard-wiring one of the two rules, so a policy change reaches
+ * all of them.
+ *
  * WIRED as of Phase 1 WP7: pass_c_finding, pass_d_a_insight,
  * pass_d_a_consumer_summary, pass_d_a_brief (through validateBrief),
  * pass_d_a_say_vs_hear, pass_d_b_recommendation, pass_e_persona,
@@ -452,7 +476,10 @@ export interface ScrubProseInput {
  */
 export function scrubProse(slot: ProseSlot, raw: string, input: ScrubProseInput = {}): ProseScrub {
   const policy = PROSE_POLICY[slot]
-  const source = (raw ?? '').trim()
+  // Under every policy, `none` included: the table defines `none` as "handles
+  // are stripped and nothing else", and a caller reaching this function
+  // directly used to get neither.
+  const source = stripThemeRefs((raw ?? '').trim())
   if (!source) return EMPTY
   if (policy === 'none') return { ...EMPTY, text: source }
   let out: ProseScrub = { ...EMPTY, text: source }

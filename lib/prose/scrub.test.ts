@@ -239,6 +239,14 @@ describe('scrubProse', () => {
     expect(scrubProse('pass_b_theme', raw).text).toBe(raw)
   })
 
+  // `none` is documented as "handles are stripped and nothing else", and the
+  // strip used to live one level up in `slotScrubber` — so a caller reaching
+  // scrubProse directly got a documented strip that never ran.
+  it('strips handles under every policy, none included', () => {
+    expect(scrubProse('pass_b_theme', 'Fit and price [T4] lead.').text).toBe('Fit and price lead.')
+    expect(scrubProse('pass_c_finding', 'Fit and price (T4, T12) lead.', { figures }).text).toBe('Fit and price lead.')
+  })
+
   it('answers an empty string with an empty result rather than a dropped sentence', () => {
     expect(scrubProse('report_cover', '   ')).toEqual({ text: '', dropped: 0, droppedDigits: 0, droppedDirection: 0, flaggedDirection: 0, leaked: false })
   })

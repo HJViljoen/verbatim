@@ -1,4 +1,4 @@
-import { PROSE_POLICY, scrubProse, type ProseSlot, type ScrubProseInput } from '../prose/scrub'
+import { PROSE_POLICY, scrubProse, stripThemeRefs, type ProseSlot, type ScrubProseInput } from '../prose/scrub'
 
 // Shared prompt rule (Calibrated-Language doc 2026-07-04): magnitude words are
 // assigned by code from measured data (lib/calibration.ts) — the model's prose
@@ -21,19 +21,10 @@ export const CALIBRATED_PROSE_RULE =
   '- Prose is client-facing. NEVER cite internal handles like [T4] or T12 inside titles, findings, or ' +
   'descriptions — name the topic in plain words instead. T# belongs ONLY in the structured supporting_themes field.'
 
-/** Defensive strip for internal handles that leak into client-facing prose
- *  despite the prompt rule (seen live: Pass C findings citing "[T18]",
- *  2026-07-09). Covers T# (themes), C# (competitive insights), and S# (client
- *  claims, Step 2b) — the same leak class for every bracket-labelled input.
- *  Removes bracketed refs and tidies the whitespace/punctuation left behind. */
-export function stripThemeRefs(text: string): string {
-  return text
-    .replace(/\s*\[[TSC]\d+\](\[[TSC]\d+\])*/g, '')
-    .replace(/\s*\([TSC]\d+(,\s*[TSC]\d+)*\)/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([.,;:])/g, '$1')
-    .trim()
-}
+/** The handle strip lives with the scrubbers now, because every policy in the
+ *  table — `none` included — is defined as running it. Re-exported here for the
+ *  passes that have always imported it from this file. */
+export { stripThemeRefs }
 
 /** What a slot is called inside its own prompt. Used only to say WHICH
  *  deliverable a rule is enforced on, when one prompt writes several. */
@@ -110,7 +101,7 @@ export function slotScrubber(slot: ProseSlot, input: ScrubProseInput = {}) {
   let leaked = false
   return {
     run(raw: string | null | undefined): string {
-      const out = scrubProse(slot, stripThemeRefs(raw ?? ''), input)
+      const out = scrubProse(slot, raw ?? '', input)
       dropped += out.dropped
       droppedDigits += out.droppedDigits
       droppedDirection += out.droppedDirection

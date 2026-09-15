@@ -1,4 +1,4 @@
-import { FIGURE_KEY_RE, dropDigitSentences, dropUnverdictedDirection, splitSentences } from '../prose/scrub'
+import { FIGURE_KEY_RE, scrubProse, splitSentences } from '../prose/scrub'
 import type { Verdict } from '../reading/verdicts'
 
 import { AUDIENCES, type Audience, type CoverText, type FigureTable } from './types'
@@ -105,11 +105,9 @@ export interface ScrubbedCover {
 }
 
 export function scrubCover(body: string, figures: FigureTable, verdicts: readonly Verdict[] = []): ScrubbedCover {
-  const digits = dropDigitSentences(body, figures)
-  const direction = dropUnverdictedDirection(digits.text, verdicts)
-  return {
-    body: direction.text,
-    dropped: digits.dropped + direction.dropped,
-    leaked: digits.leaked || direction.dropped > 0,
-  }
+  // Through the policy table, not around it: `report_cover` is `both` there,
+  // and a table that documents a slot without driving it is a table the next
+  // policy change will not reach.
+  const out = scrubProse('report_cover', body, { figures, verdicts })
+  return { body: out.text, dropped: out.dropped, leaked: out.leaked }
 }

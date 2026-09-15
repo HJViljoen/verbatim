@@ -1,4 +1,4 @@
-import { FIGURE_RE, MAGNITUDE_RE, dropUnverdictedDirection, tidy } from '../prose/scrub'
+import { FIGURE_RE, MAGNITUDE_RE, PROSE_POLICY, dropUnverdictedDirection, tidy } from '../prose/scrub'
 import type { Verdict } from '../reading/verdicts'
 
 import type { ExecutiveBrief, BriefMetric } from './schemas'
@@ -100,8 +100,22 @@ export function validateBrief(raw: ExecutiveBrief | null | undefined, verdicts: 
   // verbatim today. A beat or a headline that names a direction nothing earned
   // is now gone, and an empty headline drops the whole brief to the
   // code-composed fallback, which says it is one.
-  const directional = (text: string): boolean => dropUnverdictedDirection(text, verdicts).dropped > 0
+  // Gated on the slot's own row in the policy table, so the brief's rules
+  // change in one place. `pass_d_a_brief` is `both` there; if it ever is not,
+  // this stops running rather than quietly disagreeing with the table.
+  const policy = PROSE_POLICY.pass_d_a_brief
+  const runsDirection = policy === 'direction' || policy === 'both'
+  const directional = (text: string): boolean =>
+    runsDirection && dropUnverdictedDirection(text, verdicts).dropped > 0
 
+  // A DEVIATION FROM THE DESIGN'S SENTENCE DROP, deliberate and stated: one
+  // directional sentence empties the whole headline, and a brief with no
+  // headline is null, so the dashboard falls to the code-composed narrative
+  // that says the product wrote it. A headline is one claim in one or two
+  // sentences; half of it is not a smaller version of it, it is a different
+  // claim with the qualifier gone. Falling back says so on the page, which
+  // keeping half does not. Blast radius checked read-only: none of the 18
+  // stored executive-brief headlines trips it.
   const headline = scrubHeadline(raw.headline_finding)
   leaked ||= headline.leaked
   if (headline.text && directional(headline.text)) {
