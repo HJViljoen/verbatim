@@ -1,6 +1,6 @@
 import { proportionDelta, SHARE_BAND, type BandOptions } from '../report-bands'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isRivalAudience, rivalKey, rivalNameOf } from '../rivals'
-import type { AttentionRow } from './attention'
+import { attentionSplit, attentionTotals, type AttentionRow } from './attention'
 import { monthStartOf, nextMonth } from './monthly'
 import type { PlatformMix } from './types'
 import { bandVerdict, type Verdict, type VerdictFlag } from './verdicts'
@@ -112,10 +112,6 @@ export interface StandingRow {
   panelId: string | null
 }
 
-const round1 = (n: number): number => Math.round(n * 10) / 10
-
-const shareOf = (k: number, n: number): StandingShare => ({ k, n, pct: n > 0 ? round1((k / n) * 100) : null })
-
 export interface StandingsInput {
   month: string
   /** This month's rows, one per audience, off `month_audience_stats`. */
@@ -151,10 +147,14 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
   const byAudience = new Map(input.rows.map((r) => [r.audience, r]))
   const prevByAudience = new Map((input.prevRows ?? []).map((r) => [r.audience, r]))
 
-  const videos = input.rows.reduce((s, r) => s + r.panel_videos, 0)
-  const comments = input.rows.reduce((s, r) => s + r.attention_comments, 0)
-  const prevVideos = (input.prevRows ?? []).reduce((s, r) => s + r.panel_videos, 0)
-  const prevComments = (input.prevRows ?? []).reduce((s, r) => s + r.attention_comments, 0)
+  // The shares themselves come from `attentionSplit` — ONE implementation of
+  // "this brand's cut of the panel's videos and of the panel's comments", so
+  // the table and the block above it can never come to disagree about a number
+  // they both compute off the same row. This file's contribution is the band,
+  // the not-observed row and the rival list.
+  const splits = new Map(attentionSplit(input.rows).map((s) => [s.audience, s]))
+  const { videos, comments } = attentionTotals(input.rows)
+  const { videos: prevVideos, comments: prevComments } = attentionTotals(input.prevRows ?? [])
 
   const wanted: { audience: string; label: string; role: StandingRole }[] = [
     { audience: CLIENT_AUDIENCE, label: input.clientLabel, role: 'client' },
@@ -185,8 +185,9 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
     const row = byAudience.get(audience)
     const prev = prevByAudience.get(audience)
     const observed = row != null
-    const content = observed ? shareOf(row.panel_videos, videos) : null
-    const attention = observed ? shareOf(row.attention_comments, comments) : null
+    const split = splits.get(audience) ?? null
+    const content: StandingShare | null = split?.content ?? null
+    const attention: StandingShare | null = split?.attention ?? null
 
     const canCompare = observed && prev != null && basis != null && (input.prevRows?.length ?? 0) > 0
     const flags = input.flags ?? []
@@ -255,7 +256,7 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
       contentVerdict,
       attentionVerdict,
       bandN: videos,
-      platformMix: row?.panel_platform_mix ?? {},
+      platformMix: split?.platformMix ?? {},
       dualMention: role === 'client' ? (input.dualMention ?? null) : null,
       panelId: input.panelId ?? null,
     }

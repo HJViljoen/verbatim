@@ -259,6 +259,14 @@ export interface AttentionSplit {
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
+/** A month's two denominators: the panel's videos and the panel's comments.
+ *  One place, so `attentionSplit` and `buildStandings` cannot come to divide by
+ *  two different numbers. */
+export const attentionTotals = (rows: readonly AttentionRow[]): { videos: number; comments: number } => ({
+  videos: rows.reduce((s, r) => s + r.panel_videos, 0),
+  comments: rows.reduce((s, r) => s + r.attention_comments, 0),
+})
+
 /**
  * The two shares, per audience, over one month's panel.
  *
@@ -302,8 +310,7 @@ export const attentionRowsOf = (
 ): AttentionRow[] => rows.map(attentionRowOf).filter((r): r is AttentionRow => r != null)
 
 export function attentionSplit(rows: readonly AttentionRow[]): AttentionSplit[] {
-  const videos = rows.reduce((s, r) => s + r.panel_videos, 0)
-  const comments = rows.reduce((s, r) => s + r.attention_comments, 0)
+  const { videos, comments } = attentionTotals(rows)
   return rows.map((r) => ({
     audience: r.audience,
     content: { k: r.panel_videos, n: videos, pct: videos > 0 ? round1((r.panel_videos / videos) * 100) : null },

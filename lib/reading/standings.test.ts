@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { attentionSplit } from './attention'
 import { NOT_OBSERVED, buildStandings, standingText } from './standings'
 
 // Össur's panel at a 1 June 2026 cutoff, measured read-only 2026-09-15:
@@ -29,6 +30,19 @@ const base = {
 }
 
 describe('buildStandings', () => {
+  // The table and the block above it read the same two shares off the same
+  // rows. They used to be two implementations tested against the same figures,
+  // which is a way of not noticing a drift rather than of preventing one.
+  it('reads its shares through attentionSplit, not a second copy of it', () => {
+    const rows = buildStandings(base)
+    const split = new Map(attentionSplit(SEP).map((s) => [s.audience, s]))
+    for (const row of rows) {
+      if (!row.observed) continue
+      expect(row.content).toEqual(split.get(row.audience)!.content)
+      expect(row.attention).toEqual(split.get(row.audience)!.attention)
+    }
+  })
+
   it('draws a row per brand, client first, category last', () => {
     const rows = buildStandings(base)
     expect(rows.map((r) => r.role)).toEqual(['client', 'rival', 'category'])
