@@ -117,25 +117,25 @@ describe('quotableLine — what a reader is told about a decayed point', () => {
     ...over,
   })
 
-  it('says videos and voices while everything is there', () => {
-    expect(quotableLine(r())).toBe('4 videos · 31 voices')
+  it('says conversations and voices while everything is there', () => {
+    expect(quotableLine(r())).toBe('4 conversations · 31 voices')
   })
 
   it('says "counted, not quotable" only when every voice is gone', () => {
-    expect(quotableLine(r({ comments: { total: 31, resolvable: 0 } }))).toBe('4 videos · counted, not quotable')
+    expect(quotableLine(r({ comments: { total: 31, resolvable: 0 } }))).toBe('4 conversations · counted, not quotable')
   })
 
   it('gives the number that is left rather than the word "some"', () => {
-    expect(quotableLine(r({ comments: { total: 31, resolvable: 8 } }))).toBe('4 videos · 8 of 31 voices still quotable')
+    expect(quotableLine(r({ comments: { total: 31, resolvable: 8 } }))).toBe('4 conversations · 8 of 31 voices still quotable')
   })
 
-  it('names the videos the platform no longer serves', () => {
-    expect(quotableLine(r({ unavailableVideos: 1 }))).toBe('4 videos (1 no longer on the platform) · 31 voices')
-    expect(quotableLine(r({ unavailableVideos: 4 }))).toBe('4 videos (no longer on the platform) · 31 voices')
+  it('names the conversations the platform no longer serves', () => {
+    expect(quotableLine(r({ unavailableVideos: 1 }))).toBe('4 conversations (1 no longer on the platform) · 31 voices')
+    expect(quotableLine(r({ unavailableVideos: 4 }))).toBe('4 conversations (no longer on the platform) · 31 voices')
   })
 
-  it('says the videos alone for a point that never cited a comment', () => {
-    expect(quotableLine(r({ videos: { total: 1, resolvable: 1 }, comments: { total: 0, resolvable: 0 } }))).toBe('1 video')
+  it('says the conversations alone for a point that never cited a comment', () => {
+    expect(quotableLine(r({ videos: { total: 1, resolvable: 1 }, comments: { total: 0, resolvable: 0 } }))).toBe('1 conversation')
   })
 
   it('prints no pipeline jargon and no score', () => {
@@ -171,7 +171,7 @@ describe('resolveRefs', () => {
 
   it('says nothing about an empty point rather than dividing by zero', async () => {
     const out = await resolveRefs(fakeAdmin(store, {}) as never, { videoIds: [], commentIds: [] })
-    expect(quotableLine(out)).toBe('0 videos')
+    expect(quotableLine(out)).toBe('0 conversations')
   })
 })
 

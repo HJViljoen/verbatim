@@ -201,7 +201,13 @@ export async function resolveRefs(
  * weigh and "some" is not.
  */
 export function quotableLine(r: PointResolution): string {
-  const videos = r.videos.resolvable === 1 ? '1 video' : `${r.videos.resolvable} videos`
+  // CONVERSATIONS, not videos. lib/calibration.ts's GLOSSARY pins the word —
+  // "one video and the comments it sparked — the unit behind every 'heard in…'
+  // and share figure" — and this sentence sits beside exactly those figures.
+  // The plan pins only the "8 of 31 voices still quotable" half, so the other
+  // half was a free choice, and "videos" is the pipeline's word for it, not
+  // the product's.
+  const videos = r.videos.resolvable === 1 ? '1 conversation' : `${r.videos.resolvable} conversations`
   const gone = r.unavailableVideos > 0
     ? `${r.unavailableVideos === r.videos.resolvable ? 'no longer' : `${r.unavailableVideos} no longer`} on the platform`
     : null
