@@ -69,6 +69,13 @@ import {
 // prompt bump re-mints every insight id with a NULL vector, and that is a
 // tenant back at 0% with nothing on any surface saying so. Below
 // SUBJECT_MIN_COVERAGE the pass writes nothing and logs `coverage_short`.
+//
+// AND THE REFUSAL HAS TO REACH THE RECORD, not just this table. Memberships
+// persist between runs, so a refusal here does not make the month reading
+// EMPTY the way a failed theme pass does — it makes it short, and freeze-months
+// would write that down and freeze it. `subjectFreezeHold` (lib/subjects/read.ts)
+// is the link: whatever this pass says it did not decide, the same run's freeze
+// declines to write a subject month around.
 
 /** The fraction of a run's model budget this pass may spend before it stops.
  *

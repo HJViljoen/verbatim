@@ -32,7 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
-import { subjectMonthSide } from '@/lib/subjects/read'
+import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
 import { isMissingSubjects } from '@/lib/subjects/types'
@@ -1332,6 +1332,7 @@ export const runPipeline = inngest.createFunction(
     //     returns the same costUsd it returned the first time.
     const passBudget = subjectBudgetUsd()
     let subjectSpend = 0
+    const subjectOutcomes: MembershipOutcome[] = []
     for (let i = 0; i < subjects.length; i++) {
       const subject = subjects[i]
       const budgetUsd = Math.max(0, passBudget - subjectSpend)
@@ -1347,6 +1348,7 @@ export const runPipeline = inngest.createFunction(
           return null
         })
       subjectSpend += r?.costUsd ?? 0
+      subjectOutcomes.push(r)
     }
     if (subjectSpend > 0) {
       console.log(`[subject-membership] pass spent $${subjectSpend.toFixed(4)} of its $${passBudget.toFixed(2)} ceiling`)
@@ -1448,6 +1450,7 @@ export const runPipeline = inngest.createFunction(
     // run must not read 'partial' because a bookkeeping pass had a bad day. It
     // is also the step that can run before its migration has been applied:
     // until then it is a logged no-op rather than a retry loop holding a slot.
+    const subjectHold = subjectFreezeHold(subjectOutcomes)
     await step
       .run('freeze-months', async () => {
         const admin = createAdminClient()
@@ -1458,8 +1461,17 @@ export const runPipeline = inngest.createFunction(
           // so every numerator has to be written before it. A separate subject
           // freeze running afterwards would be refused by the insert guard,
           // correctly and permanently.
+          //
+          // Unless the judgement that feeds it said it was short. A membership
+          // refusal protects its own table and nothing else — memberships
+          // persist between runs, so the reading here is not empty but SHORT,
+          // and a short month frozen by this visit can never be corrected.
+          // Better no subject row: a month that closes without one keeps
+          // decision K's single later chance.
+          if (subjectHold) console.warn(`[freeze-months] subject months NOT written — ${subjectHold}`)
           const r = await freezeMonths(admin, {
-            clientId, runId, months, sides: [subjectMonthSide(admin, clientId)],
+            clientId, runId, months,
+            sides: subjectHold ? [] : [subjectMonthSide(admin, clientId)],
           })
           const sideCounts = Object.entries(r.sides)
             .map(([table, side]) => `${table} ${side.written} written (${side.frozen} now frozen, ${side.keptFrozen} already frozen and left alone, ${side.deleted} dropped)`)

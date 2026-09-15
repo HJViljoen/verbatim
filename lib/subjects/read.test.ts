@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { backReadBlockers, type SubjectBackReadState } from './read'
+import { backReadBlockers, subjectFreezeHold, type MembershipOutcome, type SubjectBackReadState } from './read'
 
 const s = (over: Partial<SubjectBackReadState>): SubjectBackReadState => ({
   id: 'a', name: 'Comfort', status: 'active', decided: 120, undecided: 0, ...over,
@@ -49,5 +49,58 @@ describe('backReadBlockers', () => {
       s({ id: 'b', name: 'Price', decided: 0, status: 'active' }),
     ])
     expect(out).toHaveLength(2)
+  })
+})
+
+describe('subjectFreezeHold', () => {
+  const ok = (name: string): NonNullable<MembershipOutcome> => ({
+    subjectName: name, skipped: null, budgetStopped: false, unanswered: 0,
+  })
+
+  it('writes the subject months when every subject was decided', () => {
+    expect(subjectFreezeHold([ok('Comfort'), ok('Price')])).toBeNull()
+  })
+
+  it('writes them for a tenant with no subjects at all — there is nothing to be short about', () => {
+    expect(subjectFreezeHold([])).toBeNull()
+  })
+
+  it('holds when a subject refused on coverage — the case the record could not undo', () => {
+    // judgeSubject writes no membership row, but the rows from LAST run are
+    // still on file, so the month reading is short rather than empty and the
+    // freeze would make it permanent.
+    const hold = subjectFreezeHold([ok('Comfort'), { ...ok('Price'), skipped: 'coverage_short' }])
+    expect(hold).toContain('Price')
+    expect(hold).toContain('not embedded enough')
+  })
+
+  it('holds when a step ran out of retries', () => {
+    expect(subjectFreezeHold([ok('Comfort'), null])).toContain('ran out of retries')
+  })
+
+  it('holds when the pass stopped at its ceiling', () => {
+    expect(subjectFreezeHold([{ ...ok('Comfort'), budgetStopped: true }])).toContain('pass ceiling')
+  })
+
+  it('holds when the judge left pairs undecided, and says how many', () => {
+    expect(subjectFreezeHold([{ ...ok('Comfort'), unanswered: 7 }])).toContain('Comfort: 7')
+  })
+
+  it('does not hold for a migration that is not applied or a tenant with no subjects', () => {
+    // Neither writes anything and neither is short: there is no membership to
+    // under-count. The side simply reads empty.
+    expect(subjectFreezeHold([{ ...ok(''), skipped: 'migration' }])).toBeNull()
+    expect(subjectFreezeHold([{ ...ok(''), skipped: 'no_subjects' }])).toBeNull()
+  })
+
+  it('reports every reason in one sentence', () => {
+    const hold = subjectFreezeHold([
+      { ...ok('Comfort'), skipped: 'coverage_short' },
+      { ...ok('Price'), budgetStopped: true },
+      null,
+    ])
+    expect(hold).toContain('Comfort')
+    expect(hold).toContain('Price')
+    expect(hold).toContain('ran out of retries')
   })
 })

@@ -7,6 +7,7 @@ import {
   RPC_SUBJECT_READINGS,
   RPC_WINDOW_SUBJECT_READINGS,
 } from '../reading/types'
+import type { SubjectMembershipResult } from './membership'
 import {
   JUDGE_VERSION,
   type SubjectReading,
@@ -196,4 +197,56 @@ export function backReadBlockers(subjects: readonly SubjectBackReadState[]): str
     )
   }
   return out
+}
+
+// ---- The link between the judgement and the record ----------------------------
+
+/** What `subjectFreezeHold` needs of a membership pass — the shape of a step's
+ *  result, or `null` for a step that ran out of retries. */
+export type MembershipOutcome =
+  | Pick<SubjectMembershipResult, 'subjectName' | 'skipped' | 'budgetStopped' | 'unanswered'>
+  | null
+
+/**
+ * Must this visit leave the subject side unwritten?
+ *
+ * `judgeSubject` refuses rather than under-counts: short embedding coverage
+ * writes no membership row at all. That protects the MEMBERSHIP table, and on
+ * its own it protects nothing else — memberships persist across runs, so the
+ * month reading taken minutes later is not empty, it is SHORT, and freeze-months
+ * writes it down and freezes it if the month has passed its 30-day line. The
+ * theme side cannot do this: `readThemeReadings(runId)` comes back empty when
+ * its pass failed, which trips the emptyReading hold. A subject reading has no
+ * such tell.
+ *
+ * So the tell is this: the pass says what it knows it did not decide, and a
+ * visit that hears any of it writes no subject rows at all. The cost is that
+ * the months still filling are not refreshed until the next run, which fixes
+ * itself; the cost of the other answer is a permanently frozen number that is
+ * low by an unknown amount, which does not.
+ */
+export function subjectFreezeHold(results: readonly MembershipOutcome[]): string | null {
+  const reasons: string[] = []
+  const failed = results.filter((r) => r === null).length
+  if (failed > 0) reasons.push(`${failed} subject(s) ran out of retries`)
+  const named = results.filter((r): r is Exclude<MembershipOutcome, null> => r !== null)
+  const say = (rows: typeof named, what: string) =>
+    rows.length > 0 ? reasons.push(`${what}: ${rows.map((r) => r.subjectName || '(unnamed)').join(', ')}`) : undefined
+  say(named.filter((r) => r.skipped === 'coverage_short'), 'refused because the corpus is not embedded enough')
+  say(named.filter((r) => r.skipped === 'no_vector'), 'has no phrase vector')
+  say(named.filter((r) => r.budgetStopped), 'stopped at the pass ceiling with pairs still undecided')
+  const unanswered = named.filter((r) => r.unanswered > 0)
+  if (unanswered.length > 0) {
+    reasons.push(
+      'left pairs undecided (' +
+      unanswered.map((r) => `${r.subjectName || '(unnamed)'}: ${r.unanswered}`).join(', ') +
+      ')',
+    )
+  }
+  if (reasons.length === 0) return null
+  return (
+    `${reasons.join('; ')}. The membership on file is short by an amount nobody can state, ` +
+    'and a month frozen around it could never be corrected — the frozen guard refuses the UPDATE. ' +
+    'Nothing was written for the subjects this visit; the pairs come back next run.'
+  )
 }
