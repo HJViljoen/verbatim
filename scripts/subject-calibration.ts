@@ -233,7 +233,12 @@ async function main() {
           calibration_judge_version: s.calibration_judge_version,
         },
         after: { id: s.id, name: s.name, ...after },
-        actor: scriptActor(`scripts/subject-calibration.ts --client ${clientId} --score ${score} --apply`),
+        // NOT `--score ${score}`: that argument is a path on the operator's
+        // machine, and config_changes.actor_label is TENANT-READABLE ("Members
+        // read their change log" selects it). The flag is named, its value is
+        // not — the same line attention_panels draws when it withholds
+        // created_by from the tenant.
+        actor: scriptActor(`scripts/subject-calibration.ts --client ${clientId} --score <file> --apply`),
         note: `precision measured by hand on ${pairs.length} labelled pairs at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}`,
       })
       console.log(`  recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
