@@ -474,8 +474,23 @@ export const figureKey = (objectId: string, suffix: string): string =>
 export interface HeadlineInput {
   /** The verdicts OV1 chooses its sentence from — subjects and themes. */
   verdicts: readonly Verdict[]
-  /** What the audience is called, for the sentence. */
-  audienceLabel: string
+}
+
+/**
+ * The audience a sentence names, taken from the verdict rather than assumed.
+ *
+ * OV1 is handed subject verdicts on YOUR audience beside theme verdicts on the
+ * category's and picks the lead by the size of the banded change, so the
+ * sentence cannot carry one hard-coded audience: the day your own side carries
+ * the largest change, "Durability came up in 31% of the category's videos this
+ * month — 26 of 84 videos" prints YOUR video count as the category's, in the
+ * page's headline claim. A `Verdict` has said which audience it is a
+ * proportion OF since WP3; this reads it.
+ */
+export function audienceInSentence(audience: string): string {
+  if (audience === CLIENT_AUDIENCE) return 'your own videos'
+  if (audience === INDUSTRY_AUDIENCE) return 'the category’s videos'
+  return `${audienceLabel(audience)}’s videos`
 }
 
 export interface Headline {
@@ -504,16 +519,17 @@ export function headline(input: HeadlineInput): Headline {
     return { lead: null, body: 'Nothing moved clearly this month. Here is where you stand.', figures: {} }
   }
 
+  const audience = audienceInSentence(lead.audience)
   const share = figureKey(lead.objectId, 'share')
   const videos = figureKey(lead.objectId, 'videos')
   const denominator = figureKey(lead.objectId, 'of')
   const figures: FigureTable = {
     [share]: { value: pctOf(lead.value.k, lead.value.n) ?? 0, unit: 'pct', label: `${lead.objectLabel}'s share of the month` },
     [videos]: { value: lead.value.k, unit: 'videos', label: `videos that raised ${lead.objectLabel}` },
-    [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${input.audienceLabel}` },
+    [denominator]: { value: lead.value.n, unit: 'videos', label: `videos read for ${audience}` },
   }
   const body =
-    `${lead.objectLabel} came up in [[${share}]] of ${input.audienceLabel} this month — ` +
+    `${lead.objectLabel} came up in [[${share}]] of ${audience} this month — ` +
     `[[${videos}]] of [[${denominator}]] videos.`
   return { lead, body, figures }
 }
@@ -916,10 +932,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  const head = headline({
-    verdicts: thin ? [] : sentenceVerdicts,
-    audienceLabel: 'the category’s videos',
-  })
+  const head = headline({ verdicts: thin ? [] : sentenceVerdicts })
   const ledger = await loadLedger(supabase, clientId)
   const voices = await loadVoices(supabase, head.lead, top, themedRunId)
   const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null

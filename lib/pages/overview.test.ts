@@ -121,10 +121,7 @@ describe('fillingLine', () => {
 
 describe('headline', () => {
   it('names the single largest banded change and leaves its figures as tokens', () => {
-    const h = headline({
-      verdicts: [moved('t1', 'Durability', 5.4), moved('t2', 'Price', -2.1)],
-      audienceLabel: 'the category’s videos',
-    })
+    const h = headline({ verdicts: [moved('t1', 'Durability', 5.4), moved('t2', 'Price', -2.1)] })
     expect(h.lead?.objectLabel).toBe('Durability')
     expect(h.body).toContain('Durability came up in [[o_t1_share]]')
     expect(Object.keys(h.figures).sort()).toEqual(['o_t1_of', 'o_t1_share', 'o_t1_videos'])
@@ -133,7 +130,7 @@ describe('headline', () => {
   })
 
   it('takes the largest by magnitude, in either direction', () => {
-    const h = headline({ verdicts: [moved('t1', 'Durability', 2.0), moved('t2', 'Price', -9.3)], audienceLabel: 'x' })
+    const h = headline({ verdicts: [moved('t1', 'Durability', 2.0), moved('t2', 'Price', -9.3)] })
     expect(h.lead?.objectId).toBe('t2')
   })
 
@@ -141,15 +138,26 @@ describe('headline', () => {
     // Össur's largest mover is `2418f4d7-…`: a key taken straight off that id
     // starts with a digit, FIGURE_KEY_RE never matches it, and the raw
     // `[[…]]` token reaches the reader. Found by rendering against production.
-    const h = headline({ verdicts: [moved('2418f4d7-54a2-497e-8433-6cd89bc2322b', 'Admiration', 5.1)], audienceLabel: 'x' })
+    const h = headline({ verdicts: [moved('2418f4d7-54a2-497e-8433-6cd89bc2322b', 'Admiration', 5.1)] })
     for (const key of Object.keys(h.figures)) expect(key).toMatch(/^[a-z][a-z0-9_]*$/)
     expect(substituteFigures(h.body, proseFigures(h.figures)).some((p) => 'figure' in p)).toBe(true)
     expect(h.body.match(FIGURE_KEY_RE)?.length).toBe(3)
   })
 
+  it('names the audience the lead verdict is a proportion of, never a hard-coded one', () => {
+    // The sentence mixes subject verdicts on YOUR audience with theme verdicts
+    // on the category's and picks by magnitude. A hard-coded label prints your
+    // own video count as the category's on the page's headline claim.
+    const yours: Verdict = { ...moved('s1', 'Durability', 9.9, 26, 84), objectKind: 'subject', audience: CLIENT_AUDIENCE }
+    expect(headline({ verdicts: [yours, moved('t1', 'Price', 2.0)] }).body).toContain('of your own videos this month')
+    expect(headline({ verdicts: [moved('t1', 'Price', 2.0)] }).body).toContain('of the category’s videos this month')
+    const rival: Verdict = { ...moved('t9', 'Smell', 8.1), audience: rivalKey('Freitag') }
+    expect(headline({ verdicts: [rival] }).body).toContain('of Freitag’s videos this month')
+  })
+
   it('reads nothing that did not clear its band', () => {
     const unbanded: Verdict = { ...moved('t1', 'Durability', 5.4), state: 'no_clear_change' }
-    const h = headline({ verdicts: [unbanded], audienceLabel: 'x' })
+    const h = headline({ verdicts: [unbanded] })
     expect(h.lead).toBeNull()
     expect(h.body).toBe('Nothing moved clearly this month. Here is where you stand.')
     expect(h.figures).toEqual({})
