@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, previousRunId, withoutLineageColumn, inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
+import { assignLineage, previousRunId, withoutLineageColumn, statusForLineage, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -998,18 +998,16 @@ async function applyLineage(
       // itself is still written.
       counters[isMissingRecDecisions(e) ? 'lineage_decisions_absent' : 'lineage_decisions_failed'] = 1
     }
-    const decided = new Set(decisions?.map((d) => d.lineage_id) ?? [])
-
     let statusCarried = 0
     assigned.forEach((a, i) => {
       rows[i].lineage_id = a.lineageId
       // The ledger answers for a lineage it has heard of, including when the
-      // answer is "back to New" (null). The column answers only for one it has
-      // not — a status set before the ledger existed, or one whose decision row
-      // never landed.
-      const carried = decisions && decided.has(a.lineageId)
-        ? inheritedStatus(a.lineageId, decisions)
-        : a.status
+      // answer is "back to New" (null); the prior row's column answers only for
+      // one it has not, and for a read that failed. That rule is
+      // `statusForLineage` in lib/rec-decisions.ts, where its four branches are
+      // tested — it was four lines of inline logic here, in an I/O function
+      // nothing pure could reach.
+      const carried = statusForLineage(a.lineageId, decisions, a.status)
       if (carried) {
         rows[i].status = carried
         statusCarried++

@@ -48,7 +48,7 @@ import { RECOMMENDATION_TYPES } from './schemas'
 // client's decision was `recommendations.status` on the prior row, so a missed
 // match erased it. `rec_decisions` is the record now, keyed on the lineage; the
 // prior row's status is kept here as the fallback for a decision that was never
-// filed (see `inheritedStatus`).
+// filed. Which of the two answers, and when, is `statusForLineage`.
 //
 // Pure: the caller embeds (or, in tests, supplies vectors). No I/O here.
 
@@ -230,7 +230,7 @@ export function assignLineage(
       // nothing. Only a status the client actually set carries forward.
       //
       // Since 2026-09-15 this is the FALLBACK: `rec_decisions` is where a
-      // decision is recorded, and `inheritedStatus` reads it by lineage. This
+      // decision is recorded, and `statusForLineage` reads it by lineage. This
       // still answers for a lineage the ledger has never heard of — a status
       // written before the ledger existed, or one whose decision row failed to
       // land while the column write succeeded.
@@ -248,7 +248,7 @@ export function assignLineage(
 // this file's embedding client. See the header there.
 export {
   REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
-  inheritedStatus, isMissingRecDecisions, type RecDecision,
+  inheritedStatus, statusForLineage, isMissingRecDecisions, type RecDecision,
 } from '../rec-decisions'
 
 /** A `pipeline_runs` row, as the lineage read hands it over. */

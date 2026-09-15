@@ -76,6 +76,39 @@ function isLaterDecision(a: RecDecision, b: RecDecision): boolean {
 }
 
 /**
+ * The status to write onto the row that inherits `lineageId`, given what the
+ * ledger says and what the prior row's own `status` column says.
+ *
+ * The rule the whole table comes down to, in one place because each of its three
+ * branches is a single character away from a silent bug:
+ *
+ *   - the read FAILED (`decisions` null — the migration has not landed, or
+ *     PostgREST did): the prior row's column, exactly as this worked before the
+ *     ledger existed. Invert that guard and the first hiccup erases every
+ *     carried status instead of falling back.
+ *   - the ledger HAS HEARD of this lineage: the ledger's answer, INCLUDING when
+ *     that answer is null — "the client moved it back to New". Fall through to
+ *     the column there and a client's reset is answered with the "Done" that
+ *     preceded it, undone silently, on their next update.
+ *   - the ledger is SILENT on this lineage: the column. A status set before the
+ *     ledger existed, or one whose decision row never landed while the column
+ *     write succeeded.
+ *
+ * Scanning `decisions` twice costs nothing at the sizes involved (a dozen
+ * lineages against a page of decisions) and keeps the rule readable as one
+ * sentence per branch.
+ */
+export function statusForLineage(
+  lineageId: string,
+  decisions: RecDecision[] | null,
+  fallback: string | null,
+): string | null {
+  if (!decisions) return fallback
+  if (!decisions.some((d) => d.lineage_id === lineageId)) return fallback
+  return inheritedStatus(lineageId, decisions)
+}
+
+/**
  * Is this error "the decision ledger is not there yet"?
  *
  * `20260915093000_rec_decisions.sql` is applied by hand, so a deploy can reach

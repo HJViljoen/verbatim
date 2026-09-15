@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
   assignLineage, normaliseTitle, normaliseRecType, lineageThresholdFor, previousRunId,
-  withoutLineageColumn, inheritedStatus, isMissingRecDecisions,
+  withoutLineageColumn, inheritedStatus, statusForLineage, isMissingRecDecisions,
   REC_LINEAGE_THRESHOLD, REC_LINEAGE_CROSS_TYPE_THRESHOLD,
   REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
   type PriorRec, type NewRec, type RunRow, type RecDecision,
@@ -362,6 +362,44 @@ describe('inheritedStatus — what the ledger says this lineage is', () => {
   })
 })
 
+describe('statusForLineage — which of the two records answers', () => {
+  const d = (over: Partial<RecDecision> = {}): RecDecision => ({
+    id: 'dec-1',
+    lineage_id: 'lin-1',
+    status: 'acted_on',
+    decided_at: '2026-09-15T08:00:00.000Z',
+    ...over,
+  })
+
+  it('takes the ledger for a lineage the ledger knows', () => {
+    // The prior row's column says 'acknowledged' — a copy the client has since
+    // moved past. The ledger is the record.
+    expect(statusForLineage('lin-1', [d({ status: 'dismissed' })], 'acknowledged')).toBe('dismissed')
+  })
+
+  it('takes the ledger even when the ledger says "back to New"', () => {
+    // The branch that makes the table worth having. A reset is a decision; using
+    // the column here would answer it with the "Done" the client just undid.
+    expect(statusForLineage('lin-1', [d({ status: 'new' })], 'acted_on')).toBeNull()
+  })
+
+  it('falls back to the column for a lineage the ledger is silent on', () => {
+    // A status set before the ledger existed, or one whose decision row never
+    // landed while the column write succeeded.
+    expect(statusForLineage('lin-1', [d({ lineage_id: 'lin-2' })], 'acknowledged')).toBe('acknowledged')
+    expect(statusForLineage('lin-1', [], 'acknowledged')).toBe('acknowledged')
+    expect(statusForLineage('lin-1', [], null)).toBeNull()
+  })
+
+  it('falls back to the column when the read itself failed', () => {
+    // null is "we do not know what the ledger says" — not "the ledger says
+    // nothing". A PostgREST hiccup, or the migration not applied yet, must not
+    // erase every status the last update carried.
+    expect(statusForLineage('lin-1', null, 'acted_on')).toBe('acted_on')
+    expect(statusForLineage('lin-1', null, null)).toBeNull()
+  })
+})
+
 describe('surviving a deploy that lands before 20260915093000_rec_decisions.sql', () => {
   it('is the same guard the browser\'s write site uses, not a second copy of it', async () => {
     // The definitions live in lib/rec-decisions.ts so a dashboard server action
@@ -371,6 +409,7 @@ describe('surviving a deploy that lands before 20260915093000_rec_decisions.sql'
     const shared = await import('../rec-decisions')
     expect(isMissingRecDecisions).toBe(shared.isMissingRecDecisions)
     expect(inheritedStatus).toBe(shared.inheritedStatus)
+    expect(statusForLineage).toBe(shared.statusForLineage)
     expect(REC_DECISIONS_TABLE).toBe(shared.REC_DECISIONS_TABLE)
   })
 
