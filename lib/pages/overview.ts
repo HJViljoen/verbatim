@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
-import { fmtInt, monthName, shortDate } from '../format'
+import { fmtInt, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
@@ -596,16 +596,30 @@ export function firstHeardThisMonth(input: {
   return input.readableMonths.length > 0 && monthStartOf(input.readableMonths[0]) === monthStartOf(input.month)
 }
 
-/** The month a move declared today is first scored in: the month after the one
- *  it was declared in, because the month it was declared in is already part
- *  filled when the declaration lands. */
+/**
+ * The month a move declared today is first scored in: the month AFTER the one
+ * it was declared in, because the month it was declared in is already part
+ * filled when the declaration lands.
+ *
+ * A DECLARED DEVIATION FROM THE SPEC STRING. The design writes this line three
+ * times — "…tracked 14 Sep · first scoring lands with the November reading"
+ * (§3 OV5, §3 line 443, research/mock-spec.md §3 row 1) — naming the month the
+ * reading of October is DELIVERED in rather than the month it is OF. This
+ * product names a reading by the month its comments fall in, everywhere: the
+ * page bar says "Sep 2026 · still filling", and AGENTS.md's rule is that a
+ * period is dated by the comment and never by the run. "The November reading"
+ * for October's comments dates a period by its delivery, which is the one
+ * thing the reading layer exists to stop — so the line names October and the
+ * deviation is recorded rather than improvised.
+ */
 export function firstScoringMonth(declaredAt: string): string {
   return nextMonth(monthStartOf(declaredAt.slice(0, 10)))
 }
 
-/** One move, on one line (design §3 OV5, Phase 1). */
+/** One move, on one line (design §3 OV5, Phase 1). The month in the reader's
+ *  form — "the October reading", as the design writes it, not "Oct 2026". */
 export function moveLine(move: Pick<Move, 'title' | 'declared_at'>): string {
-  return `${move.title} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${monthName(firstScoringMonth(move.declared_at))} reading.`
+  return `${move.title} · tracked ${shortDate(move.declared_at)} · first scoring lands with the ${longMonth(firstScoringMonth(move.declared_at))} reading.`
 }
 
 /** What OV5 says when nothing has been dated. */

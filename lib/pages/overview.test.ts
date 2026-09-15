@@ -226,7 +226,7 @@ describe('moves', () => {
 
   it('writes the one line the design asks for', () => {
     expect(moveLine({ title: 'Advanced technology', declared_at: '2026-09-14' })).toBe(
-      'Advanced technology · tracked 14 Sep · first scoring lands with the Oct 2026 reading.',
+      'Advanced technology · tracked 14 Sep · first scoring lands with the October reading.',
     )
   })
 

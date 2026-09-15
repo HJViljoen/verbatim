@@ -23,7 +23,7 @@ describe('OV5 · your moves', () => {
   it('lists each dated move with the month its first score lands in', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('Advanced technology · tracked 14 Sep')
-    expect(text).toContain('first scoring lands with the Oct 2026 reading')
+    expect(text).toContain('first scoring lands with the October reading')
   })
 
   it('names the unlock on the block rather than leaving it to be wondered about', () => {
