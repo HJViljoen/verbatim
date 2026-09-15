@@ -187,8 +187,6 @@ export const THIN_TRAILING_MONTHS = 12
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
 
-const key = (month: string, audience: string): string => `${month} ${audience}`
-
 function fillingLabel(month: string): MonthLabel {
   return {
     kind: 'still_filling',
@@ -436,4 +434,3 @@ export function isReadable(point: MonthPoint): boolean {
   return point.state === 'frozen' || point.state === 'filling'
 }
 
-export { key as monthAudienceKey }
