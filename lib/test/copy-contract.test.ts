@@ -118,6 +118,31 @@ describe('copyViolations — (c) no direction word outside a verdict node', () =
     expect(copyViolations('<p>Where each one turns up · New search term</p>')).toEqual([])
   })
 
+  it('catches the families the first list left half-written', () => {
+    // Every one of these returned [] before: 'grown' while 'growing' and
+    // 'grew' were listed, the whole decline family while increase/decrease
+    // were, 'trend' while 'trending' was. A word list with a hole in it fails
+    // open, which is the wrong direction for the guard that catches a
+    // direction claim nobody marked.
+    const words = [
+      'grown', 'declined', 'declining', 'decline', 'dropped', 'dropping',
+      'jumped', 'soared', 'spiked', 'plunged', 'dipped', 'doubled', 'halved',
+      'improved', 'worsened', 'trend', 'trends', 'fell',
+    ]
+    for (const word of words) {
+      const bad = copyViolations(`<p>Strap comfort ${word} this update.</p>`)
+      expect(bad.map((v) => v.rule), word).toEqual(['direction-word'])
+    }
+  })
+
+  it('leaves the bare nouns that double as ordinary verbs out', () => {
+    // "rise" and "fall" join up/down/new: the product says "comments that fall
+    // outside the window" and means nothing about a series.
+    expect(DIRECTION_WORDS).not.toContain('rise')
+    expect(DIRECTION_WORDS).not.toContain('fall')
+    expect(copyViolations('<p>Comments that fall outside the window.</p>')).toEqual([])
+  })
+
   it('matches whole words only', () => {
     expect(copyViolations('<p>Download the upgraded export.</p>')).toEqual([])
   })

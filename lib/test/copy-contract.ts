@@ -62,22 +62,47 @@ export interface CopyViolation {
 }
 
 /**
- * Movement vocabulary, whole-word and case-insensitive. Deliberately NOT here:
- * bare "up" and "down", which the product's ordinary copy uses without
- * claiming a direction ("where each one turns up"), and "new", which is a word
- * before it is a chip. Both belong to rule (c) in spirit; neither can be
- * caught by a word list without failing honest copy, so the New chip stays
+ * Movement vocabulary, whole-word and case-insensitive. Listed BY FAMILY, and
+ * a family is listed whole: the first pass had "growing" and "grew" but not
+ * "grown", the whole increase family but not "decline" — the word English copy
+ * actually reaches for — and "trending" but not "trend", so rule (c) failed
+ * open on the sentences most likely to be written. A word added here belongs
+ * with its inflections or the next reader finds the same hole.
+ *
+ * Deliberately NOT here: bare "up" and "down", which the product's ordinary
+ * copy uses without claiming a direction ("where each one turns up"), and
+ * "new", which is a word before it is a chip. Bare "rise" and "fall" are out
+ * for the same reason ("comments that fall outside the window"); their
+ * unambiguous inflections are in. All belong to rule (c) in spirit; none can
+ * be caught by a word list without failing honest copy, so the New chip stays
  * gated by `directionWordsFor('dashboard.themes')` instead (lib/config.ts).
  */
 export const DIRECTION_WORDS = [
-  'gaining', 'gained', 'gains', 'fading', 'faded', 'fades',
-  'rising', 'rises', 'risen', 'rose', 'falling', 'falls', 'fallen',
-  'climbing', 'climbed', 'slipping', 'slipped', 'surging', 'surged',
-  'growing', 'grew', 'shrinking', 'shrank', 'shrunk',
-  'accelerating', 'decelerating', 'trending', 'trended',
-  'upward', 'downward', 'uptick', 'downtick', 'momentum',
+  'gain', 'gaining', 'gained', 'gains',
+  'fade', 'fading', 'faded', 'fades',
+  'rising', 'rises', 'risen', 'rose',
+  'falling', 'falls', 'fallen', 'fell',
+  'climb', 'climbing', 'climbed', 'climbs',
+  'slip', 'slipping', 'slipped', 'slips',
+  'surge', 'surging', 'surged', 'surges',
+  'grow', 'growing', 'grew', 'grown', 'grows',
+  'shrink', 'shrinking', 'shrank', 'shrunk', 'shrinks',
+  'accelerate', 'accelerating', 'accelerated', 'accelerates',
+  'decelerate', 'decelerating', 'decelerated', 'decelerates',
+  'trend', 'trending', 'trended', 'trends',
   'increase', 'increased', 'increases', 'increasing',
   'decrease', 'decreased', 'decreases', 'decreasing',
+  'decline', 'declined', 'declines', 'declining',
+  'drop', 'dropped', 'dropping', 'drops',
+  'jump', 'jumped', 'jumping', 'jumps',
+  'soar', 'soared', 'soaring', 'soars',
+  'spike', 'spiked', 'spiking', 'spikes',
+  'plunge', 'plunged', 'plunging', 'plunges',
+  'dip', 'dipped', 'dipping', 'dips',
+  'double', 'doubled', 'doubling', 'halve', 'halved', 'halving',
+  'improve', 'improved', 'improving', 'improves',
+  'worsen', 'worsened', 'worsening', 'worsens',
+  'upward', 'downward', 'uptick', 'downtick', 'momentum',
 ]
 
 export const DIRECTION_RE = new RegExp(`\\b(${DIRECTION_WORDS.join('|')})\\b`, 'gi')
