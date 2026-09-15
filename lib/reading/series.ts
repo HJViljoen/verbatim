@@ -445,6 +445,42 @@ export function mergeSeriesNotes(series: readonly MonthSeries[]): MonthLabel[] {
   return out
 }
 
+/** One object's weight on one audience's axis, for ranking only. */
+export interface ObjectWeight {
+  audience: string
+  objectId: string
+  /** Comments summed over the months read. */
+  comments: number
+  /** How many months of the axis the object appears in. */
+  months: number
+}
+
+/**
+ * The biggest objects on each audience's axis, by comments.
+ *
+ * BY COMMENTS, AND ONLY BY COMMENTS. A comment carries one date and lands in
+ * one month, so summing month rows gives the window's comment count exactly;
+ * videos do NOT sum, because a video whose thread spans two months is a member
+ * of both months' sets (+38.7% on Össur's own brand over twelve months). This
+ * is a ranking, not a figure: whoever prints a number for one of these objects
+ * reads it from `loadWindowReading`, which counts distinct videos over the
+ * whole window in one pass.
+ *
+ * Ties break on the object id, so the same corpus always ranks the same way.
+ */
+export function rankObjects(rows: readonly ObjectWeight[], limit: number): ObjectWeight[] {
+  const byAudience = new Map<string, ObjectWeight[]>()
+  for (const row of rows) byAudience.set(row.audience, [...(byAudience.get(row.audience) ?? []), row])
+  const out: ObjectWeight[] = []
+  for (const audience of [...byAudience.keys()].sort()) {
+    const ranked = [...(byAudience.get(audience) ?? [])].sort(
+      (a, b) => b.comments - a.comments || a.objectId.localeCompare(b.objectId),
+    )
+    out.push(...ranked.slice(0, Math.max(0, limit)))
+  }
+  return out
+}
+
 /** Index the points of a series by month, for a caller that needs to reach one
  *  without walking the axis. */
 export function pointsByMonth(series: MonthSeries): Map<string, MonthPoint> {

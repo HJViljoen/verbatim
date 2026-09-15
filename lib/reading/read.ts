@@ -9,10 +9,12 @@ import {
   buildSeries,
   mergeSeriesNotes,
   monthAxis,
+  rankObjects,
   type DenominatorPoint,
   type MonthLabel,
   type MonthSeries,
   type NumeratorPoint,
+  type ObjectWeight,
   type SeriesChange,
   type Substrate,
 } from './series'
@@ -496,4 +498,103 @@ export async function loadWindowReading(
       ? themes.filter((t) => (!audiences || audiences.has(t.audience)) && (!objectIds || objectIds.has(t.theme_id)))
       : null,
   }
+}
+
+// ---- Which objects to draw at all --------------------------------------------
+
+export interface TopObjectsOptions {
+  /** Only `theme` has a table today; M4 and M5 attach their own here, exactly
+   *  as `loadMonthSeries` does. */
+  objectKind?: ObjectKind
+  audiences?: readonly Audience[]
+  from: string
+  to: string
+  /** How many objects per audience. */
+  limit?: number
+}
+
+export interface TopObject {
+  audience: Audience
+  objectId: string
+  label: string | null
+  /** Comments over the months read — the ONE figure that sums across month
+   *  rows exactly. Ranking weight, never a printed number. */
+  comments: number
+  months: number
+}
+
+/**
+ * The objects worth drawing on an axis, largest first, per audience.
+ *
+ * The seam WP9/WP10 need and `loadMonthSeries` deliberately does not have: it
+ * reads numerators only for the object ids a caller already holds, and
+ * Overview and Voice do not hold them — they want "the largest themes of this
+ * window" before they can ask for anything. This is that question, answered
+ * off the same stored month rows, so the ranking and the series are read from
+ * one record.
+ *
+ * It ranks by COMMENTS and returns no video count on purpose: comments sum
+ * across month rows exactly and videos do not (a video whose thread spans two
+ * months is a member of both months' sets). A caller that wants an object's
+ * figure over the window reads `loadWindowReading`, which counts distinct
+ * videos in one pass.
+ */
+export async function loadTopObjects(
+  client: SupabaseClient,
+  clientId: string,
+  options: TopObjectsOptions,
+): Promise<TopObject[]> {
+  const objectKind = options.objectKind ?? 'theme'
+  const table = NUMERATOR_TABLE[objectKind]
+  const idColumn = NUMERATOR_ID_COLUMN[objectKind]
+  if (!table || !idColumn) return []
+  const from = monthStartOf(options.from)
+  const to = monthStartOf(options.to)
+  const limit = options.limit ?? 10
+
+  const asked = options.audiences ? [...new Set(options.audiences)] : null
+  let audiences: string[] | null = null
+  if (asked) {
+    const changes = await loadChanges(client, clientId)
+    const chains = renameChains(asked, changes.map(renameFrom).filter((r): r is RenameRecord => r != null))
+    audiences = [...new Set(asked.flatMap((a) => namesFor(chains, a)))]
+  }
+
+  let rows: StoredNumerator[] = []
+  try {
+    rows = await selectAll<StoredNumerator>(() => {
+      let q = client
+        .from(table)
+        .select('*')
+        .eq('client_id', clientId)
+        .gte('month', from)
+        .lte('month', to)
+      if (audiences) q = q.in('audience', audiences)
+      return q
+        .order('month', { ascending: true })
+        .order('audience', { ascending: true })
+        .order(idColumn, { ascending: true })
+    })
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) throw error
+    return []
+  }
+
+  const weights = new Map<string, ObjectWeight>()
+  for (const row of rows) {
+    const objectId = String((row as unknown as Record<string, unknown>)[idColumn] ?? '')
+    if (!objectId) continue
+    const key = `${row.audience}\u0000${objectId}`
+    const held = weights.get(key)
+    weights.set(key, {
+      audience: row.audience,
+      objectId,
+      comments: (held?.comments ?? 0) + (row.comments ?? 0),
+      months: (held?.months ?? 0) + 1,
+    })
+  }
+
+  const ranked = rankObjects([...weights.values()], limit)
+  const labels = await loadLabels(client, clientId, objectKind, [...new Set(ranked.map((r) => r.objectId))])
+  return ranked.map((r) => ({ ...r, label: labels.get(r.objectId) ?? null }))
 }

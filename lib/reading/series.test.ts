@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildSeries,
   mergeSeriesNotes,
+  rankObjects,
   isReadable,
   monthAxis,
   pointsByMonth,
@@ -430,5 +431,37 @@ describe('mergeSeriesNotes — a set of series says its caveats once', () => {
 
   it('answers an empty set with no notes', () => {
     expect(mergeSeriesNotes([])).toEqual([])
+  })
+})
+
+describe('rankObjects — which objects are worth drawing', () => {
+  const w = (audience: string, objectId: string, comments: number, months = 3) => ({
+    audience, objectId, comments, months,
+  })
+
+  it('ranks each audience on its own, largest first', () => {
+    const ranked = rankObjects(
+      [w('industry-other', 't1', 308), w('industry-other', 't2', 900), w('client', 't3', 40)],
+      2,
+    )
+    expect(ranked.map((r) => `${r.audience}/${r.objectId}`)).toEqual([
+      'client/t3', 'industry-other/t2', 'industry-other/t1',
+    ])
+  })
+
+  it('takes the limit per audience, not across the set', () => {
+    const rows = ['a', 'b', 'c'].flatMap((aud) => [w(aud, 'x', 10), w(aud, 'y', 5)])
+    expect(rankObjects(rows, 1)).toHaveLength(3)
+  })
+
+  it('breaks a tie on the id, so the same corpus ranks the same way twice', () => {
+    const rows = [w('client', 'zzz', 10), w('client', 'aaa', 10)]
+    expect(rankObjects(rows, 2).map((r) => r.objectId)).toEqual(['aaa', 'zzz'])
+    expect(rankObjects([...rows].reverse(), 2).map((r) => r.objectId)).toEqual(['aaa', 'zzz'])
+  })
+
+  it('answers nothing for a limit of zero or an empty set', () => {
+    expect(rankObjects([w('client', 't1', 10)], 0)).toEqual([])
+    expect(rankObjects([], 5)).toEqual([])
   })
 })
