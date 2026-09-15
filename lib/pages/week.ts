@@ -774,10 +774,20 @@ async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow)
   }
 }
 
-/** `quote_refs` is `[{ref, context}]` on the table and a bare string list in
- *  older rows. Both read as refs; anything else is dropped rather than
- *  rendered as `[object Object]`. */
-function refsOf(value: unknown): string[] {
+/**
+ * The refs inside `anomaly_flags.quote_refs`.
+ *
+ * THE COLUMN IS `[{ref, context}]`, NOT A STRING LIST. M7's own comment says
+ * so — "comment ids and their context, never the text" — and a row written and
+ * read back on a local PostgreSQL 17 cluster comes out
+ * `[{"ref": "e:abc", "context": "tiktok"}]`. A reader that filtered for
+ * `typeof r === 'string'` would therefore drop every ref there is and print a
+ * flag with no evidence under it, silently, the day M7 lands. Both shapes are
+ * accepted here because nothing has written the column in production yet and
+ * the string form is the cheaper thing for a future writer to reach for;
+ * anything else is dropped rather than rendered as `[object Object]`.
+ */
+export function refsOf(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   const out: string[] = []
   for (const item of value) {

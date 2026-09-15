@@ -12,6 +12,7 @@ import {
   newThemesLine,
   NEW_THEME_FLOOR,
   pooledBaseline,
+  refsOf,
   typicalTag,
   windowDays,
   type UnusualFlag,
@@ -224,5 +225,22 @@ describe('the anomaly record’s absence', () => {
     expect(isMissingAnomalyRecord({ code: '42501', message: 'permission denied for table anomaly_flags' })).toBe(false)
     expect(isMissingAnomalyRecord(new Error('fetch failed'))).toBe(false)
     expect(isMissingAnomalyRecord(null)).toBe(false)
+  })
+})
+
+describe('a flag’s quote refs', () => {
+  it('reads the shape the column actually holds', () => {
+    // Written and read back on a local PG 17 cluster with M7 applied:
+    // `[{"ref": "e:abc", "context": "tiktok"}]`. A reader that kept only
+    // strings here would print every flag with no evidence under it, silently,
+    // the day the migration lands.
+    expect(refsOf([{ ref: 'e:abc', context: 'tiktok' }, { ref: 'e:def' }])).toEqual(['e:abc', 'e:def'])
+  })
+
+  it('also reads a bare string list, and drops anything else', () => {
+    expect(refsOf(['e:abc', 'c:def'])).toEqual(['e:abc', 'c:def'])
+    expect(refsOf([{ context: 'tiktok' }, 42, null, undefined])).toEqual([])
+    expect(refsOf(null)).toEqual([])
+    expect(refsOf('e:abc')).toEqual([])
   })
 })
