@@ -3,6 +3,7 @@ import {
   BOOKKEEPING_COLUMNS,
   buildConfigSnapshot,
   isMissingBookkeepingColumn,
+  isMissingClusteringKeyColumn,
   openRunBookkeeping,
   previousRunEnd,
   rowWindow,
@@ -254,6 +255,35 @@ describe('isMissingBookkeepingColumn — surviving a deploy that lands before it
     expect(isMissingBookkeepingColumn({ code: '42703', message: 'column "videos_scraped" does not exist' })).toBe(false)
     expect(isMissingBookkeepingColumn(null)).toBe(false)
     expect(isMissingBookkeepingColumn('42703')).toBe(false)
+  })
+
+  it('leaves clustering_key out of the group, so a missing key never costs the window', () => {
+    // The seven arrived in one migration; clustering_key arrived three days
+    // later. If it joined the group, a database with the window columns and
+    // without the key would re-issue the write as a bare row — no
+    // window_start, no window_end, no basis — and every step after open-run
+    // would fall back to the clock.
+    const missingKey = { code: '42703', message: 'column "clustering_key" of relation "pipeline_runs" does not exist' }
+    expect(isMissingBookkeepingColumn(missingKey)).toBe(false)
+    expect(isMissingClusteringKeyColumn(missingKey)).toBe(true)
+    expect(isMissingClusteringKeyColumn({
+      code: 'PGRST204',
+      message: "Could not find the 'clustering_key' column of 'pipeline_runs' in the schema cache",
+    })).toBe(true)
+    expect(isMissingClusteringKeyColumn({ code: '42703', message: 'column "window_basis" does not exist' })).toBe(false)
+    expect(isMissingClusteringKeyColumn(null)).toBe(false)
+  })
+
+  it('omits the column rather than writing null when the narrow retry drops the key', () => {
+    // What open-run re-issues on a 42703 for clustering_key alone: the same
+    // row, window and all, minus one key.
+    const window = { start: '2026-09-13T04:06:38.483Z', end: '2026-09-20T04:00:00.000Z', basis: 'anchored' as const }
+    const w = openRunBookkeeping({ period: 'weekly', window, snapshot: { brand_keywords: ['össur'] } })
+    expect('clustering_key' in w).toBe(false)
+    expect(w.window_start).toBe(window.start)
+    expect(w.window_end).toBe(window.end)
+    expect(w.window_basis).toBe('anchored')
+    expect(w.config_snapshot).toEqual({ brand_keywords: ['össur'] })
   })
 })
 

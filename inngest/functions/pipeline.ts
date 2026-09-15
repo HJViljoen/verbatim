@@ -35,7 +35,7 @@ import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh }
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
-import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
+import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, isMissingClusteringKeyColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -325,6 +325,13 @@ export const runPipeline = inngest.createFunction(
       // tenant until someone applied the migration. The run then carries no
       // frozen window and every reader falls back to the clock, as a
       // pre-2026-09-15 row does. Same guard as ocr.ts and Pass D-b's lineage.
+      //
+      // `clustering_key` is retried on its OWN before that blanket drop. It
+      // came three migrations later, so it can be the only column missing, and
+      // it is one nullable text column nothing reads yet — while dropping the
+      // group costs the frozen window, which is the 18-days-apart failure
+      // AGENTS.md names. So: full write, then the same write minus the key,
+      // then (only for the seven) the bare row.
       let recorded = true
       const resumeRunId = options.runId
       if (resumeRunId) {
@@ -336,8 +343,9 @@ export const runPipeline = inngest.createFunction(
         // The bookkeeping is NOT simply rewritten: the slot the original run
         // served and the config it gathered under are its facts, not this
         // invocation's (lib/pipeline/run-bookkeeping.ts).
-        const bookkeeping = openRunBookkeeping({
-          period, window, snapshot, clusteringKey,
+        const bookkeeping = (withClusteringKey: boolean) => openRunBookkeeping({
+          period, window, snapshot,
+          ...(withClusteringKey ? { clusteringKey } : {}),
           scheduledFor: options.scheduledFor,
           resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
         })
@@ -346,7 +354,11 @@ export const runPipeline = inngest.createFunction(
             .from('pipeline_runs')
             .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
             .eq('id', resumeRunId).eq('client_id', clientId)
-        let { error } = await reopen({ stalled: false, ...bookkeeping })
+        let { error } = await reopen({ stalled: false, ...bookkeeping(true) })
+        if (error && isMissingClusteringKeyColumn(error)) {
+          console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; reopening without it (the window is still frozen)')
+          ;({ error } = await reopen({ stalled: false, ...bookkeeping(false) }))
+        }
         if (error && isMissingBookkeepingColumn(error)) {
           console.warn('[open-run] run bookkeeping columns are not in the database yet; reopening without them')
           recorded = false
@@ -360,7 +372,16 @@ export const runPipeline = inngest.createFunction(
         admin
           .from('pipeline_runs')
           .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...extra })
-      let { error } = await open(openRunBookkeeping({ period, window, snapshot, clusteringKey, scheduledFor: options.scheduledFor }))
+      const opening = (withClusteringKey: boolean) => openRunBookkeeping({
+        period, window, snapshot,
+        ...(withClusteringKey ? { clusteringKey } : {}),
+        scheduledFor: options.scheduledFor,
+      })
+      let { error } = await open(opening(true))
+      if (error && isMissingClusteringKeyColumn(error)) {
+        console.warn('[open-run] pipeline_runs.clustering_key is not in the database yet; opening without it (the window is still frozen)')
+        ;({ error } = await open(opening(false)))
+      }
       if (error && isMissingBookkeepingColumn(error)) {
         console.warn('[open-run] run bookkeeping columns are not in the database yet; opening without them')
         recorded = false
