@@ -830,7 +830,7 @@ export async function freezeMonths(
       })
     } catch (e) {
       console.error(
-        `[monthly-reading] the evidence-id freeze ${dryRun ? 'preview' : ''} failed for ${opts.clientId} over ${months.join(' ')}: ` +
+        `[monthly-reading] the evidence-id freeze${dryRun ? ' preview' : ''} failed for ${opts.clientId} over ${months.join(' ')}: ` +
         `${e instanceof Error ? e.message : String(e)}. The months are frozen; their ids are not, and a month ` +
         'that closes without them cannot be given them later.',
       )
