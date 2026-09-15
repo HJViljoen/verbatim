@@ -416,7 +416,7 @@ function BriefBody({ d, mode }: { d: D; mode: RenderMode }) {
       {h.quotes.length > 0 && (
         <div>
           <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">In their words</p>
-          <Quotes items={h.quotes.map((q) => q.text)} />
+          <Quotes items={h.quotes} />
         </div>
       )}
       {app && d.funnel.length > 0 && (
@@ -457,7 +457,7 @@ const brief: R = (d) => {
         {h.quotes.length > 0 && (
           <div>
             <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">In their words</p>
-            <Quotes items={h.quotes.map((q) => q.text)} />
+            <Quotes items={h.quotes} />
           </div>
         )}
       </div>

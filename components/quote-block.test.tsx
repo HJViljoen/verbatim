@@ -3,6 +3,7 @@ import { render, renderText } from '@/lib/test/render'
 import { QuoteBlock, translationNote, languageName, MACHINE_TRANSLATION_STAMP, type QuoteMode } from './quote-block'
 import { Quotes } from './quotes'
 import { Verbatim } from './shell/master-list'
+import type { Quote } from '@/lib/renderables/types'
 
 // Item 8's promise, asserted as markup: the original leads, the English sits
 // under it, and the stamp says who did the translating. In all three modes,
@@ -122,5 +123,16 @@ describe('the adopters render the same promise', () => {
 
   it('Quotes renders nothing for an empty list', () => {
     expect(render(<Quotes items={[]} />)).toBe('')
+  })
+
+  // The dashboard hands its hero quotes over whole — renderable Quotes, `ref`
+  // and all — rather than mapping them to `q.text`. That map was why the
+  // EMAILED dashboard showed an English rendering the app dashboard did not.
+  it('Quotes takes a renderable Quote whole, ref included', () => {
+    const q: Quote = { ref: 'e:abc', ...es }
+    const text = renderText(<Quotes items={[q]} />)
+    expect(text.indexOf(es.text)).toBeLessThan(text.indexOf(es.english))
+    expect(text).toContain(MACHINE_TRANSLATION_STAMP)
+    expect(text).not.toContain('e:abc')
   })
 })
