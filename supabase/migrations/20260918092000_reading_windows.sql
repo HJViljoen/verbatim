@@ -482,13 +482,20 @@ begin
   -- (a) has this audience-month already closed? The denominator is the commit
   -- marker: freezeMonths writes it last, so it is `filling` or absent while a
   -- visit is still writing and frozen once the visit has finished.
+  -- Closed is closed, including to the transaction that closed it: an earlier
+  -- draft excluded this transaction's own freeze here, and that let one
+  -- transaction freeze a denominator and then insert a brand-new row into the
+  -- audience-month behind the freeze — the exact thing this guard exists to
+  -- stop. No shipped writer does it (PostgREST makes two requests, and
+  -- freezeMonths writes numerators first on purpose), but a Postgres-side
+  -- backfill that writes denominator-first would have inherited the hole
+  -- silently.
   select exists (
     select 1 from public.month_denominators d
     where d.client_id = new.client_id
       and d.month     = new.month
       and d.audience  = new.audience
       and d.status    = 'frozen'
-      and d.xmin <> pg_current_xact_id()::xid
   ) into v_closed;
 
   if not v_closed then
@@ -607,6 +614,9 @@ create trigger month_theme_readings_frozen_insert_guard
 --   * the same upsert with ONE fresh key in it is refused IN WHOLE, in either
 --     row order — which is why `mergeMonthRows` drops that row before it sends
 --     the batch (`closedAudienceMonths` / `refusedLate`);
+--   * one transaction that freezes the denominator and then inserts a new key
+--     into that audience-month is refused: closed is closed, including to the
+--     transaction that closed it;
 --   * a newly tracked rival back-reads into old months freely (no denominator
 --     row for its audience);
 --   * an upsert that would rewrite a frozen denominator is refused;
