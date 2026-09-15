@@ -86,13 +86,13 @@ describe('writeChunks — one chunk is one RPC body', () => {
     expect(writeChunks([])).toEqual([])
   })
 
-  it('splits at 100, the body size the themes 57014 incident calibrated', () => {
-    expect(EMBED_WRITE_CHUNK).toBe(100)
-    expect(writeChunks(payload(250)).map((c) => c.length)).toEqual([100, 100, 50])
+  it('splits at 25, the largest chunk the authenticator role\'s 8 s statement clock takes on an HNSW insert', () => {
+    expect(EMBED_WRITE_CHUNK).toBe(25)
+    expect(writeChunks(payload(60)).map((c) => c.length)).toEqual([25, 25, 10])
   })
 
-  it('turns the whole 3,536-row backlog into 36 requests', () => {
-    expect(writeChunks(payload(3536))).toHaveLength(36)
+  it('turns the whole 3,536-row backlog into 142 requests', () => {
+    expect(writeChunks(payload(3536))).toHaveLength(142)
   })
 
   it('keeps a chunk body under the ~10MB that killed the themes insert', () => {

@@ -49,13 +49,21 @@ import { logAiCall, type AiLogArgs } from './ai-log'
 // the `limit` option below plus a default — not a new step — because the work
 // is already idempotent: whatever is left is still NULL next run.
 
-/** Rows per RPC call. The write body is the constraint, not the row count: a
- *  1536-float vector is ~19.3 kB of JSON (measured across both tenants), so 100
- *  rows is a ~1.9 MB body — the size lib/pipeline/themes.ts settled on after a
- *  ~10 MB statement spent 13.4 s in Postgres and died 57014 on the 2026-09-13
- *  run, and a 200-chunk in the same table family measures ~5.4 ms a row. The
- *  whole 3,536-row backlog is 36 requests at this size. */
-export const EMBED_WRITE_CHUNK = 100
+/** Rows per RPC call. Two constraints, and the second is the one that binds.
+ *  The write body: a 1536-float vector is ~19.3 kB of JSON (measured across
+ *  both tenants), so 100 rows is a ~1.9 MB body — the size lib/pipeline/themes.ts
+ *  settled on after a ~10 MB statement spent 13.4 s in Postgres and died 57014
+ *  on the 2026-09-13 run. The statement clock: PostgREST logs in as
+ *  `authenticator`, whose role config carries `statement_timeout = 8s`, and
+ *  SET ROLE service_role does not lift it — so every RPC call has eight
+ *  seconds, and each written row is an HNSW index insert (the vector index on
+ *  audience_insights), not a plain UPDATE. Measured on the 2026-09-15 backfill:
+ *  100-row chunks landed 1,224 Össur rows and then died 57014 ("canceling
+ *  statement due to statement timeout"), and every Sealand chunk died on the
+ *  first call, alone on the database. 25 rows is ~0.5 MB and well inside the
+ *  clock; the whole 3,536-row backlog is ~142 requests at this size, still
+ *  under a minute of Postgres. */
+export const EMBED_WRITE_CHUNK = 25
 
 /** The bulk write. PostgREST cannot express "set a different value per row in
  *  one request" — PATCH with `.in()` sets ONE value for every match, and an
