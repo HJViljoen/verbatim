@@ -28,12 +28,22 @@ export function StatValue({
 
 export type Good = 'up' | 'down' | 'neutral'
 
-/** Is this delta favourable? null = flat or direction-neutral. */
-export function favourability(delta: number, good: Good, unit: 'pt' | 'count' | '%' = 'count'): boolean | null {
-  const flat = Math.abs(delta) < (unit === 'count' ? 0.5 : 0.05)
-  if (flat || good === 'neutral') return null
-  const up = delta > 0
-  return good === 'up' ? up : !up
+/**
+ * Is this delta favourable? null = flat, or direction-neutral.
+ *
+ * NO EPSILON (Phase 1 WP10). This used to call anything under 0.5 of a count
+ * or 0.05 of a point "flat" — a threshold decided inside a presentation
+ * component, applied to every `<Delta>` in the app, with no n behind it and no
+ * relation to any band. It retires. Flat here means exactly zero, and the
+ * caller passes the value it is about to PRINT, so what is coloured is what is
+ * shown: a 0.3-count delta that renders as "±0" is grey, and never green.
+ *
+ * This is a colour, not a claim. Whether a proportion MOVED is a banded
+ * question and `MovementBadge` is where it is asked (components/delta-badge.tsx).
+ */
+export function favourability(delta: number, good: Good): boolean | null {
+  if (delta === 0 || good === 'neutral') return null
+  return good === 'up' ? delta > 0 : delta < 0
 }
 
 export function Delta({
@@ -50,8 +60,10 @@ export function Delta({
 }) {
   if (value == null || Number.isNaN(value)) return null
   const dec = decimals ?? (unit === 'pt' || unit === '%' ? 1 : 0)
-  const fav = favourability(value, good, unit === 'pt' ? 'pt' : unit === '%' ? '%' : 'count')
+  // Round FIRST, then colour: the printed value is the one the reader sees, so
+  // it is the one the colour has to be about (the old 0.5 / 0.05 epsilon).
   const v = dec === 1 ? round1(value) : Math.round(value)
+  const fav = favourability(v, good)
   return (
     <span
       className={cn(
