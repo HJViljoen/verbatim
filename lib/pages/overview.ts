@@ -1298,17 +1298,27 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
 
 /** The top row of Market's ledger, with its age and the decision on it. */
 async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<LedgerRow | null> {
-  const [recRes, decisionRes] = await Promise.all([
-    supabase
-      .from('recommendations')
-      // THE COLUMNS THE TABLE ACTUALLY HAS. There is no `first_seen_run_date`
-      // and no `rank_score`: Pass D-b deletes and reinserts every
-      // recommendation each update, so the row carries no history at all and
-      // `lineage_id` is the only thing about it that survives. Ordering is
-      // `topRecommendation`'s — priority, then how well grounded — so Overview
-      // and Market name the same top row.
-      .select('id, title, lineage_id, status, priority, based_on')
-      .eq('client_id', clientId),
+  const [recRows, decisionRes] = await Promise.all([
+    // THROUGH selectAll, like every other list read: a bare `.select()` caps
+    // at 1000 rows silently (AGENTS.md). 56 and 65 rows on production today,
+    // so nothing truncates — the rule is about the read, not about today's
+    // count, and `rec_decisions` beside it already obeys it.
+    selectAll<RecRow>(() =>
+      supabase
+        .from('recommendations')
+        // THE COLUMNS THE TABLE ACTUALLY HAS. There is no `first_seen_run_date`
+        // and no `rank_score`: Pass D-b deletes and reinserts every
+        // recommendation each update, so the row carries no history at all and
+        // `lineage_id` is the only thing about it that survives. Ordering is
+        // `topRecommendation`'s — priority, then how well grounded — so Overview
+        // and Market name the same top row.
+        .select('id, title, lineage_id, status, priority, based_on')
+        .eq('client_id', clientId)
+        .order('id', { ascending: true }),
+    ).catch((error: unknown) => {
+      console.error(`[pages] overview.recommendation: ${(error as { message?: string })?.message ?? String(error)}`)
+      return [] as RecRow[]
+    }),
     selectAll<RecDecision>(() =>
       supabase
         .from(REC_DECISIONS_TABLE)
@@ -1319,7 +1329,7 @@ async function loadLedger(supabase: SupabaseClient, clientId: string): Promise<L
         .limit(200),
     ).catch(() => [] as RecDecision[]),
   ])
-  const rec = topRecommendation(rows<RecRow>(recRes, 'overview.recommendation'))
+  const rec = topRecommendation(recRows)
   if (!rec) return null
   const decided = rec.lineage_id
     ? [...decisionRes].filter((d) => d.lineage_id === rec.lineage_id).sort((a, b) => (a.decided_at < b.decided_at ? 1 : -1))[0] ?? null
