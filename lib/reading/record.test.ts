@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   countRefused,
   discardCaveat,
+  isMissingThemeMembers,
   howSoundLine,
   isEnglishTag,
   longestGapDays,
@@ -162,5 +163,19 @@ describe('recordLines — every fact with its basis', () => {
 
   it('prints the reading date on every record', () => {
     expect(has('Reading as at 2026-09-15')).toBe(true)
+  })
+})
+
+describe('isMissingThemeMembers — "M2 is not applied" and nothing else', () => {
+  it('recognises the column and the table before the migration lands', () => {
+    expect(isMissingThemeMembers({ code: '42703', message: 'column theme_observations.member_video_ids does not exist' })).toBe(true)
+    expect(isMissingThemeMembers({ code: 'PGRST205', message: "Could not find the table 'public.theme_observations' in the schema cache" })).toBe(true)
+  })
+
+  it('does not swallow a permission error, a network failure or a query bug', () => {
+    expect(isMissingThemeMembers({ code: '42501', message: 'permission denied for table theme_observations' })).toBe(false)
+    expect(isMissingThemeMembers(new Error('fetch failed'))).toBe(false)
+    expect(isMissingThemeMembers({ code: '42703', message: 'column videos.analyzed_run_id does not exist' })).toBe(false)
+    expect(isMissingThemeMembers(null)).toBe(false)
   })
 })

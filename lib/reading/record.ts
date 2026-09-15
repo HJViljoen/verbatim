@@ -440,6 +440,11 @@ async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWi
  * rather than a figure that cannot move: "nobody has measured this" and "the
  * instrument attached one theme per video" are different answers, and this one
  * is the first until M2 is applied and a run has written the column.
+ *
+ * Two columns, not `*`: the newest run carries ~1,346 observations on Össur,
+ * and once M2 lands each of those rows carries a `member_video_ids` array
+ * beside everything else the table holds. One array column is what this reads,
+ * so one array column is what it asks for.
  */
 async function loadInstrument(client: SupabaseClient, clientId: string): Promise<InstrumentRecord> {
   const none: InstrumentRecord = { themesPerVideo: null, themeAttachments: 0, analysedVideos: 0, runId: null }
@@ -458,7 +463,7 @@ async function loadInstrument(client: SupabaseClient, clientId: string): Promise
     rows = await selectAll(() =>
       client
         .from('theme_observations')
-        .select('*')
+        .select('run_id, member_video_ids')
         .eq('client_id', clientId)
         .eq('run_id', runId)
         .order('id', { ascending: true }),
@@ -479,11 +484,29 @@ async function loadInstrument(client: SupabaseClient, clientId: string): Promise
       analysedVideos: videos.size,
       runId,
     }
-  } catch {
-    // The table, the column or the tenant's history may not be there. The
-    // record says "not recorded" rather than taking the page down.
-    return none
+  } catch (error) {
+    // ONLY the one error this answer is true for. `member_video_ids` arrives
+    // with M2 and is absent until it is applied, and the record's honest answer
+    // to that is "not recorded yet". A permission error, a dropped connection
+    // or a bug in the query above is a different fact and printing the same
+    // sentence for it would hide a broken read behind a true-sounding one —
+    // every other loader in this file narrows the same way.
+    if (isMissingThemeMembers(error)) return none
+    throw error
   }
+}
+
+/** The error a read of `theme_observations.member_video_ids` gets before M2 is
+ *  applied. Same shape as `isMissingMonthlyReading` / `isMissingConfigLog`:
+ *  PostgREST's schema-cache codes and Postgres's own, and the object has to be
+ *  named in the message before any of them counts. */
+export function isMissingThemeMembers(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!/member_video_ids|theme_observations/.test(text)) return false
+  if (code && ['PGRST204', 'PGRST205', '42P01', '42703'].includes(code)) return true
+  return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
 async function loadChanges(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<ChangeRecord> {
