@@ -391,7 +391,13 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
     ) {
       labels.push({
         kind: 'thin',
-        text: 'Thin month — far fewer conversations than usual, so a share moves on very little here.',
+        // VIDEOS, because videos are what the rule measures. thinMonth compares
+        // `point.videos` against the trailing median of videosOnAxis, and its
+        // other arm counts delivered updates; nothing in the computation
+        // touches a comment count. Naming conversations broke the
+        // copy-matches-code rule in the direction a reader cannot detect — and
+        // "videos" is the word the new reading surfaces say anyway.
+        text: 'Thin month — far fewer videos than usual, so a share moves on very little here.',
       })
     }
 

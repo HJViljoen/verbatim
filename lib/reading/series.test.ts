@@ -319,6 +319,20 @@ describe('buildSeries · labels', () => {
     expect(thin).toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
   })
 
+  it('names the unit the thin rule actually measures', () => {
+    const wide = monthAxis('2025-10-01', '2026-09-01')
+    const s = buildSeries({
+      axis: wide,
+      audience: 'industry-other',
+      denominators: [...wide.slice(0, 11).map((m) => den(m, 600)), den('2026-09-01', 150)],
+    })
+    const thin = s.points[s.points.length - 1].labels.find((l) => l.kind === 'thin')
+    // thinMonth compares videos against the trailing median of videos; nothing
+    // in the computation touches a comment count.
+    expect(thin?.text).toContain('far fewer videos than usual')
+    expect(thin?.text).not.toContain('conversations')
+  })
+
   it('reads a run-era month with NO key as zero updates, not as uncounted', () => {
     // loadUpdates keys byMonth only for months that have a delivered run, so a
     // month the pipeline did not run in arrived as null and could never be
