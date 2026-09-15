@@ -230,7 +230,7 @@ describe('hoverTitle', () => {
 
   it('says what a hollow month is instead of showing a value', () => {
     expect(hoverTitle({ label: 'Freitag' }, p('2026-05-01', null, 'hollow')))
-      .toBe('Freitag · May 2026 · no conversation this month')
+      .toBe('Freitag · May 2026 · no videos this month')
   })
 
   it('prints the denominator of a below-floor month and refuses the reading', () => {
@@ -262,7 +262,7 @@ describe('monthColumns / columnTitle', () => {
   it('heads the tooltip with the month and then answers for every line, once', () => {
     const cols = monthColumns(['2026-08-01', '2026-09-01'], [a, b])
     expect(columnTitle(cols[0], (v) => `${v}%`))
-      .toBe('Aug 2026\nSealand 28% · 23 of 82 videos\nFreitag · no conversation this month')
+      .toBe('Aug 2026\nSealand 28% · 23 of 82 videos\nFreitag · no videos this month')
   })
 })
 

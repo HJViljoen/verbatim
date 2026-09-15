@@ -97,7 +97,7 @@ describe('CalendarLine', () => {
   })
 
   it('says what a hollow month is when the reader asks', () => {
-    expect(render(chart())).toContain('Jul 2026\nSealand 24% · 19 of 79 videos\nFreitag · no conversation this month')
+    expect(render(chart())).toContain('Jul 2026\nSealand 24% · 19 of 79 videos\nFreitag · no videos this month')
   })
 
   it('gives a month ONE hover target, so no series can answer for another', () => {

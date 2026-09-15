@@ -387,7 +387,12 @@ export function stateNote(state: CalendarPointState): string | null {
     case 'below_numerator':
       return 'too few of this one to read'
     case 'hollow':
-      return 'no conversation this month'
+      // "conversations" is the LEGACY unit (lib/calibration.ts) — run-scoped,
+      // and listed there as retiring with the pages that print it. This is the
+      // newest reading surface in the product and the only place the
+      // month-scoped reading is drawn, so it speaks the thirteen words: a
+      // hollow month is a month whose audience had no video with comment on it.
+      return 'no videos this month'
     case 'filling':
       return 'still filling'
   }
@@ -442,7 +447,7 @@ export const STATE_LABEL: Record<CalendarPointState, string> = {
   read: 'read',
   below_floor: 'below the floor',
   below_numerator: 'too few to read',
-  hollow: 'no conversation',
+  hollow: 'no videos',
   filling: 'still filling',
 }
 
