@@ -898,6 +898,17 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     .limit(TRAILING_RUNS)
   if (trailingError) throw new Error(`anomaly-check pipeline_runs: ${trailingError.message}`)
   const trailing = (trailingData ?? []) as { id: string; videos_scraped: number | null; status: string }[]
+  //
+  // ONLY THE THIN ARM IS LIVE INSIDE THE PIPELINE, and the code should say so
+  // rather than imply three gates where there is one. This step runs before
+  // `close-run`, which is where the terminal status is written and where
+  // `stalled` is computed at all (inngest/functions/pipeline.ts) — and
+  // `open-run` resets a resumed run to status 'running' with stalled false. So
+  // this row reads 'running' and false on every pipeline pass, and
+  // `thinUpdate`'s `failed` and `stalled` arms are reachable only from a replay
+  // over a closed run. They are read anyway, and not deleted: decision M names
+  // `stalled` as a live suppression, a replay is a real caller, and moving the
+  // step after close-run would put the flags on the wrong side of the report.
   const thisRun = await admin
     .from('pipeline_runs')
     .select('status, stalled')
