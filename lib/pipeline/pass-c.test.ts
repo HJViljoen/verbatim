@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSystemPrompt, buildUserPrompt, indexThemes, thinBuckets, bucketCoverage } from './pass-c'
+import { buildSystemPrompt, buildUserPrompt, capAboutClaims, indexThemes, thinBuckets, bucketCoverage, MAX_ABOUT_CLAIMS_IN_PROMPT } from './pass-c'
 import type { AggregatedTheme } from './types'
 
 // Pins for the v5 claims block: present exactly when competitor claims exist,
@@ -27,6 +27,7 @@ const theme = (over: Partial<AggregatedTheme> = {}): AggregatedTheme => ({
 
 const tc = { brand_keywords: ['sealand'], competitor_names: ['Cotopaxi'], industry_keywords: [] }
 const CLAIM = { competitor: 'Cotopaxi', claim: 'Lifetime warranty on bags', quote: 'They have a lifetime warranty' }
+const ABOUT = { competitor: 'Cotopaxi', claim: 'The zips give out after a season', quote: 'the zips gave out after one season', voice: 'about' as const, account: 'berryd treasure' }
 
 describe('pass C v5 claims block', () => {
   it('system prompt gains the claims rules only when claims exist', () => {
@@ -97,5 +98,71 @@ describe('thinBuckets + the coverage floor (Tier 1)', () => {
     const prompt = buildUserPrompt([{ label: 'T1', theme: t }], sov)
     expect(prompt).toContain('heard in 15 videos (20% of its bucket)')
     expect(prompt).not.toContain('strength 9')
+  })
+})
+
+describe('pass C v6 — the two claim blocks are told apart', () => {
+  it('the about block is labelled, rule-lined and carries who said it', () => {
+    const idx = indexThemes([theme()])
+    const p = buildUserPrompt(idx, undefined, [CLAIM], [ABOUT])
+    expect(p).toContain('WHAT OTHERS SAY ABOUT THEM (from transcripts of videos the competitor did NOT post):')
+    expect(p).toContain("audience voice, not the competitor's own marketing")
+    expect(p).toContain('- [about Cotopaxi, said by berryd treasure] The zips give out after a season — "the zips gave out after one season"')
+    // Their own words first, then what others say, then the themes.
+    expect(p.indexOf('WHAT COMPETITORS SAY IN THEIR OWN VIDEOS')).toBeLessThan(p.indexOf('WHAT OTHERS SAY ABOUT THEM'))
+    expect(p.indexOf('WHAT OTHERS SAY ABOUT THEM')).toBeLessThan(p.indexOf('THEMES (1)'))
+  })
+
+  it('an about claim never lands in the own-videos block, and vice versa', () => {
+    const idx = indexThemes([theme()])
+    const ownOnly = buildUserPrompt(idx, undefined, [CLAIM], [])
+    expect(ownOnly).toContain('WHAT COMPETITORS SAY IN THEIR OWN VIDEOS')
+    expect(ownOnly).not.toContain('WHAT OTHERS SAY ABOUT THEM')
+    // Sealand's real shape: two own claims, 187 about. The own block must not
+    // appear at all when nothing was captured from the rival's own videos.
+    const aboutOnly = buildUserPrompt(idx, undefined, [], [ABOUT])
+    expect(aboutOnly).not.toContain('WHAT COMPETITORS SAY IN THEIR OWN VIDEOS')
+    expect(aboutOnly).toContain('WHAT OTHERS SAY ABOUT THEM')
+  })
+
+  it('the about block is capped, so a crowd of creators cannot fill the prompt', () => {
+    const many = Array.from({ length: MAX_ABOUT_CLAIMS_IN_PROMPT + 9 }, (_, i) => ({ ...ABOUT, claim: `creator claim ${i}` }))
+    const p = buildUserPrompt(indexThemes([theme()]), undefined, [], many)
+    expect(p).toContain('creator claim 0')
+    expect(p).toContain(`creator claim ${MAX_ABOUT_CLAIMS_IN_PROMPT - 1}`)
+    expect(p).not.toContain(`creator claim ${MAX_ABOUT_CLAIMS_IN_PROMPT}`)
+  })
+
+  it('the cap is PER RIVAL, so the loudest rival cannot silence the others', () => {
+    // Sealand's shape: the rows arrive newest-first across every rival, and
+    // Cotopaxi has 24 to Freitag's 8. One flat slice would print no Freitag.
+    const rows = [
+      ...Array.from({ length: MAX_ABOUT_CLAIMS_IN_PROMPT + 6 }, (_, i) => ({ ...ABOUT, claim: `cotopaxi claim ${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => ({ ...ABOUT, competitor: 'Freitag', claim: `freitag claim ${i}` })),
+    ]
+    const capped = capAboutClaims(rows)
+    expect(capped.filter((c) => c.competitor === 'Cotopaxi')).toHaveLength(MAX_ABOUT_CLAIMS_IN_PROMPT)
+    expect(capped.filter((c) => c.competitor === 'Freitag')).toHaveLength(3)
+    // Order is the loader's, not regrouped.
+    expect(capped[0].claim).toBe('cotopaxi claim 0')
+    expect(buildUserPrompt(indexThemes([theme()]), undefined, [], rows)).toContain('freitag claim 0')
+  })
+
+  it('the system rules arrive per block, and say who is speaking in each', () => {
+    const both = buildSystemPrompt(tc, 'Sealand', true, true)
+    expect(both).toContain('WHAT COMPETITORS SAY')
+    expect(both).toContain('WHAT OTHERS SAY ABOUT THEM')
+    expect(both).toContain('Never attribute one of these to the competitor')
+    const ownOnly = buildSystemPrompt(tc, 'Sealand', true, false)
+    expect(ownOnly).not.toContain('WHAT OTHERS SAY ABOUT THEM')
+    const aboutOnly = buildSystemPrompt(tc, 'Sealand', false, true)
+    expect(aboutOnly).toContain('WHAT OTHERS SAY ABOUT THEM')
+    expect(aboutOnly).not.toContain("A claim is the competitor's marketing voice")
+  })
+
+  it('with neither block, the prompt is byte-identical to the claim-less v5 shape', () => {
+    const idx = indexThemes([theme()])
+    expect(buildUserPrompt(idx, undefined, [], [])).toBe(buildUserPrompt(idx, undefined))
+    expect(buildSystemPrompt(tc, 'Sealand', false, false)).toBe(buildSystemPrompt(tc, 'Sealand'))
   })
 })

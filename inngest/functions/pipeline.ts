@@ -1898,9 +1898,20 @@ async function runSynthesisHalf(
 
   // Brand claims (Step 2b) — all-time accumulation, newest-run-per-video,
   // tracked competitors only; empty for tenants that never ran Pass A v4.
-  // Client claims split by voice: `client` = the brand speaking (own posts +
-  // own accounts) → say-vs-hear; `about` = third parties → the About-you block.
-  const claims = await loadBrandClaims(admin, clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [], (tc?.own_handles ?? {}) as Record<string, string>)
+  // EVERY side is split by voice (2026-09-15): `client` = the brand speaking
+  // (own posts + own accounts) → say-vs-hear; `about` = third parties → the
+  // About-you block; `competitorsOwn` = a rival speaking in its own videos →
+  // Pass C's own-videos block and the document's pitch; `competitorsAbout` =
+  // creators and reviewers talking about that rival, which used to be printed
+  // as the rival's own marketing.
+  const claims = await loadBrandClaims(
+    admin,
+    clientId,
+    tc?.competitor_names ?? [],
+    tc?.brand_keywords ?? [],
+    (tc?.own_handles ?? {}) as Record<string, string>,
+    (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
+  )
 
   // Floor-passing themes only — early signals surface on pages, not in C/D.
   const themes = (await loadThemes(clientId, runId)).filter((t) => !t.singleSource)
@@ -1908,7 +1919,7 @@ async function runSynthesisHalf(
   const c = await runPassC({
     clientId, runId, themes,
     trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice,
-    competitorClaims: claims.competitors, persist: true,
+    competitorClaims: claims.competitorsOwn, competitorAboutClaims: claims.competitorsAbout, persist: true,
   })
   const d = await runPassD({
     clientId, runId, themes,

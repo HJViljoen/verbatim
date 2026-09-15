@@ -121,9 +121,19 @@ async function main() {
 
   // Brand claims (Step 2b) — all-time, newest-run-per-video, tracked
   // competitors only; empty for tenants that have never run Pass A v4.
-  const claims = await loadBrandClaims(admin, args.clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [], (tc?.own_handles ?? {}) as Record<string, string>)
-  if (claims.client.length || claims.about.length || claims.competitors.length) {
-    console.log(`\nBrand claims: ${claims.client.length} own voice · ${claims.about.length} about you · ${claims.competitors.length} competitor`)
+  const claims = await loadBrandClaims(
+    admin,
+    args.clientId,
+    tc?.competitor_names ?? [],
+    tc?.brand_keywords ?? [],
+    (tc?.own_handles ?? {}) as Record<string, string>,
+    (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
+  )
+  if (claims.client.length || claims.about.length || claims.competitorsOwn.length || claims.competitorsAbout.length) {
+    console.log(
+      `\nBrand claims: ${claims.client.length} own voice · ${claims.about.length} about you · ` +
+      `${claims.competitorsOwn.length} from a rival's own videos · ${claims.competitorsAbout.length} about a rival`,
+    )
   }
 
   console.log('\nShare of voice:')
@@ -159,7 +169,8 @@ async function main() {
     trackingConfig: tc ?? undefined,
     brandName,
     sov: metrics.share_of_voice,
-    competitorClaims: claims.competitors,
+    competitorClaims: claims.competitorsOwn,
+    competitorAboutClaims: claims.competitorsAbout,
     persist,
     dryRun: args.dryRun,
   })

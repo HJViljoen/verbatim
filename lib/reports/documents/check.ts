@@ -86,7 +86,7 @@ function writtenText(w: WriterOutput): string {
   return [
     w.in_short?.summary ?? '',
     ...(w.findings ?? []).flatMap((f) => [f.headline, f.saw, f.means, f.sure_note, ...(f.practice ?? [])]),
-    ...(w.competitors ?? []).flatMap((c) => [c.name, c.pitch, c.praise, c.hurt, c.read]),
+    ...(w.competitors ?? []).flatMap((c) => [c.name, c.pitch, c.about, c.praise, c.hurt, c.read]),
     ...(w.persona_lines ?? []).flatMap((p) => [p.name, p.line]),
     ...(w.say_hear ?? []).flatMap((x) => [x.claim, x.read]),
     ...(w.care ?? []), ...(w.asked ?? []), ...(w.not_sure_yet ?? []),

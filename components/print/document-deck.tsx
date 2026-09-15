@@ -264,18 +264,28 @@ function ShareStrip({ data, name }: { data: DocumentSnapshotData; name: string }
 function CompetitorPage({ page, figures, data }: { page: DocPage; figures: FigureTable; data: DocumentSnapshotData }) {
   const b = (field: string) => page.blocks.find((x) => x.field === field)
   const name = page.meta?.name ?? page.title
-  const cols: [string, DocBlock | undefined][] = [['What they are pitching', b('pitch')], ['What their users praise', b('praise')], ['Where their users hurt', b('hurt')]]
+  // Four columns since 2026-09-15, three on a snapshot frozen before the
+  // "what others say" block existed: a column is drawn only for a block the
+  // snapshot actually carries, so an older document prints exactly as it did.
+  const cols = ([
+    ['What they are pitching', 'pitch'],
+    ['What others say about them', 'about'],
+    ['What their users praise', 'praise'],
+    ['Where their users hurt', 'hurt'],
+  ] as const)
+    .map(([label, field]) => [label, b(field)] as [string, DocBlock | undefined])
+    .filter(([, block]) => !!block)
   const read = b('read')
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          <p className="text-[14px] text-muted-foreground">As their own videos and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
+          <p className="text-[14px] text-muted-foreground">As their own videos, other people&rsquo;s videos and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
         </div>
         <ShareStrip data={data} name={name} />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-x-6">
+      <div className={`grid min-h-0 flex-1 ${cols.length >= 4 ? 'grid-cols-4 gap-x-4' : 'grid-cols-3 gap-x-6'}`}>
         {cols.map(([label, block]) => (
           <div key={label} className={`${CARD} flex flex-col gap-2.5 px-5 py-4`}>
             <Eyebrow>{label}</Eyebrow>

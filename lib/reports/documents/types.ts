@@ -106,6 +106,7 @@ export type DocField =
   | 'practice'  // finding: in practice, at most two lines (items)
   | 'sure'      // finding: confidence, in words
   | 'pitch'     // competitor: what they are pitching
+  | 'about'     // competitor: what others say about them (creator and reviewer voice)
   | 'praise'    // competitor: what their users praise
   | 'hurt'      // competitor: where their users hurt
   | 'read'      // competitor: the read, when both names come up

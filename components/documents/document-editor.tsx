@@ -19,7 +19,7 @@ const PAGE_LABEL: Record<string, string> = { in_short: 'Overview', finding: 'Fin
 // The two labels that name a finding's consequence come from the document's
 // own LENS, so the editor calls a block what the printed page calls it. A
 // snapshot from before the lens existed is a Sales brief.
-const FIELD_LABEL: Record<string, string> = { summary: 'Executive summary', headline: 'Headline', saw: 'What the conversation shows', practice: 'In practice', pitch: 'What they are pitching', praise: 'What their users praise', hurt: 'Where their users hurt', read: 'When they come up', standing: 'How it reads', gap: 'What comes back', asked: 'The questions', care: 'Handle with care', not_sure: 'Not settled this update' }
+const FIELD_LABEL: Record<string, string> = { summary: 'Executive summary', headline: 'Headline', saw: 'What the conversation shows', practice: 'In practice', pitch: 'What they are pitching', about: 'What others say about them', praise: 'What their users praise', hurt: 'Where their users hurt', read: 'When they come up', standing: 'How it reads', gap: 'What comes back', asked: 'The questions', care: 'Handle with care', not_sure: 'Not settled this update' }
 const fieldLabel = (field: string, lens: DocumentSnapshotData['lens']) => {
   const l = lens ?? { means: 'What it means for a sale', short: 'for a sale' }
   if (field === 'means') return l.means

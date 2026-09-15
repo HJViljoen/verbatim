@@ -10,12 +10,14 @@ import { ownAccountNames, normAccount } from '../gather/owned'
 // themes-first_seen / report-delta precedent — never inside runPassC/runPassD,
 // which stay single-run-scoped.
 
-/** Who is speaking on a client-bucket video. `own` = the client itself (an
- *  owned post, or a discovered video from one of the client's own accounts);
- *  `about` = a third party talking about the client (a reviewer, a clinic, a
- *  news channel). Both are `is_client` — the bucket means "about the brand",
- *  which is why pooling them under "You say" misattributed 10 of Össur's 22
- *  client claims (2026-08-16). Competitor claims carry no voice. */
+/** Who is speaking on a video in a brand's bucket. `own` = the brand itself (a
+ *  post read off its own profile, or a video from one of its own accounts);
+ *  `about` = a third party talking about that brand (a reviewer, a clinic, a
+ *  news channel). Both sit in the same bucket, because a bucket means "about
+ *  this brand" — which is why pooling them under "You say" misattributed 10 of
+ *  Össur's 22 client claims (2026-08-16). The same split applies to a tracked
+ *  rival (2026-09-15): 206 of Sealand's 208 "Cotopaxi claims" were creators
+ *  reviewing Cotopaxi bags, printed under "what they say in their own videos". */
 export type Voice = 'own' | 'about'
 
 export interface BrandClaim {
@@ -23,7 +25,8 @@ export interface BrandClaim {
   competitor: string | null
   claim: string
   quote: string
-  /** Client claims only (see Voice). */
+  /** Which voice the claim is in (see Voice). Absent only on rows from a
+   *  caller that does not compute it, which are read as own voice. */
   voice?: Voice
   /** Speaker context for the "About you" surface; present when the loader joined the video. */
   account?: string | null
@@ -31,20 +34,37 @@ export interface BrandClaim {
   url?: string | null
 }
 
+/** Post-hygiene, PRE-cap counts per side — the honest roll-up numbers
+ *  ("N claims in your voice · N about you · N from competitors"). */
+export interface ClaimCounts {
+  own: number
+  about: number
+  /** Every claim in a rival's bucket, both voices — the key stored snapshots
+   *  already carry, kept at its old meaning so an old run_summary still reads. */
+  competitors: number
+  competitors_own: number
+  competitors_about: number
+}
+
 export interface BrandClaims {
   /** The client speaking — own voice ONLY. This is what say-vs-hear's "You say" quotes. */
   client: BrandClaim[]
   /** Third parties speaking about the client. Never enters say-vs-hear. */
   about: BrandClaim[]
-  competitors: BrandClaim[]
-  /** Post-hygiene, PRE-cap counts per side — the honest roll-up numbers
-   *  ("N claims in your voice · N about you · N from competitors"). */
-  counts: { own: number; about: number; competitors: number }
+  /** A tracked rival speaking in ITS OWN videos — the only side that may be
+   *  printed as "what they are pitching". */
+  competitorsOwn: BrandClaim[]
+  /** Third parties speaking about a tracked rival: audience and creator voice,
+   *  never that rival's marketing. */
+  competitorsAbout: BrandClaim[]
+  counts: ClaimCounts
 }
 
-/** What Market reads (run_summary.brand_voice) — see the 20260816230000 migration. */
+/** What Market reads (run_summary.brand_voice) — see the 20260816230000
+ *  migration. The two competitor keys arrived 2026-09-15; a snapshot written
+ *  before then has neither, so both are optional on the way back in. */
 export interface BrandVoiceSnapshot {
-  counts: { own: number; about: number; competitors: number }
+  counts: { own: number; about: number; competitors: number; competitors_own?: number; competitors_about?: number }
   about: AboutYouEntry[]
 }
 export interface AboutYouEntry {
@@ -136,21 +156,97 @@ export function ownVoice(
   })
 }
 
-/** Cap per entity (client, or each named competitor) after dedupe. */
+/**
+ * Pure: is this video the named RIVAL speaking, rather than someone talking
+ * about it? The mirror of `ownVoice`, and the reason it exists: nothing
+ * downstream of Pass A ever re-checked who was holding the camera on a
+ * competitor video, so "What they say in their own videos" printed a creator's
+ * unboxing narration as Cotopaxi's marketing — 206 of 208 rows on Sealand
+ * (2026-09-14). The three tests, in order:
+ *   1. the post came off the rival's own profile read (`competitor_owned`);
+ *   2. the account is one the census knows as that rival's — the configured
+ *      handle, or a name an owned read has already stamped for it;
+ *   3. the account name carries the rival's name and none of the third-party
+ *      words ("Ottobock Professionals", "ottobock deutschland" → the rival;
+ *      "Ossur vs Ottobock", "ottobock fan page" → somebody else).
+ * Everything else is said ABOUT them, by others.
+ *
+ * Test 3 is what covers a rival's regional and sub-brand channels, which the
+ * one-handle-per-platform schema cannot reach: it is why Össur reads 280 own
+ * to 74 about today on a tenant with no competitor handles configured at all.
+ */
+export function competitorVoice(
+  v: {
+    source: string | null | undefined
+    account_name: string | null | undefined
+    platform?: string | null | undefined
+  },
+  /** The rival's name as configured, e.g. "Ottobock". */
+  competitorName: string | null | undefined,
+  /** That rival's account names per platform, from the census rule
+   *  (lib/gather/owned.ts ownAccountNames with source 'competitor_owned').
+   *  Empty for a tenant with no handles configured, which is Össur today. */
+  ownNames?: Map<string, Set<string>>,
+): Voice {
+  if (v.source === 'competitor_owned') return 'own'
+  if (v.platform && v.account_name && ownNames?.get(v.platform)?.has(normAccount(v.account_name))) return 'own'
+  const acct = fold(v.account_name ?? '')
+  if (!acct) return 'about'
+  const words = new Set(acct.split(/[^a-z0-9]+/).filter(Boolean))
+  if (THIRD_PARTY_ACCOUNT_WORDS.some((w) => words.has(w))) return 'about'
+  const name = fold(competitorName ?? '')
+  return name.length >= 3 && acct.includes(name) ? 'own' : 'about'
+}
+
+/**
+ * Pure: whose claim is this, read from the video as it stands NOW.
+ *
+ * `video_claims.entity` froze `videos.is_client` at the run that wrote the row,
+ * and a re-tag since rewrites the video and never the claim: 72 of Sealand's
+ * 376 stored rows disagree with their video today (2026-09-14), 54 of them
+ * naming brands Sealand no longer tracks and 18 of them on Sealand's own posts.
+ *
+ * Authorship first, then subject. A post read off a profile IS that account's,
+ * whatever a caption-only re-tag later decided — Sealand has 13 `owned` rows
+ * carrying `is_client = false` (the captions never say "Sealand"), two of them
+ * with 18 claims between them. Only then the subject tags, which is what a
+ * keyword-discovered video has. A video that is now neither the client's nor a
+ * named rival's belongs to nobody, and its claims are dropped rather than
+ * attributed to whoever the tagger used to think it was about.
+ */
+export function claimEntity(v: {
+  source?: string | null
+  is_client?: boolean | null
+  is_competitor?: boolean | null
+  competitor_name?: string | null
+}): { entity: 'client' | 'competitor'; competitor: string | null } | null {
+  const rival = (v.competitor_name ?? '').trim()
+  if (v.source === 'owned') return { entity: 'client', competitor: null }
+  if (v.source === 'competitor_owned') return rival ? { entity: 'competitor', competitor: rival } : null
+  if (v.is_client) return { entity: 'client', competitor: null }
+  if (v.is_competitor) return rival ? { entity: 'competitor', competitor: rival } : null
+  return null
+}
+
+/** Cap per entity per voice (the client, or each named competitor) after
+ *  dedupe: this is the prompt-sized side. */
 export const MAX_CLAIMS_PER_ENTITY = 12
-/** The about-you side feeds no prompt (evidence-only block), so it can hold
- *  more than the prompt-sized cap — enough that ≤2-per-video still fills 8. */
+/** The about side is evidence, not prompt input — the client's feeds a block
+ *  of quotes and a rival's is trimmed again at the prompt — so it can hold
+ *  more than the prompt-sized cap: enough that ≤2-per-video still fills 8. */
 export const MAX_ABOUT_CLAIMS = 24
 
 interface ClaimRow {
   run_id: string
   source_video_id: string
+  /** Re-derived by the loader from the joined video (claimEntity), not the
+   *  stored column. */
   entity: string
   competitor_name: string | null
   claim: string
   quote: string
   /** Set by the loader from the joined video; absent = treated as own voice
-   *  (pre-voice callers and tests). */
+   *  (callers that do not compute it, and tests). */
   voice?: Voice
   account?: string | null
   platform?: string | null
@@ -169,9 +265,9 @@ const normClaim = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
  *     must not keep feeding Pass C. Unnamed ('unknown') rows are excluded:
  *     a prompt that names brands can't use them.
  *  3. Exact-normalized dedupe within what survives, then the per-entity cap.
- *  4. Client claims split by VOICE (own vs about), each side capped separately
- *     — a busy reviewer must never crowd the client's own words out of the
- *     "You say" quota. */
+ *  4. EVERY entity's claims split by VOICE (own vs about), each side capped
+ *     separately — a busy reviewer must never crowd the brand's own words out
+ *     of its quota, on the client's side or a rival's. */
 export function selectClaims(rows: ClaimRow[], trackedCompetitors: string[], maxPerEntity: number = MAX_CLAIMS_PER_ENTITY): BrandClaims {
   const newestRunByVideo = new Map<string, string>()
   for (const r of rows) {
@@ -183,8 +279,9 @@ export function selectClaims(rows: ClaimRow[], trackedCompetitors: string[], max
   const perEntity = new Map<string, number>()
   const client: BrandClaim[] = []
   const about: BrandClaim[] = []
-  const competitors: BrandClaim[] = []
-  const counts = { own: 0, about: 0, competitors: 0 }
+  const competitorsOwn: BrandClaim[] = []
+  const competitorsAbout: BrandClaim[] = []
+  const counts: ClaimCounts = { own: 0, about: 0, competitors: 0, competitors_own: 0, competitors_about: 0 }
 
   for (const r of rows) {
     if (newestRunByVideo.get(r.source_video_id) !== r.run_id) continue
@@ -197,31 +294,36 @@ export function selectClaims(rows: ClaimRow[], trackedCompetitors: string[], max
     if (seen.has(key)) continue
     seen.add(key)
 
-    const voice: Voice | undefined = isClient ? (r.voice ?? 'own') : undefined
-    if (!isClient) counts.competitors++
-    else if (voice === 'about') counts.about++
+    const voice: Voice = r.voice ?? 'own'
+    if (!isClient) {
+      counts.competitors++
+      if (voice === 'about') counts.competitors_about++
+      else counts.competitors_own++
+    } else if (voice === 'about') counts.about++
     else counts.own++
-    const entityKey = isClient ? `client:${voice}` : `competitor:${fold(name!)}`
+    const entityKey = `${isClient ? 'client' : `competitor:${fold(name!)}`}:${voice}`
     const count = perEntity.get(entityKey) ?? 0
-    // The about side never feeds a prompt, so it ignores the prompt-sized cap.
+    // The about side is evidence rather than prompt input, so it holds more.
     if (count >= (voice === 'about' ? MAX_ABOUT_CLAIMS : maxPerEntity)) continue
     perEntity.set(entityKey, count + 1)
 
     const out: BrandClaim = { competitor: isClient ? null : name, claim: r.claim, quote: r.quote }
-    if (isClient && r.voice) out.voice = r.voice
+    if (r.voice) out.voice = r.voice
     if (r.account !== undefined) out.account = r.account
     if (r.platform !== undefined) out.platform = r.platform
     if (r.url !== undefined) out.url = r.url
-    if (!isClient) competitors.push(out)
-    else if (voice === 'about') about.push(out)
-    else client.push(out)
+    if (isClient) (voice === 'about' ? about : client).push(out)
+    else (voice === 'about' ? competitorsAbout : competitorsOwn).push(out)
   }
 
-  return { client, about, competitors, counts }
+  return { client, about, competitorsOwn, competitorsAbout, counts }
 }
 
 /** All-time claims for a client, newest-first, hygiened per selectClaims. Joins
- *  the source video so client claims can be split by voice (own vs about). */
+ *  the source video for two things the stored row cannot give: who the claim
+ *  belongs to today (claimEntity), and whose voice it is (ownVoice /
+ *  competitorVoice). Rows whose video no longer belongs to the client or a
+ *  named rival are dropped. */
 export async function loadBrandClaims(
   admin: ReturnType<typeof createAdminClient>,
   clientId: string,
@@ -230,6 +332,10 @@ export async function loadBrandClaims(
   /** tracking_configs.own_handles. Lets the client/about split use the same
    *  account-identity rule the census counts by, instead of source alone. */
   ownHandles: Record<string, string> | null | undefined = {},
+  /** tracking_configs.competitor_handles, keyed by the competitor name. Does
+   *  the same for each rival's own/about split. `{}` (Össur today) leaves the
+   *  name rule in competitorVoice to carry it. */
+  competitorHandles: Record<string, Record<string, string>> | null | undefined = {},
 ): Promise<BrandClaims> {
   interface JoinedRow {
     run_id: string
@@ -243,38 +349,67 @@ export async function loadBrandClaims(
     // infers an array, so accept both and normalise below.
     videos: JoinedVideo | JoinedVideo[] | null
   }
-  interface JoinedVideo { source: string | null; account_name: string | null; platform: string | null; video_url: string | null }
+  interface JoinedVideo {
+    source: string | null
+    account_name: string | null
+    platform: string | null
+    video_url: string | null
+    is_client: boolean | null
+    is_competitor: boolean | null
+    competitor_name: string | null
+  }
   const raw = await selectAll<JoinedRow>(() =>
     admin
       .from('video_claims')
-      .select('run_id, source_video_id, entity, competitor_name, claim, quote, created_at, videos:source_video_id(source, account_name, platform, video_url)')
+      .select('run_id, source_video_id, entity, competitor_name, claim, quote, created_at, videos:source_video_id(source, account_name, platform, video_url, is_client, is_competitor, competitor_name)')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: true }),
   )
-  // The brand's account names, learned the same way the census learns them.
-  const joined = raw.map((r) => (Array.isArray(r.videos) ? r.videos[0] : r.videos) ?? null)
-  const ownNames = ownAccountNames(
-    joined.map((v) => ({ platform: v?.platform ?? '', source: v?.source ?? null, account_name: v?.account_name ?? null })),
-    ownHandles ?? {},
-    { source: 'owned' },
-  )
-  const rows: ClaimRow[] = raw.map((r) => {
-    const v = (Array.isArray(r.videos) ? r.videos[0] : r.videos) ?? null
+  const videoOf = (r: JoinedRow): JoinedVideo | null => (Array.isArray(r.videos) ? r.videos[0] : r.videos) ?? null
+  // Account identity, learned the same way the census learns it: once for the
+  // client, once per rival. A rival's map is keyed by its FOLDED name, because
+  // that is how the video's competitor_name is compared everywhere else.
+  const censusRows = raw.map((r) => {
+    const v = videoOf(r)
     return {
+      platform: v?.platform ?? '',
+      source: v?.source ?? null,
+      account_name: v?.account_name ?? null,
+      competitor_name: v?.competitor_name ?? null,
+    }
+  })
+  const ownNames = ownAccountNames(censusRows, ownHandles ?? {}, { source: 'owned' })
+  const handlesByFold = new Map(Object.entries(competitorHandles ?? {}).map(([name, h]) => [fold(name), h ?? {}]))
+  const rivalNames = new Map<string, Map<string, Set<string>>>()
+  for (const name of [...trackedCompetitors, ...Object.keys(competitorHandles ?? {})]) {
+    const key = fold(name)
+    if (!key || rivalNames.has(key)) continue
+    rivalNames.set(key, ownAccountNames(censusRows, handlesByFold.get(key) ?? {}, { source: 'competitor_owned', competitorName: name }))
+  }
+
+  const rows: ClaimRow[] = []
+  for (const r of raw) {
+    const v = videoOf(r)
+    // No joined video means the row outlived its video, which the FK forbids;
+    // fall back to what Pass A froze rather than silently dropping evidence.
+    const who = v ? claimEntity(v) : { entity: r.entity === 'client' ? ('client' as const) : ('competitor' as const), competitor: r.competitor_name }
+    if (!who) continue
+    const speaker = { source: v?.source, account_name: v?.account_name, platform: v?.platform }
+    rows.push({
       run_id: r.run_id,
       source_video_id: r.source_video_id,
-      entity: r.entity,
-      competitor_name: r.competitor_name,
+      entity: who.entity,
+      competitor_name: who.competitor,
       claim: r.claim,
       quote: r.quote,
-      voice: r.entity === 'client'
-        ? (ownVoice({ source: v?.source, account_name: v?.account_name, platform: v?.platform }, brandKeywords, ownNames) ? 'own' : 'about')
-        : undefined,
+      voice: who.entity === 'client'
+        ? (ownVoice(speaker, brandKeywords, ownNames) ? 'own' : 'about')
+        : competitorVoice(speaker, who.competitor, rivalNames.get(fold(who.competitor ?? ''))),
       account: v?.account_name ?? null,
       platform: v?.platform ?? null,
       url: v?.video_url ?? null,
-    }
-  })
+    })
+  }
   return selectClaims(rows, trackedCompetitors)
 }

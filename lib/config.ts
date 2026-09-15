@@ -1394,6 +1394,11 @@ export const DOCUMENT_BRIEF_MAX = 1200
 export const DOCUMENT_BLOCK_MAX: Record<string, number> = {
   summary: 1000, headline: 90, saw: 1050, heard: 260, means: 480, practice: 180, sure: 220,
   pitch: 520, praise: 520, hurt: 520, read: 420, persona: 260, not_sure: 180, care: 220,
+  // "What others say about them" (2026-09-15) is the competitor page's fourth
+  // column, and a fourth column is a narrower one — the same characters take
+  // half again as many lines. Shorter than its three neighbours on purpose:
+  // it is the block the page gained, not one it was built around.
+  about: 420,
   // The pages the leadership, market and content briefs add (2026-09-02).
   standing: 900, gap: 330, asked: 220,
 }
