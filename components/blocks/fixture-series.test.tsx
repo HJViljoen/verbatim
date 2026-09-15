@@ -151,9 +151,12 @@ describe('the fixture, rendered', () => {
     expect((words.match(/Themes were re-grouped/g) ?? [])).toHaveLength(1)
   })
 
-  it('prints the filling month as a bar on the screen and as a number in the email', () => {
+  it('prints the filling month as a bar on the screen and as a marked number in the email', () => {
     expect(render(block('app'))).toContain('Still filling — this month is still taking comments')
-    expect(markupText(render(block('email')))).toContain('43.7%')
+    const email = markupText(render(block('email')))
+    expect(email).toContain('43.7%')
+    // And not as though it were finished: the email says so in a word.
+    expect(email).toContain('filling')
   })
 
   it('draws no inline SVG in the email arm', () => {

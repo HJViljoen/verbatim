@@ -262,6 +262,13 @@ describe('BlockCalendar', () => {
     for (const v of ['19%', '22%', '28%', '31%']) expect(words).toContain(v)
   })
 
+  it('marks the still-filling month in the email instead of printing it like a frozen one', () => {
+    const markup = render(chart('email'))
+    expect(markupText(markup)).toContain('filling')
+    // The frozen months are the bold ones; September is not.
+    expect((markup.match(/font-weight:600/g) ?? []).length).toBeGreaterThan(0)
+  })
+
   it('says what a non-reading month is instead of leaving an empty cell', () => {
     const words = markupText(render(chart('email')))
     expect(words).toContain('too few')

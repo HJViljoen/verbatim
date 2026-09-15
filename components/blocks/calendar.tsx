@@ -30,7 +30,10 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  *
  * The table carries the last `emailMonths` months, newest last, with a month
  * that is not a reading printed as its own word rather than as a blank — an
- * empty cell in an email is indistinguishable from a rendering failure.
+ * empty cell in an email is indistinguishable from a rendering failure — and a
+ * still-filling month printed in the muted ink with "filling" under it, because
+ * the one distinction this product is built on is a month that may still be
+ * rewritten against one that may not.
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
@@ -103,9 +106,19 @@ export function BlockCalendar({
               {months.map((m) => {
                 const point = byMonth.get(m)
                 const value = point?.value
+                // A STILL-FILLING MONTH IS NOT A FROZEN ONE, in this mode too.
+                // It has a value, so the branch below prints it — but printed
+                // like August's it reads as settled, and a month that may still
+                // be rewritten reading as settled is the product's own central
+                // distinction dropped on the surface most clients read. It
+                // keeps the number, in the muted ink the axis uses, with the
+                // word under it.
+                const filling = point?.state === 'filling'
+                const settled = value != null && !filling
                 return (
-                  <td key={m} align="right" style={{ fontFamily: FONT.mono, fontSize: 11.5, fontWeight: value != null ? 600 : 400, color: value != null ? EMAIL.ink : EMAIL.faint, padding: '3px 0 3px 10px', whiteSpace: 'nowrap', borderTop: `1px solid ${EMAIL.hairline}` }}>
+                  <td key={m} align="right" style={{ fontFamily: FONT.mono, fontSize: 11.5, fontWeight: settled ? 600 : 400, color: settled ? EMAIL.ink : EMAIL.faint, padding: '3px 0 3px 10px', whiteSpace: 'nowrap', borderTop: `1px solid ${EMAIL.hairline}` }}>
                     {value != null ? <span data-copy="figure">{format(value)}</span> : (point ? STATE_SHORT[point.state] || '—' : '—')}
+                    {filling ? <div style={{ fontFamily: FONT.sans, fontSize: 9.5, fontWeight: 400, color: EMAIL.faint, letterSpacing: '.01em' }}>{STATE_SHORT.filling}</div> : null}
                   </td>
                 )
               })}
