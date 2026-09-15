@@ -208,6 +208,19 @@ describe('calendarBandsFor', () => {
     expect(one[0].label).toContain('this month had already closed')
   })
 
+  it('draws two bands for two separate back-reads, never one over the readable gap between', () => {
+    const back: MonthLabel = { kind: 'read_back_at_setup', text: 'x' }
+    const s = series([
+      point('2026-01-01', { labels: [back] }),
+      point('2026-02-01', { labels: [back] }),
+      point('2026-03-01'),
+      point('2026-04-01', { labels: [back] }),
+    ])
+    const bands = calendarBandsFor([s])
+    expect(bands.map((b) => b.months)).toEqual([['2026-01-01', '2026-02-01'], ['2026-04-01']])
+    expect(bands[1].label).toContain('this month had already closed')
+  })
+
   it('unions the back-read of several lines', () => {
     const back: MonthLabel = { kind: 'read_back_at_setup', text: 'Read back at setup.' }
     const a = series([point('2026-04-01', { labels: [back] })])
