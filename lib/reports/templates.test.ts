@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { STARTER_TEMPLATES, instantiate, starterTemplate, templateKeys } from './templates'
 import { isStaticKey } from './compose'
-import { SECTION_PAGES } from './types'
+import { ALL_SECTION_PAGES } from './types'
 
 describe('starter templates', () => {
   it('are five, name only static keys of their own page, and every audience is real', () => {
     expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
     for (const t of STARTER_TEMPLATES) {
       for (const s of t.sections) {
-        expect(SECTION_PAGES).toContain(s.page)
+        // ALL_, not SECTION_: the weekly digest and the leadership one-pager
+        // name `dashboard`, which WP9 retired from the picker and kept
+        // registered for the artefacts already built from them.
+        expect(ALL_SECTION_PAGES).toContain(s.page)
         expect(s.page).not.toBe('agent')
         for (const k of s.keys ?? []) {
           expect(isStaticKey(k)).toBe(true)

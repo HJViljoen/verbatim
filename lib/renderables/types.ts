@@ -19,7 +19,29 @@ import type { ReadingHandle } from '../reading/read'
 
 export type RenderMode = 'app' | 'print'
 
-export type PageKey = 'dashboard' | 'market' | 'voice' | 'competitive' | 'content' | 'profile' | 'agent'
+/**
+ * Every page key the product has ever stored, in one list (Phase 1 WP9).
+ *
+ * A key is a STORED CONTRACT, not a route: it is `report_snapshots.ref.page`,
+ * a section's `section.page` inside a built report, the `page` column on an
+ * export event and the thing `/r/<token>` resolves a section by. Renaming one
+ * does not move a page — it orphans every artefact that named it. So the nine
+ * Phase 1 surfaces JOIN this list and the pages they replace STAY on it, with
+ * `SECTION_PAGES` (lib/reports/types.ts) saying which of them a NEW report may
+ * name and `components/pages/registry.ts` saying which still render.
+ *
+ * `overview`, `subjects` and `week` are the three new ones. `dashboard`,
+ * `content` and `profile` are the retiring ones: `dashboard` keeps its module
+ * with no route of its own, because one sent snapshot, one live share link and
+ * the one active weekly schedule are all keyed on it and all of them would
+ * quietly render a section short if the module left the registry.
+ */
+export const PAGE_KEYS = [
+  'overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'agent',
+  'dashboard', 'content', 'profile',
+] as const
+
+export type PageKey = (typeof PAGE_KEYS)[number]
 
 /** Print variants: the default export is the overview plus the selected item;
  *  `full` appends one slide per item (capped, see EXPORT_FULL_MAX_ITEMS). */

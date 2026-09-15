@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, LoaderCircle, X } from 'lucide-react'
 import { updateReport, type ActionState } from '@/app/dashboard/studio/actions'
 import { newSectionId } from '@/lib/reports/templates'
-import { AUDIENCES, REPORT_FRAMING_MAX, type Audience, type ReportSection } from '@/lib/reports/types'
+import { AUDIENCES, REPORT_FRAMING_MAX, SECTION_PAGES, type Audience, type ReportSection } from '@/lib/reports/types'
 import type { CataloguePage } from '@/lib/reports/catalogue'
 import { REPORT_MAX_SECTIONS } from '@/lib/config'
 
@@ -38,7 +38,7 @@ export function Outline(p: Props) {
   const [sections, setSections] = useState<ReportSection[]>(p.sections)
   const [open, setOpen] = useState<string | null>(p.sections[0]?.id ?? null)
   const [status, setStatus] = useState<ActionState | null>(null)
-  const [addPage, setAddPage] = useState(p.catalogue[0]?.page ?? 'dashboard')
+  const [addPage, setAddPage] = useState(p.catalogue[0]?.page ?? SECTION_PAGES[0])
   const byPage = new Map(p.catalogue.map((c) => [c.page, c]))
   const skippedFor = new Map(p.skipped.map((s) => [s.sectionId, s.reason]))
 

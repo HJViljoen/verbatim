@@ -32,9 +32,27 @@ export const AUDIENCES: { key: Audience; label: string; reader: string }[] = [
 
 export const isAudience = (v: unknown): v is Audience => typeof v === 'string' && AUDIENCES.some((a) => a.key === v)
 
-/** Pages a section may name. The agent page joins only through "add to
- *  report" from a thread (its params carry the thread id). */
-export const SECTION_PAGES: PageKey[] = ['dashboard', 'market', 'voice', 'competitive', 'content', 'profile', 'agent']
+/** Pages a NEW section may name. The agent page joins only through "add to
+ *  report" from a thread (its params carry the thread id).
+ *
+ *  Phase 1 WP9: `dashboard` left this list and did not leave the registry.
+ *  `SECTION_PAGES` is the Studio's picker — what an operator may ADD today —
+ *  and Overview replaces the Dashboard, so nothing new should name it. But
+ *  three stored `reports` rows already do, one of them the active weekly
+ *  schedule, and a zod enum narrowed to this list would refuse the next edit
+ *  to those rows. So validation reads `ALL_SECTION_PAGES` and the picker reads
+ *  this one: a stored report stays editable, and no new one is offered a
+ *  retired page. `week` is deliberately absent for Phase 1 — it is a page key
+ *  and a module, and it is not composable into a report until it has been read
+ *  for a few weeks. */
+export const SECTION_PAGES: PageKey[] = ['overview', 'subjects', 'market', 'voice', 'competitive', 'content', 'profile', 'agent']
+
+/** Pages a STORED section may still name — the retired keys whose modules are
+ *  kept registered so already-built artefacts keep rendering every tile. */
+export const LEGACY_SECTION_PAGES: PageKey[] = ['dashboard']
+
+/** What validation accepts: what may be added, plus what is already stored. */
+export const ALL_SECTION_PAGES: PageKey[] = [...SECTION_PAGES, ...LEGACY_SECTION_PAGES]
 
 export interface ReportSection {
   /** Client-minted, stable across edits (React keys, reorder, remove). */
