@@ -4,6 +4,7 @@ import { BUCKET_COLOR, priorityLabel, type DashboardData } from '../../lib/pages
 import type { ContentData } from '../../lib/pages/content'
 import type { CompetitiveData } from '../../lib/pages/competitive'
 import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
+import { shareDeltaShown } from '../../lib/competitive-tiles'
 import { movementRows, movementShowsChange } from '../../lib/dashboard-tiles'
 import { RUN_INDEXED_DIRECTION_WORDS } from '../../lib/config'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
@@ -254,15 +255,21 @@ export const contentEmail: Record<string, E<ContentData>> = { 'content.inbox': i
 
 // ── competitive: where you stand ───────────────────────────────────────────
 
-const standings: E<CompetitiveData> = ({ standings: st }) => {
+const standings: E<CompetitiveData> = (d) => {
+  const st = d.standings
   if (!st) return empty('Standings land once a competitor is tracked and analysed.')
   const rows = [...(st.client ? [{ ...st.client, you: true }] : []), ...st.competitors.map((c) => ({ ...c, you: false }))]
+  // Same rule as the page, at render, so an email re-rendered from a snapshot
+  // frozen before the gate passes through it too (D1, `shareDeltaShown`): the
+  // period layer's per-update delta stays, the cumulative one goes, and the
+  // footnote goes with the column it describes.
+  const showsDelta = shareDeltaShown(d.layerWord)
   return (
     <div>
       {rows.map((r) => (
-        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.green : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
+        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.green : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={showsDelta && r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
       ))}
-      <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>share of the tracked conversation, by videos · change vs the previous update</div>
+      <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>share of the tracked conversation, by videos{showsDelta ? ' · change vs the previous update' : ''}</div>
     </div>
   )
 }

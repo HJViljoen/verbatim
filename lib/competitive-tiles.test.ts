@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   competitorShares, leadCompetitor, videoBucket, isAudienceSentiment, bucketStats, themeCounts, pairScale,
-  faceOffRows, ownedPostCounts, praisedFor, shareSeries, kindOf, orderInsights, groupByKind, coverageOf, coverageText, competitiveHref,
+  faceOffRows, ownedPostCounts, praisedFor, shareSeries, shareDeltaShown, kindOf, orderInsights, groupByKind, coverageOf, coverageText, competitiveHref,
   SENTIMENT_MIN_JUDGED,
 } from './competitive-tiles'
 
@@ -154,6 +154,21 @@ describe('praisedFor', () => {
     expect(praisedFor(rows, 'client')).toBe('Quality and trust')
     expect(praisedFor(rows, 'competitor:Ottobock')).toBe('Freedom')
     expect(praisedFor(rows, 'industry-other')).toBeNull()
+  })
+})
+
+describe('shareDeltaShown', () => {
+  // D1: the period layer's delta is this update's window against the previous
+  // one's — the figure the digest keeps. The cumulative one is the difference
+  // between two readings of a corpus that grows with every gather.
+  it('allows a period-layer delta and withholds a cumulative one while the gate is off', () => {
+    expect(shareDeltaShown('this update', false)).toBe(true)
+    expect(shareDeltaShown('all updates', false)).toBe(false)
+    expect(shareDeltaShown('all updates')).toBe(false) // the shipped default
+  })
+  it('allows both once Phase 1 flips the constant', () => {
+    expect(shareDeltaShown('all updates', true)).toBe(true)
+    expect(shareDeltaShown('this update', true)).toBe(true)
   })
 })
 

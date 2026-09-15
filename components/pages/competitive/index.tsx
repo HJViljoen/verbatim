@@ -11,7 +11,8 @@ import { ListSearch } from '@/components/shell/list-search'
 import { LineChart } from '@/components/charts/line-chart'
 import { Delta } from '@/components/charts/stat'
 import { fmtInt, fmtPct, fmtDelta, round1, weekdayDate, shortDate } from '@/lib/format'
-import { kindOf, competitorBucket, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
+import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { kindOf, competitorBucket, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
 import {
   loadCompetitive, isCompetitiveEmpty, competitiveFindingHref, LEGEND_ITEMS,
   type CompetitiveData, type CompetitiveEmpty, type FindingDetail,
@@ -81,6 +82,11 @@ const standings: R = (d, mode) => {
     )
   }
   const sel = d.selection
+  // Gated at render, not in the loader: these tiles are frozen into report
+  // snapshots and re-drawn from them on a share link and in "the email as
+  // sent", so the rule has to sit where the drawing happens (D1,
+  // `shareDeltaShown`).
+  const delta = (v: number | null): number | null => (shareDeltaShown(d.layerWord) ? v : null)
   return (
     <Tile exportKey="competitive.standings" col={4} row={3} eyebrow="Where you stand" meta={`by videos · ${d.layerWord}`}
       footerNote={`${s.competitors.length} competitor${s.competitors.length === 1 ? '' : 's'} tracked`}
@@ -89,7 +95,7 @@ const standings: R = (d, mode) => {
       {s.client && (
         <div className="flex items-baseline gap-2">
           <span className="font-mono text-[30px] font-semibold leading-none tabular-nums tracking-[-0.01em]">{fmtPct(s.client.pct)}</span>
-          <Delta value={s.client.delta} unit="pt" good="up" />
+          <Delta value={delta(s.client.delta)} unit="pt" good="up" />
           <span className="text-[11.5px] text-muted-foreground">of tracked conversation is you</span>
         </div>
       )}
@@ -97,13 +103,13 @@ const standings: R = (d, mode) => {
         {s.competitors.map((c, i) => (
           <li key={c.name}>
             {standingRow({
-              name: c.name, pct: c.pct, videos: c.videos, delta: c.delta, rank: i + 1, maxPct: s.maxPct,
+              name: c.name, pct: c.pct, videos: c.videos, delta: delta(c.delta), rank: i + 1, maxPct: s.maxPct,
               color: c.name === sel.vs ? THEM_COLOR : COMP_DIM, active: c.name === sel.vs,
               href: app ? competitiveFindingHref({ vs: c.name, kind: sel.kind, about: sel.about, item: sel.itemId }) : undefined,
             })}
           </li>
         ))}
-        {s.client && <li>{standingRow({ name: s.client.name, you: true, pct: s.client.pct, videos: s.client.videos, delta: s.client.delta, color: YOU_COLOR, active: false, maxPct: s.maxPct })}</li>}
+        {s.client && <li>{standingRow({ name: s.client.name, you: true, pct: s.client.pct, videos: s.client.videos, delta: delta(s.client.delta), color: YOU_COLOR, active: false, maxPct: s.maxPct })}</li>}
       </ol>
     </Tile>
   )
@@ -121,7 +127,7 @@ const faceoff: R = (d, mode) => {
           ? <Link href={competitiveFindingHref({ vs: fo.lead, about: fo.lead }, 'findings')}>{fo.leadFindings} finding{fo.leadFindings === 1 ? '' : 's'} about {fo.lead} ↓</Link>
           : <span>{fo.leadFindings} finding{fo.leadFindings === 1 ? '' : 's'} about {fo.lead}</span>
       ) : undefined}
-      footerNote={fo.youDelta != null && fo.themDelta != null ? `vs last update: ${d.brandShort} ${fmtDelta(fo.youDelta, 'pt', 1)} · ${fo.lead} ${fmtDelta(fo.themDelta, 'pt', 1)}` : undefined}
+      footerNote={shareDeltaShown(d.layerWord) && fo.youDelta != null && fo.themDelta != null ? `vs last update: ${d.brandShort} ${fmtDelta(fo.youDelta, 'pt', 1)} · ${fo.lead} ${fmtDelta(fo.themDelta, 'pt', 1)}` : undefined}
       bodyClassName="min-h-0 overflow-y-auto">
       {fo.rows.length > 0 ? (
         <div className="flex flex-col gap-3">
@@ -145,7 +151,9 @@ const shareLine: R = (d) => {
   return (
     <Tile exportKey="competitive.shareLine" col={7} row={2} eyebrow="Share of tracked conversation over time"
       meta={series ? `${d.updatesCount} updates · ${series.layers.some((l) => l === 'period') ? 'share in each update' : 'share across all updates'}` : undefined}
-      footerNote={series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
+      // The whole-series delta goes while the gate is off, on either layer:
+      // it spans every update on a line that can mix the two (D1).
+      footerNote={RUN_INDEXED_DIRECTION_WORDS && series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
       bodyClassName="min-h-0 justify-center">
       {series && lead ? (
         <div className="overflow-x-auto">
