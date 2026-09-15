@@ -330,6 +330,17 @@ describe('inheritedStatus — what the ledger says this lineage is', () => {
 })
 
 describe('surviving a deploy that lands before 20260915093000_rec_decisions.sql', () => {
+  it('is the same guard the browser\'s write site uses, not a second copy of it', async () => {
+    // The definitions live in lib/rec-decisions.ts so a dashboard server action
+    // can have them without this file's embedding client; rec-lineage re-exports
+    // them. Two implementations of "has the client decided this" would drift,
+    // and the one that drifted would be the one nobody reads.
+    const shared = await import('../rec-decisions')
+    expect(isMissingRecDecisions).toBe(shared.isMissingRecDecisions)
+    expect(inheritedStatus).toBe(shared.inheritedStatus)
+    expect(REC_DECISIONS_TABLE).toBe(shared.REC_DECISIONS_TABLE)
+  })
+
   it('recognises the ledger missing, by any of the four ways it is said', () => {
     expect(isMissingRecDecisions({ code: 'PGRST205', message: `Could not find the table 'public.${REC_DECISIONS_TABLE}' in the schema cache` })).toBe(true)
     expect(isMissingRecDecisions({ code: '42P01', message: `relation "public.${REC_DECISIONS_TABLE}" does not exist` })).toBe(true)
