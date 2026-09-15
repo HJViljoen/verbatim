@@ -33,9 +33,26 @@ npm run dev
 | `npm run build` | Production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest — `lib/**/*.test.ts`, pure pipeline logic only (no network/DB) |
+| `npm test` | Vitest — `lib/**/*.test.ts` (pure pipeline logic, no network/DB) + `components/**/*.test.tsx` (static block renders) |
 
-CI (GitHub Actions) runs typecheck + lint + test on every push to every branch.
+CI (GitHub Actions) runs typecheck + lint + test **and `next build`** on every
+push to every branch. The build step is there because the bundler is the one
+gate the other three cannot stand in for: Vercel builds with Turbopack, and a
+Turbopack-only break used to surface as a failed production deploy.
+
+### Working in a worktree
+
+`node_modules` inside a git worktree is a symlink out of the project root.
+Turbopack resolves modules only inside the root it auto-detects from the
+nearest lockfile, so the plain `npm run build` fails there with
+`Symlink … invalid` before it compiles anything. Two supported ways round it:
+
+| Command | Bundler | Notes |
+| --- | --- | --- |
+| `npx next build --webpack` | webpack | No config, no env var. Compiles, typechecks and writes the `*.nft.json` file-tracing manifests, so a missing `outputFileTracingIncludes` entry is visible locally. Not the bundler Vercel runs. |
+| `TURBOPACK_ROOT=/path/containing/both npx next build` | Turbopack | Production parity. `next.config.ts` reads `TURBOPACK_ROOT` and sets `turbopack.root` only when it is set, so the line is inert on Vercel. The path must contain both the worktree and the real `node_modules`. |
+
+Both work for `next dev` too (`npx next dev --webpack`, or the same env var).
 
 ## How the pipeline works
 
