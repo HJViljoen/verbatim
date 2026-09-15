@@ -1,4 +1,4 @@
-import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { directionWordsFor } from '../config'
 import type { InitiativeDirection } from './types'
 
 // Measuring a declared initiative (WP7c) — pure, so it is tested and so the
@@ -167,14 +167,14 @@ export function measureInitiative(
  * points" is a fact about share; "working" would be a claim about cause, and
  * nothing here measures cause.
  *
- * While D1's `RUN_INDEXED_DIRECTION_WORDS` is off it says how long the theme
+ * While D1's `directionWordsFor('initiatives')` is off it says how long the theme
  * has been tracked and how many updates have been read, and no direction: the
  * x-axis here is `theme_observations.run_date`, one point per UPDATE, and the
  * denominator is a stock that grows with every gather — so "Up 5.3 points"
  * measures the reading as much as the conversation. The two `too_early`
  * sentences are already direction-free and are unchanged.
  */
-export function initiativeLine(m: InitiativeMeasure, startedLabel: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+export function initiativeLine(m: InitiativeMeasure, startedLabel: string, directionWords = directionWordsFor('initiatives')): string {
   const updates = m.points.length
   if (m.verdict === 'too_early') {
     return updates === 0
@@ -200,13 +200,13 @@ export const trackedLine = (startedLabel: string, updates: number): string =>
  * promise made twice.
  *
  * Gated on D1 for the same reason the tile and its empty state are: while
- * `RUN_INDEXED_DIRECTION_WORDS` is off the tile prints no direction at all
+ * `directionWordsFor('initiatives')` is off the tile prints no direction at all
  * (`initiativeTile` empties the series, the mood delta and the verdict
  * sentence), so an invitation that promised "grew or shrank" would be
  * promising what the product has just withdrawn. Phase 1 flips the constant,
  * the tile draws the series again, and this sentence comes back with it.
  */
-export function initiativePromise(directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+export function initiativePromise(directionWords = directionWordsFor('initiatives')): string {
   return directionWords
     ? 'Every update from today on says whether its share of its own group’s conversation grew or shrank — never whether you succeeded.'
     : 'Every update from today on reports its share of its own group’s conversation — never whether you succeeded.'
@@ -219,7 +219,7 @@ export function initiativePromise(directionWords = RUN_INDEXED_DIRECTION_WORDS):
  *  reader is the sparkline's stroke colour, which paints the line the rival's
  *  clay when the answer is `false` — a direction said in colour instead of in
  *  words, and the design's rule is about the surface, not the sentence. */
-export function wentTheirWay(m: InitiativeMeasure, direction: InitiativeDirection, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean | null {
+export function wentTheirWay(m: InitiativeMeasure, direction: InitiativeDirection, directionWords = directionWordsFor('initiatives')): boolean | null {
   if (!directionWords || m.verdict === 'too_early' || m.verdict === 'flat') return null
   return direction === 'up' ? m.verdict === 'moving_up' : m.verdict === 'moving_down'
 }

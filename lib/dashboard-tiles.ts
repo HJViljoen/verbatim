@@ -4,7 +4,7 @@
 // figure is a stored count or share from run_summary / themes / snapshots,
 // never re-estimated, and model scores only ever gate or order.
 
-import { RUN_INDEXED_DIRECTION_WORDS } from './config'
+import { directionWordsFor } from './config'
 import { CURATION_GATE } from './curation'
 
 // ── themes ────────────────────────────────────────────────────────────────
@@ -43,12 +43,12 @@ export function bucketKind(bucket: string | null | undefined): Bucket {
 /** Top N by rank_score (the ordering key everywhere), falling back to
  *  evidence × strength on rows written before rank_score existed.
  *
- *  `isNew` is additionally gated on RUN_INDEXED_DIRECTION_WORDS (D1): the flag
+ *  `isNew` is additionally gated on directionWordsFor('dashboard.themes') (D1): the flag
  *  it rests on is `themes.first_seen`, which means "this registry entry was
  *  opened by this update" — a relabel opens one — while the badge's glossary
  *  line promises "not present in your previous update". That promise needs a
  *  period reading behind it, so the badge waits for Phase 1. */
-export function topThemes<T extends ThemeRankRow>(rows: T[], n: number, showNew: boolean, directionWords = RUN_INDEXED_DIRECTION_WORDS) {
+export function topThemes<T extends ThemeRankRow>(rows: T[], n: number, showNew: boolean, directionWords = directionWordsFor('dashboard.themes')) {
   const key = (t: ThemeRankRow) => t.rank_score ?? t.evidence_count * Number(t.strength_score ?? 0)
   return [...rows]
     .sort((a, b) => key(b) - key(a))
@@ -179,7 +179,7 @@ export interface Movement {
  * update is passed in (counted by the page). Deltas are vs the previous
  * update. Returns null below two updates — nothing to compare.
  *
- * The THEMES row is gated on RUN_INDEXED_DIRECTION_WORDS (D1): "Themes
+ * The THEMES row is gated on directionWordsFor('dashboard.themes') (D1): "Themes
  * confirmed, +12" counts a cumulative corpus at two arbitrary moments, so the
  * delta reads as a fact about the conversation when it is mostly a fact about
  * how much was gathered. The other four rows are period figures out of
@@ -194,7 +194,7 @@ export interface Movement {
 export function movement(
   summaries: HistoryRow[],
   themesConfirmedByRun: Map<string, number>,
-  directionWords = RUN_INDEXED_DIRECTION_WORDS,
+  directionWords = directionWordsFor('dashboard.themes'),
 ): Movement | null {
   if (summaries.length < 2) return null
   const allPeriod = summaries.every((s) => s.period_comments != null && s.period_share_of_voice != null && s.period_sentiment_positive != null)
@@ -246,7 +246,7 @@ export function movement(
  *  with no layer disclosed on the tile. Sealand's dashboard prints exactly that
  *  today. The LEVELS stay — a level is a fact either way — and Phase 1 flips
  *  the constant and gives the series back. */
-export function movementRows(mv: Movement, directionWords = RUN_INDEXED_DIRECTION_WORDS): MovementRow[] {
+export function movementRows(mv: Movement, directionWords = directionWordsFor('dashboard.themes')): MovementRow[] {
   if (directionWords) return mv.rows
   const rows = mv.rows.filter((r) => r.key !== 'themes')
   if (mv.layer === 'period') return rows
@@ -256,7 +256,7 @@ export function movementRows(mv: Movement, directionWords = RUN_INDEXED_DIRECTIO
 /** Whether a tile drawn from this movement may say "change vs the previous
  *  update" in its own words. False wherever `movementRows` has taken the
  *  deltas away, so a footnote does not describe a column that is not there. */
-export function movementShowsChange(mv: Movement, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean {
+export function movementShowsChange(mv: Movement, directionWords = directionWordsFor('dashboard.themes')): boolean {
   return directionWords || mv.layer === 'period'
 }
 

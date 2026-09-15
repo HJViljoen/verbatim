@@ -11,7 +11,7 @@ import { ListSearch } from '@/components/shell/list-search'
 import { LineChart } from '@/components/charts/line-chart'
 import { Delta } from '@/components/charts/stat'
 import { fmtInt, fmtPct, fmtDelta, round1, weekdayDate, shortDate } from '@/lib/format'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { directionWordsFor } from '@/lib/config'
 import { kindOf, competitorBucket, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
 import {
   loadCompetitive, isCompetitiveEmpty, competitiveFindingHref, LEGEND_ITEMS,
@@ -153,7 +153,7 @@ const shareLine: R = (d) => {
       meta={series ? `${d.updatesCount} updates · ${series.layers.some((l) => l === 'period') ? 'share in each update' : 'share across all updates'}` : undefined}
       // The whole-series delta goes while the gate is off, on either layer:
       // it spans every update on a line that can mix the two (D1).
-      footerNote={RUN_INDEXED_DIRECTION_WORDS && series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
+      footerNote={directionWordsFor('competitive.deltas') && series && series.youDelta != null ? `since your first update: ${d.brandShort} ${fmtDelta(series.youDelta, 'pt', 1)}${series.themDelta != null ? ` · ${lead} ${fmtDelta(series.themDelta, 'pt', 1)}` : ''}` : undefined}
       bodyClassName="min-h-0 justify-center">
       {series && lead ? (
         <div className="overflow-x-auto">

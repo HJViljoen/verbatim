@@ -6,7 +6,7 @@ import type { CompetitiveData } from '../../lib/pages/competitive'
 import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
 import { shareDeltaShown } from '../../lib/competitive-tiles'
 import { movementRows, movementShowsChange } from '../../lib/dashboard-tiles'
-import { RUN_INDEXED_DIRECTION_WORDS } from '../../lib/config'
+import { directionWordsFor } from '../../lib/config'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
@@ -129,7 +129,7 @@ const themes: E<DashboardData> = ({ themes: t }) => {
       {t.rows.map((r, i) => (
         // Gated at render as well as at compute (D1): an email re-rendered
         // from a snapshot frozen before the gate still carries isNew.
-        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew && RUN_INDEXED_DIRECTION_WORDS ? <Badge>New</Badge> : undefined} />
+        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew && directionWordsFor('dashboard.themes') ? <Badge>New</Badge> : undefined} />
       ))}
       <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>conversations per theme · green you · grey category{t.topCompetitorName ? ` · orange ${t.topCompetitorName}` : ''}</div>
     </div>

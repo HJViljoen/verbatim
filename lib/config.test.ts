@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from 'vitest'
-import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR } from './config'
+import { passAMinComments, PASS_A_MIN_COMMENTS_DEFAULT, captureRunFlags, transcriptsEnabled, translationEnabled, ocrEnabled, effectivePeriod, periodWindowDays, periodSince, PERSONA_MAX, PERSONA_MIN_INSIGHTS, PERSONA_MIN_VIDEOS, PERSONA_DIGEST_THEMES, EVIDENCE_FLOOR, directionWordsFor, DIRECTION_READERS, RUN_INDEXED_DIRECTION_WORDS, OLD_PAGES_RETIRE_ON } from './config'
 
 // Pass A's comment floor is per-platform (Wave 3). One global 5 was tuned for
 // TikTok/Instagram; Reddit threads run 3-8 comments but are far denser per
@@ -144,5 +144,45 @@ describe('persona evidence floors (Pass E) — the numbers that decide what a cl
   it('sends enough theme lines to cover a normal run whole', () => {
     // Ossur run 2 produced 120 themes for the entire corpus.
     expect(PERSONA_DIGEST_THEMES).toBeGreaterThanOrEqual(120)
+  })
+})
+
+// D1's per-reader map (Phase 1 WP0). The map is the flip's unit of work: a
+// reader turns on the day its own series is re-based on the comment-dated
+// monthly reading, and not one day before, so these tests guard the shape
+// rather than the values — every reader present, every reader readable, and
+// the whole map still off.
+describe('directionWordsFor', () => {
+  it('answers for every reader, and every reader is still off', () => {
+    for (const reader of DIRECTION_READERS) {
+      expect(directionWordsFor(reader), reader).toBe(false)
+    }
+  })
+
+  it('lists exactly the readers the map holds — a reader added to one and not the other is the bug', () => {
+    expect([...DIRECTION_READERS].sort()).toEqual(Object.keys(RUN_INDEXED_DIRECTION_WORDS).sort())
+  })
+
+  it('carries the seven surfaces that read a run-indexed series', () => {
+    expect([...DIRECTION_READERS].sort()).toEqual([
+      'agent.movement', 'competitive.deltas', 'dashboard.themes', 'documents.trajectory',
+      'initiatives', 'profile.mix', 'voice.movers',
+    ])
+  })
+
+  it('types the map as boolean, so a gated branch is never narrowed to dead code', () => {
+    // If the values were inferred as the literal `false`, TypeScript would
+    // stop checking the half Phase 1 turns back on. Asserted at runtime
+    // because that is where a literal would show up as an unreachable branch.
+    expect(typeof RUN_INDEXED_DIRECTION_WORDS['voice.movers']).toBe('boolean')
+  })
+})
+
+// A placeholder Heinrich sets at R2 (decision C). Guarded only for shape: a
+// date the shell can parse, and one that has not silently gone by.
+describe('OLD_PAGES_RETIRE_ON', () => {
+  it('is an ISO date', () => {
+    expect(OLD_PAGES_RETIRE_ON).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(Number.isNaN(Date.parse(OLD_PAGES_RETIRE_ON))).toBe(false)
   })
 })

@@ -15,7 +15,7 @@ import { pickThemedRunId } from './themed-run'
 import { row, rows as readRows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import type { MethodNoteData } from '../../components/print/method-note'
-import { EXPORT_FULL_MAX_ITEMS, RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { EXPORT_FULL_MAX_ITEMS, directionWordsFor } from '../config'
 
 // Voice of Customer loader — the data half of the old app/dashboard/voice/page.tsx
 // (split 2026-08-29, Reports & Exports T4). "What are they saying?": the theme
@@ -32,7 +32,7 @@ import { EXPORT_FULL_MAX_ITEMS, RUN_INDEXED_DIRECTION_WORDS } from '../config'
 // with, so the snapshot renders the same five voices.
 //
 // D1 (2026-09-15): every direction the page used to read off the per-update
-// theme series is gated on RUN_INDEXED_DIRECTION_WORDS — the movers list, the
+// theme series is gated on directionWordsFor('voice.movers') — the movers list, the
 // per-theme sparklines on the map and in the pane, and the "New" chips. What
 // stays is every level: the map, the counts, the tiers, the phrases, the mood
 // and the voices. Phase 1 turns them back on against the monthly reading.
@@ -325,7 +325,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   // "New" is a direction word off the per-update series (raw themes.first_seen,
   // which means "this registry entry was opened by this update" — a relabel
   // opens one), so it is gated with the rest (D1). The legend key follows it.
-  const showNew = updatesCount > 1 && RUN_INDEXED_DIRECTION_WORDS
+  const showNew = updatesCount > 1 && directionWordsFor('voice.movers')
   const samples = readRows<{ id: string; phrase: string; platform: string | null }>(samplesRes, 'voice.languageSamples')
   const sampleTotal = samplesRes.count ?? samples.length
   const asQuote = (s: { id: string; phrase: string; platform: string | null }) => ({ ref: quoteRef.phrase(s.id), text: s.phrase, platform: s.platform })
@@ -425,7 +425,7 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const { trajectories, keyOf } = themeTrajectories(historyRows.filter((r) => !runningIds.includes(r.run_id)), runDates)
   const trajectoryByKey = new Map(trajectories.map((t) => [t.key, t]))
   const historyOf = (t: ThemeRow): Trajectory | undefined =>
-    RUN_INDEXED_DIRECTION_WORDS ? trajectoryByKey.get(keyOf(t)) : undefined
+    directionWordsFor('voice.movers') ? trajectoryByKey.get(keyOf(t)) : undefined
   const moversAll = themeMovers(trajectories).filter((t) => entityFilter === 'all' || t.bucket === entityFilter)
   const movers = moversAll.filter((t) => t.movement !== 'steady')
   const steadyCount = moversAll.length - movers.length

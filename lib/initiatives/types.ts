@@ -1,4 +1,4 @@
-import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { directionWordsFor } from '../config'
 import { trackedLine, type InitiativeVerdict } from './measure'
 // Initiatives (WP7c, 2026-09-11) — the shapes the table, the actions and the
 // measurement all agree on.
@@ -150,7 +150,7 @@ export interface InitiativeTileData extends InitiativesData {
  */
 export function initiativeTile(
   data: { initiatives?: InitiativesData },
-  directionWords = RUN_INDEXED_DIRECTION_WORDS,
+  directionWords = directionWordsFor('initiatives'),
 ): InitiativeTileData {
   const { rows, total } = initiativesOf(data)
   if (directionWords) return { rows, total, movement: true }

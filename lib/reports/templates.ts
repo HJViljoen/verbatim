@@ -1,4 +1,4 @@
-import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { directionWordsFor } from '../config'
 import type { ReportSection, ReportTemplate } from './types'
 
 /**
@@ -11,9 +11,9 @@ import type { ReportSection, ReportTemplate } from './types'
  * silently rewrites the section without it. The deck is fine either way
  * (`sectionSlides` keeps only the keys `slides()` emits), which is why the
  * starters' own "dropped at build time with a warning" is true of paper and
- * not of the Studio. Phase 1 flips the constant and the tile comes back.
+ * not of the Studio. Phase 1 flips `voice.movers` and the tile comes back.
  */
-export function templateKeys(keys: string[], directionWords = RUN_INDEXED_DIRECTION_WORDS): string[] {
+export function templateKeys(keys: string[], directionWords = directionWordsFor('voice.movers')): string[] {
   return directionWords ? keys : keys.filter((k) => k !== 'voice.movers')
 }
 

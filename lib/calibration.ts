@@ -1,4 +1,4 @@
-import { RUN_INDEXED_DIRECTION_WORDS } from './config'
+import { directionWordsFor } from './config'
 
 // Calibrated language (Calibrated-Language doc 2026-07-04) — the companion to
 // lib/curation.ts. Every "how much / how strong / how sure" word shown to a
@@ -128,7 +128,7 @@ export const GLOSSARY = {
   // gated the tile prints a theme's share and how long it has been tracked and
   // no movement at all, so the promise of "holding steady" would be a rule the
   // code can no longer keep. Phase 1 flips the constant and the sentence back.
-  moving: RUN_INDEXED_DIRECTION_WORDS
+  moving: directionWordsFor('initiatives')
     ? ['Moving / not moving', 'the change in a theme’s share of the conversation since the day you started tracking it, in share points; under a point either way reads "holding steady", and two updates are the least that can say anything']
     : ['What it is running at', 'a theme’s share of the conversation this update, and how long you have been tracking it; the share of one update is a level, not a direction, and we do not read a change from it yet'],
   on_camera: ['Said on camera', 'the creator spoke it in their own video rather than typing it in a comment — filming an opinion costs time and reputation, so those conversations weigh more than a comment when a theme is ranked'],

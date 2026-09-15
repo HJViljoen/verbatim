@@ -6,7 +6,7 @@
 
 import type { Sov, HistoryRow } from './dashboard-tiles'
 import type { OwnedCensus } from './gather/owned'
-import { COMPETITIVE_MIN_VIDEOS, RUN_INDEXED_DIRECTION_WORDS } from './config'
+import { COMPETITIVE_MIN_VIDEOS, directionWordsFor } from './config'
 
 // ── what a share delta is allowed to say (D1) ─────────────────────────────
 
@@ -23,7 +23,7 @@ import { COMPETITIVE_MIN_VIDEOS, RUN_INDEXED_DIRECTION_WORDS } from './config'
  * the face-off header already reads the layer from), which also means a tile
  * frozen into a report snapshot is judged by the layer it was drawn on.
  */
-export function shareDeltaShown(layerWord: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean {
+export function shareDeltaShown(layerWord: string, directionWords = directionWordsFor('competitive.deltas')): boolean {
   return directionWords || layerWord === 'this update'
 }
 

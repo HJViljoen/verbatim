@@ -1138,10 +1138,10 @@ export const REGISTRY_MATCH_WEAK = 0.25
  *  It revives on the next match — dormancy hides an entry, it never deletes it. */
 export const REGISTRY_DORMANT_RUNS = 3
 
-// --- Direction words on the run-indexed theme series (Phase 0 · D1, 2026-09-15) --
+// --- Direction words on the run-indexed series (D1, 2026-09-15) -------------
 
 /**
- * OFF, and deliberately: nothing may tell a client a theme is gaining, fading
+ * ALL OFF, and deliberately: nothing may tell a client a theme is gaining, fading
  * or gone quiet while the only series we hold is indexed by UPDATE.
  *
  * Every gaining / fading / New on a theme today compares two readings of one
@@ -1158,17 +1158,72 @@ export const REGISTRY_DORMANT_RUNS = 3
  * count in the email. Every LEVEL — counts, shares, sentiment, the theme map,
  * the lists — is untouched.
  *
- * Phase 1 flips this to true one reader at a time, as each is re-based on the
- * comment-dated monthly reading (lib/reading/monthly.ts). That is why every
- * gated branch READS this constant rather than deleting its code, and why the
- * gated pure functions take it as an argument defaulting to this, so both
- * answers stay under test.
+ * ONE FLAG PER READER (Phase 1 WP0, 2026-09-15). Phase 0 shipped a single
+ * boolean, which made the flip all-or-nothing: the first reader re-based on
+ * the comment-dated monthly series could not be turned on without turning on
+ * six that were not. The constant is now a map, and `directionWordsFor` is the
+ * only way to read it, so a reader flips the day its own series is honest and
+ * not before.
  *
- * Annotated `boolean` rather than left to infer the literal `false`: a literal
- * narrows every gated branch to dead code, and TypeScript then stops checking
- * the half Phase 1 turns back on.
+ * `profile.mix` joins the map having never been gated at all — the Consumer
+ * Profile's "How the mix has moved" is a line across `consumer_profiles` rows
+ * indexed by run_date, which is precisely the series D1 is about. It was
+ * missed in Phase 0 because the surface draws a chart and prints no direction
+ * WORD; a line that rises is a direction claim whether or not a word says so.
+ *
+ * Annotated `boolean` (the map's value type) rather than left to infer the
+ * literal `false`: a literal narrows every gated branch to dead code, and
+ * TypeScript then stops checking the half Phase 1 turns back on. For the same
+ * reason every gated branch READS the map rather than deleting its code, and
+ * every gated pure function takes the answer as an argument defaulting to it,
+ * so both answers stay under test.
  */
-export const RUN_INDEXED_DIRECTION_WORDS: boolean = false
+export type DirectionReader =
+  /** Voice of Customer · "Gaining and fading" — the tile, its drawer, its deck slide. */
+  | 'voice.movers'
+  /** Dashboard · the themes list's "New" chip, the movement row, the email's chip. */
+  | 'dashboard.themes'
+  /** Reports & briefs · a theme's trajectory word in a document block. */
+  | 'documents.trajectory'
+  /** Ask · the movement paragraph a "trend" question is answered from. */
+  | 'agent.movement'
+  /** Initiatives · whether the conversation went the way the client said they wanted. */
+  | 'initiatives'
+  /** Competitive · share-point deltas "since your first update". */
+  | 'competitive.deltas'
+  /** Consumer Profile · "How the mix has moved", the per-persona share line. */
+  | 'profile.mix'
+
+/** Every reader, for the tests and for a Settings surface that lists them. */
+export const DIRECTION_READERS = [
+  'voice.movers', 'dashboard.themes', 'documents.trajectory', 'agent.movement',
+  'initiatives', 'competitive.deltas', 'profile.mix',
+] as const satisfies readonly DirectionReader[]
+
+export const RUN_INDEXED_DIRECTION_WORDS: Record<DirectionReader, boolean> = {
+  'voice.movers': false,
+  'dashboard.themes': false,
+  'documents.trajectory': false,
+  'agent.movement': false,
+  'initiatives': false,
+  'competitive.deltas': false,
+  'profile.mix': false,
+}
+
+/** May this reader print a direction? Read it; never read the map directly. */
+export function directionWordsFor(reader: DirectionReader): boolean {
+  return RUN_INDEXED_DIRECTION_WORDS[reader]
+}
+
+/**
+ * When the pages Phase 1 replaces stop being reachable (decision C). A
+ * placeholder until Heinrich sets it at R2: the old Reports page, Dashboard,
+ * Guide, Connections, Initiatives, Voice of Customer, Market Intelligence,
+ * Competitive and Consumer Profile retire on this date, and the shell reads it
+ * rather than each page carrying its own answer. ISO, no time: a retirement is
+ * a day, and the reader's timezone decides when that day starts for them.
+ */
+export const OLD_PAGES_RETIRE_ON = '2026-11-30'
 
 // Order-of-magnitude Apify spend per platform, for RANKING keywords in
 // scripts/keyword-roi.ts — never invoicing. Apify doesn't land per-actor cost

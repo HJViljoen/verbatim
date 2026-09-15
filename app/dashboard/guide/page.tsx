@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { GLOSSARY, type GlossaryKey } from '@/lib/calibration'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { directionWordsFor, type DirectionReader } from '@/lib/config'
 import { SettingsFrame } from '@/components/settings-frame'
 import { ListSearch } from '@/components/shell/list-search'
 
@@ -21,19 +21,21 @@ interface Section {
   cannot: string[]
 }
 
-/** D1: the guide describes the pages as they are. While the run-indexed
- *  direction words are gated off there is no gaining-and-fading tile, no
- *  per-theme history in the theme pane and no "New" chip on either page, so
- *  the guide does not promise them — a page that says less than the product
- *  does is a bug here as much as one that says more. Phase 1 flips the clause
- *  back with the surface. */
-const ifDirectionWords = <T,>(on: T, off: T): T => (RUN_INDEXED_DIRECTION_WORDS ? on : off)
+/** D1: the guide describes the pages as they are. While a page's direction
+ *  words are gated off there is no gaining-and-fading tile, no per-theme
+ *  history in the theme pane and no "New" chip on it, so the guide does not
+ *  promise them — a page that says less than the product does is a bug here as
+ *  much as one that says more. Per READER since WP0: the guide describes each
+ *  page from that page's own flag, so the Dashboard section can gain its "New"
+ *  chip back on the day the dashboard does and the Voice section stays as it
+ *  is. */
+const ifDirectionWords = <T,>(reader: DirectionReader, on: T, off: T): T => (directionWordsFor(reader) ? on : off)
 
 const SECTIONS: Section[] = [
   {
     id: 'dashboard', title: 'Dashboard', href: '/dashboard',
     tells: 'Where you stand this update: what was tracked, the executive brief, audience sentiment, your share of the tracked conversation, the themes your market is talking about, movement since your first update, the top recommendation, and your own accounts.',
-    read: ifDirectionWords<GlossaryKey[]>(['conversations', 'sentiment', 'new'], ['conversations', 'sentiment']),
+    read: ifDirectionWords<GlossaryKey[]>('dashboard.themes', ['conversations', 'sentiment', 'new'], ['conversations', 'sentiment']),
     weekly: ['Read the brief first — it is written from this update’s counted figures.', 'Click the underlined recommendation to see the voices behind it before deciding anything.', 'Check the movement row: arrows only appear when a change clears the band, so a missing arrow means "no clear change", not "no data".'],
     cannot: ['It samples the public conversation around your tracked names; it is not every comment on the internet.', 'Model confidence is shown as a word, never a number — there is no score to compare week to week.'],
   },
@@ -47,14 +49,16 @@ const SECTIONS: Section[] = [
   {
     id: 'voice', title: 'Voice of Customer', href: '/dashboard/voice',
     tells: ifDirectionWords(
+      'voice.movers',
       'What they are saying: the conversation by theme, with each block sized by the number of conversations, tinted by whose audience is talking; the selected theme in full beside the map; what is gaining and fading; the phrases your customers use; and their mood.',
       'What they are saying: the conversation by theme, with each block sized by the number of conversations, tinted by whose audience is talking; the selected theme in full beside the map; the phrases your customers use; and their mood.',
     ),
     read: ifDirectionWords<GlossaryKey[]>(
+      'voice.movers',
       ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal', 'new'],
       ['conversations', 'dominant', 'widespread', 'recurring', 'early_signal'],
     ),
-    weekly: ['Switch audience (yours · a competitor’s · the category) and the category tabs inside the map to narrow the conversation.', ifDirectionWords('Click a block to read the theme beside the map: its reach within its group, its history across updates, and the voices behind it.', 'Click a block to read the theme beside the map: its reach within its group and the voices behind it.'), 'Borrow the language — the phrases are verbatim, in your customers’ words.'],
+    weekly: ['Switch audience (yours · a competitor’s · the category) and the category tabs inside the map to narrow the conversation.', ifDirectionWords('voice.movers', 'Click a block to read the theme beside the map: its reach within its group, its history across updates, and the voices behind it.', 'Click a block to read the theme beside the map: its reach within its group and the voices behind it.'), 'Borrow the language — the phrases are verbatim, in your customers’ words.'],
     cannot: ['A theme is confirmed only when heard in more than one conversation; single mentions are kept for the record but never headline.', 'Demographic evidence is counted, never quoted.'],
   },
   {

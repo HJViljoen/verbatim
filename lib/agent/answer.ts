@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT, RUN_INDEXED_DIRECTION_WORDS } from '../config'
+import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT, directionWordsFor } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { enforceRegisters, type RawAnswer } from './enforce'
@@ -76,7 +76,7 @@ function renderEvidence(insights: RetrievedInsight[]): string {
     .join('\n')
 }
 
-/** What a "trend" question is told while D1's RUN_INDEXED_DIRECTION_WORDS is
+/** What a "trend" question is told while D1's directionWordsFor('agent.movement') is
  *  off: the per-reading series is not loaded at all, and the model is handed
  *  the line the block already printed whenever a topic had no points of its
  *  own. Said rather than left out — an unexplained silence invites the model to
@@ -116,7 +116,7 @@ function renderTrend(trend: TrendContext): string {
  *  not-readable-yet line when they are off (D1). Pure, so both answers stay
  *  tested; the loader above it is skipped entirely in the gated case, so the
  *  gate costs no reads either. */
-export function movementBlock(trend: TrendContext | null, timeframe: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+export function movementBlock(trend: TrendContext | null, timeframe: string, directionWords = directionWordsFor('agent.movement')): string {
   if (timeframe !== 'trend') return ''
   return trend && directionWords ? renderTrend(trend) : NO_TREND_BLOCK
 }
@@ -178,7 +178,7 @@ export async function answerQuestion(
   // D1: while the direction words are gated the per-reading series is not even
   // read — the block it feeds is the one place the agent is told it may name a
   // direction, and the counts behind it are indexed by update, not by period.
-  const trend = plan.timeframe === 'trend' && RUN_INDEXED_DIRECTION_WORDS
+  const trend = plan.timeframe === 'trend' && directionWordsFor('agent.movement')
     ? await loadTrendContext(admin, {
         clientId: args.clientId,
         registryIds: context.insights.map((i) => i.themeRef?.registryId).filter((r): r is string => Boolean(r)),

@@ -165,7 +165,7 @@ export async function loadSignals(
 
   // History in words: the registry join Voice uses, so "new" and "seen N
   // updates" mean here what they mean on the page — which, while D1's
-  // RUN_INDEXED_DIRECTION_WORDS is off, is nothing. `trajectoryWord` answers
+  // directionWordsFor('documents.trajectory') is off, is nothing. `trajectoryWord` answers
   // null for every theme, every concern carries an empty word, and the deck,
   // the heard line and the writer's brief each already know what to do with
   // that. The join itself is still built: it is pure, and Phase 1 re-bases it.

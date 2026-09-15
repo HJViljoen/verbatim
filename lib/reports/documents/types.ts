@@ -1,4 +1,4 @@
-import { DOCUMENT_BRIEF_MAX, RUN_INDEXED_DIRECTION_WORDS } from '../../config'
+import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -158,7 +158,7 @@ export interface DocPage {
  * than beside `trajectoryWord` because the workings drawer is a client
  * component and `merge.ts` reaches the OpenAI client through `cosine`.
  */
-export function shownTrajectory(word: string | null | undefined, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+export function shownTrajectory(word: string | null | undefined, directionWords = directionWordsFor('documents.trajectory')): string {
   return word && directionWords ? word : ''
 }
 

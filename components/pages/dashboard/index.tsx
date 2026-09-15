@@ -22,7 +22,7 @@ import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } fro
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
 import { movementRows } from '@/lib/dashboard-tiles'
-import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { directionWordsFor } from '@/lib/config'
 import { initiativeTile, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -92,7 +92,7 @@ const strip: R = ({ strip: s }, mode) => {
             // spine of the per-update series and the only part of this cell
             // that speaks across updates. Gated with the rest (D1); the three
             // tier counts are this update's own and stay.
-            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{RUN_INDEXED_DIRECTION_WORDS && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
+            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{directionWordsFor('dashboard.themes') && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
           />
         ) : <TileEmpty>Themes land with the first analysed update.</TileEmpty>}
       </StripCell>
@@ -250,7 +250,7 @@ const themes: R = ({ themes: t }, mode) => {
               // The badge is gated at render as well as at compute (D1): a
               // snapshot frozen before the gate still carries isNew, and it is
               // re-rendered forever.
-              badge={row.isNew && RUN_INDEXED_DIRECTION_WORDS ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
+              badge={row.isNew && directionWordsFor('dashboard.themes') ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
               href={app ? `/dashboard/voice?themes=${encodeURIComponent(row.memberThemes.join(','))}` : undefined}
             />
           ))}

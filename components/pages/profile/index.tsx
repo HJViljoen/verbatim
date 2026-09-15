@@ -9,6 +9,7 @@ import { ProfileConnectors } from '@/components/profile-connectors'
 import { PlatformMix, ShareOverTime } from '@/components/profile-stats'
 import { Tile } from '@/components/shell/tile'
 import { glossaryRule, type GlossaryKey } from '@/lib/calibration'
+import { directionWordsFor } from '@/lib/config'
 import { loadProfile, isProfileEmpty, type ProfileData, type ProfileEmpty, type PersonaDetail } from '@/lib/pages/profile'
 import type { Quote, PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
@@ -288,7 +289,13 @@ export function profilePersonaSlide(n: number): Renderable<D> {
 const renderables: Record<string, Renderable<D>> = {
   'profile.persona': { key: 'profile.persona', title: 'Consumer profile', render: persona },
   'profile.platformMix': { key: 'profile.platformMix', title: 'Where each one turns up', render: platformMix },
-  'profile.shareOverTime': { key: 'profile.shareOverTime', title: 'How the mix has moved', render: shareOverTime },
+  // Unregistered while profile.mix is gated (D1, WP0): the Studio's picker
+  // reads these keys, so a tile nobody may see must not be offerable either.
+  // `shareSeries` already hands back an empty series, so the tile would render
+  // nothing; taking it out of the catalogue is what keeps the deck honest.
+  ...(directionWordsFor('profile.mix')
+    ? { 'profile.shareOverTime': { key: 'profile.shareOverTime', title: 'How the mix has moved', render: shareOverTime } }
+    : {}),
 }
 
 export const profilePage: PageModule<D> = {
@@ -301,7 +308,12 @@ export const profilePage: PageModule<D> = {
   slides(d, variant): Slide[] {
     const slides: Slide[] = [
       { title: 'Consumer profile', keys: ['profile.persona'], layout: 'single' },
-      { title: 'Where they turn up, and how the mix has moved', keys: ['profile.platformMix', 'profile.shareOverTime'], layout: 'grid' },
+      directionWordsFor('profile.mix')
+        ? { title: 'Where they turn up, and how the mix has moved', keys: ['profile.platformMix', 'profile.shareOverTime'], layout: 'grid' }
+        // Without the chart the slide is no longer about movement, and a title
+        // that promises it would be the direction claim the deck no longer
+        // carries (D1).
+        : { title: 'Where they turn up', keys: ['profile.platformMix'], layout: 'grid' },
     ]
     if (variant === 'full') {
       for (let n = 0; n < (d.full?.length ?? 0); n++) slides.push({ title: `Persona · ${d.full![n].name}`, keys: [`${PERSONA_SLIDE_PREFIX}${n}`], layout: 'single' })
