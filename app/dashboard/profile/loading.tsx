@@ -2,6 +2,7 @@
 
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 import { Card, CardContent } from '@/components/ui/card'
+import { directionWordsFor } from '@/lib/config'
 
 export default function ProfileLoading() {
   return (
@@ -29,8 +30,13 @@ export default function ProfileLoading() {
         </div>
       </div>
 
+      {/* One bone per bottom card the page actually draws: platformMix always,
+          shareOverTime only while profile.mix is on (D1). Reserving the second
+          while the tile is gated off shows a grey block that resolves into
+          nothing and the page jumps, which is why the Voice skeleton gates its
+          own movers tile. */}
       <Bone className="h-40 w-full rounded-xl" />
-      <Bone className="h-40 w-full rounded-xl" />
+      {directionWordsFor('profile.mix') && <Bone className="h-40 w-full rounded-xl" />}
     </div>
   )
 }
