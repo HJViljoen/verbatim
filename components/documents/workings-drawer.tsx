@@ -1,7 +1,7 @@
 'use client'
 
 import { Quotes } from '@/components/quotes'
-import type { DocumentWorkings } from '@/lib/reports/documents/types'
+import { shownTrajectory, type DocumentWorkings } from '@/lib/reports/documents/types'
 
 // The workings (S7, 2026-08-31): what a block rests on, shown beside the
 // page, never on it. The selected block's grounded points (the agent's own
@@ -33,12 +33,17 @@ export function WorkingsDrawer({ workings, selectedId, blockLabel }: { workings:
               <Quotes items={p.quotes.map((q) => q.text).filter(Boolean).slice(0, 2)} />
             </div>
           ))}
-          {concerns.map((c) => (
-            <div key={c.label} className="rounded-[4px] bg-inner px-3 py-2.5">
-              <p className="text-foreground">{c.label}</p>
-              <p className="font-mono text-[10.5px] text-muted-foreground">{fmt(c.total)} across {c.buckets.map((b) => `${b.label} ${b.evidenceCount}`).join(', ')}{c.trajectory ? ` · ${c.trajectory}` : ''}</p>
-            </div>
-          ))}
+          {concerns.map((c) => {
+            // Workings frozen before D1 still carry the history word; the
+            // suffix is gated here so the drawer and the page agree.
+            const trajectory = shownTrajectory(c.trajectory)
+            return (
+              <div key={c.label} className="rounded-[4px] bg-inner px-3 py-2.5">
+                <p className="text-foreground">{c.label}</p>
+                <p className="font-mono text-[10.5px] text-muted-foreground">{fmt(c.total)} across {c.buckets.map((b) => `${b.label} ${b.evidenceCount}`).join(', ')}{trajectory ? ` · ${trajectory}` : ''}</p>
+              </div>
+            )
+          })}
         </div>
       ) : (
         <p className="text-muted-foreground">Press a count on the page to see what that block rests on.</p>

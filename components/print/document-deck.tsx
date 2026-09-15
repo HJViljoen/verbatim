@@ -5,7 +5,7 @@ import { Slide } from '@/components/print/slide'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides } from '@/lib/reports/documents/compose'
 import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
-import type { DocBlock, DocLens, DocPage, DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { shownTrajectory, type DocBlock, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
 // A document's deck from its (hydrated) snapshot data: the cover, then one
@@ -174,7 +174,10 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
   const practice = practiceBlock?.items ?? []
   const sureWord = page.meta?.sure ?? 'thin'
   const sureNote = (b('sure')?.text ?? '').replace(/^(Solid|Reasonable|Thin):[^.]*\.\s*(Treat it as a lead, not a rule\.\s*)?/, '')
-  const history = page.meta?.history ?? ''
+  // Through `shownTrajectory` (D1): this page is drawn from a snapshot, and
+  // one built before the gate carries "rising" / "seen 2 updates running" in
+  // its meta. The gate is on the surface, not on the build.
+  const history = shownTrajectory(page.meta?.history)
   const conversations = Number(page.meta?.conversations ?? 0)
   const strands = Number(page.meta?.strands ?? 0)
   return (
@@ -373,6 +376,9 @@ function movementLines(data: DocumentSnapshotData): { label: string; value: stri
 function ConcernField({ meta }: { meta: string }) {
   const rows = parseMeta<{ label: string; total: number; trajectory: string }[]>(meta, [])
     .filter((r) => r && typeof r.label === 'string' && Number.isFinite(r.total))
+    // Same gate as the finding page's pill: the counts are this update's and
+    // stay; the history word beside them is withdrawn, frozen or not (D1).
+    .map((r) => ({ ...r, trajectory: shownTrajectory(r.trajectory) }))
   if (!rows.length) return null
   const max = Math.max(...rows.map((r) => r.total), 1)
   return (
