@@ -1,0 +1,1125 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { fmtInt, monthName, shortDate } from '../format'
+import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
+import { citationLink } from '../evidence-cite'
+import { quoteRef } from '../renderables/quotes-freeze'
+import type { Quote, Scope } from '../renderables/types'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
+import { audienceLabel } from '../readiness/types'
+import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
+import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
+import { isMissingKindMoodAttention } from '../reading/attention'
+import { freezeBoundary, freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { monthStartOf, nextMonth } from '../reading/month-key'
+import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
+import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
+import type { MonthStatus } from '../reading/types'
+import type { FigureTable, Verdict } from '../reading/verdicts'
+import {
+  isMissingSubjects,
+  subjectCalibration,
+  TABLE_SUBJECTS,
+  TABLE_SUBJECT_MEMBERSHIPS,
+  TABLE_MOVES,
+  type Move,
+  type Subject,
+  type SubjectCalibration,
+} from '../subjects/types'
+import { selectAll } from '../supabase-admin'
+import { rows } from './read'
+import { fetchRunningRunIds } from './latest-video-run'
+import { fetchThemedRunId } from './themed-run'
+
+// Subjects — "how are we seen on this subject?" (Phase 1 WP12, design §3
+// SU1–SU3, the mock's Subjects.dc.html).
+//
+// THE PAGE IS ONE SUBJECT AT A TIME. SU1 is the rail: every subject the tenant
+// named, where it came from, the day it was named, and the sentence that makes
+// the whole model legible — renaming or adding one starts a NEW line and the
+// old line is kept. SU2 is the selected subject in full: you, each rival and
+// the category as monthly lines, the kinds of thing said in each audience, six
+// voices, and the two things a reader can DO about it (Track this, Ask about
+// this). SU3 is the gap: questions the category asks on this subject that your
+// own posts have never answered.
+//
+// EVERYTHING COUNTED COMES OFF THE STORED MONTHS. `month_subject_readings`
+// through `loadMonthSeries` (WP12 attached the table to it) — never a
+// recomputation and never a run. M4 is authored and NOT applied, so on
+// production today every one of those reads answers `numeratorSubstrate:
+// 'missing'` and this page says what is not recorded yet, in words, rather
+// than drawing an axis of hollow months for a table that does not exist.
+//
+// AND ONE THING IT WILL NOT PRINT. SU3's counts are taken from the CURRENT
+// analysis — which videos carry a question insight on this subject — while
+// every other number on the page is comment-dated. Those two are not two ends
+// of one fraction, so SU3 prints counts and the population it counted in, and
+// no share and no change badge. The design's example sentence is a share; the
+// smallest correct alternative is the sentence without it (see UNANSWERED_BASIS).
+
+/** How many subjects the rail shows before it scrolls. The set is 5-8 by
+ *  design (SUBJECTS_MAX), so this is a guard against a tenant that grew past
+ *  the editor rather than a page decision. */
+export const RAIL_MAX = 12
+
+/** Voices on the selected subject (the mock: "6 shown"). */
+export const VOICES_SHOWN = 6
+
+/** …and at most this many from any one audience, so the three sides are all
+ *  heard. The design asks for "up to six quotes per audience" and the mock
+ *  draws six in total, mixed — one under your post, one under a rival's, one
+ *  under a category video. Six per audience is eighteen quotes on one page and
+ *  the page is a reading, not an archive; a round-robin over the audiences
+ *  keeps the mock's six AND the design's guarantee that no audience is
+ *  silenced by another's volume. */
+export const VOICES_PER_AUDIENCE = 3
+
+/** Rows SU3 lists. The mock draws three. */
+export const UNANSWERED_SHOWN = 3
+
+/** SU3's gate (design §3 SU3): fewer question videos than this on the subject
+ *  and the block says so rather than ranking noise. */
+export const UNANSWERED_GATE = 10
+
+/** What SU3's counts are counted in, said once. */
+export const UNANSWERED_BASIS =
+  'Counted in the videos we have read for this subject, not in a calendar month — so these are counts, not shares, and carry no change.'
+
+/** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
+export const REDDIT_THREAD_CAP =
+  'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'
+
+/** SU1's sentence. The whole identity model in twelve words, printed where the
+ *  editing happens rather than inside a help page nobody opens. */
+export const SUPERSEDE_RULE = 'Renaming or adding a subject starts a new line. The old line is kept.'
+
+// ---- the shapes ---------------------------------------------------------------
+
+/** One side of the reading: you, one rival, or the category. */
+export interface SubjectSide {
+  /** The stored audience key. */
+  audience: string
+  /** The reader's words for it. */
+  label: string
+  kind: 'you' | 'rival' | 'category'
+  /** The entity's colour token — never the rank's. */
+  color: string
+  /** This month's k and n, and the share. Null where nothing was read. */
+  k: number | null
+  n: number | null
+  pct: number | null
+  /** False where this audience carried no row at all — "— not tracked". */
+  observed: boolean
+  /** The banded month-on-month change, or null where none was drawn. */
+  verdict: Verdict | null
+  /** Three consecutive readings in one regime, or null. */
+  direction: Direction | null
+  /** The month before this one, as a level beside a level — never a change. */
+  previous: { month: string; pct: number | null } | null
+  /** The audience-wide kind mix this month (the mock's own denominator: every
+   *  video in the audience, not the subject's). */
+  kinds: KindShare[]
+  reddit: RedditRead | null
+}
+
+export interface SubjectRail {
+  id: string
+  name: string
+  description: string | null
+  origin: Subject['origin']
+  namedAt: string
+  status: Subject['status']
+  calibration: SubjectCalibration
+  /** Your own side this month, as a level. Null while the subject is
+   *  calibrating — a share nobody has measured the precision of is not shown
+   *  to a client (design :891). */
+  level: { k: number; n: number; pct: number | null } | null
+  /** Why no share is shown, in the reader's words. */
+  note: string | null
+  selected: boolean
+  href: string
+}
+
+export interface SubjectListBlock {
+  rows: SubjectRail[]
+  /** Subjects named but not confirmed — nothing counts them yet. */
+  proposed: { id: string; name: string; because: string }[]
+  rule: string
+  /** Null where `subjects` is readable; a sentence where M4 is not applied. */
+  notRecorded: string | null
+  setLine: string
+}
+
+export interface SubjectVoice {
+  quote: Quote
+  cite: string
+  href: string | null
+  /** Which side of the conversation it came from, for the reader. */
+  from: string
+}
+
+export interface UnansweredRow {
+  id: string
+  label: string
+  /** Non-owned videos that asked it. */
+  videos: number
+  /** Of those, Reddit threads. */
+  reddit: number
+  /** True where one of your own posts touches it. */
+  answered: boolean
+  href: string | null
+}
+
+export interface UnansweredBlock {
+  rows: UnansweredRow[]
+  /** Distinct non-owned videos carrying a question on this subject — the gate's
+   *  own number. */
+  questionVideos: number
+  /** Videos read for the category, as the population the counts sit in. */
+  population: number | null
+  /** Your own posts in the drawn window. */
+  yourPosts: number
+  lead: string | null
+  basis: string
+  reddit: string | null
+  refusal: string | null
+}
+
+export interface SubjectPane {
+  id: string
+  name: string
+  description: string | null
+  namedAt: string
+  origin: Subject['origin']
+  calibration: SubjectCalibration
+  index: number
+  of: number
+  sides: SubjectSide[]
+  /** The chart's lines, one per side, in axis order. */
+  series: MonthSeries[]
+  voices: SubjectVoice[]
+  voicesFrom: number
+  unanswered: UnansweredBlock
+  /** The move already declared on this subject, where there is one. */
+  move: { id: string; title: string; declaredAt: string; status: Move['status'] } | null
+  /** The videos behind YOUR figure, as a link and a count. */
+  behind: { videos: number; href: string } | null
+  /** The sentence above the axis about which lines carry an n. */
+  axisNote: string | null
+  /** Said where the numerator table is not applied here. */
+  notRecorded: string | null
+}
+
+export interface SubjectsRecordBlock {
+  line: string
+  lines: string[]
+  href: string
+  freezesOn: string
+}
+
+export interface SubjectsData {
+  brand: string
+  month: string
+  monthStatus: MonthStatus
+  readingAt: string
+  horizon: Horizon
+  window: HorizonWindow
+  axis: string[]
+  substrate: Substrate
+  notes: MonthLabel[]
+  list: SubjectListBlock
+  selected: SubjectPane | null
+  record: SubjectsRecordBlock
+}
+
+// ---- pure ---------------------------------------------------------------------
+
+const pctOf = (k: number | null, n: number | null): number | null =>
+  k == null || n == null || n <= 0 ? null : Math.round((k / n) * 1000) / 10
+
+/** Where a subject came from, in the client's words. The same three sentences
+ *  OV2's empty state uses, so the two surfaces cannot word one origin twice. */
+export function originLine(origin: Subject['origin']): string {
+  if (origin === 'own_claims') return 'you said this in your own posts'
+  if (origin === 'category_theme') return 'the category raised it in the videos we read'
+  return 'you named it'
+}
+
+/** The rail's own "N named" line, and what it says about the set. */
+export function setLine(active: number, proposed: number): string {
+  if (active === 0 && proposed === 0) return 'No subject named yet.'
+  if (active === 0) return `${fmtInt(proposed)} proposed · none confirmed, so nothing is counted yet.`
+  const tail = proposed > 0 ? ` · ${fmtInt(proposed)} waiting to be confirmed` : ''
+  return `${fmtInt(active)} named${tail}`
+}
+
+/** Why this subject's share is not being shown. Null when it is.
+ *
+ *  TWO DIFFERENT SILENCES AND THEY READ DIFFERENTLY. "Calibrating" is about the
+ *  MEASUREMENT — nobody has checked how often the judge is right, so the number
+ *  exists and may not be printed. "Not read yet" is about the RECORD — the
+ *  month holds no row for this subject. Collapsing them into one sentence was
+ *  how the old product told a client its data was missing when its method was. */
+export function railNote(calibration: SubjectCalibration, read: boolean): string | null {
+  if (calibration === 'calibrating') return 'still checking how often we get this right'
+  if (!read) return 'no reading yet'
+  return null
+}
+
+/** Which subject the page is about: the one asked for, else the first
+ *  confirmed one, else nothing. A subject that is not this tenant's, or is
+ *  retired, is not selected by a URL — it simply is not in the list. */
+export function selectSubject(rail: readonly { id: string }[], asked: string | undefined): string | null {
+  if (asked && rail.some((r) => r.id === asked)) return asked
+  return rail[0]?.id ?? null
+}
+
+/**
+ * Six voices, drawn round-robin across the audiences.
+ *
+ * The order inside one audience is the caller's (relevance rank); the order
+ * ACROSS them is one each in turn, so a category audience with four hundred
+ * citations cannot silence your own audience's two. `perAudience` caps any one
+ * side, and the total cap is what actually stops the list.
+ */
+export function voicesAcross<T>(
+  pools: readonly { audience: string; items: readonly T[] }[],
+  total: number = VOICES_SHOWN,
+  perAudience: number = VOICES_PER_AUDIENCE,
+): T[] {
+  const out: T[] = []
+  const taken = new Map<string, number>()
+  for (let round = 0; round < perAudience; round++) {
+    for (const pool of pools) {
+      if (out.length >= total) return out
+      const at = taken.get(pool.audience) ?? 0
+      if (at >= perAudience || at >= pool.items.length) continue
+      out.push(pool.items[at])
+      taken.set(pool.audience, at + 1)
+    }
+  }
+  return out
+}
+
+/** Where a voice was heard, in the reader's words — never an audience key. */
+export function voiceFrom(audience: string, brand: string): string {
+  if (audience === CLIENT_AUDIENCE) return `under a post of yours`
+  if (audience === INDUSTRY_AUDIENCE) return 'under a category video'
+  const name = audience.startsWith('competitor:') ? audience.slice('competitor:'.length) : audience
+  return `under a ${name} video`
+}
+
+/** Words worth matching on: lower-cased, accent-folded, three letters or more,
+ *  stop words dropped. Small on purpose — this decides whether one of your
+ *  posts TOUCHED a question, and a generous matcher that calls everything
+ *  answered is the failure mode that matters (it hides the gap). */
+const STOP = new Set([
+  'the', 'and', 'for', 'with', 'you', 'your', 'our', 'are', 'was', 'were', 'will', 'can', 'does', 'did',
+  'this', 'that', 'these', 'those', 'from', 'about', 'into', 'have', 'has', 'had', 'but', 'not', 'any',
+  'all', 'how', 'why', 'what', 'when', 'where', 'who', 'its', 'it’s', 'there', 'them', 'they',
+])
+
+/** The combining marks NFD splits an accent into, as escapes rather than as
+ *  invisible characters in the source — a literal combining mark in a regex
+ *  class is a character nobody can see in a diff. */
+const COMBINING = new RegExp('[\\u0300-\\u036f]', 'g')
+
+export function matchWords(text: string): string[] {
+  const folded = text.normalize('NFD').replace(COMBINING, '').toLowerCase()
+  const words = folded.split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !STOP.has(w))
+    // ONE PIECE OF STEMMING, AND ONLY ONE. "zips failing after a year" against
+    // a claim about "ten years" shares one word and reads as unanswered — a
+    // question you HAVE answered, printed as a gap, which is the direction of
+    // failure that embarrasses a client in front of their own posts. A trailing
+    // `s` on a word of four letters or more is dropped and nothing else is; a
+    // real stemmer would start matching things that are not the same thing.
+    .map((w) => (w.length >= 4 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w))
+  return [...new Set(words)]
+}
+
+/**
+ * Did any of your own posts touch this question?
+ *
+ * Two content words in common, not one: one shared word is "bag" and calls
+ * every question about a bag answered. `haystack` is your posts' topics and
+ * claims, already folded.
+ */
+export function answeredBy(label: string, haystack: readonly string[]): boolean {
+  const want = matchWords(label)
+  if (want.length === 0) return false
+  const pool = new Set(haystack.flatMap(matchWords))
+  const hits = want.filter((w) => pool.has(w)).length
+  return hits >= Math.min(2, want.length)
+}
+
+/**
+ * SU3's sentence, in the design's own shape minus the share.
+ *
+ * "The category asked X in N of the videos we have read — none of your M posts
+ * touched it." The share is absent deliberately: the k is taken from the
+ * current analysis and every other n on this page is comment-dated, and this
+ * product does not print a fraction whose two halves are dated two ways.
+ */
+export function unansweredLead(
+  rows: readonly UnansweredRow[],
+  yourPosts: number,
+  monthLabel: string,
+): string | null {
+  const top = rows.find((r) => !r.answered)
+  if (!top) return null
+  const posts = yourPosts > 0
+    ? `none of your ${fmtInt(yourPosts)} ${monthLabel} post${yourPosts === 1 ? '' : 's'} touched it`
+    : `you published nothing in ${monthLabel}`
+  return `The category asked “${top.label}” in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
+}
+
+/** The words above the axis about which lines carry an n (design §3 SU2's
+ *  gate, and the mock's own sentence). ONE sentence for a run of lines, never
+ *  one per line. */
+export function axisNote(sides: readonly SubjectSide[], floorN: number): string | null {
+  const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
+  const silent = sides.filter((s) => !s.observed)
+  const parts: string[] = []
+  if (hollow.length > 0) {
+    parts.push(
+      `${hollow.map((s) => s.label).join(' and ')} carried too few videos this month to compare ` +
+      `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}) — drawn hollow, with a level and no change.`,
+    )
+  }
+  if (silent.length > 0) {
+    parts.push(`${silent.map((s) => s.label).join(' and ')} — not tracked.`)
+  }
+  return parts.length > 0 ? parts.join(' ') : null
+}
+
+/** The day this month stops moving, off the reading layer's own rule. */
+export function freezesOn(month: string): string {
+  return freezeBoundary(month).slice(0, 10)
+}
+
+/** The window the record is composed over. */
+export function recordWindow(month: string, readingAt: string): RecordWindow {
+  const from = monthStartOf(month)
+  const end = nextMonth(month).slice(0, 10)
+  const today = readingAt.slice(0, 10)
+  return { kind: 'month', from, to: today < end ? today : end }
+}
+
+// ---- the rows the loader reads -------------------------------------------------
+
+interface RunRow {
+  id: string
+  started_at: string
+}
+
+type StoredKindRow = {
+  month: string
+  audience: string
+  kind: string
+  videos: number
+  comments: number
+  platform_mix: Record<string, number> | null
+}
+
+interface MembershipRow {
+  audience_insight_id: string
+}
+
+interface InsightRow {
+  id: string
+  category: string
+  theme: string | null
+  source_video_id: string | null
+}
+
+interface VideoRow {
+  id: string
+  platform: string | null
+  is_client: boolean | null
+  is_competitor: boolean | null
+  competitor_name: string | null
+  topics: string[] | null
+  upload_date: string | null
+}
+
+/** A stored month table, read straight. Null — never [] — when the migration
+ *  that creates it has not been applied here (the WP11 precedent). */
+async function readStoredMonths<T>(
+  client: SupabaseClient,
+  table: string,
+  clientId: string,
+  months: readonly string[],
+  order: readonly string[],
+  missing: (error: unknown) => boolean,
+): Promise<T[] | null> {
+  if (months.length === 0) return []
+  try {
+    return await selectAll<T>(() => {
+      let q = client
+        .from(table)
+        .select('*')
+        .eq('client_id', clientId)
+        .gte('month', months[0])
+        .lte('month', months[months.length - 1])
+      for (const col of order) q = q.order(col, { ascending: true })
+      return q
+    })
+  } catch (error) {
+    if (missing(error) || isMissingMonthTable(error)) return null
+    throw error
+  }
+}
+
+/** The tenant's subjects, or null where M4 is not applied here. */
+async function loadSubjectRows(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
+  try {
+    return await selectAll<Subject>(() =>
+      supabase
+        .from(TABLE_SUBJECTS)
+        .select('*')
+        .eq('client_id', clientId)
+        .neq('status', 'retired')
+        .order('named_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** Every move this tenant has declared on a subject. Null where M4 is absent. */
+async function loadSubjectMoves(supabase: SupabaseClient, clientId: string): Promise<Move[] | null> {
+  try {
+    return await selectAll<Move>(() =>
+      supabase
+        .from(TABLE_MOVES)
+        .select('*')
+        .eq('client_id', clientId)
+        .eq('kind', 'subject')
+        .order('declared_at', { ascending: false })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+/** The member insight ids of one subject, at any judge version. Id-set lookups
+ *  stay on the base tables (AGENTS.md): a membership row cascades with its
+ *  insight, so an id that resolves is an insight that is still live. */
+async function loadMemberInsightIds(
+  supabase: SupabaseClient,
+  clientId: string,
+  subjectId: string,
+): Promise<string[] | null> {
+  try {
+    const rowsOut = await selectAll<MembershipRow>(() =>
+      supabase
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('audience_insight_id')
+        .eq('client_id', clientId)
+        .eq('subject_id', subjectId)
+        .eq('member', true)
+        .order('audience_insight_id', { ascending: true }),
+    )
+    return [...new Set(rowsOut.map((r) => r.audience_insight_id))]
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
+// ---- the loader ---------------------------------------------------------------
+
+/**
+ * The Subjects page, for one tenant, one horizon and one selected subject.
+ *
+ * Null is the first-run empty state: a tenant with no delivered update has no
+ * reading of anything.
+ */
+export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | null> {
+  const supabase = scope.supabase as SupabaseClient
+  const { clientId, params } = scope
+  const reading: ReadingHandle = scope.reading
+  const readingAt = new Date().toISOString()
+  const horizon = parseHorizon(params.horizon)
+
+  const [clientRes, runsRaw, runningIds, rivals, subjectRows, moveRows] = await Promise.all([
+    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
+    selectAll<RunRow>(() =>
+      supabase.from('pipeline_runs').select('id, started_at')
+        .eq('client_id', clientId).in('status', ['completed', 'partial'])
+        .order('started_at', { ascending: true }),
+    ),
+    fetchRunningRunIds(supabase, clientId, 'subjects'),
+    loadTrackedRivals(supabase, clientId),
+    loadSubjectRows(supabase, clientId),
+    loadSubjectMoves(supabase, clientId),
+  ])
+  const brand = (clientRes.data as { company_name?: string | null } | null)?.company_name ?? 'Your brand'
+  if (runsRaw.length === 0) return null
+
+  const updatesByMonth: Record<string, number> = {}
+  for (const r of runsRaw) {
+    const m = monthStartOf(r.started_at)
+    updatesByMonth[m] = (updatesByMonth[m] ?? 0) + 1
+  }
+  const firstRunMonth = monthStartOf(runsRaw[0].started_at)
+
+  // The whole denominator history decides the axis — `sinceStart` is what
+  // "since we started" means (decision M) and the horizon is computed from it.
+  const history = await loadMonthSeries(reading.client, clientId, {
+    from: '2019-01-01',
+    to: readingAt,
+    updatesByMonth,
+    firstRunMonth,
+  })
+  const started = sinceStart(history.denominators.map((d) => ({ month: d.month, videos: d.videos })))
+  const window = horizonWindow(horizon, readingAt, started.from)
+  const axis = window.months
+  const month = axis[axis.length - 1]
+  // The page reads one month wider than it draws: "this month" is a one-month
+  // axis, and the comparison is the calendar's, not the horizon's (OV0's rule).
+  const prevMonth = previousMonthOf(month)
+  const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
+  const monthStatus = freezeStateFor(month, readingAt)
+
+  const perAudience = new Map<string, number>()
+  const denominatorByMonth = new Map<string, number>()
+  for (const d of history.denominators) {
+    perAudience.set(`${monthStartOf(d.month)}|${d.audience}`, d.videos)
+    denominatorByMonth.set(d.month, (denominatorByMonth.get(d.month) ?? 0) + d.videos)
+  }
+
+  // A thin month suppresses every band on the page, exactly as it does on
+  // Overview — one gate, one answer for the builders.
+  const historyMonths = [...denominatorByMonth.keys()].sort()
+  const trailing = historyMonths.filter((m) => m < month && m >= firstRunMonth).slice(-12)
+    .map((m) => denominatorByMonth.get(m) ?? null)
+  const thin = thinMonth(
+    { month, videos: denominatorByMonth.get(month) ?? null, k: null },
+    trailing,
+    { updates: updatesByMonth[month] ?? 0, firstRunMonth },
+  )
+
+  const active = (subjectRows ?? []).filter((s) => s.status === 'active')
+  const proposed = (subjectRows ?? []).filter((s) => s.status === 'proposed')
+
+  // ── SU2 · the selected subject's months ───────────────────────────────
+  const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
+  const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
+  const selectedId = selectSubject(active, params.item)
+
+  const [subjectSet, kindRows] = await Promise.all([
+    selectedId
+      ? loadMonthSeries(reading.client, clientId, {
+          from: readAxis[0],
+          to: month,
+          audiences,
+          objectKind: 'subject',
+          objectIds: active.map((s) => s.id),
+          updatesByMonth,
+          firstRunMonth,
+          changeLogFrom: history.changeLogFrom,
+        })
+      : Promise.resolve(null),
+    readStoredMonths<StoredKindRow>(
+      reading.client, 'month_kind_readings', clientId, readAxis,
+      ['month', 'audience', 'kind'], isMissingKindMoodAttention,
+    ),
+  ])
+
+  const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
+    subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
+
+  const rail: SubjectRail[] = active.slice(0, RAIL_MAX).map((s) => {
+    const calibration = subjectCalibration(s)
+    const own = seriesFor(s.id, CLIENT_AUDIENCE)
+    const point = own ? pointsByMonth(own).get(month) ?? null : null
+    const read = point != null && point.k != null && point.videos != null
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      origin: s.origin,
+      namedAt: s.named_at,
+      status: s.status,
+      calibration,
+      level: read && calibration === 'ready'
+        ? { k: point!.k!, n: point!.videos!, pct: pctOf(point!.k, point!.videos) }
+        : null,
+      note: railNote(calibration, read),
+      selected: s.id === selectedId,
+      href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
+    }
+  })
+
+  const list: SubjectListBlock = {
+    rows: rail,
+    proposed: proposed.map((s) => ({ id: s.id, name: s.name, because: originLine(s.origin) })),
+    rule: SUPERSEDE_RULE,
+    notRecorded: subjectRows == null
+      ? 'Your subjects are not recorded for this workspace yet.'
+      : null,
+    setLine: setLine(active.length, proposed.length),
+  }
+
+  let selected: SubjectPane | null = null
+  const subject = selectedId ? active.find((s) => s.id === selectedId) ?? null : null
+  if (subject) {
+    const sides = buildSides({
+      subject,
+      rivals,
+      leadRival,
+      month,
+      prevMonth,
+      axis: readAxis,
+      perAudience,
+      kindRows,
+      seriesFor,
+      thin,
+    })
+    const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null)
+
+    const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'subjects')
+    const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
+    const [voices, unanswered] = await Promise.all([
+      loadVoices(supabase, clientId, brand, memberIds ?? []),
+      loadUnanswered(supabase, clientId, memberIds ?? [], {
+        window: { from: window.from, to: window.to },
+        population: perAudience.get(`${month}|${INDUSTRY_AUDIENCE}`) ?? null,
+        monthLabel: monthName(month).split(' ')[0],
+      }),
+    ])
+
+    const move = (moveRows ?? []).find((m) => m.subject_id === subject.id) ?? null
+    const own = sides.find((s) => s.kind === 'you') ?? null
+    selected = {
+      id: subject.id,
+      name: subject.name,
+      description: subject.description,
+      namedAt: subject.named_at,
+      origin: subject.origin,
+      calibration: subjectCalibration(subject),
+      index: active.findIndex((s) => s.id === subject.id) + 1,
+      of: active.length,
+      sides,
+      series,
+      voices: voices.voices,
+      voicesFrom: voices.from,
+      unanswered,
+      move: move
+        ? { id: move.id, title: move.title, declaredAt: move.declared_at, status: move.status }
+        : null,
+      behind: own && own.k != null && own.k > 0
+        ? { videos: own.k, href: `/dashboard/videos?subject=${encodeURIComponent(subject.id)}` }
+        : null,
+      axisNote: axisNote(sides, FLOOR_N),
+      notRecorded: subjectSet?.numeratorSubstrate === 'missing'
+        ? 'This subject has no monthly reading recorded for this workspace yet.'
+        : null,
+    }
+    void themedRunId
+  }
+
+  // ── the record ────────────────────────────────────────────────────────
+  const pageVerdicts = (selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
+  const recordInputs = await loadRecordInputs(
+    reading.client,
+    clientId,
+    recordWindow(month, readingAt),
+    { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
+  )
+
+  return {
+    brand,
+    month,
+    monthStatus,
+    readingAt,
+    horizon,
+    window,
+    axis,
+    substrate: subjectSet?.numeratorSubstrate ?? history.substrate,
+    notes: subjectSet?.notes ?? history.notes,
+    list,
+    selected,
+    record: {
+      line: howSoundLine(recordInputs),
+      lines: recordLines(recordInputs),
+      href: '/dashboard/settings',
+      freezesOn: freezesOn(month),
+    },
+  }
+}
+
+/** The denominator floor a side is called hollow against — `SHARE_BAND.minN`,
+ *  the same 100 videos every other reading uses. Restated as a number here so
+ *  the axis note does not import the band module for one field. */
+const FLOOR_N = 100
+
+function previousMonthOf(month: string): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  d.setUTCMonth(d.getUTCMonth() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+interface SidesInput {
+  subject: Subject
+  rivals: readonly TrackedRival[]
+  leadRival: TrackedRival | null
+  month: string
+  prevMonth: string
+  axis: readonly string[]
+  perAudience: Map<string, number>
+  kindRows: StoredKindRow[] | null
+  seriesFor: (subjectId: string, audience: string) => MonthSeries | null
+  thin: boolean
+}
+
+/**
+ * You, each rival and the category, as the three sides of one subject.
+ *
+ * WHAT A SIDE MAY CARRY IS DECIDED BY ITS OWN n, NOT BY THE PAGE'S. On the
+ * paying tenant your own audience carries 84 videos in a month and the category
+ * 1,388, so the category is the only side of the three that can carry a monthly
+ * change — and a page that printed the same verdict shape on all three would
+ * print "too little data" on two of them for ever without saying why. The level
+ * is real on every side and is always shown; the CHANGE is drawn where the band
+ * can be, and `axisNote` says in one sentence which lines those are.
+ */
+export function buildSides(input: SidesInput): SubjectSide[] {
+  const { subject, month, prevMonth, axis, perAudience, thin } = input
+  const sides: { audience: string; label: string; kind: SubjectSide['kind']; color: string }[] = [
+    { audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)' },
+    ...input.rivals.map((r) => ({
+      audience: rivalKey(r.name),
+      label: r.retiredAt ? `${r.name} — stopped` : r.name,
+      kind: 'rival' as const,
+      color: 'var(--comp)',
+    })),
+    { audience: INDUSTRY_AUDIENCE, label: audienceLabel(INDUSTRY_AUDIENCE), kind: 'category', color: 'var(--cat)' },
+  ]
+
+  const kindsFor = (audience: string): { kinds: KindShare[]; reddit: RedditRead | null } => {
+    if (input.kindRows == null) return { kinds: [], reddit: null }
+    const n = perAudience.get(`${month}|${audience}`) ?? null
+    const rowsHere = input.kindRows.filter((r) => monthStartOf(r.month) === month && r.audience === audience)
+    if (n == null || rowsHere.length === 0) return { kinds: [], reddit: null }
+    const shares = kindShares(
+      rowsHere.map((r) => ({ kind: r.kind, videos: r.videos, comments: r.comments, ...(r.platform_mix ? { platform_mix: r.platform_mix } : {}) })),
+      n,
+    )
+    return { kinds: shares, reddit: redditRead(shares) }
+  }
+
+  return sides.map((s) => {
+    const series = input.seriesFor(subject.id, s.audience)
+    const byMonth = series ? pointsByMonth(series) : new Map()
+    const here = byMonth.get(month) ?? null
+    const before = byMonth.get(prevMonth) ?? null
+    const n = perAudience.get(`${month}|${s.audience}`) ?? null
+    const k = here?.k ?? null
+    const observed = n != null && k != null
+
+    const point = (m: string): SeriesPoint => {
+      const p = byMonth.get(m) ?? null
+      return {
+        month: m,
+        videos: perAudience.get(`${m}|${s.audience}`) ?? null,
+        k: p?.k ?? null,
+        audience: s.audience,
+        // A subject's membership is not a clustering artefact, so its months
+        // are comparable across a boundary a theme's are not.
+        regime: 'n/a',
+      }
+    }
+    const verdict = thin || !observed
+      ? null
+      : monthChange({
+          object: { kind: 'subject', id: subject.id, label: subject.name },
+          audience: s.audience,
+          curr: point(month),
+          prev: point(prevMonth),
+        })
+    const { kinds, reddit } = kindsFor(s.audience)
+    return {
+      audience: s.audience,
+      label: s.label,
+      kind: s.kind,
+      color: s.color,
+      k,
+      n,
+      pct: pctOf(k, n),
+      observed,
+      verdict,
+      direction: thin ? null : directionWord(axis.map(point)),
+      previous: before ? { month: prevMonth, pct: pctOf(before.k, before.videos) } : null,
+      kinds,
+      reddit,
+    }
+  })
+}
+
+// ---- SU2's voices --------------------------------------------------------------
+
+/**
+ * Six voices on the subject, across the audiences.
+ *
+ * The same gate Overview's two voices pass (`readsAsHeroQuote`, item 8): a
+ * quote that cannot be read is not evidence, and the cache's own language
+ * answer decides rather than a guess about the alphabet. The words themselves
+ * are resolved at render — a snapshot keeps the ref and empties the text
+ * (lib/renderables/quotes-freeze.ts).
+ */
+async function loadVoices(
+  supabase: SupabaseClient,
+  clientId: string,
+  brand: string,
+  insightIds: readonly string[],
+): Promise<{ voices: SubjectVoice[]; from: number }> {
+  if (insightIds.length === 0) return { voices: [], from: 0 }
+  const ids = [...insightIds].slice(0, 400)
+  const citations = await fetchQuoteCitationsByAudience(supabase, ids)
+
+  const pool: QuoteCitation[] = []
+  const seen = new Set<string>()
+  for (const id of ids) {
+    for (const c of (citations.get(id) ?? []).sort((a, b) => a.rank - b.rank)) {
+      const text = cleanQuote(c.quote)
+      const key = text.toLowerCase()
+      if (!text || seen.has(key)) continue
+      if (!readsAsHeroQuote(text, c)) continue
+      seen.add(key)
+      pool.push({ ...c, quote: text })
+    }
+  }
+  if (pool.length === 0) return { voices: [], from: 0 }
+
+  const commentIds = pool.map((c) => c.commentId).filter((id): id is string => Boolean(id)).slice(0, 400)
+  type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
+  const meta = new Map<string, CommentMeta>()
+  if (commentIds.length > 0) {
+    const res = await supabase
+      .from('comments')
+      .select('id, platform, comment_date, video_id, comment_id')
+      .eq('client_id', clientId)
+      .in('id', commentIds)
+    for (const c of rows<CommentMeta & { id: string }>(res, 'subjects.voiceComments')) meta.set(c.id, c)
+  }
+
+  const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
+  const urlByKey = new Map<string, string>()
+  const audienceByKey = new Map<string, string>()
+  if (nativeIds.length > 0) {
+    const res = await supabase
+      .from('videos')
+      .select('platform, video_id, video_url, is_client, is_competitor, competitor_name')
+      .eq('client_id', clientId)
+      .in('video_id', nativeIds)
+    type V = { platform: string | null; video_id: string | null; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }
+    for (const v of rows<V>(res, 'subjects.voiceVideos')) {
+      if (!v.video_id) continue
+      const key = `${v.platform}::${v.video_id}`
+      if (v.video_url) urlByKey.set(key, v.video_url)
+      audienceByKey.set(
+        key,
+        v.is_client ? CLIENT_AUDIENCE : v.is_competitor ? rivalKey(v.competitor_name ?? 'unknown') : INDUSTRY_AUDIENCE,
+      )
+    }
+  }
+
+  // Grouped by the audience the quote was HEARD in, then drawn round-robin so
+  // one loud side cannot fill the list.
+  const byAudience = new Map<string, QuoteCitation[]>()
+  for (const c of pool) {
+    const m = c.commentId ? meta.get(c.commentId) : undefined
+    const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+    const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
+    byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
+  }
+  const order = [CLIENT_AUDIENCE, ...[...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort(), INDUSTRY_AUDIENCE]
+  const shown = voicesAcross(
+    order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
+  )
+
+  const voices = shown.map((c) => {
+    const m = c.commentId ? meta.get(c.commentId) : undefined
+    const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+    const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
+    const from = voiceFrom(audience, brand)
+    const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, from]
+      .filter(Boolean).join(' · ')
+    const url = key ? urlByKey.get(key) ?? null : null
+    return {
+      quote: {
+        ref: quoteRef.evidence(c.evidenceId),
+        text: c.quote,
+        ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+      } as Quote,
+      cite,
+      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
+      from,
+    }
+  })
+  return { voices, from: pool.length }
+}
+
+// ---- SU3 -----------------------------------------------------------------------
+
+interface UnansweredInput {
+  window: { from: string; to: string }
+  population: number | null
+  monthLabel: string
+}
+
+/**
+ * Questions the category asks on this subject that your posts never answer.
+ *
+ * COUNTS, NOT SHARES, and the reason is on the module header: the k here is
+ * taken from the current analysis and every other n on this page is
+ * comment-dated. The gate is the design's — fewer than ten question videos on
+ * the subject and the block says so rather than ranking noise.
+ */
+async function loadUnanswered(
+  supabase: SupabaseClient,
+  clientId: string,
+  insightIds: readonly string[],
+  input: UnansweredInput,
+): Promise<UnansweredBlock> {
+  const empty: UnansweredBlock = {
+    rows: [], questionVideos: 0, population: input.population, yourPosts: 0,
+    lead: null, basis: UNANSWERED_BASIS, reddit: null, refusal: null,
+  }
+  if (insightIds.length === 0) {
+    return { ...empty, refusal: 'Nothing has been matched to this subject yet.' }
+  }
+
+  // Id-set lookup on the base table: a membership row cascades with its
+  // insight, so every id that resolves is live (AGENTS.md).
+  const insights = await selectAll<InsightRow>(() =>
+    supabase
+      .from('audience_insights')
+      .select('id, category, theme, source_video_id')
+      .eq('client_id', clientId)
+      .eq('category', 'question')
+      .in('id', [...insightIds].slice(0, 1000))
+      .order('id', { ascending: true }),
+  )
+  const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
+  if (videoIds.length === 0) {
+    return { ...empty, refusal: 'Nobody has asked a question about this subject in the videos we have read.' }
+  }
+
+  const videos = await selectAll<VideoRow>(() =>
+    supabase
+      .from('videos')
+      .select('id, platform, is_client, is_competitor, competitor_name, topics, upload_date')
+      .eq('client_id', clientId)
+      .in('id', videoIds)
+      .order('id', { ascending: true }),
+  )
+  const byId = new Map(videos.map((v) => [v.id, v]))
+
+  // Your own posts in the drawn window, and what they are about.
+  const ownVideos = await selectAll<VideoRow>(() =>
+    supabase
+      .from('videos')
+      .select('id, platform, is_client, is_competitor, competitor_name, topics, upload_date')
+      .eq('client_id', clientId)
+      .eq('is_client', true)
+      .gte('upload_date', input.window.from.slice(0, 10))
+      .lt('upload_date', input.window.to.slice(0, 10))
+      .order('id', { ascending: true }),
+  )
+  const ownClaims = ownVideos.length > 0
+    ? await selectAll<{ claim: string }>(() =>
+        supabase
+          .from('video_claims')
+          .select('claim, source_video_id')
+          .eq('client_id', clientId)
+          .in('source_video_id', ownVideos.map((v) => v.id).slice(0, 1000))
+          .order('id', { ascending: true }),
+      )
+    : []
+  const haystack = [
+    ...ownVideos.flatMap((v) => v.topics ?? []),
+    ...ownClaims.map((c) => c.claim),
+  ]
+
+  // One row per question, keyed on the insight's own short label. Themes are
+  // not used as the key here for the reason AGENTS.md gives: a theme label
+  // churns ~88% run to run, and this list is read against your own posts, not
+  // against last month's list.
+  const groups = new Map<string, { label: string; videos: Set<string>; reddit: Set<string> }>()
+  const nonOwned = new Set<string>()
+  for (const i of insights) {
+    const v = i.source_video_id ? byId.get(i.source_video_id) : null
+    if (!v || v.is_client) continue
+    nonOwned.add(v.id)
+    const label = (i.theme ?? '').trim()
+    if (!label) continue
+    const key = label.toLowerCase()
+    const g = groups.get(key) ?? { label, videos: new Set<string>(), reddit: new Set<string>() }
+    g.videos.add(v.id)
+    if ((v.platform ?? '').toLowerCase() === 'reddit') g.reddit.add(v.id)
+    groups.set(key, g)
+  }
+
+  const questionVideos = nonOwned.size
+  if (questionVideos < UNANSWERED_GATE) {
+    return {
+      ...empty,
+      questionVideos,
+      yourPosts: ownVideos.length,
+      refusal:
+        `${fmtInt(questionVideos)} video${questionVideos === 1 ? '' : 's'} asked something about this subject — ` +
+        `we do not rank a gap under ${fmtInt(UNANSWERED_GATE)}.`,
+    }
+  }
+
+  const ranked = [...groups.values()]
+    .sort((a, b) => b.videos.size - a.videos.size || a.label.localeCompare(b.label))
+    .map((g) => ({
+      id: g.label.toLowerCase(),
+      label: g.label,
+      videos: g.videos.size,
+      reddit: g.reddit.size,
+      answered: answeredBy(g.label, haystack),
+      href: null,
+    }))
+  const shown = ranked.filter((r) => !r.answered).slice(0, UNANSWERED_SHOWN)
+  const redditVideos = [...groups.values()].reduce((n, g) => n + g.reddit.size, 0)
+
+  return {
+    rows: shown,
+    questionVideos,
+    population: input.population,
+    yourPosts: ownVideos.length,
+    lead: unansweredLead(shown, ownVideos.length, input.monthLabel),
+    basis: UNANSWERED_BASIS,
+    reddit: redditVideos > 0 ? REDDIT_THREAD_CAP : null,
+    refusal: shown.length === 0
+      ? 'Your posts touch every question the category asks on this subject.'
+      : null,
+  }
+}
+
+// ---- what the blocks declare ----------------------------------------------------
+
+/** The figures the selected subject's hero prints, by token. */
+export function sideFigures(pane: SubjectPane | null): FigureTable {
+  const out: FigureTable = {}
+  if (!pane) return out
+  for (const s of pane.sides) {
+    if (s.pct == null || s.k == null || s.n == null) continue
+    const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`
+    out[`${token}_share`] = { value: s.pct, unit: 'pct', label: `${pane.name}, ${s.label}'s share this month` }
+    out[`${token}_videos`] = { value: s.k, unit: 'videos', label: `${pane.name}, ${s.label}'s videos this month` }
+  }
+  return out
+}
