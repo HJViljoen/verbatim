@@ -10,6 +10,12 @@ import { PrintTile } from '@/components/print/print-tile'
 import { ReportDeck } from '@/components/print/report-deck'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { weeklyBlocksFor } from '@/components/blocks/weekly'
+import { blockContext } from '@/lib/blocks/types'
+import { EMAIL } from '@/lib/email/theme'
+import { appBaseUrl } from '@/lib/site'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { MethodNote, type MethodNoteData } from '@/components/print/method-note'
@@ -43,6 +49,25 @@ export default async function RenderPage({
   // component composes them; hydration is the same walk as for a page.
   if (row.kind === 'report') {
     const data = await hydrateSnapshot<ReportSnapshotData>(admin, row)
+    // A weekly report (Phase 1 WP17): six blocks over one reading, no page
+    // sections. Its tile key is a BLOCK key, and the block renders itself —
+    // there is no page module to look one up in.
+    if (isWeeklyData(data)) {
+      if (token.tileKey) {
+        const block = weeklyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <WeeklyDeck data={data} />
+        </PrintRoot>
+      )
+    }
     // A document (2026-08-31): written pages, no sections, no tiles. Its
     // workings were never selected, so nothing here can print them.
     if (isDocumentData(data)) {

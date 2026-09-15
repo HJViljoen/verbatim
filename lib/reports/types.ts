@@ -148,6 +148,11 @@ export interface ReportTemplate {
   /** One line for the picker: who it is for and what it holds. */
   description: string
   sections: Omit<ReportSection, 'id'>[]
+  /** Retired (Phase 1 WP17): still RESOLVABLE, because stored schedules name
+   *  it and must keep sending exactly what they sent — but never offered for a
+   *  new report. `starterTemplates()` is the picker's list; `starterTemplate()`
+   *  is the resolver and answers retired keys too. */
+  retired?: boolean
 }
 
 /** One frozen section inside a report snapshot. `data` is the page loader's

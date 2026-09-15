@@ -34,6 +34,11 @@ export interface ScheduleRow {
   review: boolean
   /** The workspace's digest: the schedule an accepted invite joins. */
   is_default: boolean
+  /** Which artefact this schedule sends — `weekly` | `monthly` | `quarterly` |
+   *  `brief:<audience>` (M8, WP16). OPTIONAL because the column is not applied
+   *  yet: `lib/schedules/artefact.ts` falls back to the starter key until it
+   *  is, and a row that answers nothing sends exactly what it sent before. */
+  artefact?: string | null
   last_sent_at: string | null
   created_by: string | null
   created_at: string

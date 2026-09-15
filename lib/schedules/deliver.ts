@@ -8,6 +8,8 @@ import { memberEmails } from './members'
 import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
+import { isWeeklyData } from '../reports/weekly-build'
+import { renderWeeklyEmail } from '../email/weekly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -74,7 +76,9 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isDocumentData(data)
+  const subject = isWeeklyData(data)
+    ? data.subject
+    : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
     : renderDigestEmail({ data, shareUrl: null, appUrl: a.baseUrl, attached: schedule?.attach_pdf ?? false, cadenceWord: schedule?.cadence === 'monthly' ? 'monthly' : 'weekly' }).subject
 
@@ -193,8 +197,10 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // A written report carries no inline tile pictures: its pages are the
     // report, and the email is the way in.
     const document = isDocumentData(data) ? data : null
+    // A weekly artefact says every number in words and asks for no PNGs.
+    const weekly = isWeeklyData(data) ? data : null
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
-    const imageTiles = document ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = document || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
@@ -255,9 +261,11 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       images[k] = `cid:${cid}`
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
-    const email = document
-      ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
-      : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
+    const email = weekly
+      ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : document
+        ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
     const attachments = pruneInlineImages(email.html, inline)
     if (schedule.attach_pdf) attachments.push({ filename: pdfFilename, content: rendered[0].buffer, contentType: 'application/pdf' })
     const { sent } = await sendReportEmail({ to, subject: email.subject, html: email.html, text: email.text, attachments })

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCHEDULE_RECIPIENTS_MAX } from '../config'
 import { recordConfigChange, scriptActor, type ConfigActor } from '../config-log'
+import { WEEKLY_STARTER_KEY } from './artefact'
 import { normaliseRecipients } from './validate'
 import type { ScheduleRow } from './types'
 
@@ -21,8 +22,13 @@ import type { ScheduleRow } from './types'
  * no person to name.
  */
 
-export const DEFAULT_SCHEDULE_NAME = 'Weekly digest'
-export const DEFAULT_SCHEDULE_STARTER = 'weekly_digest'
+// THE NEW WORKSPACE GETS THE WEEKLY REPORT (Phase 1 WP17). The digest is
+// retired; a workspace created from here on is born on the artefact the design
+// asks for — "a weekly report goes to everyone, every update". Existing rows
+// are untouched: `ensureDefaultSchedule` returns the row it finds, and an
+// operator migrates a live schedule with scripts/migrate-schedule-keys.ts.
+export const DEFAULT_SCHEDULE_NAME = 'Weekly report'
+export const DEFAULT_SCHEDULE_STARTER = WEEKLY_STARTER_KEY
 
 /** Create the default schedule if the workspace has none; returns the row either way. */
 export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: string, recipients: string[] = [], createdBy: string | null = null, actor?: ConfigActor): Promise<ScheduleRow> {
