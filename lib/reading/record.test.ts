@@ -15,6 +15,7 @@ import {
   type RecordInputs,
 } from './record'
 import type { Verdict } from './verdicts'
+import { directionRe } from '../test/copy-contract'
 
 const inputs = (over: Partial<RecordInputs> = {}): RecordInputs => ({
   window: { kind: 'month', from: '2026-09-01', to: '2026-09-30' },
@@ -170,6 +171,9 @@ describe('recordLines — every fact with its basis', () => {
     expect(has('2 comparisons on this page could not be drawn and say why in their place')).toBe(true)
     expect(recordLines(inputs({ comparisonsRefused: 1 }))
       .some((l) => l.includes('1 comparison on this page could not be drawn and says why in its place'))).toBe(true)
+    expect(recordLines(inputs({ changes: { inWindow: 2, loggedFrom: '2026-09-15', reconstructed: 9 } }))
+      .some((l) => l.includes('2 changes to what we track were made inside this window'))).toBe(true)
+    expect(has('1 change to what we track was made inside this window')).toBe(true)
   })
 
   it('counts one theme per video as one theme, not "1 themes"', () => {
@@ -179,6 +183,14 @@ describe('recordLines — every fact with its basis', () => {
     expect(has('2.4 themes attached per analysed video')).toBe(true)
   })
 
+  it('names no direction word — the record is prose, not a verdict', () => {
+    // Block rule (c): a direction word outside a verdict node fails the copy
+    // contract, and WP9/WP10 render the record into a block. "fell inside this
+    // window" was the breach.
+    for (const line of recordLines(inputs({ comparisonsRefused: 1, changes: { inWindow: 3, loggedFrom: '2026-09-15', reconstructed: 9 } }))) {
+      expect({ line, hits: [...line.matchAll(directionRe())].map((m) => m[0]) }).toEqual({ line, hits: [] })
+    }
+  })
 })
 
 describe('isMissingThemeMembers — "M2 is not applied" and nothing else', () => {

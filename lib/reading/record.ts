@@ -740,7 +740,14 @@ export function recordLines(input: RecordInputs): string[] {
 
   const c = input.changes
   lines.push(
-    c.inWindow === 0 ? 'Nothing about what we track changed in this window.' : `${plural(c.inWindow, 'change')} to what we track fell inside this window.`,
+    // NOT "fell inside this window". `fell` is a direction word to the block
+    // copy contract (rule (c): no direction word outside a verdict), the record
+    // is prose and not a verdict, and WP9/WP10 render it into a block — so the
+    // sentence would land as a red build. The idiom is also the one
+    // copy-contract deliberately keeps bare `fall` out of the list for.
+    c.inWindow === 0
+      ? 'Nothing about what we track changed in this window.'
+      : `${plural(c.inWindow, 'change')} to what we track ${c.inWindow === 1 ? 'was' : 'were'} made inside this window.`,
   )
   lines.push(
     c.loggedFrom == null
