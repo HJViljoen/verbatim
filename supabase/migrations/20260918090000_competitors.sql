@@ -245,7 +245,22 @@ select d.client_id, d.name, public.rival_slug(d.name), d.seen_at,
  where public.rival_slug(d.name) is not null
    and not exists (
      select 1 from public.competitors c
-      where c.client_id = d.client_id and c.slug = public.rival_slug(d.name));
+      where c.client_id = d.client_id and c.slug = public.rival_slug(d.name))
+   -- A name this tenant has RENAMED AWAY is not a missing identity — it is the
+   -- old spelling of a live one. rename_rival rewrites competitors.slug in
+   -- place while month_denominators.audience and keyword_performance keep the
+   -- old string by design, so the evidence union above still finds the old
+   -- name and the NOT EXISTS above, which keys on the slug, no longer sees a
+   -- row for it. Re-applying this file after a rename (a rebuilt environment,
+   -- a db push replay, a fresh branch) would then mint a GHOST: a retired row
+   -- carrying the old slug, outside the partial unique index, and the only row
+   -- that slug resolves to — so findRival would send the rival's frozen months
+   -- to the ghost instead of to the row the rename was supposed to explain.
+   and not exists (
+     select 1 from public.config_changes cc
+      where cc.client_id = d.client_id
+        and cc.surface = 'rival_rename'
+        and cc.affects_audiences[1] = 'competitor:' || d.name);
 
 -- 5. The rename, in one transaction --------------------------------------------
 -- Five writes have to land together or not at all: the identity, the tracked
