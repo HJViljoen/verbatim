@@ -27,7 +27,7 @@ import {
   type UpdateSize,
 } from '../reading/anomaly'
 import { SLICE } from '../reading/coverage'
-import { kindLabel } from '../reading/kinds'
+import { preRegisteredKind } from '../reading/kinds'
 import {
   isMissingMonthTable,
   monthStartOf,
@@ -1292,14 +1292,17 @@ export async function buildReading(
 
   const candidates: PreRegisteredObject[] = []
   for (const kind of KIND_SET) {
-    candidates.push({
-      kind: 'kind',
-      id: kind,
-      label: kindLabel(kind),
-      denominator: SLICE,
+    // Through `preRegisteredKind`, which WP5 built as "the seam with the
+    // anomaly check" so a flag and a chart are built from the same rows and can
+    // never disagree. This loop hand-rolled a structural twin of it — a seam
+    // that only happens to line up is a seam that compiles until the day it
+    // does not.
+    candidates.push(preRegisteredKind({
+      kind,
+      audience: SLICE,
       weekVideos: weekKindVideos.get(kind) ?? 0,
       months: baselineKinds.get(kind) ?? [],
-    })
+    }))
   }
   for (const rival of rivals.filter((r) => !r.retired_at)) {
     // `rivalKey`, not the prefix by hand: WP1 pinned it as the ONE fold and it
