@@ -499,6 +499,16 @@ describe('the mirror in the migration — the two have to keep saying the same t
     expect(sql).not.toMatch(/grant delete[^;]*rec_decisions/i)
   })
 
+  it('takes update and delete off the service role, which the default ACL hands it', () => {
+    // This project's pg_default_acl grants arwdDxtm on every new public table to
+    // anon, authenticated AND service_role. Revoking from the first two leaves
+    // append-only true only of the roles RLS already governs — and the service
+    // role is the one that bypasses RLS. A plain Postgres cluster has no such
+    // default ACL, so a local exercise of this file cannot catch it.
+    expect(sql).toMatch(/revoke update, delete, truncate on public\.rec_decisions from service_role;/)
+    expect(sql).toMatch(/grant select, insert on public\.rec_decisions to service_role;/)
+  })
+
   it('backfills the lineage so NULL stops meaning two different things', () => {
     expect(sql).toMatch(/update public\.recommendations set lineage_id = id where lineage_id is null;/)
   })

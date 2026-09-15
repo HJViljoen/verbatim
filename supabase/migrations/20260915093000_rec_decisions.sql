@@ -25,11 +25,21 @@
 -- because `pipeline_runs` rows are not churned and a decision outliving its
 -- update is the normal case.
 --
--- APPEND-ONLY. Members select and insert; nobody updates or deletes. A decision
--- that can be edited afterwards is not a ledger, and "they marked this Done
--- three weeks ago" has to be answerable from what was written at the time.
--- `id` and `decided_at` are not in the insert grant, so a client cannot backdate
--- a decision or overwrite one by reusing its id.
+-- APPEND-ONLY, AND SAID TO EVERY ROLE. Members select and insert; nobody
+-- updates or deletes — the pipeline's service role included. A decision that
+-- can be edited afterwards is not a ledger, and "they marked this Done three
+-- weeks ago" has to be answerable from what was written at the time. `id` and
+-- `decided_at` are not in the insert grant, so a client cannot backdate a
+-- decision or overwrite one by reusing its id.
+--
+-- The service role needs saying out loud because this project's `pg_default_acl`
+-- grants `arwdDxtm` on every new public table to anon, authenticated AND
+-- service_role. Revoking from the first two (which RLS covers anyway) while
+-- leaving the third would make append-only a property of the application rather
+-- than of the database — and the service role is the one that bypasses RLS.
+-- Deleting a tenant still takes their decisions with them: the cascade from
+-- `clients` is a referential action, which is not permission-checked against
+-- the role doing the delete.
 
 -- 1. The ledger -----------------------------------------------------------------
 create table if not exists public.rec_decisions (
@@ -96,6 +106,13 @@ grant insert (client_id, lineage_id, recommendation_id, run_id, status, decided_
 -- and a silent "permission denied" there would carry no status forward while
 -- the browser half kept working.
 grant select, insert on public.rec_decisions to service_role;
+-- And the other half of stating it. This project's default ACL hands every new
+-- public table to service_role with all privileges, so append-only is only true
+-- of the role that bypasses RLS if it is taken away here. Nothing in the repo
+-- updates or deletes a decision; if something ever must, it is a migration and a
+-- conversation, not a quiet write. TRUNCATE goes with them — emptying the ledger
+-- in one statement is the same act as deleting it row by row.
+revoke update, delete, truncate on public.rec_decisions from service_role;
 
 -- 3. Backfill — NULL stops meaning two different things --------------------------
 -- 111 of 121 recommendations predate the 2026-09-12 lineage migration, so a NULL
@@ -113,4 +130,8 @@ update public.recommendations set lineage_id = id where lineage_id is null;
 --   select policyname, cmd from pg_policies where tablename = 'rec_decisions';  -- SELECT + INSERT only
 --   select column_name, privilege_type from information_schema.column_privileges
 --     where table_name = 'rec_decisions' and grantee = 'authenticated' order by 2, 1;
+--   select grantee, privilege_type from information_schema.table_privileges
+--     where table_name = 'rec_decisions' order by 1, 2;
+--     -- service_role: SELECT + INSERT only. UPDATE or DELETE here means the
+--     -- revoke above did not run, and append-only is application-level again.
 --   select indexname from pg_indexes where tablename = 'rec_decisions';
