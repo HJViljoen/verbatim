@@ -1,5 +1,4 @@
-import { SurfacePageBar } from '@/components/shell/page-bar'
-import { PageFrame, PageGrid } from '@/components/shell/page-grid'
+import { PageBar, PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import { surface, type NavKey } from '@/lib/nav'
 
@@ -21,7 +20,11 @@ export function SurfaceShell({ nav }: { nav: NavKey }) {
   const s = surface(nav)
   return (
     <PageFrame>
-      <SurfacePageBar nav={nav} />
+      {/* The bare bar, not SurfacePageBar: a horizon control on a page that
+          reads no months would be a control that changes nothing, and this
+          product does not print controls that do not work. The filled page
+          brings its own bar with it. */}
+      <PageBar title={s.label} subtitle={s.question ?? undefined} />
       <PageGrid>
         <Tile col={12} row={2} eyebrow={s.label}>
           <TileEmpty>This page is still being built — nothing here is a reading yet.</TileEmpty>

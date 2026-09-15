@@ -21,7 +21,10 @@ import { Card, CardContent } from '@/components/ui/card'
 
 export function HowSound({ basePath, line, lines }: { basePath: string; line: string; lines: string[] }) {
   const sp = useSearchParams()
-  const isOpen = sp.get('detail') === 'record'
+  // Optional chaining: the hook returns null wherever there is no router —
+  // a static render in a test or a script — and a page bar that throws
+  // outside Next is a page bar nothing can check.
+  const isOpen = sp?.get('detail') === 'record'
   // The pill wears the short head of the line — the counter, not the sentence —
   // and the whole sentence is its title, so a bar at phone width never wraps.
   const head = line.split(' · ')[0]
