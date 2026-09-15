@@ -1336,12 +1336,20 @@ export async function buildReading(
       months: baselineSubjects.get(subject.id) ?? [],
     })
   }
-  const labelOf = new Map(themeLabels.map((t) => [t.id, t.canonical_label ?? '(unlabelled)']))
+  // PLAIN WORDS, NEVER AN ID. This label is written to anomaly_flags.label,
+  // becomes the model's figure labels and the object name in the explanation,
+  // and reaches the readiness row as "the most recent …". A uuid prefix on a
+  // client's page is the purest form of the jargon the calibration bans, and
+  // "(unlabelled)" is only half a sentence. Latent today — 2,957
+  // month_theme_readings rows, 0 whose theme_id is absent from that client's
+  // theme_registry and 0 with a null or blank canonical_label — and one line.
+  const UNNAMED = 'a theme we have not named yet'
+  const labelOf = new Map(themeLabels.map((t) => [t.id, t.canonical_label?.trim() || UNNAMED]))
   for (const [themeId, monthsOf] of baselineThemes) {
     candidates.push({
       kind: 'theme',
       id: themeId,
-      label: labelOf.get(themeId) ?? themeId.slice(0, 8),
+      label: labelOf.get(themeId) ?? UNNAMED,
       denominator: SLICE,
       weekVideos: weekThemeVideos.get(themeId) ?? 0,
       months: monthsOf,
