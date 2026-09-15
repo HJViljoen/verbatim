@@ -423,6 +423,87 @@ $$;
 comment on function public.subject_retirement_freeze() is
   'Freezes a retired subject''s still-filling months at the moment of retirement. A retired subject is not re-judged, so its membership decays with every Pass A prune; leaving its open months to be recomputed would freeze them at a number the client never saw.';
 
+-- EVERY STATUS WRITE CARRIES AN ACTOR, AND THE TRIGGER IS WHERE IT IS TAKEN.
+-- The freeze below is SECURITY DEFINER and permanently closes months; the write
+-- that fires it is a member PATCH on `subjects.status`, which the update grant
+-- and the "Members retire their subjects" policy allow straight through
+-- PostgREST. subjects carries no audit trigger — tracking_configs_audit is the
+-- only one in the schema — so lib/subjects/moves.ts's own recordConfigChange
+-- was bypassed by a browser talking to the API directly and nothing recorded
+-- who closed the months, or when.
+--
+-- AGENTS.md: a surface the trigger cannot see must call recordConfigChange.
+-- This is the other half of that rule — a surface the trigger CAN see is logged
+-- here, once, and the application stops logging it, so a retirement is one row
+-- however it arrived.
+--
+-- ATTRIBUTION COMES FROM IDENTITY, never from a payload, which is the
+-- tracking_configs_audit rule and the reason this is stronger than the
+-- application call it replaces: the person is auth.uid(), the label their
+-- stored email, and 'operator' survives only for a real platform_admins row.
+create or replace function public.subjects_status_audit()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_uid    uuid := null;
+  v_caller text;
+  v_kind   text;
+  v_user   uuid := null;
+  v_label  text := null;
+begin
+  begin v_uid := auth.uid(); exception when others then v_uid := null; end;
+  -- Not `current_user`: inside SECURITY DEFINER that names the owner, so every
+  -- caller would read as `postgres`.
+  begin v_caller := nullif(auth.role(), ''); exception when others then v_caller := null; end;
+  v_caller := coalesce(v_caller, session_user);
+
+  if v_caller = 'authenticated' then
+    v_user := v_uid;
+    v_kind := case
+                when v_uid is not null
+                 and exists (select 1 from public.platform_admins pa where pa.user_id = v_uid)
+                then 'operator' else 'user'
+              end;
+    begin v_label := nullif(auth.jwt() ->> 'email', ''); exception when others then v_label := null; end;
+    v_label := coalesce((select u.email from public.users u where u.id = v_uid), v_label, v_caller);
+  else
+    -- service_role covers the operator scripts and the pipeline alike, and hand
+    -- run SQL is neither. Indistinguishable here, which is what 'script' and
+    -- 'sql' say.
+    v_kind  := case v_caller when 'service_role' then 'script' else 'sql' end;
+    v_label := v_caller;
+  end if;
+  if v_user is not null and not exists (select 1 from public.users u where u.id = v_user) then
+    v_user := null;
+  end if;
+
+  insert into public.config_changes
+    (client_id, surface, field, before, after, actor_kind, actor_user_id, actor_label, source, note)
+  values (
+    NEW.client_id, 'subjects', 'subjects',
+    jsonb_build_object('id', NEW.id, 'name', NEW.name, 'status', OLD.status),
+    jsonb_build_object('id', NEW.id, 'name', NEW.name, 'status', NEW.status, 'superseded_by', NEW.superseded_by),
+    v_kind, v_user, v_label, 'trigger',
+    case when NEW.status = 'retired'
+      then 'Retiring a subject freezes every month it still had open, and a frozen monthly reading is never rewritten.'
+      else null end
+  );
+  return null;  -- AFTER trigger: the return value is ignored
+end
+$$;
+
+comment on function public.subjects_status_audit() is
+  'Logs every change to subjects.status into config_changes, with the actor taken from identity rather than from a payload. Retiring a subject permanently freezes its open months, and the write that does it is a member PATCH the application cannot intercept — so the record of who did it belongs here, where nothing can go round it.';
+
+drop trigger if exists subjects_status_audit on public.subjects;
+create trigger subjects_status_audit
+  after update of status on public.subjects
+  for each row when (new.status is distinct from old.status)
+  execute function public.subjects_status_audit();
+
 -- RETIREMENT IS FINAL, AND THE DATABASE SAYS SO. The freeze above is
 -- irreversible by design — a frozen monthly reading is never rewritten, and
 -- `month_reading_frozen_guard` refuses the UPDATE — so re-activating a retired

@@ -384,14 +384,11 @@ export async function activateSubject(
     .eq('id', input.id)
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
 
-  await recordConfigChange(admin, {
-    clientId: ctx.clientId,
-    surface: 'subjects',
-    field: 'subjects',
-    before: before as Record<string, unknown>,
-    after: { id: input.id, status: 'active' },
-    actor: actorFor(ctx, 'confirmed a subject'),
-  })
+  // NOT LOGGED HERE. `subjects_status_audit` writes the config_changes row for
+  // every status move, from identity, and it cannot be gone round: the update
+  // grant and the "Members retire their subjects" policy make this a PATCH a
+  // browser can send directly, so a log written only on this path was a log
+  // with a hole in it. One row per change, wherever the change came from.
   return { ok: true, message: 'Confirmed. It starts being counted from the next update.', value: null }
 }
 
@@ -420,13 +417,8 @@ export async function retireSubject(
     .eq('id', input.id)
   if (error) return { ok: false, message: `Could not save: ${error.message}` }
 
-  await recordConfigChange(admin, {
-    clientId: ctx.clientId,
-    surface: 'subjects',
-    field: 'subjects',
-    before: before as Record<string, unknown>,
-    after: { id: input.id, status: 'retired', superseded_by: input.supersededBy ?? null },
-    actor: actorFor(ctx, input.supersededBy ? 'replaced a subject' : 'stopped tracking a subject'),
-  })
+  // Logged by `subjects_status_audit`, not here — see confirmSubject. This is
+  // the write that permanently freezes the subject's open months, so the record
+  // of who made it has to sit where nothing can bypass it.
   return { ok: true, message: 'Stopped. The months it already carries keep their line.', value: null }
 }
