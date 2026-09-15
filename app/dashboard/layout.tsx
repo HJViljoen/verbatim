@@ -2,6 +2,7 @@ import { Suspense } from "react"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
+import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
 import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
 import { agentEnabled } from "@/lib/config"
 
@@ -25,6 +26,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         header={
           <Suspense fallback={<SidebarWordmark />}>
             <WorkspaceSwitcherLoader />
+          </Suspense>
+        }
+        ops={
+          <Suspense fallback={null}>
+            <OpsNavLoader />
           </Suspense>
         }
       />
