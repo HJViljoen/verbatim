@@ -40,6 +40,7 @@ export const overviewBar: Block<OverviewData> = {
       return (
         <BlockFrame title={overviewBar.title} mode={mode} meta={meta}>
           <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink }}>{b.line}</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{b.counter}</div>
           {b.updateDates.length > 0 ? (
             <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{b.updateDates.join(' · ')}</div>
           ) : null}
@@ -71,6 +72,10 @@ export const overviewBar: Block<OverviewData> = {
           />
         </div>
         <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
+        {/* THE ONE COUNTER (design §3 OV0). Where this tenant is in the ramp,
+            and the only place the page says it: not the delivery record, which
+            is OV6's, and not a second month label. */}
+        <p className="m-0 text-[11.5px] text-muted-foreground">{b.counter}</p>
       </BlockFrame>
     )
   },

@@ -15,6 +15,7 @@ import {
   medianOf,
   firstHeardThisMonth,
   monthlyLineLabel,
+  readingsCounter,
   moveLine,
   MOVES_EMPTY,
   recordWindow,
@@ -118,6 +119,22 @@ describe('fillingLine', () => {
 
   it('carries no direction word — the badge carries the movement', () => {
     expect(fillingLine(base)).not.toMatch(/\b(growing|fading|rising|falling|flat|steady)\b/i)
+  })
+})
+
+describe('readingsCounter', () => {
+  it('is the design\u2019s one counter, with what the quarter view still needs', () => {
+    expect(readingsCounter(3)).toBe('your 3rd monthly reading · the quarter view needs 6')
+    expect(readingsCounter(1)).toBe('your 1st monthly reading · the quarter view needs 6')
+    expect(readingsCounter(2)).toBe('your 2nd monthly reading · the quarter view needs 6')
+  })
+  it('drops the second clause once the quarter unlocks', () => {
+    expect(readingsCounter(6)).toBe('your 6th monthly reading')
+    expect(readingsCounter(11)).toBe('your 11th monthly reading')
+    expect(readingsCounter(21)).toBe('your 21st monthly reading')
+  })
+  it('says so rather than counting a zeroth reading', () => {
+    expect(readingsCounter(0)).toBe('no monthly reading yet · the quarter view needs 6')
   })
 })
 

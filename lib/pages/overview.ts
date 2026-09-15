@@ -27,8 +27,8 @@ import {
   type AttentionPanel,
   type AttentionRow,
 } from '../reading/attention'
-import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { HORIZON_LABEL, horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
+import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, KIND_ORDER, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
@@ -307,9 +307,13 @@ export interface BarBlock {
   thin: boolean
   /** The still-filling line, composed once. */
   line: string
-  /** "your 3rd monthly reading" — months with a reading, counted. */
+  /** "your 3rd monthly reading" — the months of the GATHERED era that carry a
+   *  reading. Not every stored month: Össur holds 119 denominator months and
+   *  has been gathered for six, and "your 119th monthly reading" is a count of
+   *  what we read back at setup, not of what we have delivered. */
   readings: number
-  horizonLabel: string
+  /** That count as the design's one counter, printed on OV0. */
+  counter: string
 }
 
 export interface RecordBlock {
@@ -467,6 +471,27 @@ export function fillingLine(input: FillingLineInput): string {
   }
   if (input.thin) parts.push('thin month — every change below is suppressed')
   return parts.join(' · ')
+}
+
+/**
+ * OV0's one counter (design §3 OV0: "one counter only").
+ *
+ * "your 3rd monthly reading · the quarter view needs 6" — the one element of
+ * OV0 that tells a new tenant where they are in the ramp, and the disposition
+ * map's home for the old Dashboard's context line (#4, "one counter, not the
+ * delivery record"). The second clause is dropped once the quarter unlocks,
+ * because a need that is met is not news.
+ *
+ * SIX is `QUARTER_UNLOCKS_AT` (lib/reading/bands.ts), not a number typed here:
+ * it is the count of monthly readings a window-against-window comparison needs
+ * behind it before Last 3 may draw one at all.
+ */
+export function readingsCounter(readings: number): string {
+  const n = Math.max(0, Math.floor(readings))
+  const tens = n % 100
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+  const counter = n === 0 ? 'no monthly reading yet' : `your ${fmtInt(n)}${suffix} monthly reading`
+  return n >= QUARTER_UNLOCKS_AT ? counter : `${counter} · the quarter view needs ${QUARTER_UNLOCKS_AT}`
 }
 
 /**
@@ -931,6 +956,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // different things. It is the same era gate `thinMonth`'s updates arm
   // already applies, applied to its median arm.
   const historyMonths = [...denominatorByMonth.keys()].sort()
+  // The counter counts the GATHERED era, for the reason the median does.
+  const readingsSoFar = historyMonths.filter((m) => m >= firstRunMonth && m <= month).length
   const trailing = historyMonths
     .filter((m) => m < month && m >= firstRunMonth)
     .slice(-12)
@@ -966,8 +993,8 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       atLastMonthKnown: lastMonthSoFar.known,
       thin,
     }),
-    readings: denominatorByMonth.size,
-    horizonLabel: HORIZON_LABEL[horizon],
+    readings: readingsSoFar,
+    counter: readingsCounter(readingsSoFar),
   }
 
   // ── OV2 · your subjects ────────────────────────────────────────────────

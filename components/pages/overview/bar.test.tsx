@@ -54,4 +54,10 @@ describe('OV0 · the month so far', () => {
     const data = overviewFixture()
     expect(overviewBar.emptyState({ ...data, bar: { ...data.bar, videos: null } })).toContain('Nothing has been read')
   })
+
+  it('prints the one counter the design asks OV0 for', () => {
+    for (const mode of MODES) {
+      expect(renderText(overviewBar.render(overviewFixture(), mode, ctx)), mode).toContain('your 3rd monthly reading')
+    }
+  })
 })

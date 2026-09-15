@@ -3,7 +3,7 @@ import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
 
 // The Overview's block fixtures (Phase 1 WP11).
 //
@@ -49,7 +49,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     thin: false,
     line: '',
     readings: 3,
-    horizonLabel: 'This month',
+    counter: readingsCounter(3),
   }
   bar.line = fillingLine(bar)
 
