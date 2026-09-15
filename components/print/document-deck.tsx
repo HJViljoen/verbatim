@@ -276,12 +276,19 @@ function CompetitorPage({ page, figures, data }: { page: DocPage; figures: Figur
     .map(([label, field]) => [label, b(field)] as [string, DocBlock | undefined])
     .filter(([, block]) => !!block)
   const read = b('read')
+  // The sentence is conditioned on the same thing the columns are. It names
+  // the method, and nine frozen snapshots carry a competitor page with no
+  // `about` block — one of them served live on a share link — so an
+  // unconditional "other people's videos" would have them claiming a reading
+  // they never did, beside three columns rather than four. A document says
+  // what it read, not what today's pipeline reads.
+  const aboutShown = Boolean(b('about'))
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          <p className="text-[14px] text-muted-foreground">As their own videos, other people&rsquo;s videos and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
+          <p className="text-[14px] text-muted-foreground">As their own videos{aboutShown ? ', other people’s videos' : ''} and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
         </div>
         <ShareStrip data={data} name={name} />
       </div>
