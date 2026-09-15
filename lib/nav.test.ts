@@ -108,9 +108,14 @@ describe('the addresses that lose their page', () => {
     expect(Object.keys(RETIRED_ADDRESSES).sort()).toEqual([
       '/dashboard/guide', '/dashboard/profile', '/dashboard/settings/connections', '/dashboard/settings/initiatives',
     ])
+    // EXACTLY one of the nine's own addresses, not a sub-path of one. The
+    // looser rule passed for `/dashboard/settings/how-to-read`, an address
+    // WP16 has not built, and a redirect to a route that does not exist is a
+    // bare Next 404 — this app has no `app/not-found.tsx`. A sub-page becomes
+    // a legal target when it becomes a route.
     for (const to of Object.values(RETIRED_ADDRESSES)) {
       const path = to.split('#')[0]
-      expect(SURFACES.some((s) => path === s.href || path.startsWith(`${s.href}/`))).toBe(true)
+      expect(SURFACES.map((s) => s.href)).toContain(path)
     }
   })
 

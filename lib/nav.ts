@@ -169,10 +169,19 @@ export function oldPageBanner(page: OldPage): { title: string; body: string; cta
  * that file's own header forbids adding `redirects()` because config redirects
  * run before `proxy.ts`'s host routing. Five live examples of the house
  * pattern already exist (`app/dashboard/ask/page.tsx` and friends).
+ *
+ * A TARGET IS AN ADDRESS THAT EXISTS TODAY, not the address it will have when
+ * the work package that owns it lands. `/dashboard/settings/how-to-read` and
+ * `/dashboard/settings/tracking` are WP16's, and until WP16 builds them a
+ * reader sent there got Next's bare 404 — there is no `app/not-found.tsx` in
+ * this app, so the bare default is what a bookmark and a live legend link
+ * reached. Both land on Settings itself for the R1 window; WP16 re-points them
+ * at its sub-pages in the same commit that creates them. `lib/nav.test.ts`
+ * pins the rule: a target must be one of the nine's own addresses.
  */
 export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
   '/dashboard/profile': '/dashboard/voice#cast',
-  '/dashboard/guide': '/dashboard/settings/how-to-read',
-  '/dashboard/settings/connections': '/dashboard/settings/tracking',
+  '/dashboard/guide': '/dashboard/settings',
+  '/dashboard/settings/connections': '/dashboard/settings',
   '/dashboard/settings/initiatives': '/dashboard/market#moves',
 }
