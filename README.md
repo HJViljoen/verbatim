@@ -179,18 +179,25 @@ functions (defined in the baseline).
 - **Schedule preview/send**: `scripts/send-report.ts` (preview by default →
   `email-preview.html`; `--test <email>`; `--commit` sends to the list) or
   `POST /api/admin/send-report { clientId, scheduleId?, mode }`.
-- **Retention** (`retention-daily`, 04:00 SAST, dormant until `RETENTION_ENABLED=1`):
-  raw payloads and prompt bodies past 30 days go; **YouTube rows are refreshed,
-  not deleted** — re-fetched from the API every ≤30 days (Developer Policy
-  III.E.4.d), rows YouTube no longer serves are deleted (evidence cascades,
-  hero-quote copies nulled), vanished videos are tombstoned; the Tier 0 delete
-  path stays as a 30-day backstop and logs loudly if it ever fires. Preview with
-  `scripts/retention-dry.ts`. **Order:** apply
-  `20260822100000_retention_refresh.sql` (schema) BEFORE deploying this code
-  (gather/Pass A write the new columns) → deploy + re-register Inngest →
-  apply `20260822110000_demographic_redact_backfill.sql` AFTER (its readers
-  must be live) → run `retention-dry.ts --refresh-sample 50` → then
-  `RETENTION_ENABLED=1` and watch the first sweep.
+- **Retention** (`retention-daily`, 04:00 SAST). **Live, not dormant**:
+  `RETENTION_ENABLED` is set in production and the sweep has been running since
+  **24 Aug 2026** — 50 YouTube videos tombstoned between 24 Aug and 12 Sep, each
+  batch stamped at the 04:00 slot (`select count(*), min(unavailable_at),
+  max(unavailable_at) from videos where unavailable_at is not null`; only the
+  sweep writes that column). It is deleting and refreshing real tenant data
+  every night, so treat it as one of the four forces that move a month's
+  numbers, not as something waiting to be switched on. Raw payloads and prompt
+  bodies past 30 days go; **YouTube rows are refreshed, not deleted** —
+  re-fetched from the API every ≤30 days (Developer Policy III.E.4.d), rows
+  YouTube no longer serves are deleted (evidence cascades, hero-quote copies
+  nulled), vanished videos are tombstoned; the Tier 0 delete path stays as a
+  30-day backstop and logs loudly if it ever fires. Preview tonight's sweep with
+  `scripts/retention-dry.ts` (read-only). **How it was rolled out**, kept as the
+  order any re-apply would follow: apply `20260822100000_retention_refresh.sql`
+  (schema) BEFORE deploying the code (gather/Pass A write the new columns) →
+  deploy + re-register Inngest → apply
+  `20260822110000_demographic_redact_backfill.sql` AFTER (its readers must be
+  live) → run `retention-dry.ts --refresh-sample 50` → then `RETENTION_ENABLED=1`.
 - **Workspace switcher (operator only, 2026-09-09)**: a user listed in
   `public.platform_admins` sees a tenant dropdown in place of the sidebar
   wordmark and can point their session at any client — the whole app follows,
