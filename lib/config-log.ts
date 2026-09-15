@@ -255,12 +255,21 @@ export function withActor<T extends Record<string, unknown>>(
  *  Without the retry, the first settings save after a deploy would 400 on a
  *  column that does not exist yet and the client would lose an edit they made
  *  correctly — the failure mode `isMissingColumnError` was written for. The
- *  statement is rejected whole, so the retry cannot write twice. */
+ *  statement is rejected whole, so the retry cannot write twice.
+ *
+ *  `stamped` says which of the two happened, because the caller cannot tell
+ *  otherwise and two of them close by telling an operator that the change log
+ *  recorded the change. It did not: on the retry either the column and the
+ *  trigger are both absent (no row at all) or the trigger files the write under
+ *  the bare database role. A script that armed a tenant for $13–20 an update,
+ *  or started spending Apify money on a rival's accounts, must be able to say
+ *  so out loud. `true` means the statement carried the stamp — not that it
+ *  succeeded; the `error` still says that. */
 export async function updateWithActor<R extends { error: unknown }>(
   update: (payload: Record<string, unknown>) => PromiseLike<R>,
   payload: Record<string, unknown>,
   actor: ConfigActor,
-): Promise<R> {
+): Promise<R & { stamped: boolean }> {
   const stamped = await update(withActor(payload, actor))
   if (stamped.error && isMissingColumnError(stamped.error, 'last_actor')) {
     // An error, not a warning, and it names the person: the retry is
@@ -277,9 +286,9 @@ export async function updateWithActor<R extends { error: unknown }>(
       `The write was ${actor.kind} ${actor.label ?? actor.user_id ?? 'unknown'}; ` +
       'the log will name the database role instead, or nothing at all.',
     )
-    return update(payload)
+    return { ...(await update(payload)), stamped: false }
   }
-  return stamped
+  return { ...stamped, stamped: true }
 }
 
 // ---- Diffing a configuration ------------------------------------------------

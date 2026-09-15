@@ -124,13 +124,21 @@ async function main() {
     return
   }
 
-  const { error } = await updateWithActor(
+  const { error, stamped } = await updateWithActor(
     (payload) => admin.from('tracking_configs').update(payload).eq('client_id', clientId),
     { competitor_handles: merged, updated_at: new Date().toISOString() },
     scriptActor(`scripts/set-competitor-handles.ts --client ${clientId} --competitor "${match}" --apply`),
   )
   if (error) throw new Error(`write handles: ${error.message}`)
-  console.log('\nwritten. The change log records it under the `handles` surface, with this command as the actor.')
+  // The honest sentence, not the hopeful one: `updateWithActor` retries
+  // UNSTAMPED when `last_actor` is rejected, and this write is the one that
+  // starts spending Apify money on a rival's accounts.
+  console.log(stamped
+    ? '\nwritten. The change log records it under the `handles` surface, with this command as the actor.'
+    : '\nwritten, but NOT attributed: tracking_configs.last_actor was rejected, so this write was ' +
+      'retried without it. The change log has no row for it, or one naming the database role — ' +
+      'apply supabase/migrations/20260915091000_config_changes.sql (or let PostgREST refresh its ' +
+      'schema cache) and record this change before the next update reads these accounts.')
   console.log('The accounts are read on the next update; nothing historical is re-read or re-stamped.')
 }
 

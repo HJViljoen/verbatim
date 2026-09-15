@@ -170,6 +170,7 @@ describe('withActor / updateWithActor — stamping the UPDATE itself', () => {
     const seen: Record<string, unknown>[] = []
     const res = await updateWithActor(async (p) => { seen.push(p); return { error: null } }, { report_day: 'sunday' }, actor())
     expect(res.error).toBeNull()
+    expect(res.stamped).toBe(true)
     expect(seen).toHaveLength(1)
     expect(seen[0]).toHaveProperty('last_actor')
   })
@@ -198,6 +199,9 @@ describe('withActor / updateWithActor — stamping the UPDATE itself', () => {
     expect(said).toContain('PGRST204')
     expect(said).toContain('heinrich@verbatimintel.com')
     expect(said).toContain('UNSTAMPED')
+    // And the caller is told, because two scripts close by telling an operator
+    // that the change log recorded the change — which on this path it did not.
+    expect(res.stamped).toBe(false)
   })
 
   it('does not retry any other failure — one rejected write, one report of it', async () => {
