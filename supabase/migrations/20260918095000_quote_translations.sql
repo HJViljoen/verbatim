@@ -224,6 +224,15 @@ create table if not exists public.month_evidence_refs (
   origin       text not null check (origin in ('live', 'back_read')),
   read_at      timestamptz not null,
   run_id       uuid references public.pipeline_runs(id) on delete set null,
+  -- The clustering these ids were read under, as month_theme_readings carries
+  -- it (20260918091000). The freeze STAMPS it — mergeMonthRows puts the run's
+  -- fingerprint on every row of this merge — so the column has to exist or the
+  -- whole upsert is a 42703 that the caller's non-fatal wrapper swallows, one
+  -- console line a run, for ever. It belongs here on its own merits too: a
+  -- theme's id list is a product of the grouping that made the theme, so two
+  -- months' id lists are like-for-like only where this is equal, which is the
+  -- same sentence run_id already carries.
+  clustering_key text,
   frozen_at    timestamptz,
   primary key (client_id, month, audience, object_kind, object_id)
 );
