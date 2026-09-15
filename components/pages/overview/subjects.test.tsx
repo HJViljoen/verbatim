@@ -1,0 +1,85 @@
+import { describe, it, expect } from 'vitest'
+
+import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
+import { EMAIL } from '@/lib/email/theme'
+import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
+import { render, renderText } from '@/lib/test/render'
+import { overviewSubjects } from './subjects'
+import { overviewFixture, refusedFixture } from './fixture'
+
+const MODES: RenderMode[] = ['app', 'print', 'email']
+const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
+
+describe('OV2 · your subjects', () => {
+  it('renders in all three modes and keeps the copy contract', () => {
+    for (const data of [overviewFixture(), refusedFixture()]) {
+      for (const mode of MODES) {
+        assertCopyContract(render(overviewSubjects.render(data, mode, ctx)))
+      }
+    }
+  })
+
+  it('prints every side as a level with its count', () => {
+    const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('31% 26 of 84')
+    expect(text).toContain('44% 62 of 142')
+    expect(text).toContain('22% 305 of 1,388')
+  })
+
+  it('bands the category and refuses your own side, without hiding it', () => {
+    const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('too little data')
+    expect(text).toContain('the category column carries the month')
+  })
+
+  it('prints a direction word only inside a verdict node', () => {
+    const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('growing, 3 months')
+    // The contract's rule (c) is what proves it: no direction word survives
+    // outside a verdict node.
+    expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
+  })
+
+  it('says "— not tracked" for a side nothing was read for, never 0%', () => {
+    const data = overviewFixture()
+    const rows = data.subjects.rows.map((r) => ({ ...r, rival: null }))
+    const text = renderText(overviewSubjects.render({ ...data, subjects: { ...data.subjects, rows } }, 'app', ctx))
+    expect(text).toContain('— not tracked')
+  })
+
+  it('offers the proposer’s candidates rather than a blank form', () => {
+    const data = overviewFixture()
+    const withCandidates = {
+      ...data,
+      subjects: {
+        ...data.subjects,
+        state: 'candidates' as const,
+        rows: [],
+        candidates: [{ name: 'Durability', origin: 'category_theme', because: 'the category raised it in the videos we read' }],
+      },
+    }
+    const text = renderText(overviewSubjects.render(withCandidates, 'app', ctx))
+    expect(text).toContain('We have proposed 1 subject')
+    expect(text).toContain('the category raised it in the videos we read')
+  })
+
+  it('says subjects are not recorded when M4 is not applied', () => {
+    expect(overviewSubjects.emptyState(refusedFixture())).toBe('Your subjects are not recorded for this workspace yet.')
+    const text = renderText(overviewSubjects.render(refusedFixture(), 'app', ctx))
+    expect(text).toContain('not recorded for this workspace yet')
+  })
+
+  it('declares one figure per subject — the side that carries the month', () => {
+    const { figures, verdicts } = blockAnswers(overviewSubjects, overviewFixture())
+    expect(Object.keys(figures)).toEqual(['subject_s1_share', 'subject_s2_share'])
+    expect(verdicts.length).toBeGreaterThan(0)
+  })
+
+  it('is email-safe', () => {
+    const markup = render(overviewSubjects.render(overviewFixture(), 'email', ctx))
+    expect(markup).toContain('<table')
+    expect(markup).not.toContain('class=')
+    expect(markup).not.toContain('var(--')
+    expect(markup).not.toContain('<svg')
+  })
+})
