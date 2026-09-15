@@ -6,7 +6,7 @@ import { overviewTiles } from './overview'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
-import type { ResearchAnswer } from './research'
+import type { ResearchAnswer, ResearchQuote } from './research'
 
 const point = (id: string, n: number, text: string, quotes: { ref: string; text: string; commentId: string | null }[] = []): ResearchAnswer['grounded'][number] => ({
   id, text, insightIds: [`i-${id}`], themeLabels: ['Insurance blocks needed care'], conversationCount: n, questionId: 'stops',
@@ -241,6 +241,25 @@ describe('pickQuote and thinWeek', () => {
     expect(pickQuote(answers[0].grounded[0], used)).toBeNull()
     expect(pickQuote(answers[0].grounded[1], new Set())?.ref).toBe('v:vid')
   })
+  // Item 8 reaches this call site or it reaches no document at all: the filter
+  // is hard, so a translated voice handed over without its reading is dropped
+  // from every finding however good the rendering under it is.
+  it('takes a translated quote, and carries the rendering onto the renderable', () => {
+    const thai: ResearchQuote = { ref: 'c:bbb', text: 'ราคาเท่าไหร่ ซื้อได้ที่ไหนครับ อยากทราบจริง ๆ', commentId: 'bbb', videoId: null }
+    const english = 'How much does it cost, and where can I buy one near me?'
+    const only = (q: ResearchQuote) => ({ ...answers[0].grounded[0], quotes: [q] })
+    expect(pickQuote(only(thai), new Set())).toBeNull()
+    expect(pickQuote(only({ ...thai, lang: 'th', english }), new Set())).toEqual({ ref: 'c:bbb', text: thai.text, lang: 'th', english })
+  })
+
+  it('leaves an untranslated reading out, and adds nothing to a quote nothing has read', () => {
+    const thai: ResearchQuote = { ref: 'c:bbb', text: 'ราคาเท่าไหร่ ซื้อได้ที่ไหนครับ อยากทราบจริง ๆ', commentId: 'bbb', videoId: null, lang: 'th', english: null }
+    expect(pickQuote({ ...answers[0].grounded[0], quotes: [thai] }, new Set())).toBeNull()
+    expect(pickQuote(answers[0].grounded[1], new Set())).toEqual({
+      ref: 'v:vid', text: 'the socket rubbed raw by the afternoon and I had to take it off at work',
+    })
+  })
+
   it('calls a partial run or a quiet period thin', () => {
     expect(thinWeek(signals)).toBe(false)
     expect(thinWeek({ ...signals, runStatus: 'partial' })).toBe(true)

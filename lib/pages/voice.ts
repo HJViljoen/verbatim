@@ -456,7 +456,12 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
     for (const insightId of theme.supporting_insight_ids.slice(0, QUOTE_IDS_PER_THEME)) {
       for (const c of citations.get(insightId) ?? []) {
         const q = cleanQuote(c.quote)
-        if (!readsAsHeroQuote(q)) continue
+        // The citation carries the cache's reading, and this is a HARD filter —
+        // a quote refused here never reaches the ribbon. Handing the reading
+        // over is what makes the gate ask "can this reader read it" rather than
+        // "does it look English" (item 8); with one argument a translated voice
+        // is dropped however good the rendering under it is.
+        if (!readsAsHeroQuote(q, c)) continue
         pool.push({ theme, quote: q, citation: c, insightId })
       }
     }

@@ -69,15 +69,25 @@ export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTa
 }
 
 /** The quote that leads a finding: from the grounded point the writer named,
- *  a comment before a transcript line, one that reads as English and fits a
- *  card, the longest of those. Text stays in memory until freeze. */
+ *  a comment before a transcript line, one THIS READER CAN READ and that fits a
+ *  card, the longest of those. Text stays in memory until freeze.
+ *
+ *  The reading travels with the quote and both halves of this use it: the
+ *  filter, because a hard filter given only the words drops every translated
+ *  voice out of every document (item 8's inversion has to reach the call site
+ *  to reach the reader); and the returned Quote, because a finding that leads
+ *  with a Spanish sentence and no English under it is the failure the
+ *  translation exists to prevent. `steps.ts` resolves lang/english onto these
+ *  refs a moment before composing — they are never stored. */
 export function pickQuote(point: ResearchPoint | undefined, used: Set<string>): Quote | null {
   if (!point) return null
-  const ok = point.quotes.filter((q) => !used.has(q.ref) && readsAsHeroQuote(q.text))
+  const ok = point.quotes.filter((q) => !used.has(q.ref) && readsAsHeroQuote(q.text, q))
   const pick = [...ok].sort((a, b) => (b.commentId ? 1 : 0) - (a.commentId ? 1 : 0) || b.text.length - a.text.length)[0]
   if (!pick) return null
   used.add(pick.ref)
-  return { ref: pick.ref, text: pick.text }
+  return pick.lang != null
+    ? { ref: pick.ref, text: pick.text, lang: pick.lang, english: pick.english ?? null }
+    : { ref: pick.ref, text: pick.text }
 }
 
 /** Where a finding was heard, written by code from the points and concerns
