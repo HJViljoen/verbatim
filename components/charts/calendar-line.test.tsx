@@ -159,7 +159,12 @@ describe('CalendarLine', () => {
   it('draws no legend for one ordinary series with nothing to explain', () => {
     const one: CalendarSeries = { label: 'Category', color: 'var(--cat)', points: [p('2026-08-01', 20), p('2026-09-01', 22)] }
     const markup = render(CalendarLine({ axis: monthAxis('2026-08-01', '2026-09-01'), series: [one] }))
-    expect(markup).not.toContain('rounded-full')
+    const words = markupText(markup)
+    // The legend's own words, not the utility class it happens to be styled
+    // with: a restyled legend would pass a class assertion while drawing one.
+    for (const word of ['below the floor', 'too few to read', 'still filling']) expect(words).not.toContain(word)
+    // And nothing at all is printed above the chart, which is where it goes.
+    expect(markupText(markup.slice(0, markup.indexOf('<svg'))).trim()).toBe('')
   })
 
   it('scales uniformly, so the round gutter token cannot become an ellipse', () => {
