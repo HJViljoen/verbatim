@@ -109,10 +109,21 @@ interface OpenRunResult {
  * carries a config snapshot. Read once, inside open-run, so no later step asks
  * again.
  *
- * Every read here names columns the bookkeeping migration adds, and none of the
- * three errors are read: before the migration lands each comes back empty,
- * which lands on the same answers the pre-2026-09-15 code had (no anchor, no
- * stored window) — and open-run then writes without the columns at all.
+ * Two of the three reads name columns the bookkeeping migration adds, and those
+ * two swallow THAT error and nothing else: before the migration lands each
+ * comes back empty, which lands on the same answers the pre-2026-09-15 code had
+ * (no anchor, no stored window), and open-run then writes without the columns
+ * at all.
+ *
+ * Every other failure throws, because once the columns exist "the read failed"
+ * and "this client has no previous run" are otherwise the same answer: `closed`
+ * is empty, `previousRunEnd` is null, `resolveRunWindow` takes the rolling arm,
+ * and the row then asserts `window_basis = 'rolling'` as a deliberate basis
+ * rather than as a fallback. For Össur after a missed week that is the
+ * difference between gathering the gap — the whole point of D6 — and gathering
+ * seven days, with nothing anywhere recording the cause. A throw is the safe
+ * direction: open-run is a step, Inngest retries it, and the pre-migration path
+ * is named by its own predicate rather than by silence.
  */
 async function loadRunWindowInput(
   admin: ReturnType<typeof createAdminClient>,
@@ -143,8 +154,16 @@ async function loadRunWindowInput(
     resumeRunId
       ? admin.from('pipeline_runs').select('window_start, window_end, window_basis, config_snapshot')
           .eq('id', resumeRunId).eq('client_id', clientId).maybeSingle()
-      : Promise.resolve({ data: null }),
+      : Promise.resolve({ data: null, error: null }),
   ])
+  // The narrow guard, on the two reads that can legitimately hit it, and a
+  // throw on everything else — see this function's comment.
+  if (prevRes.error && !isMissingBookkeepingColumn(prevRes.error)) throw prevRes.error
+  if (storedRes.error && !isMissingBookkeepingColumn(storedRes.error)) throw storedRes.error
+  // run_summary names no new column, so any failure of it is a real one: a
+  // swallowed error here reads as "this client has never been synthesised" and
+  // opens the run on the `baseline` arm.
+  if (summaryRes.error) throw summaryRes.error
   const closed = (prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[]
   const storedRow = storedRes.data as (WindowColumns & { config_snapshot?: unknown }) | null
   return {
