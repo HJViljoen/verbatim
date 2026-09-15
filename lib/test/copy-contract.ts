@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { render, markupText } from './render'
+import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibration'
 
 // The copy-and-figures contract every block is tested against, from WP10 on
 // (Phase 1 WP0, decision X). Three rules, and they are the three the product
@@ -68,48 +69,25 @@ export interface CopyViolation {
 }
 
 /**
- * Movement vocabulary, whole-word and case-insensitive. Listed BY FAMILY, and
- * a family is listed whole: the first pass had "growing" and "grew" but not
- * "grown", the whole increase family but not "decline" — the word English copy
- * actually reaches for — and "trending" but not "trend", so rule (c) failed
- * open on the sentences most likely to be written. A word added here belongs
- * with its inflections or the next reader finds the same hole.
+ * Movement vocabulary, whole-word and case-insensitive — THE SAME LIST the
+ * prose scrubber matches on (lib/calibration.ts). It was a second copy for one
+ * WP and the two drifted 64 words apart, which is the drift the shared list
+ * exists to make impossible: a word added to one of them was not added to the
+ * other, and the block contract and the model scrubber then disagreed about
+ * what a direction word is.
  *
- * Deliberately NOT here: bare "up" and "down", which the product's ordinary
- * copy uses without claiming a direction ("where each one turns up"), and
- * "new", which is a word before it is a chip. Bare "rise" and "fall" are out
- * for the same reason ("comments that fall outside the window"); their
- * unambiguous inflections are in. All belong to rule (c) in spirit; none can
- * be caught by a word list without failing honest copy, so the New chip stays
- * gated by `directionWordsFor('dashboard.themes')` instead (lib/config.ts).
+ * MINUS THE FRAMED THREE. `up`, `down` and `new` count as claims only inside a
+ * movement frame ("moved up", "up 4 points", "new this month"), which
+ * `directionHits` can check and a flat regex over rendered copy cannot — the
+ * product's ordinary copy says "where each one turns up" and "the new socket".
+ * They belong to rule (c) in spirit and are gated instead by
+ * `directionWordsFor('dashboard.themes')` (lib/config.ts).
+ *
+ * Bare `rise` and `fall` are absent from the shared list itself, for the same
+ * reason and with the reason written there.
  */
-export const DIRECTION_WORDS = [
-  'gain', 'gaining', 'gained', 'gains',
-  'fade', 'fading', 'faded', 'fades',
-  'rising', 'rises', 'risen', 'rose',
-  'falling', 'falls', 'fallen', 'fell',
-  'climb', 'climbing', 'climbed', 'climbs',
-  'slip', 'slipping', 'slipped', 'slips',
-  'surge', 'surging', 'surged', 'surges',
-  'grow', 'growing', 'grew', 'grown', 'grows',
-  'shrink', 'shrinking', 'shrank', 'shrunk', 'shrinks',
-  'accelerate', 'accelerating', 'accelerated', 'accelerates',
-  'decelerate', 'decelerating', 'decelerated', 'decelerates',
-  'trend', 'trending', 'trended', 'trends',
-  'increase', 'increased', 'increases', 'increasing',
-  'decrease', 'decreased', 'decreases', 'decreasing',
-  'decline', 'declined', 'declines', 'declining',
-  'drop', 'dropped', 'dropping', 'drops',
-  'jump', 'jumped', 'jumping', 'jumps',
-  'soar', 'soared', 'soaring', 'soars',
-  'spike', 'spiked', 'spiking', 'spikes',
-  'plunge', 'plunged', 'plunging', 'plunges',
-  'dip', 'dipped', 'dipping', 'dips',
-  'double', 'doubled', 'doubling', 'halve', 'halved', 'halving',
-  'improve', 'improved', 'improving', 'improves',
-  'worsen', 'worsened', 'worsening', 'worsens',
-  'upward', 'downward', 'uptick', 'downtick', 'momentum',
-]
+export const DIRECTION_WORDS: readonly string[] =
+  CALIBRATED_DIRECTION_WORDS.filter((w) => !FRAMED.has(w))
 
 /**
  * A fresh matcher each call, never one shared `/g` regex: `lastIndex` survives

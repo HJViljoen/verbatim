@@ -77,6 +77,38 @@ describe('directionHits — the scrubber’s match list, calibrated on productio
     expect(DIRECTION_WORDS).toContain('increasing')
   })
 
+  it('catches the four sentences the first list failed open on', () => {
+    // Each returned [] before the families were listed whole, and each was kept
+    // whole by scrubProse and reached the reader under the word Interpretation.
+    expect(directionHits('Objections have grown this month.')).toContain('grown')
+    expect(directionHits('Durability has dropped away.')).toContain('dropped')
+    expect(directionHits('Praise improved across the category.')).toContain('improved')
+    expect(directionHits('Interest spiked after the launch.')).toContain('spiked')
+  })
+
+  it('lists every family whole — the hole the first pass left', () => {
+    // A family with one inflection missing is a family the rule fails open on.
+    const families = [
+      ['grow', 'growing', 'grew', 'grown', 'grows'],
+      ['drop', 'dropping', 'dropped', 'drops'],
+      ['improve', 'improving', 'improved', 'improves'],
+      ['worsen', 'worsening', 'worsened', 'worsens'],
+      ['jump', 'jumping', 'jumped', 'jumps'],
+      ['spike', 'spiking', 'spiked', 'spikes'],
+      ['slip', 'slipping', 'slipped', 'slips'],
+      ['trend', 'trending', 'trended', 'trends'],
+    ]
+    for (const family of families) {
+      for (const word of family) expect(DIRECTION_WORDS).toContain(word)
+    }
+  })
+
+  it('keeps the two bare stems that collide with honest copy out', () => {
+    // "comments that fall outside the window" is the product's own sentence.
+    expect(DIRECTION_WORDS).not.toContain('fall')
+    expect(DIRECTION_WORDS).not.toContain('rise')
+  })
+
   it('finds the product’s own three', () => {
     expect(directionHits('Durability is growing and comfort is fading.')).toEqual(['growing', 'fading'])
     expect(directionHits('The share has been flat since June.')).toEqual(['flat'])

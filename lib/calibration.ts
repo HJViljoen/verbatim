@@ -228,41 +228,87 @@ export const READER_FLAGS = ['new', 'gone_quiet'] as const satisfies readonly Gl
 //     no idea where a quote starts. This list is only ever used for a SENTENCE
 //     DROP, never a word delete, and `directionHits` ignores quoted spans:
 //     inside quotation marks the words are the speaker's, not a claim of ours.
+// A FAMILY IS LISTED WHOLE. The first pass carried `growing` and `grew` but
+// not `grown`, `trending` but not `trend`, and none of `dropped`, `improved`,
+// `worsened`, `spiked`, `jumped`, `soared`, `plunged`, `slipped`, `doubled`,
+// `dipped` — so the rule failed OPEN on the sentences a model is most likely
+// to write: "Objections have grown this month." returned no hits and reached
+// the reader under the word Interpretation as an unearned movement claim. The
+// block-render contract had already learned this once (lib/test/copy-contract's
+// own docblock says so) and the two lists then drifted 64 words apart. They are
+// now ONE list — copy-contract imports this one — and a word added here belongs
+// with its inflections or the next reader finds the same hole.
+//
+// THE TWO BARE FORMS THAT ARE NOT HERE, and why: `rise` and `fall`. Their
+// unambiguous inflections are in, but the bare stems are ordinary English in
+// this product's own honest copy ("comments that fall outside the window"), and
+// a word list cannot tell those apart. Same reasoning as classes 1–3 above,
+// one step further.
 export const DIRECTION_WORDS = [
   // The product's own three, and the flags.
-  'growing', 'grew', 'grows', 'growth',
-  'fading', 'faded', 'fades',
+  'growing', 'grew', 'grown', 'grows', 'grow', 'growth',
+  'fading', 'faded', 'fades', 'fade',
   'flat', 'flattened',
   'new', 'gone quiet',
-  // The words a model reaches for instead.
-  'rising', 'rise', 'risen', 'rose',
+  // The words a model reaches for instead, by family.
+  'rising', 'rises', 'risen', 'rose',
+  'falling', 'falls', 'fallen', 'fell',
   'declining', 'decline', 'declined', 'declines',
-  'falling', 'fell', 'fallen',
-  'climbing', 'climbed',
-  'gaining', 'gained', 'gains',
+  'climbing', 'climbed', 'climbs', 'climb',
+  'gaining', 'gained', 'gains', 'gain',
   'losing ground', 'lost ground',
+  'slipping', 'slipped', 'slips', 'slip',
   'momentum',
   'steady', 'steadily', 'holding steady',
-  'trending', 'trended',
-  'accelerating', 'accelerated',
-  'slowing', 'slowed',
-  'shrinking', 'shrank', 'shrunk',
-  'increasing', 'increased', 'increase',
-  'decreasing', 'decreased', 'decrease',
+  'trending', 'trended', 'trends', 'trend',
+  'accelerating', 'accelerated', 'accelerates', 'accelerate',
+  'decelerating', 'decelerated', 'decelerates', 'decelerate',
+  'slowing', 'slowed', 'slows',
+  'shrinking', 'shrank', 'shrunk', 'shrinks', 'shrink',
+  'increasing', 'increased', 'increases', 'increase',
+  'decreasing', 'decreased', 'decreases', 'decrease',
+  'dropping', 'dropped', 'drops', 'drop',
+  'jumping', 'jumped', 'jumps', 'jump',
+  'soaring', 'soared', 'soars', 'soar',
+  'spiking', 'spiked', 'spikes', 'spike',
+  'plunging', 'plunged', 'plunges', 'plunge',
+  'dipping', 'dipped', 'dips', 'dip',
+  'surging', 'surged', 'surges', 'surge',
+  'doubling', 'doubled', 'doubles', 'double',
+  'halving', 'halved', 'halves', 'halve',
+  'improving', 'improved', 'improves', 'improve',
+  'worsening', 'worsened', 'worsens', 'worsen',
   'more and more', 'less and less',
   'upward', 'downward', 'uptick', 'downtick',
-  'surging', 'surged', 'surge',
-  'picked up', 'tapered off',
+  'picking up', 'picked up', 'picks up',
+  'tapering off', 'tapered off',
   // Particle-shaped, matched only in a movement frame (class 1 above).
   'up', 'down',
 ] as const
+
+/**
+ * The words the prompt rule NAMES as examples (lib/pipeline/prose-rules.ts).
+ *
+ * Typed as members of `DIRECTION_WORDS`, so a word cannot be promised to a
+ * model unless something deletes it: the shipped prompt banned "picking up"
+ * while the list held only "picked up", so `report_cover` promised a reader
+ * "a sentence that names one is deleted before the reader sees it" for a
+ * phrase nothing deleted. A mirror test runs every one of these through
+ * `directionHits`, the way prose-rules.test.ts already holds the magnitude
+ * prompt to MAGNITUDE_WORDS.
+ */
+export const DIRECTION_PROMPT_EXAMPLES = [
+  'growing', 'grown', 'fading', 'rising', 'declining', 'gaining', 'losing ground',
+  'momentum', 'steady', 'trending', 'picking up', 'increasing', 'dropped',
+  'improved', 'spiked', 'jumped',
+] as const satisfies readonly (typeof DIRECTION_WORDS)[number][]
 
 /** The three that need a frame around them before they are a claim. `up` and
  *  `down` are verb particles far more often than measurements (class 1), and
  *  `new` is an ordinary adjective — "the new socket", "new to the category" —
  *  far more often than it is the flag. Each is counted only in the frame that
  *  makes it one. */
-const FRAMED = new Set(['up', 'down', 'new'])
+export const FRAMED: ReadonlySet<string> = new Set(['up', 'down', 'new'])
 
 /** Verbs after which `up` / `down` is a measurement, not a particle. */
 const MOVEMENT_VERBS =

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { MAGNITUDE_WORDS } from '../prose/scrub'
+import { DIRECTION_PROMPT_EXAMPLES, directionHits } from '../calibration'
 import { CALIBRATED_PROSE_RULE, noDirectionRule, stripThemeRefs } from './prose-rules'
 
 describe('noDirectionRule — the prompt sentence follows the slot’s policy', () => {
@@ -29,6 +30,24 @@ describe('noDirectionRule — the prompt sentence follows the slot’s policy', 
         expect(rule).toContain(`"${word}"`)
       }
     }
+  })
+
+  // The mirror of the MAGNITUDE test below, and the one that was missing: the
+  // prompt banned "picking up" while DIRECTION_WORDS held only "picked up", so
+  // on a `both` slot the sentence promised deletion for a phrase nothing
+  // deleted — invisible because nothing held the two together.
+  it('names no word the direction rule does not catch', () => {
+    const quoted = [...noDirectionRule('report_cover').matchAll(/"([a-z][a-z ]*)"/g)].map((m) => m[1])
+    const named = quoted.filter((w) => w !== 'stronger than last time')
+    expect(named.length).toBeGreaterThan(10)
+    for (const word of named) {
+      expect(directionHits(`Objections ${word} this month.`).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('names every example the list offers', () => {
+    const rule = noDirectionRule('report_cover')
+    for (const word of DIRECTION_PROMPT_EXAMPLES) expect(rule).toContain(`"${word}"`)
   })
 })
 

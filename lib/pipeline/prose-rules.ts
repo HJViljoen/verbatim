@@ -1,4 +1,5 @@
 import { PROSE_POLICY, scrubProse, stripThemeRefs, type ProseSlot, type ScrubProseInput } from '../prose/scrub'
+import { DIRECTION_PROMPT_EXAMPLES } from '../calibration'
 
 // Shared prompt rule (Calibrated-Language doc 2026-07-04): magnitude words are
 // assigned by code from measured data (lib/calibration.ts) — the model's prose
@@ -77,10 +78,15 @@ export function noDirectionRule(...slots: ProseSlot[]): string {
       : enforced.length === slots.length
         ? `${earned}; a sentence that names one without a verdict behind it is deleted before the reader sees it.`
         : `${earned}; in ${andList(enforced.map(nameOf))} a sentence that names one without a verdict behind it is deleted before the reader sees it, and everywhere else it is counted against this prompt as a defect.`
+  // The examples are GENERATED from the list the scrubber matches on, never
+  // typed out beside it: the hand-typed sentence banned "picking up" while
+  // DIRECTION_WORDS held only "picked up", so on a `both` slot the prompt
+  // promised deletion for a phrase nothing deleted. A word can now only be
+  // promised to a model if something deletes it.
+  const examples = DIRECTION_PROMPT_EXAMPLES.map((w) => `"${w}"`).join(', ')
   return (
-    '- You may NOT say which WAY anything is going. Not "growing", "fading", "rising", "declining", ' +
-    '"gaining", "losing ground", "momentum", "steady", "trending", "picking up", "increasing", "up", "down", ' +
-    '"more and more", or any synonym — and not a comparison that implies one ("stronger than last time"). ' +
+    `- You may NOT say which WAY anything is going. Not ${examples}, ` +
+    'or any synonym — and not a comparison that implies one ("stronger than last time"). ' +
     `${consequence} Describe WHAT people say and why it matters, in the present tense.`
   )
 }
