@@ -331,37 +331,57 @@ export async function fetchQuoteTextsByCommentId(
 
 const HERO_TABLES = new Set(['recommendations', 'market_insights', 'competitive_insights', 'account_events'])
 
+/** What a failed read of one kind of ref costs the caller: the quotes, or the
+ *  whole call. `fetchQuoteTextsByRefs` takes it; see `refReader` for which
+ *  caller asks for which, and why. */
+export type QuoteRefReadErrors = 'degrade' | 'throw'
+
 /**
- * One kind of ref's read, allowed to fail without taking the render with it.
+ * One kind of ref's read, and what a failure of it costs.
  *
  * Used ONLY by `fetchQuoteTextsByRefs`, and the asymmetry is the point.
  * `fetchChunks` pages through `selectAll`, which throws on any PostgREST error
- * — right for a live page (it reloads) and for a pipeline step (it retries),
- * and wrong here: this function is the hydration boundary of a FROZEN artefact,
- * and its callers are the Sunday digest send (lib/schedules/deliver.ts), the
- * share link and the PDF/PNG export (app/render/[snapshotId]), the schedule
- * preview and the Studio editor. Those are one-shot renders of numbers that are
- * already final, fired two tenants at a time into a 5-slot account at 06:00 —
- * exactly when a connection reset or a statement timeout on the 120-id comment
- * read is most likely. One transient error on one of eight parallel reads must
- * not be the difference between the digest going out with a few quotes missing
- * and the digest not going out at all.
+ * — right for a live page (it reloads) and for a pipeline step (it retries).
  *
- * Refs that do not resolve are absent from the map and the resolver drops them
- * by contract, so a failed read degrades exactly as an erased comment does. It
- * is loud in the log, with the ref kind and how many were being asked for, so a
- * render that came back thin can be explained rather than guessed at.
+ * 'degrade' is for the HYDRATION boundary of an already-frozen artefact: the
+ * Sunday digest send (lib/schedules/deliver.ts), the share link and the
+ * PDF/PNG export (app/render/[snapshotId]), the schedule preview and the
+ * Studio editor. Those are one-shot renders of numbers that are already final,
+ * fired two tenants at a time into a 5-slot account at 06:00 — exactly when a
+ * connection reset or a statement timeout on the 120-id comment read is most
+ * likely. One transient error on one of eight parallel reads must not be the
+ * difference between the digest going out with a few quotes missing and the
+ * digest not going out at all. Refs that do not resolve are absent from the
+ * map and the resolver drops them by contract, so a failed read degrades
+ * exactly as an erased comment does, loudly in the log with the ref kind and
+ * how many were being asked for.
+ *
+ * 'throw' is for the one caller that is COMPOSING an artefact rather than
+ * rendering one, inside a context that can retry: the `build-document` freeze
+ * step (lib/reports/documents/steps.ts). Its snapshot is the record — a
+ * document frozen from fewer quotes than the build asked for is wrong for
+ * ever, with nothing on the page saying so — and the step's own retry is the
+ * cheap answer to a transient read. The failures are collected and raised
+ * once every read has SETTLED rather than propagated as they happen: these
+ * reads run in parallel, and a rejection nobody is left to await takes the
+ * process down instead of the step.
  */
-async function softRead<T>(kind: string, count: number, read: () => Promise<T>, fallback: T): Promise<T> {
-  try {
-    return await read()
-  } catch (e) {
-    console.error(
-      `[quotes] ${count} ${kind} ref(s) did not resolve, rendering without them: ` +
-      `${e instanceof Error ? e.message : String(e)}`,
-    )
-    return fallback
+function refReader(mode: QuoteRefReadErrors) {
+  const failed: string[] = []
+  const read = async <T>(kind: string, count: number, run: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await run()
+    } catch (e) {
+      const why = e instanceof Error ? e.message : String(e)
+      if (mode === 'throw') failed.push(`${count} ${kind} ref(s): ${why}`)
+      else console.error(`[quotes] ${count} ${kind} ref(s) did not resolve, rendering without them: ${why}`)
+      return fallback
+    }
   }
+  const settle = () => {
+    if (failed.length) throw new Error(`[quotes] ${failed.length} ref read(s) failed — ${failed.join(' · ')}`)
+  }
+  return { read, settle }
 }
 
 /** Resolve quote TEXT for snapshot refs — 'e:<insight_evidence.id>',
@@ -373,14 +393,18 @@ async function softRead<T>(kind: string, count: number, read: () => Promise<T>, 
  *  match. Refs that do not resolve are absent from the map and the resolver
  *  drops them.
  *
- *  Each kind of ref is read through `softRead`, so a failure of one read costs
- *  those quotes and not the whole render — see its comment for why this one
- *  boundary degrades where every other reader throws. */
+ *  `onReadError` says what a failed read costs, and defaults to the hydration
+ *  path's answer: 'degrade', where a failure of one read costs those quotes
+ *  and not the whole render. The build-document freeze step passes 'throw' —
+ *  see `refReader` for why this one boundary has two answers where every other
+ *  reader in this file has one. */
 export async function fetchQuoteTextsByRefs(
   client: unknown,
   refs: string[],
+  opts: { onReadError?: QuoteRefReadErrors } = {},
 ): Promise<Map<string, string>> {
   const c = client as EvidenceClient
+  const { read, settle } = refReader(opts.onReadError ?? 'degrade')
   const out = new Map<string, string>()
   const by = { e: [] as string[], c: [] as string[], v: [] as string[], m: [] as string[], p: [] as string[] }
   const heroes = new Map<string, string[]>()
@@ -400,7 +424,7 @@ export async function fetchQuoteTextsByRefs(
     if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p'].push(m[2])
   }
   const heroReads = [...heroes.entries()].map(([table, ids]) =>
-    softRead(`h:${table}`, ids.length, async () => {
+    read(`h:${table}`, ids.length, async () => {
       const rows = await fetchChunks<{ id: string; hero_quote: string | null }>(
         ids,
         (chunk) => c.from(table).select('id, hero_quote').in('id', chunk).order('id') as unknown as Rows,
@@ -410,7 +434,7 @@ export async function fetchQuoteTextsByRefs(
   )
   // "Said about you" claims quoted from videos: run_summary.brand_voice.about[n].
   const brandVoiceRead = brandVoice.size
-    ? softRead('b: (said about you)', brandVoice.size, async () => {
+    ? read('b: (said about you)', brandVoice.size, async () => {
         const rows = await fetchChunks<{ run_id: string; brand_voice: { about?: { quote?: string | null }[] } | null }>(
           [...brandVoice.keys()],
           (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk).order('id') as unknown as Rows,
@@ -427,7 +451,7 @@ export async function fetchQuoteTextsByRefs(
   // evidence row still cites (redacted = false), so the sweep's deletion and
   // the counts-not-quotes rule reach it exactly as they reach the excerpt.
   const messageRead = by.m.length
-    ? softRead('m: (comment as posted)', by.m.length, async () => {
+    ? read('m: (comment as posted)', by.m.length, async () => {
         const cited = await fetchChunks<{ comment_id: string | null }>(
           by.m,
           (chunk) => c.from('insight_evidence').select('comment_id').in('comment_id', chunk).eq('redacted', false).order('id'),
@@ -442,7 +466,7 @@ export async function fetchQuoteTextsByRefs(
     : Promise.resolve()
   // p: a customer phrase — language_samples by id (cascade-deleted with its comment).
   const phraseRead = by.p.length
-    ? softRead('p: (customer phrase)', by.p.length, async () => {
+    ? read('p: (customer phrase)', by.p.length, async () => {
         const rows = await fetchChunks<{ id: string; phrase: string | null }>(
           by.p,
           (chunk) => c.from('language_samples').select('id, phrase').in('id', chunk).order('id') as unknown as Rows,
@@ -451,20 +475,22 @@ export async function fetchQuoteTextsByRefs(
       }, undefined)
     : Promise.resolve()
   const [byId, byComment, byVideo] = await Promise.all([
-    softRead('e: (evidence)', by.e.length, () => fetchChunks<{ id: string; quote: string | null }>(
+    read('e: (evidence)', by.e.length, () => fetchChunks<{ id: string; quote: string | null }>(
       by.e,
       (chunk) => c.from('insight_evidence').select('id, quote').in('id', chunk).eq('redacted', false).order('id'),
     ), []),
-    softRead('c: (comment)', by.c.length, () => fetchChunks<{ comment_id: string | null; quote: string | null }>(
+    read('c: (comment)', by.c.length, () => fetchChunks<{ comment_id: string | null; quote: string | null }>(
       by.c,
       (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false).order('id'),
     ), []),
-    softRead('v: (video)', by.v.length, () => fetchChunks<{ source_video_id: string | null; quote: string | null }>(
+    read('v: (video)', by.v.length, () => fetchChunks<{ source_video_id: string | null; quote: string | null }>(
       by.v,
       (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false).order('id'),
     ), []),
   ])
   await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead])
+  // Every read has settled; under 'throw' this is where their failures arrive.
+  settle()
   for (const r of byId) if (r.quote && !out.has(`e:${r.id}`)) out.set(`e:${r.id}`, r.quote)
   for (const r of byComment) if (r.comment_id && r.quote && !out.has(`c:${r.comment_id}`)) out.set(`c:${r.comment_id}`, r.quote)
   for (const r of byVideo) if (r.source_video_id && r.quote && !out.has(`v:${r.source_video_id}`)) out.set(`v:${r.source_video_id}`, r.quote)
