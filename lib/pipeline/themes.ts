@@ -334,6 +334,18 @@ export async function persistThemes(
       if (r.themeId) {
         // Refresh the entry to this observation: the label is deliberately the
         // LATEST one (display stays fresh, the id carries continuity).
+        //
+        // `bucket` is written unconditionally, which since 2026-09-18 can MOVE
+        // an entry: when the title arm carries an identity across two spellings
+        // of one rival, the entry lands under the new spelling with nothing
+        // recording that it moved. Decision I reserves the theme_registry.bucket
+        // re-stamp to the Settings rename, which writes the competitors row and
+        // logs the break. Inert today — verified read-only that Össur has 3
+        // distinct buckets and Sealand 6, no two of which fold together under
+        // audienceFold — and harmless for the month series either way, because
+        // month_theme_readings derives `audience` from videos.is_client /
+        // competitor_name rather than from this column. It becomes live the
+        // moment WP16's rename path exists, and belongs on that checklist.
         const prior = entries.find((e) => e.id === r.themeId)
         updates.push({
           id: r.themeId,
