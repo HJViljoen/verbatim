@@ -172,6 +172,26 @@ describe('copyViolations — the marker itself', () => {
     const bad = copyViolations('<p data-copy="headline">hello</p>')
     expect(bad.map((v) => v.rule)).toEqual(['unknown-kind'])
   })
+
+  it('sees a single-quoted marker, which used to be invisible', () => {
+    // Before: copyNodes returned [] for this, so rules (a) and (b) skipped the
+    // node and nothing was reported — a marked node that fails open.
+    expect(copyNodes("<p data-copy='prose'>3 things</p>")).toHaveLength(1)
+    expect(copyViolations("<p data-copy='prose'>3 things</p>").map((v) => v.rule)).toEqual(['prose-digit'])
+  })
+
+  it('reports a marker the scanner cannot resolve into a node', () => {
+    // data-copy on a self-closed element: skipped by the scanner (it opens no
+    // scope), so it is neither cut from its parent's ownText nor checked. It
+    // is now counted and named instead of passing in silence.
+    const bad = copyViolations('<p data-copy="prose">a <img data-copy="figure" src="x.png"/> 4</p>')
+    expect(bad.map((v) => v.rule)).toContain('unscanned-marker')
+    expect(bad.find((v) => v.rule === 'unscanned-marker')?.detail).toContain('2 data-copy markers declared but only 1 node')
+  })
+
+  it('counts a well-formed block as fully resolved', () => {
+    expect(copyViolations('<p data-copy="prose">a <span data-copy="figure">4</span> b</p>')).toEqual([])
+  })
 })
 
 describe('assertCopyContract', () => {

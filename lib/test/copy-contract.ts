@@ -33,6 +33,12 @@ import { render, markupText } from './render'
 // of every marked descendant removed — so code's number is code's, and the
 // model's sentence around it is checked bare.
 //
+// The marker goes on an element that OPENS AND CLOSES — never a void, never a
+// self-closed tag, which open no scope and hold no words. A `data-copy` the
+// scanner cannot resolve into a node is reported (`unscanned-marker`) rather
+// than skipped, because a rule that silently does not apply is worse than one
+// that fails.
+//
 // Unmarked markup is not exempt from rule (c): a direction word anywhere on a
 // block that is not inside a verdict node fails, which is the point — the rule
 // is about the whole page, not about the nodes someone remembered to mark.
@@ -52,7 +58,7 @@ export interface CopyNode {
   ownText: string
 }
 
-export type CopyRule = 'prose-digit' | 'prose-figure-token' | 'level-denominator' | 'direction-word' | 'unknown-kind'
+export type CopyRule = 'prose-digit' | 'prose-figure-token' | 'level-denominator' | 'direction-word' | 'unknown-kind' | 'unscanned-marker'
 
 export interface CopyViolation {
   rule: CopyRule
@@ -196,9 +202,21 @@ export function copyNodes(markup: string): CopyNode[] {
   })
 }
 
+/** The attribute in any of the three spellings HTML allows. Double quotes are
+ *  all `renderToStaticMarkup` ever emits, but a hand-written fixture reaches
+ *  for single ones, and a marker the reader cannot SEE is a rule that silently
+ *  does not apply. */
+function markerRe(flags: string): RegExp {
+  return new RegExp(`${COPY_ATTR}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, flags)
+}
+
+function markerValue(m: RegExpExecArray): string {
+  return (m[1] ?? m[2] ?? m[3] ?? '').trim()
+}
+
 function kindOf(attrs: string): CopyKind | null {
-  const m = new RegExp(`${COPY_ATTR}\\s*=\\s*"([^"]*)"`, 'i').exec(attrs)
-  const value = m?.[1]?.trim()
+  const m = markerRe('i').exec(attrs)
+  const value = m ? markerValue(m) : undefined
   return value && (KINDS as readonly string[]).includes(value) ? (value as CopyKind) : null
 }
 
@@ -206,9 +224,9 @@ function kindOf(attrs: string): CopyKind | null {
  *  unrecognised kind is a violation rather than silence. */
 function declaredKinds(markup: string): string[] {
   const out: string[] = []
-  const re = new RegExp(`${COPY_ATTR}\\s*=\\s*"([^"]*)"`, 'gi')
+  const re = markerRe('gi')
   let m: RegExpExecArray | null
-  while ((m = re.exec(markup)) !== null) out.push(m[1].trim())
+  while ((m = re.exec(markup)) !== null) out.push(markerValue(m))
   return out
 }
 
@@ -232,10 +250,24 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   const nodes = copyNodes(markup)
   const bad: CopyViolation[] = []
 
-  for (const kind of declaredKinds(markup)) {
+  const declared = declaredKinds(markup)
+  for (const kind of declared) {
     if (!(KINDS as readonly string[]).includes(kind)) {
       bad.push({ rule: 'unknown-kind', text: kind, detail: `${COPY_ATTR}="${kind}" is not one of ${KINDS.join(', ')}` })
     }
+  }
+
+  // The marker itself has to be counted, not trusted. A `data-copy` the scanner
+  // cannot resolve into a node — on a void or self-closed element, or on a tag
+  // that is never closed — would otherwise be skipped by every rule in
+  // silence, which is the wrong direction for a contract to fail in.
+  const resolvable = declared.filter((k) => (KINDS as readonly string[]).includes(k)).length
+  if (nodes.length < resolvable) {
+    bad.push({
+      rule: 'unscanned-marker',
+      text: markupText(markup).slice(0, 80),
+      detail: `${resolvable} ${COPY_ATTR} marker${resolvable === 1 ? '' : 's'} declared but only ${nodes.length} node${nodes.length === 1 ? '' : 's'} resolved — mark an element that opens and closes, never a void or a self-closed tag`,
+    })
   }
 
   for (const n of nodes) {
