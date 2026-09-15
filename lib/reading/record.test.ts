@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   countRefused,
   discardCaveat,
+  halfOpenInstants,
   isMissingThemeMembers,
   howSoundLine,
   isEnglishTag,
@@ -177,5 +178,24 @@ describe('isMissingThemeMembers — "M2 is not applied" and nothing else', () =>
     expect(isMissingThemeMembers(new Error('fetch failed'))).toBe(false)
     expect(isMissingThemeMembers({ code: '42703', message: 'column videos.analyzed_run_id does not exist' })).toBe(false)
     expect(isMissingThemeMembers(null)).toBe(false)
+  })
+})
+
+describe('halfOpenInstants — an inclusive day pair for a half-open SQL window', () => {
+  it('includes the last day of the window', () => {
+    // window_denominators is `comment_date >= p_from and comment_date < p_to`,
+    // so September's inclusive 2026-09-30 has to leave here as 1 October.
+    expect(halfOpenInstants({ kind: 'month', from: '2026-09-01', to: '2026-09-30' }))
+      .toEqual({ from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z' })
+  })
+
+  it('crosses a month and a year end', () => {
+    expect(halfOpenInstants({ kind: 'quarter', from: '2026-10-01', to: '2026-12-31' }).to)
+      .toBe('2027-01-01T00:00:00.000Z')
+  })
+
+  it('refuses an instant — a HorizonWindow is a whole extra month', () => {
+    expect(() => halfOpenInstants({ kind: 'month', from: '2026-09-01', to: '2026-10-01T00:00:00.000Z' }))
+      .toThrow(/inclusive YYYY-MM-DD/)
   })
 })

@@ -244,6 +244,39 @@ export async function loadRecordInputs(
 const dayStart = (day: string): string => `${day}T00:00:00.000Z`
 const dayEnd = (day: string): string => `${day}T23:59:59.999Z`
 
+/**
+ * A record window as the windowed SQL functions take it: half-open instants.
+ *
+ * `RecordWindow.to` is an INCLUSIVE `YYYY-MM-DD` — every other reader in this
+ * file wraps it in `dayEnd` or compares against it as a day — but
+ * `window_denominators(p_from, p_to)` is `comment_date >= p_from and
+ * comment_date < p_to`. Handing it `w.to` unchanged read September as 1–29
+ * September: videos, comments, platform mix and dual mentions all a day short,
+ * printed as if they were the month. It was invisible only because M3 is
+ * unapplied and the single-month fallback was the live path, so the two halves
+ * of `loadCoverage` would have started disagreeing by a day the moment it
+ * landed.
+ *
+ * The instants are explicit and UTC, as `monthWindow()` builds them for every
+ * other caller, rather than bare date strings the server casts.
+ *
+ * AND IT REFUSES AN INSTANT. `horizonWindow` — the intended producer of a
+ * page's window — emits HALF-OPEN instants (`to: monthEndInstant(last)`), so a
+ * caller handing one of those in gets the opposite off-by-one: a whole extra
+ * month, silently. A record window is a pair of days; anything else is a
+ * caller's mistake and says so here rather than in the numbers.
+ */
+export function halfOpenInstants(w: RecordWindow): { from: string; to: string } {
+  for (const [name, day] of [['from', w.from], ['to', w.to]] as const) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+      throw new Error(`record window ${name} must be an inclusive YYYY-MM-DD day, not ${day}`)
+    }
+  }
+  const dayAfter = new Date(new Date(`${w.to}T00:00:00.000Z`).getTime() + 86_400_000)
+  return { from: `${w.from}T00:00:00.000Z`, to: dayAfter.toISOString() }
+}
+
+
 async function loadDelivery(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<DeliveryRecord> {
   const runs = await selectAll<{ started_at: string | null; completed_at: string | null; status: string }>(() =>
     client
@@ -285,7 +318,7 @@ export function longestGapDays(startedAt: readonly string[]): number | null {
  * twelve months. Comments do sum; videos never will.
  */
 async function loadCoverage(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<CoverageRecord[] | null> {
-  const reading = await loadWindowReading(client, clientId, { from: w.from, to: w.to })
+  const reading = await loadWindowReading(client, clientId, halfOpenInstants(w))
   if (reading.denominators) {
     return reading.denominators.map((d) => ({
       audience: d.audience,
