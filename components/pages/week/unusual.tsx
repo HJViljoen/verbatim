@@ -1,0 +1,206 @@
+import type { Block } from '@/lib/blocks/types'
+import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockQuote } from '@/components/blocks/quote'
+import { BlockStat } from '@/components/blocks/stat'
+import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
+import { baselineFormingLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
+import type { FigureTable } from '@/lib/reading/verdicts'
+
+// WK1 · Unusual this week (design §3 WK1, item 40; the mock's §1).
+//
+// THE LEAD SECTION OF THIS PAGE IS USUALLY EMPTY, AND THAT IS THE DESIGN. The
+// Phase 0 replay over eleven weeks raised exactly one flag on the paying tenant
+// and none at all on the trial one, and the design's answer is to print
+// "Nothing unusual this week" in full rather than hide the section — a check
+// that only ever appears when it fires is a check nobody can calibrate. So this
+// block has FIVE states and each of them is a different sentence:
+//
+//   flagged           the check ran and these cleared. Printed in full.
+//   nothing_unusual   the check ran, nothing cleared. The commonest answer.
+//   refused           the check ran and declined to read the week — a thin
+//                     update, a run with no window. The reason is NAMED.
+//   baseline_forming  the check cannot speak yet, and the page says WHEN it
+//                     will: "the check starts with the November reading".
+//   not_checked       nothing has ever looked at this update.
+//
+// THE LAST TWO ARE NOT THE SAME AS THE SECOND, and keeping them apart is what
+// `anomaly_checks` exists for (WP8's migration says so at length). "Nothing was
+// unusual" is a reading; "nobody has looked" is not, and a surface that prints
+// the first for the second is telling a paying client their week was quiet on
+// the strength of an absent table.
+//
+// NO DIRECTION WORD ANYWHERE. A flag states a level, the level behind it and
+// the band between them. It never says growing or rising: it compares one
+// week's share with three months pooled, which is two readings and not three,
+// and the direction vocabulary is reserved for what three consecutive monthly
+// readings under one grouping have earned (D1). The one movement word here —
+// `MovementBadge` — is not used; the change is printed as points with its band
+// beside it, inside a verdict node.
+
+export const weekUnusual: Block<WeekData> = {
+  key: 'week.unusual',
+  title: 'Unusual this week',
+  question: 'Did anything this update read differently from the months behind it?',
+
+  render(data, mode = 'app') {
+    const u = data.unusual
+    const empty = weekUnusual.emptyState(data)
+
+    return (
+      <BlockFrame
+        title={weekUnusual.title}
+        question={weekUnusual.question}
+        mode={mode}
+        meta={u.setSize != null ? `${fmtInt(u.setSize)} objects watched · ${fmtInt(u.tested ?? 0)} testable` : undefined}
+      >
+        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+
+        {u.state === 'baseline_forming' ? (
+          <Line mode={mode}>{baselineFormingLine(u.baseline!, data.month)}</Line>
+        ) : null}
+
+        {u.state === 'refused' && u.updateVideos != null && u.medianVideos != null ? (
+          <Line mode={mode}>
+            This update analysed {fmtInt(u.updateVideos)} videos against a usual {fmtInt(Math.round(u.medianVideos))}.
+          </Line>
+        ) : null}
+
+        {u.flags.map((flag, i) => <Flag key={`${flag.objectKind}:${flag.objectId}`} flag={flag} n={i + 1} mode={mode} />)}
+
+        {u.state === 'flagged' && u.flaggedCount > u.flags.length ? (
+          <Line mode={mode}>
+            {fmtInt(u.flaggedCount)} cleared the band this update; the {fmtInt(u.flags.length)} largest are printed.
+          </Line>
+        ) : null}
+        {u.state === 'flagged' && u.flaggedCount <= u.flags.length ? (
+          <Line mode={mode}>Nothing else was unusual this update.</Line>
+        ) : null}
+      </BlockFrame>
+    )
+  },
+
+  figures(data): FigureTable {
+    const out: FigureTable = {}
+    data.unusual.flags.forEach((flag, i) => Object.assign(out, flagFigures(flag, i + 1)))
+    // The page bar's own number and §1's n are the same number, so it is
+    // declared once, here, by the block that states what it is the n OF.
+    if (data.windowVideos != null) {
+      out.week_videos = { value: data.windowVideos, unit: 'videos', label: 'videos this update covered' }
+    }
+    return out
+  },
+
+  quotes(data) {
+    return data.unusual.flags.flatMap((f) => f.quotes.map((q) => q.quote.ref))
+  },
+
+  emptyState(data) {
+    const u = data.unusual
+    // NOT AN EMPTY STATE IN THE USUAL SENSE. Four of the five states have
+    // something to say and only one of them is "we looked and found nothing";
+    // they all come through here because a page, a slide and an email must
+    // word one silence one way (lib/blocks/types.ts).
+    switch (u.state) {
+      case 'flagged':
+        return null
+      case 'nothing_unusual':
+        return u.setSize != null
+          ? `Nothing unusual this week. Every one of the ${fmtInt(u.setSize)} objects this check watches read inside its usual band.`
+          : 'Nothing unusual this week. Everything this check watches read inside its usual band.'
+      case 'refused':
+        return u.note ?? 'This week was not compared with the months behind it.'
+      case 'baseline_forming':
+        return 'This check compares a week with the three complete months behind it, and this workspace does not have three yet.'
+      case 'not_checked':
+      default:
+        return 'No update has run this check for this workspace yet — which is not the same as nothing being unusual.'
+    }
+  },
+}
+
+/** One flag, in full: the object, the week, the months behind it, the band,
+ *  the n, and the explanation labelled as an interpretation. */
+function Flag({ flag, n, mode }: { flag: UnusualFlag; n: number; mode: 'app' | 'print' | 'email' }) {
+  const email = mode === 'email'
+  const weekPct = pct(flag.week.k, flag.week.n)
+  const basePct = pct(flag.baseline.k, flag.baseline.n)
+  const months = flag.baselineMonths.map(monthName).join(', ')
+
+  return (
+    <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'} style={email ? { marginTop: n > 1 ? 14 : 0 } : undefined}>
+      <BlockStat
+        mode={mode}
+        size="lg"
+        value={fmtInt(flag.week.k)}
+        unit="videos this update"
+        level={{ word: flag.label, of: `of ${fmtInt(flag.week.n)} videos this update covered` }}
+        base={`${flag.denominator} · against ${fmtPct(basePct, 1)} across ${months}`}
+      />
+      {/* THE DIFFERENCE AND THE BAND IT CLEARED, INSIDE A VERDICT NODE. The
+          number is printed as points because that is what the comparison
+          measured; the band is printed beside it because a difference without
+          the width it had to clear is a claim without its evidence. */}
+      <span
+        data-copy="verdict"
+        className={email ? undefined : 'text-[12px] font-medium text-foreground'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.ink } : undefined}
+      >
+        {fmtPct(weekPct, 1)} this update against {fmtPct(basePct, 1)} before it — a difference of{' '}
+        {flag.changePts.toFixed(1)} points on a band of {flag.bandPts.toFixed(1)}
+      </span>
+      {flag.baselineFilling.length > 0 ? (
+        <Line mode={mode}>
+          {flag.baselineFilling.length === flag.baselineMonths.length
+            ? 'Every month behind it was still filling when this was read, so the comparison will move.'
+            : `${flag.baselineFilling.map(longMonth).join(' and ')} had not finished when this was read, so the comparison will move.`}
+        </Line>
+      ) : null}
+
+      {flag.sentences.length > 0 ? (
+        <Interpretation sentences={flag.sentences} model={flag.explanationModel} mode={mode} />
+      ) : null}
+
+      {flag.quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
+    </div>
+  )
+}
+
+/**
+ * The model's paragraph, labelled.
+ *
+ * `data-copy="prose"` and no digits inside it: the model explains and code
+ * rates (copy contract rule (a)). Every number the explanation wants was
+ * handed to it as a figure KEY and substituted by the product before it
+ * reached the page — so a digit surfacing here is a number a model typed,
+ * which is the one thing the contract exists to catch.
+ */
+function Interpretation({ sentences, model, mode }: { sentences: readonly string[]; model: string | null; mode: 'app' | 'print' | 'email' }) {
+  const email = mode === 'email'
+  const label = model ? 'Interpretation · written by a model, from the figures above' : 'Interpretation'
+  if (email) {
+    return (
+      <div style={{ background: EMAIL.inner, borderRadius: 4, padding: '10px 12px', marginTop: 8 }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
+        {sentences.map((s, i) => (
+          <p key={i} data-copy="prose" style={{ margin: '5px 0 0', fontFamily: FONT.sans, fontSize: 12.5, lineHeight: 1.5, color: EMAIL.ink }}>{s}</p>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-1.5 rounded bg-muted/50 px-3 py-2.5">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+      {sentences.map((s, i) => <p key={i} data-copy="prose" className="m-0 text-[12.5px] leading-relaxed">{s}</p>)}
+    </div>
+  )
+}
+
+function Line({ mode, children }: { mode: 'app' | 'print' | 'email'; children: React.ReactNode }) {
+  if (mode === 'email') {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{children}</div>
+  }
+  return <p className="m-0 text-[11.5px] text-muted-foreground">{children}</p>
+}
+
+const pct = (k: number, n: number): number => (n > 0 ? (k / n) * 100 : 0)
