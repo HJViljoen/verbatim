@@ -266,6 +266,34 @@ export interface BuildSeriesInput {
  * Pure. Every input is something a loader has already read; nothing here goes
  * near a database, a clock or a model.
  */
+/**
+ * How many updates were delivered in this month, as decision M's first arm
+ * means the question.
+ *
+ * `loadUpdates` keys `byMonth` only for months that HAVE a delivered run, and
+ * `thinMonth` gates its updates arm on `updates != null`, whose documented
+ * meaning is "nobody has counted". So a month inside the run era with ZERO
+ * delivered updates used to arrive as null and could never be marked thin —
+ * the arm could only ever fire for a month with exactly one update, and the
+ * case it exists for, a month the pipeline did not run in, was drawn as an
+ * ordinary month. Sealand's tracking_configs.report_period already reads
+ * `paused`, so its first paused month is the first month that gets it wrong.
+ *
+ * A missing key is 0 only where someone counted (`byMonth` present) and the
+ * month is inside the run era; before the first delivered run a month is read
+ * back at setup, not thin, and that is thinMonth's own gate.
+ */
+function updatesFor(
+  month: string,
+  byMonth: Record<string, number> | undefined,
+  firstRunMonth: string | null | undefined,
+): number | null {
+  const counted = byMonth?.[month]
+  if (counted != null) return counted
+  if (!byMonth || !firstRunMonth) return null
+  return monthStartOf(month) >= monthStartOf(firstRunMonth) ? 0 : null
+}
+
 export function buildSeries(input: BuildSeriesInput): MonthSeries {
   const floor = input.floor ?? SHARE_BAND
   const substrate = input.substrate ?? 'seeded'
@@ -358,7 +386,7 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
       thinMonth(
         { month, videos: den.videos, k: null },
         videosOnAxis.slice(Math.max(0, index - THIN_TRAILING_MONTHS), index),
-        { updates: input.updatesByMonth?.[month] ?? null, firstRunMonth: input.firstRunMonth ?? null },
+        { updates: updatesFor(month, input.updatesByMonth, input.firstRunMonth), firstRunMonth: input.firstRunMonth ?? null },
       )
     ) {
       labels.push({

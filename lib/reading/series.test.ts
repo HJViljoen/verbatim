@@ -318,6 +318,36 @@ describe('buildSeries · labels', () => {
     const thin = s.points.filter((p) => kinds(p.labels).includes('thin')).map((p) => p.month)
     expect(thin).toEqual(['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01'])
   })
+
+  it('reads a run-era month with NO key as zero updates, not as uncounted', () => {
+    // loadUpdates keys byMonth only for months that have a delivered run, so a
+    // month the pipeline did not run in arrived as null and could never be
+    // thin — the exact case decision M's first arm exists for. Here August has
+    // no key and every month is the same size, so the median arm cannot be
+    // what marks it.
+    const wide = monthAxis('2026-05-01', '2026-09-01')
+    const s = buildSeries({
+      axis: wide,
+      audience: 'industry-other',
+      denominators: wide.map((m) => den(m, 600)),
+      updatesByMonth: { '2026-05-01': 4, '2026-06-01': 4, '2026-07-01': 4, '2026-09-01': 4 },
+      firstRunMonth: '2026-04-01',
+    })
+    const thin = s.points.filter((p) => kinds(p.labels).includes('thin')).map((p) => p.month)
+    expect(thin).toEqual(['2026-08-01'])
+  })
+
+  it('leaves a month BEFORE the first run uncounted rather than zero', () => {
+    const wide = monthAxis('2026-01-01', '2026-03-01')
+    const s = buildSeries({
+      axis: wide,
+      audience: 'industry-other',
+      denominators: wide.map((m) => den(m, 600, { origin: 'back_read' })),
+      updatesByMonth: {},
+      firstRunMonth: '2026-04-01',
+    })
+    expect(s.points.filter((p) => kinds(p.labels).includes('thin'))).toEqual([])
+  })
 })
 
 describe('buildSeries · a renamed rival is one line with the break marked', () => {
