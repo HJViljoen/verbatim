@@ -86,6 +86,66 @@ export interface ThemeReading {
   excluded_undated: number
 }
 
+/** One row of `monthly_kind_readings(p_client, p_from, p_to)`: what one insight
+ *  KIND read in one month, inside one audience.
+ *
+ *  THE SHAPE IS `ThemeReading`'s WITH ONE FIELD RENAMED, AND ONE THING ABOUT IT
+ *  IS DIFFERENT. There is no `p_run`, and the stored row's `run_id` is
+ *  bookkeeping rather than identity: `audience_insights.category` is the enum
+ *  Pass A writes, not a clustering artefact, so a re-grouping cannot move an
+ *  insight from one kind to another and two kind months are comparable whether
+ *  or not the runs that wrote them match. Two theme months are not. */
+export interface KindReading {
+  month: string
+  audience: Audience
+  /** The `audience_insights.category` value — `pain_point`, `question`, … The
+   *  ten of `INSIGHT_CATEGORIES` today, and neither the column nor this type
+   *  narrows to them: the vocabulary has grown once already. */
+  kind: string
+  videos: number
+  comments: number
+  platform_mix: PlatformMix
+  /** Same rule as `ThemeReading`: per kind and audience, repeated identically
+   *  on every month row of that kind, never summed. */
+  excluded_on_camera: number
+  /** Same rule as `ThemeReading`: per month, never summed. */
+  excluded_undated: number
+}
+
+/** One row of `monthly_audience_stats(p_client, p_panel, p_from, p_to)`.
+ *
+ *  TWO READINGS ON TWO CLOCKS IN ONE ROW, and nothing here is ever added to
+ *  anything else here. `judged`/`positive`/`negative`/`neutral`/`mixed` are the
+ *  comment-dated analysed video set — the population `DenominatorReading`
+ *  counts — so `negative / judged` is a share with a denominator a reader can
+ *  check. `panel_videos`/`attention_comments`/`panel_platform_mix` are the
+ *  UPLOAD-dated videos by an account on the frozen panel: a different
+ *  population, on a different clock, answering a different question. */
+export interface AudienceStatsReading {
+  month: string
+  audience: Audience
+  /** Videos carrying an AUDIENCE-family sentiment (`lib/reading/mood.ts`
+   *  `isAudienceSentiment`). The four counts below sum to it exactly. */
+  judged: number
+  positive: number
+  negative: number
+  neutral: number
+  mixed: number
+  /** Videos judged on the FRAMING family instead — what the video's own caption
+   *  and transcript claim, not how it was received. Recorded, never mixed in:
+   *  before the 2026-08-18 split the headline was 59% framing on Össur and a
+   *  pass reorder read as "sentiment up 6.2 pts" in a sent subject line. */
+  judged_framing: number
+  /** Videos by a panel account in this audience UPLOADED in this month. */
+  panel_videos: number
+  /** Platform-reported `videos.comments_count` summed over those videos, as at
+   *  `read_at` — not a count of stored comments. It drifts upward while those
+   *  videos are still being re-found, which is why the row freezes and why the
+   *  reading date is printed beside it. */
+  attention_comments: number
+  panel_platform_mix: PlatformMix
+}
+
 /** The bookkeeping both stored tables carry. */
 export interface FreezeColumns {
   status: MonthStatus
@@ -110,6 +170,17 @@ export type DenominatorRow = DenominatorReading & FreezeColumns & { client_id: s
 /** A `month_theme_readings` row, ready to upsert. */
 export type ThemeReadingRow = ThemeReading & FreezeColumns & { client_id: string }
 
+/** A `month_kind_readings` row, ready to upsert. */
+export type KindReadingRow = KindReading & FreezeColumns & { client_id: string }
+
+/** A `month_audience_stats` row, ready to upsert. `panel_id` is null on a row
+ *  written before any panel was frozen: the mood half stands on its own and
+ *  does not wait for one. */
+export type AudienceStatsRow = AudienceStatsReading & FreezeColumns & {
+  client_id: string
+  panel_id: string | null
+}
+
 /** What a stored row has to tell the merge: nothing about its numbers, only
  *  whether it may be touched and what it has always been. The identifying
  *  columns travel as columns, not as a parsed key — a competitor's name is
@@ -119,6 +190,12 @@ export interface StoredFreeze {
   month: string
   audience: Audience
   theme_id: string | null
+  /** The kind, on a `month_kind_readings` row; absent everywhere else. The
+   *  third key column differs per table — `theme_id` on the theme readings,
+   *  `kind` on the kind readings, neither on the denominators or the audience
+   *  stats — and the delete path restates whichever one the row has, so a
+   *  frozen row can never be deleted by a key that half-matches. */
+  kind?: string | null
   status: MonthStatus
   origin: MonthOrigin
   frozen_at: string | null
@@ -134,3 +211,11 @@ export const RPC_WINDOW_DENOMINATORS = 'window_denominators'
 export const RPC_WINDOW_THEME_READINGS = 'window_theme_readings'
 export const TABLE_DENOMINATORS = 'month_denominators'
 export const TABLE_THEME_READINGS = 'month_theme_readings'
+/** WP5's three (20260918094000_kind_mood_attention.sql). The kind read has no
+ *  `p_run`; the audience stats take a panel id, which may be null. */
+export const RPC_KIND_READINGS = 'monthly_kind_readings'
+export const RPC_WINDOW_KIND_READINGS = 'window_kind_readings'
+export const RPC_AUDIENCE_STATS = 'monthly_audience_stats'
+export const TABLE_KIND_READINGS = 'month_kind_readings'
+export const TABLE_AUDIENCE_STATS = 'month_audience_stats'
+export const TABLE_ATTENTION_PANELS = 'attention_panels'
