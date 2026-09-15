@@ -502,7 +502,16 @@ begin
     return new;
   end if;
 
-  v_mark := format('|%s/%s/%s|', tg_table_name, new.month, new.audience);
+  -- THE AUDIENCE IS HASHED INTO THE MARK, NOT INTERPOLATED. The mark is
+  -- matched with `position(v_mark in v_seen)`, i.e. by substring, and `audience`
+  -- is `competitor:<competitor_name>` — free text from Settings, which
+  -- lib/rivals.ts trims and nothing else. A rival named `a|b` produced the mark
+  -- |T/M/competitor:a|b|, which CONTAINS the mark for a rival named `a`; the
+  -- collision is one-directional, so it made the guard refuse a legitimate
+  -- first back-read rather than admit a late row — it failed safe, and it
+  -- failed permanently. md5 is hex, tg_table_name is an identifier and month is
+  -- a date, so no mark can be a substring of another.
+  v_mark := format('|%s/%s/%s|', tg_table_name, new.month, md5(new.audience));
 
   -- (b) is this row genuinely NEW? `insert … on conflict do update` fires its
   -- BEFORE INSERT triggers BEFORE it detects the conflict, so the ordinary
