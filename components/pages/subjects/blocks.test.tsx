@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { SUBJECT_BLOCKS } from './index'
+import { layoutFor, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
 import { subjectsSubject } from './subject'
 import { subjectsLine } from './line'
@@ -75,7 +75,11 @@ describe('SU1 · the subjects list', () => {
     expect(subjectsList.emptyState(data)).toContain('Confirm the set')
     const text = renderText(subjectsList.render(data, 'app', ctx))
     expect(text).toContain('2 proposed · none confirmed, so nothing is counted yet.')
-    expect(text).toContain('the category raised it in the videos we read')
+    // The Confirm control is ON the row — a candidate listed as prose under the
+    // editor is the one control a client needs, out of reach.
+    expect(text).toContain('Durability')
+    expect(text).toContain('not counted yet')
+    expect(text).toContain('Confirm')
   })
 
   it('is email-safe', () => {
@@ -258,5 +262,31 @@ describe('SU3 · questions your posts did not answer', () => {
 
   it('carries no verdict at all — its two halves are dated two ways', () => {
     expect(blockAnswers(subjectsUnanswered, subjectsFixture()).verdicts).toEqual([])
+  })
+})
+
+describe('the page’s own layout', () => {
+  it('draws all six blocks when a subject is selected', () => {
+    expect(layoutFor(subjectsFixture()).map((b) => b.block.key)).toEqual(SUBJECT_BLOCKS.map((b) => b.key))
+  })
+
+  it('drops the four blocks that are about a subject when there is no subject', () => {
+    // Six tiles printing the same sentence down two screens of empty space is
+    // honest and unreadable. The page decides what to drop; that division is
+    // the block contract's own ("a report drops a slide").
+    for (const data of [refusedFixture(), candidatesFixture()]) {
+      expect(layoutFor(data).map((b) => b.block.key)).toEqual(['subjects.list', 'subjects.subject'])
+    }
+  })
+
+  it('never asks the grid for a span it does not have', () => {
+    for (const data of [subjectsFixture(), refusedFixture()]) {
+      for (const { col, row } of layoutFor(data)) {
+        expect(col).toBeGreaterThanOrEqual(1)
+        expect(col).toBeLessThanOrEqual(12)
+        expect(row).toBeGreaterThanOrEqual(1)
+        expect(row).toBeLessThanOrEqual(6)
+      }
+    }
   })
 })

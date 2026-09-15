@@ -32,12 +32,35 @@ export const SUBJECT_BLOCKS: readonly Block<SubjectsData>[] = [
 /** Column span and row height per block, in the grid's 12 columns and 116px
  *  row units. The rail is narrow and tall; the reading fills the rest. */
 const LAYOUT: Record<string, { col: number; row: number }> = {
-  'subjects.list': { col: 3, row: 5 },
+  'subjects.list': { col: 3, row: 6 },
   'subjects.subject': { col: 9, row: 2 },
-  'subjects.line': { col: 9, row: 3 },
+  // FOUR ROWS, NOT THREE. A tile clips what does not fit (overflow-hidden), and
+  // at three the chart's own footer link was cut in half.
+  'subjects.line': { col: 9, row: 4 },
   'subjects.kinds': { col: 6, row: 4 },
   'subjects.voices': { col: 6, row: 4 },
   'subjects.unanswered': { col: 12, row: 2 },
+}
+
+/**
+ * What the page draws, and how big.
+ *
+ * THE PAGE DECIDES WHAT TO DROP — that is the block contract's own division of
+ * labour ("a tile keeps its size; a report drops a slide; an email drops a
+ * section"). With no subject selected, four of the six blocks are about a
+ * subject that is not there, and drawing all six printed the SAME sentence six
+ * times down two screens of empty tiles. Honest, and unreadable. The two that
+ * are about the workspace rather than about a subject stay, at the height of
+ * what they have to say.
+ */
+export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col: number; row: number }[] {
+  if (data.selected) {
+    return SUBJECT_BLOCKS.map((block) => ({ block, ...(LAYOUT[block.key] ?? { col: 12, row: 2 }) }))
+  }
+  return [
+    { block: subjectsList, col: 4, row: 3 },
+    { block: subjectsSubject, col: 8, row: 3 },
+  ]
 }
 
 /** The app's context: RELATIVE links, so `next/link` navigates on the client
@@ -79,14 +102,11 @@ export function SubjectsPage({
         record={{ line: data.record.line, lines: data.record.lines }}
       />
       <PageGrid>
-        {SUBJECT_BLOCKS.map((block) => {
-          const at = LAYOUT[block.key] ?? { col: 12, row: 2 }
-          return (
-            <Tile key={block.key} col={at.col} row={at.row}>
-              {block.render(data, 'app', ctx)}
-            </Tile>
-          )
-        })}
+        {layoutFor(data).map(({ block, col, row }) => (
+          <Tile key={block.key} col={col} row={row}>
+            {block.render(data, 'app', ctx)}
+          </Tile>
+        ))}
       </PageGrid>
       {data.notes.length > 0 ? (
         <p className="m-0 text-[11px] text-muted-foreground">

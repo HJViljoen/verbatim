@@ -257,12 +257,19 @@ export function setLine(active: number, proposed: number): string {
 
 /** Why this subject's share is not being shown. Null when it is.
  *
- *  TWO DIFFERENT SILENCES AND THEY READ DIFFERENTLY. "Calibrating" is about the
- *  MEASUREMENT — nobody has checked how often the judge is right, so the number
- *  exists and may not be printed. "Not read yet" is about the RECORD — the
- *  month holds no row for this subject. Collapsing them into one sentence was
- *  how the old product told a client its data was missing when its method was. */
-export function railNote(calibration: SubjectCalibration, read: boolean): string | null {
+ *  THREE DIFFERENT SILENCES AND THEY READ DIFFERENTLY. "Not counted yet" is
+ *  about the CONSENT — the subject is named and nobody has confirmed it, so
+ *  nothing has ever looked. "Calibrating" is about the MEASUREMENT — nobody
+ *  has checked how often the judge is right, so the number exists and may not
+ *  be printed. "No reading yet" is about the RECORD — the month holds no row.
+ *  Collapsing them into one sentence was how the old product told a client its
+ *  data was missing when its method was. */
+export function railNote(
+  calibration: SubjectCalibration,
+  read: boolean,
+  status: Subject['status'] = 'active',
+): string | null {
+  if (status === 'proposed') return 'not counted yet — confirm it and counting starts with the next update'
   if (calibration === 'calibrating') return 'still checking how often we get this right'
   if (!read) return 'no reading yet'
   return null
@@ -655,11 +662,16 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const seriesFor = (subjectId: string, audience: string): MonthSeries | null =>
     subjectSet?.series.find((s) => s.objectId === subjectId && s.audience === audience) ?? null
 
-  const rail: SubjectRail[] = active.slice(0, RAIL_MAX).map((s) => {
+  // CONFIRMED FIRST, THEN NAMED-BUT-NOT-CONFIRMED, and both in the ONE list.
+  // A proposed subject was kept out of the rail at first and listed underneath
+  // as prose, which left the only control that can start it counting — Confirm
+  // — on a row a client could not reach. The editor is the whole live set; the
+  // row says which of the two it is.
+  const rail: SubjectRail[] = [...active, ...proposed].slice(0, RAIL_MAX).map((s) => {
     const calibration = subjectCalibration(s)
     const own = seriesFor(s.id, CLIENT_AUDIENCE)
     const point = own ? pointsByMonth(own).get(month) ?? null : null
-    const read = point != null && point.k != null && point.videos != null
+    const read = s.status === 'active' && point != null && point.k != null && point.videos != null
     return {
       id: s.id,
       name: s.name,
@@ -671,9 +683,9 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       level: read && calibration === 'ready'
         ? { k: point!.k!, n: point!.videos!, pct: pctOf(point!.k, point!.videos) }
         : null,
-      note: railNote(calibration, read),
+      note: railNote(calibration, read, s.status),
       selected: s.id === selectedId,
-      href: `/dashboard/subjects?item=${encodeURIComponent(s.id)}`,
+      href: s.status === 'active' ? `/dashboard/subjects?item=${encodeURIComponent(s.id)}` : '',
     }
   })
 

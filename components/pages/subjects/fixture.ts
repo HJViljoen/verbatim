@@ -4,6 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { kindShares, redditRead } from '@/lib/reading/kinds'
 import {
   axisNote,
+  railNote,
   setLine,
   SUPERSEDE_RULE,
   UNANSWERED_BASIS,
@@ -214,7 +215,12 @@ export function candidatesFixture(over: Partial<SubjectsData> = {}): SubjectsDat
   return {
     ...base,
     list: {
-      rows: [],
+      // A proposed subject IS in the list — that is where its Confirm control
+      // lives — and it carries no level, because nothing has counted it.
+      rows: [
+        { id: 'p1', name: 'Durability', description: null, origin: 'category_theme' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), selected: false, href: '' },
+        { id: 'p2', name: 'Recycled materials', description: null, origin: 'own_claims' as const, namedAt: '2026-08-19', status: 'proposed' as const, calibration: 'calibrating' as const, level: null, note: railNote('calibrating', false, 'proposed'), selected: false, href: '' },
+      ],
       proposed: [
         { id: 'p1', name: 'Durability', because: 'the category raised it in the videos we read' },
         { id: 'p2', name: 'Recycled materials', because: 'you said this in your own posts' },

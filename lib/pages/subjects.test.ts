@@ -317,3 +317,12 @@ describe('sideFigures', () => {
     expect(sideFigures(null)).toEqual({})
   })
 })
+
+describe('railNote, on a subject nobody has confirmed', () => {
+  it('says what is missing is the CONSENT, not the data', () => {
+    expect(railNote('calibrating', false, 'proposed'))
+      .toBe('not counted yet — confirm it and counting starts with the next update')
+    // and it outranks both other silences: nothing has ever looked at it.
+    expect(railNote('ready', true, 'proposed')).toContain('not counted yet')
+  })
+})

@@ -41,25 +41,11 @@ export const subjectsList: Block<SubjectsData> = {
               level: r.level,
               note: r.note,
               selected: r.selected,
-              href: r.href,
+              href: r.href || undefined,
             }))}
             setLine={l.setLine}
             notRecorded={l.notRecorded}
           />
-          {l.proposed.length > 0 ? (
-            <div className="flex flex-col gap-1 border-t border-border/70 pt-2">
-              <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
-                Proposed, not counted yet
-              </span>
-              <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
-                {l.proposed.map((p) => (
-                  <li key={p.id} className="text-[12px]">
-                    {p.name} — <span className="text-muted-foreground">{p.because}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
         </BlockFrame>
       )
     }
@@ -107,7 +93,10 @@ export const subjectsList: Block<SubjectsData> = {
   emptyState(data) {
     const l = data.list
     if (l.notRecorded) return l.notRecorded
-    if (l.rows.length === 0) {
+    // NOT "no rows" — NO CONFIRMED ROW. A named subject that nobody has
+    // confirmed is visible in the editor and is counted by nothing, and the
+    // block whose whole job is the set has to say which of those two it is.
+    if (!l.rows.some((r) => r.status === 'active')) {
       return l.proposed.length > 0
         ? `We have proposed ${fmtInt(l.proposed.length)} subject${l.proposed.length === 1 ? '' : 's'}. Confirm the set and we start counting from the next update.`
         : 'No subject has been named for this workspace yet.'

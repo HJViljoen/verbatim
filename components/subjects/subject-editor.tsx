@@ -126,10 +126,15 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                   of your videos · {r.level.k} of {r.level.n} videos
                 </span>
               ) : (
-                <span className={cls.meta}>{r.note ?? 'no reading yet'}</span>
+                // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
+                // counted: the chip on the line below already says that, and
+                // the same sentence twice on one row reads as a rendering bug.
+                // What the client actually has to decide is whether to keep it,
+                // and the origin is the argument for keeping it.
+                <span className={cls.meta}>{r.status === 'proposed' ? r.because : r.note ?? 'no reading yet'}</span>
               )}
 
-              {variant === 'settings' && r.description ? (
+              {variant === 'settings' && r.status !== 'proposed' && r.description ? (
                 <span className="text-[11.5px] text-muted-foreground">{r.description}</span>
               ) : null}
 
@@ -151,6 +156,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     </button>
                   </>
                 ) : null}
+                <span aria-hidden>·</span>
                 <button
                   type="button"
                   disabled={pending}
@@ -159,6 +165,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 >
                   Rename
                 </button>
+                <span aria-hidden>·</span>
                 <button
                   type="button"
                   disabled={pending}

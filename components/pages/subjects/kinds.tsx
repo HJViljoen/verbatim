@@ -43,13 +43,24 @@ function Audience({ side, mode }: { side: SubjectSide; mode: RenderMode }) {
           of {fmtInt(side.n ?? 0)} videos
         </span>
       </span>
+      {/* THE SHARE RIDES ON THE LABEL AND THE COUNT IS THE COUNT. `RankedBar`
+          gives the count a 28px column (it is built for one short token), and
+          "34% · 472" wrapped onto two lines in it — a number broken across a
+          line break is a number a reader has to reassemble. */}
       <BlockRanked
         mode={mode}
         rows={shown.map((k) => ({
-          label: k.label,
+          label: (
+            <>
+              {k.label}{' '}
+              <span data-copy="figure" className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'}>
+                {fmtPct(k.pct ?? 0)}
+              </span>
+            </>
+          ),
           pct: ((k.pct ?? 0) / max) * 100,
           color: side.color,
-          count: `${fmtPct(k.pct ?? 0)} · ${fmtInt(k.videos)}`,
+          count: fmtInt(k.videos),
         }))}
       />
     </div>
