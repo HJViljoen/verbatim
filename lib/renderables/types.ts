@@ -66,6 +66,25 @@ export interface Scope {
 export interface Quote {
   ref: string
   text: string
+  /** The language the words were written in, as comment_translations read it
+   *  (item 8, decision A, 2026-09-18). Absent means nothing has read this text
+   *  — not that it is English. Present on a rendered quote, never on a frozen
+   *  one: it is stripped by freezeQuotes with the words and comes back with
+   *  them. */
+  lang?: string | null
+  /** The machine translation, or null for "already English". Shown UNDER the
+   *  original, stamped, never instead of it. Never frozen: it is a third
+   *  party's words, so a stored artefact keeps the ref and resolves the
+   *  rendering live, which is also what makes an erasure reach it. */
+  english?: string | null
+}
+
+/** What one ref resolves to at render. A bare string is still accepted
+ *  everywhere a resolution is, for callers that want only the words. */
+export interface QuoteResolution {
+  text: string
+  lang?: string | null
+  english?: string | null
 }
 
 export interface Slide {

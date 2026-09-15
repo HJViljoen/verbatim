@@ -95,3 +95,79 @@ describe('quote freeze / resolve', () => {
     expect(isQuote({ ref: 'p:ls1', text: 'x' })).toBe(true)
   })
 })
+
+// ---- Item 8: the reading that travels with a quote (2026-09-18) ------------
+
+// The freeze contract with item 8's two extra fields (2026-09-18). The rule the
+// module has always kept — a stored artefact holds ids, never words — now has a
+// second word-bearing field to keep out.
+
+const quote = (ref: string, text: string, extra: Record<string, unknown> = {}) => ({ ref, text, ...extra })
+
+describe('freezeQuotes strips the English rendering with the original', () => {
+  it('leaves no trace of either in the frozen data', () => {
+    const data = {
+      cards: [quote('e:ev1', 'Me encanta esta pierna', { lang: 'es', english: 'I love this leg' })],
+    }
+    const { data: frozen, refs } = freezeQuotes(data)
+    expect(refs).toEqual(['e:ev1'])
+    expect(JSON.stringify(frozen)).not.toContain('I love this leg')
+    expect(JSON.stringify(frozen)).not.toContain('Me encanta')
+    expect(frozen.cards[0]).toEqual({ ref: 'e:ev1', text: '' })
+  })
+
+  it('drops the language label too — a label on words nobody can see says something about a person nobody can check', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('c:c1', 'hola', { lang: 'es' }) })
+    expect('lang' in (frozen.q as object)).toBe(false)
+  })
+
+  it('keeps every other field a surface hung on the quote', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('e:ev1', 'hola', { lang: 'es', english: 'hello', platform: 'youtube' }) })
+    expect(frozen.q).toEqual({ ref: 'e:ev1', text: '', platform: 'youtube' })
+  })
+})
+
+describe('resolveQuotes puts back both', () => {
+  it('accepts a bare string, as every caller before item 8 passed', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('e:ev1', 'hello') })
+    expect(resolveQuotes(frozen, new Map([['e:ev1', 'hello']]))).toEqual({ q: { ref: 'e:ev1', text: 'hello' } })
+  })
+
+  it('accepts a resolution and re-attaches the reading', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('e:ev1', 'Me encanta esta pierna', { lang: 'es', english: 'I love this leg' }) })
+    expect(resolveQuotes(frozen, new Map([['e:ev1', { text: 'Me encanta esta pierna', lang: 'es', english: 'I love this leg' }]])))
+      .toEqual({ q: { ref: 'e:ev1', text: 'Me encanta esta pierna', lang: 'es', english: 'I love this leg' } })
+  })
+
+  it('renders the original alone when the cache has no reading for it', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('e:ev1', 'hola') })
+    expect(resolveQuotes(frozen, new Map([['e:ev1', { text: 'hola' }]]))).toEqual({ q: { ref: 'e:ev1', text: 'hola' } })
+  })
+
+  it('records an English verdict as english: null, which is not the same as unread', () => {
+    const { data: frozen } = freezeQuotes({ q: quote('e:ev1', 'it works') })
+    const out = resolveQuotes(frozen, new Map([['e:ev1', { text: 'it works', lang: 'en', english: null }]])) as { q: { lang?: string; english?: string | null } }
+    expect(out.q.lang).toBe('en')
+    expect(out.q.english).toBeNull()
+  })
+
+  it('drops a quote whose original no longer resolves, rendering or not', () => {
+    const { data: frozen } = freezeQuotes({ list: [quote('e:ev1', 'kept'), quote('e:ev2', 'erased')] })
+    const out = resolveQuotes(frozen, new Map([
+      ['e:ev1', { text: 'kept', lang: 'es', english: 'kept, in English' }],
+      ['e:ev2', { text: '', lang: 'es', english: 'the rendering outlived the words' }],
+    ])) as { list: unknown[] }
+    expect(out.list).toHaveLength(1)
+  })
+})
+
+describe('the structural recogniser', () => {
+  it('still recognises a quote that has grown fields', () => {
+    expect(isQuote({ ref: 'e:1', text: 'x', lang: 'es', english: 'y' })).toBe(true)
+    expect(isQuote({ ref: 'nope', text: 'x' })).toBe(false)
+  })
+
+  it('collects refs from quotes carrying a reading', () => {
+    expect(collectQuoteRefs({ a: quote('e:1', 'x', { lang: 'es' }), b: quote('c:2', 'y') }).sort()).toEqual(['c:2', 'e:1'])
+  })
+})

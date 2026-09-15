@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX } from '../../config'
 import { createSnapshot } from '../../snapshots'
 import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables/quotes-freeze'
-import { fetchQuoteTextsByRefs } from '../../quotes'
+import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
 import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
@@ -174,7 +174,7 @@ export async function freezeStep(
   // a document frozen from a thinner pool than the build asked for is wrong
   // for ever, and nothing on the page would say so.
   const refs = collectQuoteRefs(args.answers)
-  const texts = refs.length ? await fetchQuoteTextsByRefs(admin, refs, { onReadError: 'throw' }) : new Map<string, string>()
+  const texts = refs.length ? await fetchQuoteResolutionsByRefs(admin, refs, { onReadError: 'throw' }) : new Map<string, QuoteResolution>()
   const answers = resolveQuotes(args.answers, texts) as ResearchAnswer[]
   const signals = await signalsOf(admin, ctx)
   const figures = documentFigures(signals, answers)
