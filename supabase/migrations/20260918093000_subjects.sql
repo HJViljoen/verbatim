@@ -39,11 +39,18 @@
 --   5. monthly_subject_readings() / window_subject_readings()
 --   6. moves                   — "Track this", append-only for members
 --
--- Applied by hand in window W1, with no run in flight. Idempotent: every
--- object is `if not exists` or `create or replace`, and the two triggers are
--- dropped before they are created. Exercised twice on a throwaway PostgreSQL
--- 17 cluster over schema-baseline.sql plus every 2026* migration in filename
--- order; the checks are listed at the foot.
+-- Applied by hand in window W1, with no run in flight, and AFTER
+-- 20260918092000_reading_windows.sql (M3) — not merely after it in filename
+-- order, but dependent on it: month_subject_readings' INSERT guard calls
+-- public.month_reading_frozen_insert_guard(), which M3 creates, and that
+-- function does not exist in production today. Applied alone this file fails
+-- on the trigger statement. It also needs 20260915092000_monthly_reading.sql
+-- for month_reading_frozen_guard(), which IS applied.
+--
+-- Idempotent: every object is `if not exists` or `create or replace`, and the
+-- three triggers are dropped before they are created. Exercised twice on a
+-- throwaway PostgreSQL 17 cluster over schema-baseline.sql plus every 2026*
+-- migration in filename order; the checks are listed at the foot.
 
 -- 1. The named set -------------------------------------------------------------
 create table if not exists public.subjects (
