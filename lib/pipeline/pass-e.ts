@@ -337,9 +337,10 @@ export async function runPassE(
   for (const i of insights) if (i.theme) themeSlugById.set(i.id, i.theme)
   const poolIds = [...new Set(carried.flatMap((p) => p.insightIds.slice(0, QUOTE_POOL_PER_PERSONA)))]
   const quotesByAudience = poolIds.length ? await fetchQuotesByAudience(admin, poolIds) : new Map()
-  // A pool that resolves to nothing is a schema/permission problem, not an
-  // absence of good voices — fetchQuotesByAudience swallows its query error and
-  // returns an empty map, so without this the personas would just look quiet.
+  // A pool that resolves to nothing is a reachability problem, not an absence
+  // of good voices: rows nobody can see come back as no rows at all (a query
+  // that fails outright now throws, since each chunk is paged), so without this
+  // the personas would just look quiet.
   if (poolIds.length && quotesByAudience.size === 0) {
     console.warn(`[pass-e] ${poolIds.length} insight ids resolved 0 evidence rows — check insight_evidence reachability`)
   }

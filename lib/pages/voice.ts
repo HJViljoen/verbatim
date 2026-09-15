@@ -295,8 +295,8 @@ export async function loadVoice(scope: Scope): Promise<VoiceData | VoiceEmpty> {
   const themedRunId = pickThemedRunId([...runDates].map(([run_id, created_at]) => ({ run_id, created_at })), runningIds)
 
   // selectAll: this is the page's whole theme corpus for one update, and one
-  // update crosses the 1000-row cap (Sealand's latest is at 936). A bare
-  // select would drop the tail silently — the heard-once tier, and with it the
+  // update crosses the 1000-row cap (Sealand's biggest is 1,053, on 13 Sep). A
+  // bare select would drop the tail silently — the heard-once tier, and with it the
   // member_themes a grounding deep link matches on.
   //
   // `video_evidence_count` here is a HARD PRECONDITION on migration

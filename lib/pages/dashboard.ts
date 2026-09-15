@@ -260,13 +260,17 @@ export async function loadDashboard(scope: Scope): Promise<DashboardData | Dashb
   const supportIds: string[] = []
   if (oneThing) for (const id of oneThing.based_on?.insight_ids ?? []) supportIds.push(...(miEvidenceById.get(id)?.supporting_theme_ids ?? []))
   const [platformRows, themeRows, earlierRes, supportInsights, bucketRows, initiatives] = await Promise.all([
+    // `.order('id')`: selectAll pages with .range(), so without a stable order
+    // the two pages of an update past 1,000 videos can skip or repeat rows —
+    // and one update has crossed that line (Sealand, 10 Sep, 1,098 videos),
+    // which is the platform split on the Dashboard counted wrong.
     selectAll<{ platform: string | null }>(() =>
-      supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId),
+      supabase.from('videos').select('platform').eq('client_id', clientId).eq('run_id', videoRunId).order('id'),
     ),
-    // selectAll: one update's themes cross the 1000-row cap (Sealand's latest
-    // is at 936), and this read is unordered, so a silent cap would hand
-    // topThemes an arbitrary 1000 of them and the tiles would rank the wrong
-    // eight without saying so.
+    // selectAll: one update's themes cross the 1000-row cap (Sealand's biggest
+    // is 1,053, on 13 Sep), and this read is unordered, so a silent cap would
+    // hand topThemes an arbitrary 1000 of them and the tiles would rank the
+    // wrong eight without saying so.
     themedRunId
       ? selectAll<ThemeRankRow>(() =>
           supabase.from('themes')

@@ -6,6 +6,7 @@
 // and covers rows/runs that predate hero_quote.
 
 import { chunk } from './chunk'
+import { selectAll } from './supabase-admin'
 import { VIDEO_QUOTE_BONUS } from './config'
 import type { EvidenceSource } from './pipeline/pass-a'
 
@@ -186,25 +187,48 @@ export function scopeToCompetitor(ids: string[], bucketById: Map<string, string>
 /** Minimal shape of a Supabase-style client for the evidence read. Kept as a
  *  local cast target so callers can pass their fully-typed client without TS
  *  trying to reconcile Postgrest's deeply-recursive builder type ("excessively
- *  deep") against this structural interface. */
-type Rows = PromiseLike<{ data: unknown[] | null; error: unknown }>
+ *  deep") against this structural interface.
+ *
+ *  A builder reaches `fetchChunks` un-awaited and ends at `.order(...)`, because
+ *  each chunk is PAGED: `selectAll` calls the builder afresh per page and closes
+ *  it with `.range()`. */
+type Page = PromiseLike<{ data: unknown[] | null; error: unknown }>
+interface Rows {
+  range(from: number, to: number): Page
+}
+interface Ordered extends Rows {
+  order(col: string): Rows
+}
 interface EvidenceClient {
   from(table: string): {
     select(cols: string): {
-      in(col: string, vals: string[]): Rows & { eq(col: string, val: boolean): Rows }
+      in(col: string, vals: string[]): Ordered & { eq(col: string, val: boolean): Ordered }
     }
   }
 }
 
-/** Split an id list into PostgREST-URL-sized chunks and fetch them ALL AT
- *  ONCE. These helpers used to await one chunk at a time; Market and Voice
- *  pass hundreds to thousands of ids, so a page paid 5–30 serial round trips
- *  here — each one, after an idle spell, at the DB's wake-up price. Chunks
- *  are disjoint by id, so processing the results in chunk order gives the
- *  same per-id ordering the serial loop did. */
+/** Split an id list into PostgREST-URL-sized chunks, fetch them ALL AT ONCE,
+ *  and page each chunk past the 1000-row cap.
+ *
+ *  Two different caps, and chunking only answers the first. 120 ids keeps the
+ *  request URL short (PostgREST's other limit); it does nothing about the
+ *  RESPONSE, and evidence rows per insight are unbounded — one Sealand insight
+ *  carries 104, and its 120 densest sum to 1,914. A bare select would drop the
+ *  overflow silently, which on the print/export path (up to 40 items × 120 ids)
+ *  is quotes simply missing from a deck with nothing saying so. The same
+ *  reasoning, and the same shape, as lib/engage.ts `chunkedIn` and the Voice
+ *  page's export read.
+ *
+ *  These helpers used to await one chunk at a time; Market and Voice pass
+ *  hundreds to thousands of ids, so a page paid 5–30 serial round trips here —
+ *  each one, after an idle spell, at the DB's wake-up price. Chunks are
+ *  disjoint by id, so processing the results in chunk order gives the same
+ *  per-id ordering the serial loop did. */
 async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
-  const results = await Promise.all(chunk(ids, size).map((part) => fetch(part)))
-  return results.flatMap((r) => (r.data ?? []) as R[])
+  const pages = await Promise.all(
+    chunk(ids, size).map((part) => selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> })),
+  )
+  return pages.flat()
 }
 
 /** Fetch evidence quotes for a set of audience-insight ids (chunked to stay under
@@ -220,7 +244,7 @@ export async function fetchQuotesByAudience(
   // reach a picker.
   const rows = await fetchChunks<{ id: string; audience_insight_id: string; quote: string | null; relevance_rank: number | null; source: string | null }>(
     audienceIds,
-    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, source').in('audience_insight_id', chunk).eq('redacted', false),
+    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, source').in('audience_insight_id', chunk).eq('redacted', false).order('id'),
   )
   for (const r of rows) {
     if (!r.quote) continue
@@ -256,7 +280,7 @@ export async function fetchQuoteCitationsByAudience(
     source: string | null
   }>(
     audienceIds,
-    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', chunk).eq('redacted', false),
+    (chunk) => c.from('insight_evidence').select('id, audience_insight_id, quote, relevance_rank, comment_id, source_video_id, source').in('audience_insight_id', chunk).eq('redacted', false).order('id'),
   )
   for (const r of rows) {
     if (!r.quote) continue
@@ -297,7 +321,7 @@ export async function fetchQuoteTextsByCommentId(
   const unique = [...new Set(commentIds.filter(Boolean))]
   const rows = await fetchChunks<{ comment_id: string | null; quote: string | null }>(
     unique,
-    (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false),
+    (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false).order('id'),
   )
   for (const r of rows) {
     if (r.comment_id && r.quote && !out.has(r.comment_id)) out.set(r.comment_id, r.quote)
@@ -341,7 +365,7 @@ export async function fetchQuoteTextsByRefs(
   const heroReads = [...heroes.entries()].map(async ([table, ids]) => {
     const rows = await fetchChunks<{ id: string; hero_quote: string | null }>(
       ids,
-      (chunk) => c.from(table).select('id, hero_quote').in('id', chunk) as unknown as Rows,
+      (chunk) => c.from(table).select('id, hero_quote').in('id', chunk).order('id') as unknown as Rows,
     )
     for (const r of rows) if (r.hero_quote) out.set(`h:${table}:${r.id}`, cleanQuote(r.hero_quote))
   })
@@ -350,7 +374,7 @@ export async function fetchQuoteTextsByRefs(
     ? (async () => {
         const rows = await fetchChunks<{ run_id: string; brand_voice: { about?: { quote?: string | null }[] } | null }>(
           [...brandVoice.keys()],
-          (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk) as unknown as Rows,
+          (chunk) => c.from('run_summary').select('run_id, brand_voice').in('run_id', chunk).order('run_id') as unknown as Rows,
         )
         for (const r of rows) {
           for (const n of brandVoice.get(r.run_id) ?? []) {
@@ -367,12 +391,12 @@ export async function fetchQuoteTextsByRefs(
     ? (async () => {
         const cited = await fetchChunks<{ comment_id: string | null }>(
           by.m,
-          (chunk) => c.from('insight_evidence').select('comment_id').in('comment_id', chunk).eq('redacted', false),
+          (chunk) => c.from('insight_evidence').select('comment_id').in('comment_id', chunk).eq('redacted', false).order('id'),
         )
         const ok = new Set(cited.map((r) => r.comment_id).filter((id): id is string => !!id))
         const rows = await fetchChunks<{ id: string; text: string | null }>(
           [...ok],
-          (chunk) => c.from('comments').select('id, text').in('id', chunk) as unknown as Rows,
+          (chunk) => c.from('comments').select('id, text').in('id', chunk).order('id') as unknown as Rows,
         )
         for (const r of rows) if (r.text) out.set(`m:${r.id}`, cleanQuote(r.text))
       })()
@@ -382,7 +406,7 @@ export async function fetchQuoteTextsByRefs(
     ? (async () => {
         const rows = await fetchChunks<{ id: string; phrase: string | null }>(
           by.p,
-          (chunk) => c.from('language_samples').select('id, phrase').in('id', chunk) as unknown as Rows,
+          (chunk) => c.from('language_samples').select('id, phrase').in('id', chunk).order('id') as unknown as Rows,
         )
         for (const r of rows) if (r.phrase) out.set(`p:${r.id}`, r.phrase)
       })()
@@ -390,15 +414,15 @@ export async function fetchQuoteTextsByRefs(
   const [byId, byComment, byVideo] = await Promise.all([
     fetchChunks<{ id: string; quote: string | null }>(
       by.e,
-      (chunk) => c.from('insight_evidence').select('id, quote').in('id', chunk).eq('redacted', false),
+      (chunk) => c.from('insight_evidence').select('id, quote').in('id', chunk).eq('redacted', false).order('id'),
     ),
     fetchChunks<{ comment_id: string | null; quote: string | null }>(
       by.c,
-      (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false),
+      (chunk) => c.from('insight_evidence').select('comment_id, quote').in('comment_id', chunk).eq('redacted', false).order('id'),
     ),
     fetchChunks<{ source_video_id: string | null; quote: string | null }>(
       by.v,
-      (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false),
+      (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false).order('id'),
     ),
   ])
   await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead])
@@ -451,7 +475,7 @@ export async function fetchLiveBucketsByAudience(
     is_competitor: boolean | null
     competitor_name: string | null
   }>(videoIds, (chunk) =>
-    c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk),
+    c.from('videos').select('id, is_client, is_competitor, competitor_name').in('id', chunk).order('id'),
   )
   // A short read here is not cosmetic. This map decides whether the agent may
   // say "your customers" (lib/agent/enforce.ts → components/agent-answer.tsx),
@@ -483,7 +507,7 @@ export async function fetchLiveBucketsByAudience(
 export async function fetchInsightsByIds<T>(client: unknown, ids: string[], select: string): Promise<T[]> {
   const c = client as EvidenceClient
   const unique = [...new Set(ids)]
-  return fetchChunks<T>(unique, (chunk) => c.from('audience_insights').select(select).in('id', chunk))
+  return fetchChunks<T>(unique, (chunk) => c.from('audience_insights').select(select).in('id', chunk).order('id'))
 }
 
 /** A per-page quote picker with cross-card de-duplication (no voice repeats on a

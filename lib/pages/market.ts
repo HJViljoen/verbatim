@@ -45,7 +45,8 @@ const SINGLE_SOURCE_SHOWN = 12
 /** News headlines kept (rings 0–2). */
 const NEWS_SHOWN = 30
 /** Audience-insight ids ranked and capped before a quote fetch — cost control,
- *  not a PostgREST limit (fetchQuotesByAudience chunks on its own). */
+ *  not a PostgREST limit (fetchQuotesByAudience chunks the ids to keep the URL
+ *  short and pages each chunk past the 1000-row response cap). */
 const QUOTE_POOL_CAP = 120
 
 export const LEGEND_ITEMS: GlossaryKey[] = ['conversations', 'say_vs_hear', 'about_you', 'news', 'act_now', 'plan_next', 'worth_considering', 'strong_evidence', 'early_signal']

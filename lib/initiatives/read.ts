@@ -87,9 +87,11 @@ export async function loadInitiatives(
     if (runIds.length === 0) return { rows: [], total: initiatives.length }
 
     // selectAll on both: a client's observations run to hundreds per update
-    // (Össur ~543) and the registry is past a thousand rows (Sealand 1,240), so
-    // a bare select would cap at 1000 — and a capped read here does not merely
-    // lose rows, it shrinks the DENOMINATOR and inflates every share on the tile.
+    // (Össur 444 → 757 across its four registry updates; Sealand's last wrote
+    // 1,053) and the registry is past a thousand rows on both tenants (Össur
+    // 1,096, Sealand 1,883), so a bare select would cap at 1000 — and a capped
+    // read here does not merely lose rows, it shrinks the DENOMINATOR and
+    // inflates every share on the tile.
     const [observations, registry] = await Promise.all([
       selectAll<ObservationRow>(() =>
         supabase

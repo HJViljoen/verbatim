@@ -50,12 +50,21 @@ describe('videoBucketOf — live entity, not a cached one', () => {
   })
 })
 
-describe('fetchLiveBucketsByAudience', () => {
-  // Minimal stand-in for the supabase admin client: one `videos` select.
-  const clientReturning = (rows: unknown[]) => ({
-    from: () => ({ select: () => ({ in: () => Promise.resolve({ data: rows, error: null }) }) }),
-  })
+// Minimal stand-in for the supabase admin client: one `videos` select, paged.
+// Every chunked read in lib/quotes.ts is now paged past the 1000-row cap, so a
+// fake that answers `.in()` with a promise no longer matches the contract —
+// the builder is closed by `.order(...).range(from, to)`.
+const clientReturning = (rows: unknown[]) => ({
+  from: () => ({
+    select: () => ({
+      in: () => ({
+        order: () => ({ range: (from: number, to: number) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }) }),
+      }),
+    }),
+  }),
+})
 
+describe('fetchLiveBucketsByAudience', () => {
   it('maps each insight to its source video\'s CURRENT tags', async () => {
     const admin = clientReturning([
       { id: 'v-client', is_client: true, is_competitor: false, competitor_name: null },
@@ -83,16 +92,7 @@ describe('the live entity gate (the 2026-09-10 Patagonia answer)', () => {
     const stored = bucketByAudienceId(themes)
     expect(scopeToClientVoices(['c1', 'p2'], stored)).toEqual(['c1', 'p2']) // the old behaviour
 
-    const admin = {
-      from: () => ({
-        select: () => ({
-          in: () => Promise.resolve({
-            data: [{ id: 'v9', is_client: false, is_competitor: true, competitor_name: 'Patagonia' }],
-            error: null,
-          }),
-        }),
-      }),
-    }
+    const admin = clientReturning([{ id: 'v9', is_client: false, is_competitor: true, competitor_name: 'Patagonia' }])
     const live = await fetchLiveBucketsByAudience(admin, [{ id: 'p2', source_video_id: 'v9' }])
     const merged = new Map(stored)
     for (const [id, bucket] of live) merged.set(id, bucket)
@@ -105,16 +105,7 @@ describe('the live entity gate (the 2026-09-10 Patagonia answer)', () => {
     const stored = bucketByAudienceId([{ bucket: 'competitor:Cotopaxi', supporting_insight_ids: ['x1'] }])
     expect(scopeToClientVoices(['x1'], stored)).toEqual([])
 
-    const admin = {
-      from: () => ({
-        select: () => ({
-          in: () => Promise.resolve({
-            data: [{ id: 'v1', is_client: true, is_competitor: false, competitor_name: null }],
-            error: null,
-          }),
-        }),
-      }),
-    }
+    const admin = clientReturning([{ id: 'v1', is_client: true, is_competitor: false, competitor_name: null }])
     const live = await fetchLiveBucketsByAudience(admin, [{ id: 'x1', source_video_id: 'v1' }])
     const merged = new Map(stored)
     for (const [id, bucket] of live) merged.set(id, bucket)
