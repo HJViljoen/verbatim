@@ -504,7 +504,10 @@ describe('the baseline behind an unusual week', () => {
       ),
       'anomaly-baseline',
     )
-    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 in the 2 updates compared so far, the most recent Objections in the week of /)
+    // The label is framed, because a kind's label is a verb phrase — the
+    // pipeline writes "Pushing back", not "Objections" — and the sentence
+    // around it assumed a noun.
+    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 in the 2 updates compared so far, the most recent about “Objections” in the week of /)
   })
 
   it('is one month of three on the trial workspace', () => {

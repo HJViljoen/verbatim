@@ -340,7 +340,12 @@ function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
   if (a.flags.length === 0) return `Flags raised — none in the ${updates} compared so far.${aside}`
   const newest = a.flags[0]
   const word = a.flags.length === 1 ? 'one' : fmtInt(a.flags.length)
-  return `Flags raised — ${word} in the ${updates} compared so far, the most recent ${newest.label} in the week of ${fullDate(newest.weekStart)}.${aside}`
+  // THE LABEL NEEDS A FRAME. A flag's label is whatever the flagged object is
+  // called, and for a KIND that is a verb phrase built to be a row label —
+  // KIND_LABELS gives "Pushing back", "Saying it worked", "What made them look"
+  // — so the bare sentence read "the most recent Pushing back in the week of
+  // 7 Sep 2026". The labels are right; the sentence around them assumed a noun.
+  return `Flags raised — ${word} in the ${updates} compared so far, the most recent about “${newest.label}” in the week of ${fullDate(newest.weekStart)}.${aside}`
 }
 
 // ---- 8 · how much of each video was read ------------------------------------
