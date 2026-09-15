@@ -28,7 +28,8 @@ import type { DocumentSettings } from './types'
 export interface CompetitorSignal {
   name: string
   bucket: string
-  /** What they say in their own videos (their marketing, not a comment). */
+  /** What they say in THEIR OWN videos (their marketing, not a comment, and
+   *  not a creator narrating over their product — see competitorVoice). */
   claims: BrandClaim[]
   praise: MergeThemeRow[]
   hurt: MergeThemeRow[]
@@ -91,7 +92,7 @@ export async function loadSignals(
 
   const [{ data: client }, { data: config }, { data: latestRun }, runningRes, historyRows, summaryRows] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    admin.from('tracking_configs').select('brand_keywords, competitor_names, industry_keywords, own_handles').eq('client_id', clientId).maybeSingle(),
+    admin.from('tracking_configs').select('brand_keywords, competitor_names, industry_keywords, own_handles, competitor_handles').eq('client_id', clientId).maybeSingle(),
     args.runId
       ? admin.from('pipeline_runs').select('id, status, started_at, completed_at').eq('id', args.runId).eq('client_id', clientId).maybeSingle()
       : admin.from('pipeline_runs').select('id, status, started_at, completed_at').eq('client_id', clientId).in('status', ['completed', 'partial']).order('started_at', { ascending: false }).limit(1).maybeSingle(),
@@ -109,6 +110,7 @@ export async function loadSignals(
   const company = (client?.company_name as string | undefined) ?? 'the company'
   const brandKeywords = ((config?.brand_keywords ?? []) as string[]).filter(Boolean)
   const ownHandles = ((config?.own_handles ?? {}) as Record<string, string>)
+  const competitorHandles = ((config?.competitor_handles ?? {}) as Record<string, Record<string, string>>)
   const industryKeywords = ((config?.industry_keywords ?? []) as string[]).filter(Boolean)
   const trackedCompetitors = ((config?.competitor_names ?? []) as string[]).filter(Boolean)
   const wanted = args.settings.competitors?.length
@@ -134,7 +136,7 @@ export async function loadSignals(
     admin.from('consumer_profiles').select('personas, run_date').eq('client_id', clientId).order('run_date', { ascending: false }).limit(1).maybeSingle(),
     admin.from('language_samples_current').select('id, phrase, platform').eq('client_id', clientId).order('phrase').limit(400),
     admin.from('competitive_insights').select('id, category, competitor_name, title, finding, impact_level').eq('client_id', clientId).eq('run_id', runId),
-    loadBrandClaims(admin, clientId, trackedCompetitors, brandKeywords, ownHandles),
+    loadBrandClaims(admin, clientId, trackedCompetitors, brandKeywords, ownHandles, competitorHandles),
   ])
   if (!summary) throw new SignalsError('This update has no summary to write from.')
 
@@ -186,7 +188,7 @@ export async function loadSignals(
     return {
       name,
       bucket,
-      claims: claims.competitors.filter((c) => c.competitor?.toLowerCase() === name.toLowerCase()).slice(0, 8),
+      claims: claims.competitorsOwn.filter((c) => c.competitor?.toLowerCase() === name.toLowerCase()).slice(0, 8),
       ...own,
       shareNow: pct(sovNow, bucket),
       shareAll: pct(sovAll, bucket),
