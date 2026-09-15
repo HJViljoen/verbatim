@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ConfigActor } from '../config-log'
-import { freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
+import { emptyEvidenceRefSummary, freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   PANEL_LEAD_MONTHS,
@@ -1270,12 +1270,17 @@ export async function freezeMonths(
         closedAudienceMonths,
       })
     } catch (e) {
+      const why = e instanceof Error ? e.message : String(e)
       console.error(
         `[monthly-reading] the evidence-id freeze${dryRun ? ' preview' : ''} failed for ${opts.clientId} over ${months.join(' ')}: ` +
-        `${e instanceof Error ? e.message : String(e)}. The months are frozen; their ids are not, and a month ` +
+        `${why}. The months are frozen; their ids are not, and a month ` +
         'that closes without them cannot be given them later.',
       )
-      return undefined
+      // A SUMMARY THAT SAYS SO, never `undefined`. A falsy summary already
+      // means something else to the operator's printer — "no clustering to
+      // attribute them to" — so erasing it here reported a hard failure as a
+      // run that had no run.
+      return { ...emptyEvidenceRefSummary(), failed: why }
     }
   }
 

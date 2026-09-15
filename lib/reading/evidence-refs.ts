@@ -293,10 +293,23 @@ export interface EvidenceRefSummary {
   commentIds: number
   /** The table or function is not there yet. Nothing was read or written. */
   missing: boolean
+  /**
+   * The freeze THREW and its caller swallowed it — the one shot at this
+   * visit's ids is spent and the months froze without them.
+   *
+   * It is a field rather than an absent summary because the two read the same
+   * to an operator and mean opposite things: the caller's catch used to return
+   * undefined, and the script prints "not read — no clustering to attribute
+   * them to (--denominators-only, or no run)" for a falsy summary, so the one
+   * run that will ever fill 201 frozen audience-months could fail hard and
+   * report itself as a run with no clustering, immediately below a line that
+   * had already named the run. Exit code 0.
+   */
+  failed: string | null
 }
 
 export const emptyEvidenceRefSummary = (): EvidenceRefSummary =>
-  ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, refusedLate: 0, videoIds: 0, commentIds: 0, missing: false })
+  ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, refusedLate: 0, videoIds: 0, commentIds: 0, missing: false, failed: null })
 
 /**
  * Write down which videos and which comments this visit's theme numbers rested

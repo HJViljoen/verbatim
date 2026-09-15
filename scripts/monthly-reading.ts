@@ -121,6 +121,11 @@ function printEvidenceRefs(refs: EvidenceRefSummary | undefined, verb: 'would' |
     console.log('  evidence ids: not read — no clustering to attribute them to (--denominators-only, or no run)')
     return
   }
+  if (refs.failed) {
+    console.log(`  evidence ids: THE FREEZE FAILED — ${refs.failed}`)
+    console.log('    The months are frozen and their ids are not. A month that closes without its ids cannot be given them later, so this is the one shot for every audience-month this visit closed. Fix the cause and re-run BEFORE any further month freezes.')
+    return
+  }
   if (refs.missing) {
     console.log('  evidence ids: not read — apply supabase/migrations/20260918095000_quote_translations.sql first. The months seed without them, and a month that closes without its ids cannot be given them later.')
     return
