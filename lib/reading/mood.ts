@@ -1,5 +1,6 @@
 import { SENTIMENT_BAND, type BandOptions } from '../report-bands'
 import { monthChange, type SeriesPoint } from './bands'
+import { monthStartOf, nextMonth } from './monthly'
 import type { Verdict, VerdictFlag } from './verdicts'
 
 // The mood line: how the month's conversation was received (design item 10,
@@ -133,7 +134,10 @@ export function framingShare(counts: MoodCounts): number | null {
 
 /** Does this comparison span the day `videos.sentiment` changed meaning? Both
  *  bounds are month starts or ISO instants; the break belongs to the LATER side
- *  of the pair, so a window ending before it is clean. */
+ *  of the pair, so a window ending before it is clean. `to` is EXCLUSIVE — the
+ *  end of the span, not the start of its last month — which is why `moodChange`
+ *  passes `nextMonth(curr.month)` rather than `curr.month`: August itself
+ *  straddles the break, so a July-against-August comparison crosses it too. */
 export function crossesSentimentBreak(from: string, to: string): boolean {
   const a = from.slice(0, 10)
   const b = to.slice(0, 10)
@@ -170,6 +174,18 @@ export interface MoodChangeInput {
  * The clustering caveat is stripped for the same reason it is stripped from a
  * kind: re-grouping insights into themes cannot change how a video was
  * received.
+ *
+ * THE ONE CAVEAT IT ADDS INSTEAD. A pair whose span reaches across 2026-08-18
+ * earns `measurement_changed`, because `videos.sentiment` meant two different
+ * things on the two sides of that date and no caller should have to remember
+ * it. That is not a hypothetical: the Aug→Sep Össur category pair is the single
+ * comparison in the whole corpus that clears SENTIMENT_BAND (judged 537 → 338,
+ * negative 10 → 19, +3.8 pts against a band of 2.8, "moved") and its span is
+ * exactly the one that crosses. An unqualified "the mood moved" there is a
+ * claim about the conversation that is partly a claim about a pass reorder —
+ * the failure 20260820110000_sentiment_split.sql exists to stop. The verdict is
+ * not refused: both counts are real, and a reader told what else changed can
+ * still use them.
  */
 export function moodChange(input: MoodChangeInput): Verdict {
   const mood = input.mood ?? 'negative'
@@ -180,6 +196,15 @@ export function moodChange(input: MoodChangeInput): Verdict {
     audience: input.audience,
   })
   const flags = [...(input.flags ?? [])]
+  // The span of the comparison, not the two month starts: the break falls
+  // INSIDE August, so July-against-August crosses it as surely as
+  // August-against-September does.
+  if (
+    crossesSentimentBreak(monthStartOf(input.prev.month), nextMonth(input.curr.month)) &&
+    !flags.includes('measurement_changed')
+  ) {
+    flags.push('measurement_changed')
+  }
   const verdict = monthChange({
     object: { kind: 'mood', id: mood, label: MOOD_LABELS[mood] },
     audience: input.audience,

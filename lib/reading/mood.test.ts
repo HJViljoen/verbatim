@@ -91,6 +91,22 @@ describe('moodChange', () => {
     expect(v.changePts).toBe(3.8)
     expect(v.bandPts).toBe(2.8)
     expect(v.state).toBe('moved')
+    // …and it is also the one pair whose span crosses 2026-08-18. The verdict
+    // carries the caveat so a caller cannot print "the mood moved" across a
+    // change in what the number means without being told.
+    expect(v.flags).toContain('measurement_changed')
+  })
+
+  it('marks the break on every pair whose span reaches across it, and on no other', () => {
+    const counts = (month: string) => ({ month, judged: 200, positive: 150, negative: 20, neutral: 20, mixed: 10 })
+    const spans = (prev: string, curr: string) =>
+      moodChange({ audience: 'industry-other', curr: counts(curr), prev: counts(prev) })
+        .flags.includes('measurement_changed')
+    // August straddles the break, so the pair BEFORE it crosses it too.
+    expect(spans('2026-07-01', '2026-08-01')).toBe(true)
+    expect(spans('2026-08-01', '2026-09-01')).toBe(true)
+    expect(spans('2026-06-01', '2026-07-01')).toBe(false)
+    expect(spans('2026-09-01', '2026-10-01')).toBe(false)
   })
 
   it('does not fire on Sealand, where the change is inside the band', () => {
