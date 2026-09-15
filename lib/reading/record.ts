@@ -55,8 +55,15 @@ export interface DeliveryRecord {
   /** Start dates of the delivered updates, oldest first, `YYYY-MM-DD`. */
   dates: string[]
   longestGapDays: number | null
-  /** Updates that started and never settled inside the window. */
-  unfinished: number
+  /** Updates that ran inside the window and ended in failure — `status` neither
+   *  `completed` nor `partial`. In production that means exactly `failed`: 20
+   *  rows, every one of them with a `completed_at`. They SETTLED; they settled
+   *  badly. An update that started and never settled is
+   *  `pipeline_runs.stalled`, a different column, and nothing here reads it
+   *  yet. Not printed by any composer — it is carried for whichever surface
+   *  first wants "and two of them failed", and a field waiting to be printed
+   *  is the worst place for a wrong name. */
+  failed: number
   basis: 'run_clock'
 }
 
@@ -254,7 +261,7 @@ async function loadDelivery(client: SupabaseClient, clientId: string, w: RecordW
     delivered: delivered.length,
     dates,
     longestGapDays: longestGapDays(delivered.map((r) => r.started_at as string)),
-    unfinished: runs.filter((r) => r.status !== 'completed' && r.status !== 'partial').length,
+    failed: runs.filter((r) => r.status !== 'completed' && r.status !== 'partial').length,
     basis: 'run_clock',
   }
 }

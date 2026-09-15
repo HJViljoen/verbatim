@@ -16,7 +16,7 @@ import type { Verdict } from './verdicts'
 
 const inputs = (over: Partial<RecordInputs> = {}): RecordInputs => ({
   window: { kind: 'month', from: '2026-09-01', to: '2026-09-30' },
-  delivery: { delivered: 3, dates: ['2026-09-01', '2026-09-07', '2026-09-13'], longestGapDays: 6, unfinished: 0, basis: 'run_clock' },
+  delivery: { delivered: 3, dates: ['2026-09-01', '2026-09-07', '2026-09-13'], longestGapDays: 6, failed: 0, basis: 'run_clock' },
   coverage: [
     { audience: 'client', videos: 28, comments: 210, platformMix: { tiktok: 12, youtube: 10, instagram: 6 }, dualMention: 2, excludedUndated: 4 },
     { audience: 'industry-other', videos: 366, comments: 4_100, platformMix: { tiktok: 151, youtube: 202, instagram: 76, reddit: 12 }, dualMention: 0, excludedUndated: 31 },
