@@ -159,13 +159,16 @@ async function main() {
       ),
     )
     const gate = verdicts === null
-      ? { migrated: false, judged: 0, kept: 0, dropped: 0, failedOpen: 0 }
+      ? { migrated: false, judged: 0, kept: 0, dropped: 0, unjudged: 0 }
       : {
           migrated: true,
           judged: verdicts.length,
           kept: verdicts.filter((v) => v.kept).length,
           dropped: verdicts.filter((v) => !v.kept).length,
-          failedOpen: verdicts.filter((v) => v.source === 'default').length,
+          // Every `source: 'default'` row, which is three different facts:
+          // the check off, the heuristic clearing a video, and the real
+          // fail-open. Only `reason` separates them (GATE_DEFAULT_REASONS).
+          unjudged: verdicts.filter((v) => v.source === 'default').length,
         }
 
     results[client.id] = { client: client.company_name, grounding, validation, stability, gate, cadence }
@@ -181,7 +184,7 @@ async function main() {
       console.log(`pass A calls ${Object.entries(validation).map(([k, v]) => `${k}=${v}`).join(' · ') || '(none)'}`)
       console.log(`theme match  ${Object.entries(stability).map(([k, v]) => `${k}=${v}`).join(' · ') || (obs === null ? '(table not migrated here)' : '(registry has not seeded yet)')}`)
       console.log(`cadence      ${formatCadence(client.company_name, cadence).replace(`${client.company_name}: `, '')}`)
-      console.log(`gate         ${!gate.migrated ? '(table not migrated here)' : gate.judged ? `${gate.kept} kept / ${gate.dropped} dropped · ${gate.failedOpen} failed open` : '(no gather since verdict recording shipped)'}`)
+      console.log(`gate         ${!gate.migrated ? '(table not migrated here)' : gate.judged ? `${gate.kept} kept / ${gate.dropped} dropped · ${gate.unjudged} unjudged` : '(no gather since verdict recording shipped)'}`)
     }
 
     // The contract: grounding is the one number with a real floor today,

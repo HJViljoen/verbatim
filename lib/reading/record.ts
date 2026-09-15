@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct } from '../format'
 import { selectAll } from '../supabase-admin'
 
@@ -110,7 +111,17 @@ export interface DiscardRecord {
   /** The first verdict ever recorded for this tenant, `YYYY-MM-DD`. Null when
    *  none is: then the share is not unknown, it is unrecorded. */
   recordedFrom: string | null
-  /** Judged without a judgement — the gate failed open and the video entered. */
+  /** Cleared by the cheap check and never put to the model — the heuristic
+   *  found no reason to drop it (`method: 'heuristic'`). A DECISION, not a
+   *  defect, and by far the commonest of the three `source: 'default'` cases:
+   *  all 295 production rows are this one. */
+  clearedByHeuristic: number
+  /** Judged while the gate was switched off for the gather. */
+  gateOff: number
+  /** Judged without a judgement — the gate ran, returned nothing for this
+   *  video, and it entered unjudged. The real fail-open, and the only one of
+   *  the three that is a defect. Counted by `reason`, never by `source`:
+   *  `source: 'default'` covers all three and separates none of them. */
   failedOpen: number
   basis: 'run_clock'
 }
@@ -383,10 +394,12 @@ async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWi
       .eq('client_id', clientId)
       .gte('created_at', dayStart(w.from))
       .lte('created_at', dayEnd(w.to))
-  const [judged, kept, failedOpen, first] = await Promise.all([
+  const [judged, kept, clearedByHeuristic, gateOff, failedOpen, first] = await Promise.all([
     headCount(gate()),
     headCount(gate().eq('kept', true)),
-    headCount(gate().eq('source', 'default')),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.undecided)),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.off)),
+    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.failedOpen)),
     client
       .from('gate_verdicts')
       .select('created_at')
@@ -401,6 +414,8 @@ async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWi
     judged,
     kept,
     setAside: judged - kept,
+    clearedByHeuristic,
+    gateOff,
     failedOpen,
     recordedFrom: recordedFrom ? recordedFrom.slice(0, 10) : null,
     basis: 'run_clock',
@@ -583,6 +598,22 @@ export function howSoundLine(input: RecordInputs): string {
 }
 
 /**
+ * What to say about the videos nothing judged. Three different facts wear one
+ * `source` value, and the record said the worst of the three about all of
+ * them: "97 videos entered without a judgement" was printed for 295 rows whose
+ * reason is "no off-market signal in metadata" — the cheap check cleared them
+ * and the model was never asked, which is the gate working. A record that
+ * reports a defect where there is none is worse than one that says nothing.
+ */
+export function discardCaveat(g: DiscardRecord): string {
+  const parts: string[] = []
+  if (g.clearedByHeuristic > 0) parts.push(`${plural(g.clearedByHeuristic, 'video')} passed the quick check and were never looked at more closely`)
+  if (g.gateOff > 0) parts.push(`${plural(g.gateOff, 'video')} came in while the check was switched off`)
+  if (g.failedOpen > 0) parts.push(`${plural(g.failedOpen, 'video')} entered without a judgement because the check itself returned none`)
+  return parts.length === 0 ? '' : `; ${parts.join(', and ')}`
+}
+
+/**
  * The record itself, as lines (OV6 and the record page). Each line is one fact
  * with its basis; a fact nothing has recorded says so rather than printing a
  * zero.
@@ -631,7 +662,7 @@ export function recordLines(input: RecordInputs): string[] {
       ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
       : g.judged === 0
         ? `Nothing was looked at and set aside in this window — the record of it begins ${g.recordedFrom}.`
-        : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${g.recordedFrom}, so no month before that can show it${g.failedOpen > 0 ? `; ${plural(g.failedOpen, 'video')} entered without a judgement` : ''}.`,
+        : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${g.recordedFrom}, so no month before that can show it${discardCaveat(g)}.`,
   )
 
   const i = input.instrument

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   countRefused,
+  discardCaveat,
   howSoundLine,
   isEnglishTag,
   longestGapDays,
@@ -22,7 +23,7 @@ const inputs = (over: Partial<RecordInputs> = {}): RecordInputs => ({
   ],
   readDepth: { analysed: 1_596, speech: 798, translated: 208, onScreenText: 269, unflagged: 0, basis: 'all_time_non_reddit' },
   language: { analysed: 1_596, unknown: 491, english: 730, notEnglish: 375, basis: 'video_speech' },
-  discard: { judged: 1_700, kept: 1_051, setAside: 649, failedOpen: 97, recordedFrom: '2026-08-23', basis: 'run_clock' },
+  discard: { judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 97, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' },
   instrument: { themesPerVideo: 2.4, themeAttachments: 960, analysedVideos: 400, runId: 'run-1' },
   changes: { inWindow: 1, loggedFrom: '2026-09-15', reconstructed: 9 },
   comparisonsRefused: 2,
@@ -108,7 +109,23 @@ describe('recordLines — every fact with its basis', () => {
 
   it('carries the discard record’s late start, because no month before it can show one', () => {
     expect(has('38% of what was looked at was set aside, recorded only from 2026-08-23')).toBe(true)
-    expect(has('97 videos entered without a judgement')).toBe(true)
+  })
+
+  // `source: 'default'` is three facts wearing one value, and the record used
+  // to say the worst of the three about all of them. All 295 production rows
+  // are the heuristic clearing a video, which is the gate working.
+  it('does not call a heuristic clearance a video that entered unjudged', () => {
+    expect(has('97 videos passed the quick check and were never looked at more closely')).toBe(true)
+    expect(has('entered without a judgement')).toBe(false)
+  })
+
+  it('says it plainly when the check really did return nothing', () => {
+    const line = recordLines(inputs({ discard: { judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 0, gateOff: 0, failedOpen: 4, recordedFrom: '2026-08-23', basis: 'run_clock' } }))
+    expect(line.some((l) => l.includes('4 videos entered without a judgement because the check itself returned none'))).toBe(true)
+  })
+
+  it('says nothing at all when nothing went unjudged', () => {
+    expect(discardCaveat({ judged: 10, kept: 9, setAside: 1, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' })).toBe('')
   })
 
   it('says outright that the comment language is not recorded', () => {

@@ -14,6 +14,24 @@ import type { RelevanceCandidate, RelevanceVerdict } from './relevance'
 
 type Admin = ReturnType<typeof createAdminClient>
 
+/**
+ * The three ways a row gets `source: 'default'` — which is to say, the three
+ * things "no model judged this" can mean. Only `reason` separates them, so any
+ * reader counting them apart matches on these strings and not on `source`.
+ *
+ *  · `off`         — the gate was switched off for this gather; nothing judged.
+ *  · `undecided`   — the cheap heuristic found no reason to drop it and the
+ *                     model was never asked (method='heuristic'). A decision,
+ *                     and the commonest one: all 295 production rows are this.
+ *  · `failedOpen`  — the gate ran and returned nothing for this video, so it
+ *                     entered unjudged. The real defect, and the rare one.
+ */
+export const GATE_DEFAULT_REASONS = {
+  off: 'gate off',
+  undecided: 'no off-market signal in metadata',
+  failedOpen: 'no verdict returned (gate failed open)',
+} as const
+
 /** Enough caption to judge the judgement, not enough to duplicate the corpus. */
 const CAPTION_EXCERPT_CHARS = 200
 
@@ -81,7 +99,7 @@ export function buildGateVerdictRows(
       keyword: clean(keywordFor?.(c.video_id) ?? null),
       // Matches the live rule at gather.ts: anything not explicitly dropped is kept.
       kept: v?.relevant !== false,
-      reason: clean(v?.reason ?? null) ?? 'no verdict returned (gate failed open)',
+      reason: clean(v?.reason ?? null) ?? GATE_DEFAULT_REASONS.failedOpen,
       source: v?.source ?? 'default',
     }
   })
