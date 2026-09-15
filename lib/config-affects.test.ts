@@ -31,12 +31,12 @@ describe('changedTerms — what moved, in the corpus’s own spelling', () => {
 describe('planAffects — what to look for, per surface', () => {
   it('a term edit looks for the terms', () => {
     expect(planAffects({ surface: 'terms', field: 'industry_keywords', before: ['running blade'], after: ['#runningblade'] }))
-      .toEqual({ terms: ['#runningblade', 'running blade'], audiences: [], basis: 'terms' })
+      .toEqual({ terms: ['#runningblade', 'running blade'], audiences: [], basis: 'terms', partial: false })
   })
 
   it('a rival edit names the audiences as well as the terms', () => {
     expect(planAffects({ surface: 'rivals', field: 'competitor_names', before: ['Cotopaxi', 'Patagonia'], after: ['Cotopaxi'] }))
-      .toEqual({ terms: ['patagonia'], audiences: ['competitor:Patagonia'], basis: 'rivals' })
+      .toEqual({ terms: ['patagonia'], audiences: ['competitor:Patagonia'], basis: 'rivals', partial: true })
   })
 
   it('a rename names both halves, old first, because that pair is the stitch', () => {
@@ -45,16 +45,26 @@ describe('planAffects — what to look for, per surface', () => {
     expect(plan.terms).toEqual(['topo designs', 'topo'])
   })
 
+  it('marks a rival band partial, because the name finds less than the change moved', () => {
+    // 164 of Sealand's 198 analysed Cotopaxi videos carry the term 'cotopaxi'
+    // nowhere in source_keywords — they are tagged by account or caption. The
+    // band is a floor, and only the plan can say so: the column cannot.
+    expect(planAffects({ surface: 'rivals', before: ['Cotopaxi'], after: [] }).partial).toBe(true)
+    expect(planAffects({ surface: 'rival_rename', before: { name: 'A' }, after: { name: 'B' } }).partial).toBe(true)
+    expect(planAffects({ surface: 'terms', before: [], after: ['running blade'] }).partial).toBe(false)
+    expect(planAffects({ surface: 'subreddits', before: [], after: ['bifl'] }).partial).toBe(false)
+  })
+
   it('a subreddit edit looks for the r/ form the gather stores', () => {
     expect(planAffects({ surface: 'subreddits', before: ['bifl'], after: ['bifl', 'r/onebag'] }))
-      .toEqual({ terms: ['r/onebag'], audiences: [], basis: 'subreddits' })
+      .toEqual({ terms: ['r/onebag'], audiences: [], basis: 'subreddits', partial: false })
   })
 
   it('says "not known" for the surfaces that move no stored month', () => {
     // A handles edit moves rows stamped by account membership, which carry no
     // search term; cadence and knobs change the next gather, not the past.
     for (const surface of ['handles', 'cadence', 'knobs', 'schedule', 'subjects', 'other'] as const) {
-      expect(planAffects({ surface, before: ['a'], after: ['b'] })).toEqual({ terms: [], audiences: [], basis: 'none' })
+      expect(planAffects({ surface, before: ['a'], after: ['b'] })).toEqual({ terms: [], audiences: [], basis: 'none', partial: false })
     }
   })
 

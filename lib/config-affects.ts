@@ -27,6 +27,20 @@ import { selectAll } from './supabase-admin'
 // (that is exactly why the 2026-09-09 re-tag is unrecoverable). `changed_at`
 // stays the rule's identity — what the log lists and what a reader clicks.
 //
+// AND WHERE THE BAND IS A FLOOR, NOT THE ANSWER. A RIVAL change is matched on
+// the rival's name as a search term, and that is narrower than the change twice
+// over. Measured on Sealand's analysed corpus, read-only, 2026-09-15: 61 videos
+// carry 'cotopaxi' in source_keywords and 169 carry 'cotopaxi backpack', and
+// `.overlaps` is exact array-element equality, so neither term finds the
+// other's videos; and rival tagging is by ACCOUNT and caption match
+// (lib/gather/tagging.ts tagVideo), which source_keywords does not record at
+// all — 164 of the 198 analysed videos tagged Cotopaxi, 83%, carry the term
+// 'cotopaxi' nowhere. The band stored for a rivals / rival_rename change is
+// therefore usually a strict subset of the months that moved.
+// `AffectsPlan.partial` says so; the column cannot, so a reader that draws a
+// rule from it (WP11/WP14) has to treat a rival's band as "at least these
+// months".
+//
 // WHAT IS NOT COMPUTABLE, AND SAYS SO. A term REMOVED takes nothing out of the
 // corpus by itself; only the re-tag or re-gate that follows moves rows. A
 // handles edit moves rows stamped by account membership, which carry no search
@@ -44,6 +58,10 @@ export interface AffectsPlan {
   /** Where the terms came from — and `none` when nothing is derivable, which is
    *  an answer rather than an empty one. */
   basis: 'terms' | 'rivals' | 'subreddits' | 'none'
+  /** True when the terms are known to find LESS than the change moved, so the
+   *  band that comes back is a lower bound rather than the answer. See the
+   *  header: a rival is the case, and nothing on the stored row can say so. */
+  partial: boolean
 }
 
 /** Two configuration values → the entries that moved, in either direction.
@@ -83,10 +101,12 @@ export function planAffects(change: {
 }): AffectsPlan {
   switch (change.surface) {
     case 'terms':
-      return { terms: changedTerms(change.before, change.after), audiences: [], basis: 'terms' }
+      // Exact: a gather records the term it searched, verbatim and folded.
+      return { terms: changedTerms(change.before, change.after), audiences: [], basis: 'terms', partial: false }
     case 'rivals': {
       const names = changedNames(change.before, change.after)
-      return { terms: names.map(fold).filter(Boolean), audiences: names.map(rivalKey), basis: 'rivals' }
+      // Partial, always: see the header — composite terms and account tagging.
+      return { terms: names.map(fold).filter(Boolean), audiences: names.map(rivalKey), basis: 'rivals', partial: true }
     }
     case 'rival_rename': {
       // before/after are {name}, not arrays: the pair IS the answer.
@@ -98,18 +118,19 @@ export function planAffects(change: {
         // Old first: lib/rivals.ts stitchRenames reads the pair in that order.
         audiences: names.map(rivalKey),
         basis: 'rivals',
+        partial: true,
       }
     }
     case 'subreddits': {
       const moved = changedTerms(change.before, change.after)
-      return { terms: moved.map((s) => (s.startsWith('r/') ? s : `r/${s}`)), audiences: [], basis: 'subreddits' }
+      return { terms: moved.map((s) => (s.startsWith('r/') ? s : `r/${s}`)), audiences: [], basis: 'subreddits', partial: false }
     }
     default:
       // handles (account membership carries no search term), cadence and knobs
       // (they change the next gather, not a stored month), entity_retag and
       // regate (the moved rows are known only to the operation itself, which
       // passes its own video ids), schedule, subjects, other.
-      return { terms: [], audiences: [], basis: 'none' }
+      return { terms: [], audiences: [], basis: 'none', partial: false }
   }
 }
 
