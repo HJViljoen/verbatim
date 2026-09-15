@@ -386,4 +386,25 @@ describe('the picker, once a quote can be read', () => {
     const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
     expect(pick(['a1'], 1, 'socket')).toEqual([{ ref: 'e:ev-en', text: 'the socket rubs after about an hour of walking' }])
   })
+
+  // The one movement the collapse makes BEFORE any translation exists, named so
+  // it is a decision and not a surprise. quoteScore's gate used to be
+  // `englishHits >= 2` alone; the unified gate is readsAsHeroQuote's
+  // `englishHits >= 2 && englishHits > romanceHits`, which is strictly tighter.
+  const mixed = 'no me gusta pero es muy bueno para mi hermano'
+
+  it('drops a Romance-majority quote with two incidental English words, which quoteScore alone used to take', () => {
+    expect(englishHits(mixed)).toBeGreaterThanOrEqual(2) // the old gate passed it
+    expect(readsAsHeroQuote(mixed)).toBe(false) // the hero pool already refused it
+    expect(quoteAvailability({ text: mixed })).toBe('untranslated') // and now so does the picker
+    const pick = createCitedQuotePicker(new Map([['a1', [{ quote: mixed, rank: 1, evidenceId: 'ev-mix' }]]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([])
+  })
+
+  it('hands the same quote back once the cache has read it, as a translation', () => {
+    const english = 'I do not like it but it is very good for my brother'
+    const rows: QuoteRow[] = [{ quote: mixed, rank: 1, evidenceId: 'ev-mix', lang: 'es', english }]
+    const pick = createCitedQuotePicker(new Map([['a1', rows]]), slugs)
+    expect(pick(['a1'], 1, 'comfort')).toEqual([{ ref: 'e:ev-mix', text: mixed, lang: 'es', english }])
+  })
 })

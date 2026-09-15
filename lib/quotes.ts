@@ -174,9 +174,22 @@ function quoteScore(q: string, keywords: Set<string>, t?: QuoteLanguage): number
   const len = q.length
   if (len < 18 || len > 170) return -1
   const eng = englishHits(q)
-  // The gate is READABILITY, not Englishness (item 8). Until the cache has read
-  // this text `t.lang` is null and quoteAvailability falls back to exactly the
-  // rule this line used to be, so nothing moves before the backfill runs.
+  // The gate is READABILITY, not Englishness (item 8). This is the collapse the
+  // plan asks for — quoteScore, readsAsHeroQuote and the inbox gate all ask one
+  // question — and it MOVES THE PRE-CACHE ANSWER, in one direction, which the
+  // first version of this comment wrongly denied.
+  //
+  // This line used to be `if (eng < 2) return -1`. The unread fallback is
+  // readsAsHeroQuote's rule, `englishHits >= 2 && englishHits > romanceHits`,
+  // so it is STRICTLY TIGHTER: a Romance-majority comment carrying two
+  // incidental English function words ("no me gusta pero es muy bueno para mi
+  // hermano" — `no`, `me`, and `a` inside the accent fold) used to score and now
+  // does not. It is the same text the 2026-09-05 fix already kept out of the
+  // hero pool while quoteScore went on offering it to cards, and keeping two
+  // answers to one question is what item 8 exists to end — so the pool shrinks
+  // by that class the moment this deploys, and the backfill hands the same
+  // quotes back as 'translated', with an English rendering under them, rather
+  // than as English they never were. Pinned by a test that names the movement.
   if (!readableQuote({ text: q, ...t })) return -1
   let s = Math.min(eng, 5)
   if (len >= 30 && len <= 140) s += 2
