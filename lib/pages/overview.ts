@@ -10,12 +10,10 @@ import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs,
 import { citationLink } from '../evidence-cite'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
-import { SHARE_BAND } from '../report-bands'
 import {
   CLIENT_AUDIENCE,
   INDUSTRY_AUDIENCE,
   isMissingCompetitors,
-  isRivalAudience,
   loadCompetitors,
   rivalKey,
   type Competitor,
@@ -30,7 +28,7 @@ import {
 } from '../reading/attention'
 import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
-import { kindShares, redditRead, kindChange, KIND_ORDER, type KindShare, type RedditRead } from '../reading/kinds'
+import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
@@ -1929,10 +1927,3 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
     caveat,
   }
 }
-
-/** Every kind the block may print, in the order it prints them. Exported for
- *  the "more, one click down" link and for the tests. */
-export const OVERVIEW_KINDS = KIND_ORDER
-
-/** The floor every band on this page is drawn against. */
-export const OVERVIEW_FLOOR = SHARE_BAND
