@@ -149,7 +149,10 @@ describe('text helpers', () => {
     expect(text).toBe('One & two\na b\nOpen (https://x.y/z)\nDone now')
   })
   // 2026-09-13: the Össur digest's plain-text part was reported as
-  // `…/dashboard/market-intel?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. The raw MIME
+  // `…/dashboard/market?rec\ufffddd4fde-…` for `?rec=85dd4fde-…`. (That send said
+  // /dashboard/market, which is what was in those four inboxes; WP9 moved the
+  // page to /dashboard/market-intel and the assertion below moved with it. The
+  // record of what happened does not.) The raw MIME
   // of that send (DKIM-pass, so these are the bytes Resend signed) carries
   // `Content-Transfer-Encoding: quoted-printable` with the `=` correctly
   // escaped — `rec=3D85dd4fde-…` — and decodes to the exact URL: the mangling
