@@ -1272,6 +1272,15 @@ export const runPipeline = inngest.createFunction(
     const persisted = await step.run('persist-themes', () =>
       persistThemes(clientId, runId, themed.allThemes, { themeRegistry: flags.themeRegistry }),
     )
+    // COUNTED, though the step itself succeeded. The registry block inside
+    // persistThemes catches its own failures so a client's update never dies on
+    // identity bookkeeping — but the `theme_observations` write is inside that
+    // catch, so a run could close 'completed' having written zero observations
+    // and nothing anywhere said so. The trend series, the initiatives
+    // measurement and the report delta all read that table; a silently empty
+    // week reads to a client as "nothing changed" rather than "we lost the
+    // record". The degrade stays; the silence does not.
+    if (persisted.registryFailed) noteError('persist-themes:registry', persisted.registryFailed)
     const themedSummary = {
       ...themed.summary,
       newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
