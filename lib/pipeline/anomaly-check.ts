@@ -127,6 +127,12 @@ export const WEEK_COMMENT_CAP = 400
 
 export const ANOMALY_FLAGS_TABLE = 'anomaly_flags'
 
+/** Updates behind this one whose size the thin gate takes its median from.
+ *  Eight: two months of a weekly cadence, long enough that one thin week does
+ *  not move the median and short enough that a tenant's corpus growing over a
+ *  year does not make every recent week look large. */
+export const TRAILING_RUNS = 8
+
 /** Whether a pooled baseline was read under one clustering. `not_grouped` is
  *  the answer for an object that has no grouping to be like-for-like about —
  *  a kind is the enum Pass A wrote, and a re-grouping cannot move an insight
@@ -736,16 +742,26 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
 
   // The thin gate, before anything is read: a week measured off an update that
   // did not finish, or read half its usual corpus, is our coverage moving.
-  const trailing = await selectAll<{ id: string; videos_scraped: number | null; status: string; stalled?: boolean | null }>(() =>
-    admin
-      .from('pipeline_runs')
-      .select('id, videos_scraped, status')
-      .eq('client_id', args.clientId)
-      .neq('id', args.runId)
-      .in('status', ['completed', 'partial'])
-      .order('started_at', { ascending: false })
-      .limit(8),
-  )
+  //
+  // A PLAIN READ, NOT `selectAll`. `selectAll` pages with `.range(from, from +
+  // 999)`, and postgrest-js's `range()` OVERWRITES the limit `.limit()` set —
+  // so wrapping this in it read the tenant's whole history and took the median
+  // over all of it. Measured read-only on production 2026-09-15: Össur's
+  // median of the last eight runs is 611 against 469 over everything (the 60%
+  // gate 367 rather than 281), Sealand's 1,772 against 934 (1,063 rather than
+  // 560) — a gate 24-47% weaker than the one that was designed, drifting
+  // further every run. The cap IS the point here, exactly as it is in
+  // `candidateQuotes`, so the query is awaited directly.
+  const { data: trailingData, error: trailingError } = await admin
+    .from('pipeline_runs')
+    .select('id, videos_scraped, status')
+    .eq('client_id', args.clientId)
+    .neq('id', args.runId)
+    .in('status', ['completed', 'partial'])
+    .order('started_at', { ascending: false })
+    .limit(TRAILING_RUNS)
+  if (trailingError) throw new Error(`anomaly-check pipeline_runs: ${trailingError.message}`)
+  const trailing = (trailingData ?? []) as { id: string; videos_scraped: number | null; status: string }[]
   const thisRun = await admin
     .from('pipeline_runs')
     .select('status, stalled')
