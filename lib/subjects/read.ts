@@ -7,7 +7,12 @@ import {
   RPC_SUBJECT_READINGS,
   RPC_WINDOW_SUBJECT_READINGS,
 } from '../reading/types'
-import { JUDGE_VERSION, type SubjectReading, type SubjectWindowReading } from './types'
+import {
+  JUDGE_VERSION,
+  type SubjectReading,
+  type SubjectStatus,
+  type SubjectWindowReading,
+} from './types'
 
 // A subject's months — the same reading as a theme's, over a different
 // membership, written into a sibling table by the same freeze.
@@ -28,6 +33,28 @@ import { JUDGE_VERSION, type SubjectReading, type SubjectWindowReading } from '.
 // bookkeeping — which update wrote this — but a reader compares on
 // `judge_version`, and the two are not the same question: a subject's months
 // stay comparable across a clustering boundary that a theme's do not.
+//
+// THE BACK-READ IS ONE-SHOT, AND ITS ORDER IS NOT OPTIONAL. 201 audience-months
+// were already frozen across the two tenants before this table existed
+// (2026-09-15: Ossur 113, Sealand 88). Decision K lets the FIRST write into
+// such a month through and freezes it on arrival as `back_read`; from then on
+// `mergeMonthRows` refuses every later new subject in that month and the
+// database's insert guard refuses it again. Nothing in the pipeline ever
+// revisits it — `monthsToRefresh` walks the clock and the stored `filling`
+// rows, and a frozen audience-month has neither — so the only path that reads
+// history at all is `scripts/monthly-reading.ts --write`.
+//
+// Which makes the order a one-way door:
+//
+//   1. every subject the tenant wants is NAMED and CONFIRMED (status 'active');
+//   2. the membership backfill has RUN and is complete for each of them
+//      (`scripts/subject-membership.ts --apply`: no budget stop, no refusal);
+//   3. then, once, `scripts/monthly-reading.ts --write`.
+//
+// A subject that has no members at that instant writes no row, and its history
+// is refused for ever afterwards. `backReadBlockers` below is what the seed
+// asks before it spends the one shot, and the seed drops the subject side
+// rather than spending it badly.
 //
 // AND ONE THING A READER HAS TO CARRY. A back-read subject month decays faster
 // than a theme's. A theme month loses evidence only as the Pass A prune takes
@@ -102,4 +129,71 @@ export function subjectMonthSide(
     read: async (window: { from: string; to: string }) =>
       (await readSubjectMonths(admin, clientId, window)) as unknown as ({ month: string; audience: string } & Record<string, unknown>)[],
   }
+}
+
+// ---- The one-shot back-read ---------------------------------------------------
+
+/** What the seed needs to know about one subject before it writes history. */
+export interface SubjectBackReadState {
+  id: string
+  name: string
+  status: SubjectStatus
+  /** Membership pairs decided for it at the CURRENT judge version — members and
+   *  judged non-members alike. Zero means nothing has judged this subject yet,
+   *  so its reading today is not a short reading, it is no reading. */
+  decided: number
+  /** Pairs still waiting to be decided at this judge version — `subject_band`'s
+   *  own answer. Anything above zero is a backfill that has not finished: a
+   *  pass that stopped at its ceiling, a batch the model would not answer, or
+   *  simply an --apply that was never run. The reading would be short by
+   *  whatever they turn out to be, and short is what a frozen month keeps. */
+  undecided: number
+}
+
+/**
+ * Why a one-shot subject back-read must not be spent yet, in sentences.
+ *
+ * Empty means go. Anything else is a reason the history written now would be
+ * the history the tenant is stuck with: every frozen audience-month accepts a
+ * subject row exactly once (decision K), and the frozen guard refuses the
+ * correction afterwards. A subject that is proposed but not confirmed, or
+ * confirmed but never judged, contributes nothing to that write and loses its
+ * whole history to it — which is why the seed would rather write no subject
+ * months at all than write the wrong ones.
+ */
+export function backReadBlockers(subjects: readonly SubjectBackReadState[]): string[] {
+  const live = subjects.filter((s) => s.status !== 'retired')
+  const active = live.filter((s) => s.status === 'active')
+  const proposed = live.filter((s) => s.status === 'proposed')
+  const out: string[] = []
+  if (active.length === 0) {
+    out.push(
+      'no subject is confirmed yet — a back-read now would write no subject months, ' +
+      'and every subject confirmed afterwards would start at the first month still open',
+    )
+  }
+  if (proposed.length > 0) {
+    out.push(
+      `${proposed.length} named but not confirmed (${proposed.map((s) => s.name).join(', ')}) — ` +
+      'confirm the whole set first, because a subject confirmed after the back-read has no history at all',
+    )
+  }
+  const unjudged = active.filter((s) => s.decided === 0)
+  if (unjudged.length > 0) {
+    out.push(
+      `${unjudged.length} confirmed but never judged (${unjudged.map((s) => s.name).join(', ')}) — ` +
+      'run scripts/subject-membership.ts --apply to completion first; a subject with no members writes no row, ' +
+      'and a month that closes without its row refuses it for ever',
+    )
+  }
+  const partial = active.filter((s) => s.decided > 0 && s.undecided > 0)
+  if (partial.length > 0) {
+    out.push(
+      `${partial.length} judged only in part (` +
+      partial.map((s) => `${s.name}: ${s.undecided} pair(s) still undecided`).join(', ') +
+      ') — finish scripts/subject-membership.ts --apply; a reading taken now is short by whatever they turn out to be, ' +
+      'and short is exactly what a frozen month keeps',
+    )
+  }
+  return out
 }

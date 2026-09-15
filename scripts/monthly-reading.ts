@@ -9,7 +9,17 @@ import {
   readThemeReadings,
   windowOf,
 } from '../lib/reading/monthly'
-import { subjectMonthSide } from '../lib/subjects/read'
+import { backReadBlockers, subjectMonthSide, type SubjectBackReadState } from '../lib/subjects/read'
+import {
+  JUDGE_VERSION,
+  RPC_SUBJECT_BAND,
+  SUBJECT_MATCH_HIGH,
+  SUBJECT_MATCH_LOW,
+  TABLE_SUBJECTS,
+  TABLE_SUBJECT_MEMBERSHIPS,
+  isMissingSubjects,
+  type SubjectStatus,
+} from '../lib/subjects/types'
 import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 
 // The comment-dated monthly reading, read out loud — and, with --write, seeded
@@ -38,7 +48,24 @@ import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 // back through FILLING ones). A second run would write the theme rows under a
 // LATER clustering, which is the one thing these two tables exist to prevent.
 //
-//   node --env-file=.env.local --import tsx scripts/monthly-reading.ts [--client <uuid>] [--run <uuid>] [--all] [--write] [--denominators-only]
+// THE SUBJECT SIDE IS ONE-SHOT, AND THIS IS THE ONLY THING THAT READS ITS
+// HISTORY. The pipeline's freeze-months visits the current month, the one
+// before it and whatever is still `filling`; a frozen audience-month is never
+// revisited. So the 201 audience-months that were already frozen when
+// month_subject_readings was created get their subject rows here, once, and
+// decision K refuses every later addition to them. The order that has to hold:
+//
+//   1. every subject named AND confirmed (`activateSubject`);
+//   2. scripts/subject-membership.ts --client <uuid> --apply, to completion;
+//   3. then this, once, with --write.
+//
+// Out of order the damage is permanent — a subject with no members at that
+// instant writes no row and is refused for ever. So --write ASKS first
+// (backReadBlockers) and, when the answer is no, writes the denominators and
+// the themes and leaves the subject side unspent, which keeps the one shot.
+// --force-subjects overrides that, for an operator who means it.
+//
+//   node --env-file=.env.local --import tsx scripts/monthly-reading.ts [--client <uuid>] [--run <uuid>] [--all] [--write] [--denominators-only] [--force-subjects]
 
 interface Args {
   clientId: string | null
@@ -46,16 +73,18 @@ interface Args {
   all: boolean
   write: boolean
   denominatorsOnly: boolean
+  forceSubjects: boolean
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: null, runId: null, all: false, write: false, denominatorsOnly: false }
+  const args: Args = { clientId: null, runId: null, all: false, write: false, denominatorsOnly: false, forceSubjects: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--run') args.runId = argv[++i]
     else if (argv[i] === '--all') args.all = true
     else if (argv[i] === '--write') args.write = true
     else if (argv[i] === '--denominators-only') args.denominatorsOnly = true
+    else if (argv[i] === '--force-subjects') args.forceSubjects = true
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   return args
@@ -69,8 +98,66 @@ const mix = (m: Record<string, number>): string =>
     .map(([p, n]) => `${p} ${n}`)
     .join(' · ') || '—'
 
+/**
+ * Why this tenant's subject history must not be written yet — see
+ * `backReadBlockers`. An empty list is a go; a database without M4, or with no
+ * subjects at all, returns the same "nothing is confirmed" refusal, which is
+ * the right answer: writing no subject rows keeps the one shot for later.
+ */
+async function subjectBlockers(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+): Promise<string[]> {
+  let rows: { id: string; name: string; status: SubjectStatus }[]
+  try {
+    // Every LIVE subject, not just the active ones: a subject sitting in
+    // 'proposed' is the commonest way to lose a whole history, and it is
+    // invisible to loadActiveSubjects by design.
+    const { data, error } = await admin
+      .from(TABLE_SUBJECTS)
+      .select('id, name, status')
+      .eq('client_id', clientId)
+      .neq('status', 'retired')
+      .order('named_at', { ascending: true })
+    if (error) throw error
+    rows = (data ?? []) as { id: string; name: string; status: SubjectStatus }[]
+  } catch (e) {
+    if (!isMissingSubjects(e)) throw e
+    return ['subjects are not switched on for this database yet (20260918093000_subjects.sql is not applied)']
+  }
+
+  const state: SubjectBackReadState[] = []
+  for (const r of rows) {
+    const { count, error } = await admin
+      .from(TABLE_SUBJECT_MEMBERSHIPS)
+      .select('subject_id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('subject_id', r.id)
+      .eq('judge_version', JUDGE_VERSION)
+    if (error) throw new Error(`${TABLE_SUBJECT_MEMBERSHIPS} count: ${error.message}`)
+    // What the judge has NOT decided yet, asked of the same function the
+    // membership pass reads — a pass that stopped at its ceiling leaves rows
+    // here and nowhere else. One row is enough to know; the count is what the
+    // band would hand the next --apply.
+    const { count: bandCount, error: bandError } = await admin.rpc(
+      RPC_SUBJECT_BAND,
+      {
+        p_client: clientId,
+        p_subject: r.id,
+        p_low: SUBJECT_MATCH_LOW,
+        p_high: SUBJECT_MATCH_HIGH,
+        p_judge: JUDGE_VERSION,
+      },
+      { count: 'exact', head: true },
+    )
+    if (bandError) throw new Error(`${RPC_SUBJECT_BAND}: ${bandError.message}`)
+    state.push({ ...r, decided: count ?? 0, undecided: bandCount ?? 0 })
+  }
+  return backReadBlockers(state)
+}
+
 async function main() {
-  const { clientId, runId: runOverride, all, write, denominatorsOnly } = parseArgs(process.argv.slice(2))
+  const { clientId, runId: runOverride, all, write, denominatorsOnly, forceSubjects } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
@@ -185,7 +272,22 @@ async function main() {
     // denominator's freeze closes the audience-month, so a numerator written
     // after it is refused. A tenant with no subjects, or a database without
     // M4, simply contributes an empty side.
-    const sides = [subjectMonthSide(admin, id)]
+    //
+    // But it rides along ONLY if the subject set is ready, because this visit
+    // is the only one those closed months will ever get.
+    const blockers = await subjectBlockers(admin, id)
+    const carrySubjects = blockers.length === 0 || forceSubjects
+    if (blockers.length > 0) {
+      console.log(`  subjects: ${carrySubjects ? 'FORCED ON' : 'not written this visit'} —`)
+      for (const b of blockers) console.log(`    · ${b}`)
+      if (!carrySubjects) {
+        console.log(
+          '    Fix those, then re-run. The denominators and themes below are written either way; ' +
+          'leaving the subject side out is what keeps the one shot at the closed months.',
+        )
+      }
+    }
+    const sides = carrySubjects ? [subjectMonthSide(admin, id)] : []
     const plan = await freezeMonths(admin, { clientId: id, runId, months, now, dryRun: true, sides })
     const planSides = Object.values(plan.sides)
     console.log(
