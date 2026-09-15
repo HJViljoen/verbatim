@@ -114,11 +114,15 @@ describe('WK §3 · moving now', () => {
 })
 
 describe('WK §4 · what came in', () => {
-  it('keeps gathered and analysed apart', () => {
+  it('keeps analysed and newly found apart, and never says one is "of" the other', () => {
     const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
     expect(text).toContain('508')
-    expect(text).toContain('618 found')
+    expect(text).toContain('618 newly found')
     expect(text).toContain('5,134 comments written in these days')
+    // They are two sets. Production reads "Ottobock — 96 analysed · 137 newly
+    // found" on one row and "52 analysed · 52 newly found" on another; an "of"
+    // between them is arithmetic that does not hold.
+    expect(text).not.toMatch(/analysed of \d/)
   })
 
   it('hands the window’s count back to the month it fell in', () => {
@@ -145,14 +149,20 @@ describe('WK §4 · what came in', () => {
   })
 
   it('states the by/about distinction, and why a zero is a zero', () => {
-    // Össur has no competitor handles and zero competitor-owned videos: "0
-    // posts" would read as "Ottobock posted nothing".
+    // Össur has never captured a post of Ottobock's in six months of
+    // gathering, handle configured or not: "0 posts of their own" would read
+    // as "Ottobock went quiet this week".
     const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
     expect(text).toContain('92 posts about them')
-    expect(text).toContain('their own posts are not read — no handle is tracked for them')
-    // Sealand does have handles, so both counts are real.
+    expect(text).toContain('their own posts are not read yet — Verbatim engineering')
+    // Sealand does capture rival-owned posts, so both counts are real.
     const thin = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
     expect(thin).toContain('94 posts about them, 44 posts of their own')
+    // And one is a post, not "1 posts" — production has a rival with exactly
+    // one (Sealand's Rareform).
+    const one = thinFixture()
+    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, ownPostsUnread: false }]
+    expect(renderText(weekCameIn.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
   })
 
   it('says why there are no subject quotes, rather than showing none', () => {
@@ -199,6 +209,14 @@ describe('WK §6 · what worked', () => {
     const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Talking head')
     expect(text).toContain('1.8× the median · 128 of 331 videos')
+  })
+
+  it('prints the engagement figure as the column stores it, a percentage', () => {
+    // `engagement_rate` is already a percentage; a ×100 read "Promotional
+    // 998%" against a 3.3× multiple on production.
+    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('3.8%')
+    expect(text).not.toContain('380%')
   })
 
   it('names what it left out of the median', () => {

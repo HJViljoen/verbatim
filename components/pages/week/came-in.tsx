@@ -73,7 +73,13 @@ export const weekCameIn: Block<WeekData> = {
               mode={mode}
               value={fmtInt(c.analysed)}
               unit="videos analysed"
-              base={`${fmtInt(c.gathered)} found${c.windowComments != null ? ` · ${fmtInt(c.windowComments)} comments written in these days` : ''}`}
+              // "ANALYSED" AND "NEWLY FOUND" ARE TWO SETS, NOT A PART AND A
+              // WHOLE, so the line never says "of". A video discovered by an
+              // earlier update and re-analysed by this one is in the first and
+              // not the second, which is why production reads "Ottobock — 96
+              // analysed · 92 newly found": an "of" there is arithmetic that
+              // does not hold.
+              base={`${fmtInt(c.gathered)} newly found${c.windowComments != null ? ` · ${fmtInt(c.windowComments)} comments written in these days` : ''}`}
             />
             {c.contribution ? (
               <Note mode={mode}>{contributionLine(data.month, c.contribution.videos, c.contribution.of)}</Note>
@@ -131,7 +137,7 @@ function Audiences({ rows, mode }: { rows: CameInBlock['rows']; mode: 'app' | 'p
       <div style={{ marginTop: 8 }}>
         {rows.map((r) => (
           <div key={r.audience} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0' }}>
-            {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed of {fmtInt(r.gathered)} found · {platformMixLine(r.platformMix) || 'no platform recorded'}
+            {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
           </div>
         ))}
       </div>
@@ -142,7 +148,7 @@ function Audiences({ rows, mode }: { rows: CameInBlock['rows']; mode: 'app' | 'p
       {rows.map((r) => (
         <p key={r.audience} className="m-0 text-[12px]">
           <span className="font-medium">{r.label}</span> — <span data-copy="figure">{fmtInt(r.analysed)}</span>{' '}
-          <span className="text-muted-foreground">analysed of {fmtInt(r.gathered)} found · {platformMixLine(r.platformMix) || 'no platform recorded'}</span>
+          <span className="text-muted-foreground">analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}</span>
         </p>
       ))}
     </div>
@@ -180,13 +186,14 @@ function Rivals({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
         >
           <span className={mode === 'email' ? undefined : 'font-medium'}>{r.label}</span>{' '}
           <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>
-            — <span data-copy="figure">{fmtInt(r.aboutThem)}</span> posts about them
+            — <span data-copy="figure">{fmtInt(r.aboutThem)}</span> {r.aboutThem === 1 ? 'post' : 'posts'} about them
             {r.ownPostsUnread
-              // THE READINESS GAP, NAMED WHERE IT BITES. A zero here would read
-              // as "they posted nothing"; what is true is that no handle is
-              // tracked for them, so nothing of theirs is read at all.
-              ? ' · their own posts are not read — no handle is tracked for them'
-              : `, ${fmtInt(r.byThem)} posts of their own`}
+              // THE READINESS GAP, NAMED WHERE IT BITES. This workspace has
+              // never captured a post of this rival's, so a zero here would be
+              // read as "they went quiet" when what is true is that their own
+              // posts are not being read at all.
+              ? ' · their own posts are not read yet — Verbatim engineering'
+              : `, ${fmtInt(r.byThem)} ${r.byThem === 1 ? 'post' : 'posts'} of their own`}
           </span>
         </p>
       ))}

@@ -110,7 +110,12 @@ function Group({
           // would ship a Tailwind class into an inbox that has no stylesheet —
           // which the email-safety test catches, and which is the whole reason
           // the primitives own their own markup per mode.
-          badge: fmtPct(r.engagement * 100, 1),
+          // `engagement_rate` IS ALREADY A PERCENTAGE in the column, not a
+          // share — the Content page prints `fmtPct(avgEng)` straight. A ×100
+          // here read "Promotional 998%" against a 3.3× multiple on
+          // production, which is the kind of number a reader stops trusting a
+          // page over.
+          badge: fmtPct(r.engagement, 1),
         }))}
       />
     </div>

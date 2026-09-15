@@ -181,13 +181,13 @@ export function weekFixture(): WeekData {
     },
     worked: {
       formats: [
-        { label: 'talking_head', videos: 128, engagement: 0.038, multiple: 1.8 },
-        { label: 'product_demo', videos: 71, engagement: 0.031, multiple: 1.4 },
-        { label: 'day_in_the_life', videos: 53, engagement: 0.052, multiple: 2.4 },
+        { label: 'talking_head', videos: 128, engagement: 3.8, multiple: 1.8 },
+        { label: 'product_demo', videos: 71, engagement: 3.1, multiple: 1.4 },
+        { label: 'day_in_the_life', videos: 53, engagement: 5.2, multiple: 2.4 },
       ],
       hooks: [
-        { label: 'direct_question', videos: 181, engagement: 0.041, multiple: 1.9 },
-        { label: 'before_after', videos: 97, engagement: 0.036, multiple: 1.7 },
+        { label: 'direct_question', videos: 181, engagement: 4.1, multiple: 1.9 },
+        { label: 'before_after', videos: 97, engagement: 3.6, multiple: 1.7 },
       ],
       rated: 331,
       excluded: ['Reddit'],

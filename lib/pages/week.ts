@@ -1,10 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
+import { chunk } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_QUOTES_PER_GROUP } from '../blocks/for-sales'
-import { perfVsMedian, type PerfMultiple } from '../content-tiles'
+import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
-import { fmtInt, longMonth, platformLabel, shortDate } from '../format'
+import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
 import { rowWindow } from '../pipeline/run-bookkeeping'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { audienceLabel } from '../readiness/types'
@@ -311,7 +312,9 @@ export interface CameInBlock {
 export interface WorkedRow {
   label: string
   videos: number
-  /** Average engagement rate of that group, as a share (0–1). */
+  /** Average engagement rate of that group, AS THE COLUMN STORES IT — a
+   *  percentage, not a share. `videos.engagement_rate` is 3.8 for 3.8%, which
+   *  is what every other surface prints straight through `fmtPct`. */
   engagement: number
   /** That average against the update's median video. */
   multiple: number
@@ -878,7 +881,7 @@ async function buildRising(input: {
     byTheme.set(r.theme_id, held)
   }
 
-  const labels = await readThemeLabels(reading, clientId, [...byTheme.keys()].slice(0, 400))
+  const labels = await readThemeLabels(reading, clientId, [...byTheme.keys()])
   // RANKED BEFORE THE BAND IS DRAWN, so the three shown are the three largest
   // movements of the month rather than the first three that cleared a floor.
   const ranked = [...byTheme.entries()]
@@ -972,7 +975,7 @@ async function buildCameIn(input: {
   // "notable rival posts" does not say which. Both are printed, named: Össur
   // has zero competitor-owned videos in production, so the first is empty on
   // the paying tenant and would have read as "the rivals posted nothing".
-  const handles = await loadCompetitorHandles(supabase, clientId)
+  const everOwned = await loadOwnedRivalAudiences(supabase, clientId)
   const rivalRows: RivalPosts[] = rivals.map((r) => {
     const audience = rivalKey(r.name)
     const mine = videos.filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
@@ -982,7 +985,14 @@ async function buildCameIn(input: {
       byThem: mine.filter((v) => v.source === 'competitor_owned').length,
       aboutThem: mine.filter((v) => v.source !== 'competitor_owned').length,
       comments: 0,
-      ownPostsUnread: !handles.has(r.name.toLowerCase()),
+      // NOT "IS A HANDLE CONFIGURED" — that is a setting, and a setting is not
+      // evidence. A configured handle that has never yielded a post is exactly
+      // the readiness gap Phase 0 names on the prosthetics tenant, and a row
+      // reading "0 posts of their own" there would tell a paying client their
+      // rival went quiet. So the question asked is whether this workspace has
+      // EVER captured a post of this rival's: never, and their own posts are
+      // not being read; sometimes, and a zero this update is a real zero.
+      ownPostsUnread: !everOwned.has(audience),
     }
   }).filter((r) => r.byThem > 0 || r.aboutThem > 0 || r.ownPostsUnread)
 
@@ -1066,12 +1076,14 @@ async function loadSubjectQuotes(
   // insight this update wrote out of a comment written in March is March's
   // comment, and "new quotes this update" means quotes written inside the days
   // this update covered.
-  const dated = await selectAll<{ id: string }>(() =>
-    supabase.from('comments').select('id')
-      .eq('client_id', clientId)
-      .in('id', pool.map((p) => p.citation.commentId as string).slice(0, 1000))
-      .gte('comment_date', window.from).lt('comment_date', window.to)
-      .order('id', { ascending: true }),
+  const dated = await inChunks<{ id: string }>(
+    pool.map((p) => p.citation.commentId as string),
+    (part) => () =>
+      supabase.from('comments').select('id')
+        .eq('client_id', clientId)
+        .in('id', part)
+        .gte('comment_date', window.from).lt('comment_date', window.to)
+        .order('id', { ascending: true }),
   )
   const fresh = new Set(dated.map((c) => c.id))
   const kept = pool.filter((p) => p.citation.commentId && fresh.has(p.citation.commentId))
@@ -1242,17 +1254,16 @@ async function loadRivals(
   return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
 }
 
-/** Which rivals the tenant has a handle for. A rival with none has no readable
- *  own posts, and a zero there means "we cannot see them", not "they posted
- *  nothing". */
-async function loadCompetitorHandles(supabase: SupabaseClient, clientId: string): Promise<Set<string>> {
-  const res = await supabase.from('tracking_configs').select('competitor_handles').eq('client_id', clientId).maybeSingle()
-  const tc = row<{ competitor_handles: Record<string, Record<string, string>> | null }>(res, 'week.handles')
-  const out = new Set<string>()
-  for (const [name, handles] of Object.entries(tc?.competitor_handles ?? {})) {
-    if (handles && Object.values(handles).some((h) => typeof h === 'string' && h.trim() !== '')) out.add(name.toLowerCase())
-  }
-  return out
+/** The rivals this workspace has EVER captured a post of, by audience key.
+ *  Measured, not configured: Össur has a handle for Ottobock and zero
+ *  competitor-owned videos in six months of gathering. */
+async function loadOwnedRivalAudiences(supabase: SupabaseClient, clientId: string): Promise<Set<string>> {
+  const held = await selectAll<{ competitor_name: string | null }>(() =>
+    supabase.from('videos').select('competitor_name')
+      .eq('client_id', clientId).eq('is_competitor', true).eq('source', 'competitor_owned')
+      .order('competitor_name', { ascending: true }),
+  )
+  return new Set(held.map((v) => rivalKey(v.competitor_name)))
 }
 
 /** The check's own row for this update. `undefined` means the table is not
@@ -1367,8 +1378,8 @@ async function readClientMonthVideos(reading: ReadingHandle, clientId: string, m
 async function readThemeLabels(reading: ReadingHandle, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>()
   if (ids.length === 0) return out
-  const held = await selectAll<{ id: string; canonical_label: string | null }>(() =>
-    reading.client.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', [...ids]),
+  const held = await inChunks<{ id: string; canonical_label: string | null }>(ids, (part) => () =>
+    reading.client.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
   )
   for (const r of held) if (r.canonical_label) out.set(r.id, r.canonical_label)
   return out
@@ -1403,9 +1414,9 @@ async function loadNewThemes(
 
   let readings: { theme_id: string; videos: number }[] = []
   try {
-    readings = await selectAll<{ theme_id: string; videos: number }>(() =>
+    readings = await inChunks<{ theme_id: string; videos: number }>(ids, (part) => () =>
       supabase.from('month_theme_readings').select('theme_id, videos')
-        .eq('client_id', clientId).eq('month', month).in('theme_id', ids.slice(0, 400))
+        .eq('client_id', clientId).eq('month', month).in('theme_id', part)
         .order('theme_id', { ascending: true }),
     )
   } catch (error) {
@@ -1541,6 +1552,12 @@ async function loadSalesCitations(
   clientId: string,
   window: WeekWindow,
 ): Promise<SalesCitation[] | null> {
+  // THE CITED COMMENTS, NOT THE WINDOW'S. Reading every comment written in
+  // these days and intersecting in memory is one paged read on a week and a
+  // statement timeout on a thirty-day window (Sealand's, measured: 9,000-odd
+  // rows). Reading only the comments a sales insight actually cites, with the
+  // window applied in the database so each chunk comes back nearly empty, is
+  // the same answer off a fraction of the rows.
   const insights = await selectAll<{ id: string; category: string; theme: string | null }>(() =>
     supabase.from('audience_insights_current')
       .select('id, category, theme')
@@ -1552,15 +1569,15 @@ async function loadSalesCitations(
   const byInsight = new Map(insights.map((i) => [i.id, i]))
 
   const citations = await fetchQuoteCitationsByAudience(supabase, insights.map((i) => i.id))
-  const commentIds = new Set<string>()
-  for (const list of citations.values()) for (const c of list) if (c.commentId) commentIds.add(c.commentId)
-  if (commentIds.size === 0) return []
+  const citedComments = new Set<string>()
+  for (const list of citations.values()) for (const c of list) if (c.commentId) citedComments.add(c.commentId)
+  if (citedComments.size === 0) return []
 
   type CommentRow = { id: string; platform: string; video_id: string; comment_id: string; comment_date: string | null }
-  const comments = await selectAll<CommentRow>(() =>
+  const comments = await inChunks<CommentRow>([...citedComments], (part) => () =>
     supabase.from('comments').select('id, platform, video_id, comment_id, comment_date')
       .eq('client_id', clientId)
-      .in('id', [...commentIds].slice(0, 1000))
+      .in('id', part)
       .gte('comment_date', window.from)
       .lt('comment_date', window.to)
       .order('id', { ascending: true }),
@@ -1568,12 +1585,14 @@ async function loadSalesCitations(
   if (comments.length === 0) return []
   const byComment = new Map(comments.map((c) => [c.id, c]))
 
-  const videos = await selectAll<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(() =>
-    supabase.from('videos')
-      .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
-      .eq('client_id', clientId)
-      .in('video_id', [...new Set(comments.map((c) => c.video_id))].slice(0, 1000))
-      .order('id', { ascending: true }),
+  const videos = await inChunks<{ id: string; platform: string; video_id: string; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }>(
+    comments.map((c) => c.video_id),
+    (part) => () =>
+      supabase.from('videos')
+        .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
+        .eq('client_id', clientId)
+        .in('video_id', part)
+        .order('id', { ascending: true }),
   )
   const videoByKey = new Map(videos.map((v) => [`${v.platform}::${v.video_id}`, v]))
 
@@ -1591,7 +1610,11 @@ async function loadSalesCitations(
       out.push({
         category: insight.category,
         themeId: insight.theme ?? insightId,
-        themeLabel: insight.theme ?? 'Unnamed',
+        // A THEME SLUG IS NOT A HEADING. Pass A writes `brand_controversy`;
+        // a salesperson reads "Brand controversy". Humanised here rather than
+        // in the block, because the email arm has no stylesheet to capitalise
+        // with and the report will want the same words.
+        themeLabel: insight.theme ? cap(pretty(insight.theme)) : 'Unnamed',
         audience: video.is_client ? CLIENT_AUDIENCE : video.is_competitor ? rivalKey(video.competitor_name) : INDUSTRY_AUDIENCE,
         videoUuid: video.id,
         evidenceId: c.evidenceId,
@@ -1605,6 +1628,30 @@ async function loadSalesCitations(
     }
   }
   return out
+}
+
+/**
+ * One `.in()` read, in chunks of a hundred ids, issued together.
+ *
+ * NOT A REFINEMENT — THE UNCHUNKED VERSION IS A 400 AND THE SERIAL VERSION IS A
+ * TIMEOUT. PostgREST puts an `in()` list in the query string, and a thousand
+ * uuids is a URL no gateway will take: this page's first run against production
+ * came back "selectAll: Bad Request" from exactly that. Slicing the list
+ * instead would be worse — the read would succeed and silently answer about the
+ * first hundred rows. And chunking it serially cost five thousand ids fifty
+ * round trips, measured at 17 s on Össur and a statement timeout on Sealand's
+ * thirty-day window, so the chunks go out together (`Promise.all`, the shape
+ * lib/engage.ts has used since the digest shipped). Chunks are disjoint and
+ * concatenating them in chunk order keeps the output order a serial loop
+ * produced.
+ */
+async function inChunks<T>(
+  ids: readonly string[],
+  build: (part: string[]) => Parameters<typeof selectAll<T>>[0],
+): Promise<T[]> {
+  const parts = chunk([...new Set(ids)], 100)
+  const pages = await Promise.all(parts.map((part) => selectAll<T>(build(part))))
+  return pages.flat()
 }
 
 // ---- small arithmetic --------------------------------------------------------
