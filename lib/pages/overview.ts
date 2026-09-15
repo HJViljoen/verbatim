@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
-import { fmtInt, monthName, shortDate } from '../format'
+import { fmtInt, longMonth, monthName, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
@@ -386,12 +386,13 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * `monthName` (lib/format.ts) is the product's short form and is what the chart
  * axis and every caption use; this one line is the mock's own wording and reads
  * as a sentence, so it takes the long form (WP10: "a surface that wants the
- * long form writes it in its own caption"). Written here rather than widened in
- * lib/format, because one caption is not a vocabulary change.
+ * long form writes it in its own caption").
+ *
+ * IT MOVED TO lib/format.ts IN WP15 and is re-exported here so this module's
+ * callers are untouched. One caption was not a vocabulary change; two pages
+ * writing the same month two ways would have been.
  */
-export function longMonth(month: string): string {
-  return new Date(`${monthStartOf(month)}T00:00:00.000Z`).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
-}
+export { longMonth }
 
 const pctOf = (k: number | null, n: number | null): number | null =>
   k == null || n == null || n <= 0 ? null : round1((k / n) * 100)
