@@ -132,6 +132,13 @@ update public.recommendations set lineage_id = id where lineage_id is null;
 --     where table_name = 'rec_decisions' and grantee = 'authenticated' order by 2, 1;
 --   select grantee, privilege_type from information_schema.table_privileges
 --     where table_name = 'rec_decisions' order by 1, 2;
---     -- service_role: SELECT + INSERT only. UPDATE or DELETE here means the
---     -- revoke above did not run, and append-only is application-level again.
+--     -- Read this as an ABSENCE, not as a count. The revoke above takes three
+--     -- privileges of the seven the default ACL hands out, so a correct apply
+--     -- leaves service_role holding four rows: SELECT, INSERT, REFERENCES and
+--     -- TRIGGER. The last two are harmless and are meant to survive. What must
+--     -- not be there is UPDATE, DELETE or TRUNCATE — any one of them means the
+--     -- revoke did not run and append-only is application-level again:
+--     --   select count(*) from information_schema.table_privileges
+--     --     where table_name = 'rec_decisions' and grantee = 'service_role'
+--     --       and privilege_type in ('UPDATE','DELETE','TRUNCATE');  -- 0
 --   select indexname from pg_indexes where tablename = 'rec_decisions';
