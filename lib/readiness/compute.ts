@@ -134,7 +134,6 @@ function communities(i: ReadinessInputs): ReadinessRow {
   const proposedUnsampled = i.communities.filter((c) => c.status === 'candidate' && !c.probed)
   const ruledOut = i.communities.filter((c) => c.status === 'rejected')
   const silent = active.filter((c) => c.postsStored === 0)
-  const handSet = active.filter((c) => !c.probed)
   const unconfiguredShare = i.reddit.postsStored > 0
     ? (i.reddit.postsFromUnconfigured / i.reddit.postsStored) * 100
     : 0
@@ -150,10 +149,12 @@ function communities(i: ReadinessInputs): ReadinessRow {
       ? ` · ${fmtPct(unconfiguredShare, 0)} of stored Reddit posts come from communities nobody configured.`
       : ' · no Reddit post stored yet.')
 
-  const notes = [
-    ...silent.map((c) => `r/${c.name} — watched, nothing stored from it yet`),
-    ...handSet.filter((c) => c.postsStored > 0).map((c) => `r/${c.name} — watched by hand, never sampled`),
-  ]
+  // Every watched community and what it has returned, not just the silent
+  // ones: a list of three where one is dead is a different picture from a
+  // list of three where one is carrying the whole thing.
+  const notes = active.map((c) =>
+    `r/${c.name} — ${c.postsStored === 0 ? 'nothing stored from it yet' : plural(c.postsStored, 'post')}` +
+    (c.probed ? '' : ' · watched by hand, never sampled'))
 
   return row(
     'communities', 'Reddit', 'the communities worth watching, and what they return',
@@ -319,6 +320,15 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
 
 const SETTLED = new Set(['completed', 'partial'])
 
+/** What an update's stored state means to a reader. `partial` is a real state
+ *  and not a failure — the update went out, with something missing from it. */
+const UPDATE_WORD: Record<string, string> = {
+  completed: 'finished',
+  partial: 'finished, with gaps',
+  failed: 'did not finish',
+}
+const updateWord = (status: string): string => UPDATE_WORD[status] ?? 'still going'
+
 /** The longest stretch between two updates that produced something, in whole
  *  days. Null when there are fewer than two. */
 export function longestGapDays(updates: readonly { status: string; startedAt: string }[]): number | null {
@@ -353,13 +363,18 @@ function updateRecord(i: ReadinessInputs): ReadinessRow {
       `${plural(settled.length, 'update')} since ${first ? fullDate(first.startedAt) : '—'}` +
       (gap === null ? '.' : `, longest gap ${plural(gap, 'day')}.`)
 
-  const notes: string[] = []
-  if (stalled.length > 0) notes.push(`${fmtInt(stalled.length)} of the last ${recent.length} took longer than the stretch they covered`)
-  if (!i.slotsRecorded) notes.push('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.')
-  else {
-    const served = recent.filter((u) => u.scheduledFor).length
-    notes.push(`${fmtInt(served)} of the last ${recent.length} served a scheduled slot`)
-  }
+  // The recent updates one line each, newest first — the shape of a run of
+  // weeks is the thing an operator is actually reading this row for, and a
+  // count of six out of eight hides whether the two were consecutive.
+  const notes = [
+    ...recent.map((u) =>
+      `${fullDate(u.startedAt)} — ${updateWord(u.status)}` +
+      (u.stalled === true ? ' · took longer than the stretch it covered' : '') +
+      (i.slotsRecorded ? (u.scheduledFor ? ' · on schedule' : ' · by hand') : '')),
+    ...(i.slotsRecorded
+      ? []
+      : ['Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.']),
+  ]
 
   return row(
     'update-record', 'Updates', 'a record of what ran, when, and over what stretch',

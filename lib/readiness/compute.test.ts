@@ -250,15 +250,20 @@ describe('watched communities', () => {
     const row = find(computeReadiness(ossur()), 'communities')
     expect(row.status).toBe('partial')
     expect(row.detail).toBe('3 watched, 5 proposed and not yet sampled, 9 ruled out · 66% of stored Reddit posts come from communities nobody configured.')
-    expect(row.notes).toEqual(['r/bionics — watched, nothing stored from it yet'])
+    expect(row.notes).toEqual([
+      'r/amputee — 23 posts',
+      'r/bionics — nothing stored from it yet',
+      'r/prosthetics — 26 posts',
+    ])
   })
 
   it('does not count a community set watched by hand as a gap, but does name it', () => {
     const row = find(computeReadiness(sealand()), 'communities')
     expect(row.detail).toContain('3 watched, 2 proposed and not yet sampled, 15 ruled out')
     expect(row.notes).toEqual([
-      'r/travelgear — watched, nothing stored from it yet',
-      'r/onebag — watched by hand, never sampled',
+      'r/backpacks — 41 posts',
+      'r/onebag — 17 posts · watched by hand, never sampled',
+      'r/travelgear — nothing stored from it yet',
     ])
   })
 
@@ -421,23 +426,33 @@ describe('how much was read', () => {
 // ---- 9 · the update record ----------------------------------------------------
 
 describe('the update record', () => {
-  it('counts what finished and says the slot is not recorded yet', () => {
+  it('counts what finished, lists them one line each, and says the slot is not recorded yet', () => {
     const row = find(computeReadiness(ossur()), 'update-record')
     expect(row.status).toBe('partial')
     expect(row.detail).toContain('6 of the last 8 updates finished')
-    expect(row.notes).toContain('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.')
+    expect(row.notes.slice(0, 3)).toEqual([
+      '13 Sep 2026 — finished',
+      '6 Sep 2026 — finished',
+      '30 Aug 2026 — finished',
+    ])
+    expect(row.notes).toContain('30 Aug 2026 — did not finish')
+    expect(row.notes).toContain('23 Aug 2026 — finished, with gaps')
+    expect(row.notes.at(-1)).toBe('Which scheduled slot each update served is not recorded yet, so a missed slot cannot be told from a manual update.')
   })
 
-  it('counts the slots once they are recorded', () => {
+  it('marks each update scheduled or by hand once the slot is recorded', () => {
     const updates = ossur().updates.map((u, k) => ({ ...u, scheduledFor: k < 3 ? '2026-09-13T04:00:00Z' : null }))
     const row = find(computeReadiness(ossur({ slotsRecorded: true, updates })), 'update-record')
-    expect(row.notes).toContain('3 of the last 8 served a scheduled slot')
+    expect(row.notes[0]).toBe('13 Sep 2026 — finished · on schedule')
+    expect(row.notes[3]).toBe('30 Aug 2026 — did not finish · by hand')
+    expect(row.notes).toHaveLength(8)
   })
 
   it('names an update that took longer than the stretch it covered', () => {
     const updates = ossur().updates.map((u, k) => ({ ...u, stalled: k === 0 }))
     const row = find(computeReadiness(ossur({ updates })), 'update-record')
-    expect(row.notes[0]).toBe('1 of the last 8 took longer than the stretch they covered')
+    expect(row.status).toBe('partial')
+    expect(row.notes[0]).toBe('13 Sep 2026 — finished · took longer than the stretch it covered')
   })
 
   it('is missing when nothing has finished', () => {

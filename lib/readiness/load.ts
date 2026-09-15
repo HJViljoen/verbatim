@@ -300,10 +300,32 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
   }
 }
 
+/**
+ * A HEAD COUNT CANNOT TELL YOU A TABLE IS MISSING. Verified read-only against
+ * production on 2026-09-15: `select('id', {count:'exact', head:true})` on a
+ * table PostgREST has never heard of comes back `204, count: null, error:
+ * null` — indistinguishable from an empty table, because a HEAD response has
+ * no body for the error to arrive in. The same request as a GET comes back
+ * `404 / PGRST205` with the table named.
+ *
+ * Which is exactly the distinction this page exists to draw: "no change has
+ * ever been recorded" and "nothing in the product can record a change" are
+ * different answers with different owners. So availability is probed with a
+ * one-row GET, and only then is the count asked for.
+ */
+async function tableIsThere(admin: Admin, table: string, missing: (e: unknown) => boolean): Promise<boolean> {
+  const { error } = await admin.from(table).select('id').limit(1)
+  if (missing(error)) return false
+  if (error) throw error
+  return true
+}
+
 async function loadChangeLog(admin: Admin, clientId: string): Promise<ReadinessInputs['changeLog']> {
+  if (!(await tableIsThere(admin, CONFIG_CHANGES_TABLE, isMissingConfigLog))) {
+    return { available: false, rows: 0, firstLoggedAt: null, lastChangeAt: null }
+  }
   const { count, error } = await admin.from(CONFIG_CHANGES_TABLE)
     .select('id', { count: 'exact', head: true }).eq('client_id', clientId)
-  if (isMissingConfigLog(error)) return { available: false, rows: 0, firstLoggedAt: null, lastChangeAt: null }
   if (error) throw error
 
   const [first, last] = await Promise.all([
@@ -322,9 +344,9 @@ async function loadChangeLog(admin: Admin, clientId: string): Promise<ReadinessI
 
 /** Decisions the client has recorded, or null when nothing can record one yet. */
 async function loadDecisionCount(admin: Admin, clientId: string): Promise<number | null> {
+  if (!(await tableIsThere(admin, REC_DECISIONS_TABLE, isMissingRecDecisions))) return null
   const { count, error } = await admin.from(REC_DECISIONS_TABLE)
     .select('id', { count: 'exact', head: true }).eq('client_id', clientId)
-  if (isMissingRecDecisions(error)) return null
   if (error) throw error
   return count ?? 0
 }
