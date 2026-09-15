@@ -15,6 +15,7 @@ import {
   redditRead,
   redditShare,
 } from './kinds'
+import type { PreRegisteredObject } from './anomaly'
 
 // The numbers in these tests are production's, measured read-only on
 // 2026-09-15 (research/kind-mix-attention-standings.md §1.3, re-verified
@@ -225,5 +226,18 @@ describe('preRegisteredKind', () => {
     expect(o.denominator).toBe('industry-other')
     expect(o.weekVideos).toBe(11)
     expect(o.months).toHaveLength(2)
+  })
+
+  // The seam WP8 meets: the value goes straight into the pre-registered set the
+  // weekly check runs, so it has to BE that type, not resemble it.
+  it('is the pinned PreRegisteredObject, not a structural twin of it', () => {
+    const o: PreRegisteredObject = preRegisteredKind({
+      kind: 'question',
+      audience: 'industry-other',
+      weekVideos: 9,
+      months: [{ month: '2026-08-01', videos: 138 }],
+    })
+    const set: readonly PreRegisteredObject[] = [o]
+    expect(set[0].id).toBe('question')
   })
 })

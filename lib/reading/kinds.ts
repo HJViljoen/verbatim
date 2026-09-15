@@ -1,5 +1,6 @@
 import { INSIGHT_CATEGORIES } from '../pipeline/schemas'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
+import type { DenominatorMonth, PreRegisteredObject } from './anomaly'
 import { monthChange, type SeriesPoint } from './bands'
 import type { PlatformMix } from './types'
 import type { Verdict, VerdictFlag } from './verdicts'
@@ -236,20 +237,17 @@ export function kindChange(input: KindChangeInput): Verdict {
  * `months` are the trailing baseline months' counts for this kind, keyed the
  * same way the denominator series is keyed; a month the kind is absent from may
  * be omitted, which the check reads as zero of that month's videos.
+ *
+ * The return type is the pinned `PreRegisteredObject` itself, not a structural
+ * twin of it: WP8 takes this straight into `anomalyCheck`, and a seam that only
+ * happens to line up is a seam that compiles until the day it does not.
  */
 export function preRegisteredKind(input: {
   kind: string
   audience: string
   weekVideos: number
-  months: readonly { month: string; videos: number }[]
-}): {
-  kind: 'kind'
-  id: string
-  label: string
-  denominator: string
-  weekVideos: number
-  months: readonly { month: string; videos: number }[]
-} {
+  months: readonly DenominatorMonth[]
+}): PreRegisteredObject {
   return {
     kind: 'kind',
     id: input.kind,
