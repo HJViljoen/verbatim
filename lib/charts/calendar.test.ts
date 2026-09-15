@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, hoverTitle, legendStates, lineSegments,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, hoverTitle, legendStates, lineSegments, monthColumns,
   niceMid, spanOf, stateNote, valueScale, type CalendarPoint, type CalendarSeries,
 } from './calendar'
 import { monthAxis } from '../reading/series'
@@ -233,6 +233,28 @@ describe('hoverTitle', () => {
   it("carries the caller's own caveat last", () => {
     expect(hoverTitle({ label: 'You' }, p('2026-09-01', 12, 'filling', { k: 4, n: 33, note: 'settles on 31 October 2026' })))
       .toBe('You 12 · Sep 2026 · 4 of 33 videos · still filling · settles on 31 October 2026')
+  })
+})
+
+describe('monthColumns / columnTitle', () => {
+  const a: CalendarSeries = { label: 'Sealand', color: 'var(--you)', points: [p('2026-08-01', 28, 'read', { k: 23, n: 82 }), p('2026-09-01', 31, 'read', { k: 26, n: 84 })] }
+  const b: CalendarSeries = { label: 'Freitag', color: 'var(--comp)', points: [p('2026-08-01', null, 'hollow'), p('2026-09-01', 44, 'read', { k: 62, n: 142 })] }
+
+  it('gives one column per axis month, whatever the series were handed in', () => {
+    const cols = monthColumns(['2026-08-01', '2026-09-01'], [a, b])
+    expect(cols.map((c) => c.month)).toEqual(['2026-08-01', '2026-09-01'])
+    expect(cols[0].entries.map((e) => e.series.label)).toEqual(['Sealand', 'Freitag'])
+  })
+
+  it('leaves a month out of a series that has no point for it, rather than inventing one', () => {
+    const short: CalendarSeries = { ...b, points: [p('2026-09-01', 44, 'read')] }
+    expect(monthColumns(['2026-08-01', '2026-09-01'], [a, short])[0].entries).toHaveLength(1)
+  })
+
+  it('heads the tooltip with the month and then answers for every line, once', () => {
+    const cols = monthColumns(['2026-08-01', '2026-09-01'], [a, b])
+    expect(columnTitle(cols[0], (v) => `${v}%`))
+      .toBe('Aug 2026\nSealand 28% · 23 of 82 videos\nFreitag · no conversation this month')
   })
 })
 

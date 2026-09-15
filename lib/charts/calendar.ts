@@ -312,15 +312,61 @@ export function hoverTitle(
   point: CalendarPoint,
   format: (v: number) => string = (v) => `${v}`,
 ): string {
+  const [head, ...rest] = hoverLine(series, point, format).split(' · ')
+  return [head, monthName(point.month), ...rest].join(' · ')
+}
+
+/** The same sentence without its month — one line of a month column, where the
+ *  month is the column's own heading and printing it once per series would say
+ *  "Aug 2026" three times in one tooltip. */
+export function hoverLine(
+  series: Pick<CalendarSeries, 'label'>,
+  point: CalendarPoint,
+  format: (v: number) => string = (v) => `${v}`,
+): string {
   const parts: string[] = []
   parts.push(point.value == null ? series.label : `${series.label} ${format(point.value)}`)
-  parts.push(monthName(point.month))
   if (point.k != null && point.n != null) parts.push(`${point.k.toLocaleString('en-US')} of ${point.n.toLocaleString('en-US')} videos`)
   else if (point.n != null) parts.push(`${point.n.toLocaleString('en-US')} videos`)
   const state = stateNote(point.state)
   if (state) parts.push(state)
   if (point.note) parts.push(point.note)
   return parts.join(' · ')
+}
+
+/** One month's hover target, with every series' point for that month. */
+export interface MonthColumn {
+  month: string
+  entries: readonly { series: CalendarSeries; point: CalendarPoint }[]
+}
+
+/**
+ * The hover targets: one per MONTH, carrying every line.
+ *
+ * A COLUMN BELONGS TO THE AXIS, NOT TO A LINE — the same reason a dated rule
+ * does. Each series used to lay its own month-wide transparent rect over the
+ * plot for every month it had no point in, and SVG has no z-index: the last
+ * series painted covered the earlier series' point targets, so on a three-line
+ * chart hovering your own August answered with the category's "too few videos
+ * this month to read against". One target per month, drawn above everything,
+ * cannot be shadowed by another series and answers with all of them at once —
+ * which is the question a reader of a multi-line chart is actually asking.
+ */
+export function monthColumns(axis: readonly string[], series: readonly CalendarSeries[]): MonthColumn[] {
+  const indexed = series.map((s) => ({ s, by: new Map(s.points.map((p) => [monthStartOf(p.month), p])) }))
+  return axis.map(monthStartOf).map((month) => ({
+    month,
+    entries: indexed.flatMap(({ s, by }) => {
+      const point = by.get(month)
+      return point ? [{ series: s, point }] : []
+    }),
+  }))
+}
+
+/** What a month column says: the month, then one line per series, in the order
+ *  the lines were handed to the chart. */
+export function columnTitle(column: MonthColumn, format: (v: number) => string = (v) => `${v}`): string {
+  return [monthName(column.month), ...column.entries.map((e) => hoverLine(e.series, e.point, format))].join('\n')
 }
 
 /** The one sentence each non-reading state is allowed, so no surface invents a

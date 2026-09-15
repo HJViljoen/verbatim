@@ -252,7 +252,7 @@ baseline, and rules drawn behind the lines.
 | `read` | solid point, `r 2.2` (`3.4` at the series end), ringed `--tile` | §3.9 unchanged |
 | `below_floor` | **hollow circle in the GUTTER**, `r 3.5`, fill `--tile`, stroke the entity colour `1.5` | the audience's denominator is under `SHARE_BAND.minN` — a real number, no comparison |
 | `below_numerator` | **hollow square in the gutter**, `6×6`, same stroke | the object's own k is under the numerator floor |
-| `hollow` | nothing on the line; a full-slot transparent hover target | no row at all — the gap IS the statement |
+| `hollow` | nothing on the line at all | no row at all — the gap IS the statement; the month's column still answers when hovered |
 | `filling` | the point, plus a **part-height bar** at `opacity .14` in the entity colour, with an "at this point last month" dashed tick beside it | the month is still taking comments and will be rewritten |
 
 - **Dated rules** (`tracking change` / `clustering change` / `rename`): a vertical
@@ -271,8 +271,11 @@ baseline, and rules drawn behind the lines.
   regime, so drawn literally that is a dated rule on every bar of the history the trial is sold on.
 - **Month labels thin** past 12 months, keeping the last month always: a 68-month axis under a 644px
   plot gives each label ~9px, which is not a label.
-- **Hover carries k of n** — "Sealand 31% · Aug 2026 · 26 of 84 videos". A share without its
-  denominator is a score, and this product shows no scores.
+- **Hover carries k of n**, and the hover target is a COLUMN PER MONTH, not a target per point:
+  "Aug 2026 / Sealand 28% · 23 of 82 videos / Freitag 41% · 57 of 139 videos". A column belongs to
+  the axis, like a dated rule does — SVG has no z-index, so per-series targets let the last line
+  painted cover every earlier line's points and answer for them. A share without its denominator is
+  a score, and this product shows no scores.
 - **Legend whenever there are ≥2 series or any gutter token**; identity is never colour-alone. A
   series that excludes Reddit says so there, in its own entry.
 

@@ -91,14 +91,22 @@ describe('CalendarLine', () => {
     expect(markup).toContain('too few of this one to read')
   })
 
-  it('hovers with k of n on every read month', () => {
+  it('hovers with k of n on every read month, one column answering for every line', () => {
     const markup = render(chart())
-    expect(markup).toContain('Sealand 28% · Aug 2026 · 23 of 82 videos')
-    expect(markup).toContain('Freitag 44% · Sep 2026 · 62 of 142 videos')
+    expect(markup).toContain('Aug 2026\nSealand 28% · 23 of 82 videos\nFreitag 41% · 57 of 139 videos')
   })
 
   it('says what a hollow month is when the reader asks', () => {
-    expect(render(chart())).toContain('Freitag · Jul 2026 · no conversation this month')
+    expect(render(chart())).toContain('Jul 2026\nSealand 24% · 19 of 79 videos\nFreitag · no conversation this month')
+  })
+
+  it('gives a month ONE hover target, so no series can answer for another', () => {
+    const markup = render(chart())
+    // One transparent rect per axis month and not one per series per month:
+    // SVG has no z-index, so a second layer of full-column targets would cover
+    // the first line's points and answer with the wrong line (WP10 review).
+    const targets = markup.match(/fill="transparent"/g) ?? []
+    expect(targets).toHaveLength(AXIS.length)
   })
 
   it('draws the still-filling month as a part-height bar with last month beside it', () => {

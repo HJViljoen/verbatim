@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, hoverTitle, legendStates, lineSegments,
-  spanOf, STATE_LABEL, valueScale,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, legendStates, lineSegments,
+  monthColumns, spanOf, STATE_LABEL, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -120,6 +120,7 @@ export function CalendarLine({
   const labelled = new Set(axisLabels(months, maxLabels))
   const printRuleLabels = drawn.length <= MAX_PRINTED_RULE_LABELS
   const states = legendStates(series)
+  const columns = monthColumns(months, series)
   const showLegend = legend && (series.length >= 2 || states.length > 0)
 
   // A month nobody has a reading for gets a fainter label, the way the mock
@@ -240,6 +241,22 @@ export function CalendarLine({
             </text>
           ) : null,
         )}
+
+        {/* The hover layer: one column per month, answering with every series at
+            once. LAST in the document, so nothing a line or a label draws can
+            cover it and no series can answer for another. */}
+        {columns.map((c, i) => (
+          <rect
+            key={`col${c.month}`}
+            x={g.xAt(i) - g.slot / 2}
+            y={g.top}
+            width={Math.max(4, g.slot)}
+            height={g.baseline - g.top + 12}
+            fill="transparent"
+          >
+            <title>{columnTitle(c, format)}</title>
+          </rect>
+        ))}
       </svg>
 
       {caption ? <p className="m-0 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caption}</p> : null}
@@ -286,13 +303,14 @@ function SeriesMarks({
         )
       })}
 
+      {/* The marks. Nothing here is a hover target: the chart's one hover layer
+          is a column per month, drawn above every series (`monthColumns`). */}
       {points.map((p, i) => {
         const x = at(p)
         if (x == null) return null
-        const title = hoverTitle(series, p, format)
         if (p.value == null) {
           // Nothing on the line. A below-floor month is a mark in the gutter; a
-          // hollow month is the gap itself, with a hover so the reader can ask.
+          // hollow month is the gap itself, and its column still answers.
           return (
             <g key={`m${i}`}>
               {p.state === 'below_floor' && (
@@ -301,9 +319,6 @@ function SeriesMarks({
               {p.state === 'below_numerator' && (
                 <rect x={x - 3} y={g.gutterY - 3} width={6} height={6} fill="var(--tile)" stroke={series.color} strokeWidth={1.5} />
               )}
-              <rect x={x - g.slot / 2} y={g.top} width={Math.max(4, g.slot)} height={g.baseline - g.top + 12} fill="transparent">
-                <title>{title}</title>
-              </rect>
             </g>
           )
         }
@@ -314,7 +329,6 @@ function SeriesMarks({
               <FillingBar x={x} value={p.value} atLastMonth={p.atLastMonth ?? null} y={y} baseline={g.baseline} slot={g.slot} color={series.color} format={format} padR={padR} />
             )}
             <circle cx={x} cy={y(p.value)} r={isEnd ? 3.4 : 2.2} fill={series.color} stroke="var(--tile)" strokeWidth={isEnd ? 1.5 : 1} />
-            <circle cx={x} cy={y(p.value)} r={9} fill="transparent"><title>{title}</title></circle>
           </g>
         )
       })}
