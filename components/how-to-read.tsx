@@ -50,7 +50,10 @@ export function HowToRead({ items, basePath }: { items: GlossaryKey[]; open?: bo
                   Every label above is assigned by a fixed rule from counted data — never worded by the AI.
                 </p>
                 <p className="pt-1 text-xs">
-                  <a href={`/dashboard/guide#${basePath === '/dashboard' ? 'dashboard' : basePath.replace('/dashboard/', '')}`} className="font-medium text-foreground underline underline-offset-2">Full guide to this page →</a>
+                  {/* The Guide retired into Settings › How to read (WP9, decision C); the
+                      anchor is still the page's own name, so a link lands on that
+                      page's card. WP16 builds the sub-page. */}
+                  <a href={`/dashboard/settings/how-to-read#${basePath === '/dashboard' ? 'dashboard' : basePath.replace('/dashboard/', '')}`} className="font-medium text-foreground underline underline-offset-2">Full guide to this page →</a>
                 </p>
               </div>
             </CardContent>

@@ -54,9 +54,15 @@ const firstIssue = (e: z.ZodError) => {
   return `${i?.path.join('.') || 'form'}: ${i?.message ?? 'check your input.'}`
 }
 
-/** Revalidate everywhere an initiative is read. */
+/** Revalidate everywhere an initiative is read.
+ *
+ *  WP9 moved this action out of app/dashboard/settings/initiatives/ — the page
+ *  retired and redirects to Market's moves section, while the action itself is
+ *  still called from Voice's "Track this" button, so it had to stop living
+ *  beside a page that no longer exists. `initiatives` is the legacy table;
+ *  WP12/WP13 move Track this onto `moves`. */
 function revalidateInitiatives() {
-  revalidatePath('/dashboard/settings/initiatives')
+  revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/voice')
 }

@@ -382,5 +382,6 @@ export function competitiveHref(vs: string | null, detail?: string): string {
   const q: string[] = []
   if (vs) q.push(`vs=${encodeURIComponent(vs)}`)
   if (detail) q.push(`detail=${detail}`)
-  return `/dashboard/competitive${q.length ? `?${q.join('&')}` : ''}`
+  // The parked page (WP9) — see lib/pages/competitive.ts.
+  return `/dashboard/competitive-intel${q.length ? `?${q.join('&')}` : ''}`
 }

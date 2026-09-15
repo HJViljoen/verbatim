@@ -251,9 +251,9 @@ describe('findings', () => {
 
 describe('competitiveHref', () => {
   it('keeps the ?vs= pick alongside a drawer id', () => {
-    expect(competitiveHref(null)).toBe('/dashboard/competitive')
-    expect(competitiveHref('Ottobock', 'field')).toBe('/dashboard/competitive?vs=Ottobock&detail=field')
-    expect(competitiveHref('Össur Iceland')).toBe('/dashboard/competitive?vs=%C3%96ssur%20Iceland')
-    expect(competitiveHref(null, 'findings')).toBe('/dashboard/competitive?detail=findings')
+    expect(competitiveHref(null)).toBe('/dashboard/competitive-intel')
+    expect(competitiveHref('Ottobock', 'field')).toBe('/dashboard/competitive-intel?vs=Ottobock&detail=field')
+    expect(competitiveHref('Össur Iceland')).toBe('/dashboard/competitive-intel?vs=%C3%96ssur%20Iceland')
+    expect(competitiveHref(null, 'findings')).toBe('/dashboard/competitive-intel?detail=findings')
   })
 })

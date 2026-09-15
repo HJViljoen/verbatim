@@ -25,20 +25,30 @@ const password = process.env.SHOT_PASSWORD ?? process.env.DEMO_PASSWORD ?? ''
 
 interface Shot { name: string; path: string; follow?: string }
 const SHOTS: Shot[] = [
-  { name: 'dashboard', path: '/dashboard' },
-  { name: 'dashboard-brief', path: '/dashboard?detail=brief' },
-  { name: 'market', path: '/dashboard/market', follow: 'a[href*="item="]' },
-  { name: 'market-insights', path: '/dashboard/market?group=insights' },
-  { name: 'market-claims', path: '/dashboard/market?group=claims' },
+  // The nine surfaces (WP9). Overview, Voice, Market, Competitive, Subjects
+  // and This week are shells or legacy pages until WP11-WP15 fill them; they
+  // are shot anyway, because a route that stops routing is what this script is
+  // for.
+  { name: 'overview', path: '/dashboard' },
+  { name: 'overview-brief', path: '/dashboard?detail=brief' },
+  { name: 'subjects', path: '/dashboard/subjects' },
   { name: 'voice', path: '/dashboard/voice?seed=1', follow: 'a[href*="theme="]' },
   { name: 'voice-filtered', path: '/dashboard/voice?seed=1&entity=client&type=pain_point&stage=consideration' },
   { name: 'voice-list', path: '/dashboard/voice?seed=1&detail=list' },
-  { name: 'competitive', path: '/dashboard/competitive', follow: 'a[href*="item="]' },
-  { name: 'competitive-kind', path: '/dashboard/competitive', follow: 'a[href*="kind="]' },
+  { name: 'market', path: '/dashboard/market' },
+  { name: 'competitive', path: '/dashboard/competitive' },
+  { name: 'week', path: '/dashboard/week' },
+  { name: 'reports', path: '/dashboard/reports' },
+  { name: 'settings', path: '/dashboard/settings' },
+  // The parked pages, at the addresses they moved to.
+  { name: 'market-intel', path: '/dashboard/market-intel', follow: 'a[href*="item="]' },
+  { name: 'market-intel-insights', path: '/dashboard/market-intel?group=insights' },
+  { name: 'market-intel-claims', path: '/dashboard/market-intel?group=claims' },
+  { name: 'competitive-intel', path: '/dashboard/competitive-intel', follow: 'a[href*="item="]' },
+  { name: 'competitive-intel-kind', path: '/dashboard/competitive-intel', follow: 'a[href*="kind="]' },
   { name: 'content', path: '/dashboard/videos', follow: 'a[href*="detail=engage-"]' },
   { name: 'content-intent', path: '/dashboard/videos?intent=objection' },
   { name: 'content-playbooks', path: '/dashboard/videos?detail=playbooks' },
-  { name: 'profile', path: '/dashboard/profile', follow: 'a[href*="persona="]' },
 ]
 
 async function main() {

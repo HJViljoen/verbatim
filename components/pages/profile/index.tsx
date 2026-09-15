@@ -60,7 +60,10 @@ const persona: R = (d, mode) => {
             return app ? (
               <Link
                 key={p.key}
-                href={`/dashboard/profile?persona=${encodeURIComponent(p.key)}`}
+                // WP9: /dashboard/profile redirects to Voice's cast. This module is
+                // kept registered for the stored artefacts that name it, and in app
+                // mode its switcher now points at the page that reads personas.
+                href={`/dashboard/voice?persona=${encodeURIComponent(p.key)}#cast`}
                 scroll={false}
                 aria-current={isActive ? 'page' : undefined}
                 className={cls}

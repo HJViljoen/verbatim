@@ -1,15 +1,9 @@
-import { getSessionContext } from '@/lib/auth'
-import { readingHandle } from '@/lib/reading/read'
-import { loadCompetitive, type CompetitiveParams } from '@/lib/pages/competitive'
-import { CompetitivePage } from '@/components/pages/competitive'
+import { SurfaceShell } from '@/components/shell/surface-shell'
 
-// Competitive Intelligence — "where do we stand vs <competitor>?" Loader in
-// lib/pages/competitive.ts, renderers in components/pages/competitive
-// (Reports & Exports, 2026-08-29).
+// Competitive — "who else is in this, and are they gaining?" The address
+// Competitive Intelligence used to hold; that page is parked at
+// /dashboard/competitive-intel until 30 Nov 2026. WP14 fills this one.
 
-export default async function Page({ searchParams }: { searchParams?: Promise<CompetitiveParams> }) {
-  const { supabase, clientId } = await getSessionContext()
-  const sp = (await searchParams) ?? {}
-  const data = await loadCompetitive({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  return <CompetitivePage data={data} detail={sp.detail} params={sp} />
+export default function Page() {
+  return <SurfaceShell nav="competitive" />
 }

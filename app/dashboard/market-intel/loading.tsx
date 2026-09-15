@@ -1,7 +1,7 @@
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
 import { Bone, BoneLines } from '@/components/shell/skeleton'
 
-// Mirrors app/dashboard/market/page.tsx as a page inside the page: rail ·
+// Mirrors app/dashboard/market-intel/page.tsx as a page inside the page: rail ·
 // list · detail. Widths match MasterDetail's defaults (20 / 34 / rest) so the
 // real panes land in place.
 

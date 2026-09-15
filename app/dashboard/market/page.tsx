@@ -1,14 +1,11 @@
-import { getSessionContext } from '@/lib/auth'
-import { readingHandle } from '@/lib/reading/read'
-import { loadMarket, type MarketParams } from '@/lib/pages/market'
-import { MarketPage } from '@/components/pages/market'
+import { SurfaceShell } from '@/components/shell/surface-shell'
 
-// Market Intelligence — "what should we do?" Loader in lib/pages/market.ts,
-// renderers in components/pages/market (Reports & Exports, 2026-08-29).
+// Market — "what should we do, and is it working?" The address Market
+// Intelligence used to hold; that page is parked at /dashboard/market-intel
+// until 30 Nov 2026 and still answers. WP14 fills this one, and takes the
+// legacy `?rec=<id>` alias with it — four sent emails and every digest until
+// WP17 carry that parameter.
 
-export default async function Page({ searchParams }: { searchParams?: Promise<MarketParams> }) {
-  const { supabase, clientId } = await getSessionContext()
-  const sp = (await searchParams) ?? {}
-  const data = await loadMarket({ supabase, clientId, reading: readingHandle(clientId), params: sp })
-  return <MarketPage data={data} detail={sp.detail} params={sp} />
+export default function Page() {
+  return <SurfaceShell nav="market" />
 }

@@ -6,6 +6,11 @@ import { getSessionContext } from '@/lib/auth'
 import { REC_STATUSES, type RecStatus } from '@/lib/calibration'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '@/lib/rec-decisions'
 
+// Lives in lib/actions/ rather than beside a page, since WP9: it is rendered
+// on the parked Market page AND on the legacy Dashboard's hero, and an action
+// imported by module path from app/dashboard/<page>/actions moves house every
+// time its page does — which is exactly what happened here.
+//
 // Moving a recommendation through its lifecycle — the write the `status`
 // column has been granted for since 2026-08-18 and never received.
 //
@@ -78,7 +83,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
       return { ok: false, message: `Could not save: ${decisionError.message}` }
     }
     console.warn(
-      '[market] rec_decisions does not exist — apply supabase/migrations/20260915093000_rec_decisions.sql. ' +
+      '[rec-status] rec_decisions does not exist — apply supabase/migrations/20260915093000_rec_decisions.sql. ' +
       'Recording the status on the recommendation alone; it now survives only as long as the next update re-finds this row.',
     )
   }
@@ -112,7 +117,14 @@ export async function setRecommendationStatus(id: string, status: string): Promi
   if ((data ?? []).length === 0) return { ok: false, message: 'That recommendation is no longer here.' }
 
   // Both surfaces show it: the agenda list and the dashboard's top-
-  // recommendation tile.
+  // recommendation tile. THREE paths while the old and the new Market coexist
+  // (WP9): the control is rendered on the parked page at /dashboard/market-intel
+  // AND the new Market takes /dashboard/market and reads the same ledger, so
+  // revalidating one address would leave a client who marked a recommendation
+  // "Working on it" looking at a stale answer on the other for a router-cache
+  // minute (next.config.ts staleTimes.dynamic = 60). The parked path drops out
+  // with the parked page.
+  revalidatePath('/dashboard/market-intel')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
   return { ok: true, message: '' }

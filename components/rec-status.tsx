@@ -5,7 +5,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { setRecommendationStatus } from '@/app/dashboard/market/actions'
+import { setRecommendationStatus } from '@/lib/actions/rec-status'
 import { REC_STATUSES, REC_STATUS_LABEL, type RecStatus } from '@/lib/calibration'
 
 // The recommendation lifecycle control (WP7c). Quiet chrome, MASTER rule 1:

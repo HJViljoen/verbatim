@@ -19,7 +19,7 @@ import { row, rows as readRows } from './read'
 import { fetchLatestVideoRun, fetchRunningRunIds } from './latest-video-run'
 
 // Competitive Intelligence loader — the data half of the old
-// app/dashboard/competitive/page.tsx (split 2026-08-29, Reports & Exports
+// app/dashboard/competitive-intel/page.tsx (split 2026-08-29, Reports & Exports
 // T5). "Where do we stand vs <competitor>?": standings, the face-off vs the
 // selected competitor, the share line and the full comparison up top; the
 // findings — a page inside the page (rail: all · by kind · about a
@@ -64,7 +64,9 @@ interface ThemeRow extends ThemeBucketRow {
   rank_score: number | null
 }
 
-const BASE = '/dashboard/competitive'
+// The parked page's own address (WP9): the new Competitive takes
+// `/dashboard/competitive`, and this module draws the page that moved aside.
+const BASE = '/dashboard/competitive-intel'
 export const LEGEND_ITEMS: GlossaryKey[] = ['conversations', 'sentiment']
 
 export type CompetitiveParams = { detail?: string; vs?: string; group?: string; item?: string; kind?: string; about?: string }

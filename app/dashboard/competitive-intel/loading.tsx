@@ -1,7 +1,7 @@
 import { PageFrame, PageGrid, PageBar } from '@/components/shell/page-grid'
 import { SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
 
-// Mirrors app/dashboard/competitive/page.tsx: the overview tiles (standings
+// Mirrors app/dashboard/competitive-intel/page.tsx: the overview tiles (standings
 // 4×3 · face-off 8×3 · share line 7×2 · full comparison 5×2), then the
 // findings as rail · list · detail beneath.
 

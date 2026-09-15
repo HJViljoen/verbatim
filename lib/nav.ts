@@ -129,6 +129,14 @@ export const OLD_PAGES: readonly OldPage[] = [
   },
 ]
 
+/** The parked page at exactly this address. Throws rather than returning null:
+ *  a page asking for its own banner has to get one. */
+export function oldPage(href: string): OldPage {
+  const p = OLD_PAGES.find((x) => x.href === href)
+  if (!p) throw new Error(`no old page: ${href}`)
+  return p
+}
+
 export const oldPageFor = (pathname: string): OldPage | null =>
   OLD_PAGES.find((p) => p.href === pathname || pathname.startsWith(`${p.href}/`)) ?? null
 

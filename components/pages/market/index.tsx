@@ -620,7 +620,7 @@ export function MarketPage({ data: d, detail: detailParam, params }: { data: Mar
     return (
       <PageFrame>
         <PageBar title="Market Intelligence" context={`What should we do? · ${d.brand}`}>
-          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market" />
+          <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market-intel" />
         </PageBar>
         <section className="rounded-lg bg-tile p-6 shadow-tile">
           <p className="text-[12px] text-muted-foreground">Your market intelligence lands with your first update — check back then.</p>
@@ -634,7 +634,7 @@ export function MarketPage({ data: d, detail: detailParam, params }: { data: Mar
       <PageBar title="Market Intelligence" context={d.context}>
         <BarPill active>This update</BarPill>
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market" />
+        <HowToRead items={d.legendItems} open={showLegend} basePath="/dashboard/market-intel" />
       </PageBar>
       {shortRead(d, 'app')}
       <MasterDetail id="market" className="md:h-[640px]" rail={rail(d, 'app')} list={list(d, 'app')} detail={detail(d, 'app')} />

@@ -167,7 +167,7 @@ async function main() {
       noDash('team', t8)
 
       // 7. No export chrome on the dashboard pages
-      for (const p of ['/dashboard', '/dashboard/market', '/dashboard/voice', '/dashboard/competitive', '/dashboard/videos', '/dashboard/profile']) {
+      for (const p of ['/dashboard', '/dashboard/voice', '/dashboard/market-intel', '/dashboard/competitive-intel', '/dashboard/videos']) {
         await goto(p)
         const exportChrome = await page.evaluate(() => document.querySelector('button[data-print-hide][aria-haspopup="dialog"]') != null)
         check(`no export control on ${p}`, !exportChrome && !/Add to a report/.test(await text(page)))
