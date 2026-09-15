@@ -211,7 +211,7 @@ describe('buildSeries · labels', () => {
       denominators: [den('2026-09-01', 388, { status: 'filling', frozen_at: null })],
     })
     const label = s.points[3].labels.find((l) => l.kind === 'still_filling')!
-    expect(label.text).toContain('2026-10-31')
+    expect(label.text).toContain('31 Oct 2026')
   })
 
   it('draws a clustering rule at the first month under the new key, and nowhere else', () => {
@@ -248,8 +248,8 @@ describe('buildSeries · labels', () => {
     expect(s.points.every((p) => !kinds(p.labels).includes('clustering_changed'))).toBe(true)
     const collapsed = s.notes.filter((n) => n.kind === 'clustering_changed')
     expect(collapsed).toHaveLength(1)
-    expect(collapsed[0].text).toContain('2026-07')
-    expect(collapsed[0].text).toContain('2026-09')
+    expect(collapsed[0].text).toContain('Jul 2026')
+    expect(collapsed[0].text).toContain('Sep 2026')
   })
 
   it('draws a faint band over the months a tracking change MOVED, not the month it was made in', () => {
@@ -367,5 +367,34 @@ describe('buildSeries · a renamed rival is one line with the break marked', () 
     const s = buildSeries({ axis, audience: 'competitor:Rareform', denominators: [den('2026-08-01', 628)] })
     expect(s.audience).toBe('competitor:Rareform')
     expect(s.points.every((p) => p.state === 'hollow')).toBe(true)
+  })
+})
+
+describe('the labels a client actually reads carry no ISO dates', () => {
+  // horizon.test.ts asserts HORIZON_LABEL has no jargon in it; nothing asserted
+  // anything about the MonthLabel texts, which are the strings printed on a
+  // chart. "settles on 2026-10-31" and "for 2026-07 to 2026-09" both shipped.
+  const axis = monthAxis('2026-06-01', '2026-09-01')
+  const rows = [
+    den('2026-06-01', 400, { status: 'frozen', clustering_key: null }),
+    den('2026-07-01', 400, { status: 'frozen', clustering_key: null }),
+    den('2026-08-01', 400, { status: 'frozen', clustering_key: 'a=v4;c=0.58' }),
+    den('2026-09-01', 400, { status: 'filling' }),
+  ]
+  const series = buildSeries({ axis, audience: 'industry-other', denominators: rows })
+  const texts = [...series.points.flatMap((p) => p.labels), ...series.notes].map((l) => l.text)
+
+  it('prints a settle date as a date, not as a slice', () => {
+    const filling = series.points.find((p) => p.labels.some((l) => l.kind === 'still_filling'))
+    expect(filling?.labels.find((l) => l.kind === 'still_filling')?.text).toContain('settles on 31 Oct 2026')
+  })
+
+  it('names a stretch of months in months', () => {
+    const note = series.notes.find((n) => n.kind === 'clustering_changed')
+    expect(note?.text).toContain('Jul 2026 to Aug 2026')
+  })
+
+  it('has no YYYY-MM or YYYY-MM-DD anywhere in what it prints', () => {
+    for (const text of texts) expect(text).not.toMatch(/\d{4}-\d{2}/)
   })
 })

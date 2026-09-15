@@ -1,6 +1,7 @@
 import { thinMonth } from './bands'
 import { rangeCoversMonth } from '../config-affects'
 import { changeLogBoundary } from '../config-log'
+import { fullDate, monthName } from '../format'
 import { clusteringBoundaries, type ClusteringBoundary } from '../pipeline/clustering'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import { renameLabel, stitchRenames, type RenameRecord } from '../rivals'
@@ -190,7 +191,7 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
 function fillingLabel(month: string): MonthLabel {
   return {
     kind: 'still_filling',
-    text: `Still filling — this month is still taking comments, and settles on ${freezeBoundary(month).slice(0, 10)}.`,
+    text: `Still filling — this month is still taking comments, and settles on ${fullDate(freezeBoundary(month))}.`,
   }
 }
 
@@ -214,7 +215,7 @@ const BACK_READ: MonthLabel = {
 function unknownRegimeNote(months: readonly string[]): MonthLabel {
   const first = months[0]
   const last = months[months.length - 1]
-  const span = first === last ? first.slice(0, 7) : `${first.slice(0, 7)} to ${last.slice(0, 7)}`
+  const span = first === last ? monthName(first) : `${monthName(first)} to ${monthName(last)}`
   return {
     kind: 'clustering_changed',
     text: `We did not record how themes were grouped for ${span}, so those months are not strictly comparable with the ones after them.`,
