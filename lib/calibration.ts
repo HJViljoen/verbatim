@@ -275,12 +275,40 @@ const wordRe = (word: string): RegExp => new RegExp(`\\b${escape(word).replace(/
  * QUOTED, not claimed, and nothing this product does to its own prose may
  * reach inside a quotation (§6.2: the magnitude strip does, and mutilates
  * Dutch and German text every time it runs).
+ *
+ * THE STRAIGHT SINGLE QUOTE IS THE DANGEROUS ONE, and it is the only mark here
+ * that has a second job in ordinary English. "The theme's share is growing, and
+ * it's clear buyers care." brackets a span between a POSSESSIVE and a
+ * CONTRACTION; read as a quotation it hides `growing` from `directionHits` and
+ * the magnitude words from `replaceOutsideQuotes`, and the sentence ships with
+ * `leaked: false` so nothing reaches ai_call_log either — a scrubber that
+ * cannot see a leak reports a clean run. 20 of 732 stored recommendation,
+ * finding and market-insight strings carry such a false span today. So a pair
+ * of straight single quotes counts as a quotation only when neither mark sits
+ * against a letter or a digit; an apostrophe always does. A real quotation
+ * (‘…’, or 'dat staat vast' between spaces) is unaffected.
  */
 export function quotedSpans(text: string): [number, number][] {
-  const spans: [number, number][] = []
-  for (const m of text.matchAll(/"[^"]*"|“[^”]*”|'[^']{2,}'|‘[^’]{2,}’/g)) {
+  const found: [number, number][] = []
+  for (const m of text.matchAll(/"[^"]*"|“[^”]*”|‘[^’]{2,}’/g)) {
     const start = m.index ?? 0
-    spans.push([start, start + m[0].length])
+    found.push([start, start + m[0].length])
+  }
+  for (const m of text.matchAll(/(^|[^\p{L}\p{N}'’])('[^']{2,}')(?=$|[^\p{L}\p{N}'’])/gu)) {
+    const start = (m.index ?? 0) + m[1].length
+    found.push([start, start + m[2].length])
+  }
+  // `replaceOutsideQuotes` walks these in order and assumes they do not
+  // overlap; two passes can nest ("he said 'yes' to it"), so merge.
+  found.sort((a, b) => a[0] - b[0] || b[1] - a[1])
+  const spans: [number, number][] = []
+  for (const [start, end] of found) {
+    const last = spans[spans.length - 1]
+    if (last && start < last[1]) {
+      if (end > last[1]) last[1] = end
+      continue
+    }
+    spans.push([start, end])
   }
   return spans
 }

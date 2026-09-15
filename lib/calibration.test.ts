@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { SHARE_BAND } from './report-bands'
-import { DIRECTION_WORDS, READER_FLAGS, THIRTEEN_WORDS, directionHits, evidenceOf, glossaryRule } from './calibration'
+import { DIRECTION_WORDS, READER_FLAGS, THIRTEEN_WORDS, directionHits, evidenceOf, glossaryRule, quotedSpans } from './calibration'
 
 describe('evidenceOf — every number carries its denominator (Tier 1)', () => {
   it('renders the shape this module promised and never shipped', () => {
@@ -115,6 +115,25 @@ describe('directionHits — the scrubber’s match list, calibrated on productio
     expect(directionHits('One owner wrote: “my socket keeps rising off the stump”.')).toEqual([])
     // The claim outside the quote still counts.
     expect(directionHits('Attention is fading, and one owner wrote “it keeps rising”.')).toEqual(['fading'])
+  })
+
+  // A POSSESSIVE AND A CONTRACTION ARE NOT A QUOTATION. Measured on the shipped
+  // code before this was fixed: every one of these returned [] and shipped with
+  // leaked:false, because `'s … it'` read as a quoted span.
+  it('does not read a possessive and a contraction as a quotation', () => {
+    expect(directionHits("The theme's share is growing, and it's clear buyers care.")).toEqual(['growing'])
+    expect(directionHits("Durability's profile is fading, but it's early.")).toEqual(['fading'])
+    expect(quotedSpans("The brand's many buyers said it's fine.")).toEqual([])
+  })
+
+  it('still reads a straight single quote that stands on its own as one', () => {
+    expect(quotedSpans("A buyer put it as 'dat staat vast' and moved on.")).toEqual([[18, 34]])
+    expect(directionHits("A buyer put it as 'the socket keeps rising' and moved on.")).toEqual([])
+  })
+
+  it('returns spans in order and never overlapping, so a word strip can walk them', () => {
+    const spans = quotedSpans(`He said "it is 'fine' either way" and left.`)
+    expect(spans).toEqual([[8, 33]])
   })
 
   it('reports each word once, in the order it was found', () => {
