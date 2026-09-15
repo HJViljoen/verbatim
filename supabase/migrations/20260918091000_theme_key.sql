@@ -102,13 +102,17 @@ comment on column public.month_denominators.clustering_key is
 
 -- 4. Backfill — every entry that has a themes row ------------------------------
 -- The newest themes row per (client, registry_id): that is the membership the
--- entry currently stands on, and it is stored per run and never pruned. Össur
--- covers 1,096 of 1,096 entries; Sealand 1,845 of 1,883 — the 38 it misses are
--- debris from the retried persist-themes of run cb0d97b2 (its first attempt's
--- themes rows were deleted by the retry's delete-then-insert while the
--- observations upsert kept the entries alive), they have no themes row at all,
--- and there is nothing anywhere to fill them from. They score 0 on the video
--- arm and fall through to the insight arm exactly as they do today.
+-- entry currently stands on, and it is stored per run and never pruned.
+-- Measured on production 2026-09-15: Össur covers 1,096 of 1,096 entries;
+-- Sealand 1,860 of 1,927. The 67 it misses have no `themes` row at all and
+-- there is nothing anywhere to fill them from — they are debris from two
+-- retried persist-themes runs (35 from cb0d97b2 on 09-10, 32 from 5a2ebc43 on
+-- 09-15), whose first attempt's theme rows were deleted by the retry's
+-- delete-then-insert while the observations upsert kept the entries alive. The
+-- population GROWS by roughly thirty every time a run of that size is retried,
+-- so the number here is a reading, not a constant. They score 0 on the video
+-- arm and fall through to the insight arm exactly as they do today; they are
+-- never deleted (see the theme_registry grant at the end of this file).
 --
 -- Idempotent by the empty-array predicate rather than by ON CONFLICT: the
 -- second apply finds every row already filled and writes nothing, and a row a
