@@ -672,10 +672,42 @@ export async function freezeMonths(
   }
   if (opts.dryRun) return summary
 
-  if (denomRows.length > 0) await writeRows(admin, TABLE_DENOMINATORS, denomRows, 'client_id,month,audience')
+  // ORDER MATTERS, and it is the only thing standing between a failed write and
+  // a month lost for good. The two tables are two statements, and either can
+  // fail on its own (a statement timeout on a wide upsert, a transient 5xx, a
+  // body over the limit — the shape themes.ts has already hit in production).
+  //
+  // Theme readings go FIRST. A month is revisited only while something of it is
+  // still `filling` (monthsToRefresh walks the clock and the stored filling
+  // rows), so the half that must never be frozen alone is the DENOMINATOR: a
+  // visit that froze August's denominators and then failed on its theme rows
+  // would leave August with a frozen denominator, no numerators, and nothing to
+  // bring any later run back to it — and the Pass A prune plus the retention
+  // sweep make those numerators unrecomputable for that clustering.
+  //
+  // The other order of failure is recoverable and clustering-safe: theme rows
+  // frozen, denominators not written. The denominator is a count of videos and
+  // comments per audience and does not depend on a run at all, so the next
+  // visit writes it from the same corpus while the frozen numerators are kept
+  // as they are.
   if (themeRows.length > 0) await writeRows(admin, TABLE_THEME_READINGS, themeRows, 'client_id,month,audience,theme_id')
-  await deleteStale(admin, TABLE_DENOMINATORS, opts.clientId, denomMerge.stale)
+  if (denomRows.length > 0) {
+    try {
+      await writeRows(admin, TABLE_DENOMINATORS, denomRows, 'client_id,month,audience')
+    } catch (e) {
+      // Say what state the tables are in. The caller's catch logs one line, and
+      // "upsert failed" would not tell anyone that one side of this visit
+      // landed and the other did not.
+      const wrote = themeRows.length > 0 ? `${themeRows.length} theme rows were already written; ` : ''
+      throw new Error(
+        `${TABLE_DENOMINATORS} write failed after the theme side of the same visit — ${wrote}` +
+        `months ${months.join(' ')} are half-written and the denominators are NOT frozen. ` +
+        `Re-run the freeze for this tenant; the frozen theme rows are kept. Cause: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    }
+  }
   await deleteStale(admin, TABLE_THEME_READINGS, opts.clientId, themeMerge.stale)
+  await deleteStale(admin, TABLE_DENOMINATORS, opts.clientId, denomMerge.stale)
   return summary
 }
 
