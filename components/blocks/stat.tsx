@@ -19,10 +19,14 @@ import { EMAIL, FONT } from '@/lib/email/theme'
  * (2) A LEVEL CANNOT BE PRINTED WITHOUT ITS DENOMINATOR. `level` is not a
  *     string, it is `{ word, of }`, and the two are rendered together. A
  *     calibrated word on its own is a score, and this product shows no scores:
- *     "Dominant" is unreadable, "Dominant · 21 of 36 conversations" is a
- *     measurement (lib/calibration.ts; copy contract rule (b)). Making the
- *     denominator a separate, optional prop would make the rule breakable by
- *     forgetting, which is exactly how it was broken before.
+ *     "Dominant" is unreadable, "Dominant · 21 of 36 videos" is a
+ *     measurement (lib/calibration.ts; copy contract rule (b)). The noun in
+ *     that example is deliberate: this is the stat every Phase 1 reading
+ *     surface uses, and a reading surface counts VIDEOS (the thirteen words).
+ *     `conversations` is the legacy, run-scoped unit and stays on the pages
+ *     that still compute it. Making the denominator a separate, optional prop
+ *     would make the rule breakable by forgetting, which is exactly how it was
+ *     broken before.
  */
 export function BlockStat({
   value, unit, level, base, aside, mode = 'app', size = 'md',

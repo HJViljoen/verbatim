@@ -15,7 +15,9 @@ import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibr
 //       one thing that contract exists to stop.
 //   (b) EVERY LEVEL PRINTS "of N". A calibrated word without its denominator
 //       is a score, and this product shows no scores: "Dominant" alone is
-//       unreadable, "Dominant · 21 of 36 conversations" is a measurement.
+//       unreadable, "Dominant · 21 of 36 videos" is a measurement. (The
+//       noun: a reading surface counts videos — the thirteen words — while
+//       `conversations` stays on the legacy pages that still compute it.)
 //   (c) NO DIRECTION WORD OUTSIDE A VERDICT NODE. D1 (AGENTS.md): gaining and
 //       fading compare two readings of one cumulative corpus taken at two
 //       arbitrary moments. A direction word is legitimate only where a verdict
@@ -26,7 +28,7 @@ import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibr
 // attribute, `data-copy`, on the element that wraps the words:
 //
 //     <p data-copy="prose">{brief.before}<span data-copy="figure">21</span>{brief.after}</p>
-//     <span data-copy="level">Dominant · 21 of 36 conversations</span>
+//     <span data-copy="level">Dominant · 21 of 36 videos</span>
 //     <span data-copy="verdict">up 4 pts since August</span>
 //
 // A `figure` nested inside a `prose` is the normal case and is how rule (a)

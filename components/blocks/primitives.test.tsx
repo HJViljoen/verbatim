@@ -73,9 +73,9 @@ describe('BlockStat', () => {
 
   it('cannot print a calibrated level without its denominator', () => {
     for (const mode of MODES) {
-      const markup = render(<BlockStat mode={mode} value="21" level={{ word: 'Dominant', of: '21 of 36 conversations' }} />)
+      const markup = render(<BlockStat mode={mode} value="21" level={{ word: 'Dominant', of: '21 of 36 videos' }} />)
       expect(copyViolations(markup)).toEqual([])
-      expect(markupText(markup)).toContain('Dominant · 21 of 36 conversations')
+      expect(markupText(markup)).toContain('Dominant · 21 of 36 videos')
     }
   })
 
