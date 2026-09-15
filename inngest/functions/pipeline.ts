@@ -1440,6 +1440,22 @@ export const runPipeline = inngest.createFunction(
             `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
             `${r.themes.deleted} dropped)`,
           )
+          // The ids behind those numbers, said separately (item 31a). An
+          // operator reading this log is the only person who will ever see
+          // whether "which videos was this read on" was answerable for these
+          // months, and `refusedLate` is the number that says the record
+          // declined to take a point.
+          const refs = r.evidenceRefs
+          console.log(
+            refs === undefined
+              ? '[freeze-months] evidence ids: not attempted — this visit has no run to attribute a clustering to'
+              : refs.missing
+                ? '[freeze-months] evidence ids: skipped — 20260918095000_quote_translations.sql has not been applied yet'
+                : `[freeze-months] evidence ids ${refs.written} written (${refs.frozen} now frozen, ` +
+                  `${refs.keptFrozen} already frozen and left alone, ${refs.deleted} dropped, ` +
+                  `${refs.refusedLate} refused because their months have closed) · ` +
+                  `${refs.videoIds} videos and ${refs.commentIds} comments named`,
+          )
           return {
             months: r.months.length,
             denominators: r.denominators.written,
@@ -1448,6 +1464,12 @@ export const runPipeline = inngest.createFunction(
             keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
             heldStale: r.denominators.heldStale + r.themes.heldStale,
             refusedLate: r.denominators.refusedLate + r.themes.refusedLate,
+            evidenceRefs: refs
+              ? {
+                  written: refs.written, frozen: refs.frozen, refusedLate: refs.refusedLate,
+                  videoIds: refs.videoIds, commentIds: refs.commentIds, missing: refs.missing,
+                }
+              : null,
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.

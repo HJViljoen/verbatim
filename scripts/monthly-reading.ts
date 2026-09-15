@@ -9,6 +9,7 @@ import {
   readThemeReadings,
   windowOf,
 } from '../lib/reading/monthly'
+import type { EvidenceRefSummary } from '../lib/reading/evidence-refs'
 import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 
 // The comment-dated monthly reading, read out loud — and, with --write, seeded
@@ -61,6 +62,39 @@ function parseArgs(argv: string[]): Args {
 }
 
 const RECENT_MONTHS = 12
+
+/**
+ * The ids behind the numbers (item 31a), on the same terms as the counts: on a
+ * dry run this is the ONLY preview of what the refs freeze would write, and it
+ * is the number an operator needs before deciding to seed a back-read.
+ *
+ * `refusedLate` is the one that matters most and reads the least: it is the
+ * count of points the record declined to take because their audience-month had
+ * already closed — a question a reader will ask that will never be answerable.
+ */
+function printEvidenceRefs(refs: EvidenceRefSummary | undefined, verb: 'would' | 'WROTE'): void {
+  if (!refs) {
+    console.log('  evidence ids: not read — no clustering to attribute them to (--denominators-only, or no run)')
+    return
+  }
+  if (refs.missing) {
+    console.log('  evidence ids: not read — apply supabase/migrations/20260918095000_quote_translations.sql first. The months seed without them, and a month that closes without its ids cannot be given them later.')
+    return
+  }
+  console.log(
+    verb === 'would'
+      ? `  would write ${refs.written} evidence-id rows (${refs.frozen} frozen at once, back-read), naming ` +
+        `${refs.videoIds} videos and ${refs.commentIds} comments; ${refs.keptFrozen} stored rows are already frozen.`
+      : `  WROTE ${refs.written} evidence-id rows (${refs.frozen} frozen), naming ${refs.videoIds} videos ` +
+        `and ${refs.commentIds} comments; ${refs.keptFrozen} frozen rows untouched, ${refs.deleted} stale filling rows dropped.`,
+  )
+  if (refs.refusedLate > 0) {
+    console.log(
+      `  ${refs.refusedLate} evidence-id rows ${verb === 'would' ? 'would be' : 'were'} REFUSED: their audience-months ` +
+      'have closed. "Which videos was this read on" stays unanswered for those points, for good.',
+    )
+  }
+}
 
 const mix = (m: Record<string, number>): string =>
   Object.entries(m)
@@ -202,6 +236,10 @@ async function main() {
         'never an addition to a month that is already the record.',
       )
     }
+    // The ids behind those numbers (item 31a) — "which videos was this read
+    // on". Previewing it is the point of a dry run, so it is printed on the
+    // same terms as the counts above.
+    printEvidenceRefs(plan.evidenceRefs, 'would')
 
     if (write) {
       // A freeze is permanent (`month_denominators_frozen_guard` refuses any
@@ -224,6 +262,7 @@ async function main() {
         `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty, ` +
         `${done.denominators.refusedLate + done.themes.refusedLate} refused because their months have closed.`,
       )
+      printEvidenceRefs(done.evidenceRefs, 'WROTE')
     }
     console.log()
   }
