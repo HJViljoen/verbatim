@@ -563,19 +563,46 @@ export function isMissingAnomalyFlags(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
-/** Every stored month row of one table over a month range. */
+/**
+ * Every stored month row of one table over a month range.
+ *
+ * ORDERED ON THE WHOLE PRIMARY KEY, object column included. `selectAll` pages
+ * with `.range(from, from + 999)` — OFFSET — and with ties in the ORDER BY
+ * Postgres promises nothing about the order between two queries, so a boundary
+ * row can be skipped or returned twice. Three of the four tables read here
+ * (theme, kind, subject) have a fourth key column, and pooledByObject sums
+ * whatever comes back: the failure mode is a baseline `videos` count that is
+ * silently wrong, which moves the p, which moves the Holm threshold, which
+ * decides whether a flag fires. Every other month read in this layer already
+ * does this and says why (storedFreezeRows, fillingMonths, loadMonthSeries,
+ * loadTopObjects, readSubjectMonths).
+ *
+ * Not live when it was found — the trailing-three-month slices measured 745
+ * rows (Össur) and 797 (Sealand), both under the cap — and both are growing.
+ */
 async function readMonths(admin: Admin, table: string, clientId: string, months: readonly string[]): Promise<StoredMonthRow[]> {
   if (months.length === 0) return []
-  return selectAll<StoredMonthRow>(() =>
-    admin
+  const objectColumn = MONTH_OBJECT_COLUMN[table]
+  return selectAll<StoredMonthRow>(() => {
+    const q = admin
       .from(table)
       .select('*')
       .eq('client_id', clientId)
       .gte('month', months[0])
       .lte('month', months[months.length - 1])
       .order('month', { ascending: true })
-      .order('audience', { ascending: true }),
-  )
+      .order('audience', { ascending: true })
+    return objectColumn ? q.order(objectColumn, { ascending: true }) : q
+  })
+}
+
+/** The fourth primary-key column of each month table, where it has one.
+ *  month_denominators is keyed on (client_id, month, audience) alone. */
+const MONTH_OBJECT_COLUMN: Record<string, string | undefined> = {
+  [TABLE_DENOMINATORS]: undefined,
+  [TABLE_KIND_READINGS]: 'kind',
+  [TABLE_SUBJECT_READINGS]: 'subject_id',
+  [TABLE_THEME_READINGS]: 'theme_id',
 }
 
 interface WindowRow {
