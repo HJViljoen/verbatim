@@ -132,7 +132,7 @@ describe('the adopters render the same promise', () => {
   // to it stop agreeing about what a reader is looking at.
   it('every renderer prints the same label, word for word', () => {
     const label = translationLabel(translationNote(es))!
-    expect(label).toBe(`Spanish · English below, ${MACHINE_TRANSLATION_STAMP}`)
+    expect(label).toBe(`Spanish · ${MACHINE_TRANSLATION_STAMP}`)
     for (const mode of MODES) expect(renderText(<QuoteBlock quote={es} mode={mode} />)).toContain(label)
     expect(renderText(<Quotes items={[es]} />)).toContain(label)
     expect(renderText(<EmailQuote text={es.text} lang={es.lang} english={es.english} />)).toContain(label)

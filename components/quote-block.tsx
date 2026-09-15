@@ -100,8 +100,13 @@ export const MACHINE_TRANSLATION_STAMP = 'machine translation'
  *  word it differently. They delegate the WORDS; the markup stays theirs. */
 export function translationLabel(note: { language: string | null; english: string | null }): string | null {
   if (!note.language) return null
+  // NOT "English below". Every arm renders quote, then the English, then this
+  // label — the app, print and email blocks here and the email primitive — so a
+  // reader met the English first and then a line pointing to it as being below.
+  // The label's job is to say the rendering is a machine's, and it says that
+  // without pointing anywhere.
   return note.english
-    ? `${note.language} · English below, ${MACHINE_TRANSLATION_STAMP}`
+    ? `${note.language} · ${MACHINE_TRANSLATION_STAMP}`
     : `${note.language} · no English rendering yet`
 }
 
