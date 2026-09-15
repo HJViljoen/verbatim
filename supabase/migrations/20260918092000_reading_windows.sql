@@ -96,15 +96,34 @@
 -- later statement, so it is still `filling` (or absent) while the numerators go
 -- in, and frozen for ever after.
 --
--- THE SECOND CLAUSE, AND DECISION K's "A FIRST WRITE IS ALLOWED". A frozen
+-- AN UPSERT IS NOT AN INSERT, AND THE TRIGGER CANNOT TELL. `insert … on
+-- conflict do update` fires BEFORE INSERT before it looks for the conflict, so
+-- the ordinary refresh of rows that already exist reaches this trigger as an
+-- insert (measured on PostgreSQL 17.11). A guard that stopped there would
+-- refuse every upsert into a closed audience-month — including the one that
+-- refreshes the filling theme rows of a month whose denominator froze first,
+-- which is exactly the state this file's writer paragraph describes, and
+-- `writeRows` sends an upsert for every write there is. So the guard asks the
+-- catalogue for the target table's primary key and lets a row that is already
+-- there through to the DO UPDATE path, where the BEFORE UPDATE guard judges it.
+-- Reading the key from the catalogue is also what lets M4 and M5 attach this
+-- function unchanged. It leaves one thing to tidy up: the DO UPDATE rewrites
+-- that row's tuple with THIS transaction's xmin, which would blind the third
+-- clause below to the fact that the audience-month was already held, so a new
+-- key later in the same statement could slip in behind the freeze. The pass is
+-- therefore marked in a transaction-local setting and the third clause reads
+-- it, which makes the answer the same whichever order the rows arrive in.
+--
+-- THE THIRD CLAUSE, AND DECISION K's "A FIRST WRITE IS ALLOWED". A frozen
 -- denominator alone would also refuse the first back-read of a table that did
 -- not exist when the month closed — the subject readings of M4, the kind
 -- readings of M5 — and those are not a change to the record, they are the first
 -- reading of it. So the guard refuses only when the target table ALREADY HOLDS
 -- a row for that audience-month, and "already" excludes the rows the current
--- transaction is writing (`xmin <> pg_current_xact_id()::xid`), so a first
--- population of a whole table is one statement and not one row followed by a
--- raise. A tenant's newly tracked rival is allowed for the plainer reason that
+-- transaction is writing (`month_reading_written_here`, which is
+-- subtransaction-safe where a bare `xmin <> pg_current_xact_id()::xid` is not),
+-- so a first population of a whole table is one statement — or one savepointed
+-- chunk after another — and not one row followed by a raise. A tenant's newly tracked rival is allowed for the plainer reason that
 -- its audience has no denominator row in those months at all.
 --
 -- AND THE WRITER MUST NOT SEND ONE. A raise takes the WHOLE statement with it,
@@ -410,6 +429,43 @@ grant execute on function public.window_theme_readings(uuid, uuid, timestamptz, 
 -- 3. The other half of the freeze guard ----------------------------------------
 -- Attached to every month table. The rationale is at the head of this file; the
 -- rule is three predicates and they are all in the one query below.
+
+-- Was this row written by THIS transaction? Not the same question as
+-- `xmin = pg_current_xact_id()`, and the difference is a live bug: a row
+-- inserted inside a SAVEPOINT — or inside a PL/pgSQL `begin … exception` block,
+-- which opens one — carries a SUBTRANSACTION xid, while pg_current_xact_id()
+-- returns the top-level one, so the plain equality reads this transaction's own
+-- earlier rows as an earlier transaction's and refuses a first population on
+-- the chunk after the savepoint (measured on PostgreSQL 17.11: the plain
+-- outer-then-savepoint order passes and the savepoint-then-outer order raises,
+-- so the failure is direction-dependent and a casual test misses it).
+-- pg_xact_status answers 'in progress' for the current transaction AND every
+-- subtransaction of it, and a row written by ANOTHER in-progress transaction is
+-- not visible to this one in the first place, so 'in progress' means "written
+-- here". It raises on an xid8 in the future, which is what an xid from an
+-- earlier epoch casts to after wraparound; that is caught and answered `false`,
+-- the conservative direction (the row counts as an earlier transaction's, and
+-- the guard fires). Takes an xid and returns a boolean: it reads no table and
+-- says nothing about any tenant, so it keeps the default ACL.
+create or replace function public.month_reading_written_here(p_xmin xid)
+returns boolean
+language plpgsql
+stable
+set search_path = public, pg_temp
+as $here$
+begin
+  if p_xmin = pg_current_xact_id()::xid then
+    return true;
+  end if;
+  return coalesce(pg_xact_status(p_xmin::text::xid8) = 'in progress', false);
+exception when others then
+  return false;
+end
+$here$;
+
+comment on function public.month_reading_written_here(xid) is
+  'Was the row carrying this xmin written by the current transaction, subtransactions included? Used by month_reading_frozen_insert_guard to tell its own statement''s rows from an earlier transaction''s. Subtransaction-safe, which xmin = pg_current_xact_id()::xid is not.';
+
 create or replace function public.month_reading_frozen_insert_guard()
 returns trigger
 language plpgsql
@@ -418,6 +474,10 @@ as $guard$
 declare
   v_closed boolean;
   v_known  boolean;
+  v_exists boolean;
+  v_pk     text;
+  v_mark   text;
+  v_seen   text;
 begin
   -- (a) has this audience-month already closed? The denominator is the commit
   -- marker: freezeMonths writes it last, so it is `filling` or absent while a
@@ -435,21 +495,67 @@ begin
     return new;
   end if;
 
-  -- (b) does the table being written to already hold a reading of that
+  v_mark := format('|%s/%s/%s|', tg_table_name, new.month, new.audience);
+
+  -- (b) is this row genuinely NEW? `insert … on conflict do update` fires its
+  -- BEFORE INSERT triggers BEFORE it detects the conflict, so the ordinary
+  -- refresh of a row that already exists arrives here looking exactly like an
+  -- insert (measured on PostgreSQL 17.11). Without this clause the guard
+  -- refuses every upsert into a closed audience-month, including one whose rows
+  -- all exist — which is the shape `writeRows` sends, so an audience-month
+  -- whose denominator froze while a theme row of it is still filling could
+  -- never be refreshed again. A row whose primary key is already there is not
+  -- an addition to the record: it goes on to the DO UPDATE path, where
+  -- `month_reading_frozen_guard` (BEFORE UPDATE) judges it as it always has.
+  -- The key is read from the catalogue rather than named, so M4 and M5 attach
+  -- this function to their own tables unchanged.
+  select string_agg(
+           format('t.%I = ($1 ->> %L)::%s', a.attname, a.attname, format_type(a.atttypid, a.atttypmod)),
+           ' and ' order by k.ord)
+    into v_pk
+  from pg_index i
+  cross join lateral unnest(i.indkey) with ordinality as k(attnum, ord)
+  join pg_attribute a on a.attrelid = i.indrelid and a.attnum = k.attnum
+  where i.indrelid = tg_relid and i.indisprimary;
+
+  if v_pk is not null then
+    execute format('select exists (select 1 from public.%I t where %s)', tg_table_name, v_pk)
+      into v_exists
+      using to_jsonb(new);
+    if v_exists then
+      -- Remember it. An `on conflict do update` rewrites the existing row's
+      -- tuple, and the rewritten tuple carries THIS transaction's xmin — so
+      -- once a sibling of this audience-month has been refreshed by this
+      -- statement, clause (c) below can no longer see that the audience-month
+      -- was already held, and a brand-new key later in the same statement would
+      -- slip in behind the freeze. The mark is transaction-local (reset on
+      -- rollback, including a savepoint's) and makes the refusal the same
+      -- whichever order the rows arrive in.
+      v_seen := coalesce(current_setting('verbatim.month_reading_refreshed', true), '');
+      if position(v_mark in v_seen) = 0 then
+        perform set_config('verbatim.month_reading_refreshed', v_seen || v_mark, true);
+      end if;
+      return new;
+    end if;
+  end if;
+
+  -- (c) does the table being written to already hold a reading of that
   -- audience-month? If it does not, this is the first reading of a record that
   -- closed before the table existed (decision K), not a change to one. Rows this
   -- transaction has written do not count as "already": a BEFORE INSERT trigger
   -- sees its own statement's earlier rows, and without this a first population
-  -- would refuse itself on its second row.
+  -- would refuse itself on its second row. `month_reading_written_here` is that
+  -- test, and it is subtransaction-safe — see its own comment.
   execute format(
     'select exists (select 1 from public.%I t
                      where t.client_id = $1 and t.month = $2 and t.audience = $3
-                       and t.xmin <> pg_current_xact_id()::xid)',
+                       and not public.month_reading_written_here(t.xmin))',
     tg_table_name)
     into v_known
     using new.client_id, new.month, new.audience;
 
-  if not v_known then
+  if not v_known
+     and position(v_mark in coalesce(current_setting('verbatim.month_reading_refreshed', true), '')) = 0 then
     return new;
   end if;
 
@@ -462,7 +568,7 @@ end
 $guard$;
 
 comment on function public.month_reading_frozen_insert_guard() is
-  'BEFORE INSERT on every month table: refuses a row for an audience-month whose month_denominators row is already frozen, unless the target table holds no reading of that audience-month from an earlier transaction (the first back-read of a table that did not exist when the month closed). The companion to month_reading_frozen_guard, which is BEFORE UPDATE.';
+  'BEFORE INSERT on every month table: refuses a row for an audience-month whose month_denominators row is already frozen, unless the row''s primary key is already there (an upsert''s DO UPDATE path, judged by month_reading_frozen_guard instead) or the target table holds no reading of that audience-month from an earlier transaction (the first back-read of a table that did not exist when the month closed). The companion to month_reading_frozen_guard, which is BEFORE UPDATE.';
 
 drop trigger if exists month_denominators_frozen_insert_guard on public.month_denominators;
 create trigger month_denominators_frozen_insert_guard
@@ -490,6 +596,17 @@ create trigger month_theme_readings_frozen_insert_guard
 --   * a first row for a brand-new object kind (a second table with the same
 --     shape) into a long-frozen audience-month is accepted, and a second row for
 --     the same audience-month in a LATER transaction is refused;
+--   * that first population is accepted whether its chunks are plain statements,
+--     savepointed in either order, or written from a PL/pgSQL `begin … exception`
+--     block — the case a bare `xmin <> pg_current_xact_id()::xid` refused,
+--     because a row written in a subtransaction carries the SUBtransaction's xid;
+--   * an upsert of rows that ALL already exist in a closed audience-month is
+--     accepted by this guard and judged by the UPDATE guard instead, so a month
+--     whose denominator froze while a theme row of it is still filling can still
+--     be refreshed;
+--   * the same upsert with ONE fresh key in it is refused IN WHOLE, in either
+--     row order — which is why `mergeMonthRows` drops that row before it sends
+--     the batch (`closedAudienceMonths` / `refusedLate`);
 --   * a newly tracked rival back-reads into old months freely (no denominator
 --     row for its audience);
 --   * an upsert that would rewrite a frozen denominator is refused;
