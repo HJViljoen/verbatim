@@ -47,8 +47,8 @@ export interface RunPassCOptions {
   competitorClaims?: BrandClaim[]
   /** Claims made about a named competitor by somebody else — a creator, a
    *  reviewer, a deal account. Also context, and a different KIND of context:
-   *  it is the audience's voice, not the rival's. Trimmed to
-   *  MAX_ABOUT_CLAIMS_IN_PROMPT here so the caller cannot flood the prompt. */
+   *  it is the audience's voice, not the rival's. Trimmed per rival by
+   *  buildUserPrompt, so the caller cannot flood the prompt. */
   competitorAboutClaims?: BrandClaim[]
   persist?: boolean
   dryRun?: boolean
@@ -81,12 +81,30 @@ export function indexThemes(themes: AggregatedTheme[]): { label: string; theme: 
   return themes.map((theme, i) => ({ label: `T${i + 1}`, theme }))
 }
 
-/** How many "said about a rival" claims reach the prompt. The own side is
- *  already capped at MAX_CLAIMS_PER_ENTITY (12) per rival by the loader; this
- *  side arrives up to MAX_ABOUT_CLAIMS (24) per rival and would otherwise
- *  outweigh the rival's own words two to one — on Sealand, where the about
- *  side is 187 rows before the cap and the own side is 2, by far more. */
+/** How many "said about a rival" claims reach the prompt, PER RIVAL. The own
+ *  side is already capped at MAX_CLAIMS_PER_ENTITY (12) per rival by the
+ *  loader; this side arrives up to MAX_ABOUT_CLAIMS (24) per rival and would
+ *  otherwise outweigh the rival's own words two to one — on Sealand, where the
+ *  about side is 187 rows before the loader's cap and the own side is 2, by far
+ *  more. Per rival, not over the whole list: the rows arrive newest-first
+ *  across every rival, so one flat slice of 12 would have handed the model 12
+ *  Cotopaxi lines and nothing at all about Freitag. */
 export const MAX_ABOUT_CLAIMS_IN_PROMPT = 12
+
+/** The about side, trimmed to MAX_ABOUT_CLAIMS_IN_PROMPT per named rival,
+ *  keeping the order it arrived in. Exported for tests. */
+export function capAboutClaims(claims: BrandClaim[], perRival: number = MAX_ABOUT_CLAIMS_IN_PROMPT): BrandClaim[] {
+  const seen = new Map<string, number>()
+  const out: BrandClaim[] = []
+  for (const c of claims) {
+    const key = (c.competitor ?? '').toLowerCase()
+    const n = seen.get(key) ?? 0
+    if (n >= perRival) continue
+    seen.set(key, n + 1)
+    out.push(c)
+  }
+  return out
+}
 
 /** Exported for tests (v5/v6 claims-block pins). */
 export function buildSystemPrompt(
@@ -208,7 +226,7 @@ export function buildUserPrompt(
   // Separate block, separate label, and the rule line repeated where the lines
   // are: the model reads this list right after the one above, and the two are
   // only distinguishable by what they are called.
-  const about = competitorAboutClaims.slice(0, MAX_ABOUT_CLAIMS_IN_PROMPT)
+  const about = capAboutClaims(competitorAboutClaims)
   if (about.length) {
     lines.push('WHAT OTHERS SAY ABOUT THEM (from transcripts of videos the competitor did NOT post):')
     lines.push('This is a creator, reviewer or retailer speaking — audience voice, not the competitor\'s own marketing. Never attribute one of these lines to the competitor.')
@@ -244,7 +262,7 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
   const themeIndex = indexThemes(themes)
   const byLabel = new Map(themeIndex.map((t) => [t.label.toLowerCase(), t.theme]))
   const competitorClaims = opts.competitorClaims ?? []
-  const competitorAboutClaims = (opts.competitorAboutClaims ?? []).slice(0, MAX_ABOUT_CLAIMS_IN_PROMPT)
+  const competitorAboutClaims = capAboutClaims(opts.competitorAboutClaims ?? [])
   const systemPrompt = buildSystemPrompt(trackingConfig, opts.brandName, competitorClaims.length > 0, competitorAboutClaims.length > 0)
   const userPrompt = buildUserPrompt(themeIndex, sov, competitorClaims, competitorAboutClaims)
 

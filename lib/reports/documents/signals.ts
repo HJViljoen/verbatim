@@ -15,7 +15,8 @@ import type { DocumentSettings } from './types'
 /**
  * The researcher's reading of an update, in code, before a single question is
  * asked: the numbers, what moved, the themes across buckets merged into
- * concerns, each competitor's own pitch and its users' praise and pain, what
+ * concerns, each competitor's own pitch, what others say about it and its
+ * users' praise and pain, what
  * the brand claims against what its audience says, the personas, the phrases.
  * The writer never sees a comment's text: phrases and hero quotes travel as
  * refs from here on (AGENTS: nothing under lib/reports/ sends a comment to a

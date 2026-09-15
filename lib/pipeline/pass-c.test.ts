@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildSystemPrompt, buildUserPrompt, indexThemes, thinBuckets, bucketCoverage, MAX_ABOUT_CLAIMS_IN_PROMPT } from './pass-c'
+import { buildSystemPrompt, buildUserPrompt, capAboutClaims, indexThemes, thinBuckets, bucketCoverage, MAX_ABOUT_CLAIMS_IN_PROMPT } from './pass-c'
 import type { AggregatedTheme } from './types'
 
 // Pins for the v5 claims block: present exactly when competitor claims exist,
@@ -131,6 +131,21 @@ describe('pass C v6 — the two claim blocks are told apart', () => {
     expect(p).toContain('creator claim 0')
     expect(p).toContain(`creator claim ${MAX_ABOUT_CLAIMS_IN_PROMPT - 1}`)
     expect(p).not.toContain(`creator claim ${MAX_ABOUT_CLAIMS_IN_PROMPT}`)
+  })
+
+  it('the cap is PER RIVAL, so the loudest rival cannot silence the others', () => {
+    // Sealand's shape: the rows arrive newest-first across every rival, and
+    // Cotopaxi has 24 to Freitag's 8. One flat slice would print no Freitag.
+    const rows = [
+      ...Array.from({ length: MAX_ABOUT_CLAIMS_IN_PROMPT + 6 }, (_, i) => ({ ...ABOUT, claim: `cotopaxi claim ${i}` })),
+      ...Array.from({ length: 3 }, (_, i) => ({ ...ABOUT, competitor: 'Freitag', claim: `freitag claim ${i}` })),
+    ]
+    const capped = capAboutClaims(rows)
+    expect(capped.filter((c) => c.competitor === 'Cotopaxi')).toHaveLength(MAX_ABOUT_CLAIMS_IN_PROMPT)
+    expect(capped.filter((c) => c.competitor === 'Freitag')).toHaveLength(3)
+    // Order is the loader's, not regrouped.
+    expect(capped[0].claim).toBe('cotopaxi claim 0')
+    expect(buildUserPrompt(indexThemes([theme()]), undefined, [], rows)).toContain('freitag claim 0')
   })
 
   it('the system rules arrive per block, and say who is speaking in each', () => {
