@@ -243,6 +243,16 @@ select d.client_id, d.name, public.rival_slug(d.name), d.seen_at,
             else 'migration 20260918090000_competitors.sql · retirement reconstructed, not recorded' end
   from dated d
  where public.rival_slug(d.name) is not null
+   -- 'competitor:unknown' is not a rival. It is what lib/rivals.ts rivalKey
+   -- emits for a video flagged as a rival's but carrying no name — a tagger
+   -- disagreeing with itself — and it matches the four `like 'competitor:_%'`
+   -- arms above, so a single such row in themes, theme_registry or a month
+   -- would give this tenant an identity called "unknown", with a slug and a
+   -- fabricated retirement date. Zero exist in production today; the predicate
+   -- is what keeps it that way. A tenant that genuinely tracks a rival called
+   -- "unknown" still gets its row: the name is in the tracked list, and this
+   -- only skips the sentinel nothing tracks.
+   and not (d.name = 'unknown' and not d.tracked)
    and not exists (
      select 1 from public.competitors c
       where c.client_id = d.client_id and c.slug = public.rival_slug(d.name))
