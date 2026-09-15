@@ -63,7 +63,8 @@ export function ScheduleForm({ reportId, reportTitle, schedule, canManage, userE
         name: reportTitle,
         starterKey: null,
         reportId,
-        cadence,
+        // Narrowed to what this form offers (CADENCES excludes 'quarterly').
+        cadence: cadence as 'every_update' | 'monthly',
         recipients: parsedRecipients,
         attachPdf,
         shareDays: shareDays === 'never' ? null : (Number(shareDays) as 7 | 30 | 90),
