@@ -299,6 +299,13 @@ export interface EnsureResult {
  * Call it AFTER a successful write of the tracked list, with an admin client:
  * `authenticated` has SELECT on this table and nothing else, deliberately.
  *
+ * It writes no `config_changes` row of its own. The change a reader is looking
+ * for is the tracked LIST moving, and the `tracking_configs` audit trigger has
+ * already logged that in the same save under surface 'rivals'; the actor
+ * reaches the identity itself through `created_by`. A revive carries no stamp
+ * beyond that row — the log's answer to "who brought this rival back" is the
+ * trigger's.
+ *
  * Additive and non-fatal by the same asymmetry as `recordConfigChange`: the
  * configuration write has already happened, so a failure here is logged and
  * leaves the identity to the next save rather than reporting an error for work
