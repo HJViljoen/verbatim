@@ -15,7 +15,9 @@ import {
   embeddable,
   emptyEmbedResult,
   isMissingEmbeddingWrite,
+  isStatementTimeout,
   writeChunks,
+  writeEmbeddings,
   type EmbedCandidate,
 } from './embed-insights'
 import { EMBED_BATCH, EMBED_INPUT_VERSION, embedInput } from './cluster'
@@ -326,5 +328,54 @@ describe('the migration and this module agree', () => {
     expect(sql).toContain('add column if not exists')
     expect(sql).toContain('create or replace function')
     expect(sql).toContain('create or replace view')
+  })
+})
+
+describe('writeEmbeddings — a statement timeout halves the chunk', () => {
+  const vec = (x: number) => Array.from({ length: 1536 }, () => x)
+  const payload = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `id-${i}`, embedding: vec(0.1) }))
+  const timeout = { code: '57014', message: 'canceling statement due to statement timeout' }
+  /** An RPC that times out on any call above `fitsUpTo` rows and records every call's size. */
+  function admin(fitsUpTo: number, calls: number[]) {
+    return {
+      rpc: async (_fn: string, args: { p_rows: unknown[] }) => {
+        calls.push(args.p_rows.length)
+        if (args.p_rows.length > fitsUpTo) return { data: null, error: timeout }
+        return { data: args.p_rows.length, error: null }
+      },
+    } as unknown as Parameters<typeof writeEmbeddings>[0]
+  }
+
+  it('recognises SQLSTATE 57014 and nothing else', () => {
+    expect(isStatementTimeout(timeout)).toBe(true)
+    expect(isStatementTimeout({ code: '42501', message: 'permission denied' })).toBe(false)
+    expect(isStatementTimeout(null)).toBe(false)
+  })
+
+  it('retries at half the size until the call fits, and writes every row exactly once', async () => {
+    const calls: number[] = []
+    expect(await writeEmbeddings(admin(10, calls), payload(25))).toBe(25)
+    expect(calls).toEqual([25, 13, 7, 6, 12, 6, 6])
+  })
+
+  it('writes a fitting chunk in one call', async () => {
+    const calls: number[] = []
+    expect(await writeEmbeddings(admin(100, calls), payload(25))).toBe(25)
+    expect(calls).toEqual([25])
+  })
+
+  it('gives up on a single row that still times out', async () => {
+    const calls: number[] = []
+    await expect(writeEmbeddings(admin(0, calls), payload(2))).rejects.toMatchObject({ code: '57014' })
+    expect(calls).toEqual([2, 1])
+  })
+
+  it('re-throws anything that is not a timeout without retrying', async () => {
+    const calls: number[] = []
+    const denied = {
+      rpc: async (_fn: string, args: { p_rows: unknown[] }) => { calls.push(args.p_rows.length); return { data: null, error: { code: '42501', message: 'permission denied' } } },
+    } as unknown as Parameters<typeof writeEmbeddings>[0]
+    await expect(writeEmbeddings(denied, payload(4))).rejects.toMatchObject({ code: '42501' })
+    expect(calls).toEqual([4])
   })
 })

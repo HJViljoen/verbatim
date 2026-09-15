@@ -268,11 +268,27 @@ export async function loadEmbedCandidates(
   )
 }
 
-/** Write one chunk. Returns how many rows the RPC says it actually changed. */
+/** A statement the database cut off at the authenticator role's 8 s clock
+ *  (SQLSTATE 57014). The whole RPC rolls back and the function only touches
+ *  rows still null, so the same rows can simply be sent again — smaller. */
+export function isStatementTimeout(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === '57014'
+}
+
+/** Write one chunk. Returns how many rows the RPC says it actually changed.
+ *  On a statement timeout the chunk is split in half and each half written on
+ *  its own, down to a single row. Measured on the 2026-09-15 backfill
+ *  (pg_stat_statements, 103 calls): the same 25-row call ran 1.1 s on average
+ *  and 7.0 s at the tail, so a timeout is the instance's variance, not the
+ *  chunk's size — a retry at half the size finishes the work where a smaller
+ *  constant for every call would only move the tail. A single row that still
+ *  times out is a real fault and is thrown. */
 export async function writeEmbeddings(admin: SupabaseClient, rows: EmbedPayloadRow[]): Promise<number> {
   const { data, error } = await admin.rpc(SET_EMBEDDINGS_RPC, { p_rows: rows })
-  if (error) throw error
-  return Number(data ?? 0)
+  if (!error) return Number(data ?? 0)
+  if (!isStatementTimeout(error) || rows.length < 2) throw error
+  const mid = Math.ceil(rows.length / 2)
+  return (await writeEmbeddings(admin, rows.slice(0, mid))) + (await writeEmbeddings(admin, rows.slice(mid)))
 }
 
 export interface EmbedInsightsOptions {
