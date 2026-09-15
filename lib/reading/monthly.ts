@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
+import { freezeEvidenceRefs, type EvidenceRefSummary } from './evidence-refs'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   FREEZE_AFTER_DAYS,
@@ -665,6 +666,10 @@ export interface FreezeSummary {
   months: string[]
   denominators: FreezeSide
   themes: FreezeSide
+  /** The ids behind the theme numbers, written down beside them (item 31a).
+   *  Absent when there is no run to attribute a clustering to — a seed writing
+   *  denominators alone reads no citations. */
+  evidenceRefs?: EvidenceRefSummary
 }
 
 /**
@@ -822,6 +827,33 @@ export async function freezeMonths(
   // visit writes it from the same corpus while the frozen numerators are kept
   // as they are.
   if (themeRows.length > 0) await writeRows(admin, TABLE_THEME_READINGS, themeRows, 'client_id,month,audience,theme_id')
+  // The ids behind those numbers, BETWEEN the two writes (item 31a). The
+  // denominator is the commit marker the INSERT guard reads, so a refs row has
+  // to land before its audience-month's denominator freezes or the database
+  // refuses it for ever — no later visit returns to a closed month.
+  //
+  // Non-fatal, and the only non-fatal write in this function: a record kept
+  // alongside the report must not make a clean run read `partial`
+  // (the keyword-discovery precedent), and the months themselves are complete
+  // without it. Said out loud rather than swallowed.
+  if (opts.runId) {
+    try {
+      summary.evidenceRefs = await freezeEvidenceRefs(admin, {
+        clientId: opts.clientId,
+        runId: opts.runId,
+        months,
+        now,
+        clusteringKey,
+        closedAudienceMonths: storedDenoms.filter((d) => d.status === 'frozen').map(denominatorKey),
+      })
+    } catch (e) {
+      console.error(
+        `[monthly-reading] the evidence-id freeze failed for ${opts.clientId} over ${months.join(' ')}: ` +
+        `${e instanceof Error ? e.message : String(e)}. The months are frozen; their ids are not, and a month ` +
+        'that closes without them cannot be given them later.',
+      )
+    }
+  }
   if (denomRows.length > 0) {
     try {
       await writeRows(admin, TABLE_DENOMINATORS, denomRows, 'client_id,month,audience')
