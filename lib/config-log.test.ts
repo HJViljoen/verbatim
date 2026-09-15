@@ -551,6 +551,20 @@ describe('the mirror in the migration — the two have to keep saying the same t
     for (const named of arms.keys()) expect(WATCHED_CONFIG_COLUMNS).toContain(named as never)
   })
 
+  it('takes update, delete and truncate off the service role, which the default ACL hands it', () => {
+    // The log is the audit record for exactly the writes nobody else sees, and
+    // the service role is the one that bypasses RLS — so "append-only" is a
+    // property of the application, not of the database, until these three are
+    // revoked. This project's pg_default_acl grants arwdDxtm on every new
+    // public table; a plain Postgres cluster has no such default, so a local
+    // exercise of this file cannot catch it. Nothing in the repo updates or
+    // deletes a row here: lib/config-log.ts inserts, lib/readiness/load.ts and
+    // scripts/reconstruct-config-log.ts read. Same rule, same wording as
+    // 20260915093000_rec_decisions.sql.
+    expect(sql).toMatch(/revoke update, delete, truncate on public\.config_changes from service_role;/)
+    expect(sql).toMatch(/grant select, insert on public\.config_changes to service_role;/)
+  })
+
   it('carries the same two vocabularies in its CHECK constraints', () => {
     const surfaces = sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]

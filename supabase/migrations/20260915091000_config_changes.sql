@@ -112,6 +112,16 @@ grant select on public.config_changes to authenticated;
 -- denied for table config_changes" and return 0 while the trigger half kept
 -- working: a log that looks alive with half of it silently gone.
 grant select, insert on public.config_changes to service_role;
+-- And the other half of stating it (the rec_decisions precedent, migration 4).
+-- The same default ACL hands service_role all seven privileges, so a log that
+-- cannot be rewritten is only true of the role that bypasses RLS if the three
+-- that rewrite it are taken away here. Nothing in the repo updates or deletes a
+-- change row — lib/config-log.ts inserts, the readiness page and
+-- scripts/reconstruct-config-log.ts read, and the trigger inserts — and an
+-- audit record that its own writer can edit afterwards answers no question
+-- worth asking. TRUNCATE goes with them: emptying the log in one statement is
+-- the same act as deleting it row by row.
+revoke update, delete, truncate on public.config_changes from service_role;
 
 -- 3. The actor, carried by the write site -------------------------------------
 -- {kind, user_id, label, at, nonce, run_id?} — set in the same UPDATE that
@@ -312,6 +322,12 @@ create trigger tracking_configs_audit
 --
 -- Post-apply checks (run by hand, read-only):
 --   select count(*) from public.config_changes;                                  -- 0
+--   select count(*) from information_schema.table_privileges
+--     where table_name = 'config_changes' and grantee = 'service_role'
+--       and privilege_type in ('UPDATE','DELETE','TRUNCATE');                    -- 0
+--     -- An absence, not a count: the revoke takes three of the seven the
+--     -- default ACL hands out, so a correct apply leaves SELECT, INSERT,
+--     -- REFERENCES and TRIGGER. The last two are harmless and meant to survive.
 --   select tgname from pg_trigger where tgrelid = 'public.tracking_configs'::regclass and not tgisinternal;
 --   select column_name from information_schema.column_privileges
 --     where table_name = 'tracking_configs' and grantee = 'authenticated' and privilege_type = 'UPDATE';
