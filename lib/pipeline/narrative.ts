@@ -1,4 +1,5 @@
-import { FIGURE_RE, MAGNITUDE_RE, tidy } from '../prose/scrub'
+import { FIGURE_RE, MAGNITUDE_RE, dropUnverdictedDirection, tidy } from '../prose/scrub'
+import type { Verdict } from '../reading/verdicts'
 
 import type { ExecutiveBrief, BriefMetric } from './schemas'
 
@@ -85,15 +86,28 @@ export interface ValidatedBrief {
 
 /** Sanitise + structurally validate a raw executive_brief. Keeps at most one
  *  beat per metric (first wins), caps at three, scrubs every string. */
-export function validateBrief(raw: ExecutiveBrief | null | undefined): ValidatedBrief {
+export function validateBrief(raw: ExecutiveBrief | null | undefined, verdicts: readonly Verdict[] = []): ValidatedBrief {
   if (!raw || typeof raw.headline_finding !== 'string' || !Array.isArray(raw.narrative)) {
     return { brief: null, leaked: false, dropped: 0 }
   }
   let leaked = false
   let dropped = 0
 
+  // The direction rule (item 9), on the same prose the digit rule already
+  // guards. The prompt has told the brief since July not to state a figure's
+  // "size or direction", and the enforcement was half: a probe of the live
+  // headline "Attention is fading while price talk is rising." comes back
+  // verbatim today. A beat or a headline that names a direction nothing earned
+  // is now gone, and an empty headline drops the whole brief to the
+  // code-composed fallback, which says it is one.
+  const directional = (text: string): boolean => dropUnverdictedDirection(text, verdicts).dropped > 0
+
   const headline = scrubHeadline(raw.headline_finding)
   leaked ||= headline.leaked
+  if (headline.text && directional(headline.text)) {
+    headline.text = ''
+    leaked = true
+  }
 
   const seen = new Set<BriefMetric>()
   const beats: ExecutiveBrief['narrative'] = []
@@ -103,6 +117,7 @@ export function validateBrief(raw: ExecutiveBrief | null | undefined): Validated
     leaked ||= scrubbed.leaked
     // A beat with no surviving prose around its token is noise.
     if (!scrubbed.text || scrubbed.text === FIGURE_TOKEN) { dropped++; continue }
+    if (directional(scrubbed.text)) { dropped++; leaked = true; continue }
     seen.add(beat.metric)
     beats.push({ metric: beat.metric, text: scrubbed.text })
     if (beats.length >= 3) break

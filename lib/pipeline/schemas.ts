@@ -249,13 +249,14 @@ const recommendationSchema = z.object({
 // Intelligence (Spec §3). Item counts (top 3) are prompt-enforced — strict
 // structured outputs don't support maxItems.
 const ciSummarySchema = z.object({
-  // The woven "short read" that LEADS Market Intelligence — the executive-read
-  // version of this summary: 2–4 flowing sentences, written the way you'd brief
-  // an owner out loud, synthesising the market picture (needs, triggers,
-  // standouts, mood, threats) into one written narrative. Client-facing prose;
-  // no numbers, no bracket indices. The structured fields below stay as the
-  // supporting detail beneath it. (Added 2026-07-18 — pass_d_a_v4.)
-  narrative: z.string(),
+  // NO `narrative` (removed 2026-09-15, pass_d_a_v6). It was a model-written
+  // read of the whole run, added in v4 to make this page read as a briefing,
+  // and it is exactly what §7 reserves for the three labelled interpretation
+  // slots: unscrubbed argument, cross-brand comparison on no verdict, no label
+  // saying a model wrote it. Nothing ever read it — Market renders the four
+  // structured lists and the document writer's ciLines the other four fields —
+  // so the cut costs no surface. The read it was trying to be is the monthly
+  // report's two signed sentences and the quarterly review's page.
   top_unmet_needs: z.array(z.string()),
   top_buying_triggers: z.array(z.string()),
   top_differentiators: z.array(z.string()),

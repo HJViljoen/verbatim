@@ -81,3 +81,39 @@ describe('validateBrief', () => {
     expect(validateBrief(brief({ narrative: [{ metric: 'sentiment', text: FIGURE_TOKEN }] })).brief).toBeNull()
   })
 })
+
+describe('validateBrief — the direction rule (item 9)', () => {
+  // The live probe: today this headline comes back verbatim, two direction
+  // words and no verdict behind either.
+  it('drops a headline that names a direction nothing earned', () => {
+    const out = validateBrief({
+      headline_finding: 'Attention is fading while price talk is rising.',
+      narrative: [{ metric: 'top_theme', text: 'Durability is the thread buyers return to, heard across [[n]].' }],
+    })
+    expect(out.brief).toBeNull()
+    expect(out.leaked).toBe(true)
+  })
+
+  it('drops a beat that names one, and keeps the rest', () => {
+    const out = validateBrief({
+      headline_finding: 'Buyers want the fit settled before they will consider the price.',
+      narrative: [
+        { metric: 'top_theme', text: 'Durability is growing, heard across [[n]].' },
+        { metric: 'sentiment', text: 'People speak warmly about the fit, across [[n]].' },
+      ],
+    })
+    expect(out.brief?.narrative).toHaveLength(1)
+    expect(out.brief?.narrative[0].metric).toBe('sentiment')
+    expect(out.dropped).toBe(1)
+  })
+
+  // The other measured class: `up` as a verb particle in exactly this register.
+  // Two of the 51 stored beats read this way and both are correct prose.
+  it('keeps "shows up", which is the false positive a naive list deletes', () => {
+    const out = validateBrief({
+      headline_finding: 'Category discovery happens outside Össur unless it shows up earlier.',
+      narrative: [{ metric: 'top_theme', text: 'Fit is the thread, heard across [[n]].' }],
+    })
+    expect(out.brief?.headline_finding).toBe('Category discovery happens outside Össur unless it shows up earlier.')
+  })
+})

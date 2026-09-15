@@ -245,7 +245,20 @@ export function dropUnverdictedDirection(raw: string, verdicts: readonly Verdict
  * The list is the point: "extend the scrubber to every prose slot" is only
  * checkable if the slots are enumerated somewhere, and before this table they
  * were discoverable only by reading sixteen files. A new model call adds itself
- * here or it does not ship — `prose.test.ts` asserts the table is total.
+ * here or it does not ship — `scrub.test.ts` asserts the table is total.
+ *
+ * WIRED as of Phase 1 WP7: pass_c_finding, pass_d_a_insight,
+ * pass_d_a_consumer_summary, pass_d_a_brief (through validateBrief),
+ * pass_d_a_say_vs_hear, pass_d_b_recommendation, pass_e_persona,
+ * step_2c_event_explanation, report_cover, document_write. `pass_b_theme` and
+ * `agent_interpret` are `none` and need no wiring.
+ *
+ * NOT WIRED YET, and each for a stated reason: `agent_answer`, `ask_verdict`,
+ * `ask_judge` and `ask_extract_title` wait for WP21, which is where Ask gets
+ * the figure table it actually holds — its answers count things, and the digit
+ * rule with an empty table would delete a truthful answer to "how many".
+ * The three interpretation slots wait for the packages that write them
+ * (WP8, WP18, WP20); `composeInterpretation` runs their policy already.
  */
 export const PROSE_SLOTS = [
   'pass_b_theme',
@@ -292,11 +305,22 @@ export type ProsePolicy = 'none' | 'digits' | 'direction' | 'both'
  * *interpretation*. They get both rules because they are the only slots handed
  * verdicts in the first place.
  *
- * EVERY OTHER `both`. The brief, the cover, the agent's answer and an owned
- * event's explanation are prose about a reading, written without verdicts. The
- * direction rule with an empty `verdicts[]` deletes every directional sentence
- * — which is exactly what the prompts already ask for in words and have never
- * enforced (the agent's NO_TREND_BLOCK is a sentence in a prompt).
+ * EVERY OTHER `both`. The brief, the cover and the agent's answer are prose
+ * about a reading, written without verdicts. The direction rule with an empty
+ * `verdicts[]` deletes every directional sentence — which is exactly what the
+ * prompts already ask for in words and have never enforced (the agent's
+ * NO_TREND_BLOCK is a sentence in a prompt). When a reader's direction words
+ * are turned back on (DIRECTION_WORDS_BY_READER), its slot starts being handed
+ * verdicts and the same rule lets the earned sentences through.
+ *
+ * WHY AN OWNED EVENT'S EXPLANATION IS ONLY `digits`. Step 2c is the one slot
+ * where the direction is already code's: `detectAccountEvents` computes
+ * `direction: 'up' | 'down'` and a severity from the account's own median and
+ * renders them into the fact line the model is given ("TikTok followers moved
+ * up 4.2% week-over-week"). The model repeating a direction code assigned is
+ * the contract working, not a leak. The FIGURE in that line is the defect —
+ * it is interpolated rather than tokenised — so the digit rule is what this
+ * slot needs, and item 40's explainer is built on tokens from the start.
  */
 export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   pass_b_theme: 'none',
@@ -307,7 +331,7 @@ export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
   pass_d_a_say_vs_hear: 'digits',
   pass_d_b_recommendation: 'digits',
   pass_e_persona: 'digits',
-  step_2c_event_explanation: 'both',
+  step_2c_event_explanation: 'digits',
   agent_answer: 'both',
   agent_interpret: 'none',
   ask_extract_title: 'digits',

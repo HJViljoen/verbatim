@@ -155,7 +155,7 @@ describe('the policy table — every prose slot is listed with its policy', () =
     pass_d_a_say_vs_hear: 'digits',
     pass_d_b_recommendation: 'digits',
     pass_e_persona: 'digits',
-    step_2c_event_explanation: 'both',
+    step_2c_event_explanation: 'digits',
     agent_answer: 'both',
     agent_interpret: 'none',
     ask_extract_title: 'digits',

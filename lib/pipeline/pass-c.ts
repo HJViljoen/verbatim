@@ -4,7 +4,8 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, COMPETITIVE_MIN_VIDEOS, estimateCost } from '../config'
 import { PassCSchema, type PassCOutput } from './schemas'
 import { logAiCall } from './ai-log'
-import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
+import { allowTokens } from '../prose/scrub'
+import { CALIBRATED_PROSE_RULE, NO_DIRECTION_RULE, slotScrubber } from './prose-rules'
 import { embedTexts, cosine } from './cluster'
 import type { AggregatedTheme, SovEntry } from './types'
 import type { BrandClaim } from './claims'
@@ -140,6 +141,7 @@ export function buildSystemPrompt(
     '- Reference every supporting theme by its bracket index (e.g. "T3"), using ONLY indices present in the input.',
     '- Do NOT invent counts, percentages, or metrics.',
     CALIBRATED_PROSE_RULE,
+    NO_DIRECTION_RULE,
     `- A finding must rest on a genuine cross-bucket contrast. If only ONE bucket is present (no competitor or ${name} data to compare), return an empty "competitive_insights" array. Do not manufacture comparisons.`,
     `- Buckets marked TOO THIN TO COMPARE hold fewer than ${COMPETITIVE_MIN_VIDEOS} videos. Never rest a finding on one. We barely gathered them, so their quiet says nothing about the brand.`,
     '- impact_level reflects how much the finding should affect the brand’s strategy. "high" is scarce: at most one or two findings per run genuinely demand a strategy response — when in doubt, medium.',
@@ -335,6 +337,13 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
   // throws (Inngest retries) — never fail-open into unvalidated refs.
   let relevanceRejected = 0
   const themeText = (t: AggregatedTheme) => `${t.label ?? t.theme}. ${t.description ?? ''}`.trim()
+  // The slot's policy (item 9): a competitive finding may name no figure of its
+  // own — 29 of 114 stored findings carry a digit — and the allow-list is
+  // mined from the themes it is written about, so a product name that carries
+  // one ("3R78") survives while a typed percentage does not.
+  const prose = slotScrubber('pass_c_finding', {
+    allow: allowTokens(themes.map(themeText)),
+  })
   const keptRefs: string[][] = parsed.competitive_insights.map((ci) => ci.supporting_themes)
   {
     const citedLabels = [...new Set(keptRefs.flat().map((r) => r.toLowerCase().trim()))].filter((l) => byLabel.has(l))
@@ -371,8 +380,8 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
       run_id: runId,
       category: ci.category,
       competitor_name: ci.competitor_name,
-      title: stripThemeRefs(ci.title),
-      finding: stripThemeRefs(ci.finding),
+      title: prose.run(ci.title),
+      finding: prose.run(ci.finding),
       evidence: { supporting_theme_ids: [...new Set(supportingIds)] },
       impact_level: ci.impact_level,
     }
@@ -391,7 +400,7 @@ export async function runPassC(opts: RunPassCOptions): Promise<RunPassCResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
-      response: { insights: rows.length, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected },
+      response: { insights: rows.length, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected, ...prose.counts() },
       error: null, usage, durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })

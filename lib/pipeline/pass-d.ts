@@ -6,7 +6,8 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, CITATION_RELEVANCE_FLOOR, estimateCost } from '../config'
 import { PassDaSchema, PassDaSchemaV5, PassDbSchema, type PassDaOutput, type PassDbOutput, type CiSummary, type ExecutiveBrief, type SayVsHearItemOut, type SayVsHearEntry } from './schemas'
 import { priorityForRank } from '../calibration'
-import { CALIBRATED_PROSE_RULE, stripThemeRefs } from './prose-rules'
+import { allowTokens } from '../prose/scrub'
+import { CALIBRATED_PROSE_RULE, NO_DIRECTION_RULE, slotScrubber } from './prose-rules'
 import { validateBrief } from './narrative'
 import { logAiCall } from './ai-log'
 import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
@@ -39,10 +40,20 @@ import type { AggregatedTheme, SovEntry } from './types'
 // v4 (2026-07-18): consumer_intelligence_summary gains a woven `narrative` — the
 // executive-read paragraph that leads Market Intelligence (same voice as the
 // brief), so that page reads as a written briefing, not list-shaped cards.
-const PROMPT_VERSION_A = 'pass_d_a_v4'
-// v5 (2026-08-08, Step 2b): + say_vs_hear over [S#] client claims — selected
-// only when claims exist, so claim-less tenants keep the v4 schema/prompt.
-const PROMPT_VERSION_A_V5 = 'pass_d_a_v5'
+// v6 (2026-09-15, item 9): that narrative is GONE, and the share-of-voice block
+// stops carrying percentages. The narrative was a model-written read of the
+// whole run — precisely what §7 reserves for the three labelled interpretation
+// slots — and it was never scrubbed and never read by any surface: the two
+// tenants' most recent ones compare brands ("Cotopaxi is doing a better job of
+// catching that decision-stage behavior") on no verdict at all. The
+// percentages went with it because every model-typed share figure in
+// production is a number this prompt showed the model.
+const PROMPT_VERSION_A = 'pass_d_a_v6'
+// v7 (2026-08-08, Step 2b): + say_vs_hear over [S#] client claims — selected
+// only when claims exist, so claim-less tenants keep the plain schema/prompt.
+// Renumbered with v6 above so the two versions of one prompt stay ordered in
+// ai_call_log; the say-vs-hear half is unchanged.
+const PROMPT_VERSION_A_V5 = 'pass_d_a_v7'
 // v5 (2026-07-07): also select a hero_quote per recommendation AND per market
 // insight (evidence-led cards, Redesign Spec §1) — the one place a raw verbatim
 // belongs. Code validates each against the shown quotes and drops non-matches.
@@ -142,10 +153,6 @@ export function buildSystemPromptA(brandName?: string, hasClaims = false): strin
     '1. market_insights — patterns that span themes: unmet needs, platform patterns, industry signals,',
     '   cross-platform synthesis, sentiment trajectory. Look at the market, not a single bucket.',
     '2. consumer_intelligence_summary — the at-a-glance read of the whole corpus:',
-    '   - narrative: the executive read that LEADS the page — 2–4 flowing sentences, written the way you would',
-    '     brief a busy owner out loud: what the market is telling ' + name + ', what is driving it, and what it',
-    '     means for them. ONE woven paragraph, not a list; plain client-facing prose, no numbers, no bracket',
-    '     indices. This is the same voice as the executive_brief below — a written read, not bullet points.',
     '   - top_unmet_needs: the 3 (at most) clearest unmet needs in the conversation.',
     '   - top_buying_triggers: the 3 (at most) clearest events/reasons that push people to buy.',
     '   - top_differentiators: the 3 (at most) clearest things that set brands apart in this conversation (name the brand each favours).',
@@ -172,9 +179,10 @@ export function buildSystemPromptA(brandName?: string, hasClaims = false): strin
     `- When you refer to the brand, always call it by name, "${name}" — never "the client", "the brand", or "our brand".`,
     '- Reference supporting themes by their bracket index (e.g. "T2") and competitive insights by theirs (e.g. "C1"). Use ONLY indices present in the input.',
     '- supporting_themes must list ONLY the themes a market insight is directly distilled from — the specific themes whose comments are the evidence for the claim. Cite the few that genuinely apply (usually 1–4), never a broad list. Do NOT add a theme just to satisfy a grounding requirement: the product shows the user the actual comments behind each cited theme as proof, so an unrelated theme there is a visible defect.',
-    '- Some insights are NOT distilled from comment themes at all — insights about share of voice, content volume, posting presence, or platform coverage are derived from the SHARE OF VOICE data above, not from comments. For these, return an EMPTY supporting_themes array and rely on the share-of-voice figures. Never back-fill them with comment themes.',
+    '- Some insights are NOT distilled from comment themes at all — insights about who the conversation is about, content volume, posting presence, or platform coverage come from the ordering above, not from comments. For these, return an EMPTY supporting_themes array. Say what the ordering means and why it matters; never state the sizes, which the product prints for you. Never back-fill them with comment themes.',
     '- Do NOT invent counts or percentages. confidence_score and opportunity_score are 1–10 judgments, not measured quantities.',
     CALIBRATED_PROSE_RULE,
+    NO_DIRECTION_RULE,
     '- If the data is thin, produce fewer, honest insights rather than padding. Fewer, tightly-grounded insights beat many loosely-grounded ones.',
   ]
   if (!hasClaims) return base.join('\n')
@@ -220,8 +228,17 @@ export function buildUserPromptA(
 ): string {
   const lines: string[] = []
   if (sov && Object.keys(sov).length) {
-    lines.push('SHARE OF VOICE (by bucket):')
-    for (const [bucket, e] of Object.entries(sov)) lines.push(`- ${bucket}: ${e.videos} videos (${e.pct_videos}%)`)
+    // WHO IS TALKED ABUT MOST, IN ORDER — AND NOT BY HOW MUCH (item 9). This
+    // block used to print "- industry-other: 797 videos (89.1%)", and every
+    // model-typed share figure in production is one of those numbers read back:
+    // "only 1.1% share of voice", "89.1% (797 videos)". A percentage in prose
+    // is a figure no code substitutes and no reader can check, so the ordering
+    // — which code computed — is handed over and the sizes are not.
+    const ranked = Object.entries(sov).sort((a, b) => (b[1].videos ?? 0) - (a[1].videos ?? 0))
+    lines.push('WHO THE TRACKED CONVERSATION IS ABOUT, most talked about first:')
+    ranked.forEach(([bucket], i) => lines.push(`${i + 1}. ${bucket}`))
+    lines.push('You have the ORDER and not the sizes. Never state, estimate or imply a share, a count or a')
+    lines.push('gap between two of them: the product prints every one of those figures beside your text.')
     lines.push('')
   }
   if (clientClaims.length) {
@@ -297,6 +314,7 @@ export function buildSystemPromptB(brandName?: string): string {
     '  Use ONLY indices present in the input.',
     '- Do NOT invent counts or percentages.',
     CALIBRATED_PROSE_RULE,
+    NO_DIRECTION_RULE,
     '- ORDER IS PRIORITY: return recommendations ranked, most important first. There is no priority field —',
     '  the product labels your first recommendation "Act now" and the next two "Plan next", so rank deliberately.',
     '- Fewer, sharper recommendations beat a padded list. Every one must be worth the client\'s time.',
@@ -468,6 +486,14 @@ async function structuredCall<T>(
 
 export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
   const { clientId, runId, themes, sov } = opts
+  // ONE allow-list per run, carried (item 9). Both halves of Pass D write about
+  // the same themes and claims, so the digit-bearing NAMES they may repeat
+  // ("3R78", "C-Leg 4") are mined once from that material rather than each slot
+  // deriving its own from whatever it happens to hold.
+  const runAllow = allowTokens([
+    ...themes.map((th) => `${th.label ?? th.theme}. ${th.description ?? ''}`),
+    ...(opts.clientClaims ?? []).map((c) => `${c.claim} ${c.quote}`),
+  ])
   const competitive = opts.competitiveInsights ?? []
   const clientClaims = opts.clientClaims ?? []
   const dryRun = opts.dryRun ?? false
@@ -520,7 +546,21 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     }
     return result
   }
-  result.ciSummary = a.parsed.consumer_intelligence_summary
+  // The three D-a prose slots. No figure table: none of them may name a figure
+  // at all, so a `[[key]]` or a typed number costs the sentence.
+  const proseA = slotScrubber('pass_d_a_insight', { allow: runAllow })
+  const proseCi = slotScrubber('pass_d_a_consumer_summary', { allow: runAllow })
+  const proseSay = slotScrubber('pass_d_a_say_vs_hear', { allow: runAllow })
+  const ci = a.parsed.consumer_intelligence_summary
+  const ciList = (items: string[] | undefined): string[] =>
+    (items ?? []).map((s) => proseCi.run(s)).filter(Boolean)
+  result.ciSummary = {
+    top_unmet_needs: ciList(ci?.top_unmet_needs),
+    top_buying_triggers: ciList(ci?.top_buying_triggers),
+    top_differentiators: ciList(ci?.top_differentiators),
+    emotional_snapshot: proseCi.run(ci?.emotional_snapshot ?? ''),
+    threats: ciList(ci?.threats),
+  }
   // Executive brief: scrub any number/magnitude the model leaked into its prose;
   // the dashboard substitutes authoritative figures at render (a null brief just
   // means render falls back to the code-composed narrative).
@@ -601,8 +641,8 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
         you_say: it.claim.claim,
         your_quote: it.claim.quote,
         audience: it.audience,
-        they_say: it.they_say ? stripThemeRefs(it.they_say) : null,
-        gap: stripThemeRefs(it.gap),
+        they_say: proseSay.runNullable(it.they_say),
+        gap: proseSay.run(it.gap),
         supporting_theme_ids: resolveThemes(it.supporting_themes),
       }))
       // The silent contract's other direction: a non-silent verdict whose refs
@@ -618,8 +658,8 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     client_id: clientId,
     run_id: runId,
     insight_type: mi.insight_type,
-    title: stripThemeRefs(mi.title),
-    description: stripThemeRefs(mi.description),
+    title: proseA.run(mi.title),
+    description: proseA.run(mi.description),
     evidence: {
       supporting_theme_ids: resolveThemes(keptRefs[i]),
       supporting_competitive_insight_ids: resolveCompetitive(mi.supporting_competitive),
@@ -654,7 +694,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_a', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: promptVersionA, systemPrompt: systemPromptA, userPrompt: userPromptA,
-      response: { market_insights: miRows.length, ci_summary: true, executive_brief: !!brief.brief, brief_leaked: brief.leaked, brief_dropped: brief.dropped, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected, ...(clientClaims.length ? { say_vs_hear: result.sayVsHear?.length ?? 0 } : {}) },
+      response: { market_insights: miRows.length, ci_summary: true, executive_brief: !!brief.brief, brief_leaked: brief.leaked, brief_dropped: brief.dropped, rejected_refs: rejectedRefs, relevance_rejected: relevanceRejected, ...proseA.counts(), ci_prose: proseCi.counts(), say_prose: proseSay.counts(), ...(clientClaims.length ? { say_vs_hear: result.sayVsHear?.length ?? 0 } : {}) },
       error: null, usage: a.usage, durationMs: a.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })
@@ -676,6 +716,7 @@ export async function runPassD(opts: RunPassDOptions): Promise<RunPassDResult> {
     admin, clientId, runId, brandName: opts.brandName, sov,
     insightsForB, miById, ciIndex, persist,
     initialRejectedRefs: rejectedRefs,
+    allow: runAllow,
   })
   result.recommendations = db.recommendations
   result.promptTokens += db.promptTokens
@@ -700,6 +741,8 @@ interface RunDbCallArgs {
   persist: boolean
   /** Carried over from D-a's reference resolution so the D-b log stays cumulative. */
   initialRejectedRefs?: number
+  /** The run's allow-list of digit-bearing names, computed once in D-a. */
+  allow?: readonly string[]
 }
 
 interface RunDbCallResult {
@@ -712,6 +755,7 @@ interface RunDbCallResult {
 
 async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
   const { admin, clientId, runId, sov, insightsForB, miById, ciIndex, persist } = args
+  const proseB = slotScrubber('pass_d_b_recommendation', { allow: args.allow })
   let rejectedRefs = args.initialRejectedRefs ?? 0
   const out: RunDbCallResult = { recommendations: [], rejectedRefs, promptTokens: 0, completionTokens: 0, costUsd: 0 }
 
@@ -789,8 +833,8 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
       client_id: clientId,
       run_id: runId,
       type: (rec.type === 'other' && rec.custom_category && slugify(rec.custom_category)) || rec.type,
-      title: stripThemeRefs(rec.title),
-      reasoning: stripThemeRefs(rec.reasoning),
+      title: proseB.run(rec.title),
+      reasoning: proseB.run(rec.reasoning),
       priority: priorityForRank(rank),
       based_on: { insight_ids: [...new Set(ids)] },
       hero_quote: validateQuote(rec.hero_quote),
@@ -870,7 +914,7 @@ async function runDbCall(args: RunDbCallArgs): Promise<RunDbCallResult> {
     }
     await logAiCall(admin, {
       clientId, runId, pass: 'pass_d_b', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION_B, systemPrompt: systemPromptB, userPrompt: userPromptB,
-      response: { recommendations: recRows.length, rejected_refs: rejectedRefs, ...lineageLog },
+      response: { recommendations: recRows.length, rejected_refs: rejectedRefs, ...proseB.counts(), ...lineageLog },
       error: null, usage: b.usage, durationMs: b.durationMs,
       validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
     })

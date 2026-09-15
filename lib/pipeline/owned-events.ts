@@ -4,7 +4,8 @@ import { openai, samplingParams } from '../openai'
 import { SYNTHESIS_MODEL, estimateCost } from '../config'
 import { Step2cSchema, type Step2cOutput } from './schemas'
 import { logAiCall } from './ai-log'
-import { CALIBRATED_PROSE_RULE } from './prose-rules'
+import { allowTokens } from '../prose/scrub'
+import { CALIBRATED_PROSE_RULE, slotScrubber } from './prose-rules'
 import { followerFloorPct } from '../gather/owned'
 
 // Step 2c — owned-account events (Architecture/Owned-Data-Plan 2026-07-08).
@@ -373,6 +374,14 @@ export async function runStep2c(args: {
       .limit(THEMES_EXPLAINED),
   ])
   const themes = (themeRows ?? []) as ThemeLite[]
+  // The slot's policy (item 9): digits only. The DIRECTION in an owned event is
+  // code's already — detectAccountEvents computes it from the account's own
+  // median and renders it into the fact line the model is handed — so the word
+  // is earned; the figure beside it is interpolated rather than tokenised, and
+  // that is the one this rule refuses.
+  const prose = slotScrubber('step_2c_event_explanation', {
+    allow: allowTokens(themes.map((th) => th.label ?? '')),
+  })
   const eventPlatforms = [...new Set(detected.map((e) => e.platform))]
   // Prefer THIS window's owned comments — an event should be explained by the
   // conversation around it, not a greatest-hit from months ago. Widen to
@@ -463,12 +472,12 @@ export async function runStep2c(args: {
         }
         const heroQuote = ev.hero_quote ? shownByNorm.get(norm(ev.hero_quote)) ?? null : null
         if (labels.length === 0 && !heroQuote) return asUnexplained(d)
-        return { ...d, explained: true, explanation: ev.explanation, supportingThemeLabels: [...new Set(labels)], heroQuote }
+        return { ...d, explained: true, explanation: prose.run(ev.explanation), supportingThemeLabels: [...new Set(labels)], heroQuote }
       })
       if (persist) {
         await logAiCall(admin, {
           clientId, runId, pass: 'step_2c', callIndex: 1, model: SYNTHESIS_MODEL, promptVersion: PROMPT_VERSION, systemPrompt, userPrompt,
-          response: { events: events.length, explained: events.filter((e) => e.explained).length, rejected_refs: rejectedRefs },
+          response: { events: events.length, explained: events.filter((e) => e.explained).length, rejected_refs: rejectedRefs, ...prose.counts() },
           error: null, usage, durationMs,
           validationStatus: rejectedRefs > 0 ? 'ref_rejected' : 'ok',
         })
