@@ -554,10 +554,20 @@ export async function loadTopObjects(
 
   const asked = options.audiences ? [...new Set(options.audiences)] : null
   let audiences: string[] | null = null
+  // ONE KEY PER RIVAL, exactly as loadMonthSeries folds its own: the ask is
+  // widened through the rename chain, so a rival renamed A → B comes back under
+  // both strings, and ranking under the RAW string returned two audience groups
+  // with a top-N each, both ranked on half the object's comments. Worse than a
+  // duplicate, because loadMonthSeries folds to one: this loader chooses which
+  // themes to draw and that one draws them, so the ranking and the series would
+  // disagree about what the audience is and the page would draw the wrong N
+  // themes with the wrong weights.
+  let headOf = new Map<string, string>()
   if (asked) {
     const changes = await loadChanges(client, clientId)
     const chains = renameChains(asked, changes.map(renameFrom).filter((r): r is RenameRecord => r != null))
     audiences = [...new Set(asked.flatMap((a) => namesFor(chains, a)))]
+    headOf = chains.headOf
   }
 
   let rows: StoredNumerator[] = []
@@ -584,10 +594,11 @@ export async function loadTopObjects(
   for (const row of rows) {
     const objectId = String((row as unknown as Record<string, unknown>)[idColumn] ?? '')
     if (!objectId) continue
-    const key = `${row.audience}\u0000${objectId}`
+    const audience = headOf.get(row.audience) ?? row.audience
+    const key = `${audience}\u0000${objectId}`
     const held = weights.get(key)
     weights.set(key, {
-      audience: row.audience,
+      audience,
       objectId,
       comments: (held?.comments ?? 0) + (row.comments ?? 0),
       months: (held?.months ?? 0) + 1,
