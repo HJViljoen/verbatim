@@ -30,22 +30,31 @@ import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 // same one the product is showing — so every month in the table is the same
 // question asked of a different month, which is the whole point.
 //
-//   node --env-file=.env.local --import tsx scripts/monthly-reading.ts [--client <uuid>] [--run <uuid>] [--all] [--write]
+// --write refuses a tenant whose clustering could not be named, unless
+// --denominators-only says so out loud: a seed that cannot say which clustering
+// it read freezes every back-read month's denominators with no theme readings
+// at all, and nothing ever revisits a frozen month (monthsToRefresh only walks
+// back through FILLING ones). A second run would write the theme rows under a
+// LATER clustering, which is the one thing these two tables exist to prevent.
+//
+//   node --env-file=.env.local --import tsx scripts/monthly-reading.ts [--client <uuid>] [--run <uuid>] [--all] [--write] [--denominators-only]
 
 interface Args {
   clientId: string | null
   runId: string | null
   all: boolean
   write: boolean
+  denominatorsOnly: boolean
 }
 
 function parseArgs(argv: string[]): Args {
-  const args: Args = { clientId: null, runId: null, all: false, write: false }
+  const args: Args = { clientId: null, runId: null, all: false, write: false, denominatorsOnly: false }
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--client') args.clientId = argv[++i]
     else if (argv[i] === '--run') args.runId = argv[++i]
     else if (argv[i] === '--all') args.all = true
     else if (argv[i] === '--write') args.write = true
+    else if (argv[i] === '--denominators-only') args.denominatorsOnly = true
     else throw new Error(`unknown flag: ${argv[i]}`)
   }
   return args
@@ -60,7 +69,7 @@ const mix = (m: Record<string, number>): string =>
     .join(' · ') || '—'
 
 async function main() {
-  const { clientId, runId: runOverride, all, write } = parseArgs(process.argv.slice(2))
+  const { clientId, runId: runOverride, all, write, denominatorsOnly } = parseArgs(process.argv.slice(2))
   const admin = createAdminClient()
   const now = new Date().toISOString()
 
@@ -84,12 +93,17 @@ async function main() {
     let runId = runOverride
     let runDate: string | null = null
     {
-      const { data } = await admin
+      // Checked, like every other read here: a dropped error would make "this
+      // read failed" look exactly like "this tenant has no clustering yet",
+      // and under --write the difference is a permanent freeze with no
+      // numerators in it.
+      const { data, error: obsErr } = await admin
         .from('theme_observations')
         .select('run_id, created_at')
         .eq('client_id', id)
         .order('created_at', { ascending: false })
         .limit(1)
+      if (obsErr) throw new Error(`theme_observations: ${obsErr.message}`)
       const latest = (data ?? [])[0] as { run_id: string | null; created_at: string } | undefined
       if (!runOverride) runId = latest?.run_id ?? null
       runDate = latest?.created_at?.slice(0, 10) ?? null
@@ -182,6 +196,18 @@ async function main() {
     }
 
     if (write) {
+      // A freeze is permanent (`month_denominators_frozen_guard` refuses any
+      // later UPDATE) and unrecoverable for the clustering it was meant to
+      // record. Writing denominators with no clustering to attach numerators
+      // to is therefore not a degraded seed, it is a wrong one — say so and
+      // stop, rather than print one line among many and freeze the months.
+      if (!runId && !denominatorsOnly) {
+        throw new Error(
+          `${name}: no clustering to read the months with, so --write would freeze ` +
+          'denominators with no theme readings and nothing would ever revisit those months. ' +
+          'Name one with --run <uuid>, or pass --denominators-only if that is genuinely what you want.',
+        )
+      }
       const done = await freezeMonths(admin, { clientId: id, runId, months, now })
       console.log(
         `  WROTE ${done.denominators.written} denominator rows and ${done.themes.written} theme rows; ` +
