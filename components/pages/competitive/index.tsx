@@ -12,7 +12,8 @@ import { LineChart } from '@/components/charts/line-chart'
 import { Delta } from '@/components/charts/stat'
 import { fmtInt, fmtPct, fmtDelta, round1, weekdayDate, shortDate } from '@/lib/format'
 import { directionWordsFor } from '@/lib/config'
-import { kindOf, competitorBucket, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
+import { kindOf, shareDeltaShown, SENTIMENT_MIN_JUDGED, type KindTone } from '@/lib/competitive-tiles'
+import { rivalKey } from '@/lib/rivals'
 import {
   loadCompetitive, isCompetitiveEmpty, competitiveFindingHref, LEGEND_ITEMS,
   type CompetitiveData, type CompetitiveEmpty, type FindingDetail,
@@ -195,7 +196,7 @@ const table: R = (d) => {
           </thead>
           <tbody className="font-mono tabular-nums">
             {rows.map((r) => (
-              <tr key={r.key} className={`border-b border-border/70 last:border-0 ${(lead && r.key === competitorBucket(lead)) || r.key === 'client' ? 'font-semibold' : ''}`}>
+              <tr key={r.key} className={`border-b border-border/70 last:border-0 ${(lead && r.key === rivalKey(lead)) || r.key === 'client' ? 'font-semibold' : ''}`}>
                 <td className="py-1 pr-2 font-sans"><span className="flex items-center gap-1.5"><span className="size-2 shrink-0 rounded-[2px]" style={{ background: r.color }} aria-hidden />{r.label}</span></td>
                 <td className="py-1 pr-2 text-right">{fmtInt(r.videos)}</td>
                 <td className="py-1 pr-2 text-right">{fmtPct(r.pct)}</td>

@@ -566,11 +566,22 @@ describe('the mirror in the migration — the two have to keep saying the same t
   })
 
   it('carries the same two vocabularies in its CHECK constraints', () => {
-    const surfaces = sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
+    // The surface list moved: 20260918090000_competitors.sql (Phase 1 M1) drops
+    // and re-adds the constraint to admit 'rival_rename' and 'prompt_version',
+    // so the LIVE vocabulary is the newest migration that writes it, not this
+    // one. Read it that way rather than freezing the vocabulary here — the
+    // point of the test is that TypeScript and the database agree about what a
+    // surface may be, and a later migration is allowed to move the answer.
+    const rivalsSql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
+    const surfaces = rivalsSql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)?.[1]
     const kinds = sql.match(/check\s*\(actor_kind in\s*\(([\s\S]*?)\)\)/i)?.[1]
     expect(surfaces).toBeTruthy()
     expect(kinds).toBeTruthy()
     expect(quoted(surfaces!).sort()).toEqual([...CONFIG_SURFACES].sort())
     expect(quoted(kinds!).sort()).toEqual([...ACTOR_KINDS].sort())
+    // And the original file's own CHECK is still a subset of it — a migration
+    // that re-adds the constraint must never drop a surface already stored.
+    const original = quoted(sql.match(/check\s*\(surface in \(([\s\S]*?)\)\)/i)![1])
+    for (const surface of original) expect(CONFIG_SURFACES).toContain(surface as never)
   })
 })

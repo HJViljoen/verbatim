@@ -1,0 +1,314 @@
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { describe, it, expect } from 'vitest'
+
+import {
+  CLIENT_AUDIENCE,
+  INDUSTRY_AUDIENCE,
+  RIVAL_PREFIX,
+  UNKNOWN_RIVAL,
+  audienceOf,
+  findRival,
+  isMissingCompetitors,
+  isRivalAudience,
+  renameFrom,
+  renameLabel,
+  rivalKey,
+  rivalNameOf,
+  rivalSlug,
+  stitchRenames,
+  type Competitor,
+  type RenameRecord,
+} from './rivals'
+
+describe('rivalKey — the audience key, built in one place', () => {
+  it('keeps the name exactly as configured, spaces and capitals included', () => {
+    // month_denominators.audience stores this string verbatim and it is in the
+    // primary key, so anything that "tidies" it here splits a frozen series.
+    expect(rivalKey('Topo Designs')).toBe('competitor:Topo Designs')
+    expect(rivalKey('Össur')).toBe('competitor:Össur')
+    expect(rivalKey('Cotopaxi')).toBe('competitor:Cotopaxi')
+  })
+
+  it('trims, because a trailing space in a Settings field is not a second rival', () => {
+    expect(rivalKey('  Freitag  ')).toBe('competitor:Freitag')
+  })
+
+  it('names the missing name rather than printing null into a key', () => {
+    // A video flagged as a rival's with no name means the tagger disagreed with
+    // itself. scripts/regate-corpus.ts used to write `competitor:null` here.
+    expect(rivalKey(null)).toBe(`${RIVAL_PREFIX}${UNKNOWN_RIVAL}`)
+    expect(rivalKey(undefined)).toBe('competitor:unknown')
+    expect(rivalKey('   ')).toBe('competitor:unknown')
+  })
+})
+
+describe('rivalNameOf / isRivalAudience — reading a stored key back', () => {
+  it('round-trips every name, including one with a colon in it', () => {
+    for (const name of ['Topo Designs', 'Össur', 'Patagonia, Inc.', 'A:B']) {
+      expect(rivalNameOf(rivalKey(name))).toBe(name)
+      expect(isRivalAudience(rivalKey(name))).toBe(true)
+    }
+  })
+
+  it('says no to the two audiences that are not rivals, and to a bare prefix', () => {
+    for (const a of [CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, 'competitor:', '', null, undefined]) {
+      expect(isRivalAudience(a)).toBe(false)
+      expect(rivalNameOf(a)).toBeNull()
+    }
+  })
+})
+
+describe('audienceOf — the three-way precedence, folded from nine copies', () => {
+  it('reads client, then rival, then the category', () => {
+    expect(audienceOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
+    expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
+    expect(audienceOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
+  })
+
+  it('puts a dual-tagged video under the client, never under the rival', () => {
+    // lib/gather/tagging.ts files a brand+competitor mention under the client;
+    // the bucket rule has to agree or the same video is counted twice.
+    expect(audienceOf({ is_client: true, is_competitor: true, competitor_name: 'Ottobock' })).toBe('client')
+  })
+
+  it('treats absent fields as the category, not as a crash', () => {
+    expect(audienceOf({})).toBe('industry-other')
+    expect(audienceOf({ is_client: null, is_competitor: null })).toBe('industry-other')
+  })
+
+  it('never emits the tagging inspector’s old "industry" label', () => {
+    // scripts/run-tagging.ts emitted 'industry' where everything else emitted
+    // 'industry-other' — an eighth copy that disagreed with the other seven.
+    expect(audienceOf({ is_client: false, is_competitor: false })).not.toBe('industry')
+  })
+})
+
+describe('the fold has one implementation', () => {
+  const roots = ['lib', 'app', 'components', 'scripts', 'inngest']
+  const files: string[] = []
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      const path = join(dir, entry)
+      if (statSync(path).isDirectory()) walk(path)
+      else if (/\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path)) files.push(path)
+    }
+  }
+  for (const root of roots) walk(new URL(`../${root}`, import.meta.url).pathname)
+
+  it('leaves no second copy of the precedence rule anywhere in the repo', () => {
+    // Nine copies existed when this file was written and two of them disagreed.
+    // A tenth is how the next disagreement arrives, so it fails here instead.
+    const rule = /is_client[\s\S]{0,120}`competitor:\$\{/
+    const offenders = files.filter((f) => !f.endsWith('lib/rivals.ts') && rule.test(readFileSync(f, 'utf8')))
+    expect(offenders).toEqual([])
+  })
+
+  it('and the two SQL copies still say what the TypeScript one says', () => {
+    // Deliberate duplication: the monthly reading runs in the database and a
+    // function boundary there would be a per-row call on a corpus scan. They
+    // are allowed to exist and not allowed to drift.
+    const sql = readFileSync(new URL('../supabase/migrations/20260915092000_monthly_reading.sql', import.meta.url), 'utf8')
+    const copies = [...sql.matchAll(/when v\.is_client\s+then 'client'[\s\S]{0,240}?else '([a-z-]+)'/g)]
+    expect(copies.length).toBe(2)
+    for (const copy of copies) {
+      expect(copy[0]).toContain("'competitor:' || coalesce(v.competitor_name, 'unknown')")
+      expect(copy[1]).toBe(INDUSTRY_AUDIENCE)
+    }
+  })
+})
+
+describe('rivalSlug — the stable key a spelling folds to', () => {
+  it('folds accents, case and spacing the way the research measured', () => {
+    expect(rivalSlug('Össur')).toBe('ossur')
+    expect(rivalSlug('Ossur')).toBe('ossur')
+    expect(rivalSlug('Topo Designs')).toBe('topo-designs')
+    expect(rivalSlug('topo  designs')).toBe('topo-designs')
+    expect(rivalSlug('  Ottobock GmbH  ')).toBe('ottobock-gmbh')
+    expect(rivalSlug('Café Déjà')).toBe('cafe-deja')
+  })
+
+  it('collapses the spellings a free-text field actually produces to one key', () => {
+    const spellings = ['Cotopaxi', 'cotopaxi', 'COTOPAXI', ' Cotopaxi ']
+    expect(new Set(spellings.map(rivalSlug)).size).toBe(1)
+  })
+
+  it('has no slug for a name with nothing to key on', () => {
+    expect(rivalSlug('!!!')).toBe('')
+    expect(rivalSlug('')).toBe('')
+    expect(rivalSlug(null)).toBe('')
+  })
+
+  it('matches public.rival_slug, which decomposes and strips BEFORE lowercasing', () => {
+    // On a C-locale cluster lower('Ö') is 'Ö', so lowercasing first throws the
+    // letter away as punctuation: 'Össur' came back 'ssur'. Both twins fold in
+    // the same order so the answer never depends on a collation.
+    const sql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
+    const decl = sql.slice(sql.indexOf('create or replace function public.rival_slug'), sql.indexOf('comment on function public.rival_slug'))
+    const body = decl.slice(decl.indexOf('select nullif('))
+    // lower() wraps the already-stripped text; the wrong order reads
+    // normalize(lower(...)) and is what produced 'ssur'.
+    expect(body).not.toContain('normalize(lower(')
+    expect(body).toMatch(/lower\(\s*regexp_replace\([\s\S]*?normalize\(/)
+    expect(body).toContain("chr(768)")
+    expect(body).toContain("chr(879)")
+  })
+
+  it('is not entitySlug, which is an Inngest step-id segment and may not change', () => {
+    // lib/gather/owned.ts entitySlug does not strip diacritics: 'Össur' is
+    // '-ssur' there, and renaming a step id strands an in-flight run.
+    const owned = readFileSync(new URL('./gather/owned.ts', import.meta.url), 'utf8')
+    expect(owned).toContain("const slug = entity.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')")
+  })
+})
+
+describe('findRival — a stored name finds its identity', () => {
+  const rivals: Competitor[] = [
+    { id: 'a', client_id: 'c', name: 'Topo Designs', slug: 'topo-designs', first_seen_at: null, retired_at: '2026-09-09T16:10:00Z', superseded_by: null, created_by: null, created_at: '' },
+    { id: 'b', client_id: 'c', name: 'Cotopaxi', slug: 'cotopaxi', first_seen_at: null, retired_at: null, superseded_by: null, created_by: null, created_at: '' },
+    { id: 'c', client_id: 'c', name: 'Topo', slug: 'topo', first_seen_at: null, retired_at: null, superseded_by: null, created_by: null, created_at: '' },
+  ]
+
+  it('takes a name or a whole audience key', () => {
+    expect(findRival(rivals, 'Cotopaxi')?.id).toBe('b')
+    expect(findRival(rivals, 'competitor:Cotopaxi')?.id).toBe('b')
+  })
+
+  it('survives a capitalisation or an accent', () => {
+    expect(findRival(rivals, 'competitor:cotopaxi')?.id).toBe('b')
+    expect(findRival(rivals, 'COTOPAXI')?.id).toBe('b')
+  })
+
+  it('finds a retired rival, because a frozen month still has to be rendered', () => {
+    expect(findRival(rivals, 'competitor:Topo Designs')?.id).toBe('a')
+  })
+
+  it('returns nothing for the two non-rival audiences and for an unknown name', () => {
+    expect(findRival(rivals, 'industry-other')).toBeNull()
+    expect(findRival(rivals, 'competitor:Poler')).toBeNull()
+    expect(findRival(rivals, '')).toBeNull()
+  })
+})
+
+describe('renameFrom — reading a rename off the change log', () => {
+  it('takes the pair off a rival_rename row, old first', () => {
+    expect(renameFrom({ surface: 'rival_rename', affects_audiences: ['competitor:Topo Designs', 'competitor:Topo'], changed_at: '2026-11-12T08:00:00Z' }))
+      .toEqual({ from: 'competitor:Topo Designs', to: 'competitor:Topo', at: '2026-11-12T08:00:00Z' })
+  })
+
+  it('ignores every other surface, and a row written before the column existed', () => {
+    expect(renameFrom({ surface: 'rivals', affects_audiences: ['competitor:A', 'competitor:B'] })).toBeNull()
+    expect(renameFrom({ surface: 'rival_rename', affects_audiences: null })).toBeNull()
+    expect(renameFrom({ surface: 'rival_rename', affects_audiences: ['competitor:A'] })).toBeNull()
+    expect(renameFrom({ surface: 'rival_rename', affects_audiences: ['competitor:A', 'competitor:A'] })).toBeNull()
+  })
+})
+
+describe('stitchRenames — one line, with the change marked on it', () => {
+  type P = { audience: string; month: string; videos: number }
+  const rename = (from: string, to: string, at = '2026-08-01T00:00:00Z'): RenameRecord => ({ from, to, at })
+
+  const split: P[] = [
+    { audience: 'competitor:Topo Designs', month: '2026-05', videos: 4 },
+    { audience: 'competitor:Topo Designs', month: '2026-06', videos: 5 },
+    { audience: 'competitor:Topo', month: '2026-07', videos: 6 },
+    { audience: 'competitor:Topo', month: '2026-08', videos: 7 },
+  ]
+
+  it('joins the two halves into one line under the newest name', () => {
+    const [line] = stitchRenames(split, [rename('competitor:Topo Designs', 'competitor:Topo')])
+    expect(line.audience).toBe('competitor:Topo')
+    expect(line.names).toEqual(['competitor:Topo Designs', 'competitor:Topo'])
+    expect(line.points.map((p) => p.month)).toEqual(['2026-05', '2026-06', '2026-07', '2026-08'])
+  })
+
+  it('draws the rule where the months change key, not at the wall clock', () => {
+    // changed_at can sit months from the conversation it moved; the break
+    // belongs where the reader can see the line change name.
+    const [line] = stitchRenames(split, [rename('competitor:Topo Designs', 'competitor:Topo', '2026-11-30T00:00:00Z')])
+    expect(line.breaks).toEqual([{
+      month: '2026-07',
+      from: 'competitor:Topo Designs',
+      to: 'competitor:Topo',
+      at: '2026-11-30T00:00:00Z',
+      label: 'Topo Designs is now called Topo',
+    }])
+  })
+
+  it('follows a chain of renames to one line', () => {
+    const points: P[] = [
+      { audience: 'competitor:A', month: '2026-01', videos: 1 },
+      { audience: 'competitor:B', month: '2026-02', videos: 2 },
+      { audience: 'competitor:C', month: '2026-03', videos: 3 },
+    ]
+    const [line] = stitchRenames(points, [
+      rename('competitor:A', 'competitor:B'),
+      rename('competitor:B', 'competitor:C'),
+    ])
+    expect(line.audience).toBe('competitor:C')
+    expect(line.names).toEqual(['competitor:A', 'competitor:B', 'competitor:C'])
+    expect(line.breaks.map((b) => b.month)).toEqual(['2026-02', '2026-03'])
+  })
+
+  it('terminates on a cycle, because a log is written by people', () => {
+    const points: P[] = [{ audience: 'competitor:A', month: '2026-01', videos: 1 }]
+    const lines = stitchRenames(points, [rename('competitor:A', 'competitor:B'), rename('competitor:B', 'competitor:A')])
+    expect(lines).toHaveLength(1)
+    expect(lines[0].points).toHaveLength(1)
+  })
+
+  it('draws no rule when the new name has no months yet', () => {
+    const points: P[] = [{ audience: 'competitor:Topo Designs', month: '2026-05', videos: 4 }]
+    const [line] = stitchRenames(points, [rename('competitor:Topo Designs', 'competitor:Topo')])
+    expect(line.audience).toBe('competitor:Topo')
+    expect(line.breaks).toEqual([])
+    expect(line.points).toHaveLength(1)
+  })
+
+  it('keeps both halves of the month a rename landed in', () => {
+    const points: P[] = [
+      { audience: 'competitor:Topo Designs', month: '2026-07', videos: 2 },
+      { audience: 'competitor:Topo', month: '2026-07', videos: 3 },
+    ]
+    const [line] = stitchRenames(points, [rename('competitor:Topo Designs', 'competitor:Topo')])
+    expect(line.points).toHaveLength(2)
+    expect(line.breaks[0].month).toBe('2026-07')
+  })
+
+  it('passes everything else through untouched, one series each', () => {
+    const points: P[] = [
+      { audience: 'client', month: '2026-05', videos: 1 },
+      { audience: 'industry-other', month: '2026-05', videos: 9 },
+      { audience: 'competitor:Cotopaxi', month: '2026-05', videos: 3 },
+    ]
+    const lines = stitchRenames(points, [rename('competitor:Topo Designs', 'competitor:Topo')])
+    expect(lines.map((l) => l.audience)).toEqual(['client', 'competitor:Cotopaxi', 'industry-other'])
+    for (const line of lines) expect(line.breaks).toEqual([])
+  })
+
+  it('with no renames is a grouping and nothing more', () => {
+    const lines = stitchRenames(split, [])
+    expect(lines.map((l) => l.audience)).toEqual(['competitor:Topo', 'competitor:Topo Designs'])
+  })
+})
+
+describe('renameLabel — the sentence over the rule', () => {
+  it('names both, in the reader’s words, with no key in sight', () => {
+    expect(renameLabel('competitor:Topo Designs', 'competitor:Topo')).toBe('Topo Designs is now called Topo')
+    expect(renameLabel('competitor:Topo Designs', 'competitor:Topo')).not.toMatch(/competitor:/)
+  })
+})
+
+describe('isMissingCompetitors — surviving a deploy that lands before M1', () => {
+  it('recognises the table not being there yet', () => {
+    expect(isMissingCompetitors({ code: 'PGRST205', message: "Could not find the table 'public.competitors' in the schema cache" })).toBe(true)
+    expect(isMissingCompetitors({ code: '42P01', message: 'relation "public.competitors" does not exist' })).toBe(true)
+  })
+
+  it('does not swallow anything else', () => {
+    expect(isMissingCompetitors(null)).toBe(false)
+    expect(isMissingCompetitors({ code: '42P01', message: 'relation "public.subjects" does not exist' })).toBe(false)
+    expect(isMissingCompetitors({ code: '23505', message: 'duplicate key value violates unique constraint on competitors' })).toBe(false)
+  })
+})

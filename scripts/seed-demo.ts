@@ -1,4 +1,5 @@
 import { randomUUID, createHash } from 'crypto'
+import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { DEMO_CLIENT_ID, OSSUR_CLIENT_ID } from '../lib/config'
 import { computeMetrics } from '../lib/pipeline/metrics'
@@ -347,11 +348,10 @@ interface CloneMaps {
   evidenceInserted: number
 }
 
-function bucketOf(v: Row): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${(v.competitor_name as string) ?? 'Ottobock'}`
-  return 'industry-other'
-}
+/** The demo corpus stamps every rival row, so the fallback the shared rule
+ *  applies (`competitor:unknown`) never fires here — the name is always there.
+ *  The ninth copy of the three-way precedence lived at this line until WP1. */
+const bucketOf = (v: Row): string => audienceOf(v)
 
 function mapIds(ids: unknown, m: Map<string, string>): string[] {
   return (Array.isArray(ids) ? ids : [])

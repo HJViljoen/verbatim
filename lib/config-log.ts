@@ -44,7 +44,8 @@ export const CONFIG_CHANGES_TABLE = 'config_changes'
  *  by column. Mirrors the config_changes surface CHECK. */
 export const CONFIG_SURFACES = [
   'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'cadence', 'knobs',
-  'schedule', 'subjects', 'entity_retag', 'regate', 'other',
+  'schedule', 'subjects', 'entity_retag', 'regate', 'prompt_version',
+  'rival_rename', 'other',
 ] as const
 export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
 
@@ -91,6 +92,26 @@ export function surfaceForColumn(column: string): ConfigSurface {
 
 // ---- The row ----------------------------------------------------------------
 
+/** What a change broke, where the writer could work it out (Phase 1 WP1).
+ *
+ *  Both halves are optional and NULL means "not known", which is the honest
+ *  value on every row written before the columns existed — 91 of the 93 stored
+ *  today are reconstructed from gather records whose before/after are term
+ *  names, not video ids.
+ *
+ *  `months` is NOT the month the change was made in. `changed_at` is a wall
+ *  clock; every axis in this product is dated by the comment, and the two are
+ *  rarely the same: Sealand's 2026-09-09 re-tag moved 34 months from 2021-12
+ *  onward, and a term Össur added on 3 July put comments dated 11 June into the
+ *  corpus. lib/config-affects.ts computes it. */
+export interface ChangeAffects {
+  /** The literal audience keys this change moved. A rename carries BOTH, old
+   *  first — that pair is what lib/rivals.ts stitchRenames reads. */
+  audiences?: string[] | null
+  /** A Postgres daterange literal, `[first, last+1)` over calendar months. */
+  months?: string | null
+}
+
 /** One `config_changes` row, as stored. */
 export interface ConfigChange {
   id: string
@@ -107,6 +128,8 @@ export interface ConfigChange {
   source: ChangeSource
   rows_affected: number | null
   note: string | null
+  affects_audiences: string[] | null
+  affects_months: string | null
 }
 
 /** Who made a write, carried from the write site into the same UPDATE as the
@@ -154,6 +177,10 @@ export interface ConfigChangeInput {
   note?: string | null
   /** When the change happened, if that is not now — reconstruction only. */
   changedAt?: string | null
+  /** What the change broke, where the writer could work it out. Optional at
+   *  every one of the twenty call sites: a writer that cannot say leaves it
+   *  out, and NULL means "not known" rather than "nothing". */
+  affects?: ChangeAffects | null
 }
 
 /** A change input as the database takes it. Model-derived text can reach here
@@ -177,6 +204,12 @@ export function changeRow(input: ConfigChangeInput): Record<string, unknown> {
     source: input.source ?? 'logged',
     rows_affected: input.rowsAffected ?? null,
     note: input.note ? dbSafeText(input.note) : null,
+    // Absent stays absent rather than becoming an explicit NULL, so a row
+    // written by a deploy that has landed before its migration is rejected on
+    // the column that does not exist yet instead of silently losing the note
+    // with it. `recordConfigChanges` already survives that by logging loudly.
+    ...(input.affects?.audiences ? { affects_audiences: input.affects.audiences.map((a) => dbSafeText(a)) } : {}),
+    ...(input.affects?.months ? { affects_months: input.affects.months } : {}),
   }
 }
 

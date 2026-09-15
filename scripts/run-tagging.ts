@@ -1,3 +1,4 @@
+import { audienceOf, INDUSTRY_AUDIENCE } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { bucketsAfterRetag, recordConfigChange, retagChange, scriptActor, skipRetag } from '../lib/config-log'
 import { tagVideo, matchEntities, type VideoTags } from '../lib/gather/tagging'
@@ -67,12 +68,6 @@ interface VideoRow {
   is_client: boolean
   is_competitor: boolean
   competitor_name: string | null
-}
-
-function bucket(t: VideoTags): string {
-  if (t.is_client) return 'client'
-  if (t.is_competitor) return `competitor:${t.competitor_name ?? 'unknown'}`
-  return 'industry'
 }
 
 function tally(labels: string[]): Map<string, number> {
@@ -157,16 +152,16 @@ async function main() {
     const aTag = tagVideo({ account_name: r.account_name, caption: '', hashtags: [] }, config)
     const sTag = tagVideo(r, config)
     const fTag = finalTags.get(r.video_id) ?? { is_client: false, is_competitor: false, competitor_name: null }
-    account.push(bucket(aTag))
-    substring.push(bucket(sTag))
-    final.push(bucket(fTag))
-    if (r.comments_count >= COMMENT_THRESHOLD) finalCb.push(bucket(fTag))
+    account.push(audienceOf(aTag))
+    substring.push(audienceOf(sTag))
+    final.push(audienceOf(fTag))
+    if (r.comments_count >= COMMENT_THRESHOLD) finalCb.push(audienceOf(fTag))
 
     const m = matchEntities(r, config)
     if (m.brand && m.competitors.length > 0) dual.push(r)
-    if (bucket(sTag) !== 'industry' && bucket(fTag) === 'industry') gptRejected.push({ row: r, from: bucket(sTag) })
+    if (audienceOf(sTag) !== INDUSTRY_AUDIENCE && audienceOf(fTag) === INDUSTRY_AUDIENCE) gptRejected.push({ row: r, from: audienceOf(sTag) })
 
-    const stored = bucket({ is_client: r.is_client, is_competitor: r.is_competitor, competitor_name: r.competitor_name })
+    const stored = audienceOf({ is_client: r.is_client, is_competitor: r.is_competitor, competitor_name: r.competitor_name })
     const moves =
       fTag.is_client !== r.is_client ||
       fTag.is_competitor !== r.is_competitor ||
@@ -196,7 +191,7 @@ async function main() {
   for (const r of rows) {
     const t = finalTags.get(r.video_id)
     if (t && (t.is_client || t.is_competitor)) {
-      console.log(`  ${bucket(t).padEnd(24)} [${r.platform}] @${r.account_name} (${r.comments_count} cmts): "${trim(r.caption, 70)}"`)
+      console.log(`  ${audienceOf(t).padEnd(24)} [${r.platform}] @${r.account_name} (${r.comments_count} cmts): "${trim(r.caption, 70)}"`)
     }
   }
 
@@ -234,7 +229,7 @@ async function main() {
       .update({ is_client: tag.is_client, is_competitor: tag.is_competitor, competitor_name: tag.competitor_name })
       .eq('id', row.id)
     if (uErr) errs.push(`${row.video_id}: ${uErr.message}`)
-    else { ok++; applied.set(index, bucket(tag)) }
+    else { ok++; applied.set(index, audienceOf(tag)) }
   }
   console.log(`updated ${ok}/${changed.length}${errs.length ? `; ${errs.length} errors:\n  ${errs.slice(0, 10).join('\n  ')}` : ''}`)
 

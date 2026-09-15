@@ -2,13 +2,14 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { selectAll } from '../supabase-admin'
 import { rankByTheme, fetchQuotesByAudience, fetchInsightsByIds, createCitedQuotePicker, bucketByAudienceId, scopeToCompetitor, cleanQuote, type ThemeBucketRow } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
+import { rivalKey } from '../rivals'
 import type { Quote, Scope } from '../renderables/types'
 import type { GlossaryKey } from '../calibration'
 import { fmtInt, fmtPct, weekdayDate, cap } from '../format'
 import { shareBreakdown, pointDelta, latestPerDay, type Sov } from '../dashboard-tiles'
 import type { OwnedCensus } from '../gather/owned'
 import {
-  leadCompetitor, competitorShares, competitorBucket, bucketStats, themeCounts, faceOffRows, ownedPostCounts, praisedFor, shareSeries,
+  leadCompetitor, competitorShares, bucketStats, themeCounts, faceOffRows, ownedPostCounts, praisedFor, shareSeries,
   orderInsights, groupByKind, coverageOf, coverageText, SENTIMENT_MIN_JUDGED, type VideoStatRow, type FaceOffRow, type ShareSeries,
 } from '../competitive-tiles'
 import type { MethodNoteData } from '../../components/print/method-note'
@@ -268,7 +269,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   const owned = ownedPostCounts(summary?.owned_census, lead)
   const rows = lead ? faceOffRows({ sov: faceSov, layer: faceLayer, competitor: lead, stats, themes: themesByBucket, owned, fmtInt, fmtPct }) : []
   const youPraise = praisedFor(themeRows, 'client')
-  const themPraise = lead ? praisedFor(themeRows, competitorBucket(lead)) : null
+  const themPraise = lead ? praisedFor(themeRows, rivalKey(lead)) : null
   const youDelta = pointDelta(share?.client?.pct, sharePrev?.client?.pct)
   const themDelta = lead ? pointDelta(share?.competitors.find((c) => c.name === lead)?.pct, sharePrev?.competitors.find((c) => c.name === lead)?.pct) : null
   const series = lead ? shareSeries(history, lead) : null
@@ -278,7 +279,7 @@ export async function loadCompetitive(scope: Scope): Promise<CompetitiveData | C
   const fieldRows: FieldRow[] = share
     ? [
         ...(share.client ? [{ key: 'client', label: `${brandShort} · you`, color: YOU_COLOR, videos: share.client.videos, pct: share.client.pct }] : []),
-        ...share.competitors.map((c) => ({ key: competitorBucket(c.name), label: c.name, color: c.name === lead ? THEM_COLOR : COMP_DIM, videos: c.videos, pct: c.pct })),
+        ...share.competitors.map((c) => ({ key: rivalKey(c.name), label: c.name, color: c.name === lead ? THEM_COLOR : COMP_DIM, videos: c.videos, pct: c.pct })),
         ...(share.rest ? [{ key: 'industry-other', label: 'Wider category', color: 'var(--cat)', videos: share.rest.videos, pct: share.rest.pct }] : []),
       ].map((r) => {
         const s = stats?.get(r.key)

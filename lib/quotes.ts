@@ -6,6 +6,7 @@
 // and covers rows/runs that predate hero_quote.
 
 import { chunk } from './chunk'
+import { audienceOf } from './rivals'
 import { selectAll } from './supabase-admin'
 import { VIDEO_QUOTE_BONUS } from './config'
 import type { EvidenceSource } from './pipeline/pass-a'
@@ -497,25 +498,6 @@ export async function fetchQuoteTextsByRefs(
   return out
 }
 
-/** Whose post a video is, read LIVE from `videos`.
- *
- *  The same rule Step A2 uses to stamp `themes.bucket` (lib/pipeline/step-a2.ts),
- *  kept identical on purpose. The difference is when it is evaluated: a theme
- *  bucket is a snapshot frozen at the run that wrote it, so a re-tag
- *  (scripts/run-tagging.ts --write) moves `videos.is_client` and leaves every
- *  stored bucket saying the old thing. Reading it live is the only answer that
- *  cannot be stale.
- */
-export function videoBucketOf(v: {
-  is_client?: boolean | null
-  is_competitor?: boolean | null
-  competitor_name?: string | null
-}): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
-  return 'industry-other'
-}
-
 /** audience-insight id → entity bucket, resolved through each insight's source
  *  video's CURRENT tags. Insights with no source video are absent from the map
  *  (the caller falls back to the stored theme bucket for those).
@@ -553,7 +535,7 @@ export async function fetchLiveBucketsByAudience(
       `insights whose video did not resolve fall back to their stored theme bucket`,
     )
   }
-  const bucketByVideo = new Map(rows.map((r) => [r.id, videoBucketOf(r)]))
+  const bucketByVideo = new Map(rows.map((r) => [r.id, audienceOf(r)]))
   const out = new Map<string, string>()
   for (const i of insights) {
     if (!i.source_video_id) continue

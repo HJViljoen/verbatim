@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   createCitedQuotePicker,
   bucketByAudienceId,
-  videoBucketOf,
   fetchLiveBucketsByAudience,
   fetchQuoteTextsByRefs,
   scopeToClientVoices,
@@ -12,6 +11,7 @@ import {
   createQuotePicker,
   type QuoteRow,
 } from './quotes'
+import { audienceOf } from './rivals'
 
 // Entity-bucket scoping (teardown 2026-07-09 §Run 1, defect 1): a competitor's
 // customers must never speak under a claim about the client. These tests lock
@@ -41,13 +41,13 @@ describe('scopeToClientVoices', () => {
 
 describe('videoBucketOf — live entity, not a cached one', () => {
   it('reads the client, a named competitor and the rest', () => {
-    expect(videoBucketOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
-    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
-    expect(videoBucketOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
+    expect(audienceOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
+    expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')
+    expect(audienceOf({ is_client: false, is_competitor: false, competitor_name: null })).toBe('industry-other')
   })
 
   it('matches Step A2 for a competitor with no name', () => {
-    expect(videoBucketOf({ is_client: false, is_competitor: true, competitor_name: null })).toBe('competitor:unknown')
+    expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: null })).toBe('competitor:unknown')
   })
 })
 

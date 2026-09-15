@@ -1,3 +1,4 @@
+import { audienceOf } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { recordConfigChange, scriptActor, skipRetag } from '../lib/config-log'
 import { classifyRelevance } from '../lib/gather/relevance'
@@ -114,7 +115,6 @@ async function main() {
     fromAccounts[1] ? `${fromAccounts[1]} posted by an account of yours` : '',
   ].filter(Boolean).join(' and ')
 
-  const bucketOf = (v: StoredVideo) => (v.is_client ? 'client' : v.is_competitor ? `competitor:${v.competitor_name}` : 'industry-other')
   const byReason = new Map<string, StoredVideo[]>()
   for (const v of deletable) {
     const key = `${verdicts.get(v.video_id)?.reason}`
@@ -123,7 +123,7 @@ async function main() {
   console.log(`gate verdict: DROP ${dropped.length}/${videos.length} (gpt cost $${costUsd.toFixed(3)})\n`)
   for (const [reason, vs] of [...byReason.entries()].sort((a, b) => b[1].length - a[1].length)) {
     console.log(`— ${vs.length}× ${reason}`)
-    for (const v of vs.slice(0, 4)) console.log(`    [${v.platform}/${bucketOf(v)}] ${v.account_name}: ${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 80)}`)
+    for (const v of vs.slice(0, 4)) console.log(`    [${v.platform}/${audienceOf(v)}] ${v.account_name}: ${(v.caption ?? '').replace(/\s+/g, ' ').slice(0, 80)}`)
     if (vs.length > 4) console.log(`    … +${vs.length - 4} more`)
   }
   if (clientFlagged.length) {

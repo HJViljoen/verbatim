@@ -1,3 +1,5 @@
+import { audienceOf } from '../rivals'
+
 import type { SynthesisVideoRow, CommentRow, Step2aMetrics, SovEntry, PlatformSummary } from './types'
 
 // Step 2a — deterministic metrics (Architecture/Analysis-Passes §Step 2a).
@@ -10,12 +12,6 @@ const VIEW_PLATFORMS = new Set(['tiktok', 'youtube'])
 
 function videoKey(platform: string, videoId: string): string {
   return `${platform}::${videoId}`
-}
-
-function entityOf(v: SynthesisVideoRow): string {
-  if (v.is_client) return 'client'
-  if (v.is_competitor) return `competitor:${v.competitor_name ?? 'unknown'}`
-  return 'industry-other'
 }
 
 /**
@@ -134,7 +130,7 @@ export function computeMetrics(
   // Share of voice by entity bucket.
   const sovRaw: Record<string, { videos: number; views: number; analysed: number }> = {}
   for (const v of videos) {
-    const e = entityOf(v)
+    const e = audienceOf(v)
     if (!sovRaw[e]) sovRaw[e] = { videos: 0, views: 0, analysed: 0 }
     sovRaw[e].videos += 1
     sovRaw[e].views += Number(v.views) || 0
