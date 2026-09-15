@@ -191,7 +191,15 @@ create table if not exists public.month_audience_stats (
   -- ---- the attention half: UPLOAD-dated, over the panel ---------------------
   -- Null on a row written before any panel was frozen: the mood half stands on
   -- its own and does not wait for one.
-  panel_id           uuid references public.attention_panels(id) on delete cascade,
+  --
+  -- `on delete restrict`, not cascade: month_audience_stats rows FREEZE, and
+  -- month_reading_frozen_guard is a BEFORE UPDATE / BEFORE INSERT trigger that
+  -- a DELETE walks straight past. A cascade from a deleted panel would take
+  -- frozen readings with it, around the guard, which is the opposite of the
+  -- append-only promise three paragraphs above. Deleting a panel that a
+  -- reading points at is refused instead; the service role cannot delete one at
+  -- all (see the grants below), so nothing is reachable today either way.
+  panel_id           uuid references public.attention_panels(id) on delete restrict,
   -- Videos by a panel account in this audience UPLOADED in this month, and the
   -- platform-reported comments_count on them. comments_count, never
   -- comments_count_at_scrape: the latter is null on 35-50% of rows and means
