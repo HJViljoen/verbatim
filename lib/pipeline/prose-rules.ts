@@ -4,11 +4,18 @@ import { PROSE_POLICY, scrubProse, type ProseSlot, type ScrubProseInput } from '
 // assigned by code from measured data (lib/calibration.ts) — the model's prose
 // must not free-style them. One string imported by Passes B/C/D so the wording
 // never drifts between prompts.
+//
+// THE LIST IS `MAGNITUDE_WORDS`, and nothing else. It used to name "growing"
+// and "increasingly" as intensity words; they are DIRECTIONS, they left
+// MAGNITUDE_WORDS for DIRECTION_WORDS with the rest of the direction
+// vocabulary, and a prompt that keeps banning them here bans them under a rule
+// the code no longer runs. `noDirectionRule` below bans them, in every variant,
+// as what they are. `prose-rules.test.ts` holds the two lists together.
 
 export const CALIBRATED_PROSE_RULE =
   '- Your prose explains WHAT people express and WHY it matters — never HOW MUCH. ' +
   'Do not use intensity or frequency words: "very", "extremely", "significant", "overwhelming", ' +
-  '"huge", "strong", "most", "many", "widespread", "frequent", "consistently", "growing", "increasingly", ' +
+  '"huge", "strong", "most", "many", "widespread", "frequent", "frequently", "consistently", "vast", "majority", ' +
   'or their synonyms. The product renders measured counts next to your text, so a magnitude claim in ' +
   'prose is a defect. Comparisons ("X more than Y") are allowed only where the input data directly shows them.\n' +
   '- Prose is client-facing. NEVER cite internal handles like [T4] or T12 inside titles, findings, or ' +

@@ -61,6 +61,23 @@ export const FIGURE_RE = /[+-]?\d[\d.,]*\s?(?:%|k|m|bn|pts?|percent)?/gi
  * DIRECTION_WORDS (lib/calibration.ts) and are handled the way every other
  * direction word is: by dropping the sentence, wherever a slot's policy asks
  * for the direction rule at all.
+ *
+ * THE COST OF THAT MOVE, MEASURED, and why the policy below does not simply
+ * flip. On `digits` slots those three words are no longer deleted at all, so
+ * the question is whether recommendations, insights and findings should take
+ * the direction rule instead. Replaying it over today's production prose:
+ * 11 of 311 recommendation-reasoning sentences drop (6 of 121 bodies empty
+ * entirely), 8 of 121 recommendation TITLES empty entirely, 7 of 260 insight
+ * descriptions, 2 of 246 findings, 0 of 7 personas. Almost every one is the
+ * word `increase` — and on a recommendation `increase` is an IMPERATIVE
+ * addressed to the reader ("Increase short-form posting cadence"), not a claim
+ * that something is going up. That is a fourth false-positive class the word
+ * list cannot see and the policy table has to hold off, exactly like a theme's
+ * own description. Meanwhile the three words appear in 4 of 366 stored strings
+ * all told. Deleting one in fifteen recommendations to catch four leaks is the
+ * wrong trade, so these slots stay `digits` — and, since the first version of
+ * this left the breach invisible as well as unpunished, `scrubProse` now counts
+ * it (`flaggedDirection`) so the trade can be revisited on numbers.
  */
 export const MAGNITUDE_WORDS = [
   'very', 'extremely', 'significant', 'significantly', 'overwhelming', 'overwhelmingly',

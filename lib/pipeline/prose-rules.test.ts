@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { noDirectionRule, stripThemeRefs } from './prose-rules'
+import { MAGNITUDE_WORDS } from '../prose/scrub'
+import { CALIBRATED_PROSE_RULE, noDirectionRule, stripThemeRefs } from './prose-rules'
 
 describe('noDirectionRule — the prompt sentence follows the slot’s policy', () => {
   // The defect this replaces: one constant promising "a sentence that names one
@@ -27,6 +28,24 @@ describe('noDirectionRule — the prompt sentence follows the slot’s policy', 
       for (const word of ['growing', 'fading', 'rising', 'increasing', 'momentum', 'steady']) {
         expect(rule).toContain(`"${word}"`)
       }
+    }
+  })
+})
+
+describe('CALIBRATED_PROSE_RULE — the prompt’s banned list is the code’s banned list', () => {
+  // `growing` and `increasingly` were named here as magnitude words after they
+  // left MAGNITUDE_WORDS for DIRECTION_WORDS, so the prompt asked for one rule
+  // and the code ran another.
+  it('names no word the magnitude strip does not strip', () => {
+    const quoted = [...CALIBRATED_PROSE_RULE.matchAll(/"([a-z]+)"/g)].map((m) => m[1])
+    const magnitude = quoted.filter((w) => !['T4', 'T12'].includes(w))
+    expect(magnitude.length).toBeGreaterThan(5)
+    for (const word of magnitude) expect(MAGNITUDE_WORDS).toContain(word)
+  })
+
+  it('leaves the direction words to the direction rule', () => {
+    for (const word of ['growing', 'increasingly', 'increasing', 'fading']) {
+      expect(CALIBRATED_PROSE_RULE).not.toContain(`"${word}"`)
     }
   })
 })
