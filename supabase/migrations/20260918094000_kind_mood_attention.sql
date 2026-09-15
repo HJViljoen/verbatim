@@ -206,9 +206,18 @@ create table if not exists public.month_audience_stats (
   -- "as at the last paid scrape" rather than "as at this month" (decision C12
   -- of the research). It drifts upward for any video still being re-found,
   -- which is exactly why this number is frozen and printed beside its read_at.
-  panel_videos       int not null default 0,
-  attention_comments bigint not null default 0,
-  panel_platform_mix jsonb not null default '{}'::jsonb,
+  --
+  -- NULLABLE, AND THAT IS THE MEASUREMENT. All three are null exactly when
+  -- panel_id is null — "we have no panel to read over" — and 0 / 0 / {} when a
+  -- panel exists and saw nothing in this audience-month. Those are two
+  -- different readings and the row has to keep them apart, because a row
+  -- freezes 30 days after its month ends and the guard then makes the value
+  -- permanent: Sealand has no panel until an October reading, so a stored zero
+  -- here would be a recorded "the category's posts drew nothing in August" that
+  -- can never be corrected.
+  panel_videos       int,
+  attention_comments bigint,
+  panel_platform_mix jsonb,
   status             text not null check (status in ('filling','frozen')),
   origin             text not null check (origin in ('live','back_read')),
   read_at            timestamptz not null,
@@ -223,7 +232,7 @@ comment on table public.month_audience_stats is
 comment on column public.month_audience_stats.attention_comments is
   'Sum of videos.comments_count over this audience''s panel videos uploaded in this month — the platform''s own count as at read_at, not a count of stored comments. It moves upward while those videos are still being re-found, which is why the row freezes.';
 comment on column public.month_audience_stats.panel_id is
-  'The panel this row''s attention half was read over. A series is like-for-like only where panel_id is equal; a re-freeze starts a new era and draws a rule on the axis rather than re-basing the history.';
+  'The panel this row''s attention half was read over, and NULL when there was no panel to read over — in which case panel_videos, attention_comments and panel_platform_mix are null too, because "we have no panel" is not "the panel saw nothing" and this row freezes. A series is like-for-like only where panel_id is equal; a re-freeze starts a new era and draws a rule on the axis rather than re-basing the history.';
 
 create index if not exists month_audience_stats_panel_idx
   on public.month_audience_stats (client_id, panel_id, month);
@@ -705,6 +714,16 @@ as $$
            count(*) filter (where not j.is_audience)                             as judged_framing
     from judged_rows j group by 1, 2
   ),
+  -- Is there a panel to read over at all? The attention half is NULL when there
+  -- is not — "we have no panel" is not "the panel saw nothing", and the caller
+  -- freezes what this returns — and 0 when there is one and it saw nothing in
+  -- this audience-month. A panel naming another tenant is no panel.
+  panel_found as (
+    select exists (
+      select 1 from public.attention_panels p
+      where p.id = p_panel and p.client_id = p_client
+    ) as ok
+  ),
   -- The panel: the frozen member list, read as rows. Empty when p_panel is null
   -- or names another tenant's panel, and then every attention column is null.
   members as (
@@ -754,10 +773,11 @@ as $$
          coalesce(mo.neutral, 0)::int,
          coalesce(mo.mixed, 0)::int,
          coalesce(mo.judged_framing, 0)::int,
-         coalesce(atn.n_videos, 0)::int,
-         coalesce(atn.attention_comments, 0)::bigint,
-         coalesce(amx.platform_mix, '{}'::jsonb)
+         case when pf.ok then coalesce(atn.n_videos, 0)::int end,
+         case when pf.ok then coalesce(atn.attention_comments, 0)::bigint end,
+         case when pf.ok then coalesce(amx.platform_mix, '{}'::jsonb) end
   from keys k
+  cross join panel_found pf
   left join mood          mo on mo.month = k.month and mo.audience = k.audience
   left join attention     atn on atn.month = k.month and atn.audience = k.audience
   left join attention_mix amx on amx.month = k.month and amx.audience = k.audience
@@ -765,7 +785,7 @@ as $$
 $$;
 
 comment on function public.monthly_audience_stats(uuid, uuid, timestamptz, timestamptz) is
-  'Per month per audience in [p_from, p_to): the four-way AUDIENCE-family sentiment counts over the comment-dated analysed video set (the month_denominators population) plus the framing count for the record, and — over the frozen panel p_panel — the upload-dated panel video count, their platform-reported comments_count and their platform mix. Two clocks, never summed.';
+  'Per month per audience in [p_from, p_to): the four-way AUDIENCE-family sentiment counts over the comment-dated analysed video set (the month_denominators population) plus the framing count for the record, and — over the frozen panel p_panel — the upload-dated panel video count, their platform-reported comments_count and their platform mix. Two clocks, never summed. With no p_panel (or one belonging to another tenant) the three attention columns come back NULL, not 0: we have no panel is not the panel saw nothing, and the caller freezes what this returns.';
 
 revoke all on function public.monthly_audience_stats(uuid, uuid, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.monthly_audience_stats(uuid, uuid, timestamptz, timestamptz) to service_role;

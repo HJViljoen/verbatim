@@ -8,6 +8,8 @@ import {
   isMissingKindMoodAttention,
   onPanel,
   PANEL_STALING_SURFACES,
+  attentionRowOf,
+  attentionRowsOf,
   panelCutoff,
   panelStale,
   samePanelEra,
@@ -134,6 +136,31 @@ describe('panelStale', () => {
       expect(PANEL_STALING_SURFACES).not.toContain(surface)
       expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
     }
+  })
+})
+
+describe('a row read with no panel', () => {
+  // Sealand has no panel until an October reading: 0 non-Reddit accounts were
+  // first seen before 1 June 2026 and its earliest scrape of anything is
+  // 2026-06-28. Its August row therefore freezes with an attention half nobody
+  // measured, and month_reading_frozen_guard makes whatever is stored there
+  // permanent — so the one thing that must never be stored is a zero.
+  const unmeasured = { audience: 'client', panel_videos: null, attention_comments: null, panel_platform_mix: null }
+
+  it('is not a reading, and never a zero', () => {
+    expect(attentionRowOf(unmeasured)).toBeNull()
+    expect(attentionRowsOf([unmeasured])).toEqual([])
+  })
+
+  it('is told apart from a panel that saw nothing', () => {
+    const sawNothing = { audience: 'client', panel_videos: 0, attention_comments: 0, panel_platform_mix: {} }
+    expect(attentionRowOf(sawNothing)).toEqual(sawNothing)
+    expect(attentionSplit([sawNothing]).map((s) => s.content.pct)).toEqual([null])
+  })
+
+  it('keeps the rows that were measured when only some were not', () => {
+    const measured = { audience: 'industry-other', panel_videos: 122, attention_comments: 2047, panel_platform_mix: {} }
+    expect(attentionRowsOf([unmeasured, measured])).toEqual([measured])
   })
 })
 

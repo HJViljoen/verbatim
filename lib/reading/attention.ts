@@ -226,7 +226,12 @@ export async function trackingChangesSince(
 
 // ---- The index itself --------------------------------------------------------
 
-/** One audience's two numbers in one month, as stored. */
+/** One audience's two numbers in one month, with a panel behind them.
+ *
+ *  Both counts are numbers, never null, and that is the type doing work: a row
+ *  read with no panel carries nulls (`AudienceStatsReading`), and the only way
+ *  into this shape is `attentionRowOf`, which refuses those rather than
+ *  coalescing them to zero. A share of "not measured" is not 0%. */
 export interface AttentionRow {
   audience: string
   /** Videos by a panel account about this brand, uploaded in this month. */
@@ -257,6 +262,38 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * that, and it is the difference between "they post a lot" and "people talk
  * about them".
  */
+/**
+ * The attention half of a stored row, when there was a panel to read it over.
+ *
+ * Null in, null out — never zero. `month_audience_stats` holds nulls for a
+ * tenant-month read with no panel, the row FREEZES 30 days after its month
+ * ends, and `month_reading_frozen_guard` then refuses to rewrite it: a reader
+ * that coalesced those to 0 would print "the category's posts drew nothing"
+ * about a month nobody measured, permanently. Every caller building an
+ * `AttentionRow` out of a stored row comes through here.
+ */
+export function attentionRowOf(row: {
+  audience: string
+  panel_videos: number | null
+  attention_comments: number | null
+  panel_platform_mix?: PlatformMix | null
+}): AttentionRow | null {
+  if (row.panel_videos == null || row.attention_comments == null) return null
+  return {
+    audience: row.audience,
+    panel_videos: row.panel_videos,
+    attention_comments: row.attention_comments,
+    panel_platform_mix: row.panel_platform_mix ?? {},
+  }
+}
+
+/** Every row of a month that HAS an attention reading, in order. A month with
+ *  no panel yields an empty list, which a standings caller reads as "no
+ *  standings this month" — not as a table of zeroes. */
+export const attentionRowsOf = (
+  rows: readonly Parameters<typeof attentionRowOf>[0][],
+): AttentionRow[] => rows.map(attentionRowOf).filter((r): r is AttentionRow => r != null)
+
 export function attentionSplit(rows: readonly AttentionRow[]): AttentionSplit[] {
   const videos = rows.reduce((s, r) => s + r.panel_videos, 0)
   const comments = rows.reduce((s, r) => s + r.attention_comments, 0)

@@ -136,14 +136,22 @@ export interface AudienceStatsReading {
    *  before the 2026-08-18 split the headline was 59% framing on Össur and a
    *  pass reorder read as "sentiment up 6.2 pts" in a sent subject line. */
   judged_framing: number
-  /** Videos by a panel account in this audience UPLOADED in this month. */
-  panel_videos: number
+  /** Videos by a panel account in this audience UPLOADED in this month.
+   *
+   *  NULL IS NOT ZERO, AND THE DIFFERENCE IS PERMANENT. All three attention
+   *  fields are null exactly when there was no panel to read over — Sealand's
+   *  state until an October reading — and 0 / 0 / {} when a panel exists and
+   *  saw nothing this month. The row freezes 30 days after its month ends and
+   *  `month_reading_frozen_guard` then refuses to rewrite it, so a zero stored
+   *  here for "not measured" is a wrong number nobody can correct. */
+  panel_videos: number | null
   /** Platform-reported `videos.comments_count` summed over those videos, as at
    *  `read_at` — not a count of stored comments. It drifts upward while those
    *  videos are still being re-found, which is why the row freezes and why the
-   *  reading date is printed beside it. */
-  attention_comments: number
-  panel_platform_mix: PlatformMix
+   *  reading date is printed beside it. Null with no panel; see above. */
+  attention_comments: number | null
+  /** Null with no panel; see `panel_videos`. */
+  panel_platform_mix: PlatformMix | null
 }
 
 /** The bookkeeping both stored tables carry. */
