@@ -100,19 +100,41 @@ export function audienceOf(v: EntityTags): string {
  *  stripped, everything else run together with hyphens. 'Össur' → 'ossur',
  *  'Topo Designs' → 'topo-designs', '!!!' → '' (no slug at all).
  *
+ *  A NAME IN ANOTHER SCRIPT STILL GETS ONE. A Japanese, Cyrillic or Arabic name
+ *  has no ASCII to keep, and the rule above folds every one of them to '' —
+ *  but `competitors.slug` is `not null`, so no slug means no identity at all:
+ *  no row, no "tracked since", no rename, none of what decision I bought, and
+ *  WP16's add path would fail the not-null rather than degrade. The fallback is
+ *  the UTF-8 bytes of the lowercased name in hex behind an 'x-': stable,
+ *  per-tenant unique, and the one fold a database and a browser can be trusted
+ *  to agree on byte for byte. It applies only when the name actually carries a
+ *  non-ASCII character, so '!!!' — a name with no letter and no digit anywhere
+ *  — still has no slug, and `rename_rival`'s refusal still means what it says.
+ *
  *  The twin of `public.rival_slug(text)`; the two must agree, and both
  *  decompose and strip BEFORE lowercasing so the answer does not depend on a
- *  database's collation. NOT the audience key — that is still the name — and
- *  NOT lib/gather/owned.ts `entitySlug`, which looks almost identical, does not
+ *  database's collation. The one residual dependency is `lower()` on the
+ *  fallback path, where every character is outside ASCII by definition;
+ *  production and the verification cluster are both en_US.UTF-8, and M1's
+ *  exercise compares the two implementations on Cyrillic, Greek, Japanese and
+ *  Arabic. NOT the audience key — that is still the name — and NOT
+ *  lib/gather/owned.ts `entitySlug`, which looks almost identical, does not
  *  strip diacritics, and may never change because it is an Inngest step-id
  *  segment (AGENTS.md: step ids are a stability contract). */
 export function rivalSlug(name: string | null | undefined): string {
-  return (name ?? '')
+  const raw = name ?? ''
+  const ascii = raw
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+  if (ascii) return ascii
+  const base = raw.normalize('NFC').trim().toLowerCase()
+  // "Non-ASCII" in the UTF-8 sense, which is exactly what the SQL twin can test
+  // as octet_length > char_length without asking the collation anything.
+  if (!/[^\u0000-\u007f]/.test(base)) return ''
+  return `x-${[...new TextEncoder().encode(base)].map((b) => b.toString(16).padStart(2, '0')).join('')}`
 }
 
 // ---- The identity -----------------------------------------------------------

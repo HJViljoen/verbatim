@@ -152,19 +152,40 @@ describe('rivalSlug — the stable key a spelling folds to', () => {
     expect(rivalSlug(null)).toBe('')
   })
 
+  it('still keys a name written in another script, because slug is not null', () => {
+    // competitors.slug is `not null`: no slug means no row, and no row means no
+    // identity at all -- no "tracked since", no rename, nothing decision I
+    // bought. The hex of the UTF-8 bytes is the one fold a database and a
+    // browser agree on byte for byte.
+    const bytes = (n: string) => `x-${[...new TextEncoder().encode(n)].map((b) => b.toString(16).padStart(2, '0')).join('')}`
+    for (const name of ['\u30c6\u30b9\u30c8', '\u0428\u0435\u0440\u0435\u0433', '\u0634\u0631\u0643\u0629']) {
+      expect(rivalSlug(name)).toBe(bytes(name.toLowerCase()))
+      expect(rivalSlug(name)).not.toBe('')
+    }
+    // Case and padding still fold to one key, which is what the live unique
+    // index is for.
+    expect(rivalSlug('  \u0428\u0415\u0420\u0415\u0413  ')).toBe(rivalSlug('\u0448\u0435\u0440\u0435\u0433'))
+    // One ASCII letter is enough to take the ordinary path.
+    expect(rivalSlug('\u30c6\u30b9\u30c8 X')).toBe('x')
+  })
+
   it('matches public.rival_slug, which decomposes and strips BEFORE lowercasing', () => {
     // On a C-locale cluster lower('Ö') is 'Ö', so lowercasing first throws the
     // letter away as punctuation: 'Össur' came back 'ssur'. Both twins fold in
     // the same order so the answer never depends on a collation.
     const sql = readFileSync(new URL('../supabase/migrations/20260918090000_competitors.sql', import.meta.url), 'utf8')
     const decl = sql.slice(sql.indexOf('create or replace function public.rival_slug'), sql.indexOf('comment on function public.rival_slug'))
-    const body = decl.slice(decl.indexOf('select nullif('))
+    const body = decl.slice(decl.indexOf('with folded as ('))
     // lower() wraps the already-stripped text; the wrong order reads
     // normalize(lower(...)) and is what produced 'ssur'.
     expect(body).not.toContain('normalize(lower(')
     expect(body).toMatch(/lower\(\s*regexp_replace\([\s\S]*?normalize\(/)
     expect(body).toContain("chr(768)")
     expect(body).toContain("chr(879)")
+    // And the same fallback, reached by the same guard: a name with no ASCII
+    // gets the hex of its UTF-8 bytes, a name with no letter at all gets NULL.
+    expect(body).toContain("octet_length(b.base) > char_length(b.base)")
+    expect(body).toContain("'x-' || encode(convert_to(b.base, 'UTF8'), 'hex')")
   })
 
   it('is not entitySlug, which is an Inngest step-id segment and may not change', () => {

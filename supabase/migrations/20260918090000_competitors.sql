@@ -66,31 +66,53 @@ language sql
 immutable
 set search_path = public, pg_temp
 as $$
-  -- Decompose, strip the marks, THEN lowercase. In that order 'Ö' has already
-  -- become an ASCII 'O' by the time lower() sees it, so the answer does not
-  -- depend on the database's collation — on a C-locale cluster lower('Ö') is
-  -- 'Ö' and the accented letter would be thrown away as punctuation instead of
-  -- folded (found by exercising this on a throwaway cluster: 'Össur' came back
-  -- 'ssur', not 'ossur'). lib/rivals.ts rivalSlug folds in the same order.
-  select nullif(
-    btrim(
-      regexp_replace(
-        lower(
-          regexp_replace(
-            normalize(coalesce(p_name, ''), NFD),
-            '[' || chr(768) || '-' || chr(879) || ']', '', 'g'    -- combining marks
-          )
-        ),
-        '[^a-z0-9]+', '-', 'g'
-      ),
-      '-'
-    ),
-    ''
+  -- Decompose, strip the marks, THEN lowercase. In that order 'O' with its
+  -- diaeresis has already become an ASCII 'O' by the time lower() sees it, so
+  -- the answer does not depend on the database's collation -- on a C-locale
+  -- cluster lower() leaves the accented letter alone and it would be thrown
+  -- away as punctuation instead of folded (found by exercising this on a
+  -- throwaway cluster: the name came back 'ssur', not 'ossur').
+  -- lib/rivals.ts rivalSlug folds in the same order.
+  --
+  -- When NOTHING ASCII survives -- a Japanese, Cyrillic or Arabic name -- the
+  -- key is the UTF-8 bytes of the lowercased name in hex behind an 'x-'.
+  -- competitors.slug is `not null`, so returning NULL for such a name means it
+  -- can have no identity at all, which is everything this table is for; hex is
+  -- the one fold this function and its TypeScript twin can be trusted to agree
+  -- on byte for byte. The guard is octet_length > char_length ("holds a
+  -- non-ASCII character" in UTF-8), which asks the collation nothing, so a name
+  -- with no letter and no digit anywhere -- '!!!' -- still returns NULL.
+  with folded as (
+    select coalesce(p_name, '') as raw,
+           nullif(
+             btrim(
+               regexp_replace(
+                 lower(
+                   regexp_replace(
+                     normalize(coalesce(p_name, ''), NFD),
+                     '[' || chr(768) || '-' || chr(879) || ']', '', 'g'    -- combining marks
+                   )
+                 ),
+                 '[^a-z0-9]+', '-', 'g'
+               ),
+               '-'
+             ),
+             ''
+           ) as ascii_slug
+  ), based as (
+    select f.ascii_slug, btrim(lower(normalize(f.raw, NFC))) as base from folded f
   )
+  select case
+           when b.ascii_slug is not null then b.ascii_slug
+           when octet_length(b.base) > char_length(b.base)
+             then 'x-' || encode(convert_to(b.base, 'UTF8'), 'hex')
+           else null
+         end
+    from based b
 $$;
 
 comment on function public.rival_slug(text) is
-  'Display name → stable per-tenant key: lowercase, diacritics stripped, non-alphanumerics to hyphens. The twin of lib/rivals.ts rivalSlug. NOT the audience key (that is competitor:<name>) and NOT lib/gather/owned.ts entitySlug, which is an Inngest step-id segment and may never change.';
+  'Display name → stable per-tenant key: lowercase, diacritics stripped, non-alphanumerics to hyphens; a name with no ASCII at all (another script) folds to x-<utf8 hex> so that it can still have an identity, and only a name with no letter or digit anywhere returns NULL. The twin of lib/rivals.ts rivalSlug. NOT the audience key (that is competitor:<name>) and NOT lib/gather/owned.ts entitySlug, which is an Inngest step-id segment and may never change.';
 
 -- 2. The identity --------------------------------------------------------------
 create table if not exists public.competitors (
