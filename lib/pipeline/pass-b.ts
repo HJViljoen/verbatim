@@ -141,6 +141,14 @@ export async function runPassB(opts: RunPassBOptions): Promise<RunPassBResult> {
           { role: 'user', content: userPrompt },
         ],
         response_format: zodResponseFormat(PassBSchema, 'pass_b'),
+      }, {
+        // The bound that keeps the whole step inside the route's 300 s: two
+        // waves of at most 120 s each. A call that runs past it is treated
+        // like any other failed chunk (slug labels, logged) rather than the
+        // SDK's default of ten minutes and two silent retries, which is how
+        // the 2026-09-15 rehearsal spent three attempts on one step.
+        timeout: 120_000,
+        maxRetries: 0,
       })
       if (completion.usage) {
         usage = { prompt_tokens: completion.usage.prompt_tokens, completion_tokens: completion.usage.completion_tokens }

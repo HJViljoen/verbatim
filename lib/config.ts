@@ -731,8 +731,15 @@ export const PASS_A_RECHECK_SHARE = 0.2
  *  under ~60s per call. */
 export const PASS_B_CHUNK = 120
 /** Labelling calls in flight at once. Sequential chunks would not fix the
- *  wall clock; 3 keeps the step well inside the cap with OpenAI headroom. */
-export const PASS_B_PARALLEL = 3
+ *  wall clock. 3 was "well inside the cap" until 2026-09-15, when gpt-5.4
+ *  answered 53% slower than two days earlier (mean 46 → 71 s a call, same
+ *  prompts) and Sealand's 12 chunks in 4 waves ran 257–273 s three times
+ *  against the route's 300 s ceiling and failed the rehearsal run; Össur's
+ *  8 chunks would have had ~24 s to spare. 6 halves the waves: the same
+ *  measured durations replay at ~175 s (Sealand) and ~115 s (Össur). The
+ *  cost of 6 in flight is a 429, which a chunk already survives — it keeps
+ *  its slug labels and logs `parse_error` — where a timeout takes the run. */
+export const PASS_B_PARALLEL = 6
 
 // --- Data retention (Tier 0 T0-9, 2026-08-18) --------------------------------
 // The windows the privacy notice states. Nothing in the product deleted source
