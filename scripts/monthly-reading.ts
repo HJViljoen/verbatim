@@ -1,3 +1,4 @@
+import { scriptActor } from '../lib/config-log'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   fillingMonths,
@@ -296,6 +297,17 @@ async function main() {
       Object.entries(plan.sides).map(([t, s2]) => `${s2.written} ${t} rows (${s2.frozen} frozen at once)`).join(', ') +
       `; ${plan.denominators.keptFrozen + planSides.reduce((n, s2) => n + s2.keptFrozen, 0)} stored rows are already frozen and would be left alone.`,
     )
+    // The row counts for the kind and mood tables are in the line above with
+    // every other side; what is NOT in it is the panel those attention numbers
+    // were read over, and whether the two tables were there to read at all.
+    if (plan.skippedKindMoodAttention) {
+      console.log('  kinds, mood and attention: skipped — 20260918094000_kind_mood_attention.sql is not applied here.')
+    } else {
+      console.log(
+        `  the mood/attention rows are read over ` +
+        `${plan.panelId ? `panel ${plan.panelId}` : 'no attention panel — the attention half would read nothing'}.`,
+      )
+    }
     const held = plan.denominators.heldStale + planSides.reduce((n, s2) => n + s2.heldStale, 0)
     if (held > 0) {
       console.log(
@@ -325,7 +337,12 @@ async function main() {
           'Name one with --run <uuid>, or pass --denominators-only if that is genuinely what you want.',
         )
       }
-      const done = await freezeMonths(admin, { clientId: id, runId, months, now, sides })
+      // The actor lets the seed freeze the tenant's first attention panel —
+      // a configuration write, which never happens unattributed.
+      const done = await freezeMonths(admin, {
+        clientId: id, runId, months, now, sides,
+        actor: scriptActor('scripts/monthly-reading.ts --write'),
+      })
       const doneSides = Object.values(done.sides)
       const sum = (pick: (s2: (typeof doneSides)[number]) => number) => doneSides.reduce((n, s2) => n + pick(s2), 0)
       console.log(
@@ -334,7 +351,8 @@ async function main() {
         `${done.denominators.keptFrozen + sum((s2) => s2.keptFrozen)} frozen rows untouched, ` +
         `${done.denominators.deleted + sum((s2) => s2.deleted)} stale filling rows dropped, ` +
         `${done.denominators.heldStale + sum((s2) => s2.heldStale)} held because a reading came back empty, ` +
-        `${done.denominators.refusedLate + sum((s2) => s2.refusedLate)} refused because their months have closed.`,
+        `${done.denominators.refusedLate + sum((s2) => s2.refusedLate)} refused because their months have closed.` +
+        `${done.panelFrozen ? ` An attention panel was frozen (${done.panelReason}: ${done.panelId}).` : ''}`,
       )
     }
     console.log()

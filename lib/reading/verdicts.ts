@@ -75,7 +75,17 @@ export type RefusedReason = 'unlogged_era' | 'tracking_change' | 'clustering_cha
  *  (`sameRegime`), and saying "themes were re-grouped" about a pair nobody
  *  recorded a grouping for is a claim the record does not support. The series
  *  already keeps them apart (`ClusteringBoundary.kind`); a verdict now can
- *  too. */
+ *  too.
+ *
+ *  `measurement_changed` is the third of that second group and the widest: the
+ *  two sides were produced by two different measurements of the same thing, so
+ *  the number moved partly because we changed what it means. The one instance
+ *  in production is `videos.sentiment`, which had two writers with two meanings
+ *  until 20260820110000_sentiment_split.sql; when classify-meta moved before
+ *  Pass A on 2026-08-16 the reorder ALONE read as "sentiment up 6.2 pts" in a
+ *  subject line that was sent. Like the other flags it does not refuse the
+ *  comparison — the counts are real on both sides — it tells the reader what
+ *  else changed between them. */
 export type VerdictFlag =
   | 'new'
   | 'gone_quiet'
@@ -84,6 +94,7 @@ export type VerdictFlag =
   | 'clustering_unknown'
   | 'renamed'
   | 'thin'
+  | 'measurement_changed'
 
 /** The period a verdict is about. `since` is the tenant's whole readable
  *  history (lib/reading/horizon.ts `sinceStart`). Both bounds are half-open

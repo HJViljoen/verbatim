@@ -31,6 +31,7 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { pipelineActor } from '@/lib/config-log'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { subjectFreezeHold, subjectMonthSide, type MembershipOutcome } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
@@ -1469,7 +1470,9 @@ export const runPipeline = inngest.createFunction(
           // denominator's freeze is what closes an audience-month to new rows,
           // so every numerator has to be written before it. A separate subject
           // freeze running afterwards would be refused by the insert guard,
-          // correctly and permanently.
+          // correctly and permanently. The same is true of M5's kinds and
+          // audience stats, which freezeMonths builds itself because they need
+          // the attention panel it resolves.
           //
           // Unless the judgement that feeds it said it was short. A membership
           // refusal protects its own table and nothing else — memberships
@@ -1477,10 +1480,16 @@ export const runPipeline = inngest.createFunction(
           // and a short month frozen by this visit can never be corrected.
           // Better no subject row: a month that closes without one keeps
           // decision K's single later chance.
+          //
+          // The actor lets this visit freeze the tenant's first attention panel
+          // (WP5). It is a configuration write and every configuration write
+          // carries one; without it an existing panel is still read and none is
+          // ever created.
           if (subjectHold) console.warn(`[freeze-months] subject months NOT written — ${subjectHold}`)
           const r = await freezeMonths(admin, {
             clientId, runId, months,
             sides: subjectHold ? [] : [subjectMonthSide(admin, clientId)],
+            actor: pipelineActor(runId, 'freeze-months'),
           })
           const sideCounts = Object.entries(r.sides)
             .map(([table, side]) => `${table} ${side.written} written (${side.frozen} now frozen, ${side.keptFrozen} already frozen and left alone, ${side.deleted} dropped)`)
@@ -1488,13 +1497,18 @@ export const runPipeline = inngest.createFunction(
           console.log(
             `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
             `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
-            `${r.denominators.deleted} dropped) · ${sideCounts}`,
+            `${r.denominators.deleted} dropped) · ${sideCounts}` +
+            `${r.panelFrozen ? ' · attention panel frozen' : ''}` +
+            `${r.skippedKindMoodAttention ? ' · kinds/mood/attention skipped: M5 not applied' : ''}`,
           )
           const all = [r.denominators, ...Object.values(r.sides)]
           return {
             months: r.months.length,
             denominators: r.denominators.written,
             themes: r.themes.written,
+            kinds: r.kinds.written,
+            stats: r.stats.written,
+            panelFrozen: r.panelFrozen,
             frozen: all.reduce((n, s) => n + s.frozen, 0),
             keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
             heldStale: all.reduce((n, s) => n + s.heldStale, 0),

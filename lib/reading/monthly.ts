@@ -1,24 +1,45 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { chunk } from '../chunk'
+import type { ConfigActor } from '../config-log'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
+  PANEL_LEAD_MONTHS,
+  currentPanel,
+  freezePanel,
+  isMissingKindMoodAttention,
+  panelCutoff,
+  panelStale,
+  panelUnderLead,
+  trackingChangesSince,
+  type AttentionPanel,
+  type PanelReason,
+} from './attention'
+import {
   FREEZE_AFTER_DAYS,
+  MONTH_AUDIENCE_STATS_TABLE,
   MONTH_DENOMINATOR_TABLE,
+  MONTH_KIND_TABLE,
   MONTH_TABLES,
   MONTH_THEME_TABLE,
+  RPC_AUDIENCE_STATS,
   RPC_DENOMINATORS,
+  RPC_KIND_READINGS,
   RPC_SUBJECT_READINGS,
   RPC_THEME_READINGS,
   RPC_WINDOW_DENOMINATORS,
   RPC_WINDOW_SUBJECT_READINGS,
   RPC_WINDOW_THEME_READINGS,
+  TABLE_AUDIENCE_STATS,
   TABLE_DENOMINATORS,
+  TABLE_KIND_READINGS,
   TABLE_SUBJECT_READINGS,
   TABLE_THEME_READINGS,
+  type AudienceStatsReading,
   type DenominatorReading,
   type DenominatorRow,
   type FreezeColumns,
+  type KindReading,
   type MonthOrigin,
   type MonthStatus,
   type MonthTable,
@@ -299,6 +320,12 @@ export const denominatorKey = (r: { month: string; audience: string }): string =
 export const themeReadingKey = (r: { month: string; audience: string; theme_id: string }): string =>
   `${monthStartOf(r.month)}|${r.audience}|${r.theme_id}`
 
+/** A kind reading's identity. The kind values are the pipeline's enum, so they
+ *  cannot hold the separator; the audience can, which is why every key here is
+ *  built rather than parsed. */
+export const kindReadingKey = (r: { month: string; audience: string; kind: string }): string =>
+  `${monthStartOf(r.month)}|${r.audience}|${r.kind}`
+
 /**
  * The bookkeeping a row gets on this write.
  *
@@ -501,6 +528,17 @@ export function isMissingMonthlyReading(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
+/** Is this ANY month table's migration missing?
+ *
+ *  M3, M4 and M5 all land in the same by-hand window, and a deploy reaches
+ *  production before any of them. Every month table is read through the same
+ *  descriptor loop now, so the loop needs one question covering all of them —
+ *  asked by OR-ing the narrow, named predicates rather than by widening either
+ *  of them, so "table X does not exist" still has to name a table we own. */
+export function isMissingMonthTable(error: unknown): boolean {
+  return isMissingMonthlyReading(error) || isMissingKindMoodAttention(error)
+}
+
 // ---- Reading and writing ------------------------------------------------------
 
 /** PostgREST caps a response at 1000 rows — on an RPC exactly as on a select —
@@ -540,6 +578,38 @@ export async function readThemeReadings(
     RPC_THEME_READINGS,
     { p_client: clientId, p_run: runId, p_from: window.from, p_to: window.to },
     ['month', 'audience', 'theme_id'],
+  )
+}
+
+/** The kinds a month carried, per audience. No run: a kind is an enum Pass A
+ *  writes, not a clustering artefact (20260918094000, head). */
+export async function readKindReadings(
+  admin: SupabaseClient,
+  clientId: string,
+  window: { from: string; to: string },
+): Promise<KindReading[]> {
+  return callRpc<KindReading>(
+    admin,
+    RPC_KIND_READINGS,
+    { p_client: clientId, p_from: window.from, p_to: window.to },
+    ['month', 'audience', 'kind'],
+  )
+}
+
+/** The mood counts and, over the given panel, the attention counts. `panelId`
+ *  null reads the mood half alone — which is the right answer for a tenant with
+ *  no panel yet, and not the same as reading zero attention. */
+export async function readAudienceStats(
+  admin: SupabaseClient,
+  clientId: string,
+  panelId: string | null,
+  window: { from: string; to: string },
+): Promise<AudienceStatsReading[]> {
+  return callRpc<AudienceStatsReading>(
+    admin,
+    RPC_AUDIENCE_STATS,
+    { p_client: clientId, p_panel: panelId, p_from: window.from, p_to: window.to },
+    ['month', 'audience'],
   )
 }
 
@@ -631,8 +701,10 @@ export async function fillingMonths(
       // A sibling table whose migration has not been applied yet is not an
       // error and must not cost the tables that DO exist their visit — the
       // months they hold open are the months that still need freezing. Narrow
-      // by name, never a blanket swallow.
-      if (!isMissingMonthlyReading(e)) throw e
+      // by name, never a blanket swallow — and there are two names, because M4
+      // and M5 arrive in the same window as M3 and a deploy can reach
+      // production before any of the three has been applied by hand.
+      if (!isMissingMonthTable(e)) throw e
       continue
     }
     for (const r of rows) out.add(monthStartOf(r.month))
@@ -681,6 +753,20 @@ export interface FreezeSummary {
    *  included, so a caller that does not know which siblings exist can still
    *  report all of them. */
   sides: Record<string, FreezeSide>
+  /** M5's two siblings, named for the readers that want them by name. Both are
+   *  entries in `sides` as well; a side whose migration has not been applied is
+   *  all zeroes, which is what a no-op looks like from outside. */
+  kinds: FreezeSide
+  stats: FreezeSide
+  /** The panel the attention half of `stats` was read over, and whether this
+   *  visit froze it. Null when the tenant has no panel that can be frozen —
+   *  which is Sealand's state until an October reading. */
+  panelId: string | null
+  panelFrozen: boolean
+  /** Why this visit froze one, when it did: the tenant's first, or a logged
+   *  tracking change that re-based it. Null when nothing was frozen. */
+  panelReason: PanelReason | null
+  skippedKindMoodAttention: boolean
 }
 
 /**
@@ -758,10 +844,17 @@ export async function freezeMonths(
      *  clustering was, and a caller that recomputed it would be recomputing it
      *  at a different moment from the one that produced the themes. */
     clusteringKey?: string | null
-    /** Sibling numerator tables to write in the same visit — subjects today,
-     *  kinds and attention next. Handed in rather than imported so lib/reading
-     *  keeps owning the freeze contract without knowing what a subject is. */
+    /** Sibling numerator tables to write in the same visit — subjects today.
+     *  Handed in rather than imported so lib/reading keeps owning the freeze
+     *  contract without knowing what a subject is. M5's kinds and audience
+     *  stats are built here instead: they need the panel this function
+     *  resolves, so they cannot be handed over from outside. */
     sides?: readonly NumeratorSide[]
+    /** Who is writing. Given, this visit may FREEZE the attention panel when
+     *  the tenant has none — a configuration write, and every configuration
+     *  write carries an actor (AGENTS.md). Omitted, an existing panel is still
+     *  read and used; none is ever created. */
+    actor?: ConfigActor
   },
 ): Promise<FreezeSummary> {
   const now = opts.now ?? new Date().toISOString()
@@ -770,16 +863,32 @@ export async function freezeMonths(
     : await runClusteringKey(admin, opts.runId)
   const months = [...new Set(opts.months.map(monthStartOf))].sort()
   const noSide = (): FreezeSide => ({ written: 0, frozen: 0, keptFrozen: 0, deleted: 0, heldStale: 0, refusedLate: 0 })
-  // Every side this visit COULD have written gets an entry, the theme side and
-  // each sibling alike, so a caller iterating `sides` reports the same set of
-  // tables on a visit with no months as on one with months.
+  // Every side this visit COULD have written gets an entry, the theme side, M5's
+  // two and each sibling alike, so a caller iterating `sides` reports the same
+  // set of tables on a visit with no months as on one with months.
   const emptySides = (): Record<string, FreezeSide> => {
-    const out: Record<string, FreezeSide> = { [TABLE_THEME_READINGS]: noSide() }
+    const out: Record<string, FreezeSide> = {
+      [TABLE_THEME_READINGS]: noSide(),
+      [TABLE_KIND_READINGS]: noSide(),
+      [TABLE_AUDIENCE_STATS]: noSide(),
+    }
     for (const side of opts.sides ?? []) out[side.table.table] = noSide()
     return out
   }
+  const emptySummary = (): FreezeSummary => ({
+    months,
+    denominators: noSide(),
+    themes: noSide(),
+    sides: emptySides(),
+    kinds: noSide(),
+    stats: noSide(),
+    panelId: null,
+    panelFrozen: false,
+    panelReason: null,
+    skippedKindMoodAttention: false,
+  })
   const window = windowOf(months)
-  if (!window) return { months, denominators: noSide(), themes: noSide(), sides: emptySides() }
+  if (!window) return emptySummary()
 
   // Denominators.
   const freshDenoms = await readDenominators(admin, opts.clientId, window)
@@ -810,6 +919,116 @@ export async function freezeMonths(
   }
   sides.push(...(opts.sides ?? []))
 
+  // M5'S TWO SIBLINGS, AND THE PANEL THE ATTENTION HALF IS READ OVER. They are
+  // numerator sides like any other — same keys, same freeze columns, same
+  // guards in the database, the same loop below — so all that is special here is
+  // the panel, which has to be resolved BEFORE the stats side is read (it is a
+  // parameter of the read and a column on every row it writes).
+  //
+  // THE PANEL IS READ, AND FROZEN ONLY WITH AN ACTOR. A tenant with no panel
+  // gets its first one here when the caller says who is asking; a tenant whose
+  // accounts are all too new gets none at all and its attention half reads
+  // nothing over a null panel, which is the honest state rather than an
+  // invented set.
+  //
+  // AND IT IS RE-FROZEN WHEN THE TRACKING MOVES. That is the design's rule
+  // ("frozen into attention_panels, re-frozen and logged at every tracking
+  // change") and without it a tenant's FIRST panel is its panel for ever: the
+  // index would never admit a newly tracked account, never react to a rival
+  // rename or a re-gate, and the rule on the axis that `samePanelEra` and
+  // `month_audience_stats.panel_id` are built around could never be drawn.
+  // `panelStale` answers from the change log — the only place those moves are
+  // recorded — and the new panel is a new dated row with reason
+  // `tracking_change`, never an edit of the old one.
+  let panelId: string | null = null
+  let panelFrozen = false
+  let panelReason: PanelReason | null = null
+  let skippedKindMoodAttention = false
+  try {
+    const existing = await currentPanel(admin, opts.clientId)
+    panelId = existing?.id ?? null
+    const readMonth = months[months.length - 1]
+    // A panel is frozen for two reasons and neither of them is "it is missing":
+    // the first freeze, and a logged change to WHERE we gather. A change we
+    // never recorded reads as no change and leaves the panel alone, which is
+    // the conservative direction — a re-freeze starts an era and an era break
+    // costs a reader every comparison across it.
+    const stale = existing
+      ? panelStale(existing, await trackingChangesSince(admin, opts.clientId, existing.frozen_at))
+      : false
+    const reason: PanelReason | null = !existing ? 'first_freeze' : stale ? 'tracking_change' : null
+    let panel: AttentionPanel | null = existing
+    if (reason && opts.actor && !opts.dryRun) {
+      const frozen = await freezePanel(admin, {
+        clientId: opts.clientId,
+        month: readMonth,
+        reason,
+        actor: opts.actor,
+      })
+      if (frozen.panel) {
+        panel = frozen.panel
+        panelId = frozen.panel.id
+        panelFrozen = true
+        panelReason = reason
+      } else if (frozen.refused === 'empty') {
+        // An empty derivation never replaces a panel that exists: the stale one
+        // is a worse denominator than it was and still a better one than none.
+        console.log(
+          `[monthly-reading] no attention panel for ${opts.clientId}: no account was first seen before ` +
+          `${panelCutoff(readMonth)}, so the attention half ${existing ? 'stays on the panel frozen at ' + existing.frozen_at : 'reads nothing this visit'}.`,
+        )
+      }
+    } else if (reason === 'tracking_change') {
+      console.log(
+        `[monthly-reading] the attention panel for ${opts.clientId} is overtaken by a logged tracking change ` +
+        `and was NOT re-frozen this visit (${opts.dryRun ? 'dry run' : 'no actor'}); the index still reads over the panel frozen at ${existing!.frozen_at}.`,
+      )
+    }
+
+    // ONE PANEL ERA PER TENANT, AND THE OLDER MONTHS PAY FOR IT. The cutoff
+    // comes from the NEWEST month in the window, so every month behind it gets
+    // less than PANEL_LEAD_MONTHS of lead: reading Sealand's August in early
+    // October takes a 1 July cutoff, which is one month of lead on August and
+    // not three. The alternative is a panel per month, which is a new
+    // denominator per point and therefore no series at all. So the shortfall is
+    // recorded rather than fixed — printed here, markable on a chart through
+    // `panelUnderLead` — and nothing pretends the constant's rule held.
+    const short = panel ? months.filter((m) => panelUnderLead(panel, m)) : []
+    if (panel && short.length > 0) {
+      console.log(
+        `[monthly-reading] ${short.length} of ${months.length} months (${short[0]}…${short[short.length - 1]}) ` +
+        `are read over a panel whose cutoff is ${panel.cutoff}, so they get less than ${PANEL_LEAD_MONTHS} ` +
+        `months' lead. One panel era per tenant is the design; the shortfall belongs on the axis, not in the numbers.`,
+      )
+    }
+
+    // NO `clustering` ON EITHER OF THESE TWO, AND IT IS THE SAME ARGUMENT BOTH
+    // TIMES. `audience_insights.category` is an enum Pass A writes and
+    // `videos.sentiment` is a reading of one video's comments; a re-grouping of
+    // insights into themes cannot move either. `kindChange` and `moodChange`
+    // already strip the clustering caveat the shared rule would add, and a key
+    // STORED on these rows would hand it straight back to any later reader that
+    // built a SeriesPoint off the table — `directionWord` would then refuse a
+    // kind's direction word across a clustering boundary, which is exactly the
+    // asymmetry this migration's header says is deliberate. So the two tables
+    // carry no such column and nothing here writes one.
+    sides.push({
+      table: MONTH_KIND_TABLE,
+      read: (w) => readKindReadings(admin, opts.clientId, w),
+    })
+    sides.push({
+      table: MONTH_AUDIENCE_STATS_TABLE,
+      read: (w) => readAudienceStats(admin, opts.clientId, panelId, w),
+      stamp: { panel_id: panelId },
+    })
+  } catch (e) {
+    // M5 has not been applied yet: the panel cannot be read, so neither side is
+    // offered and the theme rows and denominators land without them.
+    if (!isMissingKindMoodAttention(e)) throw e
+    skippedKindMoodAttention = true
+    console.log('[monthly-reading] kinds, mood and attention skipped: 20260918094000_kind_mood_attention.sql has not been applied yet')
+  }
+
   const merges: { side: NumeratorSide; merge: MergeResult<MonthNumeratorRow>; rows: Record<string, unknown>[] }[] = []
   for (const side of sides) {
     let fresh: readonly MonthNumeratorRow[]
@@ -823,7 +1042,7 @@ export async function freezeMonths(
       // would make the whole freeze a no-op on every database the new migration
       // has not reached — including production between a deploy and its apply
       // window, which is a gap measured in days here.
-      if (!isMissingMonthlyReading(e)) throw e
+      if (!isMissingMonthTable(e)) throw e
       console.log(`[monthly-reading] ${side.table.table} does not exist yet — skipped, the other sides were written`)
       continue
     }
@@ -860,9 +1079,25 @@ export async function freezeMonths(
     },
     themes: noSide(),
     sides: emptySides(),
+    kinds: noSide(),
+    stats: noSide(),
+    panelId,
+    panelFrozen,
+    panelReason,
+    skippedKindMoodAttention,
   }
   for (const m of merges) summary.sides[m.side.table.table] = sideOf(m)
   summary.themes = summary.sides[TABLE_THEME_READINGS]
+  summary.kinds = summary.sides[TABLE_KIND_READINGS]
+  summary.stats = summary.sides[TABLE_AUDIENCE_STATS]
+  // A side offered but skipped by the loop is the same no-op as a panel that
+  // could not be read: M5 is not there. Say so once, from whichever half found
+  // out, so a caller reading `skippedKindMoodAttention` never has to guess.
+  const wroteSide = new Set(merges.map((m) => m.side.table.table))
+  if (!wroteSide.has(TABLE_KIND_READINGS) || !wroteSide.has(TABLE_AUDIENCE_STATS)) {
+    skippedKindMoodAttention = true
+    summary.skippedKindMoodAttention = true
+  }
   // An empty reading is a failure, not a result, and the rows it did not delete
   // are the only copy of those months. Say so wherever this runs — the pipeline
   // step, the inspector, a backfill — rather than leaving it to a caller.

@@ -6,6 +6,7 @@ import {
   freezeFor,
   freezeStateFor,
   isMissingMonthlyReading,
+  kindReadingKey,
   mergeMonthRows,
   monthEndInstant,
   monthStartOf,
@@ -34,7 +35,9 @@ import {
   TABLE_THEME_READINGS,
   type StoredFreeze,
   type ThemeReading,
+  MONTH_AUDIENCE_STATS_TABLE,
   MONTH_DENOMINATOR_TABLE,
+  MONTH_KIND_TABLE,
   MONTH_SUBJECT_TABLE,
   MONTH_TABLES,
   MONTH_THEME_TABLE,
@@ -237,6 +240,25 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect('clustering_key' in result.writes[0]).toBe(false)
     const unset = mergeMonthRows({ months, fresh, stored: [], keyOf: themeReadingKey, now, runId: RUN })
     expect('clustering_key' in unset.writes[0]).toBe(false)
+  })
+
+  // The kind and mood rows are merged by the same function and MUST NOT get a
+  // key: a kind is an enum Pass A writes, so a kind month is comparable across a
+  // clustering boundary, and a stored key would hand `clustering_unknown` and a
+  // refused direction word back to any reader that built a series off the table.
+  // The two tables have no such column; this pins the caller's half of it.
+  it('writes no clustering key onto a kind row, whatever the run recorded', () => {
+    const fresh = [{ month: '2026-10-01', audience: 'industry-other', kind: 'question', videos: 12 }]
+    const key = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
+    const result = mergeMonthRows({ months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN })
+    expect('clustering_key' in result.writes[0]).toBe(false)
+    // The merge itself is generic and would stamp one if asked — the guarantee
+    // is the caller's (freezeMonths passes none for these two tables) and the
+    // column's (neither table has it). This pins the first half.
+    const asked = mergeMonthRows({
+      months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN, clusteringKey: key,
+    })
+    expect(asked.writes[0]).toMatchObject({ clustering_key: key })
   })
 
   it('rewrites a filling row and freezes it when its line has passed', () => {
@@ -816,11 +838,21 @@ describe('MONTH_TABLES', () => {
     // fillingMonths, leaves monthsToRefresh, and is never visited again.
     expect(MONTH_TABLES.map((t) => t.table)).toEqual([
       'month_denominators', 'month_theme_readings', 'month_subject_readings',
+      'month_kind_readings', 'month_audience_stats',
     ])
   })
 
-  it('names exactly one denominator', () => {
-    expect(MONTH_TABLES.filter((t) => t.objectColumn === null)).toHaveLength(1)
+  it('names exactly one denominator, and it is not simply the table with no object', () => {
+    // A NULL OBJECT COLUMN DOES NOT MEAN DENOMINATOR, and M5 is why. Two
+    // tables carry one row per audience-month: `month_denominators`, which IS
+    // the audience-month, and `month_audience_stats`, which is a second set of
+    // columns ON it — mood counts and an attention reading, a numerator with
+    // no object to be about. The denominator is the one freezeMonths writes
+    // LAST, because its freeze is what closes the month; so it is named, not
+    // inferred from a shape two tables share.
+    expect(MONTH_DENOMINATOR_TABLE.table).toBe('month_denominators')
+    expect(MONTH_TABLES.filter((t) => t.objectColumn === null).map((t) => t.table))
+      .toEqual(['month_denominators', 'month_audience_stats'])
   })
 
   it('spells every onConflict as the table’s real primary key', () => {
@@ -880,5 +912,77 @@ describe('the subject month migration matches the module', () => {
     // under an unchanged judge_version.
     expect(sql).toContain('grant update (status, superseded_by, updated_at) on public.subjects to authenticated')
     expect(sql).not.toContain('grant update (name')
+  })
+})
+
+describe('the kind and audience-stat siblings (WP5)', () => {
+  const now = '2026-10-05T00:00:00.000Z'
+  const RUN = '11111111-2222-3333-4444-555555555555'
+
+  it('keys a kind row on the month, the audience and the kind', () => {
+    expect(kindReadingKey({ month: '2026-08-01', audience: 'industry-other', kind: 'question' }))
+      .toBe('2026-08-01|industry-other|question')
+    // Different tables, different third column, and the keys cannot collide
+    // across them because each merge is handed only its own table's rows.
+    expect(kindReadingKey({ month: '2026-08-15', audience: 'client', kind: 'praise' }))
+      .toBe('2026-08-01|client|praise')
+  })
+
+  it('folds kind rows through the same merge as themes, with the same freeze rule', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'industry-other', kind: 'question', videos: 138 },
+      { month: '2026-08-01', audience: 'industry-other', kind: 'question', videos: 261 },
+    ]
+    const stored = [{
+      key: '2026-08-01|industry-other|question',
+      // The kind IS the object a kind row is about, so it rides in `objectId`
+      // like a registry id or a subject id, and the descriptor says the column
+      // it came out of is `kind`.
+      month: '2026-08-01', audience: 'industry-other', objectId: 'question',
+      status: 'frozen' as const, origin: 'live' as const, frozen_at: '2026-09-30T00:00:00.000Z',
+    }]
+    const result = mergeMonthRows({
+      months: ['2026-08-01', '2026-09-01'], fresh, stored, keyOf: kindReadingKey, now, runId: RUN,
+    })
+    expect(result.keptFrozen).toBe(1)
+    expect(result.writes.map((w) => w.month)).toEqual(['2026-09-01'])
+  })
+
+  it('keys an audience-stat row exactly as a denominator, because it has no third column', () => {
+    const fresh = [
+      { month: '2026-09-01', audience: 'client', judged: 7 },
+      { month: '2026-07-01', audience: 'client', judged: 3 },
+    ]
+    const result = mergeMonthRows({
+      months: ['2026-07-01', '2026-09-01'], fresh, stored: [], keyOf: denominatorKey, now, runId: RUN,
+    })
+    expect(result.writes).toHaveLength(2)
+    // September is still filling on 5 October; July closed on 30 August, so a
+    // first write of it now is a back-read and freezes at once.
+    expect(result.writes.find((w) => w.month === '2026-09-01')!.status).toBe('filling')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.status).toBe('frozen')
+    expect(result.writes.find((w) => w.month === '2026-07-01')!.origin).toBe('back_read')
+  })
+
+  it('reaches both tables through the same descriptor the other siblings use', () => {
+    // The kind key the module exports and the key the generic merge builds from
+    // the descriptor have to be the same string, or a stored kind row and a
+    // fresh one would never meet.
+    expect(monthRowKey(MONTH_KIND_TABLE, { month: '2026-08-15', audience: 'client', kind: 'praise' }))
+      .toBe(kindReadingKey({ month: '2026-08-15', audience: 'client', kind: 'praise' }))
+    // And an audience-stat row is about no object at all, exactly like a
+    // denominator — same key, same conflict target, one row per audience-month.
+    expect(MONTH_AUDIENCE_STATS_TABLE.objectColumn).toBeNull()
+    expect(monthRowKey(MONTH_AUDIENCE_STATS_TABLE, { month: '2026-09-01', audience: 'client' }))
+      .toBe(denominatorKey({ month: '2026-09-01', audience: 'client' }))
+  })
+
+  it('has both tables in MONTH_TABLES, so fillingMonths cannot forget them', () => {
+    // The one bug in this area that is silent and permanent: a month whose
+    // theme rows froze while its kind rows are still filling leaves
+    // fillingMonths and is never visited again.
+    const tables = MONTH_TABLES.map((t) => t.table)
+    expect(tables).toContain(MONTH_KIND_TABLE.table)
+    expect(tables).toContain(MONTH_AUDIENCE_STATS_TABLE.table)
   })
 })
