@@ -39,7 +39,7 @@ describe('scopeToClientVoices', () => {
   })
 })
 
-describe('videoBucketOf — live entity, not a cached one', () => {
+describe('audienceOf — live entity, not a cached one', () => {
   it('reads the client, a named competitor and the rest', () => {
     expect(audienceOf({ is_client: true, is_competitor: false, competitor_name: null })).toBe('client')
     expect(audienceOf({ is_client: false, is_competitor: true, competitor_name: 'Patagonia' })).toBe('competitor:Patagonia')

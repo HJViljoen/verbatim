@@ -9,8 +9,10 @@
 // between them.
 
 /** The three audiences, as the literal bucket strings the rest of the code
- *  already uses (`lib/pipeline/metrics.ts` entityOf, `lib/pipeline/step-a2.ts`
- *  bucketOf, `lib/quotes.ts` videoBucketOf). A competitor's is
+ *  already uses. `lib/rivals.ts` audienceOf is the one place they are built —
+ *  the nine hand-rolled copies (metrics.ts entityOf, step-a2.ts bucketOf,
+ *  quotes.ts videoBucketOf and the rest) were folded into it in WP1. A
+ *  competitor's is
  *  `competitor:<competitor_name>` with the name exactly as configured —
  *  `competitor:Topo Designs`, spaces and capitals included — because that is
  *  what `theme_registry.bucket` stores. */
