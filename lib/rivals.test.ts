@@ -108,15 +108,24 @@ describe('the fold has one implementation', () => {
     expect(offenders).toEqual([])
   })
 
-  it('and the two SQL copies still say what the TypeScript one says', () => {
+  it('and the two SQL copies still build the same three keys, prefix and all', () => {
     // Deliberate duplication: the monthly reading runs in the database and a
     // function boundary there would be a per-row call on a corpus scan. They
     // are allowed to exist and not allowed to drift.
+    //
+    // What this checks is the SHAPE — the same precedence, the same prefix, the
+    // same two constants — and not the edges. The copies do not btrim and read
+    // an empty string as a name, where rivalKey trims and folds a blank to
+    // 'unknown' (see rivalKey's comment). Production has 0 padded and 0 blank
+    // competitor_name values, the copies are in a migration already applied,
+    // and M3 rewrites those two bodies; asserting agreement at the edges here
+    // would be asserting something untrue.
     const sql = readFileSync(new URL('../supabase/migrations/20260915092000_monthly_reading.sql', import.meta.url), 'utf8')
     const copies = [...sql.matchAll(/when v\.is_client\s+then 'client'[\s\S]{0,240}?else '([a-z-]+)'/g)]
     expect(copies.length).toBe(2)
     for (const copy of copies) {
-      expect(copy[0]).toContain("'competitor:' || coalesce(v.competitor_name, 'unknown')")
+      expect(copy[0]).toContain(`'${RIVAL_PREFIX}' || coalesce(v.competitor_name, '${UNKNOWN_RIVAL}')`)
+      expect(copy[0]).toContain(`then '${CLIENT_AUDIENCE}'`)
       expect(copy[1]).toBe(INDUSTRY_AUDIENCE)
     }
   })

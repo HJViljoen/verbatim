@@ -43,7 +43,20 @@ export const RIVAL_PREFIX = 'competitor:'
  *  Not a real rival: it means the tagger disagreed with itself. */
 export const UNKNOWN_RIVAL = 'unknown'
 
-/** A rival's audience key, from its name. The ONE place the prefix is applied. */
+/** A rival's audience key, from its name. The ONE place the prefix is applied.
+ *
+ *  WHERE THE TWO SQL COPIES DIVERGE, AND WHY IT IS NOT FIXED HERE. This trims
+ *  and folds a blank name to 'unknown'; both copies are the bare
+ *  `'competitor:' || coalesce(v.competitor_name, 'unknown')`, so a padded name
+ *  keys one way in TypeScript and another in the reading, and an EMPTY string
+ *  (not null) gives 'competitor:' there and 'competitor:unknown' here. Nothing
+ *  in production has either — 0 padded and 0 blank `competitor_name` values,
+ *  and both `csv()` helpers trim on save — but the disagreement would land on
+ *  `month_*.audience`, which is in a primary key and freezes, so it cannot be
+ *  corrected afterwards. The copies live in 20260915092000_monthly_reading.sql,
+ *  which IS applied to production; M3 (20260918092000) rewrites those two
+ *  function bodies for the window readings and is where `btrim`/`nullif`
+ *  belongs. Until then the test below asserts only what it can see. */
 export function rivalKey(name: string | null | undefined): string {
   const trimmed = (name ?? '').trim()
   return `${RIVAL_PREFIX}${trimmed === '' ? UNKNOWN_RIVAL : trimmed}`
