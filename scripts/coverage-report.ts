@@ -26,7 +26,7 @@ import {
 import { readSubjectMonths, readSubjectWindow } from '../lib/subjects/read'
 import { SHARE_BAND } from '../lib/report-bands'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
-import { categoryLabel } from '../lib/voice-tiles'
+import { kindLabel } from '../lib/reading/kinds'
 
 // Back-read coverage, and the anomaly check replayed over the weeks that
 // already exist (Phase 0 WP4, design items 37 and 40 + §9.20, 2026-09-15).
@@ -235,10 +235,16 @@ async function main() {
       )
       for (const r of rows) themeLabels.set(r.id, r.canonical_label ?? '(unlabelled)')
     }
+    // EVERY ACTIVE SUBJECT, not only the ones with baseline month rows. This
+    // is a rehearsal of what the step will do, and `buildReading` admits every
+    // `status = 'active'` subject whether or not it has history — a subject
+    // with no baseline enters the set, is counted in `setSize` and is not
+    // tested. Admitting a different set here would give a different Holm
+    // threshold and stop the replay being a faithful rehearsal.
     const subjectLabels = new Map<string, string>()
-    if (subjectMonths.length > 0) {
+    {
       const rows = await selectAll<{ id: string; name: string }>(() =>
-        admin.from('subjects').select('id, name').eq('client_id', id).order('id', { ascending: true }),
+        admin.from('subjects').select('id, name').eq('client_id', id).eq('status', 'active').order('id', { ascending: true }),
       )
       for (const r of rows) subjectLabels.set(r.id, r.name)
     }
@@ -303,7 +309,11 @@ async function main() {
       const candidates: PreRegisteredObject[] = KIND_SET.map((kind) => ({
         kind: 'kind' as const,
         id: kind,
-        label: categoryLabel(kind),
+        // `kindLabel`, the word the step writes onto the row — not
+        // `categoryLabel`, which says 'Objections' where the step says
+        // 'Pushing back'. A replay that labels the same object differently
+        // from the run it is rehearsing is a replay of something else.
+        label: kindLabel(kind),
         denominator: SLICE,
         weekVideos: kindWeek.get(kind) ?? 0,
         months: monthsOf(kindsByObject.get(kind)),
@@ -314,7 +324,7 @@ async function main() {
         candidates.push({
           kind: 'rival',
           id: audience,
-          label: `${rival} — share of the conversation`,
+          label: rival,
           denominator: SLICE,
           weekVideos: weekByAudience.get(audience)?.videos ?? 0,
           months: baselineMonths.map((month) => ({
