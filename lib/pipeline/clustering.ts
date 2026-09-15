@@ -167,6 +167,15 @@ export interface ClusteringBoundary {
  * not a boundary: a gap in the series is the series' business (hollow, thin,
  * below floor), and the regime on either side of it is still comparable if the
  * keys agree.
+ *
+ * FOR THE CALLER: two nulls are never equal, so a series whose months were all
+ * frozen before 2026-09-18 — today, all 925 frozen rows on both tenants —
+ * yields an `unknown` boundary at EVERY month but the first. That is the
+ * correct conservative answer (nobody can say whether those months were
+ * re-grouped) and the tests lock it, but it is not a per-month caveat to print:
+ * a reader collapses a consecutive run of `unknown` into one statement about
+ * the stretch, the way "no change record before <date>" is one label and not a
+ * badge on every row. Only a `changed` boundary names a single month.
  */
 export function clusteringBoundaries(
   months: readonly { month: string; clustering_key?: string | null }[],

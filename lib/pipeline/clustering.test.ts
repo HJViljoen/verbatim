@@ -118,6 +118,20 @@ describe('clusteringBoundaries', () => {
     ])
   })
 
+  it('marks every month of an all-unknown series, which the reader collapses', () => {
+    // The seeded back-read: today all 925 frozen rows on both tenants carry no
+    // key, so a five-month series is four `unknown` boundaries and not one
+    // `changed`. Locked here so WP3's reading layer knows what it receives —
+    // a consecutive run of `unknown` is ONE caveat about the stretch, never a
+    // dated rule drawn on every month.
+    const months = ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01']
+      .map((month) => ({ month, clustering_key: null }))
+    const out = clusteringBoundaries(months)
+    expect(out).toHaveLength(months.length - 1)
+    expect(out.every((b) => b.kind === 'unknown')).toBe(true)
+    expect(out.some((b) => b.kind === 'changed')).toBe(false)
+  })
+
   it('a gap in the months is not a boundary', () => {
     // July is hollow — no row at all. June and August still compare.
     expect(clusteringBoundaries([
