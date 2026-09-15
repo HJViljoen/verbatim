@@ -307,6 +307,24 @@ describe('diffConfigRows — one row per column that actually moved', () => {
 })
 
 describe('changeRow — what reaches the database', () => {
+  it('leaves the two affects columns out entirely when the writer cannot say', () => {
+    // Absent, not an explicit NULL: a deploy that lands before the migration
+    // is then rejected on the column that does not exist yet instead of
+    // quietly writing a row with the note and without the band.
+    const row = changeRow({ clientId: CLIENT, surface: 'entity_retag', actor: actor() })
+    expect(row).not.toHaveProperty('affects_audiences')
+    expect(row).not.toHaveProperty('affects_months')
+  })
+
+  it('carries the audiences and the band when it can', () => {
+    const row = changeRow({
+      clientId: CLIENT, surface: 'rival_rename', actor: actor(),
+      affects: { audiences: ['competitor:Topo Designs', 'competitor:Topo'], months: '[2025-06-01,2026-10-01)' },
+    })
+    expect(row.affects_audiences).toEqual(['competitor:Topo Designs', 'competitor:Topo'])
+    expect(row.affects_months).toBe('[2025-06-01,2026-10-01)')
+  })
+
   it('defaults a logged row to now, with no changed_at of its own', () => {
     const row = changeRow({ clientId: CLIENT, surface: 'schedule', actor: actor() })
     expect(row).not.toHaveProperty('changed_at')

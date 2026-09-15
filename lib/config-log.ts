@@ -488,6 +488,9 @@ export function retagChange(args: {
   skipped: number
   costUsd?: number
   note?: string
+  /** The months the moved rows' comments sit in, computed by the caller while
+   *  it still knows which rows moved — after the process exits nothing can. */
+  affects?: ChangeAffects | null
 }): ConfigChangeInput {
   const how = RETAG_METHOD_WORDS[args.method] ?? `by ${args.method}`
   return {
@@ -498,6 +501,7 @@ export function retagChange(args: {
     after: args.after,
     actor: args.costUsd === undefined ? args.actor : labelled(args.actor, `OpenAI $${args.costUsd.toFixed(5)}`),
     rowsAffected: args.rowsAffected,
+    affects: args.affects ?? null,
     note:
       `re-checked which brand each stored video is about, ${how}. ` +
       `${args.rowsAffected} video(s) moved; ${args.skipped} posted by your own or a tracked rival's account ` +

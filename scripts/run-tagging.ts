@@ -1,3 +1,4 @@
+import { monthsOfVideos } from '../lib/config-affects'
 import { audienceOf, INDUSTRY_AUDIENCE } from '../lib/rivals'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { bucketsAfterRetag, recordConfigChange, retagChange, scriptActor, skipRetag } from '../lib/config-log'
@@ -233,9 +234,27 @@ async function main() {
   }
   console.log(`updated ${ok}/${changed.length}${errs.length ? `; ${errs.length} errors:\n  ${errs.slice(0, 10).join('\n  ')}` : ''}`)
 
+  // The MONTHS it moved, computed now because nothing can compute them later:
+  // `videos` has no updated_at and no history, so once this process exits the
+  // moved set is gone (which is precisely why the 2026-09-09 re-tag is
+  // unrecoverable). The rows are already written, so a failure here costs the
+  // band and not the re-tag — monthsOfVideos returns null rather than throwing
+  // into a completed operation.
+  const movedVideos = changed
+    .filter(({ index }) => applied.has(index))
+    .map(({ row }) => ({ platform: row.platform, video_id: row.video_id }))
+  let months: string | null = null
+  try {
+    months = await monthsOfVideos(admin, args.clientId, movedVideos)
+  } catch (e) {
+    console.error(`affected months not computed: ${(e as Error).message}`)
+  }
+  console.log(months ? `months moved: ${months}` : 'months moved: not known')
+
   // The record the 2026-09-09 re-tag never left. Counts, not row ids: what a
   // reader of a moved number needs is which buckets grew and which shrank.
   const logged = await recordConfigChange(admin, retagChange({
+    affects: { months },
     clientId: args.clientId,
     actor: scriptActor(`scripts/run-tagging.ts --write --method ${args.method}${args.platform ? ` --platform ${args.platform}` : ''}`),
     method: args.method,
