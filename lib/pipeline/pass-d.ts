@@ -13,7 +13,7 @@ import { indexThemes, type PersistedCompetitiveInsight } from './pass-c'
 import type { BrandClaim } from './claims'
 import { readsAsHeroQuote } from '../quotes'
 import { embedTexts, cosine } from './cluster'
-import { assignLineage, previousRunId, withoutLineageColumn, statusForLineage, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
+import { assignLineage, previousRunId, runIsVisible, withoutLineageColumn, statusForLineage, isMissingRecDecisions, REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT, type PriorRec, type RunRow, type RecDecision } from './rec-lineage'
 import { loadThemes } from './themes'
 import type { AggregatedTheme, SovEntry } from './types'
 
@@ -908,35 +908,50 @@ async function applyLineage(
       return (data ?? []) as PriorRec[]
     }
 
-    // THE PRIORS ARE WHATEVER SET IS ON SCREEN FOR THIS TENANT RIGHT NOW.
+    // THE PRIORS ARE THE SET THAT IS ON SCREEN FOR THIS TENANT RIGHT NOW.
     //
-    // Usually that is the previous update. But when this run ALREADY has
-    // recommendations, they are what the client is looking at, and this call is
-    // replacing them: `rerunPassDb` (scripts/run-recs.ts, the operator's
-    // prompt-iteration tool) and a retry of the synthesis step both arrive
-    // here. `previousRunId` deliberately excludes the current run, so matching
-    // against the previous update instead would inherit a status set two updates
-    // ago and drop the one set on the update being re-run — the client marks
-    // something Done at 09:00, the operator re-runs D-b at 09:05, the Done is
-    // gone. Reading the current run first is what keeps it.
-    let priors = await readRecs(runId)
-    if (priors.length > 0) {
-      counters.lineage_priors_this_run = 1
-    } else {
+    // Which is the previous update, except when this run is ITSELF on screen and
+    // being rewritten: `rerunPassDb` (scripts/run-recs.ts, the operator's
+    // prompt-iteration tool) and a resume both re-run D-b against a run the
+    // client has already been shown. There the client marks something Done at
+    // 09:00, the operator re-runs D-b at 09:05, and matching the PREVIOUS update
+    // would inherit a status set two updates ago and drop the one set on the
+    // update being re-run.
+    //
+    // "On screen" is the test, not "has recommendations". A run still
+    // `analyzing` may well have rows — a first attempt of a retried synthesis
+    // step left them — but nobody has seen them, and taking them as the pool
+    // puts TWO 0.55 cosine hops between a decision and the row inheriting it
+    // (new → attempt 1 → previous update) where the previous update alone is
+    // one. Titles are re-rolled every call (0 of 107 production pairs share even
+    // a normalised title), so each hop is a real chance to miss, and a miss
+    // restarts the lineage — orphaning the decision filed against the old one
+    // permanently, since the ledger is keyed on the lineage that just broke.
+    //
+    // The run list is the same read `previousRunId` needs, so asking it about
+    // this run too costs nothing.
+    const { data: runRows, error: runError } = await admin
+      .from('pipeline_runs')
+      .select('id, status, started_at')
+      .eq('client_id', clientId)
+      .order('started_at', { ascending: false })
+      .limit(20)
+    if (runError) throw new Error(runError.message)
+    const runs = (runRows ?? []) as RunRow[]
+
+    let priors: PriorRec[] = []
+    if (runIsVisible(runs, runId)) {
+      priors = await readRecs(runId)
+      if (priors.length > 0) counters.lineage_priors_this_run = 1
+    }
+    if (priors.length === 0) {
       // "The previous update" has to mean the update the CLIENT saw, because
       // what is being carried across is a status they set on that page. So it is
       // the newest run with `status in ('completed','partial')` — the same
       // anchor every client-facing loader uses (lib/pages/dashboard.ts,
       // lib/pages/market.ts, the schedule send) — and never an `analyzing` or
       // `failed` run.
-      const { data: runRows, error: runError } = await admin
-        .from('pipeline_runs')
-        .select('id, status, started_at')
-        .eq('client_id', clientId)
-        .order('started_at', { ascending: false })
-        .limit(20)
-      if (runError) throw new Error(runError.message)
-      const prevRunId = previousRunId((runRows ?? []) as RunRow[], runId)
+      const prevRunId = previousRunId(runs, runId)
       if (!prevRunId) return { ...counters, lineage_priors: 0 }
       priors = await readRecs(prevRunId)
     }

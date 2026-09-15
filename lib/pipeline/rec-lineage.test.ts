@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import {
-  assignLineage, normaliseTitle, normaliseRecType, lineageThresholdFor, previousRunId,
+  assignLineage, normaliseTitle, normaliseRecType, lineageThresholdFor, previousRunId, runIsVisible,
   withoutLineageColumn, inheritedStatus, statusForLineage, isMissingRecDecisions,
   REC_LINEAGE_THRESHOLD, REC_LINEAGE_CROSS_TYPE_THRESHOLD,
   REC_DECISIONS_TABLE, REC_DECISIONS_READ_LIMIT,
@@ -242,6 +242,41 @@ describe('previousRunId — the update the client actually saw', () => {
     expect(previousRunId([r('now', 'completed', '2026-09-06')], 'now')).toBeNull()
     expect(previousRunId([r('now', 'completed', '2026-09-06'), r('bad', 'failed', '2026-09-01')], 'now')).toBeNull()
     expect(previousRunId([], 'now')).toBeNull()
+  })
+})
+
+describe('runIsVisible — whether THIS update is one the client has seen', () => {
+  const r = (id: string, status: string): RunRow => ({ id, status, started_at: '2026-09-06' })
+
+  it('is true for the two statuses a client-facing page will load', () => {
+    expect(runIsVisible([r('now', 'completed')], 'now')).toBe(true)
+    expect(runIsVisible([r('now', 'partial')], 'now')).toBe(true)
+  })
+
+  it('is false for a run still in flight — which is what decides the prior pool', () => {
+    // A retried synthesis step arrives with the run still `analyzing` and, often,
+    // the first attempt's recommendations already in the table. Those rows have
+    // been seen by nobody; treating them as the match pool would put a second
+    // cosine hop between a client's decision and the row inheriting it.
+    expect(runIsVisible([r('now', 'analyzing')], 'now')).toBe(false)
+    expect(runIsVisible([r('now', 'failed')], 'now')).toBe(false)
+    expect(runIsVisible([r('now', 'gathering')], 'now')).toBe(false)
+  })
+
+  it('reads a run it cannot find, or one with no status, as not seen', () => {
+    // The conservative answer: match the previous update, one hop.
+    expect(runIsVisible([r('other', 'completed')], 'now')).toBe(false)
+    expect(runIsVisible([], 'now')).toBe(false)
+    expect(runIsVisible([{ id: 'now', status: null, started_at: null }], 'now')).toBe(false)
+  })
+
+  it('agrees with previousRunId about what "seen" means', () => {
+    // One predicate under both, so a run this calls visible is exactly a run
+    // previousRunId would hand to the NEXT update as its previous one.
+    for (const status of ['completed', 'partial', 'analyzing', 'failed', 'gathering']) {
+      expect(runIsVisible([r('now', status)], 'now'), status)
+        .toBe(previousRunId([r('now', status), r('later', 'completed')], 'later') === 'now')
+    }
   })
 })
 
