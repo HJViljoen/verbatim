@@ -46,7 +46,7 @@ import {
 } from '../reading/types'
 import type { FigureTable as ReadingFigures } from '../reading/verdicts'
 import { fetchQuoteCitationsByAudience } from '../quotes'
-import { RIVAL_PREFIX, loadCompetitors, isMissingCompetitors } from '../rivals'
+import { loadCompetitors, isMissingCompetitors, isRivalAudience, rivalKey, rivalNameOf } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
 
 // The anomaly check as a step of the update (Phase 1 WP8, design item 40,
@@ -648,7 +648,7 @@ async function candidateQuotes(
     )
     const rivalVideos = new Map<string, string>()
     if (rivals.length > 0) {
-      const names = rivals.map((a) => a.slice(RIVAL_PREFIX.length))
+      const names = rivals.map((a) => rivalNameOf(a)).filter((n): n is string => n != null)
       const videos = await selectAll<{ id: string; competitor_name: string | null; is_competitor: boolean | null }>(() =>
         admin
           .from('videos')
@@ -658,7 +658,7 @@ async function candidateQuotes(
           .in('competitor_name', names)
           .order('id', { ascending: true }),
       )
-      for (const v of videos) if (v.competitor_name) rivalVideos.set(v.id, `${RIVAL_PREFIX}${v.competitor_name}`)
+      for (const v of videos) if (v.competitor_name) rivalVideos.set(v.id, rivalKey(v.competitor_name))
     }
     const wantedKinds = new Set(kinds)
     for (const i of insights) {
@@ -1105,7 +1105,7 @@ export async function buildReading(
   const baselineSubjects = pooledByObject(subjectMonths, (r) => (r as { subject_id?: string }).subject_id ?? null, months)
   const baselineThemes = pooledByObject(themeMonths, (r) => (r as { theme_id?: string }).theme_id ?? null, months)
   const baselineRivals = pooledByObject(
-    denominatorMonths.filter((r) => r.audience.startsWith(RIVAL_PREFIX)),
+    denominatorMonths.filter((r) => isRivalAudience(r.audience)),
     (r) => r.audience,
     months,
   )
@@ -1146,7 +1146,13 @@ export async function buildReading(
     })
   }
   for (const rival of rivals.filter((r) => !r.retired_at)) {
-    const audience = `${RIVAL_PREFIX}${rival.name}`
+    // `rivalKey`, not the prefix by hand: WP1 pinned it as the ONE fold and it
+    // trims. A padded `competitors.name` keyed by hand here and by `rivalKey`
+    // in the month rows would make the baseline join return nothing, with no
+    // error anywhere — the object would simply read as having no history.
+    // Production has 0 padded and 0 blank names today; this is about not
+    // holding the ninth copy open for the day it does.
+    const audience = rivalKey(rival.name)
     candidates.push({
       kind: 'rival',
       id: audience,
