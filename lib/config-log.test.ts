@@ -323,6 +323,10 @@ describe('changeRow — what reaches the database', () => {
       affects: { audiences: ['competitor:Topo Designs', 'competitor:Topo'], months: '[2025-06-01,2026-10-01)' },
     })
     expect(row.affects_audiences).toEqual(['competitor:Topo Designs', 'competitor:Topo'])
+    // An empty list is NOT "no audiences": the column says NULL means unknown,
+    // and a writer that names none has not told us there were none.
+    expect(changeRow({ clientId: CLIENT, surface: 'rivals', actor: actor(), affects: { audiences: [], months: null } }))
+      .not.toHaveProperty('affects_audiences')
     expect(row.affects_months).toBe('[2025-06-01,2026-10-01)')
   })
 

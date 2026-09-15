@@ -209,7 +209,12 @@ export function changeRow(input: ConfigChangeInput): Record<string, unknown> {
     // A deploy that lands before M1 therefore sends a column the database does
     // not have — `recordConfigChanges` catches exactly that and retries without
     // these two, because losing the band must not cost the row.
-    ...(input.affects?.audiences ? { affects_audiences: input.affects.audiences.map((a) => dbSafeText(a)) } : {}),
+    //
+    // An EMPTY array is left out for the same reason. The column's contract is
+    // "NULL means unknown, not none", and [] says none — a claim no writer in
+    // this codebase is entitled to make. `affectsFor` returns null rather than
+    // [] already; this is the guard for a hand-built input.
+    ...(input.affects?.audiences?.length ? { affects_audiences: input.affects.audiences.map((a) => dbSafeText(a)) } : {}),
     ...(input.affects?.months ? { affects_months: input.affects.months } : {}),
   }
 }
