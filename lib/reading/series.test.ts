@@ -497,6 +497,28 @@ describe('mergeSeriesNotes — a set of series says its caveats once', () => {
     expect(merged.slice(0, one('t1').notes.length)).toEqual(one('t1').notes)
   })
 
+  it('says ONE unrecorded-grouping sentence for series covering different months', () => {
+    // Each theme's stretch is computed off the months that theme has rows in,
+    // so the sentences differ in wording and de-duplicating on text cannot
+    // collapse them. Twenty themes across three audiences used to mean many
+    // sentences; the convention is one per run of months, never one per bar.
+    const wide = monthAxis('2026-06-01', '2026-09-01')
+    const early = buildSeries({
+      axis: wide, audience: 'industry-other', objectId: 't1',
+      denominators: [den('2026-06-01', 400, { clustering_key: null }), den('2026-07-01', 400, { clustering_key: null })],
+    })
+    const late = buildSeries({
+      axis: wide, audience: 'industry-other', objectId: 't2',
+      denominators: [den('2026-08-01', 400, { clustering_key: null }), den('2026-09-01', 400, { clustering_key: null })],
+    })
+    expect(early.notes.filter((n) => n.kind === 'clustering_changed')[0].text)
+      .not.toBe(late.notes.filter((n) => n.kind === 'clustering_changed')[0].text)
+    const merged = mergeSeriesNotes([early, late])
+    const caveats = merged.filter((n) => n.kind === 'clustering_changed')
+    expect(caveats).toHaveLength(1)
+    expect(caveats[0].text).toContain('Jul 2026 and Sep 2026')
+  })
+
   it('answers an empty set with no notes', () => {
     expect(mergeSeriesNotes([])).toEqual([])
   })

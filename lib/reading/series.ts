@@ -5,7 +5,7 @@ import { fullDate, monthName } from '../format'
 import { clusteringBoundaries, type ClusteringBoundary } from '../pipeline/clustering'
 import { SHARE_BAND, type BandOptions } from '../report-bands'
 import { renameLabel, stitchRenames, type RenameRecord } from '../rivals'
-import { freezeBoundary, monthEndInstant, monthStartOf, monthsBetween } from './monthly'
+import { freezeBoundary, monthEndInstant, monthStartOf, monthsBetween, nextMonth } from './monthly'
 import type { MonthOrigin, MonthStatus } from './types'
 
 // One object, one audience, month by month — the series every chart and every
@@ -82,6 +82,12 @@ export type MonthLabelKind =
 export interface MonthLabel {
   kind: MonthLabelKind
   text: string
+  /** The months this caveat covers, on a SERIES note that names a stretch.
+   *  `mergeSeriesNotes` unions them so twenty themes present in different
+   *  months produce one sentence and not twenty — the text names the span, so
+   *  de-duplicating on text alone cannot collapse them. Absent on a point
+   *  label, which is already about one month. */
+  months?: readonly string[]
 }
 
 /** A stored `month_denominators` row, as much of it as a series needs. */
@@ -214,13 +220,26 @@ const BACK_READ: MonthLabel = {
  * recorded before {date}", which is also one line and not a badge per row.
  */
 function unknownRegimeNote(months: readonly string[]): MonthLabel {
-  const first = months[0]
-  const last = months[months.length - 1]
-  const span = first === last ? monthName(first) : `${monthName(first)} to ${monthName(last)}`
   return {
     kind: 'clustering_changed',
-    text: `We did not record how themes were grouped for ${span}, so those months are not strictly comparable with the ones after them.`,
+    text: `We did not record how themes were grouped for ${spanList(months)}, so those months are not strictly comparable with the ones after them.`,
+    months: [...new Set(months.map(monthStartOf))].sort(),
   }
+}
+
+/** "June", "June to August", "June to August and November". Consecutive months
+ *  are one span; a union of several series' stretches need not be contiguous. */
+function spanList(months: readonly string[]): string {
+  const sorted = [...new Set(months.map(monthStartOf))].sort()
+  const runs: string[][] = []
+  for (const month of sorted) {
+    const held = runs[runs.length - 1]
+    if (held && nextMonth(held[held.length - 1]) === month) held.push(month)
+    else runs.push([month])
+  }
+  const spans = runs.map((r) => (r.length === 1 ? monthName(r[0]) : `${monthName(r[0])} to ${monthName(r[r.length - 1])}`))
+  if (spans.length <= 1) return spans[0] ?? ''
+  return `${spans.slice(0, -1).join(', ')} and ${spans[spans.length - 1]}`
 }
 
 export interface BuildSeriesInput {
@@ -496,14 +515,29 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
 export function mergeSeriesNotes(series: readonly MonthSeries[]): MonthLabel[] {
   const seen = new Set<string>()
   const out: MonthLabel[] = []
+  // THE ONE CAVEAT SENTENCE, not one per series. An unrecorded-grouping note
+  // names the span it covers, and a theme series' stretch is computed off the
+  // months THAT THEME has rows in — so two themes present in different months
+  // produce two differently-worded sentences that de-duplicating on text cannot
+  // collapse. The convention handed to Block B is one sentence for a run of
+  // months, never one per bar; these merge by the union of their months and are
+  // re-worded from it, keeping the first one's place.
+  const unknownMonths: string[] = []
+  let unknownSlot = -1
   for (const s of series) {
     for (const note of s.notes) {
+      if (note.months && note.months.length > 0) {
+        unknownMonths.push(...note.months)
+        if (unknownSlot < 0) { unknownSlot = out.length; out.push(note) }
+        continue
+      }
       const key = `${note.kind}\u0000${note.text}`
       if (seen.has(key)) continue
       seen.add(key)
       out.push(note)
     }
   }
+  if (unknownSlot >= 0) out[unknownSlot] = unknownRegimeNote(unknownMonths)
   return out
 }
 
