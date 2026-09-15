@@ -87,7 +87,10 @@ type Admin = ReturnType<typeof createAdminClient>
 /** Every live insight's similarity to one subject, at no threshold at all —
  *  p_low 0 makes subject_band a plain scorer, which is what a calibration needs
  *  and a membership pass must never do. p_judge is a version nothing has ever
- *  been decided under, so nothing is filtered out. */
+ *  been decided under, so no judged pair is filtered out. A pair a PERSON has
+ *  corrected is filtered out, at every judge version, and belongs out: the
+ *  shipped procedure's answer there is the person's, not the one this sheet is
+ *  measuring. */
 async function scoreAll(admin: Admin, clientId: string, subjectId: string) {
   return selectAll<{ audience_insight_id: string; score: number }>(() =>
     admin

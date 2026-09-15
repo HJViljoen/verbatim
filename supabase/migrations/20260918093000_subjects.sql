@@ -124,7 +124,10 @@ create table if not exists public.subject_memberships (
   member              boolean not null,
   -- How it was decided. `embedding_high` is the vector alone above the high
   -- threshold; `judge` is a gpt-4.1-mini call on a pair inside the band.
-  -- `client` is a hand correction from Settings, and it outranks both.
+  -- `client` is a hand correction from Settings, and it outranks both:
+  -- subject_band() excludes a pair with a `client` row whatever judge version
+  -- it carries, so a threshold move or a prompt change re-judges everything
+  -- EXCEPT what a person decided.
   method              text not null check (method in ('embedding_high', 'judge', 'client')),
   -- Cosine similarity at the moment of the decision, when a vector produced it.
   score               numeric,
@@ -242,13 +245,20 @@ as $$
       select 1 from public.subject_memberships m
       where m.subject_id = s.id
         and m.audience_insight_id = ai.id
-        and m.judge_version = p_judge
+        -- Decided at this judge version, OR decided by a person. `client` is a
+        -- hand correction from Settings and this is what makes the column
+        -- comment true: without the second arm, the next JUDGE_VERSION bump —
+        -- the event this design explicitly says to budget for — would hand
+        -- every corrected pair back to the model and the upsert on
+        -- (subject_id, audience_insight_id) would overwrite the correction with
+        -- whatever it said this time. A person's answer is not re-bought.
+        and (m.judge_version = p_judge or m.method = 'client')
     )
   order by ai.id
 $$;
 
 comment on function public.subject_band(uuid, uuid, float8, float8, text) is
-  'The (subject, insight) pairs one membership run must act on: every live insight whose phrase similarity clears p_low and which has no decision at p_judge yet, banded `member` at or above p_high and `judge` below it. Pairs under p_low are absent — that answer is the vector''s and is free to recompute. Reads audience_insights_current, as AGENTS.md requires a population read to.';
+  'The (subject, insight) pairs one membership run must act on: every live insight whose phrase similarity clears p_low and which has neither a decision at p_judge nor a hand correction (method = client) yet, banded `member` at or above p_high and `judge` below it. Pairs under p_low are absent — that answer is the vector''s and is free to recompute. Reads audience_insights_current, as AGENTS.md requires a population read to.';
 
 revoke all on function public.subject_band(uuid, uuid, float8, float8, text) from public, anon, authenticated;
 grant execute on function public.subject_band(uuid, uuid, float8, float8, text) to service_role;
