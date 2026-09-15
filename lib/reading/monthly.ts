@@ -961,9 +961,19 @@ export async function freezeMonths(
 
     const freshKinds = await readKindReadings(admin, opts.clientId, window)
     const storedKinds = await storedKindReadings(admin, opts.clientId, months)
+    // NO `clusteringKey` ON EITHER OF THESE TWO, AND IT IS THE SAME ARGUMENT
+    // BOTH TIMES. `audience_insights.category` is an enum Pass A writes and
+    // `videos.sentiment` is a reading of one video's comments; a re-grouping of
+    // insights into themes cannot move either. `kindChange` and `moodChange`
+    // already strip the clustering caveat the shared rule would add, and a key
+    // STORED on these rows would hand it straight back to any later reader that
+    // built a SeriesPoint off the table — `directionWord` would then refuse a
+    // kind's direction word across a clustering boundary, which is exactly the
+    // asymmetry this migration's header says is deliberate. So the two tables
+    // carry no such column and nothing here writes one.
     kindMerge = mergeMonthRows({
       months, fresh: freshKinds, stored: storedKinds, keyOf: kindReadingKey, now, runId: opts.runId,
-      clusteringKey, closedAudienceMonths,
+      closedAudienceMonths,
     })
     kindRows = kindMerge.writes.map((r) => ({ ...r, client_id: opts.clientId }))
 
@@ -971,7 +981,7 @@ export async function freezeMonths(
     const storedStats = await storedAudienceStats(admin, opts.clientId, months)
     statsMerge = mergeMonthRows({
       months, fresh: freshStats, stored: storedStats, keyOf: denominatorKey, now, runId: opts.runId,
-      clusteringKey, closedAudienceMonths,
+      closedAudienceMonths,
     })
     statsRows = statsMerge.writes.map((r) => ({ ...r, client_id: opts.clientId, panel_id: panelId }))
   } catch (e) {

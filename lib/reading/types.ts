@@ -178,13 +178,24 @@ export type DenominatorRow = DenominatorReading & FreezeColumns & { client_id: s
 /** A `month_theme_readings` row, ready to upsert. */
 export type ThemeReadingRow = ThemeReading & FreezeColumns & { client_id: string }
 
-/** A `month_kind_readings` row, ready to upsert. */
-export type KindReadingRow = KindReading & FreezeColumns & { client_id: string }
+/** A `month_kind_readings` row, ready to upsert.
+ *
+ *  NO `clustering_key`, AND THE TYPE IS WHERE THAT IS ENFORCED. A kind is an
+ *  enum the Pass A writer emits, so a kind month is comparable across a
+ *  clustering boundary where a theme month is not (`KindReading` above, and the
+ *  head of 20260918094000). `kindChange` strips the clustering caveat from its
+ *  verdict — but a key STORED on the row would hand it back to any later reader
+ *  that built a `SeriesPoint` straight off the table, and `directionWord` would
+ *  then refuse a kind's direction word across a boundary that does not apply to
+ *  it. The column does not exist and this type cannot name it. */
+export type KindReadingRow = KindReading & Omit<FreezeColumns, 'clustering_key'> & { client_id: string }
 
 /** A `month_audience_stats` row, ready to upsert. `panel_id` is null on a row
  *  written before any panel was frozen: the mood half stands on its own and
- *  does not wait for one. */
-export type AudienceStatsRow = AudienceStatsReading & FreezeColumns & {
+ *  does not wait for one. No `clustering_key`, for the reason `KindReadingRow`
+ *  gives: a re-grouping of insights into themes cannot change how a video was
+ *  received, and a stored key would tell a later reader that it could. */
+export type AudienceStatsRow = AudienceStatsReading & Omit<FreezeColumns, 'clustering_key'> & {
   client_id: string
   panel_id: string | null
 }

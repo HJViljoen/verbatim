@@ -232,6 +232,25 @@ describe('mergeMonthRows — a frozen row is never rewritten', () => {
     expect('clustering_key' in unset.writes[0]).toBe(false)
   })
 
+  // The kind and mood rows are merged by the same function and MUST NOT get a
+  // key: a kind is an enum Pass A writes, so a kind month is comparable across a
+  // clustering boundary, and a stored key would hand `clustering_unknown` and a
+  // refused direction word back to any reader that built a series off the table.
+  // The two tables have no such column; this pins the caller's half of it.
+  it('writes no clustering key onto a kind row, whatever the run recorded', () => {
+    const fresh = [{ month: '2026-10-01', audience: 'industry-other', kind: 'question', videos: 12 }]
+    const key = 'a=pass_a_v4.1;c=0.58;f=2;m=gpt-5.4;k=video_v1'
+    const result = mergeMonthRows({ months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN })
+    expect('clustering_key' in result.writes[0]).toBe(false)
+    // The merge itself is generic and would stamp one if asked — the guarantee
+    // is the caller's (freezeMonths passes none for these two tables) and the
+    // column's (neither table has it). This pins the first half.
+    const asked = mergeMonthRows({
+      months, fresh, stored: [], keyOf: kindReadingKey, now, runId: RUN, clusteringKey: key,
+    })
+    expect(asked.writes[0]).toMatchObject({ clustering_key: key })
+  })
+
   it('rewrites a filling row and freezes it when its line has passed', () => {
     const fresh = [reading('2026-08-01', 'industry-other', 't1', 97), reading('2026-10-01', 'industry-other', 't1', 4)]
     const result = mergeMonthRows({

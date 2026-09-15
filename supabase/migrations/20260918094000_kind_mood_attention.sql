@@ -113,7 +113,15 @@ create table if not exists public.month_kind_readings (
   read_at            timestamptz not null,
   run_id             uuid references public.pipeline_runs(id) on delete set null,
   frozen_at          timestamptz,
-  clustering_key     text,
+  -- NO clustering_key, WHERE month_theme_readings HAS ONE. That is the same
+  -- asymmetry the header argues for, carried into the record instead of only
+  -- into the comparison: a kind is an enum the Pass A writer emits, so a kind
+  -- month is comparable across a clustering boundary. lib/reading/kinds.ts
+  -- strips the clustering caveat from its verdict — and a key stored HERE would
+  -- hand it straight back to any later reader that built a series point off
+  -- this table, at which point directionWord would refuse a kind's direction
+  -- word across a boundary that does not apply to it. The column a reader must
+  -- never consult is better absent than present and documented.
   primary key (client_id, month, audience, kind)
 );
 
@@ -223,7 +231,9 @@ create table if not exists public.month_audience_stats (
   read_at            timestamptz not null,
   run_id             uuid references public.pipeline_runs(id) on delete set null,
   frozen_at          timestamptz,
-  clustering_key     text,
+  -- No clustering_key here either, for the reason month_kind_readings gives
+  -- above: a re-grouping of insights into themes cannot move which kind an
+  -- insight is and cannot change how a video was received.
   primary key (client_id, month, audience)
 );
 
