@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'fs'
 
+import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import {
   calibrationQuota,
@@ -55,6 +56,11 @@ import {
 // ground truth to compute against. The sample is hashed rather than strided so
 // the sheet that gets labelled is the sheet that gets scored, and so the sample
 // is not secretly a sample of whichever run last re-read the corpus.
+//
+// AND IT CARRIES AN ACTOR. `subjects` has no audit trigger, and this write
+// decides whether a client is shown a number at all — so --apply logs a
+// config_changes row (surface `subjects`) with the command as its label, the
+// same way nameSubject, retireSubject and declareMove do for a browser write.
 //
 // SPENDS NOTHING. It reads vectors that already exist and judge decisions that
 // have already been paid for. A pair inside the band with no decision on file
@@ -200,17 +206,36 @@ async function main() {
     const clears = clearsPrecisionGate(shipped)
     console.log(`  → ${clears ? 'READY' : 'CALIBRATING'} at the shipped pair` + (shipped.unknown > 0 ? ` (${shipped.unknown} band pairs have no judge decision on file; run scripts/subject-membership.ts --apply first for a complete figure)` : ''))
     if (apply) {
+      const after = {
+        calibrated_at: new Date().toISOString(),
+        calibration_precision: shipped.precision,
+        calibration_n: pairs.length,
+        calibration_judge_version: JUDGE_VERSION,
+      }
       const { error } = await admin
         .from(TABLE_SUBJECTS)
-        .update({
-          calibrated_at: new Date().toISOString(),
-          calibration_precision: shipped.precision,
-          calibration_n: pairs.length,
-          calibration_judge_version: JUDGE_VERSION,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...after, updated_at: new Date().toISOString() })
         .eq('id', s.id)
       if (error) throw new Error(`subjects calibration write: ${error.message}`)
+      // Every configuration write carries an actor (AGENTS.md). There is no
+      // trigger on `subjects` to catch this one, and it is the write that
+      // decides whether a client sees a share at all.
+      await recordConfigChange(admin, {
+        clientId,
+        surface: 'subjects',
+        field: 'calibration',
+        before: {
+          id: s.id,
+          name: s.name,
+          calibrated_at: s.calibrated_at,
+          calibration_precision: s.calibration_precision,
+          calibration_n: s.calibration_n,
+          calibration_judge_version: s.calibration_judge_version,
+        },
+        after: { id: s.id, name: s.name, ...after },
+        actor: scriptActor(`scripts/subject-calibration.ts --client ${clientId} --score ${score} --apply`),
+        note: `precision measured by hand on ${pairs.length} labelled pairs at ${SUBJECT_MATCH_HIGH}/${SUBJECT_MATCH_LOW}`,
+      })
       console.log(`  recorded: ${shipped.precision === null ? 'no precision' : `${(100 * shipped.precision).toFixed(1)}%`} over ${pairs.length} pairs`)
     }
     console.log('')
