@@ -53,7 +53,11 @@ export type Mood = (typeof MOODS)[number]
 export const MOOD_LABELS: Record<Mood, string> = {
   positive: 'Warm',
   mixed: 'Both ways',
-  neutral: 'Flat',
+  // NOT "Flat". `Direction` (lib/reading/bands.ts) already owns that word for a
+  // different claim — three readings that exist and do not agree — and the two
+  // will sit on the same block: a mood line under a direction word reading
+  // "Flat / flat" would be two answers to two questions wearing one label.
+  neutral: 'Matter-of-fact',
   negative: 'Cold',
 }
 

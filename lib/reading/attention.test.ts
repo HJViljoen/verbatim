@@ -7,6 +7,7 @@ import {
   derivePanel,
   isMissingKindMoodAttention,
   onPanel,
+  PANEL_EXCLUDES_NOTE,
   PANEL_STALING_SURFACES,
   attentionRowOf,
   attentionRowsOf,
@@ -136,6 +137,17 @@ describe('panelStale', () => {
       expect(PANEL_STALING_SURFACES).not.toContain(surface)
       expect(panelStale(panel, [{ changed_at: '2026-09-09T10:00:00Z', surface }])).toBe(false)
     }
+  })
+})
+
+describe('PANEL_EXCLUDES_NOTE', () => {
+  // WP11, WP14 and WP17 print this verbatim beside comment and share figures,
+  // where lib/calibration.ts fixes "conversation" as "one video and the
+  // comments it sparked". Using it colloquially here would put two meanings
+  // under one word on one block.
+  it('stays out of the calibrated vocabulary it sits beside', () => {
+    expect(PANEL_EXCLUDES_NOTE.toLowerCase()).not.toContain('conversation')
+    expect(PANEL_EXCLUDES_NOTE).toContain('Reddit')
   })
 })
 

@@ -37,8 +37,9 @@ import { TABLE_ATTENTION_PANELS, type PlatformMix } from './types'
 // 20260814120000_subreddits — so at any workable cutoff the Reddit panel is
 // empty by construction. It is also the one platform whose comment count is not
 // comparable: a thread caps at 40 stored comments where every other platform
-// caps at 100, and a thread's replies are one conversation rather than N
-// reactions to a post. The exclusion is enforced here and said once per block.
+// caps at 100, and its replies answer each other rather than the post, so they
+// are not N reactions to one piece of content the way a video's are. The
+// exclusion is enforced here and said once per block.
 //
 // `comments_count`, NOT `comments_count_at_scrape`. The design names the latter;
 // it is null on 35% of Össur's rows and 50% of Sealand's and means "as at the
@@ -57,9 +58,15 @@ export const PANEL_LEAD_MONTHS = 3
 export const PANEL_EXCLUDED_PLATFORMS: readonly string[] = ['reddit']
 
 /** The sentence a block prints once, wherever an attention figure appears.
- *  Calibrated copy: it says what was left out and why, in the reader's terms. */
+ *  Calibrated copy: it says what was left out and why, in the reader's terms.
+ *
+ *  "conversation" is NOT in it. lib/calibration.ts fixes that word as "one
+ *  video and the comments it sparked — the unit behind every 'heard in…' and
+ *  share figure", and this is the one sentence WP11, WP14 and WP17 print
+ *  verbatim beside those figures; using it colloquially, two words from a
+ *  comment count, would put two meanings under one word on the same block. */
 export const PANEL_EXCLUDES_NOTE =
-  'Reddit is left out of this comparison: a thread collects replies to a conversation rather than reactions to a post, so its comment count is not the same measurement.'
+  'Reddit is left out of this comparison: on a thread people reply to each other rather than to the post, so its comment count is not the same measurement as a video\'s.'
 
 /** Why a panel exists. Mirrors the `attention_panels.reason` CHECK. */
 export const PANEL_REASONS = ['first_freeze', 'tracking_change', 'manual', 'backfill'] as const

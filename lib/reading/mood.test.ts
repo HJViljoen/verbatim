@@ -64,6 +64,16 @@ describe('the four-way distribution', () => {
     expect(sep.find((s) => s.mood === 'mixed')!.pct).toBe(13.3)
   })
 
+  // Two vocabularies land on one block: the mood labels and the direction word
+  // a series earns. They may not share a token, or a reader sees one word
+  // answering two questions.
+  it('shares no label with a direction word', () => {
+    const directions = ['growing', 'fading', 'flat']
+    for (const label of Object.values(MOOD_LABELS)) {
+      expect(directions).not.toContain(label.toLowerCase())
+    }
+  })
+
   it('has no share at all when nothing was judged', () => {
     const none = moodShares({ judged: 0, positive: 0, negative: 0, neutral: 0, mixed: 0 })
     expect(none.every((s) => s.pct === null)).toBe(true)
