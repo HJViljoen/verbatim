@@ -732,7 +732,10 @@ export function recordLines(input: RecordInputs): string[] {
   lines.push(
     i.themesPerVideo == null
       ? 'How many themes attach to each video has not been recorded yet.'
-      : `${i.themesPerVideo} themes attached per analysed video on the most recent update.`,
+      // `themesPerVideo` is Number(x.toFixed(2)), so an exact 1.00 prints as a
+      // bare `1` — one theme per video on a thin update, not a contrived input —
+      // and the noun beside it was hard-coded plural.
+      : `${i.themesPerVideo} ${i.themesPerVideo === 1 ? 'theme' : 'themes'} attached per analysed video on the most recent update.`,
   )
 
   const c = input.changes
@@ -749,7 +752,7 @@ export function recordLines(input: RecordInputs): string[] {
     lines.push(
       input.comparisonsRefused === 0
         ? 'Every comparison this page asked for could be drawn.'
-        : `${plural(input.comparisonsRefused, 'comparison')} on this page could not be drawn and says why in its place.`,
+        : `${plural(input.comparisonsRefused, 'comparison')} on this page could not be drawn and ${input.comparisonsRefused === 1 ? 'says why in its place' : 'say why in their place'}.`,
     )
   }
 

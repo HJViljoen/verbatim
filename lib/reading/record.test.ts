@@ -165,6 +165,20 @@ describe('recordLines — every fact with its basis', () => {
   it('prints the reading date on every record', () => {
     expect(has('Reading as at 2026-09-15')).toBe(true)
   })
+
+  it('agrees its verbs with its subjects on both plural paths', () => {
+    expect(has('2 comparisons on this page could not be drawn and say why in their place')).toBe(true)
+    expect(recordLines(inputs({ comparisonsRefused: 1 }))
+      .some((l) => l.includes('1 comparison on this page could not be drawn and says why in its place'))).toBe(true)
+  })
+
+  it('counts one theme per video as one theme, not "1 themes"', () => {
+    // themesPerVideo is Number(x.toFixed(2)), so an exact 1.00 prints bare.
+    expect(recordLines(inputs({ instrument: { themesPerVideo: 1, themeAttachments: 400, analysedVideos: 400, runId: 'r' } }))
+      .some((l) => l.includes('1 theme attached per analysed video'))).toBe(true)
+    expect(has('2.4 themes attached per analysed video')).toBe(true)
+  })
+
 })
 
 describe('isMissingThemeMembers — "M2 is not applied" and nothing else', () => {
