@@ -33,6 +33,8 @@ import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
+import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary } from '@/lib/subjects/membership'
+import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
 import { PROMPT_VERSION as THEME_MERGE_PROMPT_VERSION } from '@/lib/pipeline/theme-merge'
@@ -1266,6 +1268,70 @@ export const runPipeline = inngest.createFunction(
         console.error(`[embed-insights] out of retries: ${e instanceof Error ? e.message : String(e)}`)
         return null
       })
+
+    // 4c. Subject membership (Phase 1, design item 4). Directly after
+    //     embed-insights, because it reads the vectors that step writes; well
+    //     before themes:<bucket>, the step that cannot afford more work.
+    //
+    //     TWO ADDITIVE IDS, each in its own position, never a rename or a
+    //     reorder: `plan-subject-membership` and `subject-membership:N-of-M`.
+    //     The plan step exists for the same reason plan-classify, plan-pass-a
+    //     and plan-themes do — Inngest needs the fan-out width before it can
+    //     create the steps, and a read outside a step would re-run at every
+    //     step boundary for the rest of the function.
+    //
+    //     M is the number of ACTIVE SUBJECTS, not a batch count: 5-8, bounded,
+    //     and the same on a retry because loadActiveSubjects orders by
+    //     (named_at, id). Each step reads its own band with one RPC call and
+    //     judges it in batches of twenty inside the step, so a subject's whole
+    //     decision is one retryable unit and one bad subject does not cost the
+    //     other seven.
+    //
+    //     Logged, NOT noteError'd — the keyword-discovery precedent, the same
+    //     one embed-insights and freeze-months take. A subject reading is a
+    //     record the run maintains alongside the report, and a clean run must
+    //     not close `partial` because a judgement pass had a bad day; the pairs
+    //     are still undecided next run, which IS the retry.
+    //
+    //     No-op when M4 is not applied, and a REFUSAL rather than a low number
+    //     when insight embedding coverage is short — see lib/subjects/membership.ts.
+    const subjects = await step
+      .run('plan-subject-membership', async () => {
+        const admin = createAdminClient()
+        try {
+          const named = await loadActiveSubjects(admin, clientId)
+          // The phrase vectors, here rather than in each batch step: 5-8 texts
+          // is one embeddings request and about half a millionth of a dollar,
+          // and every band read below is meaningless without them. Re-read
+          // afterwards so each step carries its subject's real embedding state
+          // — a subject that has just been given a vector must not arrive at
+          // its step still looking like one that never had one.
+          if (await embedSubjects(admin, named) > 0) return await loadActiveSubjects(admin, clientId)
+          return named
+        } catch (e) {
+          if (!isMissingSubjects(e)) throw e
+          console.log('[subject-membership] skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet')
+          return []
+        }
+      })
+      .catch((e) => {
+        console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
+        return []
+      })
+    for (let i = 0; i < subjects.length; i++) {
+      const subject = subjects[i]
+      await step
+        .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
+          const admin = createAdminClient()
+          const r = await judgeSubject(admin, subject, { clientId, runId })
+          console.log(`[subject-membership] ${membershipSummary(r)}`)
+          return r
+        })
+        .catch((e) => {
+          console.error(`[subject-membership] ${subject.name} out of retries: ${e instanceof Error ? e.message : String(e)}`)
+          return null
+        })
+    }
 
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
