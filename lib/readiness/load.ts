@@ -28,6 +28,14 @@ import type {
 // migrations add is guarded by that object's own narrow test, and a miss
 // becomes a null or a `false` the page prints as "not recorded yet" — never an
 // exception, because the page exists to help decide whether to apply them.
+//
+// THOSE THREE GUARDS ARE THE ONLY SWALLOWED ERRORS HERE. Everything else
+// throws, and the page fails rather than draws. The reason is the page's whole
+// premise: each row is a MEASUREMENT. A dropped `error` on a PostgREST read
+// hands back `count: null` / `data: null`, which coerces to 0 / [] / a default
+// — and thirteen rows of confident falsehood with nothing anywhere saying a
+// read failed is worse than a page that does not load. (`selectAll` already
+// throws; these scalar reads have to be made to match it.)
 
 /** How many of the most recent updates the delivery row prints. */
 export const RECENT_UPDATES = 8
@@ -41,11 +49,30 @@ function trackedAudiences(rivalNames: readonly string[]): string[] {
 
 const dayOf = (iso: string): string => iso.slice(0, 10)
 
+/** A HEAD count, or a thrown error — never a quiet zero. PostgREST returns
+ *  `count: null` on every failure, so `count ?? 0` on an unchecked result is
+ *  indistinguishable from an empty table. */
 async function headCount(
   build: () => PromiseLike<{ count: number | null; error: unknown }>,
 ): Promise<number> {
-  const { count } = await build()
+  const { count, error } = await build()
+  if (error) throw error
   return count ?? 0
+}
+
+/** The first row of an ordered read, or a thrown error. Same reason: a
+ *  `maybeSingle()` whose error is dropped reads as "there is no such row". */
+function firstRow<T>(result: { data: T | null; error: unknown }): T | null {
+  if (result.error) throw result.error
+  return result.data
+}
+
+/** A bounded read's rows, or a thrown error. Only for reads that cannot run
+ *  past 1,000 rows — a workspace's schedules; everything wider uses
+ *  `selectAll`, which already throws. */
+function allRows<T>(result: { data: T[] | null; error: unknown }): T[] {
+  if (result.error) throw result.error
+  return result.data ?? []
 }
 
 type Admin = ReturnType<typeof createAdminClient>
@@ -56,7 +83,9 @@ type Admin = ReturnType<typeof createAdminClient>
  *  error object. */
 async function slotsAreRecorded(admin: Admin): Promise<boolean> {
   const { error } = await admin.from('pipeline_runs').select('scheduled_for, stalled').limit(1)
-  return !isMissingBookkeepingColumn(error)
+  if (isMissingBookkeepingColumn(error)) return false
+  if (error) throw error
+  return true
 }
 
 async function loadUpdates(admin: Admin, clientId: string, withBookkeeping: boolean): Promise<UpdateInput[]> {
@@ -178,8 +207,8 @@ async function loadRetentionCohort(admin: Admin, clientId: string): Promise<{ co
       .is('refreshed_at', null).order('created_at', { ascending: true }).limit(1).maybeSingle(),
   ])
   const candidates = [
-    (refreshed.data?.refreshed_at as string | undefined) ?? null,
-    (never.data?.created_at as string | undefined) ?? null,
+    (firstRow(refreshed)?.refreshed_at as string | undefined) ?? null,
+    (firstRow(never)?.created_at as string | undefined) ?? null,
   ].filter((d): d is string => Boolean(d)).sort()
   const oldest = candidates[0] ?? null
   if (!oldest) return { cohortDay: null, cohortRows: 0 }
@@ -198,12 +227,17 @@ async function loadRetentionCohort(admin: Admin, clientId: string): Promise<{ co
 export async function loadReadiness(admin: Admin, clientId: string, now: Date = new Date()): Promise<ReadinessInputs> {
   const nowIso = now.toISOString()
 
-  const [{ data: client }, { data: tc }] = await Promise.all([
+  const [clientRead, tcRead] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     admin.from('tracking_configs')
       .select('brand_keywords, competitor_keywords, industry_keywords, exclude_terms, competitor_names, competitor_handles, subreddits, report_period, updated_at')
       .eq('client_id', clientId).maybeSingle(),
   ])
+  // Thirteen rows hang off this one read: a dropped error here would print
+  // "no rival is named", "nothing is watched", every term count 0 and the
+  // cadence defaulted — all of it wrong, none of it saying so.
+  const client = firstRow(clientRead)
+  const tc = firstRow(tcRead)
 
   const rivalNames = ((tc?.competitor_names as string[] | null) ?? []).filter(Boolean)
   const handles = (tc?.competitor_handles as Record<string, Record<string, string>> | null) ?? {}
@@ -234,9 +268,9 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
     headCount(gate),
     headCount(() => gate().eq('kept', true)),
     admin.from('gate_verdicts').select('created_at').eq('client_id', clientId)
-      .order('created_at', { ascending: true }).limit(1).maybeSingle(),
+      .order('created_at', { ascending: true }).limit(1).maybeSingle().then(firstRow),
     admin.from('report_schedules').select('name, active, recipients, last_sent_at').eq('client_id', clientId)
-      .order('created_at', { ascending: true }),
+      .order('created_at', { ascending: true }).then(allRows),
     loadChangeLog(admin, clientId),
     headCount(recs),
     headCount(() => recs().not('lineage_id', 'is', null)),
@@ -274,13 +308,13 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
       unflagged,
       gateRows,
       gateKept,
-      gateFirstAt: (gateFirst.data?.created_at as string | undefined) ?? null,
+      gateFirstAt: (gateFirst?.created_at as string | undefined) ?? null,
     },
     updates,
     slotsRecorded,
     delivery: {
       period: (tc?.report_period as string | undefined) ?? 'weekly',
-      schedules: ((schedules.data as { name: string; active: boolean; recipients: string[] | null; last_sent_at: string | null }[] | null) ?? [])
+      schedules: (schedules as { name: string; active: boolean; recipients: string[] | null; last_sent_at: string | null }[])
         .map((s) => ({
           name: s.name,
           active: Boolean(s.active),
@@ -337,8 +371,8 @@ async function loadChangeLog(admin: Admin, clientId: string): Promise<ReadinessI
   return {
     available: true,
     rows: count ?? 0,
-    firstLoggedAt: (first.data?.changed_at as string | undefined) ?? null,
-    lastChangeAt: (last.data?.changed_at as string | undefined) ?? null,
+    firstLoggedAt: (firstRow(first)?.changed_at as string | undefined) ?? null,
+    lastChangeAt: (firstRow(last)?.changed_at as string | undefined) ?? null,
   }
 }
 
