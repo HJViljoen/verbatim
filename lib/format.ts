@@ -63,6 +63,14 @@ export function fullDate(iso: string): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
 
+/** "2026-08-01" → "Aug 2026" (UTC). The unit the comment-dated reading is
+ *  drawn in: a day on a monthly axis would imply a precision the freeze line
+ *  does not have. */
+export function monthName(month: string): string {
+  const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
 /** "2026-08-16T07:07:51Z" → "Sun 16 Aug" (UTC). */
 export function weekdayDate(iso: string): string {
   const d = new Date(iso)
