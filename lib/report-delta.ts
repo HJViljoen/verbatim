@@ -321,7 +321,9 @@ export async function computeRunDelta(
  * Walks the distinct run ids by keyset — each step asks for the smallest
  * run_id greater than the last — and stops the moment the answer is yes: at
  * most MIN_REGISTRY_OBSERVATIONS reads of one row each, whatever the table
- * holds. What it replaces was a bare `.select('run_id')` capped at 1,000 with
+ * holds. Both steps ride `theme_observations_client_run_idx` as index-only
+ * scans (verified on production: three buffer hits, no sort), which is why
+ * this is cheaper than the read it replaces rather than merely safer. What it replaces was a bare `.select('run_id')` capped at 1,000 with
  * no order, over a table holding 2,386 rows (Össur) and 2,654 (Sealand), so
  * the distinct-run count was computed over an arbitrary thousand of them. It
  * spans two runs today only by luck of the volumes: Sealand's last update
