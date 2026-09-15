@@ -78,6 +78,29 @@ describe('composeInterpretation — the three labelled slots', () => {
     expect(out.sentences.some((s) => s.includes('a brand was renamed inside the window'))).toBe(true)
   })
 
+  it('writes the quarterly thin and refusal sentences as sentences', () => {
+    // Sentence-initial capital, and the verb agreeing with its subject. Both
+    // shipped wrong: "two of these carried…" and "two could have been compared
+    // and WAS not", in prose the product signs as its own.
+    const two = composeInterpretation('interpretation_quarterly', [
+      verdict({ state: 'too_little_data', objectLabel: 'Durability' }),
+      verdict({ state: 'too_little_data', objectId: 'reg2', objectLabel: 'Fit' }),
+      verdict({ state: 'refused', objectId: 'reg3', objectLabel: 'Comfort', refusedReason: 'rename' }),
+      verdict({ state: 'refused', objectId: 'reg4', objectLabel: 'Price', refusedReason: 'rename' }),
+    ], figures, [])
+    expect(two.sentences).toContain('Two of these carried too few videos to compare, so they are printed as levels only.')
+    expect(two.sentences.some((line) => line.startsWith('Two could have been compared and were not, because '))).toBe(true)
+  })
+
+  it('writes the singular quarterly sentences in the singular', () => {
+    const one = composeInterpretation('interpretation_quarterly', [
+      verdict({ state: 'too_little_data', objectLabel: 'Durability' }),
+      verdict({ state: 'refused', objectId: 'reg3', objectLabel: 'Comfort', refusedReason: 'rename' }),
+    ], figures, [])
+    expect(one.sentences).toContain('One of these carried too few videos to compare, so it is printed as a level only.')
+    expect(one.sentences.some((line) => line.startsWith('One could have been compared and was not, because '))).toBe(true)
+  })
+
   it('measures a week against its months, never on its own', () => {
     const out = composeInterpretation('interpretation_anomaly', [], figures, [])
     expect(out.sentences[0]).toBe('This week reads like the three months behind it.')

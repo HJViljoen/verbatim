@@ -163,8 +163,25 @@ function fallbackFor(
         ? 'Nothing cleared its band this quarter. What follows is the level each of these is running at, and the count behind it.'
         : `${listObjects(moved)} cleared the band this quarter. Everything else on this page is a level, not a change.`,
     )
-    if (thin.length > 0) sentences.push(`${countWord(thin.length)} of these carried too few videos to compare, so they are printed as levels only.`)
-    if (refused.length > 0) sentences.push(`${countWord(refused.length)} could have been compared and was not, because ${refusedBecause(refused)}.`)
+    // SENTENCE-INITIAL, AND THE VERB AGREES. `countWord` is built for
+    // mid-sentence use in listObjects; reusing it to OPEN a sentence shipped
+    // "two of these carried…" in lower case, and the refusal sentence shipped
+    // "two could have been compared and WAS not". Both in prose the product
+    // signs as its own ("We wrote this read ourselves this quarter.").
+    if (thin.length > 0) {
+      sentences.push(
+        thin.length === 1
+          ? 'One of these carried too few videos to compare, so it is printed as a level only.'
+          : `${capitalise(countWord(thin.length))} of these carried too few videos to compare, so they are printed as levels only.`,
+      )
+    }
+    if (refused.length > 0) {
+      sentences.push(
+        refused.length === 1
+          ? `One could have been compared and was not, because ${refusedBecause(refused)}.`
+          : `${capitalise(countWord(refused.length))} could have been compared and were not, because ${refusedBecause(refused)}.`,
+      )
+    }
     const level = levelSentence(answered[0] ?? verdicts[0], figures)
     if (level) sentences.push(level)
   }
@@ -222,6 +239,12 @@ const WORDS = ['none', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'e
  *  and small counts read better as words in a sentence. */
 function countWord(n: number): string {
   return n >= 0 && n < WORDS.length ? WORDS[n] : String(n)
+}
+
+/** A count word opening a sentence. `countWord` is written for mid-sentence
+ *  use and reusing it at the start of one shipped lower-case sentences. */
+function capitalise(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1)
 }
 
 /** Why a refusal, in the reader's words. The reasons are about our own
