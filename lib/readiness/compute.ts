@@ -317,13 +317,30 @@ function anomalyBaseline(i: ReadinessInputs): ReadinessRow {
     status, detail, 'ops', unlocks, notes)
 }
 
-/** The one line the row prints about the check's own record. */
+/** The one line the row prints about the check's own record.
+ *
+ *  THREE STATES, NOT TWO. "Not recorded yet" (no table), "no update has run the
+ *  check", and "N updates were compared and this is what they said" are
+ *  different answers, and an update the check REFUSED to compare — a thin week
+ *  — is a fourth thing again: it is counted separately rather than folded into
+ *  the updates that were compared, because a week nobody looked at cannot
+ *  support "nothing was unusual". */
 function anomalyRecordLine(a: ReadinessInputs['anomaly']): string {
   if (!a.available) return 'Flags raised — not recorded yet.'
-  if (a.flags.length === 0) return 'Flags raised — none so far.'
+  if (a.checks.length === 0) return 'Flags raised — no update has run the check yet.'
+  const compared = a.checks.filter((c) => c.outcome === 'flagged' || c.outcome === 'nothing_unusual').length
+  const skipped = a.checks.length - compared
+  const aside = skipped === 0
+    ? ''
+    : skipped === 1
+      ? ' One update was not compared with the months behind it.'
+      : ` ${fmtInt(skipped)} updates were not compared with the months behind them.`
+  if (compared === 0) return `Flags raised — none: no update has been compared yet.${aside}`
+  const updates = compared === 1 ? 'one update' : `${fmtInt(compared)} updates`
+  if (a.flags.length === 0) return `Flags raised — none in the ${updates} compared so far.${aside}`
   const newest = a.flags[0]
   const word = a.flags.length === 1 ? 'one' : fmtInt(a.flags.length)
-  return `Flags raised — ${word} so far, the most recent ${newest.label} in the week of ${fullDate(newest.weekStart)}.`
+  return `Flags raised — ${word} in the ${updates} compared so far, the most recent ${newest.label} in the week of ${fullDate(newest.weekStart)}.${aside}`
 }
 
 // ---- 8 · how much of each video was read ------------------------------------

@@ -43,9 +43,79 @@
 -- is a table that grows for nobody: `set_size` and `tested` on each flag carry
 -- the family the correction was made over, which is the only part of the
 -- unflagged set a reader of a flag needs. A week in which nothing fired writes
--- no row, and "nothing was unusual this week" is composed in code from that
--- absence — it always will be, because it is the answer the check gives most
--- weeks and it must never cost a model call.
+-- no row HERE, and "nothing was unusual this week" is composed in code from
+-- that absence — it always will be, because it is the answer the check gives
+-- most weeks and it must never cost a model call. What the absence is read
+-- AGAINST is `anomaly_checks` below: one row per update whatever the outcome,
+-- so "nothing fired" and "we never looked" are not the same silence.
+
+-- ONE ROW PER UPDATE, WHATEVER THE CHECK CONCLUDED. `anomaly_flags` holds only
+-- the weeks that fired, which leaves "we did not compare this week" and
+-- "nothing was unusual" as the same answer to every later reader — and they are
+-- not the same answer at all. The check suppresses itself when an update read
+-- well under its usual number of videos (decision M's thin gate), when the run
+-- covered no window, and when its migrations have not landed; each of those
+-- produces a calibrated sentence saying so, and before this table that sentence
+-- reached a console log and nowhere else.
+--
+-- So the check writes here every time it runs and the flags hang off this row
+-- by (client_id, run_id). A reader asking "has anything been unusual?" can now
+-- separate three states: no update has run the check, N updates ran it and none
+-- fired, N ran it and these are the weeks that did. Frozen the same way and for
+-- the same reason as the flags: the outcome is a statement about the corpus as
+-- it stood, and re-reading the week later gives a different one.
+create table if not exists public.anomaly_checks (
+  client_id  uuid not null references public.clients(id) on delete cascade,
+  run_id     uuid not null references public.pipeline_runs(id) on delete cascade,
+  -- The run's frozen window. NULLABLE, unlike the flags': the one outcome that
+  -- has no window is `no_window`, and that is exactly the case this row exists
+  -- to record.
+  week_start timestamptz,
+  week_end   timestamptz,
+  -- What the check did. `flagged` and `nothing_unusual` are readings;
+  -- `suppressed`, `no_window` and `missing_migration` are refusals to read, and
+  -- a surface that prints "nothing was unusual" must not print it for those.
+  outcome    text not null check (outcome in ('flagged', 'nothing_unusual', 'suppressed', 'no_window', 'missing_migration')),
+  -- The machine-readable half of a refusal: 'thin', 'failed', 'stalled', or
+  -- null when the check read the week.
+  reason     text,
+  -- The calibrated sentence the product would say — client-facing words, no
+  -- pipeline jargon (lib/calibration.ts). This is the half decision S's
+  -- "suppresses the check with the reason" was promising a reader.
+  note       text not null,
+  -- The family the Holm correction was made over, when there was one. Null on
+  -- a refusal, because no set was built.
+  set_size   int,
+  tested     int,
+  flagged_count int,
+  -- What the thin gate saw: this update's videos against the median of the
+  -- eight updates behind it. Stored so the gate's own behaviour is a
+  -- measurement rather than a memory.
+  update_videos int,
+  median_videos numeric,
+  read_at    timestamptz not null,
+  frozen_at  timestamptz not null default now(),
+  primary key (client_id, run_id)
+);
+
+comment on table public.anomaly_checks is
+  'One row per update the weekly anomaly check ran on, whatever it concluded — including the weeks it refused to compare. Without it "we did not compare this week" and "nothing was unusual" are the same silence, and they are different answers.';
+comment on column public.anomaly_checks.outcome is
+  'flagged / nothing_unusual are readings; suppressed / no_window / missing_migration are refusals to read. A surface may only say "nothing was unusual" for nothing_unusual.';
+
+create index if not exists anomaly_checks_week_idx
+  on public.anomaly_checks (client_id, week_start desc nulls last);
+
+alter table public.anomaly_checks enable row level security;
+
+drop policy if exists "Members read their anomaly checks" on public.anomaly_checks;
+create policy "Members read their anomaly checks" on public.anomaly_checks
+  for select to authenticated using (client_id = public.get_my_client_id());
+
+revoke all on public.anomaly_checks from authenticated, anon;
+grant select on public.anomaly_checks to authenticated;
+grant select, insert on public.anomaly_checks to service_role;
+revoke update, delete, truncate on public.anomaly_checks from service_role;
 
 create table if not exists public.anomaly_flags (
   client_id     uuid not null references public.clients(id) on delete cascade,
@@ -124,7 +194,12 @@ create table if not exists public.anomaly_flags (
   quote_refs    jsonb not null default '[]'::jsonb,
   read_at       timestamptz not null,
   frozen_at     timestamptz not null default now(),
-  primary key (client_id, run_id, object_kind, object_id)
+  primary key (client_id, run_id, object_kind, object_id),
+  -- A flag hangs off the update that raised it. The parent row is written
+  -- first and exists for every update, so this never refuses a legitimate
+  -- insert; what it does refuse is a flag with no record of the check that
+  -- produced it.
+  foreign key (client_id, run_id) references public.anomaly_checks (client_id, run_id) on delete cascade
 );
 
 comment on table public.anomaly_flags is
@@ -183,5 +258,18 @@ revoke update, delete, truncate on public.anomaly_flags from service_role;
 --     other tenant's, and holds no insert, update or delete;
 --   * the object_kind, baseline_regime and rank checks refuse a bad value;
 --   * deleting a client deletes its flags, and deleting a run deletes the
---     flags raised by it (both cascades).
+--     flags raised by it (both cascades);
+--   * a flag whose (client_id, run_id) has no anomaly_checks row is refused by
+--     the foreign key, and deleting the check row deletes its flags;
+--   * anomaly_checks takes every one of the five outcomes, refuses a sixth,
+--     accepts a null window only for the outcome that has none, and is
+--     append-only under the same two grants.
+--
+-- NOTHING CAN REMOVE A ROW FROM EITHER TABLE, INCLUDING A ROW A REHEARSAL
+-- WROTE. service_role holds SELECT and INSERT and no DELETE, which is the whole
+-- append-only design and is right — but it means decision Z's pre-Sunday
+-- `skipGather` rehearsal writes permanent rows out of a rehearsal corpus (the
+-- thin gate may or may not catch it), and the only removal is deleting the
+-- `pipeline_runs` row and taking the cascade. The W1 apply checklist has to say
+-- so before the rehearsal, not afterwards.
 -- ============================================================================

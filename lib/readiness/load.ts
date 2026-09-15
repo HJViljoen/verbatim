@@ -2,7 +2,7 @@ import { embeddingCoverage } from '../agent/retrieve'
 import { YOUTUBE_REFRESH_NIGHTLY_CAP } from '../config'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog } from '../config-log'
 import { parseSubreddits, subredditKey } from '../gather/subreddits'
-import { ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
+import { ANOMALY_CHECKS_TABLE, ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { isMissingMonthlyReading } from '../reading/monthly'
 import { TABLE_DENOMINATORS } from '../reading/types'
@@ -134,24 +134,35 @@ async function loadMonths(admin: Admin, clientId: string): Promise<MonthCountRow
   }
 }
 
-/** Every flag the weekly check has raised, newest first — or `available:
+/** What the weekly check has done and what it has raised — or `available:
  *  false` when 20260918096000 has not been applied and nothing could have been
- *  recorded. "Not recorded yet" and "nothing has been unusual" are two answers
- *  and the row prints whichever is true. */
-async function loadAnomalyFlags(admin: Admin, clientId: string): Promise<AnomalyInput> {
+ *  recorded.
+ *
+ *  BOTH TABLES, because three answers have to stay apart: nothing is recorded,
+ *  the check has never run, and the check has run N times and raised these.
+ *  The flags alone could only tell the first from the other two. */
+async function loadAnomaly(admin: Admin, clientId: string): Promise<AnomalyInput> {
   try {
-    type Row = { week_start: string; object_kind: string; label: string }
-    const rows = await selectAll<Row>(() =>
-      admin.from(ANOMALY_FLAGS_TABLE).select('week_start, object_kind, label').eq('client_id', clientId)
-        .order('week_start', { ascending: false })
-        .order('object_kind', { ascending: true })
-        .order('label', { ascending: true }))
+    type CheckRow = { week_start: string | null; outcome: string }
+    type FlagRow = { week_start: string; object_kind: string; label: string }
+    const [checks, rows] = await Promise.all([
+      selectAll<CheckRow>(() =>
+        admin.from(ANOMALY_CHECKS_TABLE).select('week_start, outcome').eq('client_id', clientId)
+          .order('week_start', { ascending: false, nullsFirst: false })
+          .order('run_id', { ascending: true })),
+      selectAll<FlagRow>(() =>
+        admin.from(ANOMALY_FLAGS_TABLE).select('week_start, object_kind, label').eq('client_id', clientId)
+          .order('week_start', { ascending: false })
+          .order('object_kind', { ascending: true })
+          .order('label', { ascending: true })),
+    ])
     return {
       available: true,
+      checks: checks.map((c) => ({ weekStart: c.week_start, outcome: c.outcome })),
       flags: rows.map((r) => ({ weekStart: r.week_start, objectKind: r.object_kind, label: r.label })),
     }
   } catch (e) {
-    if (isMissingAnomalyFlags(e)) return { available: false, flags: [] }
+    if (isMissingAnomalyFlags(e)) return { available: false, checks: [], flags: [] }
     throw e
   }
 }
@@ -283,7 +294,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
     loadCommunities(admin, clientId, tc?.subreddits),
     embeddingCoverage(admin, clientId),
     loadMonths(admin, clientId),
-    loadAnomalyFlags(admin, clientId),
+    loadAnomaly(admin, clientId),
     loadUpdates(admin, clientId, slotsRecorded),
     headCount(analysed),
     headCount(() => analysed().eq('analyzed_with_transcript', true)),

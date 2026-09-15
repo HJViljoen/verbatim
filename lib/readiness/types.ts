@@ -210,17 +210,22 @@ export interface RetentionInput {
   dueAfterDays: number
 }
 
-/** Everything the thirteen rows are computed from. One object, so `compute`
- *  can be exercised on a workspace's shape without a database. */
 /** What the weekly anomaly check has actually said. `available` is false until
  *  20260918096000 is applied — which is a different answer from "the rule has
  *  never fired", and the row says which. */
 export interface AnomalyInput {
   available: boolean
+  /** Every update the check ran on, newest first, whatever it concluded
+   *  (`anomaly_checks`). Without these, an update the check REFUSED to compare
+   *  — a thin week, a run with no window — is indistinguishable from one it
+   *  compared and found nothing in. */
+  checks: { weekStart: string | null; outcome: string }[]
   /** Flags raised, newest first, as `anomaly_flags` holds them. */
   flags: { weekStart: string; objectKind: string; label: string }[]
 }
 
+/** Everything the thirteen rows are computed from. One object, so `compute`
+ *  can be exercised on a workspace's shape without a database. */
 export interface ReadinessInputs {
   tenant: string
   /** The instant the page was drawn, ISO. Passed in rather than read, so the

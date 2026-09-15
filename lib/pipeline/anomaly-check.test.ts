@@ -8,6 +8,7 @@ import {
   explainerSystemPrompt,
   explainerUserPrompt,
   flagRows,
+  checkRow,
   isMissingAnomalyFlags,
   objectKey,
   pooledByObject,
@@ -15,7 +16,7 @@ import {
   regimesByObject,
   type BaselineRegime,
 } from './anomaly-check'
-import { weekVsBaseline, type AnomalyReading, type DenominatorSeries, type PreRegisteredObject } from '../reading/anomaly'
+import { thinUpdate, weekVsBaseline, type AnomalyReading, type DenominatorSeries, type PreRegisteredObject } from '../reading/anomaly'
 import { composeInterpretation, verdictBlock, type QuoteRef } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
 import { anomalyVerdict } from '../reading/anomaly'
@@ -177,6 +178,53 @@ describe('the flag row', () => {
     expect(row.explanation).toBeNull()
     expect(row.explanation_model).toBeNull()
     expect(row.quote_refs).toEqual([])
+  })
+})
+
+describe("the check's own row", () => {
+  const window = { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' }
+  const base = { clientId: 'c1', runId: 'r1', updateVideos: 205, readAt: '2026-09-14T06:00:00.000Z' }
+
+  it('records the reading when the week was compared', () => {
+    const row = checkRow({ ...base, window, status: 'flagged', note: 'n', reading: readingWithOneFlag(), suppression: null })
+    expect(row.outcome).toBe('flagged')
+    expect(row.reason).toBeNull()
+    expect(row.set_size).toBe(1)
+    expect(row.tested).toBe(1)
+    expect(row.flagged_count).toBe(1)
+    expect(row.week_start).toBe(window.from)
+  })
+
+  it('carries the calibrated reason a suppressed week would otherwise say to nobody', () => {
+    const suppression = thinUpdate({ analysedVideos: 40, status: 'completed', stalled: false }, [
+      { analysedVideos: 400 }, { analysedVideos: 420 }, { analysedVideos: 380 },
+    ])
+    expect(suppression.suppressed).toBe(true)
+    const row = checkRow({ ...base, window, status: 'suppressed', note: 'week not read — thin', reading: null, suppression })
+    expect(row.outcome).toBe('suppressed')
+    expect(row.reason).toBe('thin')
+    expect(row.note).toBe(suppression.note)
+    expect(row.median_videos).toBe(400)
+    // No set was built, so no family is claimed.
+    expect(row.set_size).toBeNull()
+    expect(row.tested).toBeNull()
+    expect(row.flagged_count).toBeNull()
+  })
+
+  it('records an update that covered no window at all, with no window on it', () => {
+    const row = checkRow({ ...base, window: null, status: 'no_window', note: 'no window', reading: null, suppression: null })
+    expect(row.week_start).toBeNull()
+    expect(row.week_end).toBeNull()
+    expect(row.outcome).toBe('no_window')
+    expect(row.note).toBe('no window')
+  })
+
+  it('separates "nothing was unusual" from "we did not look"', () => {
+    const clean = checkRow({ ...base, window, status: 'nothing_unusual', note: 'n', reading: readingWithOneFlag(), suppression: null })
+    const skipped = checkRow({ ...base, window, status: 'missing_migration', note: 'n', reading: null, suppression: null })
+    expect(clean.outcome).not.toBe(skipped.outcome)
+    expect(clean.tested).toBe(1)
+    expect(skipped.tested).toBeNull()
   })
 })
 

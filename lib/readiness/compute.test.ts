@@ -68,9 +68,14 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     reddit: { postsStored: 149, postsFromUnconfigured: 99 },
     embeddings: { embedded: 1680, total: 3129, lastEmbeddedAt: null },
     subjectSet: { defined: null },
-    // The table is there and the check has never fired — Össur's state on
-    // 2026-09-15, and a different answer from "not recorded yet".
-    anomaly: { available: true, flags: [] },
+    // The tables are there, eleven updates have been compared and the check has
+    // never fired — Össur's state on 2026-09-15, and a different answer both
+    // from "not recorded yet" and from "no update has run the check".
+    anomaly: {
+      available: true,
+      checks: Array.from({ length: 11 }, () => ({ weekStart: '2026-09-07T00:00:00.000Z', outcome: 'nothing_unusual' })),
+      flags: [],
+    },
     monthly: {
       tracked: ['client', 'competitor:Ottobock', 'industry-other'],
       months: months(
@@ -437,19 +442,59 @@ describe('the baseline behind an unusual week', () => {
       'Your own brand — baseline forming — 0 of 3 months',
       'Ottobock — baseline forming — 0 of 3 months',
       'The category — baseline ready',
-      'Flags raised — none so far.',
+      'Flags raised — none in the 11 updates compared so far.',
     ])
   })
 
   it('tells "nothing has been unusual" apart from "nobody was writing it down"', () => {
-    const never = find(computeReadiness(ossur({ anomaly: { available: false, flags: [] } })), 'anomaly-baseline')
+    const never = find(computeReadiness(ossur({ anomaly: { available: false, checks: [], flags: [] } })), 'anomaly-baseline')
     expect(never.notes.at(-1)).toBe('Flags raised — not recorded yet.')
+
+    // The tables exist and no update has reached the check yet — a third
+    // answer, and the one the first week after M7 is applied will give.
+    const unrun = find(computeReadiness(ossur({ anomaly: { available: true, checks: [], flags: [] } })), 'anomaly-baseline')
+    expect(unrun.notes.at(-1)).toBe('Flags raised — no update has run the check yet.')
+
+    // A week the check REFUSED to compare is counted apart from the weeks it
+    // compared: a thin update cannot support "nothing was unusual".
+    const thin = find(
+      computeReadiness(
+        ossur({
+          anomaly: {
+            available: true,
+            checks: [
+              { weekStart: '2026-09-07T00:00:00.000Z', outcome: 'suppressed' },
+              { weekStart: '2026-08-31T00:00:00.000Z', outcome: 'nothing_unusual' },
+            ],
+            flags: [],
+          },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    expect(thin.notes.at(-1)).toBe(
+      'Flags raised — none in the one update compared so far. One update was not compared with the months behind it.',
+    )
+
+    const noneCompared = find(
+      computeReadiness(
+        ossur({
+          anomaly: { available: true, checks: [{ weekStart: null, outcome: 'no_window' }], flags: [] },
+        }),
+      ),
+      'anomaly-baseline',
+    )
+    expect(noneCompared.notes.at(-1)).toMatch(/^Flags raised — none: no update has been compared yet\./)
 
     const raised = find(
       computeReadiness(
         ossur({
           anomaly: {
             available: true,
+            checks: [
+              { weekStart: '2026-09-07T00:00:00.000Z', outcome: 'flagged' },
+              { weekStart: '2026-08-10T00:00:00.000Z', outcome: 'flagged' },
+            ],
             flags: [
               { weekStart: '2026-09-07T00:00:00.000Z', objectKind: 'kind', label: 'Objections' },
               { weekStart: '2026-08-10T00:00:00.000Z', objectKind: 'kind', label: 'Praise' },
@@ -459,7 +504,7 @@ describe('the baseline behind an unusual week', () => {
       ),
       'anomaly-baseline',
     )
-    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 so far, the most recent Objections in the week of /)
+    expect(raised.notes.at(-1)).toMatch(/^Flags raised — 2 in the 2 updates compared so far, the most recent Objections in the week of /)
   })
 
   it('is one month of three on the trial workspace', () => {

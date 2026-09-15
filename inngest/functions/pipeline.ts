@@ -1634,6 +1634,10 @@ export const runPipeline = inngest.createFunction(
     //
     // ONE MODEL CALL, AND ONLY IF SOMETHING FIRED. gpt-4.1-mini, ~$0.0014 on a
     // week that flags and $0 on the ~21 of 22 tenant-weeks that do not.
+    //
+    // AND ONE ROW EVERY TIME, flagged or not, compared or not
+    // (`anomaly_checks`): a week the check refused to read has a reason, and a
+    // reason that only reaches this log is a reason nobody has.
     await step
       .run('anomaly-check', async () => {
         const r = await runAnomalyCheck({

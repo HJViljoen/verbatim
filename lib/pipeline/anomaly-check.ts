@@ -101,6 +101,14 @@ import { createAdminClient, selectAll } from '../supabase-admin'
 // "nothing was unusual this week" is composed in code from an empty flag list
 // and always will be, because it is the answer most weeks give.
 //
+// EVERY UPDATE LEAVES A ROW, EVEN THE ONES THAT ARE NOT COMPARED. The check
+// refuses to read a week three ways — a thin update, a run with no window, a
+// migration that has not landed — and each refusal has a calibrated sentence
+// attached to it. Those sentences used to reach a console log and nowhere else,
+// which made "we did not compare this week" and "nothing was unusual" the same
+// silence to every later reader. `anomaly_checks` takes one row per update
+// whatever the outcome, and the flags hang off it.
+//
 // NON-FATAL, AND A NO-OP BEFORE ITS MIGRATION LANDS. The keyword-discovery and
 // freeze-months precedent: a record kept alongside the report must not make a
 // clean run read `partial`, and a step whose table does not exist yet logs one
@@ -126,6 +134,11 @@ export const MAX_EXPLAINER_QUOTES = 8
 export const WEEK_COMMENT_CAP = 400
 
 export const ANOMALY_FLAGS_TABLE = 'anomaly_flags'
+
+/** One row per update the check ran on, whatever it concluded. The flags hang
+ *  off it, and it is what makes "nothing fired" different from "we never
+ *  looked". */
+export const ANOMALY_CHECKS_TABLE = 'anomaly_checks'
 
 /** Updates behind this one whose size the thin gate takes its median from.
  *  Eight: two months of a weekly cadence, long enough that one thin week does
@@ -365,6 +378,53 @@ function explanationJson(i: Interpretation): Record<string, unknown> {
   }
 }
 
+// ---- The check's own row -----------------------------------------------------
+
+export interface CheckRowInput {
+  clientId: string
+  runId: string
+  /** Null only for `no_window` — the one outcome that covered no days. */
+  window: AnomalyWindow | null
+  status: AnomalyCheckStatus
+  note: string
+  reading: AnomalyReading | null
+  suppression: ThinUpdateVerdict | null
+  updateVideos: number | null
+  readAt: string
+}
+
+/**
+ * The row `anomaly_checks` takes — one per update, whatever the check did.
+ *
+ * WHY IT EXISTS. `anomaly_flags` records only the weeks that fired, so without
+ * this row "this update read well under its usual number of videos, so this
+ * week is not compared with the months behind it" and "nothing was unusual"
+ * are the same silence to every later reader. They are not the same answer, and
+ * decision S's "suppresses the check with the reason" was a promise that the
+ * reason reaches somebody. The calibrated sentence travels in `note`; the
+ * machine-readable half travels in `reason`.
+ */
+export function checkRow(input: CheckRowInput): Record<string, unknown> {
+  const read = input.status === 'flagged' || input.status === 'nothing_unusual'
+  return {
+    client_id: input.clientId,
+    run_id: input.runId,
+    week_start: input.window?.from ?? null,
+    week_end: input.window?.to ?? null,
+    outcome: input.status,
+    reason: input.suppression?.suppressed ? input.suppression.reason : null,
+    // The sentence a person would be shown. `thinUpdate` writes a calibrated
+    // one; every other outcome falls back to the run log's own line.
+    note: (input.suppression?.suppressed ? input.suppression.note : null) ?? input.note,
+    set_size: read ? input.reading?.setSize ?? null : null,
+    tested: read ? input.reading?.tested ?? null : null,
+    flagged_count: read ? input.reading?.flaggedCount ?? 0 : null,
+    update_videos: input.updateVideos ?? null,
+    median_videos: input.suppression?.median ?? null,
+    read_at: input.readAt,
+  }
+}
+
 // ---- The figures the explainer may cite --------------------------------------
 
 /**
@@ -454,7 +514,9 @@ export function isMissingAnomalyFlags(error: unknown): boolean {
   if (!error) return false
   const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
   const text = message ?? (error instanceof Error ? error.message : String(error))
-  if (!text.includes(ANOMALY_FLAGS_TABLE)) return false
+  // Either table: they land in the same migration, so a deploy that arrives
+  // before it is missing both.
+  if (![ANOMALY_CHECKS_TABLE, ANOMALY_FLAGS_TABLE].some((t) => text.includes(t))) return false
   if (code && ['PGRST202', 'PGRST205', '42883', '42P01'].includes(code)) return true
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
@@ -735,8 +797,50 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     costUsd: 0,
   }
 
+  /**
+   * The one row that says this update was checked — written at EVERY exit,
+   * before any flag hangs off it.
+   *
+   * Returns false when 20260918096000 has not been applied, which is a logged
+   * line and not a throw: the check still ran and its verdict is still the
+   * caller's answer, there is simply nowhere yet to keep it.
+   */
+  const recordCheck = async (r: {
+    status: AnomalyCheckStatus
+    note: string
+    window: AnomalyWindow | null
+    reading?: AnomalyReading | null
+    suppression?: ThinUpdateVerdict | null
+  }): Promise<boolean> => {
+    if (!persist) return true
+    const row = checkRow({
+      clientId: args.clientId,
+      runId: args.runId,
+      window: r.window,
+      status: r.status,
+      note: r.note,
+      reading: r.reading ?? null,
+      suppression: r.suppression ?? null,
+      updateVideos: args.updateVideos ?? null,
+      readAt,
+    })
+    // ON CONFLICT DO NOTHING, for the reason the flags use it: a retry of this
+    // step re-states nothing, and the table holds no UPDATE privilege.
+    const { error } = await admin
+      .from(ANOMALY_CHECKS_TABLE)
+      .upsert([row], { onConflict: 'client_id,run_id', ignoreDuplicates: true })
+    if (!error) return true
+    if (isMissingAnomalyFlags(error)) {
+      console.log(`[anomaly-check] ${r.status} not recorded: ${ANOMALY_CHECKS_TABLE} does not exist yet`)
+      return false
+    }
+    throw new Error(`anomaly-check ${ANOMALY_CHECKS_TABLE}: ${(error as { message?: string }).message ?? String(error)}`)
+  }
+
   if (!args.window?.start) {
-    return { ...empty, status: 'no_window', note: 'this update covered no window — nothing to compare a week against' }
+    const note = 'this update covered no window — nothing to compare a week against'
+    await recordCheck({ status: 'no_window', note, window: null })
+    return { ...empty, status: 'no_window', note }
   }
   const window: AnomalyWindow = { from: args.window.start, to: args.window.end }
 
@@ -777,7 +881,9 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     trailing.map((r) => ({ analysedVideos: r.videos_scraped })),
   )
   if (suppression.suppressed) {
-    return { ...empty, status: 'suppressed', suppression, note: `week not read — ${suppression.reason}` }
+    const note = `week not read — ${suppression.reason}`
+    await recordCheck({ status: 'suppressed', note, window, suppression })
+    return { ...empty, status: 'suppressed', suppression, note }
   }
 
   const months = trailingCompleteMonths(window.from, BASELINE_MONTHS)
@@ -792,18 +898,15 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     regimes = built.regimes
   } catch (e) {
     if (!isMissingMonthTable(e) && !isMissingKindMoodAttention(e)) throw e
-    return { ...empty, status: 'missing_migration', note: 'skipped: the month reading and window functions have not been applied yet' }
+    const note = 'skipped: the month reading and window functions have not been applied yet'
+    await recordCheck({ status: 'missing_migration', note, window })
+    return { ...empty, status: 'missing_migration', note }
   }
 
   if (reading.flags.length === 0) {
-    return {
-      ...empty,
-      status: 'nothing_unusual',
-      reading,
-      registration,
-      suppression,
-      note: `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`,
-    }
+    const note = `nothing unusual — ${reading.tested} of ${reading.setSize} objects tested`
+    await recordCheck({ status: 'nothing_unusual', note, window, reading, suppression })
+    return { ...empty, status: 'nothing_unusual', reading, registration, suppression, note }
   }
 
   // ---- The one model call, and only now ----
@@ -856,6 +959,28 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     explanation,
     explanationModel: call.model,
   })
+
+  // The parent row first: a flag hangs off the record of the check that raised
+  // it, and the foreign key says so.
+  const recorded = await recordCheck({
+    status: 'flagged',
+    note: `${reading.flaggedCount} flagged of ${reading.tested} tested in a set of ${reading.setSize}`,
+    window,
+    reading,
+    suppression,
+  })
+  if (!recorded) {
+    return {
+      status: 'missing_migration',
+      note: 'skipped: supabase/migrations/20260918096000_anomaly_flags.sql has not been applied yet',
+      reading,
+      registration,
+      suppression,
+      written: 0,
+      explanation,
+      costUsd: call.costUsd,
+    }
+  }
 
   let written = 0
   if (persist) {
