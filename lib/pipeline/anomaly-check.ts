@@ -186,6 +186,7 @@ interface StoredMonthRow {
   month: string
   audience: string
   videos: number
+  status?: string | null
   run_id?: string | null
   clustering_key?: string | null
   judge_version?: string | null
@@ -232,6 +233,33 @@ export function pooledByObject(
     out.set(id, months.filter((m) => per.has(m)).map((month) => ({ month, videos: per.get(month) ?? 0 })))
   }
   return out
+}
+
+/**
+ * Which of the pooled baseline months had NOT frozen when the baseline was
+ * read.
+ *
+ * A month is `filling` until 30 days after it ends and `frozen` after
+ * (AGENTS.md), so on EVERY weekly run at least one of the trailing three
+ * months is still moving — and on today's corpus it is the largest of them.
+ * Measured read-only on production 2026-09-15: Össur's baseline is 1,089
+ * videos of which August's still-filling 721 is 66%; Sealand's is 493 of which
+ * August is 407, 83%. A reader of a flag cannot be told which months went in
+ * and not told that most of the baseline was still moving when the statement
+ * was made.
+ *
+ * A month with no row at all is absent rather than filling: its zero is
+ * already visible in `baseline_n`. A row whose status is anything but `frozen`
+ * — including a null one written before the column existed — counts as still
+ * moving, because the claim being made is "this had settled".
+ */
+export function fillingMonths(rows: readonly StoredMonthRow[], months: readonly string[]): string[] {
+  const moving = new Set<string>()
+  for (const r of rows) {
+    const month = monthStartOf(r.month)
+    if (r.status !== 'frozen') moving.add(month)
+  }
+  return months.filter((m) => moving.has(m))
 }
 
 /**
@@ -290,6 +318,8 @@ export interface FlagRowInput {
   window: AnomalyWindow
   reading: AnomalyReading
   baselineMonths: readonly string[]
+  /** Those of `baselineMonths` that had not frozen yet. */
+  baselineFillingMonths: readonly string[]
   regimes: ReadonlyMap<string, BaselineRegime>
   readAt: string
   explanation?: Interpretation | null
@@ -315,6 +345,7 @@ export function flagRows(input: FlagRowInput): Record<string, unknown>[] {
     baseline_k: flag.baselineVideos,
     baseline_n: flag.baselineTotal,
     baseline_months: [...input.baselineMonths],
+    baseline_filling_months: [...input.baselineFillingMonths],
     baseline_regime: input.regimes.get(regimeKey(flag)) ?? 'not_grouped',
     change_pts: flag.verdict?.change ?? 0,
     band_pts: flag.verdict?.band ?? 0,
@@ -892,11 +923,13 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   let reading: AnomalyReading
   let registration: PreRegistration
   let regimes: Map<string, BaselineRegime>
+  let filling: string[]
   try {
     const built = await buildReading(admin, args.clientId, args.runId, window, months)
     reading = built.reading
     registration = built.registration
     regimes = built.regimes
+    filling = built.fillingMonths
   } catch (e) {
     if (!isMissingMonthTable(e) && !isMissingKindMoodAttention(e)) throw e
     const note = 'skipped: the month reading and window functions have not been applied yet'
@@ -955,6 +988,7 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
     window,
     reading,
     baselineMonths: months,
+    baselineFillingMonths: filling,
     regimes,
     readAt,
     explanation,
@@ -1032,7 +1066,12 @@ export async function buildReading(
   runId: string,
   window: AnomalyWindow,
   months: readonly string[],
-): Promise<{ reading: AnomalyReading; registration: PreRegistration; regimes: Map<string, BaselineRegime> }> {
+): Promise<{
+  reading: AnomalyReading
+  registration: PreRegistration
+  regimes: Map<string, BaselineRegime>
+  fillingMonths: string[]
+}> {
   // ---- the baseline, off the stored record ----
   const [denominatorMonths, kindMonths, subjectMonths, themeMonths] = await Promise.all([
     readMonths(admin, TABLE_DENOMINATORS, clientId, months),
@@ -1157,5 +1196,5 @@ export async function buildReading(
     regimes.set(objectKey('subject', id), r)
   }
 
-  return { reading, registration, regimes }
+  return { reading, registration, regimes, fillingMonths: fillingMonths(denominatorMonths, months) }
 }

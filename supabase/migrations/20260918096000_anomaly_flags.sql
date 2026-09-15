@@ -156,6 +156,14 @@ create table if not exists public.anomaly_flags (
   -- clustering was current when each passed its line, so which months went in
   -- is part of the statement (AGENTS.md's like-for-like rule).
   baseline_months date[] not null,
+  -- Which of those months had NOT frozen when the baseline was read. A month is
+  -- `filling` until 30 days after it ends, so on every weekly run at least one
+  -- baseline month is still moving — and today it is the largest of the three.
+  -- Measured on production 2026-09-15: Össur's baseline is 1,089 videos of
+  -- which August's still-filling 721 is 66%; Sealand's is 493 of which August
+  -- is 407, 83%. Telling a reader which months went in without telling them
+  -- that two thirds of the baseline was still moving is half a statement.
+  baseline_filling_months date[] not null default '{}',
   -- Whether those months were read under ONE grouping. 'one' they were;
   -- 'mixed' they were not; 'unknown' at least one month is older than the
   -- clustering fingerprint and nobody can say; 'not_grouped' the object has no
@@ -208,6 +216,8 @@ comment on column public.anomaly_flags.week_start is
   'The run''s frozen window start (pipeline_runs.window_start), half-open with week_end. Called "week" because that is what a weekly cadence makes it; on any other cadence it is simply the days the update covered, and the row says which.';
 comment on column public.anomaly_flags.denominator is
   'The population the share is a share of, by name — "every audience together" under decision S. A rival''s attention is a share of the whole update, not of its own audience; a surface that prints the flag prints this beside it.';
+comment on column public.anomaly_flags.baseline_filling_months is
+  'The subset of baseline_months that had not frozen when this flag was raised. Never empty in normal weekly operation: the newest baseline month does not freeze until 30 days after it ends, and on both tenants today it is the majority of the baseline.';
 comment on column public.anomaly_flags.baseline_regime is
   'Whether the pooled baseline months were read under one clustering. The check marks a mixed or unknown regime and still reports the flag, because an anomaly reading states a level and a difference and never a direction word — the thing decision L reserves for one regime.';
 comment on column public.anomaly_flags.quote_refs is
@@ -256,7 +266,8 @@ revoke update, delete, truncate on public.anomaly_flags from service_role;
 --     nothing, WITHOUT the UPDATE privilege (the retry path);
 --   * authenticated can select its own tenant's rows through the policy and no
 --     other tenant's, and holds no insert, update or delete;
---   * the object_kind, baseline_regime and rank checks refuse a bad value;
+--   * the object_kind, baseline_regime and rank checks refuse a bad value, and
+--     baseline_filling_months defaults to an empty array rather than null;
 --   * deleting a client deletes its flags, and deleting a run deletes the
 --     flags raised by it (both cascades);
 --   * a flag whose (client_id, run_id) has no anomaly_checks row is refused by

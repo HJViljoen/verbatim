@@ -9,6 +9,7 @@ import {
   explainerUserPrompt,
   flagRows,
   checkRow,
+  fillingMonths,
   isMissingAnomalyFlags,
   objectKey,
   pooledByObject,
@@ -87,6 +88,31 @@ describe('pooling a baseline out of stored month rows', () => {
   })
 })
 
+describe('which baseline months were still moving', () => {
+  const rows = (status: Record<string, string | null>) =>
+    MONTHS.flatMap((month) => [
+      { month, audience: 'client', videos: 10, status: status[month] },
+      { month, audience: 'industry-other', videos: 90, status: status[month] },
+    ])
+
+  it('names the months whose rows had not frozen, in baseline order', () => {
+    // Össur's shape on 2026-09-15: June and July frozen, August still filling
+    // and carrying 66% of the baseline.
+    expect(fillingMonths(rows({ '2026-06-01': 'frozen', '2026-07-01': 'frozen', '2026-08-01': 'filling' }), MONTHS))
+      .toEqual(['2026-08-01'])
+  })
+
+  it('treats a month written before the status column as still moving', () => {
+    expect(fillingMonths(rows({ '2026-06-01': 'frozen', '2026-07-01': null, '2026-08-01': 'frozen' }), MONTHS))
+      .toEqual(['2026-07-01'])
+  })
+
+  it('is empty when every month has frozen, and skips a month with no row at all', () => {
+    expect(fillingMonths(rows({ '2026-06-01': 'frozen', '2026-07-01': 'frozen', '2026-08-01': 'frozen' }), MONTHS)).toEqual([])
+    expect(fillingMonths([{ month: '2026-06-01', audience: 'client', videos: 1, status: 'frozen' }], MONTHS)).toEqual([])
+  })
+})
+
 describe('baselineRegime', () => {
   it('is one regime when every month carries the same key', () => {
     expect(baselineRegime(['k1', 'k1', 'k1'])).toBe('one')
@@ -136,13 +162,14 @@ describe('objectKey', () => {
 describe('the flag row', () => {
   const window = { from: '2026-09-07T00:00:00.000Z', to: '2026-09-14T00:00:00.000Z' }
 
-  const rowsFor = (over: { regimes?: Map<string, BaselineRegime> } = {}) =>
+  const rowsFor = (over: { regimes?: Map<string, BaselineRegime>; filling?: string[] } = {}) =>
     flagRows({
       clientId: 'c1',
       runId: 'r1',
       window,
       reading: readingWithOneFlag(),
       baselineMonths: MONTHS,
+      baselineFillingMonths: over.filling ?? ['2026-08-01'],
       regimes: over.regimes ?? new Map<string, BaselineRegime>(),
       readAt: '2026-09-14T06:00:00.000Z',
     })
@@ -158,6 +185,11 @@ describe('the flag row', () => {
     expect(row.set_size).toBe(1)
     expect(row.rank).toBe(1)
     expect(row.baseline_months).toEqual(MONTHS)
+  })
+
+  it('says which of the baseline months had not frozen yet', () => {
+    expect(rowsFor()[0].baseline_filling_months).toEqual(['2026-08-01'])
+    expect(rowsFor({ filling: [] })[0].baseline_filling_months).toEqual([])
   })
 
   it('names the denominator on the row rather than leaving it to be assumed', () => {
@@ -260,6 +292,7 @@ function explain(draft: string | null) {
     window,
     reading,
     baselineMonths: MONTHS,
+    baselineFillingMonths: [],
     regimes: new Map<string, BaselineRegime>(),
     readAt: '2026-09-14T06:00:00.000Z',
     explanation,
