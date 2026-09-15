@@ -12,6 +12,7 @@ import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSA
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
 import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
 import { markSnapshotsStale } from '@/lib/artifacts'
+import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { DOCUMENT_EDIT_MAX } from '@/lib/config'
 
 // The Studio's writes (Stage 2, moved here in Stage 3). Server actions are
@@ -140,9 +141,17 @@ export async function revokeShareLink(formData: FormData): Promise<void> {
 
 const NOT_ALLOWED: ActionState = { ok: false, message: 'Only an owner or admin can change schedules.' }
 
+/** What the change log keeps of a schedule: the facts that decide who gets an
+ *  email and when. `updated_at` is bookkeeping, not configuration. */
+const scheduleFacts = (row: Record<string, unknown>) => {
+  const { updated_at: _updatedAt, ...facts } = row
+  return facts
+}
+
 /** Create (no id) or update (id) a schedule from the form. */
 export async function saveSchedule(args: { id?: string | null; input: ScheduleInput }): Promise<ActionState & { id?: string }> {
-  const { clientId, userId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { clientId, userId, role } = session
   if (!canManageTenant(role)) return NOT_ALLOWED
   const parsed = scheduleInputSchema.safeParse(args.input)
   if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
@@ -176,30 +185,73 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     review: s.review,
     updated_at: new Date().toISOString(),
   }
+  // Cadence, recipients and the active flag are configuration: who receives an
+  // external email, and when. No trigger can see this table, so the change log
+  // is written here (WP2). The before-read costs one query on an action nobody
+  // takes twice a week — and without it the log could say what a schedule
+  // became but never what it was.
   if (id) {
+    // Every column scheduleFacts() keeps, and no other: a `before` that read
+    // seven columns against an `after` of nine made every edit look as though
+    // the template and the starter had just been set from nothing.
+    const { data: prior } = await admin
+      .from('report_schedules')
+      .select('name, starter_key, report_id, cadence, recipients, attach_pdf, share_days, active, review')
+      .eq('id', id).eq('client_id', clientId).maybeSingle()
     const { error } = await admin.from('report_schedules').update(row).eq('id', id).eq('client_id', clientId)
     if (error) return { ok: false, message: 'Could not save that. Try again.' }
+    await recordConfigChange(admin, {
+      clientId,
+      surface: 'schedule',
+      field: 'report_schedules',
+      before: prior ?? null,
+      after: scheduleFacts(row),
+      actor: actorStamp(session, 'edited a sending'),
+      note: `schedule ${id}`,
+    })
     revalidatePath(STUDIO)
     return { ok: true, message: 'Saved', id }
   }
   const { data, error } = await admin.from('report_schedules').insert({ ...row, client_id: clientId, created_by: userId, is_default: false }).select('id').single()
   if (error || !data) return { ok: false, message: 'Could not create the schedule. Try again.' }
+  await recordConfigChange(admin, {
+    clientId,
+    surface: 'schedule',
+    field: 'report_schedules',
+    before: null,
+    after: scheduleFacts(row),
+    actor: actorStamp(session, 'added a sending'),
+    note: `schedule ${data.id as string}`,
+  })
   revalidatePath(STUDIO)
   return { ok: true, message: 'Saved', id: data.id as string }
 }
 
 export async function deleteSchedule(formData: FormData): Promise<void> {
   const id = z.uuid().parse(String(formData.get('id') ?? ''))
-  const { clientId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { clientId, role } = session
   if (!canManageTenant(role)) throw new Error(NOT_ALLOWED.message)
   const admin = createAdminClient()
   // The workspace's default schedule is paused, never deleted: an accepted
   // invite lands on it. Its sends stay in the archive (schedule_id nulls).
-  const { data: row } = await admin.from('report_schedules').select('is_default').eq('id', id).eq('client_id', clientId).maybeSingle()
+  const { data: row } = await admin.from('report_schedules').select('is_default, name, cadence, recipients, active').eq('id', id).eq('client_id', clientId).maybeSingle()
   if (!row) throw new Error('no such schedule')
   if ((row as { is_default: boolean }).is_default) throw new Error('The default schedule can be paused, not deleted.')
   const { error } = await admin.from('report_schedules').delete().eq('id', id).eq('client_id', clientId)
   if (error) throw new Error(`delete schedule: ${error.message}`)
+  // The row is gone; its recipients are not recoverable from report_sends,
+  // which records what went out and not who was on the list.
+  const { is_default: _isDefault, ...gone } = row as { is_default: boolean } & Record<string, unknown>
+  await recordConfigChange(admin, {
+    clientId,
+    surface: 'schedule',
+    field: 'report_schedules',
+    before: gone,
+    after: null,
+    actor: actorStamp(session, 'removed a sending'),
+    note: `schedule ${id}`,
+  })
   revalidatePath(STUDIO)
   redirect(STUDIO)
 }

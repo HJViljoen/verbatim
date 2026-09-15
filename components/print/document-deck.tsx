@@ -5,7 +5,7 @@ import { Slide } from '@/components/print/slide'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides } from '@/lib/reports/documents/compose'
 import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
-import type { DocBlock, DocLens, DocPage, DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { shownTrajectory, type DocBlock, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
 // A document's deck from its (hydrated) snapshot data: the cover, then one
@@ -174,7 +174,10 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
   const practice = practiceBlock?.items ?? []
   const sureWord = page.meta?.sure ?? 'thin'
   const sureNote = (b('sure')?.text ?? '').replace(/^(Solid|Reasonable|Thin):[^.]*\.\s*(Treat it as a lead, not a rule\.\s*)?/, '')
-  const history = page.meta?.history ?? ''
+  // Through `shownTrajectory` (D1): this page is drawn from a snapshot, and
+  // one built before the gate carries "rising" / "seen 2 updates running" in
+  // its meta. The gate is on the surface, not on the build.
+  const history = shownTrajectory(page.meta?.history)
   const conversations = Number(page.meta?.conversations ?? 0)
   const strands = Number(page.meta?.strands ?? 0)
   return (
@@ -261,18 +264,35 @@ function ShareStrip({ data, name }: { data: DocumentSnapshotData; name: string }
 function CompetitorPage({ page, figures, data }: { page: DocPage; figures: FigureTable; data: DocumentSnapshotData }) {
   const b = (field: string) => page.blocks.find((x) => x.field === field)
   const name = page.meta?.name ?? page.title
-  const cols: [string, DocBlock | undefined][] = [['What they are pitching', b('pitch')], ['What their users praise', b('praise')], ['Where their users hurt', b('hurt')]]
+  // Four columns since 2026-09-15, three on a snapshot frozen before the
+  // "what others say" block existed: a column is drawn only for a block the
+  // snapshot actually carries, so an older document prints exactly as it did.
+  const cols = ([
+    ['What they are pitching', 'pitch'],
+    ['What others say about them', 'about'],
+    ['What their users praise', 'praise'],
+    ['Where their users hurt', 'hurt'],
+  ] as const)
+    .map(([label, field]) => [label, b(field)] as [string, DocBlock | undefined])
+    .filter(([, block]) => !!block)
   const read = b('read')
+  // The sentence is conditioned on the same thing the columns are. It names
+  // the method, and nine frozen snapshots carry a competitor page with no
+  // `about` block — one of them served live on a share link — so an
+  // unconditional "other people's videos" would have them claiming a reading
+  // they never did, beside three columns rather than four. A document says
+  // what it read, not what today's pipeline reads.
+  const aboutShown = Boolean(b('about'))
   return (
     <div className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex items-start justify-between gap-8">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground">{name}</h2>
-          <p className="text-[14px] text-muted-foreground">As their own videos and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
+          <p className="text-[14px] text-muted-foreground">As their own videos{aboutShown ? ', other people’s videos' : ''} and their audience tell it this update{page.meta?.thin === 'true' ? ', on few videos, read with care' : ''}.</p>
         </div>
         <ShareStrip data={data} name={name} />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-x-6">
+      <div className={`grid min-h-0 flex-1 ${cols.length >= 4 ? 'grid-cols-4 gap-x-4' : 'grid-cols-3 gap-x-6'}`}>
         {cols.map(([label, block]) => (
           <div key={label} className={`${CARD} flex flex-col gap-2.5 px-5 py-4`}>
             <Eyebrow>{label}</Eyebrow>
@@ -373,6 +393,9 @@ function movementLines(data: DocumentSnapshotData): { label: string; value: stri
 function ConcernField({ meta }: { meta: string }) {
   const rows = parseMeta<{ label: string; total: number; trajectory: string }[]>(meta, [])
     .filter((r) => r && typeof r.label === 'string' && Number.isFinite(r.total))
+    // Same gate as the finding page's pill: the counts are this update's and
+    // stay; the history word beside them is withdrawn, frozen or not (D1).
+    .map((r) => ({ ...r, trajectory: shownTrajectory(r.trajectory) }))
   if (!rows.length) return null
   const max = Math.max(...rows.map((r) => r.total), 1)
   return (

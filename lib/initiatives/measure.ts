@@ -1,3 +1,4 @@
+import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
 import type { InitiativeDirection } from './types'
 
 // Measuring a declared initiative (WP7c) — pure, so it is tested and so the
@@ -165,22 +166,60 @@ export function measureInitiative(
  * Calibrated: it reports the conversation, never the initiative. "Up 2.3
  * points" is a fact about share; "working" would be a claim about cause, and
  * nothing here measures cause.
+ *
+ * While D1's `RUN_INDEXED_DIRECTION_WORDS` is off it says how long the theme
+ * has been tracked and how many updates have been read, and no direction: the
+ * x-axis here is `theme_observations.run_date`, one point per UPDATE, and the
+ * denominator is a stock that grows with every gather — so "Up 5.3 points"
+ * measures the reading as much as the conversation. The two `too_early`
+ * sentences are already direction-free and are unchanged.
  */
-export function initiativeLine(m: InitiativeMeasure, startedLabel: string): string {
+export function initiativeLine(m: InitiativeMeasure, startedLabel: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
   const updates = m.points.length
   if (m.verdict === 'too_early') {
     return updates === 0
       ? `Nothing heard on this since ${startedLabel} — it lands with the next update.`
       : `One update in since ${startedLabel} — movement needs a second.`
   }
+  if (!directionWords) return trackedLine(startedLabel, updates)
   const size = Math.abs(m.delta ?? 0).toFixed(1)
   if (m.verdict === 'flat') return `Holding steady since ${startedLabel} · ${updates} updates`
   return `${m.verdict === 'moving_up' ? 'Up' : 'Down'} ${size} points since ${startedLabel} · ${updates} updates`
 }
 
+/** The direction-free sentence, said in one place: `initiativeLine` writes it
+ *  while the direction words are gated off, and the tile re-says it over a row
+ *  frozen with a direction sentence before the gate. */
+export const trackedLine = (startedLabel: string, updates: number): string =>
+  `Tracked since ${startedLabel} · ${updates} updates read`
+
+/**
+ * What the two surfaces that ask a client to DECLARE an initiative promise
+ * they will get back — the "Track this theme" sheet on Voice of Customer and
+ * the Settings › Initiatives card. Said in one place because it is one
+ * promise made twice.
+ *
+ * Gated on D1 for the same reason the tile and its empty state are: while
+ * `RUN_INDEXED_DIRECTION_WORDS` is off the tile prints no direction at all
+ * (`initiativeTile` empties the series, the mood delta and the verdict
+ * sentence), so an invitation that promised "grew or shrank" would be
+ * promising what the product has just withdrawn. Phase 1 flips the constant,
+ * the tile draws the series again, and this sentence comes back with it.
+ */
+export function initiativePromise(directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+  return directionWords
+    ? 'Every update from today on says whether its share of its own group’s conversation grew or shrank — never whether you succeeded.'
+    : 'Every update from today on reports its share of its own group’s conversation — never whether you succeeded.'
+}
+
 /** Whether a movement went the way the client said they wanted. Null when
- *  there is nothing to judge — never a green tick on a flat line. */
-export function wentTheirWay(m: InitiativeMeasure, direction: InitiativeDirection): boolean | null {
-  if (m.verdict === 'too_early' || m.verdict === 'flat') return null
+ *  there is nothing to judge — never a green tick on a flat line.
+ *
+ *  Null for everything while the direction words are gated (D1). Its one
+ *  reader is the sparkline's stroke colour, which paints the line the rival's
+ *  clay when the answer is `false` — a direction said in colour instead of in
+ *  words, and the design's rule is about the surface, not the sentence. */
+export function wentTheirWay(m: InitiativeMeasure, direction: InitiativeDirection, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean | null {
+  if (!directionWords || m.verdict === 'too_early' || m.verdict === 'flat') return null
   return direction === 'up' ? m.verdict === 'moving_up' : m.verdict === 'moving_down'
 }

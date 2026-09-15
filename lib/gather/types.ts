@@ -3,6 +3,8 @@
 // analysis pipeline (lib/pipeline). These shapes narrow only the columns gather
 // writes; the live schema source of truth is Architecture/Schema-Actual.
 
+import type { RunWindow } from '../pipeline/window'
+
 export type Platform = 'tiktok' | 'youtube' | 'instagram' | 'reddit'
 
 /** One row of tracking_configs.subreddits (Wave 3). `name` is bare and
@@ -34,6 +36,12 @@ export interface GatherConfig {
   max_videos: number
   comment_depth: number
   report_period: string // 'daily' | 'weekly' | 'monthly'
+  /** The run's frozen gather window, when a run row is behind this gather
+   *  (lib/pipeline/window.ts). It is the adapters' search bound: Instagram and
+   *  YouTube take its lower bound as a date, TikTok and Reddit round it to
+   *  their week/month enum. Absent — the CLI paths, and a baseline run, which
+   *  has no lower bound — every adapter keeps its report_period bound. */
+  window?: RunWindow
   /** Client's own public profiles per platform (YouTube value = channel ID).
    *  Empty = owned layer off for this tenant. */
   own_handles: Record<string, string>

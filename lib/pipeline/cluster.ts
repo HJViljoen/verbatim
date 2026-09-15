@@ -39,8 +39,13 @@ export interface ClusterOptions {
  *  `400 Invalid 'input': array length must be 2048 or less` — 93 minutes and
  *  $1.21 of gather and Pass A already spent, no email to the client. The same
  *  shape as the 2026-08-30 killer (`.in()` over the whole corpus), one seam
- *  over: any call whose size tracks the corpus needs a chunk loop. */
-const EMBED_BATCH = 512
+ *  over: any call whose size tracks the corpus needs a chunk loop.
+ *
+ *  Exported (2026-09-15) because lib/pipeline/embed-insights.ts chunks at this
+ *  size ITSELF before calling embedTexts, so one call is one embeddings request
+ *  and it can write one ai_call_log row per request. A second copy of the
+ *  number over there would drift the moment either moved. */
+export const EMBED_BATCH = 512
 
 /** Embed texts, preserving input order. Returns [] for empty input.
  *  Chunked (EMBED_BATCH) and sequential: a bucket is a handful of requests,
@@ -85,6 +90,19 @@ export function cosine(a: number[], b: number[]): number {
 export function embedInput(ins: Pick<InsightRow, 'theme' | 'description'>): string {
   return `${ins.theme.replace(/_/g, ' ')}. ${ins.description}`
 }
+
+/** The identity of the formula above, stamped on every stored vector's
+ *  ai_call_log row as its prompt_version.
+ *
+ *  An embeddings call has no prompt, but it does have the thing that decides
+ *  whether two vectors can be compared at all: the text. Change the line above
+ *  — or EMBEDDING_MODEL — and every vector already in audience_insights.embedding
+ *  becomes incomparable with every vector written after, which is a silent
+ *  retrieval failure, not an error. Bump this at the same time, so the ledger
+ *  says which rows belong to which formula and the repair is a query rather
+ *  than an archaeology. Nothing reads it yet; that is the point of writing it
+ *  down now. */
+export const EMBED_INPUT_VERSION = 'embed_input_v1'
 
 /** Average-linkage agglomerative clustering: two clusters merge only while the
  *  AVERAGE similarity across all their cross-pairs clears the threshold.

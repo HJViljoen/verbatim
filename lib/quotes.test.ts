@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   createCitedQuotePicker,
   bucketByAudienceId,
   videoBucketOf,
   fetchLiveBucketsByAudience,
+  fetchQuoteTextsByRefs,
   scopeToClientVoices,
   scopeToCompetitor,
   readsAsHeroQuote,
@@ -50,12 +51,21 @@ describe('videoBucketOf — live entity, not a cached one', () => {
   })
 })
 
-describe('fetchLiveBucketsByAudience', () => {
-  // Minimal stand-in for the supabase admin client: one `videos` select.
-  const clientReturning = (rows: unknown[]) => ({
-    from: () => ({ select: () => ({ in: () => Promise.resolve({ data: rows, error: null }) }) }),
-  })
+// Minimal stand-in for the supabase admin client: one `videos` select, paged.
+// Every chunked read in lib/quotes.ts is now paged past the 1000-row cap, so a
+// fake that answers `.in()` with a promise no longer matches the contract —
+// the builder is closed by `.order(...).range(from, to)`.
+const clientReturning = (rows: unknown[]) => ({
+  from: () => ({
+    select: () => ({
+      in: () => ({
+        order: () => ({ range: (from: number, to: number) => Promise.resolve({ data: rows.slice(from, to + 1), error: null }) }),
+      }),
+    }),
+  }),
+})
 
+describe('fetchLiveBucketsByAudience', () => {
   it('maps each insight to its source video\'s CURRENT tags', async () => {
     const admin = clientReturning([
       { id: 'v-client', is_client: true, is_competitor: false, competitor_name: null },
@@ -83,16 +93,7 @@ describe('the live entity gate (the 2026-09-10 Patagonia answer)', () => {
     const stored = bucketByAudienceId(themes)
     expect(scopeToClientVoices(['c1', 'p2'], stored)).toEqual(['c1', 'p2']) // the old behaviour
 
-    const admin = {
-      from: () => ({
-        select: () => ({
-          in: () => Promise.resolve({
-            data: [{ id: 'v9', is_client: false, is_competitor: true, competitor_name: 'Patagonia' }],
-            error: null,
-          }),
-        }),
-      }),
-    }
+    const admin = clientReturning([{ id: 'v9', is_client: false, is_competitor: true, competitor_name: 'Patagonia' }])
     const live = await fetchLiveBucketsByAudience(admin, [{ id: 'p2', source_video_id: 'v9' }])
     const merged = new Map(stored)
     for (const [id, bucket] of live) merged.set(id, bucket)
@@ -105,16 +106,7 @@ describe('the live entity gate (the 2026-09-10 Patagonia answer)', () => {
     const stored = bucketByAudienceId([{ bucket: 'competitor:Cotopaxi', supporting_insight_ids: ['x1'] }])
     expect(scopeToClientVoices(['x1'], stored)).toEqual([])
 
-    const admin = {
-      from: () => ({
-        select: () => ({
-          in: () => Promise.resolve({
-            data: [{ id: 'v1', is_client: true, is_competitor: false, competitor_name: null }],
-            error: null,
-          }),
-        }),
-      }),
-    }
+    const admin = clientReturning([{ id: 'v1', is_client: true, is_competitor: false, competitor_name: null }])
     const live = await fetchLiveBucketsByAudience(admin, [{ id: 'x1', source_video_id: 'v1' }])
     const merged = new Map(stored)
     for (const [id, bucket] of live) merged.set(id, bucket)
@@ -252,5 +244,63 @@ describe('createCitedQuotePicker', () => {
     const second = pick(['c1', 'c2'], 2, 'bag')
     expect(first.length).toBe(2)
     expect(second).toEqual([])
+  })
+})
+
+// What a failed quote read costs depends on who is asking. A render of an
+// already-frozen artefact (the digest send, the share link, the PDF) is a one
+// shot nobody retries, so it goes out thinner. The build-document freeze step
+// is composing the artefact inside a retriable step, so it must not.
+describe('fetchQuoteTextsByRefs — the read-failure contract', () => {
+  // The builder ends at `.order(...)`; `selectAll` closes it with `.range()`.
+  // A PostgREST error on the page is what selectAll turns into a throw.
+  const failingOn = (...tables: string[]) => {
+    const builder = (fail: boolean): Record<string, unknown> => {
+      const b: Record<string, unknown> = {
+        range: () =>
+          Promise.resolve(
+            fail
+              ? { data: null, error: { message: 'canceling statement due to statement timeout' } }
+              : { data: [{ id: 'ev1', quote: 'I love this bag', comment_id: 'cm1' }], error: null },
+          ),
+      }
+      b.order = () => b
+      b.eq = () => b
+      b.in = () => b
+      return b
+    }
+    return {
+      from: (table: string) => ({ select: () => builder(tables.includes(table)) }),
+    }
+  }
+
+  it('degrades by default: the refs that failed are simply absent', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const out = await fetchQuoteTextsByRefs(failingOn('insight_evidence'), ['e:ev1'])
+    expect(out.size).toBe(0)
+    expect(err.mock.calls[0]?.[0]).toContain('e: (evidence)')
+    err.mockRestore()
+  })
+
+  it('throws instead when the caller asks it to, naming every read that failed', async () => {
+    // Two kinds, two tables, one error: the failures are collected and raised
+    // after every read has settled, so no rejection is left unawaited.
+    const thrown = await fetchQuoteTextsByRefs(
+      failingOn('insight_evidence', 'language_samples'),
+      ['e:ev1', 'p:ph1'],
+      { onReadError: 'throw' },
+    ).then(() => null, (e: unknown) => e as Error)
+    expect(thrown).toBeInstanceOf(Error)
+    expect(thrown?.message).toContain('2 ref read(s) failed')
+    expect(thrown?.message).toContain('e: (evidence)')
+    expect(thrown?.message).toContain('p: (customer phrase)')
+  })
+
+  it('resolves the same words either way when nothing fails', async () => {
+    const admin = failingOn()
+    expect(await fetchQuoteTextsByRefs(admin, ['e:ev1'])).toEqual(new Map([['e:ev1', 'I love this bag']]))
+    expect(await fetchQuoteTextsByRefs(admin, ['e:ev1'], { onReadError: 'throw' })).toEqual(
+      new Map([['e:ev1', 'I love this bag']]),
+    )
   })
 })

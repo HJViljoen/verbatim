@@ -24,6 +24,9 @@ import { followerFloorPct } from '../gather/owned'
 // marks"; validation strips wrapping quotes before matching either way.
 const PROMPT_VERSION = 'step_2c_v2'
 
+/** Themes handed to the event explainer: the most salient N of this run's. */
+const THEMES_EXPLAINED = 30
+
 // ---- detection ---------------------------------------------------------------
 
 /** A follower delta only counts as an event when it clears BOTH bars:
@@ -359,11 +362,17 @@ export async function runStep2c(args: {
     admin.from('themes')
       .select('label, bucket, category, evidence_count, strength_score, dominant_emotion')
       .eq('client_id', clientId).eq('run_id', runId)
-      // Top 30 by salience feed the event explainer (Tier 1).
+      // Top 30 by salience feed the event explainer (Tier 1). Bounded HERE,
+      // not by a slice afterwards: one update's themes already cross
+      // PostgREST's 1000-row default (Sealand wrote 1,053 on 13 Sep), so the
+      // read was silently truncated and stayed right only because the server
+      // orders before it caps. That is a property of PostgREST, not something
+      // this code was asserting — a limit says what is wanted.
       .order('rank_score', { ascending: false, nullsFirst: false })
-      .order('strength_score', { ascending: false }),
+      .order('strength_score', { ascending: false })
+      .limit(THEMES_EXPLAINED),
   ])
-  const themes = ((themeRows ?? []) as ThemeLite[]).slice(0, 30)
+  const themes = (themeRows ?? []) as ThemeLite[]
   const eventPlatforms = [...new Set(detected.map((e) => e.platform))]
   // Prefer THIS window's owned comments — an event should be explained by the
   // conversation around it, not a greatest-hit from months ago. Widen to

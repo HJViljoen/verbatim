@@ -21,7 +21,9 @@ import { dashboardEmail } from '@/components/email/tiles'
 import { fmtInt, fmtCompact, fmtPct, weekdayDate, shortDate, platformLabel } from '@/lib/format'
 import { shareFootnoteLead } from '@/lib/calibration'
 import { BUCKET_COLOR, loadDashboard, isDashboardEmpty, priorityLabel, type DashboardData, type DashboardEmpty } from '@/lib/pages/dashboard'
-import { initiativesOf, isTrackingSomething } from '@/lib/initiatives/types'
+import { movementRows } from '@/lib/dashboard-tiles'
+import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
+import { initiativeTile, isTrackingSomething } from '@/lib/initiatives/types'
 import type { PageModule, RenderMode, Renderable, Slide } from '@/lib/renderables/types'
 
 // Dashboard renderers — the JSX half of the old app/dashboard/page.tsx
@@ -86,7 +88,11 @@ const strip: R = ({ strip: s }, mode) => {
           <StatSentence
             value={s.tiers.confirmed}
             unit="confirmed"
-            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
+            // "N followed over time" counts theme_registry identities — the
+            // spine of the per-update series and the only part of this cell
+            // that speaks across updates. Gated with the rest (D1); the three
+            // tier counts are this update's own and stay.
+            base={<span className="font-mono tabular-nums text-secondary-foreground">{s.tiers.early} early · {s.tiers.once} heard once{RUN_INDEXED_DIRECTION_WORDS && s.registryCount > 0 ? ` · ${fmtInt(s.registryCount)} followed over time` : ''}</span>}
           />
         ) : <TileEmpty>Themes land with the first analysed update.</TileEmpty>}
       </StripCell>
@@ -241,7 +247,10 @@ const themes: R = ({ themes: t }, mode) => {
               color={BUCKET_COLOR[row.bucket]}
               pct={(row.conversations / t.max) * 100}
               count={row.conversations}
-              badge={row.isNew ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
+              // The badge is gated at render as well as at compute (D1): a
+              // snapshot frozen before the gate still carries isNew, and it is
+              // re-rendered forever.
+              badge={row.isNew && RUN_INDEXED_DIRECTION_WORDS ? <span className="rounded-full bg-accent px-1.5 py-px text-[10px] font-medium text-accent-foreground">New</span> : undefined}
               href={app ? `/dashboard/voice?themes=${encodeURIComponent(row.memberThemes.join(','))}` : undefined}
             />
           ))}
@@ -261,7 +270,9 @@ const movement: R = ({ movement: mv, updatesCount }, mode) => (
   >
     {mv ? (
       <div className="flex flex-col gap-3">
-        {mv.rows.map((r) => {
+        {/* movementRows, not mv.rows: the themes-confirmed row is gated (D1)
+            at render too, so a snapshot that froze it does not print it. */}
+        {movementRows(mv).map((r) => {
           const st = MOVE_STYLE[r.key]
           return <Mover key={r.key} label={r.label} series={r.series} value={st.fmt(r.value)} delta={r.delta} unit={st.unit} good={st.good} color={st.color} />
         })}
@@ -332,7 +343,10 @@ const initiatives: R = ({ initiatives }, mode) => {
   // before this tile existed has no `initiatives` key at all, and reaching
   // through it would 500 the reports list, the Studio, the share link and the
   // PDF build. Frozen data renders forever — that is the contract.
-  const t = initiativesOf({ initiatives })
+  // Through `initiativeTile`, not `initiativesOf`: while D1's direction words
+  // are gated the sparkline, its verdict colour and the mood delta come off
+  // the row with the sentence, live or frozen (see its own comment).
+  const t = initiativeTile({ initiatives })
   return (
     <Tile exportKey="dashboard.initiatives" col={12} row={t.rows.length > 2 ? 2 : 1} eyebrow="What you are trying to move"
       meta={t.total > t.rows.length ? `${fmtInt(t.rows.length)} of ${fmtInt(t.total)} tracked` : t.total > 0 ? `${fmtInt(t.total)} tracked` : undefined}
@@ -352,17 +366,30 @@ const initiatives: R = ({ initiatives }, mode) => {
               <span className="w-14 text-right font-mono text-[11.5px] font-semibold tabular-nums">{r.latestShare != null ? fmtPct(r.latestShare, 1) : '—'}</span>
               <span className="order-last w-full min-w-0 text-[11.5px] text-muted-foreground md:order-none md:w-auto md:flex-[2] md:truncate">{r.line}</span>
               {/* Labelled, because it sits one column from a percentage and a
-                  bare "+0.3" reads as share points. Mood is a −1…+1 scale. */}
-              <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
-                <span className="text-[10.5px] text-muted-foreground">mood</span>
-                {r.sentimentDelta != null && r.sentimentDelta !== 0
-                  ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
-                  : <span className="text-[11px] text-muted-foreground">unchanged</span>}
-              </span>
+                  bare "+0.3" reads as share points. Mood is a −1…+1 scale.
+                  The whole cell is gated (D1): a signed delta across updates is
+                  a direction, and "unchanged" is a direction claim too. */}
+              {t.movement && (
+                <span className="flex w-[104px] flex-1 items-baseline justify-end gap-1 md:flex-none">
+                  <span className="text-[10.5px] text-muted-foreground">mood</span>
+                  {r.sentimentDelta != null && r.sentimentDelta !== 0
+                    ? <Delta value={r.sentimentDelta} decimals={1} good="up" />
+                    : <span className="text-[11px] text-muted-foreground">unchanged</span>}
+                </span>
+              )}
             </div>
           ))}
         </div>
-      ) : <TileEmpty>Track a theme from Voice of Customer to see whether the conversation is moving.</TileEmpty>}
+      ) : (
+        // The invitation promises what the tile can currently show: while the
+        // direction words are gated it follows a theme's share, and says
+        // nothing about whether that share is moving (D1).
+        <TileEmpty>
+          {t.movement
+            ? 'Track a theme from Voice of Customer to see whether the conversation is moving.'
+            : 'Track a theme from Voice of Customer to follow its share of the conversation here.'}
+        </TileEmpty>
+      )}
     </Tile>
   )
 }

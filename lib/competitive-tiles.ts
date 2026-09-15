@@ -6,7 +6,26 @@
 
 import type { Sov, HistoryRow } from './dashboard-tiles'
 import type { OwnedCensus } from './gather/owned'
-import { COMPETITIVE_MIN_VIDEOS } from './config'
+import { COMPETITIVE_MIN_VIDEOS, RUN_INDEXED_DIRECTION_WORDS } from './config'
+
+// ── what a share delta is allowed to say (D1) ─────────────────────────────
+
+/**
+ * May a competitive tile print a share delta between two updates?
+ *
+ * On the PERIOD layer the delta is this update's own window against the
+ * previous one's — the same figure D1 keeps in the digest — so yes. On the
+ * cumulative fallback it is the difference between two readings of a corpus
+ * that grows with every gather, which is the direction D1 withdraws from the
+ * run-indexed series; the page prints the levels and no delta there.
+ *
+ * Keyed on `layerWord` because that is what the tile data carries (and what
+ * the face-off header already reads the layer from), which also means a tile
+ * frozen into a report snapshot is judged by the layer it was drawn on.
+ */
+export function shareDeltaShown(layerWord: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): boolean {
+  return directionWords || layerWord === 'this update'
+}
 
 // ── who we face ───────────────────────────────────────────────────────────
 

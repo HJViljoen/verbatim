@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { SCHEDULE_RECIPIENTS_MAX } from '../config'
+import { recordConfigChange, scriptActor, type ConfigActor } from '../config-log'
 import { normaliseRecipients } from './validate'
 import type { ScheduleRow } from './types'
 
@@ -8,13 +9,23 @@ import type { ScheduleRow } from './types'
  * teammate lands (accepting an invite, T0-10) and what a new workspace is
  * given at birth (onboarding, provisioning, the demo seed). One per
  * workspace, enforced by report_schedules_one_default.
+ *
+ * Both writers log to config_changes under the `schedule` surface (WP2): who
+ * receives the update is a configuration change, and no trigger can see it —
+ * the trigger watches tracking_configs, and recipients left that table when
+ * they moved to report_schedules (T0-10). `report_sends` records what went
+ * out, never who was on the list before it did.
+ *
+ * `actor` is who to credit. It defaults to the file itself rather than to a
+ * person, because two of the four callers (provisioning, the demo seed) have
+ * no person to name.
  */
 
 export const DEFAULT_SCHEDULE_NAME = 'Weekly digest'
 export const DEFAULT_SCHEDULE_STARTER = 'weekly_digest'
 
 /** Create the default schedule if the workspace has none; returns the row either way. */
-export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: string, recipients: string[] = [], createdBy: string | null = null): Promise<ScheduleRow> {
+export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: string, recipients: string[] = [], createdBy: string | null = null, actor?: ConfigActor): Promise<ScheduleRow> {
   const { data: existing } = await admin.from('report_schedules').select('*').eq('client_id', clientId).eq('is_default', true).maybeSingle()
   if (existing) return existing as ScheduleRow
   const { data, error } = await admin
@@ -34,17 +45,36 @@ export async function ensureDefaultSchedule(admin: SupabaseClient, clientId: str
     .select('*')
     .single()
   if (error || !data) throw new Error(`default schedule: ${error?.message ?? 'no row'}`)
-  return data as ScheduleRow
+  const row = data as ScheduleRow
+  await recordConfigChange(admin, {
+    clientId,
+    surface: 'schedule',
+    field: 'report_schedules',
+    before: null,
+    after: { id: row.id, name: row.name, cadence: row.cadence, recipients: row.recipients, active: row.active, is_default: true },
+    actor: actor ?? scriptActor('lib/schedules/default.ts ensureDefaultSchedule'),
+    note: 'the workspace digest, created with the workspace',
+  })
+  return row
 }
 
 /** Add an address to the default schedule's list (case-insensitive, no
  *  duplicates, the 25 cap respected). Returns whether anything changed. */
-export async function joinDefaultSchedule(admin: SupabaseClient, clientId: string, email: string): Promise<boolean> {
-  const s = await ensureDefaultSchedule(admin, clientId)
+export async function joinDefaultSchedule(admin: SupabaseClient, clientId: string, email: string, actor?: ConfigActor): Promise<boolean> {
+  const s = await ensureDefaultSchedule(admin, clientId, [], null, actor)
   const next = normaliseRecipients([...s.recipients, email])
   if (next.length === s.recipients.length || next.length > SCHEDULE_RECIPIENTS_MAX) return false
   const { error } = await admin.from('report_schedules').update({ recipients: next, updated_at: new Date().toISOString() }).eq('id', s.id)
   if (error) throw new Error(`default schedule: ${error.message}`)
+  await recordConfigChange(admin, {
+    clientId,
+    surface: 'schedule',
+    field: 'report_schedules.recipients',
+    before: s.recipients,
+    after: next,
+    actor: actor ?? scriptActor('lib/schedules/default.ts joinDefaultSchedule'),
+    note: `${email} joined the workspace digest`,
+  })
   return true
 }
 

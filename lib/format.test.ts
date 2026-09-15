@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, weekdayDate, listNames, platformLabel } from './format'
+import { fmtInt, fmtCompact, fmtPct, fmtDelta, shortDate, fullDate, weekdayDate, listNames, platformLabel } from './format'
 
 describe('fmtInt', () => {
   it('adds thousands separators and rounds', () => {
@@ -61,6 +61,13 @@ describe('dates (UTC-anchored)', () => {
     expect(weekdayDate('2026-08-16T07:07:51.060Z')).toBe('Sun 16 Aug')
     expect(weekdayDate('2026-08-23T06:00:00Z')).toBe('Sun 23 Aug')
     expect(weekdayDate('2026-12-31T23:59:59Z')).toBe('Thu 31 Dec')
+  })
+
+  it('fullDate carries the year, and takes it from UTC', () => {
+    expect(fullDate('2026-09-17T00:00:00.000Z')).toBe('17 Sep 2026')
+    expect(fullDate('2020-10-01T12:00:00Z')).toBe('1 Oct 2020')
+    // 23:59 on 31 Dec UTC is still 31 Dec, whatever the server's zone says.
+    expect(fullDate('2026-12-31T23:59:59Z')).toBe('31 Dec 2026')
   })
 })
 

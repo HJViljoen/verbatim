@@ -2,7 +2,7 @@ import { timingSafeEqual } from 'crypto'
 import { adminKeyValid } from '@/lib/admin-auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { sendAlertEmail } from '@/lib/email'
-import { assessPipelineHealth, formatOpsEmail, LOOKBACK_MS, type HealthInputs } from '@/lib/ops/health'
+import { assessPipelineHealth, formatOpsEmail, needsRowCounts, LOOKBACK_MS, type HealthInputs, type HealthRun, type RunRowCounts } from '@/lib/ops/health'
 import { touchHeartbeat } from '@/lib/ops/heartbeat'
 
 // The dead-man's switch (WP2, 2026-09-11).
@@ -40,9 +40,10 @@ import { touchHeartbeat } from '@/lib/ops/heartbeat'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-// Five Supabase round-trips plus a Resend call, on a cold start. The Hobby
-// default is 10 s, and a timeout here is exactly the silent failure this route
-// exists to prevent.
+// Five Supabase round-trips plus five small reads per freshly-closed run
+// (usually none, at most a handful), plus a Resend call, on a cold start. The
+// Hobby default is 10 s, and a timeout here is exactly the silent failure this
+// route exists to prevent.
 export const maxDuration = 60
 
 /** Can an alert actually leave the building? sendAlertEmail no-ops silently
@@ -70,6 +71,86 @@ function callerOf(req: Request): string {
   const ua = req.headers.get('user-agent') ?? ''
   if (ua.startsWith('vercel-cron')) return 'vercel-cron'
   return ua || 'unknown'
+}
+
+interface RunRow {
+  id: string
+  client_id: string
+  status: string
+  flags: { themeRegistry?: boolean } | null
+  options: { sendReport?: boolean } | null
+  started_at: string | null
+  completed_at: string | null
+}
+
+/** What each freshly-closed run left behind: theme observations, recommendations
+ *  and its cost row — and, for the recommendations, whether they still point at
+ *  anything. Two head counts and three small selects per run, and only for the
+ *  runs the rule will actually judge — one or two on a normal morning, none on
+ *  most.
+ *
+ *  The three selects are bounded by the model's own output: a run writes single
+ *  figures of recommendations, market insights and competitive insights (the
+ *  prompts cap each), so they are nowhere near PostgREST's 1000-row cap and
+ *  need no paging. They are ids only — no text is read here.
+ *
+ *  A count that fails is left ABSENT rather than written as 0: the checker reads
+ *  absent as "not counted" and says nothing, because an unreadable table is a
+ *  problem with this route, not evidence that a run produced nothing. */
+async function withRowCounts(
+  admin: ReturnType<typeof createAdminClient>,
+  runs: HealthRun[],
+  now: Date,
+): Promise<HealthRun[]> {
+  const head = async (table: string, runId: string): Promise<number | null> => {
+    const { count, error } = await admin.from(table).select('run_id', { count: 'exact', head: true }).eq('run_id', runId)
+    if (error) {
+      console.warn(`[ops-check] counting ${table} for run ${runId}: ${error.message}`)
+      return null
+    }
+    return count ?? 0
+  }
+  const ids = async (table: string, runId: string): Promise<string[] | null> => {
+    const { data, error } = await admin.from(table).select('id').eq('run_id', runId)
+    if (error) {
+      console.warn(`[ops-check] reading ${table} ids for run ${runId}: ${error.message}`)
+      return null
+    }
+    return ((data ?? []) as { id: string }[]).map((r) => r.id)
+  }
+  return Promise.all(runs.map(async (run) => {
+    if (!needsRowCounts(run, now)) return run
+    const [observations, costs, recRows, miIds, ciIds] = await Promise.all([
+      head('theme_observations', run.id),
+      head('run_costs', run.id),
+      (async (): Promise<{ based_on: { insight_ids?: string[] } | null }[] | null> => {
+        const { data, error } = await admin.from('recommendations').select('based_on').eq('run_id', run.id)
+        if (error) {
+          console.warn(`[ops-check] reading recommendations for run ${run.id}: ${error.message}`)
+          return null
+        }
+        return (data ?? []) as { based_on: { insight_ids?: string[] } | null }[]
+      })(),
+      ids('market_insights', run.id),
+      ids('competitive_insights', run.id),
+    ])
+    if (observations === null || costs === null || recRows === null || miIds === null || ciIds === null) return run
+    // Grounded = at least one cited id that this run still has. Both tables,
+    // because `based_on.insight_ids` mixes market insights (M#) and competitive
+    // insights (C#), and a recommendation grounded only in a C# reference is
+    // grounded.
+    const live = new Set([...miIds, ...ciIds])
+    const ungroundedRecommendations = recRows.filter(
+      (r) => !(r.based_on?.insight_ids ?? []).some((id) => live.has(id)),
+    ).length
+    const rows: RunRowCounts = {
+      observations,
+      recommendations: recRows.length,
+      costs,
+      ungroundedRecommendations,
+    }
+    return { ...run, rows }
+  }))
 }
 
 interface ClientRow {
@@ -104,7 +185,7 @@ async function loadInputs(now: Date): Promise<HealthInputs> {
     // started_at, not completed_at: a run completes hours after it starts, so
     // this window holds both ends of every run inside it.
     admin.from('pipeline_runs')
-      .select('id, client_id, status, options, started_at, completed_at')
+      .select('id, client_id, status, flags, options, started_at, completed_at')
       .gte('started_at', since),
     // Every status, not just 'sent': a 'ready' row is a review hold waiting on
     // a human and 'skipped' means the schedule had no recipients — neither is a
@@ -128,11 +209,14 @@ async function loadInputs(now: Date): Promise<HealthInputs> {
       billing: c,
       config: cfgByClient.get(c.id) ?? {},
     })),
-    runs: ((runsRes.data ?? []) as { id: string; client_id: string; status: string; options: { sendReport?: boolean } | null; started_at: string | null; completed_at: string | null }[])
-      .map((r) => ({
-        id: r.id, clientId: r.client_id, status: r.status, options: r.options,
+    runs: await withRowCounts(
+      admin,
+      ((runsRes.data ?? []) as RunRow[]).map((r) => ({
+        id: r.id, clientId: r.client_id, status: r.status, flags: r.flags, options: r.options,
         startedAt: r.started_at, completedAt: r.completed_at,
       })),
+      now,
+    ),
     reportSends: ((sendsRes.data ?? []) as { run_id: string | null; sent_at: string | null; status: string | null }[])
       .map((s) => ({ runId: s.run_id, sentAt: s.sent_at, status: s.status })),
   }

@@ -79,21 +79,26 @@ describe('tile email renderers', () => {
     expect(html).toContain(`background:${EMAIL.down}`)
     expect(html).toContain('Positive 609 · Negative 11')
   })
-  it('themes: ranked rows with the bucket colour and a New badge', () => {
+  // The New badge is gated off (D1) at render as well as at compute, because a
+  // snapshot frozen before the gate still carries isNew and the email re-renders
+  // from it forever. The rows, their counts and their bucket colours stay.
+  it('themes: ranked rows with the bucket colour, and no New badge while the direction words are gated off', () => {
     const d = { themes: { rows: [{ label: 'Socket pain', bucket: 'category', conversations: 25, isNew: true, memberThemes: [], description: '', category: null }, { label: 'Ossur ads', bucket: 'client', conversations: 10, isNew: false, memberThemes: [], description: '', category: null }], max: 25, analysedConversations: 300, confirmed: 2, topCompetitorName: 'Ottobock' } } as unknown as DashboardData
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.themes'](d, ctx)))
     hygiene(html)
-    expect(html).toContain('>New<')
+    expect(html).not.toContain('>New<')
+    expect(html).toContain('Socket pain')
     expect(html).toContain(`background:${EMAIL.cat}`)
     expect(html).toContain(`background:${EMAIL.green}`)
     expect(html).toContain('width="100%"')
   })
-  it('movement without a picture still says the numbers', () => {
-    const d = { movement: { dates: ['2026-07-21', '2026-08-23'], leadCompetitor: 'Ottobock', layer: 'period', rows: [{ key: 'yourShare', label: 'Your share', series: [5.8, 5.1], value: 5.1, delta: -0.7 }] }, updatesCount: 4 } as unknown as DashboardData
+  it('movement without a picture still says the numbers, and never a themes row frozen before the gate', () => {
+    const d = { movement: { dates: ['2026-07-21', '2026-08-23'], leadCompetitor: 'Ottobock', layer: 'period', rows: [{ key: 'yourShare', label: 'Your share', series: [5.8, 5.1], value: 5.1, delta: -0.7 }, { key: 'themes', label: 'Themes confirmed', series: [104, 120], value: 120, delta: 16 }] }, updatesCount: 4 } as unknown as DashboardData
     const html = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.movement'](d, ctx)))
     expect(html).not.toContain('<img')
     expect(html).toContain('Your share')
     expect(html).toContain('−0.7 pt')
+    expect(html).not.toContain('Themes confirmed') // D1
     const withImage = renderToStaticMarkup(createElement('div', null, dashboardEmail['dashboard.movement'](d, { ...ctx, image: (k) => (k === 'dashboard.movement' ? 'cid:dashboard-movement@verbatim' : null) })))
     expect(withImage).toContain('src="cid:dashboard-movement@verbatim"')
   })

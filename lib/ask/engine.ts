@@ -231,9 +231,10 @@ export async function verdictPass(
 
   // Evidence unreachable is NOT the same as evidence absent.
   //
-  // fetchQuotesByAudience swallows its query error and returns an empty map, so
-  // a schema or permission problem looks exactly like a corpus with nothing in
-  // it. Left alone, the quote-backing rule would then downgrade every claim in
+  // A pool that resolves nothing reads exactly like a corpus with nothing in
+  // it — an RLS or reachability problem returns rows the caller cannot see, not
+  // an error (a query that fails outright now throws, since each chunk is
+  // paged). Left alone, the quote-backing rule would then downgrade every claim in
   // a plan to "untested" and tell the user their whole document is unmeasured —
   // a confident, wrong answer, which is worse than the bluff the rule exists to
   // prevent. When a real pool resolves nothing, say so loudly and stand the

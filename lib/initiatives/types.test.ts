@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  initiativesOf, isTrackingSomething, toInitiative, EMPTY_INITIATIVES,
-  type InitiativesData, type InitiativeDbRow,
+  initiativesOf, initiativeTile, isTrackingSomething, toInitiative, EMPTY_INITIATIVES,
+  type InitiativesData, type InitiativeDbRow, type InitiativeTileRow,
 } from './types'
 
 // A snapshot frozen before this tile existed has no `initiatives` key at all,
@@ -34,6 +34,52 @@ describe('initiativesOf — a snapshot that predates the tile', () => {
 
   it('the shared empty shape is the empty shape', () => {
     expect(EMPTY_INITIATIVES).toEqual({ rows: [], total: 0 })
+  })
+})
+
+// D1: the tile said direction four ways and only the sentence was gated — the
+// sparkline of share per UPDATE, the stroke colour that judged it, the signed
+// mood delta and the sentence itself. A null `theirWay` also made the colour
+// WRONG rather than absent: `theirWay === false ? comp : you` painted every
+// losing initiative in the client's own green.
+describe('initiativeTile', () => {
+  const row = (over: Partial<InitiativeTileRow> = {}): InitiativeTileRow => ({
+    id: 'i1', title: 'Comfort', direction: 'up', startedLabel: '1 Aug',
+    series: [2.1, 3.4, 6.1], line: 'Up 4.0 points since 1 Aug · 3 updates',
+    verdict: 'moving_up', theirWay: true, latestShare: 6.1, sentimentDelta: 0.4, ...over,
+  })
+  const data = (r: InitiativeTileRow): { initiatives: InitiativesData } => ({ initiatives: { rows: [r], total: 1 } })
+
+  it('takes the movement off the row while the direction words are gated off, and keeps the subject and the level', () => {
+    const t = initiativeTile(data(row()), false)
+    expect(t.movement).toBe(false)
+    expect(t.rows[0]).toMatchObject({
+      title: 'Comfort', latestShare: 6.1,
+      series: [], theirWay: null, sentimentDelta: null,
+      line: 'Tracked since 1 Aug · 3 updates read',
+    })
+    expect(t.total).toBe(1)
+    expect(initiativeTile(data(row())).rows[0].series).toEqual([]) // the shipped default
+  })
+
+  it('re-says a sentence frozen with a direction, and leaves the two honest-silence ones alone', () => {
+    const down = initiativeTile(data(row({ verdict: 'moving_down', theirWay: false, line: 'Down 8.0 points since 1 Aug · 3 updates' })), false)
+    expect(down.rows[0].line).toBe('Tracked since 1 Aug · 3 updates read')
+    const flat = initiativeTile(data(row({ verdict: 'flat', theirWay: null, line: 'Holding steady since 1 Aug · 3 updates' })), false)
+    expect(flat.rows[0].line).toBe('Tracked since 1 Aug · 3 updates read')
+    const early = initiativeTile(data(row({ verdict: 'too_early', series: [1.2], line: 'One update in since 1 Aug — movement needs a second.' })), false)
+    expect(early.rows[0].line).toBe('One update in since 1 Aug — movement needs a second.')
+  })
+
+  it('hands the whole row through when the words are on', () => {
+    const t = initiativeTile(data(row()), true)
+    expect(t.movement).toBe(true)
+    expect(t.rows[0]).toEqual(row())
+  })
+
+  it('reads a snapshot that predates the tile as the empty tile, either way', () => {
+    expect(initiativeTile({}, false)).toEqual({ rows: [], total: 0, movement: false })
+    expect(initiativeTile({}, true)).toEqual({ rows: [], total: 0, movement: true })
   })
 })
 

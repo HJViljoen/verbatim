@@ -1,4 +1,21 @@
+import { RUN_INDEXED_DIRECTION_WORDS } from '../config'
 import type { ReportSection, ReportTemplate } from './types'
+
+/**
+ * A starter's keys, minus the tiles the pages no longer register.
+ *
+ * D1 took `voice.movers` out of the Voice module's catalogue, and
+ * `studioCatalogue()` enumerates exactly that — so a starter that still names
+ * it creates a report whose stored section holds a tile the picker cannot
+ * show: the outline counts "6 of 5 tiles" and the first tile the user toggles
+ * silently rewrites the section without it. The deck is fine either way
+ * (`sectionSlides` keeps only the keys `slides()` emits), which is why the
+ * starters' own "dropped at build time with a warning" is true of paper and
+ * not of the Studio. Phase 1 flips the constant and the tile comes back.
+ */
+export function templateKeys(keys: string[], directionWords = RUN_INDEXED_DIRECTION_WORDS): string[] {
+  return directionWords ? keys : keys.filter((k) => k !== 'voice.movers')
+}
 
 /**
  * The four starters (spec §5). A template only ARRANGES pages the pipeline
@@ -38,7 +55,7 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     description: 'Where you stand, what the market is saying, the competitive picture and what is working in content: the round-up a marketing lead takes into the monthly meeting.',
     sections: [
       { page: 'dashboard', params: {}, keys: ['dashboard.strip', 'dashboard.hero', 'dashboard.sentiment', 'dashboard.share', 'dashboard.themes', 'dashboard.movement', 'dashboard.recommendation', 'dashboard.accounts'] },
-      { page: 'voice', params: {}, keys: ['voice.map', 'voice.theme', 'voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon'] },
+      { page: 'voice', params: {}, keys: templateKeys(['voice.map', 'voice.theme', 'voice.movers', 'voice.phrases', 'voice.mood', 'voice.ribbon']) },
       { page: 'market', params: {}, keys: ['market.shortRead', 'market.news', 'market.detail'] },
       { page: 'competitive', params: {}, keys: ['competitive.standings', 'competitive.faceoff', 'competitive.shareLine', 'competitive.table'] },
       { page: 'content', params: {}, keys: ['content.works', 'content.inbox', 'content.field', 'content.voices', 'content.accounts'] },

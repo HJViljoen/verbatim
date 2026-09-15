@@ -31,6 +31,10 @@ import { decideOpenRun, runIdForEvent, RUN_STALE_AFTER_HOURS, PG_UNIQUE_VIOLATIO
 import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
+import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
+import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
+import { buildConfigSnapshot, openRunBookkeeping, isMissingBookkeepingColumn, previousRunEnd, rowWindow, CONFIG_SNAPSHOT_COLUMNS, type TrackingConfigRow, type WindowColumns } from '@/lib/pipeline/run-bookkeeping'
 import { computeMetrics, isDiscoveredVideo } from '@/lib/pipeline/metrics'
 import { sendAlertEmail } from '@/lib/email'
 import { billingAccess, type BillingClient } from '@/lib/billing'
@@ -65,6 +69,11 @@ export interface PipelineRunOptions {
   // When set, emit a `report/send.requested` after the run completes so the
   // periodic report goes out. The scheduler sets this; manual "Run now" doesn't.
   sendReport?: boolean
+  // The dispatcher slot this run is serving (ISO, the 06:00 SAST slot for the
+  // day). Recorded on the run row so "was Sunday's run started?" is a column
+  // rather than a recomputation from tracking_configs. Absent on a manual run,
+  // which is exactly the distinction worth keeping.
+  scheduledFor?: string | null
   // Analysis-only resume: reuse an existing run row (reset to 'running') and
   // skip the gather fan-out entirely — the corpus is already in the DB. The
   // operator lever for finishing a run whose analysis half died, without
@@ -82,12 +91,87 @@ export interface PipelineRunOptions {
  *  `flags` is the run's frozen flag snapshot (absent on runs opened before
  *  2026-08-18, which fall back to reading the environment); `period` is the
  *  run's effective period, frozen the same way (absent on runs opened before
- *  2026-09-09). */
+ *  2026-09-09); `window` is the run's gather window, frozen the same way
+ *  (absent on runs opened before 2026-09-15, which fall back to resolving it
+ *  from the clock at each step, i.e. what they started under). */
 interface OpenRunResult {
   runId: string | null
   skipped?: string
   flags?: RunFlags
   period?: string
+  window?: RunWindow
+}
+
+/**
+ * What open-run needs from the DB before it can write its bookkeeping: the
+ * previous run's end, whether a `run_summary` exists (baseline-vs-flow), and —
+ * on a resume — the window the row already carries plus whether it already
+ * carries a config snapshot. Read once, inside open-run, so no later step asks
+ * again.
+ *
+ * Two of the three reads name columns the bookkeeping migration adds, and those
+ * two swallow THAT error and nothing else: before the migration lands each
+ * comes back empty, which lands on the same answers the pre-2026-09-15 code had
+ * (no anchor, no stored window), and open-run then writes without the columns
+ * at all.
+ *
+ * Every other failure throws, because once the columns exist "the read failed"
+ * and "this client has no previous run" are otherwise the same answer: `closed`
+ * is empty, `previousRunEnd` is null, `resolveRunWindow` takes the rolling arm,
+ * and the row then asserts `window_basis = 'rolling'` as a deliberate basis
+ * rather than as a fallback. For Össur after a missed week that is the
+ * difference between gathering the gap — the whole point of D6 — and gathering
+ * seven days, with nothing anywhere recording the cause. A throw is the safe
+ * direction: open-run is a step, Inngest retries it, and the pre-migration path
+ * is named by its own predicate rather than by silence.
+ */
+async function loadRunWindowInput(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+  runId: string,
+  resumeRunId: string | undefined,
+): Promise<{ prevEnd: string | null; hasSummary: boolean; stored: RunWindow | null; hasConfigSnapshot: boolean }> {
+  const mine = new Set([runId, resumeRunId].filter(Boolean) as string[])
+  const [prevRes, summaryRes, storedRes] = await Promise.all([
+    // The previous run's own window_end, falling back to when it closed — the
+    // rule lib/pipeline/owned-events.ts has always used for account events, now
+    // the rule for content too. Ordered by window_end (the index this migration
+    // creates) and then by completed_at, which is what a row without a window
+    // sorts on; `previousRunEnd` then takes the latest of the two per row,
+    // because a resume moves completed_at without moving window_end. Five rows,
+    // not one: this run's own row (and a resume's target) can sit at the top of
+    // the ordering and must not anchor the window on itself.
+    admin.from('pipeline_runs')
+      .select('id, window_end, completed_at')
+      .eq('client_id', clientId)
+      .in('status', ['completed', 'partial'])
+      .order('window_end', { ascending: false, nullsFirst: false })
+      .order('completed_at', { ascending: false, nullsFirst: false })
+      .limit(5),
+    // "The map exists" — the same existence check resolveGatherWindow has
+    // always made: a closed synthesis, not merely an earlier run row.
+    admin.from('run_summary').select('run_id').eq('client_id', clientId).neq('run_id', runId).limit(1).maybeSingle(),
+    resumeRunId
+      ? admin.from('pipeline_runs').select('window_start, window_end, window_basis, config_snapshot')
+          .eq('id', resumeRunId).eq('client_id', clientId).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ])
+  // The narrow guard, on the two reads that can legitimately hit it, and a
+  // throw on everything else — see this function's comment.
+  if (prevRes.error && !isMissingBookkeepingColumn(prevRes.error)) throw prevRes.error
+  if (storedRes.error && !isMissingBookkeepingColumn(storedRes.error)) throw storedRes.error
+  // run_summary names no new column, so any failure of it is a real one: a
+  // swallowed error here reads as "this client has never been synthesised" and
+  // opens the run on the `baseline` arm.
+  if (summaryRes.error) throw summaryRes.error
+  const closed = (prevRes.data ?? []) as ({ id: string } & WindowColumns & { completed_at?: string | null })[]
+  const storedRow = storedRes.data as (WindowColumns & { config_snapshot?: unknown }) | null
+  return {
+    prevEnd: previousRunEnd(closed, mine),
+    hasSummary: Boolean(summaryRes.data),
+    stored: rowWindow(storedRow),
+    hasConfigSnapshot: Boolean(storedRow?.config_snapshot),
+  }
 }
 
 export const runPipeline = inngest.createFunction(
@@ -204,38 +288,92 @@ export const runPipeline = inngest.createFunction(
       // configured cadence. Resolved ONCE, here, so gather, the owned window,
       // the synthesis slice, the census and run_summary.period cannot disagree
       // and a retry cannot see a different answer.
-      const { data: tcPeriod } = await admin.from('tracking_configs')
-        .select('report_period').eq('client_id', clientId).maybeSingle()
-      const period = effectivePeriod(options.period, tcPeriod?.report_period as string | null)
-      if (options.runId) {
+      const { data: tcRow } = await admin.from('tracking_configs')
+        .select(CONFIG_SNAPSHOT_COLUMNS).eq('client_id', clientId).maybeSingle()
+      const tc = tcRow as TrackingConfigRow | null
+      const period = effectivePeriod(options.period, tc?.report_period ?? null)
+      // The run's gather window, frozen here for the same reason and for a
+      // sharper one: it used to be recomputed from Date.now() inside plan-owned,
+      // inside every gate:<platform> and inside synthesize, so a run that took
+      // days gathered one window and reported another (Össur f9548a97: 18 days
+      // apart). Anchored on the previous run's end, so a missed week is
+      // gathered rather than skipped — see lib/pipeline/window.ts.
+      const windowInput = await loadRunWindowInput(admin, clientId, options.runId ?? newRunId, options.runId)
+      const window = resolveRunWindow({
+        now: new Date().toISOString(),
+        period,
+        prevEnd: windowInput.prevEnd,
+        hasSummary: windowInput.hasSummary,
+        stored: windowInput.stored,
+      })
+      const snapshot = buildConfigSnapshot(tc)
+      // The bookkeeping migration is applied by hand (a schema change on a live
+      // pipeline is not a deploy side effect), so the code CAN reach production
+      // first. Every one of these columns is additive, so a write that names
+      // them before they exist comes back 42703/PGRST204 and the same write
+      // without them is exactly what every run did before this shipped —
+      // whereas failing here would fail the first step of every run for every
+      // tenant until someone applied the migration. The run then carries no
+      // frozen window and every reader falls back to the clock, as a
+      // pre-2026-09-15 row does. Same guard as ocr.ts and Pass D-b's lineage.
+      let recorded = true
+      const resumeRunId = options.runId
+      if (resumeRunId) {
         // started_at moves to NOW. It is set only at insert, and a resumed run
         // is by definition hours old, so leaving it would make every resumed
         // run instantly "abandoned" to the next open-run — which would stamp a
         // live run failed and open a second one alongside it.
-        const { error } = await admin
-          .from('pipeline_runs')
-          .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options })
-          .eq('id', options.runId).eq('client_id', clientId)
+        //
+        // The bookkeeping is NOT simply rewritten: the slot the original run
+        // served and the config it gathered under are its facts, not this
+        // invocation's (lib/pipeline/run-bookkeeping.ts).
+        const bookkeeping = openRunBookkeeping({
+          period, window, snapshot,
+          scheduledFor: options.scheduledFor,
+          resume: { hasConfigSnapshot: windowInput.hasConfigSnapshot },
+        })
+        const reopen = (extra: Record<string, unknown>) =>
+          admin
+            .from('pipeline_runs')
+            .update({ status: 'running', error_message: null, completed_at: null, started_at: new Date().toISOString(), flags, options, ...extra })
+            .eq('id', resumeRunId).eq('client_id', clientId)
+        let { error } = await reopen({ stalled: false, ...bookkeeping })
+        if (error && isMissingBookkeepingColumn(error)) {
+          console.warn('[open-run] run bookkeeping columns are not in the database yet; reopening without them')
+          recorded = false
+          ;({ error } = await reopen({}))
+        }
         if (error?.code === PG_UNIQUE_VIOLATION) return { runId: null, skipped: 'another run opened first (unique index)' }
         if (error) throw new Error(`reopen run: ${error.message}`)
-        return { runId: options.runId, flags, period }
+        return { runId: resumeRunId, flags, period, ...(recorded ? { window } : {}) }
       }
-      const { error } = await admin
-        .from('pipeline_runs')
-        .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options })
+      const open = (extra: Record<string, unknown>) =>
+        admin
+          .from('pipeline_runs')
+          .insert({ id: newRunId, client_id: clientId, status: 'running', flags, options, ...extra })
+      let { error } = await open(openRunBookkeeping({ period, window, snapshot, scheduledFor: options.scheduledFor }))
+      if (error && isMissingBookkeepingColumn(error)) {
+        console.warn('[open-run] run bookkeeping columns are not in the database yet; opening without them')
+        recorded = false
+        ;({ error } = await open({}))
+      }
       if (error?.code === PG_UNIQUE_VIOLATION) {
         // Either our own previous attempt's row (same id), or another run won
         // the race for this client (different id).
         const { data: ours } = await admin.from('pipeline_runs')
-          .select('id').eq('id', newRunId).eq('client_id', clientId).maybeSingle()
+          .select(recorded ? 'id, window_start, window_end, window_basis' : 'id')
+          .eq('id', newRunId).eq('client_id', clientId).maybeSingle()
         if (ours) {
           console.warn(`[open-run] reusing run ${newRunId} from a previous attempt of this step`)
-          return { runId: newRunId, flags, period }
+          // The row's own window, not the one just computed: the previous
+          // attempt gathered against what it wrote, and a second clock reading
+          // is exactly what this work exists to stop.
+          return { runId: newRunId, flags, period, ...(recorded ? { window: rowWindow(ours as WindowColumns) ?? window } : {}) }
         }
         return { runId: null, skipped: 'another run opened first (unique index)' }
       }
       if (error) throw new Error(`open run: ${error.message}`)
-      return { runId: newRunId, flags, period }
+      return { runId: newRunId, flags, period, ...(recorded ? { window } : {}) }
     })
     // Pre-2026-08-18 memoised shape: the step returned the run id itself.
     const runId: string | null = typeof opened === 'string' ? opened : opened.runId
@@ -248,6 +386,11 @@ export const runPipeline = inngest.createFunction(
     // tracking_configs — i.e. exactly the behaviour it started under.
     const runPeriod: string | null =
       (typeof opened === 'string' ? undefined : opened.period) ?? options.period ?? null
+    // The run's frozen gather window. Null on a run opened before 2026-09-15
+    // (including one in flight across the deploy): every reader then falls back
+    // to resolving the window from the clock, which is what that run started
+    // under and must keep doing.
+    const runWindow: RunWindow | null = (typeof opened === 'string' ? undefined : opened.window) ?? null
     if (!runId) {
       const reason = typeof opened === 'string' ? '' : opened.skipped ?? ''
       // A skipped SCHEDULED run would otherwise cost the client their whole
@@ -363,7 +506,7 @@ export const runPipeline = inngest.createFunction(
             // manual {period:'monthly'} run must widen the owned window the
             // same way it widens the gather.
             const period = runPeriod ?? effectivePeriod(options.period, data?.report_period as string | null)
-            const window = await resolveGatherWindow(clientId, runId, period)
+            const window = await resolveGatherWindow(clientId, runId, period, runWindow)
             return {
               handles: (data?.own_handles ?? {}) as Record<string, string>,
               competitorHandles: (data?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
@@ -414,6 +557,7 @@ export const runPipeline = inngest.createFunction(
                       clientId, runId, platform, keyword: task.keyword, bucket: task.bucket,
                       community: task.community, variant: task.variant,
                       maxVideos: options.maxVideos, period: runPeriod ?? undefined,
+                      window: runWindow,
                     }),
                   ),
                 )
@@ -427,7 +571,7 @@ export const runPipeline = inngest.createFunction(
         }
         const gate = await step.run(`gate:${platform}`, () =>
           withApifyRunContext({ clientId, runId, step: `gate:${platform}` }, () =>
-            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined }),
+            gatePlatform({ clientId, runId, platform, searches, videoLimit: options.videoLimit, period: runPeriod ?? undefined, window: runWindow }),
           ),
         )
         totalVideos += gate.videosKept
@@ -1054,6 +1198,37 @@ export const runPipeline = inngest.createFunction(
     else if (passADegraded) console.warn(`[pass-a] ${passADegraded} (already recorded as failed batch steps)`)
     else if (passA.errored > 0) console.warn(`[pass-a] ${passA.errored} video call(s) failed under the ${PASS_A_ERROR_RATIO * 100}% ratio; re-read next run. First: ${passA.errors[0] ?? ''}`)
 
+    // Keep the agent's retrieval index current (Phase 0, design item 36). Here,
+    // right after the Pass A wave: every videos.analyzed_run_id pointer has
+    // moved by now, so audience_insights_current means what it says and the
+    // read reaches the WHOLE backlog, not just what this run wrote. It cannot
+    // live inside pass-a:N-of-M — decideAnalysis never re-selects a video whose
+    // analysis is already current, so those rows never enter a batch again and
+    // the 3,536 already sitting NULL would stay NULL forever.
+    //
+    // Before cross-reference and long before themes:<bucket>, which is the one
+    // step that must not take on more work: its merge call alone spent 183 s of
+    // a 300 s cap on Össur's 2026-09-13 run and it has no per-step catch, so a
+    // write failure there fails the run.
+    //
+    // Logged, NOT noteError'd — the keyword-discovery precedent. A searchable
+    // index is something the run maintains alongside the report, not part of
+    // producing it, and a clean run must not read 'partial' because an index
+    // pass had a bad day; the rows are still NULL next run, which is the retry.
+    // It is also a step that can run before its migration is applied: until
+    // then it is a logged no-op that has read nothing and spent nothing.
+    await step
+      .run('embed-insights', async () => {
+        const admin = createAdminClient()
+        const r = await embedNullInsights(admin, { clientId, runId })
+        console.log(`[embed-insights] ${embedSummary(r)}`)
+        return r
+      })
+      .catch((e) => {
+        console.error(`[embed-insights] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
+
     // 5. Cross-reference detection — client-brand mentions under competitor /
     //    industry videos (deterministic regex, no GPT).
     const crossRef = await step.run('cross-reference', () => runCrossReference(clientId))
@@ -1116,10 +1291,67 @@ export const runPipeline = inngest.createFunction(
     const persisted = await step.run('persist-themes', () =>
       persistThemes(clientId, runId, themed.allThemes, { themeRegistry: flags.themeRegistry }),
     )
+    // COUNTED, though the step itself succeeded. The registry block inside
+    // persistThemes catches its own failures so a client's update never dies on
+    // identity bookkeeping — but the `theme_observations` write is inside that
+    // catch, so a run could close 'completed' having written zero observations
+    // and nothing anywhere said so. The trend series, the initiatives
+    // measurement and the report delta all read that table; a silently empty
+    // week reads to a client as "nothing changed" rather than "we lost the
+    // record". The degrade stays; the silence does not.
+    if (persisted.registryFailed) noteError('persist-themes:registry', persisted.registryFailed)
     const themedSummary = {
       ...themed.summary,
       newThemes: persisted.hadPreviousRun ? persisted.firstSeen : 0,
     }
+
+    // The comment-dated monthly reading (Phase 0, design items 1–2). Here,
+    // right after persist-themes, because it reads THIS run's observations:
+    // the months are the months of one clustering, and the next run's
+    // clustering is a different one. Only the months still open are touched —
+    // the current one, the previous one until its 30-day line passes, and any
+    // month whose stored row is still filling (that visit is what freezes it).
+    //
+    // Logged, NOT noteError'd — the keyword-discovery precedent. The reading is
+    // a record kept alongside the report, not part of producing it, and a clean
+    // run must not read 'partial' because a bookkeeping pass had a bad day. It
+    // is also the step that can run before its migration has been applied:
+    // until then it is a logged no-op rather than a retry loop holding a slot.
+    await step
+      .run('freeze-months', async () => {
+        const admin = createAdminClient()
+        try {
+          const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
+          const r = await freezeMonths(admin, { clientId, runId, months })
+          console.log(
+            `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
+            `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
+            `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
+            `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
+            `${r.themes.deleted} dropped)`,
+          )
+          return {
+            months: r.months.length,
+            denominators: r.denominators.written,
+            themes: r.themes.written,
+            frozen: r.denominators.frozen + r.themes.frozen,
+            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
+            heldStale: r.denominators.heldStale + r.themes.heldStale,
+          }
+        } catch (e) {
+          // Its tables and functions do not exist yet: a no-op, not a failure.
+          // Retrying would burn the step's whole budget with backoff between
+          // attempts while holding one of the account's five shared slots, for
+          // a record it cannot write until the migration is applied by hand.
+          if (!isMissingMonthlyReading(e)) throw e
+          console.log('[freeze-months] skipped: 20260915092000_monthly_reading.sql has not been applied yet')
+          return null
+        }
+      })
+      .catch((e) => {
+        console.error(`[freeze-months] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        return null
+      })
 
     // Step 2c — account-event detection + explanation on the owned layer
     // (Wave 2: first pipeline wiring; previously script-only). After themes so
@@ -1132,7 +1364,7 @@ export const runPipeline = inngest.createFunction(
         return null
       })
 
-    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId, runPeriod))
+    const synth = await step.run('synthesize', () => runSynthesisHalf(clientId, runId, runPeriod, runWindow))
 
     // Keyword ROI bookkeeping — fills keyword_performance.insights_contributed
     // for this run. Catch on the step promise (transcribe precedent): retries
@@ -1230,13 +1462,45 @@ export const runPipeline = inngest.createFunction(
     // 7. Close the run.
     await step.run('close-run', async () => {
       const admin = createAdminClient()
-      await admin.from('pipeline_runs').update({
-        status: runCloseStatus(totalErrors),
-        videos_scraped: totalVideos,
-        completed_at: new Date().toISOString(),
-        errors: runErrors,
-        error_message: summariseRunErrors(totalErrors, runErrors),
-      }).eq('id', runId)
+      const completedAt = new Date().toISOString()
+      // Did the run take longer than the window it covered, or than the six
+      // hours anything takes to be called abandoned? A fact on the row, not a
+      // finding: nothing alerts on it yet. The floor is what keeps it a fact —
+      // without it a same-day rerun, whose anchored window is minutes wide,
+      // reads as stalled for finishing in thirteen. The two runs that made this
+      // worth recording took 18.1 and 8.9 days to close a week.
+      const { data: row } = await admin.from('pipeline_runs')
+        .select('started_at').eq('id', runId).maybeSingle()
+      const startedAt = (row?.started_at as string | undefined) ?? completedAt
+      const close = (extra: Record<string, unknown>) =>
+        admin.from('pipeline_runs').update({
+          status: runCloseStatus(totalErrors),
+          videos_scraped: totalVideos,
+          completed_at: completedAt,
+          errors: runErrors,
+          error_message: summariseRunErrors(totalErrors, runErrors),
+          ...extra,
+        }).eq('id', runId)
+      // Same "the migration has not landed yet" tolerance as open-run, and it
+      // matters more here: this update's error was never read, so a missing
+      // `stalled` column would have left the run at 'running' for ever with
+      // nothing said about it.
+      const { error } = await close({ stalled: isStalled({ startedAt, completedAt, window: runWindow }) })
+      if (error && isMissingBookkeepingColumn(error)) {
+        console.warn('[close-run] `stalled` is not in the database yet; closing without it')
+        await close({})
+      } else if (error) {
+        // Any other failure keeps the behaviour it has always had (the error
+        // was never read) — but says so, rather than leaving a run at
+        // 'running' with no line anywhere. WP9 weighed making it fatal and
+        // decided against: a throw retries and then fails the function, which
+        // stamps the run 'failed' and skips request-report, so the client loses
+        // the week's update over a bookkeeping write that did not change a
+        // single number. A row left at 'running' is caught twice as it is — the
+        // next run's open sweep closes it after six hours, and the ops check
+        // raises run_stuck the following morning.
+        console.error(`[close-run] ${error.message}`)
+      }
     })
 
     // 7a-i. Settle the Apify ledger BEFORE reading it. `usageTotalUsd` on a
@@ -1597,7 +1861,12 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
 
 // Back half, synthesis step: metrics → Pass C → Pass D (a+b) → run_summary,
 // over the themes persisted by the persist-themes step. Mirrors scripts/run-cd.ts.
-async function runSynthesisHalf(clientId: string, runId: string, runPeriod: string | null = null) {
+async function runSynthesisHalf(
+  clientId: string,
+  runId: string,
+  runPeriod: string | null = null,
+  runWindow: RunWindow | null = null,
+) {
   const admin = createAdminClient()
 
   // Share rule (Heinrich, 2026-09-10). "Share of tracked conversation" counts
@@ -1664,8 +1933,11 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   // the tenant's cadence. Read from the run, NOT from tracking_configs: a
   // manual {period:'monthly'} on a 'paused' tenant gathered 30 days and then
   // measured the week against it (run cb0d97b2, 2026-09-09).
+  // The window is the RUN's, frozen at open-run — not a fresh reading of the
+  // clock. On the two multi-day runs in production this step cut the period at
+  // a date the gather had never been asked for (18 days later on f9548a97).
   const period = runPeriod ?? effectivePeriod(null, tc?.report_period as string | null)
-  const window = await resolveGatherWindow(clientId, runId, period)
+  const window = await resolveGatherWindow(clientId, runId, period, runWindow)
   const periodVideos = videos.filter((v) => v.run_id === runId && inWindow(v.upload_date, window.since))
   const periodComments = comments.filter((c) => c.run_id === runId && inWindow(c.comment_date, window.since))
   const periodMetrics = computeMetrics(periodVideos, periodComments, analysedVideoIds)
@@ -1674,11 +1946,18 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   // with the window it is true for. The share tile sets it against how many
   // videos by and about the client were tracked in total — share counts both,
   // so the census is where "what you published" is still said on its own.
+  // BOTH bounds come from the run's frozen window when it has one. Taking the
+  // upper bound from the clock instead was the same gather-vs-synthesis
+  // divergence this work removed, on the same run: f9548a97 opened 3 Jul and
+  // synthesised 21 Jul, so a clock-read `until` counted 18 days of the client's
+  // posts into a window that ends on the 3rd — in the one number on the summary
+  // that is meant to be exact. Only the pre-Phase-0 fallback path (no frozen
+  // window) still reads the clock, which is what it started under.
   const ownedCensus = buildOwnedCensus(videos, {
     handles: (tc?.own_handles ?? {}) as Record<string, string>,
     competitorHandles: (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
     since: window.since ?? periodSince(period),
-    until: new Date().toISOString().slice(0, 10),
+    until: (runWindow?.end ?? new Date().toISOString()).slice(0, 10),
   })
 
   const { data: client } = await admin.from('clients')
@@ -1687,9 +1966,20 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
 
   // Brand claims (Step 2b) — all-time accumulation, newest-run-per-video,
   // tracked competitors only; empty for tenants that never ran Pass A v4.
-  // Client claims split by voice: `client` = the brand speaking (own posts +
-  // own accounts) → say-vs-hear; `about` = third parties → the About-you block.
-  const claims = await loadBrandClaims(admin, clientId, tc?.competitor_names ?? [], tc?.brand_keywords ?? [], (tc?.own_handles ?? {}) as Record<string, string>)
+  // EVERY side is split by voice (2026-09-15): `client` = the brand speaking
+  // (own posts + own accounts) → say-vs-hear; `about` = third parties → the
+  // About-you block; `competitorsOwn` = a rival speaking in its own videos →
+  // Pass C's own-videos block and the document's pitch; `competitorsAbout` =
+  // creators and reviewers talking about that rival, which used to be printed
+  // as the rival's own marketing.
+  const claims = await loadBrandClaims(
+    admin,
+    clientId,
+    tc?.competitor_names ?? [],
+    tc?.brand_keywords ?? [],
+    (tc?.own_handles ?? {}) as Record<string, string>,
+    (tc?.competitor_handles ?? {}) as Record<string, Record<string, string>>,
+  )
 
   // Floor-passing themes only — early signals surface on pages, not in C/D.
   const themes = (await loadThemes(clientId, runId)).filter((t) => !t.singleSource)
@@ -1697,7 +1987,7 @@ async function runSynthesisHalf(clientId: string, runId: string, runPeriod: stri
   const c = await runPassC({
     clientId, runId, themes,
     trackingConfig: tc ?? undefined, brandName, sov: metrics.share_of_voice,
-    competitorClaims: claims.competitors, persist: true,
+    competitorClaims: claims.competitorsOwn, competitorAboutClaims: claims.competitorsAbout, persist: true,
   })
   const d = await runPassD({
     clientId, runId, themes,

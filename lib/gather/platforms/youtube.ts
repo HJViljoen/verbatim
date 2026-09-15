@@ -126,7 +126,10 @@ export const youtube: PlatformAdapter = {
     const key = apiKey()
     const keyword = terms[0] ?? ''
     if (!keyword) return []
-    const publishedAfter = periodToPublishedAfter(config.report_period)
+    // The run's frozen window when there is one — search.list takes any
+    // instant, so it gets the exact lower bound rather than a fresh reading of
+    // the clock. A baseline run has none and keeps the period-derived bound.
+    const publishedAfter = config.window?.start ?? periodToPublishedAfter(config.report_period)
 
     // 1) search.list → video ids (paginate up to `limit`, 50/page).
     const ids: string[] = []

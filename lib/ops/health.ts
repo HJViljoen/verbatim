@@ -43,6 +43,16 @@ export const REPORT_GRACE_MS = 3 * 3600_000
  *  emails. The dispatcher's copy is gone and this window is short, because
  *  alert fatigue is how 6 September stayed invisible for five days. */
 export const REPORT_MISSED_WINDOW_MS = 48 * 3600_000
+/** How far back a run that closed clean is still checked for what it left
+ *  behind. Same 48 h as the missed report, and for the same reason: an update
+ *  that lost its record is worth one morning's email, not a fortnight of them.
+ *
+ *  No grace before it. The three writes it asks about all land at or within
+ *  seconds of the close, and the check runs once a day at 09:00 SAST against a
+ *  06:00 SAST slot — a grace wide enough to cover a retrying cost write would
+ *  push Sunday's finding to Monday, which is a day of not knowing in exchange
+ *  for a race nobody has observed. */
+export const RUN_INCOMPLETE_WINDOW_MS = 48 * 3600_000
 /** How far back the caller reads runs and sends. Nothing older is evidence:
  *  a run stranded at 'analyzing' since 2026-06-13 would otherwise alert every
  *  morning forever, and a missed slot we cannot see rows for proves nothing. */
@@ -62,6 +72,36 @@ export interface HealthClient {
   config: ScheduleConfig
 }
 
+/** What a closed run left behind, counted by the caller. Three rows, each the
+ *  end of a different part of the run: the trend series (`theme_observations`,
+ *  written inside persist-themes), the recommendations Pass D produces, and the
+ *  cost bookkeeping written after the run has already been stamped
+ *  'completed'. */
+export interface RunRowCounts {
+  observations: number
+  recommendations: number
+  /** 0 or 1 — `run_costs` is one row per run. */
+  costs: number
+  /** Of those recommendations, how many point at NO insight this run still has
+   *  — every id in `based_on.insight_ids` resolving to neither a
+   *  `market_insights` nor a `competitive_insights` row of the same run (an
+   *  empty `insight_ids` counts here too).
+   *
+   *  It exists because presence is not groundedness. WP7 moved the
+   *  recommendations delete to after a successful D-b parse, so a retried
+   *  synthesis whose second call refuses leaves the FIRST attempt's rows
+   *  standing — while `runPassD` has already deleted and reinserted this run's
+   *  market insights with fresh ids. The count is then non-zero and the rows
+   *  are dangling: both readers resolve them to nothing (tier `archive`, no
+   *  evidence chips), the step logs `recommendations: 0`, and the run closes
+   *  'completed'. That console line ages out of Vercel's retention within the
+   *  hour, and the client is left reading ungrounded recommendations.
+   *
+   *  Absent from the counts (undefined) on a caller that does not compute it —
+   *  read, like the counts themselves, as "not counted", never as zero. */
+  ungroundedRecommendations?: number
+}
+
 export interface HealthRun {
   id: string
   clientId: string
@@ -69,6 +109,15 @@ export interface HealthRun {
   options: { sendReport?: boolean } | null
   startedAt: string | null
   completedAt: string | null
+  /** The run's frozen flag snapshot. Only `themeRegistry` is read here: it
+   *  decides whether theme observations were expected of this run at all.
+   *  Absent on every run opened before 2026-08-18. */
+  flags?: { themeRegistry?: boolean } | null
+  /** What the run wrote, when the caller counted it — see `needsRowCounts`.
+   *  Absent means "not counted", which is never a finding: a checker that read
+   *  an uncounted run as an empty one would invent an outage out of a loader
+   *  that skipped a row. */
+  rows?: RunRowCounts | null
 }
 
 export interface HealthReportSend {
@@ -94,6 +143,7 @@ export type FindingKind =
   | 'dispatcher_silent'
   | 'run_not_started'
   | 'run_stuck'
+  | 'run_incomplete'
   | 'report_missed'
 
 export interface Finding {
@@ -118,6 +168,26 @@ function ago(ms: number): string {
  *  created. Both mean "we cannot show that Inngest is alive". */
 function missingBeat(beats: Map<string, number>, name: string, kind: FindingKind): Finding | null {
   return beats.has(name) ? null : { kind, detail: NO_HEARTBEAT }
+}
+
+/**
+ * Which runs the caller has to count rows for: one that closed 'completed'
+ * inside the last RUN_INCOMPLETE_WINDOW_MS.
+ *
+ * Exported so the loader and the rule cannot drift — a run the loader does not
+ * count arrives here with `rows` absent and can never become a finding, and a
+ * run the rule would judge is exactly the one the loader counts.
+ *
+ * 'completed' only, deliberately. A 'partial' run has already emailed through
+ * the partial-run alert with its errors attached; this finding is for the runs
+ * that look clean and are not.
+ */
+export function needsRowCounts(run: { status: string; completedAt: string | null }, now: Date): boolean {
+  if (run.status !== 'completed') return false
+  const t = run.completedAt ? Date.parse(run.completedAt) : NaN
+  if (Number.isNaN(t)) return false
+  const age = now.getTime() - t
+  return age >= 0 && age <= RUN_INCOMPLETE_WINDOW_MS
 }
 
 export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
@@ -159,6 +229,11 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
   // 2. Did every run that was due actually start? Absence of a pipeline_runs
   //    row is the only signal there is — nothing records "expected but never
   //    dispatched" — so the expectation has to be recomputed here.
+  //    `pipeline_runs.scheduled_for` (2026-09-15) names the slot a run SERVED,
+  //    which is the other half: it makes a started run's slot a fact instead of
+  //    an inference, but a slot nobody ran still writes no row at all. Phase 1
+  //    turns this into a join on that column and keeps this recomputation for
+  //    the rows that predate it.
   const startsByClient = new Map<string, number[]>()
   for (const r of inputs.runs) {
     const t = r.startedAt ? Date.parse(r.startedAt) : NaN
@@ -201,7 +276,54 @@ export function assessPipelineHealth(inputs: HealthInputs): Finding[] {
     })
   }
 
-  // 4. A run that finished owing a report, and the report never went out.
+  // 4. A run that closed 'completed' and left nothing behind.
+  //    Status is only as honest as the catch sites are: four of them log
+  //    without counting, everything after close-run cannot change the status at
+  //    all, and until this week the whole theme_observations write sat inside a
+  //    swallowed try/catch. So the status is not evidence on its own — the rows
+  //    are. Three of them, each the end of a different half of the run, plus
+  //    one arm on what the recommendations POINT AT, because WP7 made a
+  //    non-zero count of dangling rows a state this run can close clean in.
+  for (const r of inputs.runs) {
+    if (!needsRowCounts(r, inputs.now)) continue
+    const counts = r.rows
+    if (!counts) continue
+    const missing: string[] = []
+    // Only when the registry was on for THIS run: before the flag, observations
+    // were not written at all, and a feature's age is not an incident.
+    if (r.flags?.themeRegistry === true && counts.observations === 0) {
+      missing.push('no theme observations — the trend series has no point for this update')
+    }
+    if (counts.recommendations === 0) missing.push('no recommendations')
+    // Presence is not groundedness. A retried synthesis that fails at D-b keeps
+    // the previous attempt's recommendations, whose `based_on` ids point at
+    // market insights this run deleted and reinserted under fresh ids — a
+    // non-zero count of rows the client reads with no evidence behind any of
+    // them. Only when ALL of them are dangling: one recommendation whose
+    // references the parser rejected is an ordinary bad day for the model, not
+    // an incomplete run.
+    else if (
+      counts.ungroundedRecommendations !== undefined &&
+      counts.ungroundedRecommendations === counts.recommendations
+    ) {
+      missing.push(
+        `${counts.recommendations} recommendations that cite no insight this run has — ` +
+        'a retried synthesis left the previous attempt\'s rows behind, and they render ungrounded',
+      )
+    }
+    // Written after close-run and .catch()-ed, so its absence cannot show up in
+    // the status: a run that cost money and recorded none looks free.
+    if (counts.costs === 0) missing.push('no run_costs row — what this update spent is unrecorded')
+    if (missing.length === 0) continue
+    findings.push({
+      kind: 'run_incomplete',
+      clientId: r.clientId,
+      clientName: nameById.get(r.clientId),
+      detail: `run ${r.id} closed 'completed' at ${r.completedAt} with ${missing.join('; ')}`,
+    })
+  }
+
+  // 5. A run that finished owing a report, and the report never went out.
   //    cadenceReliability owns both halves of that rule — what "owed" means
   //    (options.sendReport, completed or partial) and which report_sends states
   //    settle it — so neither is restated here.
@@ -235,6 +357,7 @@ const HEADINGS: Record<FindingKind, string> = {
   dispatcher_silent: 'The daily dispatcher has not run',
   run_not_started: 'A due run never started',
   run_stuck: 'A run is stuck',
+  run_incomplete: 'An update finished without its record',
   report_missed: 'A finished update reached nobody',
 }
 

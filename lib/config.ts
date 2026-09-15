@@ -1138,6 +1138,38 @@ export const REGISTRY_MATCH_WEAK = 0.25
  *  It revives on the next match — dormancy hides an entry, it never deletes it. */
 export const REGISTRY_DORMANT_RUNS = 3
 
+// --- Direction words on the run-indexed theme series (Phase 0 · D1, 2026-09-15) --
+
+/**
+ * OFF, and deliberately: nothing may tell a client a theme is gaining, fading
+ * or gone quiet while the only series we hold is indexed by UPDATE.
+ *
+ * Every gaining / fading / New on a theme today compares two readings of one
+ * cumulative corpus taken at two arbitrary moments — not two periods. A
+ * fortnight between updates, an analysis-only re-read that gathered nothing, or
+ * a week that was missed moves the number as much as the conversation does. It
+ * shows: Voice filed "Audience identities and amputation types" under *Fading*
+ * on a strength score of 8 → 7 — a model score nobody is ever shown — beside a
+ * sparkline that went 167 → 182 conversations. The design forbids this surface
+ * "including as a temporary measure", so it is gated off rather than reworded.
+ *
+ * What is NOT gated, because it is a period reading with an n and a band: the
+ * digest's sentiment and share verdicts, and the registry-gated "N new themes"
+ * count in the email. Every LEVEL — counts, shares, sentiment, the theme map,
+ * the lists — is untouched.
+ *
+ * Phase 1 flips this to true one reader at a time, as each is re-based on the
+ * comment-dated monthly reading (lib/reading/monthly.ts). That is why every
+ * gated branch READS this constant rather than deleting its code, and why the
+ * gated pure functions take it as an argument defaulting to this, so both
+ * answers stay under test.
+ *
+ * Annotated `boolean` rather than left to infer the literal `false`: a literal
+ * narrows every gated branch to dead code, and TypeScript then stops checking
+ * the half Phase 1 turns back on.
+ */
+export const RUN_INDEXED_DIRECTION_WORDS: boolean = false
+
 // Order-of-magnitude Apify spend per platform, for RANKING keywords in
 // scripts/keyword-roi.ts — never invoicing. Apify doesn't land per-actor cost
 // in our DB (runActor returns items only), so these are coarse constants
@@ -1223,8 +1255,24 @@ export function periodToTikTokRange(period: string): string {
  *  gather window and the period-metrics slice (YouTube's publishedAfter uses the
  *  same numbers). */
 export function periodWindowDays(period: string): number {
-  return period === 'daily' ? 1 : period === 'monthly' ? 30 : 7
+  if (period === 'daily') return 1
+  if (period === 'monthly') return 30
+  // Everything else is a week, and 'paused' is spelled out because it is a LIVE
+  // value, not a typo: Sealand's report_period is 'paused' today and 9 of the 17
+  // run_summary rows in production carry it. 'paused' means "never due" to the
+  // scheduler (schedule-due.ts) — it says nothing about how much a manual run on
+  // that tenant should cover, and a week is what it has always covered. Reading
+  // that answer out of a ternary's default arm made it look accidental.
+  return 7
 }
+
+/** How far back an ANCHORED gather window may reach (D6, 2026-09-15). A run
+ *  anchors its window on the previous run's end, so after a long silence the
+ *  window would otherwise be as wide as the gap — and the gather's real cost is
+ *  one paid comment scrape per eligible video, so a three-month window is a
+ *  three-month bill. 30 days is the deepest cadence the product offers
+ *  (monthly), so the cap can never narrow a tenant's configured window. */
+export const MAX_ANCHOR_DAYS = 30
 
 /** report_period → the window's inclusive lower bound as 'YYYY-MM-DD' (UTC day).
  *  The one date the whole gather agrees on: the flow-run window filter, the
@@ -1346,6 +1394,11 @@ export const DOCUMENT_BRIEF_MAX = 1200
 export const DOCUMENT_BLOCK_MAX: Record<string, number> = {
   summary: 1000, headline: 90, saw: 1050, heard: 260, means: 480, practice: 180, sure: 220,
   pitch: 520, praise: 520, hurt: 520, read: 420, persona: 260, not_sure: 180, care: 220,
+  // "What others say about them" (2026-09-15) is the competitor page's fourth
+  // column, and a fourth column is a narrower one — the same characters take
+  // half again as many lines. Shorter than its three neighbours on purpose:
+  // it is the block the page gained, not one it was built around.
+  about: 420,
   // The pages the leadership, market and content briefs add (2026-09-02).
   standing: 900, gap: 330, asked: 220,
 }

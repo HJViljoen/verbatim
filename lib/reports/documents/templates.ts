@@ -274,7 +274,7 @@ export const DOCUMENT_BLOCKS: Record<DocumentBlockKey, DocumentBlock> = {
   competitive_analysis: {
     key: 'competitive_analysis',
     title: 'Competitive analysis',
-    description: 'A page per competitor: what they pitch in their own videos, what their users praise, where their users hurt, and the read when both names come up.',
+    description: 'A page per competitor: what they pitch in their own videos, what others say about them, what their users praise, where their users hurt, and the read when both names come up.',
     anchors: cut(SALES_BRIEF, 'competitor'),
     skeleton: [{ kind: 'competitor', repeat: 'competitors' }],
   },
@@ -487,7 +487,7 @@ export const documentTemplate = (key: string | null | undefined): DocumentTempla
 export const PAGE_FIELDS: Record<DocPageKind, string[]> = {
   in_short: ['summary', 'findings', 'not_sure'],
   finding: ['headline', 'saw', 'heard', 'means', 'practice', 'sure'],
-  competitor: ['pitch', 'praise', 'hurt', 'read'],
+  competitor: ['pitch', 'about', 'praise', 'hurt', 'read'],
   standing: ['standing'],
   say_hear: ['gap'],
   asked: ['asked'],

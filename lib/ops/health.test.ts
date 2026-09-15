@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assessPipelineHealth, formatOpsEmail, type Finding, type HealthInputs } from './health'
+import { assessPipelineHealth, formatOpsEmail, needsRowCounts, type Finding, type HealthInputs, type HealthRun } from './health'
 
 // Wednesday 2026-09-16, 12:00 SAST.
 const NOW = new Date('2026-09-16T10:00:00Z')
@@ -225,6 +225,168 @@ describe('assessPipelineHealth — stuck runs', () => {
       runs: [{ id: 'old', clientId: 'c1', status: 'analyzing', options: null, startedAt: agoDays(90), completedAt: null }],
     }))
     expect(f).toEqual([])
+  })
+})
+
+describe('assessPipelineHealth — a run that closed clean and wrote nothing', () => {
+  // Nothing checked what a 'completed' run actually produced. Status is only as
+  // honest as the catch sites are: the theme_observations write sat inside a
+  // swallowed try/catch until this week, and run_costs is written after the
+  // status is already stamped. So the rows are the evidence, not the status.
+  const client = { id: 'c1', name: 'Össur', billing: comped, config: { report_period: 'paused', report_day: null } }
+  const closed = (over: Partial<HealthRun> = {}): HealthRun => ({
+    id: 'r1', clientId: 'c1', status: 'completed', options: null,
+    startedAt: agoH(6), completedAt: agoH(4),
+    flags: { themeRegistry: true },
+    rows: { observations: 757, recommendations: 5, costs: 1 },
+    ...over,
+  })
+
+  it('says nothing when the run left all three behind', () => {
+    expect(assessPipelineHealth(inputs({ clients: [client], runs: [closed()] }))).toEqual([])
+  })
+
+  it('flags a registry run that wrote no theme observations', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 0, recommendations: 5, costs: 1 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].clientName).toBe('Össur')
+    expect(f[0].detail).toContain('no theme observations')
+    expect(f[0].detail).not.toContain('recommendations')
+  })
+
+  it('flags a run with no recommendations and one with no cost row', () => {
+    const noRecs = assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ rows: { observations: 757, recommendations: 0, costs: 1 } })],
+    }))
+    expect(kinds(noRecs)).toEqual(['run_incomplete'])
+    expect(noRecs[0].detail).toContain('no recommendations')
+    const noCosts = assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ rows: { observations: 757, recommendations: 5, costs: 0 } })],
+    }))
+    expect(kinds(noCosts)).toEqual(['run_incomplete'])
+    expect(noCosts[0].detail).toContain('no run_costs row')
+  })
+
+  it('names all three in one finding, not three findings', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ rows: { observations: 0, recommendations: 0, costs: 0 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].detail).toContain('no theme observations')
+    expect(f[0].detail).toContain('no recommendations')
+    expect(f[0].detail).toContain('no run_costs row')
+  })
+
+  it('does not expect observations of a run the registry was off for', () => {
+    // Every run before 2026-08-23 is this shape. A feature's age is not an
+    // incident, and flags is absent altogether on runs opened before 2026-08-18.
+    for (const flags of [{ themeRegistry: false }, null, undefined]) {
+      const f = assessPipelineHealth(inputs({
+        clients: [client],
+        runs: [closed({ flags, rows: { observations: 0, recommendations: 5, costs: 1 } })],
+      }))
+      expect(f).toEqual([])
+    }
+  })
+
+  it('says nothing about a run the caller did not count', () => {
+    // An unreadable table is a fault in the loader, not evidence that a run
+    // produced nothing — absent counts must never invent an outage.
+    expect(assessPipelineHealth(inputs({ clients: [client], runs: [closed({ rows: undefined })] }))).toEqual([])
+    expect(assessPipelineHealth(inputs({ clients: [client], runs: [closed({ rows: null })] }))).toEqual([])
+  })
+
+  it('leaves a partial run to the alert that already names its errors', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ status: 'partial', rows: { observations: 0, recommendations: 0, costs: 0 } })],
+    }))
+    expect(f).toEqual([])
+  })
+
+  it('stops naming an empty update once it is two days old', () => {
+    const empty = { observations: 0, recommendations: 0, costs: 0 }
+    expect(kinds(assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ completedAt: agoH(47), rows: empty })],
+    })))).toEqual(['run_incomplete'])
+    expect(assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ completedAt: agoH(49), rows: empty })],
+    }))).toEqual([])
+  })
+
+  // WP7 moved the recommendations delete to after a successful D-b parse, so a
+  // retried synthesis whose second call refuses leaves attempt 1's rows
+  // standing while this run's market_insights have been reinserted under fresh
+  // ids. The count is then non-zero and every row is dangling — the run closes
+  // 'completed', the step logs `recommendations: 0`, and the client reads
+  // recommendations with no evidence behind them.
+  it('flags a run whose recommendations all cite insights it no longer has', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 4 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].detail).toContain('4 recommendations that cite no insight this run has')
+  })
+
+  it('does not flag a run where only some recommendations lost their references', () => {
+    // One recommendation whose references the parser rejected is an ordinary
+    // bad day for the model. The retry state loses ALL of them at once.
+    expect(assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 3 } })],
+    }))).toEqual([])
+    expect(assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1, ungroundedRecommendations: 0 } })],
+    }))).toEqual([])
+  })
+
+  it('says nothing about groundedness when the caller did not measure it', () => {
+    // Absent is "not counted", here as everywhere else in this rule.
+    expect(assessPipelineHealth(inputs({
+      clients: [client], runs: [closed({ rows: { observations: 757, recommendations: 4, costs: 1 } })],
+    }))).toEqual([])
+  })
+
+  it('says "no recommendations" rather than "ungrounded" when there are none', () => {
+    const f = assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [closed({ rows: { observations: 757, recommendations: 0, costs: 1, ungroundedRecommendations: 0 } })],
+    }))
+    expect(kinds(f)).toEqual(['run_incomplete'])
+    expect(f[0].detail).toContain('no recommendations')
+    expect(f[0].detail).not.toContain('cite no insight')
+  })
+
+  it('has nothing to say about the stranded run until it is closed', () => {
+    // 06706296… has sat at 'analyzing' since 2026-06-13 with 4 recommendations
+    // and no observations. It is not 'completed', and even when the operator
+    // script closes it, it closes 'failed' — this rule judges neither.
+    const stranded: HealthRun = {
+      id: 'old', clientId: 'c1', status: 'analyzing', options: null,
+      startedAt: agoDays(93), completedAt: null, flags: null, rows: null,
+    }
+    expect(assessPipelineHealth(inputs({ clients: [client], runs: [stranded] }))).toEqual([])
+    expect(assessPipelineHealth(inputs({
+      clients: [client],
+      runs: [{ ...stranded, status: 'failed', completedAt: agoH(4), rows: { observations: 0, recommendations: 4, costs: 0 } }],
+    }))).toEqual([])
+  })
+})
+
+describe('needsRowCounts', () => {
+  // The loader and the rule read the same test, so a run the loader skips
+  // arrives uncounted and can never be judged.
+  it('asks for counts on a freshly closed run only', () => {
+    expect(needsRowCounts({ status: 'completed', completedAt: agoH(4) }, NOW)).toBe(true)
+    expect(needsRowCounts({ status: 'completed', completedAt: agoH(49) }, NOW)).toBe(false)
+    expect(needsRowCounts({ status: 'partial', completedAt: agoH(4) }, NOW)).toBe(false)
+    expect(needsRowCounts({ status: 'analyzing', completedAt: null }, NOW)).toBe(false)
+    expect(needsRowCounts({ status: 'completed', completedAt: null }, NOW)).toBe(false)
   })
 })
 

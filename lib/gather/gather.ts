@@ -12,6 +12,7 @@ import { classifyRelevance, type RelevanceMethod } from './relevance'
 import { buildGateVerdictRows, recordGateVerdicts } from './gate-verdicts'
 import { attributeVideos, type AttributionMethod } from './attribution'
 import { splitDelta, pickRechecks, pickDormant, scrapeBaseline, type KnownVideoState, type RecheckCandidate } from './delta'
+import type { RunWindow } from '../pipeline/window'
 import type {
   GatherConfig,
   Platform,
@@ -102,6 +103,9 @@ export interface GatherOptions {
   videoLimit?: number
   /** Override the client's configured report_period (scrape window), e.g. 'monthly'. */
   period?: string
+  /** The run's frozen window (open-run). Absent = resolve it the old rolling
+   *  way, which is what a CLI gather with no run row behind it must do. */
+  window?: RunWindow | null
   /** Relevance gate before comment-scraping: 'gpt' (default), 'heuristic', or 'off'. */
   relevance?: RelevanceMethod
   /** Content attribution of brand/competitor tags: 'gpt' (default) or 'substring'. */
@@ -194,8 +198,28 @@ export const inWindow = (date: string | null | undefined, since: string | null):
  * NOT merely an earlier completed pipeline_runs row — Sealand's June runs on
  * the old pipeline are status 'completed' with zero analysis, and a failed or
  * empty run must not cost the client their one deep baseline.
+ *
+ * `frozen` is the run's window, decided once at open-run and stored on the run
+ * row (lib/pipeline/window.ts). When it is passed there is no clock reading and
+ * no DB read here at all — which is the point: the three call sites inside the
+ * pipeline used to answer this question independently, minutes or days apart.
+ * Absent (the CLI scripts, and any run opened before Phase 0 replaying across
+ * the deploy) the old rolling answer stands, unchanged.
  */
-export async function resolveGatherWindow(clientId: string, runId: string, period: string): Promise<GatherWindow> {
+export async function resolveGatherWindow(
+  clientId: string,
+  runId: string,
+  period: string,
+  frozen?: RunWindow | null,
+): Promise<GatherWindow> {
+  if (frozen) {
+    return {
+      baseline: frozen.basis === 'baseline',
+      // UTC-day granular, as `since` has always been: it is compared against
+      // `upload_date`/`comment_date`, which are dates.
+      since: frozen.start ? frozen.start.slice(0, 10) : null,
+    }
+  }
   const admin = createAdminClient()
   const { data, error } = await admin
     .from('run_summary')
@@ -371,11 +395,17 @@ export async function searchOne(opts: {
   variant?: SearchVariant
   maxVideos?: number
   period?: string
+  /** The run's frozen window — the adapters' date/enum search bound. */
+  window?: RunWindow | null
 }): Promise<SearchResult> {
   const admin = createAdminClient()
   const config = await loadConfig(admin, opts.clientId)
   if (opts.maxVideos) config.max_videos = opts.maxVideos
   if (opts.period) config.report_period = opts.period
+  // The search bound the adapters read. Each falls back to its period-derived
+  // bound when this is absent or has no lower bound (a baseline run), so the
+  // CLI path and a baseline run are unchanged.
+  config.window = opts.window ?? undefined
   const adapter = adapters[opts.platform]
   if (!adapter) throw new Error(`no adapter for ${opts.platform}`)
   const ctx: NormaliseCtx = { clientId: opts.clientId, runId: opts.runId, config }
@@ -441,6 +471,8 @@ export async function gatePlatform(opts: {
   videoLimit?: number
   /** Override the client's configured report_period (matches searchOne). */
   period?: string
+  /** The run's frozen window (matches searchOne). */
+  window?: RunWindow | null
   relevance?: RelevanceMethod
   attribution?: AttributionMethod
   dryRun?: boolean
@@ -513,7 +545,7 @@ export async function gatePlatform(opts: {
   // can't be blanked by the window. (Resurfaced videos are windowed separately
   // below — old-but-active ones stay out of the corpus refresh but may still
   // earn a comment re-check.)
-  const window = await resolveGatherWindow(opts.clientId, opts.runId, opts.period ?? config.report_period)
+  const window = await resolveGatherWindow(opts.clientId, opts.runId, opts.period ?? config.report_period, opts.window)
   const videos = fresh.filter((v) => inWindow(v.upload_date, window.since))
   if (videos.length < fresh.length) {
     console.log(`[${adapter.platform}] flow window dropped ${fresh.length - videos.length}/${fresh.length} fresh videos older than ${window.since}`)
@@ -1239,7 +1271,7 @@ export async function runGather(opts: GatherOptions): Promise<PlatformResult[]> 
             clientId: opts.clientId, runId: opts.runId, platform,
             keyword: task.keyword, bucket: task.bucket, community: task.community,
             variant: task.variant,
-            maxVideos: opts.maxVideos, period: opts.period,
+            maxVideos: opts.maxVideos, period: opts.period, window: opts.window,
           }))
         } catch (e) {
           errors.push(`search ${searchLabel(task)}: ${(e as Error).message}`)
@@ -1248,8 +1280,8 @@ export async function runGather(opts: GatherOptions): Promise<PlatformResult[]> 
       }
       const gate = await gatePlatform({
         clientId: opts.clientId, runId: opts.runId, platform, searches,
-        videoLimit: opts.videoLimit, period: opts.period, relevance: opts.relevance,
-        attribution: opts.attribution, dryRun: opts.dryRun,
+        videoLimit: opts.videoLimit, period: opts.period, window: opts.window,
+        relevance: opts.relevance, attribution: opts.attribution, dryRun: opts.dryRun,
       })
       errors.push(...gate.errors)
       const scraped = await scrapeCommentsBatch({

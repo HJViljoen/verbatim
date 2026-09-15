@@ -19,6 +19,17 @@ export interface PersistThemesResult {
   /** Registry match tally when THEME_REGISTRY is on — the run log's read on how
    *  stable identity actually was this week. Absent when the flag is off. */
   registry?: Record<MatchKind, number> & { entries: number; dormant: number }
+  /** The registry block's failure message, when it failed. Absent when the
+   *  registry is off or it did its work.
+   *
+   *  The block still degrades rather than failing the run (see the catch
+   *  below), but it no longer degrades in silence: the whole
+   *  `theme_observations` write lives inside that catch, so a run could close
+   *  'completed' having written zero observations — a lost week of the trend
+   *  series that reads to a client as "nothing changed". The caller turns this
+   *  into a counted run error, which is what makes the run 'partial' and puts
+   *  the reason in the partial-run alert. */
+  registryFailed?: string
   /** False on the client's first themed run — every theme is trivially "new",
    *  so pages should suppress the badge (detectable: no earlier themed run). */
   hadPreviousRun: boolean
@@ -177,7 +188,9 @@ export async function persistThemes(
   // up quietly. Without this, the first flag-on run would badge all ~537 Voice
   // cards and email "122 new themes" on a week where nothing actually changed.
   let seeding = false
-  let registryFailed = false
+  // The failure MESSAGE, not a boolean: the caller reports it, and "the
+  // registry was skipped" with no reason is the console line this replaces.
+  let registryFailed: string | null = null
 
   if (registryOn) try {
     const entries = await selectAll<RegistryEntry & { last_seen_run_id: string | null; first_seen_run_id: string | null; observation_count: number | null }>(() =>
@@ -317,8 +330,12 @@ export async function persistThemes(
     // and the next run picks the registry up again (matching is stateless, so
     // nothing half-written misleads it: entries keep their old membership until
     // a run completes the update).
-    console.error(`[theme-registry] skipped: ${e instanceof Error ? e.message : String(e)}`)
-    registryFailed = true
+    // Returned to the caller, not merely logged: the pipeline counts it as a
+    // run error, so the run closes 'partial' and the alert names the step. A
+    // console line was the whole record before, and it ages out of the host's
+    // log retention within the hour.
+    registryFailed = e instanceof Error ? e.message : String(e)
+    console.error(`[theme-registry] skipped: ${registryFailed}`)
     for (let i = 0; i < registryIds.length; i++) registryIds[i] = null
     registrySummary = undefined
   }
@@ -383,5 +400,6 @@ export async function persistThemes(
     firstSeen: registryOn && !seeding && !registryFailed ? registryFirstSeen.filter(Boolean).length : firstSeenFlags.filter(Boolean).length,
     hadPreviousRun: prevEmbeddings.length > 0,
     ...(registrySummary ? { registry: registrySummary } : {}),
+    ...(registryFailed ? { registryFailed } : {}),
   }
 }

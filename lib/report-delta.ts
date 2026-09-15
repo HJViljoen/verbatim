@@ -264,12 +264,12 @@ export async function computeRunDelta(
   // MIN_REGISTRY_OBSERVATIONS observations for this client — the pre-registry
   // label-match rule counted relabels as new (48 of 58 measured).
   let newThemes: RunDelta['newThemes'] = null
-  const [{ data: prevTheme }, observed] = await Promise.all([
+  const [{ data: prevTheme }, observedEnough] = await Promise.all([
     admin.from('themes').select('id')
       .eq('client_id', clientId).eq('run_id', prevRow.run_id).limit(1).maybeSingle(),
-    countRegistryObservations(admin, clientId),
+    registryObservedEnough(admin, clientId),
   ])
-  if (prevTheme && observed >= MIN_REGISTRY_OBSERVATIONS) {
+  if (prevTheme && observedEnough) {
     const { data: fresh } = await admin
       .from('themes')
       .select('label')
@@ -312,16 +312,53 @@ export async function computeRunDelta(
   }
 }
 
-/** Distinct runs the client's theme registry has observed. Counts runs, not
- *  rows: one run writes one observation per theme. Registry off / table empty
- *  reads 0, which keeps "new themes" hidden — the safe direction. */
-async function countRegistryObservations(admin: Admin, clientId: string): Promise<number> {
-  const { data } = await admin
-    .from('theme_observations')
-    .select('run_id')
-    .eq('client_id', clientId)
-    .not('run_id', 'is', null)
-    .limit(1000)
-  const runs = new Set(((data ?? []) as { run_id: string }[]).map((r) => r.run_id))
-  return runs.size
+/**
+ * Has the client's theme registry been observed by at least
+ * MIN_REGISTRY_OBSERVATIONS distinct runs? Registry off, table empty or read
+ * unreadable all answer no, which keeps "new themes" hidden — the safe
+ * direction.
+ *
+ * Walks the distinct run ids by keyset — each step asks for the smallest
+ * run_id greater than the last — and stops the moment the answer is yes: at
+ * most MIN_REGISTRY_OBSERVATIONS reads of one row each, whatever the table
+ * holds. Both steps ride `theme_observations_client_run_idx` as index-only
+ * scans (verified on production: three buffer hits, no sort), which is why
+ * this is cheaper than the read it replaces rather than merely safer. What it replaces was a bare `.select('run_id')` capped at 1,000 with
+ * no order, over a table holding 2,386 rows (Össur) and 2,654 (Sealand), so
+ * the distinct-run count was computed over an arbitrary thousand of them. It
+ * spans two runs today only by luck of the volumes: Sealand's last update
+ * wrote 1,053 observations on its own, and a single run filling that window
+ * would answer "one run" and silently drop the "N new themes" line from the
+ * email subject — the one number the only report this product has ever sent
+ * led with.
+ */
+async function registryObservedEnough(
+  admin: Admin,
+  clientId: string,
+  min: number = MIN_REGISTRY_OBSERVATIONS,
+): Promise<boolean> {
+  const nextAfter = () =>
+    admin
+      .from('theme_observations')
+      .select('run_id')
+      .eq('client_id', clientId)
+      .not('run_id', 'is', null)
+      .order('run_id', { ascending: true })
+      .limit(1)
+  let after: string | null = null
+  for (let seen = 0; seen < min; seen++) {
+    // Cast, not inferred: the cursor feeds the next query's filter and the
+    // filter's result would then define the cursor, which TypeScript reads as
+    // circular.
+    const query = after ? nextAfter().gt('run_id', after) : nextAfter()
+    const { data, error } = (await query) as { data: { run_id: string }[] | null; error: { message: string } | null }
+    if (error) {
+      console.error(`[report-delta] counting registry observations: ${error.message}`)
+      return false
+    }
+    const next: string | undefined = (data ?? [])[0]?.run_id
+    if (!next) return false
+    after = next
+  }
+  return true
 }

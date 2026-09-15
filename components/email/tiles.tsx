@@ -4,10 +4,13 @@ import { BUCKET_COLOR, priorityLabel, type DashboardData } from '../../lib/pages
 import type { ContentData } from '../../lib/pages/content'
 import type { CompetitiveData } from '../../lib/pages/competitive'
 import { diverseByIntent, INTENT_LABEL } from '../../lib/content-tiles'
+import { shareDeltaShown } from '../../lib/competitive-tiles'
+import { movementRows, movementShowsChange } from '../../lib/dashboard-tiles'
+import { RUN_INDEXED_DIRECTION_WORDS } from '../../lib/config'
 import { fmtCompact, fmtInt, fmtPct, platformLabel, shortDate } from '../../lib/format'
 import { firstSentence } from '../../lib/email/text'
 import { shareFootnoteLead } from '../../lib/calibration'
-import { initiativesOf } from '../../lib/initiatives/types'
+import { initiativeTile } from '../../lib/initiatives/types'
 import { EMAIL, FONT, tokenHex } from '../../lib/email/theme'
 import { Badge, Bar, Columns, DeltaText, Img, Quote, RankedRow, Stat, text } from './primitives'
 
@@ -124,7 +127,9 @@ const themes: E<DashboardData> = ({ themes: t }) => {
   return (
     <div>
       {t.rows.map((r, i) => (
-        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew ? <Badge>New</Badge> : undefined} />
+        // Gated at render as well as at compute (D1): an email re-rendered
+        // from a snapshot frozen before the gate still carries isNew.
+        <RankedRow key={`${i}-${r.label}`} label={r.label} dot color={tokenHex(BUCKET_COLOR[r.bucket])} pct={(r.conversations / t.max) * 100} count={fmtInt(r.conversations)} badge={r.isNew && RUN_INDEXED_DIRECTION_WORDS ? <Badge>New</Badge> : undefined} />
       ))}
       <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>conversations per theme · green you · grey category{t.topCompetitorName ? ` · orange ${t.topCompetitorName}` : ''}</div>
     </div>
@@ -145,12 +150,16 @@ const movement: E<DashboardData> = ({ movement: mv, updatesCount }, ctx) => {
     <div>
       <Img src={ctx.image('dashboard.movement')} alt={`Movement since your first update, ${updatesCount} updates`} width={544} />
       <div style={{ marginTop: 8 }}>
-        {table(mv.rows.map((r) => {
+        {/* movementRows: the themes-confirmed row is gated (D1), here too, so
+            "the email as sent" re-rendered from its snapshot drops it. */}
+        {table(movementRows(mv).map((r) => {
           const st = MOVE[r.key]
           return row([r.label, <span key="v" style={{ ...text.mono, fontWeight: 600 }}>{st.fmt(r.value)}</span>, <DeltaText key="d" value={r.delta} unit={st.unit} decimals={st.decimals} good={st.good} />], { aligns: ['left', 'right', 'right'], widths: [undefined, 64, 70] })
         }))}
       </div>
-      <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{updatesCount} updates · {shortDate(mv.dates[0])} → {shortDate(mv.dates[mv.dates.length - 1])} · change vs the previous update</div>
+      {/* The footnote describes a column, so it goes when the column does:
+          on the cumulative layer the deltas are gated (D1). */}
+      <div style={{ ...text.small, fontSize: 11, marginTop: 4 }}>{updatesCount} updates · {shortDate(mv.dates[0])} → {shortDate(mv.dates[mv.dates.length - 1])}{movementShowsChange(mv) ? ' · change vs the previous update' : ''}</div>
     </div>
   )
 }
@@ -188,7 +197,10 @@ const accounts: E<DashboardData> = ({ accounts: a }, ctx) => {
 const initiatives: E<DashboardData> = ({ initiatives }, ctx) => {
   // Optional for the same reason the app renderer is: an email re-rendered from
   // a snapshot frozen before this tile existed has no key for it.
-  const t = initiativesOf({ initiatives })
+  // Through `initiativeTile` for the same reason the app tile is: the email
+  // prints the row's stored sentence, and a row frozen before D1 carries "Up
+  // 4.0 points since 1 Aug · 2 updates" in it.
+  const t = initiativeTile({ initiatives })
   // Null, not an empty state. The email does not go through `slides()`, so the
   // gate that keeps this tile off the print deck for a tenant tracking nothing
   // does not reach here — and a weekly email that says "Track a theme from
@@ -243,15 +255,21 @@ export const contentEmail: Record<string, E<ContentData>> = { 'content.inbox': i
 
 // ── competitive: where you stand ───────────────────────────────────────────
 
-const standings: E<CompetitiveData> = ({ standings: st }) => {
+const standings: E<CompetitiveData> = (d) => {
+  const st = d.standings
   if (!st) return empty('Standings land once a competitor is tracked and analysed.')
   const rows = [...(st.client ? [{ ...st.client, you: true }] : []), ...st.competitors.map((c) => ({ ...c, you: false }))]
+  // Same rule as the page, at render, so an email re-rendered from a snapshot
+  // frozen before the gate passes through it too (D1, `shareDeltaShown`): the
+  // period layer's per-update delta stays, the cumulative one goes, and the
+  // footnote goes with the column it describes.
+  const showsDelta = shareDeltaShown(d.layerWord)
   return (
     <div>
       {rows.map((r) => (
-        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.green : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
+        <RankedRow key={r.name} label={r.you ? <strong>You</strong> : r.name} color={r.you ? EMAIL.green : EMAIL.comp} pct={st.maxPct > 0 ? (r.pct / st.maxPct) * 100 : 0} count={fmtPct(r.pct)} badge={showsDelta && r.delta != null && r.delta !== 0 ? <DeltaText value={r.delta} unit=" pt" decimals={1} good={r.you ? 'up' : 'down'} /> : undefined} />
       ))}
-      <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>share of the tracked conversation, by videos · change vs the previous update</div>
+      <div style={{ ...text.small, fontSize: 11, marginTop: 6 }}>share of the tracked conversation, by videos{showsDelta ? ' · change vs the previous update' : ''}</div>
     </div>
   )
 }

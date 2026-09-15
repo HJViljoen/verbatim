@@ -25,6 +25,12 @@ export default async function ConnectionsPage() {
   // The competitor accounts we read alongside the client's own. Operator-set
   // like own_handles — a wrong handle here would credit another brand's posts
   // to a tracked competitor — so this is a statement of fact, not a form.
+  //
+  // The card's copy says these posts count toward that brand's share, which is
+  // what the code does: the share corpus is every row (inngest/functions/
+  // pipeline.ts, the 2026-09-10 share rule) and the bucket comes from identity,
+  // not source (lib/pipeline/metrics.ts entityOf), so a rival's own post lands
+  // in that rival's bucket. It said the opposite until 2026-09-15.
   const competitorHandles = Object.entries((tc?.competitor_handles as Record<string, Record<string, string>> | null) ?? {})
     .map(([name, byPlatform]) => ({
       name,
@@ -53,7 +59,7 @@ export default async function ConnectionsPage() {
         </SettingsCard>
 
         {competitorHandles.length > 0 ? (
-          <SettingsCard title="Competitor accounts we read" description="What the brands you track publish themselves, so their claims can be set beside your own. Their posts never count toward anyone's share of the conversation.">
+          <SettingsCard title="Competitor accounts we read" description="What the brands you track publish themselves, so their claims can be set beside your own. Their posts count toward that brand's share of the conversation, never toward yours.">
             {competitorHandles.map((c) => (
               <ConnectionRow
                 key={c.name}

@@ -199,14 +199,19 @@ async function loadCandidates(admin: ReturnType<typeof createAdminClient>, o: Op
  * the relevance gate. Only rows the gate could plausibly move are touched.
  */
 async function regate(admin: ReturnType<typeof createAdminClient>, o: Opts): Promise<void> {
-  const { data, error } = await admin
-    .from('videos')
-    .select('id, account_name, transcript, transcript_status')
-    .eq('client_id', o.clientId)
-    .in('transcript_status', ['ok', 'lyrics', 'garbled'])
-    .not('transcript', 'is', null)
-  if (error) throw new Error(`load transcripts: ${error.message}`)
-  const rows = (data ?? []) as { id: string; account_name: string; transcript: string; transcript_status: string }[]
+  // selectAll, ordered: this predicate matches 2,043 videos on Össur and 1,894
+  // on Sealand today, so a bare select re-gated the first ~1,000 and printed
+  // that number as though it were the whole set — the tail kept a verdict the
+  // gate had already changed its mind about, silently, every time it was run.
+  const rows = await selectAll<{ id: string; account_name: string; transcript: string; transcript_status: string }>(() =>
+    admin
+      .from('videos')
+      .select('id, account_name, transcript, transcript_status')
+      .eq('client_id', o.clientId)
+      .in('transcript_status', ['ok', 'lyrics', 'garbled'])
+      .not('transcript', 'is', null)
+      .order('id'),
+  )
   console.log(`re-gating ${rows.length} stored transcripts (no refetch, no Whisper)`)
 
   const moves = new Map<string, number>()

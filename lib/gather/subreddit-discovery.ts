@@ -1,6 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { openai } from '../openai'
 import { createAdminClient } from '../supabase-admin'
+import { pipelineActor, updateWithActor } from '../config-log'
 import { ANALYSIS_MODEL, ANALYSIS_TEMPERATURE, SUBREDDIT_PROBES_PER_RUN, SUBREDDIT_TARGET_ACTIVE, SUBREDDIT_MAX_KNOWN, SUBREDDIT_STRIKE_LIMIT } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { SubredditProposalSchema, type SubredditProposalOutput } from '../pipeline/schemas'
@@ -155,6 +156,13 @@ export function discoveryConverged(entries: SubredditEntry[]): boolean {
  * never re-probed.
  *
  * Caller must treat this as non-fatal — Reddit is a degradable platform.
+ *
+ * Its two writes are the pipeline changing a tenant's own configuration: the
+ * machine half of the change log, roughly one write per tenant per weekly
+ * gather, and the only config writer that is not a person. Both stamp the run,
+ * so a week of community churn is attributable to the update that caused it.
+ * Neither sets `updated_at`, and neither needs to — the log is the record now,
+ * and `updated_at` never was one (four of the ten writers skip it).
  */
 /** Gate survivors per Reddit source for the most recent run that gathered.
  *  keyword_performance already records this — a community harvest is stored
@@ -221,7 +229,11 @@ export async function discoverSubreddits(opts: {
     // nothing to probe — otherwise a strike is recounted from zero every week
     // and a dying community never reaches the limit.
     if (strikesChanged) {
-      const { error } = await admin.from('tracking_configs').update({ subreddits: entries }).eq('client_id', opts.clientId)
+      const { error } = await updateWithActor(
+        (payload) => admin.from('tracking_configs').update(payload).eq('client_id', opts.clientId),
+        { subreddits: entries },
+        pipelineActor(opts.runId, 'subreddit discovery · strikes'),
+      )
       if (error) throw new Error(`persist subreddit strikes: ${error.message}`)
     }
     console.log(
@@ -246,10 +258,11 @@ export async function discoverSubreddits(opts: {
   const byName = new Map(resolved.map((e) => [e.name, e]))
   const merged = entries.map((e) => byName.get(e.name) ?? e)
 
-  const { error } = await admin
-    .from('tracking_configs')
-    .update({ subreddits: merged })
-    .eq('client_id', opts.clientId)
+  const { error } = await updateWithActor(
+    (payload) => admin.from('tracking_configs').update(payload).eq('client_id', opts.clientId),
+    { subreddits: merged },
+    pipelineActor(opts.runId, 'subreddit discovery · probe'),
+  )
   if (error) throw new Error(`persist subreddits: ${error.message}`)
 
   const active = merged.filter((e) => e.status === 'active').map((e) => e.name)

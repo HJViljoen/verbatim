@@ -1,4 +1,4 @@
-import { DOCUMENT_BRIEF_MAX } from '../../config'
+import { DOCUMENT_BRIEF_MAX, RUN_INDEXED_DIRECTION_WORDS } from '../../config'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -106,6 +106,7 @@ export type DocField =
   | 'practice'  // finding: in practice, at most two lines (items)
   | 'sure'      // finding: confidence, in words
   | 'pitch'     // competitor: what they are pitching
+  | 'about'     // competitor: what others say about them (creator and reviewer voice)
   | 'praise'    // competitor: what their users praise
   | 'hurt'      // competitor: where their users hurt
   | 'read'      // competitor: the read, when both names come up
@@ -139,6 +140,26 @@ export interface DocPage {
   blocks: DocBlock[]
   /** finding: `sure` word; competitor: the competitor's name; personas: names. */
   meta?: Record<string, string>
+}
+
+/**
+ * A history word a document CARRIES, as it may be DRAWN today (D1).
+ *
+ * `trajectoryWord` (merge.ts) is the gate on what gets written: nothing built
+ * from now on carries one. But a document is re-rendered from its frozen text
+ * forever — the share link, the PDF, the Studio deck, the reports viewer all
+ * read stored pages — so a snapshot built before the gate would keep printing
+ * "rising" / "fading" / "seen N updates running" off the run-indexed series.
+ * The Dashboard's tiles are gated at render for exactly this reason: a word we
+ * have withdrawn must not come back because an artefact remembers it.
+ *
+ * Empty string, which is what every caller already reads as "no word": the
+ * pill is not drawn, the workings suffix is not appended. Lives here rather
+ * than beside `trajectoryWord` because the workings drawer is a client
+ * component and `merge.ts` reaches the OpenAI client through `cosine`.
+ */
+export function shownTrajectory(word: string | null | undefined, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+  return word && directionWords ? word : ''
 }
 
 /** What a finding's consequence is called on paper: "What it means for a

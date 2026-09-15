@@ -47,7 +47,7 @@ const ITEM_CLASS =
   "data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 " +
   "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
-export function AppSidebar({ showAgent = false, header }: { showAgent?: boolean; header?: React.ReactNode }) {
+export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boolean; header?: React.ReactNode; ops?: React.ReactNode }) {
   const pathname = usePathname()
   // The agent sits directly under the profile it reads from.
   const intelligence: NavItem[] = showAgent
@@ -101,6 +101,11 @@ export function AppSidebar({ showAgent = false, header }: { showAgent?: boolean;
       <SidebarContent className="gap-1 pt-1">
         {renderGroup("Intelligence", intelligence)}
         {renderGroup("Account", ACCOUNT)}
+        {/* The operator's group arrives as a slot for the same reason the
+            header does: resolving who is looking is async, and this component
+            is "use client". Absent — every user who is not a platform admin —
+            the sidebar is exactly the two groups above. */}
+        {ops}
       </SidebarContent>
 
       <SidebarFooter className="px-2 pb-3">

@@ -1,4 +1,5 @@
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
+import { recordConfigChange, scriptActor, skipRetag } from '../lib/config-log'
 import { classifyRelevance } from '../lib/gather/relevance'
 import { parseSubreddits } from '../lib/gather/subreddits'
 import type { GatherConfig } from '../lib/gather/types'
@@ -13,11 +14,24 @@ import type { GatherConfig } from '../lib/gather/types'
 // Aggregates (themes, market_insights, run_summary) are left alone — the
 // analysis-only re-run regenerates them from the cleaned corpus.
 //
-// Dry-run by default: prints the would-drop list. The client's OWN videos
+// Dry-run by default: prints the would-drop list. DRY DOES NOT MEAN FREE —
+// the gate's batched GPT call (lib/gather/relevance.ts, 60 videos a batch)
+// happens BEFORE the --apply gate, because the would-drop list is its output.
+// So a dry run spends the same OpenAI money an apply does, and the `gpt cost
+// $x` it prints is what this run just cost, not what a later --apply would.
+// Iterate on scripts/run-relevance.ts --method heuristic instead. The client's OWN videos
 // (is_client) are reported but NEVER deleted — attribution already confirmed
 // them as the company's; a gate drop there is a flag for human eyes, not a
 // delete. Run with env loaded:
 //   node --env-file=.env.local --import tsx scripts/regate-corpus.ts [--client <uuid>] [--apply]
+//
+// --apply leaves a config_changes row (surface 'regate'): how many videos,
+// comments and findings went, including how many of them were a tracked
+// rival's own posts. The command and what it spent ride on the actor label,
+// not in the note — every member of the tenant can read this table. This is
+// the most destructive operation an operator can run — the rows are gone, and
+// a report already sent keeps citing comments that no longer exist — so the
+// record of having run it is the least the log can carry.
 
 import { SEALAND_CLIENT_ID as SEALAND } from '../lib/config'
 
@@ -35,6 +49,7 @@ interface StoredVideo {
   id: string
   platform: string
   video_id: string
+  source: string | null
   account_name: string
   caption: string | null
   hashtags: string[] | null
@@ -73,7 +88,7 @@ async function main() {
 
   const videos = (await selectAll<StoredVideo>(() =>
     admin.from('videos')
-      .select('id, platform, video_id, account_name, caption, hashtags, is_client, is_competitor, competitor_name, comments_count')
+      .select('id, platform, video_id, source, account_name, caption, hashtags, is_client, is_competitor, competitor_name, comments_count')
       .eq('client_id', clientId).order('id', { ascending: true }),
   ))
   console.log(`client ${clientId} · ${videos.length} stored videos · mode: ${apply ? 'APPLY' : 'dry-run'}\n`)
@@ -83,6 +98,21 @@ async function main() {
   const dropped = videos.filter((v) => verdicts.get(v.video_id)?.relevant === false)
   const clientFlagged = dropped.filter((v) => v.is_client)
   const deletable = dropped.filter((v) => !v.is_client)
+  // Only is_client rows are spared, so a RIVAL's own post — captured by the
+  // census, its tag an identity rather than a reading (lib/gather/owned.ts) —
+  // is deleted with everything else. Whether it should be is a product call and
+  // is left alone here; the record of what went must still name it.
+  const identityStamped = deletable.filter((v) => skipRetag(v.source))
+  const fromAccounts = [
+    identityStamped.filter((v) => v.source === 'competitor_owned').length,
+    identityStamped.filter((v) => v.source === 'owned').length,
+  ]
+  const accountSentence = [
+    fromAccounts[0] ? `${fromAccounts[0]} posted by a tracked rival's own account` : '',
+    // 13 rows read source 'owned' with is_client false today, so this half is
+    // not hypothetical: an own-account post can sit in the deletable set.
+    fromAccounts[1] ? `${fromAccounts[1]} posted by an account of yours` : '',
+  ].filter(Boolean).join(' and ')
 
   const bucketOf = (v: StoredVideo) => (v.is_client ? 'client' : v.is_competitor ? `competitor:${v.competitor_name}` : 'industry-other')
   const byReason = new Map<string, StoredVideo[]>()
@@ -125,6 +155,11 @@ async function main() {
     }
   }
   console.log(`\nblast radius: ${deletable.length} videos · ${commentCount} comments · ${insightIds.length} insights (+ their evidence rows)`)
+  if (identityStamped.length) {
+    console.log(`  ⚠ ${identityStamped.length} of those are account-owned rows (own / rival census), whose tag is an identity, not a reading:`)
+    for (const v of identityStamped.slice(0, 10)) console.log(`      ${v.source} [${v.platform}] @${v.account_name}`)
+    if (identityStamped.length > 10) console.log(`      … +${identityStamped.length - 10} more`)
+  }
 
   if (!apply) {
     console.log('\ndry-run — nothing deleted. Re-run with --apply to remove the rows above.')
@@ -151,6 +186,24 @@ async function main() {
     const { error } = await admin.from('videos').delete().in('id', ids)
     if (error) throw new Error(`delete videos: ${error.message}`)
   }
+  const logged = await recordConfigChange(admin, {
+    clientId,
+    surface: 'regate',
+    field: null,
+    before: { videos: videos.length },
+    after: { videos: videos.length - deletable.length },
+    // The command line and the spend ride on the label; the note is the
+    // sentence, and every member of the tenant can read it.
+    actor: scriptActor(`scripts/regate-corpus.ts --apply · OpenAI $${costUsd.toFixed(5)}`),
+    rowsAffected: deletable.length,
+    note:
+      `re-checked every stored video against the tracking settings in force and removed the ones that ` +
+      `should never have been collected: ${deletable.length} video(s), ${commentCount} comment(s) and the ` +
+      `${insightIds.length} finding(s) drawn from them. ` +
+      `${clientFlagged.length} of your own video(s) were flagged and kept.` +
+      (accountSentence ? ` Of the video(s) removed, ${accountSentence}.` : ''),
+  })
+  console.log(logged ? 'change log: recorded.' : 'change log: NOT recorded (see the error above).')
   console.log('applied. Stale aggregates (themes/insights/run_summary) will be regenerated by the analysis-only re-run.')
 }
 

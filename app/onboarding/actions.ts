@@ -9,6 +9,7 @@ import { SELECTABLE_PLATFORMS } from '@/app/dashboard/settings/constants'
 import { deriveCompetitorKeywords, cleanTerms, ONBOARDING_MAX_VIDEOS } from '@/lib/onboarding-config'
 import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
+import { actorStamp, diffConfigRows, recordConfigChanges, type ConfigActor } from '@/lib/config-log'
 
 // State shape (a type) — idle value lives in the client form; a 'use server'
 // module may only export async functions.
@@ -146,8 +147,7 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
   //    competitor list is the floor that makes the product work at all, and a
   //    model's extra spellings are a bonus on top of it. The company name is
   //    the same floor for brand_keywords.
-  const { error: cfgErr } = await admin.from('tracking_configs').insert({
-    client_id: clientId,
+  const initialConfig = {
     //    The company name itself bypasses the 4-character floor: a short name
     //    ("Gap") is still the one term this tenant cannot be tracked without.
     brand_keywords: [company_name, ...cleanTerms(kept('suggested_brand')).filter((t) => t.toLowerCase() !== company_name.toLowerCase())].slice(0, 15),
@@ -157,15 +157,21 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
     platforms,
     max_videos: ONBOARDING_MAX_VIDEOS,
     report_emails: user.email ? [user.email] : [],
-  })
+  }
+  const { error: cfgErr } = await admin.from('tracking_configs').insert({ client_id: clientId, ...initialConfig })
   if (cfgErr) return { ok: false, message: `Could not save tracking settings: ${cfgErr.message}` }
 
   // 2b) Default schedule ("Weekly digest"), seeded with the creator's address
   // — mirrors the tracking_configs.report_emails seed above, now the source
   // recipients actually send from. Non-fatal: a bookkeeping failure must
   // never block workspace creation.
+  // The membership row does not exist yet (step 3) and config_changes.actor_user_id
+  // is a foreign key to it, so this stamp names the person by address rather than
+  // by id. The birth-of-configuration rows at the end, written after step 3, carry
+  // the id itself.
+  const creator: ConfigActor = { kind: 'user', user_id: null, label: user.email ?? user.id, at: new Date().toISOString() }
   try {
-    await ensureDefaultSchedule(admin, clientId, user.email ? [user.email] : [], user.id)
+    await ensureDefaultSchedule(admin, clientId, user.email ? [user.email] : [], user.id, creator)
   } catch (e) {
     console.error(`[onboarding] default schedule not created for ${clientId}: ${e instanceof Error ? e.message : String(e)}`)
   }
@@ -176,6 +182,20 @@ export async function createWorkspace(_prev: OnboardingState, formData: FormData
     id: user.id, client_id: clientId, email: user.email, full_name: fullName, role: 'owner',
   })
   if (memberErr) return { ok: false, message: `Could not finish setup: ${memberErr.message}` }
+
+  // The configuration's birth, logged (WP2). The tracking_configs trigger is an
+  // AFTER UPDATE one — an INSERT has no "before" to diff — so a new workspace
+  // would otherwise begin with a configuration nobody can date. Written here
+  // rather than beside the insert because config_changes.actor_user_id
+  // references `users`, and the membership row above is what makes this person
+  // one. Non-fatal: a bookkeeping failure must never block workspace creation.
+  await recordConfigChanges(admin, diffConfigRows({
+    clientId,
+    before: null,
+    after: initialConfig,
+    actor: actorStamp({ userId: user.id, email: user.email ?? undefined, operator: null }, 'signed up'),
+    note: 'the configuration this workspace was created with',
+  }))
 
   redirect('/dashboard')
 }

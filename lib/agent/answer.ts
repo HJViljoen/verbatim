@@ -1,7 +1,7 @@
 import { zodResponseFormat } from 'openai/helpers/zod'
 import { z } from 'zod'
 import { openai, samplingParams } from '../openai'
-import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT } from '../config'
+import { SYNTHESIS_MODEL, estimateCost, AGENT_HISTORY_TURNS, AGENT_REASONING_EFFORT, RUN_INDEXED_DIRECTION_WORDS } from '../config'
 import { logAiCall } from '../pipeline/ai-log'
 import { CALIBRATED_PROSE_RULE, stripThemeRefs } from '../pipeline/prose-rules'
 import { enforceRegisters, type RawAnswer } from './enforce'
@@ -76,6 +76,24 @@ function renderEvidence(insights: RetrievedInsight[]): string {
     .join('\n')
 }
 
+/** What a "trend" question is told while D1's RUN_INDEXED_DIRECTION_WORDS is
+ *  off: the per-reading series is not loaded at all, and the model is handed
+ *  the line the block already printed whenever a topic had no points of its
+ *  own. Said rather than left out — an unexplained silence invites the model to
+ *  answer the direction question from the evidence in front of it, which is one
+ *  reading and cannot speak to change.
+ *
+ *  Scoped to A TOPIC's history, deliberately. D1 keeps the update's own banded
+ *  verdicts — the sentiment and share the digest carries, which have an n and a
+ *  band behind them — and the email sent this month leads on one of them
+ *  ("sentiment down 13.9 pts"). A blanket "the history is not readable" here
+ *  would have the agent contradict the email in the same week. */
+const NO_TREND_BLOCK = [
+  'MOVEMENT OVER TIME (counts per reading, not remembered words).',
+  '- no per-topic history for these topics yet',
+  'You may NOT claim a topic is growing, fading or steady: say plainly that a topic’s history is not readable yet, and answer what the conversation says now.',
+].join('\n')
+
 function renderTrend(trend: TrendContext): string {
   const themes = trend.themes
     .filter((t) => t.points.length > 0)
@@ -91,6 +109,16 @@ function renderTrend(trend: TrendContext): string {
     themes || '- no per-topic history for these topics yet',
     summaries,
   ].join('\n')
+}
+
+/** The MOVEMENT block for one question: nothing unless the question asked
+ *  about change, the readings when the direction words are on, and the
+ *  not-readable-yet line when they are off (D1). Pure, so both answers stay
+ *  tested; the loader above it is skipped entirely in the gated case, so the
+ *  gate costs no reads either. */
+export function movementBlock(trend: TrendContext | null, timeframe: string, directionWords = RUN_INDEXED_DIRECTION_WORDS): string {
+  if (timeframe !== 'trend') return ''
+  return trend && directionWords ? renderTrend(trend) : NO_TREND_BLOCK
 }
 
 export interface AnswerArgs {
@@ -147,13 +175,17 @@ export async function answerQuestion(
     return { ...empty, plan, retrievedCount: 0, emptyQueries: context.emptyQueries }
   }
 
-  const trend = plan.timeframe === 'trend'
+  // D1: while the direction words are gated the per-reading series is not even
+  // read — the block it feeds is the one place the agent is told it may name a
+  // direction, and the counts behind it are indexed by update, not by period.
+  const trend = plan.timeframe === 'trend' && RUN_INDEXED_DIRECTION_WORDS
     ? await loadTrendContext(admin, {
         clientId: args.clientId,
         registryIds: context.insights.map((i) => i.themeRef?.registryId).filter((r): r is string => Boolean(r)),
       })
     : null
 
+  const movement = movementBlock(trend, plan.timeframe)
   const system = buildAnswerPrompt(args.companyName, allowNearest)
   const historyBlock = (args.history ?? [])
     .slice(-AGENT_HISTORY_TURNS)
@@ -166,7 +198,7 @@ export async function answerQuestion(
     '',
     `EVIDENCE — ${context.insights.length} findings drawn from ${context.conversationCount} conversations:`,
     renderEvidence(context.insights),
-    trend ? `\n${renderTrend(trend)}` : '',
+    movement ? `\n${movement}` : '',
   ].filter(Boolean).join('\n')
 
   const started = Date.now()

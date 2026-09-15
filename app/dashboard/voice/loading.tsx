@@ -1,11 +1,15 @@
 import { SkeletonPage, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { RUN_INDEXED_DIRECTION_WORDS } from '@/lib/config'
 
 // Mirrors app/dashboard/voice/page.tsx (2026-08-28): the conversation by theme
 // (8×4 — filter row, category tabs, the map) · the theme pane (4×4) · gaining
-// and fading (4×2) · how your customers talk (4×2) · audience mood (4×2) ·
-// hear these voices (12×2, five quote cards across).
+// and fading (4×2, gated off by D1) · how your customers talk · audience mood
+// (4×2 each beside it, 6×2 each without it) · hear these voices (12×2, five
+// quote cards across). The skeleton follows the grid the page actually draws,
+// or the page jumps when it lands.
 export default function VoiceLoading() {
   const blocks = ['col-span-3 row-span-2', 'col-span-2 row-span-2', 'col-span-2', 'col-span-2', 'col-span-3', 'col-span-2', 'col-span-2', 'col-span-2']
+  const half = RUN_INDEXED_DIRECTION_WORDS ? 4 : 6
   return (
     <SkeletonPage title="Voice of Customer" pills={1}>
       <SkeletonTile col={8} row={4} meta>
@@ -27,11 +31,11 @@ export default function VoiceLoading() {
         <Bone className="h-1.5 w-full rounded-full" />
         <BoneLines lines={5} />
       </SkeletonTile>
-      <SkeletonTile col={4} row={2} meta><BoneBars rows={6} /></SkeletonTile>
-      <SkeletonTile col={4} row={2} meta>
+      {RUN_INDEXED_DIRECTION_WORDS && <SkeletonTile col={4} row={2} meta><BoneBars rows={6} /></SkeletonTile>}
+      <SkeletonTile col={half} row={2} meta>
         <div className="flex flex-wrap gap-1">{Array.from({ length: 8 }, (_, i) => <Bone key={i} className="h-5 w-24 rounded-[4px]" />)}</div>
       </SkeletonTile>
-      <SkeletonTile col={4} row={2} meta><BoneBars rows={3} /></SkeletonTile>
+      <SkeletonTile col={half} row={2} meta><BoneBars rows={3} /></SkeletonTile>
       <SkeletonTile col={12} row={2} meta>
         <div className="grid flex-1 grid-cols-5 gap-4">
           {Array.from({ length: 5 }, (_, i) => (

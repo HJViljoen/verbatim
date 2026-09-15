@@ -1,5 +1,5 @@
 import { embedTexts } from '../pipeline/cluster'
-import { selectAll } from '../supabase-admin'
+import { isMissingColumnError, selectAll } from '../supabase-admin'
 import {
   bucketByAudienceId,
   scopeToClientVoices,
@@ -73,6 +73,66 @@ export async function embeddedInsightCount(admin: Admin, clientId: string): Prom
     .eq('client_id', clientId)
     .not('embedding', 'is', null)
   return count ?? 0
+}
+
+/** How much of this tenant's live corpus the agent can actually search, and
+ *  when a vector was last written. The readiness page's Subjects · embeddings
+ *  row; nothing in the answering path reads it.
+ *
+ *  It exists because the guard above only fires at zero. Measured 2026-09-15,
+ *  before the pipeline started embedding its own insights: Össur 1,680 of
+ *  3,129 and Sealand 785 of 2,872 — a tenant answered at 27% coverage and
+ *  told "your customers do not mention this", with nothing anywhere saying
+ *  that three quarters of the corpus was never searched. A count of zero is
+ *  the only state today's product can see, and it is not the state either
+ *  tenant was in.
+ *
+ *  Over `audience_insights_current`, not the base table, because that is the
+ *  population match_insights searches and therefore the only denominator the
+ *  percentage can honestly have. (embeddedInsightCount reads the base table; a
+ *  superset makes no difference to an is-it-zero test, and does to a share.)
+ *
+ *  `lastEmbeddedAt` is null until 20260915094000_insight_embedding.sql is
+ *  applied, and stays null for every vector written before it — the column is
+ *  new and is never backfilled, because nothing knows when those rows were
+ *  written. The page says "not recorded", not "never". */
+export interface EmbeddingCoverage {
+  embedded: number
+  total: number
+  /** ISO timestamp of the newest vector written, or null. */
+  lastEmbeddedAt: string | null
+}
+
+export async function embeddingCoverage(admin: Admin, clientId: string): Promise<EmbeddingCoverage> {
+  const [all, embedded, last] = await Promise.all([
+    admin.from('audience_insights_current').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+    admin.from('audience_insights_current').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).not('embedding', 'is', null),
+    admin.from('audience_insights_current').select('embedded_at')
+      .eq('client_id', clientId).not('embedded_at', 'is', null)
+      .order('embedded_at', { ascending: false }).limit(1).maybeSingle(),
+  ])
+  // Throw rather than count a failed read as zero. PostgREST hands back
+  // `count: null` on every failure, so `count ?? 0` here would reach the
+  // readiness page as "0 of 0" — which compute.ts reads as status `missing`
+  // and prints as "Nothing has been read for this workspace yet, so there is
+  // nothing to search" for a tenant with thousands of live insights. That is
+  // lib/readiness/load.ts's stated rule ("thirteen rows of confident falsehood
+  // with nothing anywhere saying a read failed is worse than a page that does
+  // not load"), and this reader lives one import outside that file.
+  if (all.error) throw all.error
+  if (embedded.error) throw embedded.error
+  // The ONE deliberate swallow: a deploy can land before the migration (they
+  // are applied by hand here), and the readiness page must render the two
+  // counts it CAN read rather than 500 on a column that is not there yet.
+  // Narrow: this column only — any other failure of this read throws too.
+  const columnNotThere = isMissingColumnError(last.error, 'embedded_at')
+  if (last.error && !columnNotThere) throw last.error
+  return {
+    embedded: embedded.count ?? 0,
+    total: all.count ?? 0,
+    lastEmbeddedAt: columnNotThere ? null : ((last.data?.embedded_at as string | undefined) ?? null),
+  }
 }
 
 /** Newest run that actually produced analysis. Mirrors the dashboard pages: an

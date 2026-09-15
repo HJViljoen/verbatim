@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { createInitiative, type InitiativeFormState } from '@/app/dashboard/settings/initiatives/actions'
 import { INITIATIVE_DIRECTIONS, INITIATIVE_DIRECTION_LABEL } from '@/lib/initiatives/types'
+import { initiativePromise } from '@/lib/initiatives/measure'
 
 // "Track this" — declaring an initiative from the theme you are looking at
 // (WP7c). The sheet is deliberately four fields: a client who has to fill in a
@@ -68,9 +69,7 @@ export function TrackThisButton({ registryId, themeLabel }: { registryId: string
           <SheetHeader className="border-b border-border/70 px-5 py-4 pr-12">
             <SheetTitle className="text-[15px] font-semibold">Track this theme</SheetTitle>
             <SheetDescription className="text-[12px]">
-              Tell us what you are trying to move. Every update from today on says whether this
-              theme grew or shrank as a share of its own group&rsquo;s conversation — never
-              whether you succeeded.
+              Tell us what you are trying to move. {initiativePromise()}
             </SheetDescription>
           </SheetHeader>
           <form action={formAction} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">

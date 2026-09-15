@@ -165,8 +165,16 @@ export async function freezeStep(
   }
   // The quote picker judges words (readsAsHeroQuote); the step boundary
   // stripped them, so resolve the refs once, in memory, never stored.
+  //
+  // `onReadError: 'throw'` because this is the one caller of that function
+  // COMPOSING an artefact rather than rendering one, and it runs inside a step
+  // that retries. Everywhere else the degrade is right — a digest send or a
+  // share link is a one-shot render of numbers that are already final, and a
+  // few missing quotes beat no render at all. Here the snapshot IS the record:
+  // a document frozen from a thinner pool than the build asked for is wrong
+  // for ever, and nothing on the page would say so.
   const refs = collectQuoteRefs(args.answers)
-  const texts = refs.length ? await fetchQuoteTextsByRefs(admin, refs) : new Map<string, string>()
+  const texts = refs.length ? await fetchQuoteTextsByRefs(admin, refs, { onReadError: 'throw' }) : new Map<string, string>()
   const answers = resolveQuotes(args.answers, texts) as ResearchAnswer[]
   const signals = await signalsOf(admin, ctx)
   const figures = documentFigures(signals, answers)
