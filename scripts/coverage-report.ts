@@ -10,6 +10,7 @@ import {
   type DenominatorSeries,
   type PreRegisteredObject,
 } from '../lib/reading/anomaly'
+import { SLICE, coverage, perAudience, sliceMonths } from '../lib/reading/coverage'
 import {
   completeWeeksBefore,
   dayInWindow,
@@ -21,7 +22,6 @@ import {
   weekCrossesAMonth,
   windowOf,
 } from '../lib/reading/monthly'
-import type { DenominatorReading } from '../lib/reading/types'
 import { SHARE_BAND } from '../lib/report-bands'
 import { createAdminClient, selectAll } from '../lib/supabase-admin'
 import { categoryLabel } from '../lib/voice-tiles'
@@ -106,9 +106,6 @@ function parseArgs(argv: string[]): Args {
   if (!Number.isInteger(args.weeks) || args.weeks < 1) throw new Error('--weeks takes a positive whole number')
   return args
 }
-
-/** The name of the denominator every pre-registered object shares. */
-const SLICE = 'every audience together'
 
 const pct = (k: number, n: number): string => (n > 0 ? `${((k / n) * 100).toFixed(1)}%` : '—')
 
@@ -209,91 +206,6 @@ function kindVideos(citations: readonly KindCitation[], from: string, to: string
     perKind.set(c.category, set)
   }
   return new Map([...perKind].map(([k, v]) => [k, v.size]))
-}
-
-// ---- Shaping -----------------------------------------------------------------
-
-/** Videos per audience in a set of denominator rows, months summed. */
-function perAudience(rows: readonly DenominatorReading[]): Map<string, { videos: number; comments: number }> {
-  const out = new Map<string, { videos: number; comments: number }>()
-  for (const r of rows) {
-    const prev = out.get(r.audience) ?? { videos: 0, comments: 0 }
-    out.set(r.audience, { videos: prev.videos + r.videos, comments: prev.comments + r.comments })
-  }
-  return out
-}
-
-interface MonthlyCoverage {
-  audience: string
-  monthsWithAny: number
-  monthsVideos: number
-  monthsComments: number
-  /** `YYYY-MM`, or null for an audience with no month at all. */
-  firstMonth: string | null
-  lastMonth: string | null
-  biggestVideos: number
-  biggestComments: number
-}
-
-interface MonthCounts {
-  month: string
-  videos: number
-  comments: number
-}
-
-const shapeCoverage = (audience: string, months: readonly MonthCounts[], floor: number): MonthlyCoverage => {
-  const ordered = months.map((m) => monthStartOf(m.month)).sort()
-  return {
-    audience,
-    monthsWithAny: months.length,
-    monthsVideos: months.filter((m) => m.videos >= floor).length,
-    monthsComments: months.filter((m) => m.comments >= floor).length,
-    firstMonth: ordered[0]?.slice(0, 7) ?? null,
-    lastMonth: ordered.at(-1)?.slice(0, 7) ?? null,
-    biggestVideos: months.length > 0 ? Math.max(...months.map((m) => m.videos)) : 0,
-    biggestComments: months.length > 0 ? Math.max(...months.map((m) => m.comments)) : 0,
-  }
-}
-
-/**
- * Question 1: how many months clear each floor, per audience.
- *
- * Three kinds of row, and the last two are why this is not a group-by:
- *  - one per audience that has any month at all;
- *  - one per tracked rival that has NONE, because "nobody posted about them in
- *    any month" is an answer the readiness page prints, not a gap in a table;
- *  - the pooled slice last — every audience together, which is the denominator
- *    the anomaly check actually uses, so it belongs in the same table as the
- *    audiences it pools. Videos and comments both sum cleanly: a video sits in
- *    exactly one audience and a comment under exactly one video, so the sum IS
- *    the distinct count (verified read-only on both tenants).
- */
-function coverage(
-  rows: readonly DenominatorReading[],
-  floor: number,
-  trackedAudiences: readonly string[] = [],
-): MonthlyCoverage[] {
-  const byAudience = new Map<string, MonthCounts[]>()
-  for (const audience of trackedAudiences) byAudience.set(audience, [])
-  for (const r of rows) {
-    byAudience.set(r.audience, [...(byAudience.get(r.audience) ?? []), { month: r.month, videos: r.videos, comments: r.comments }])
-  }
-  const perAudience = [...byAudience.entries()]
-    .map(([audience, months]) => shapeCoverage(audience, months, floor))
-    .sort((a, b) => a.audience.localeCompare(b.audience))
-  const pooled = [...sliceMonths(rows).entries()].map(([month, counts]) => ({ month, ...counts }))
-  return [...perAudience, shapeCoverage(SLICE, pooled, floor)]
-}
-
-/** The slice — every audience together — as its own month series. */
-function sliceMonths(rows: readonly DenominatorReading[]): Map<string, { videos: number; comments: number }> {
-  const out = new Map<string, { videos: number; comments: number }>()
-  for (const r of rows) {
-    const month = monthStartOf(r.month)
-    const prev = out.get(month) ?? { videos: 0, comments: 0 }
-    out.set(month, { videos: prev.videos + r.videos, comments: prev.comments + r.comments })
-  }
-  return out
 }
 
 // ---- The report --------------------------------------------------------------
