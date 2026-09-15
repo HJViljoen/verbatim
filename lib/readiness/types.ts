@@ -189,7 +189,10 @@ export interface RetentionInput {
    *  or null when this workspace holds none. */
   cohortDay: string | null
   cohortRows: number
-  /** Comments one night's re-read can cover. */
+  /** Comments one night's re-read can cover — ACROSS EVERY WORKSPACE, not
+   *  this one: the nightly job selects the due set with no client filter and
+   *  caps the distinct ids globally. The row says so rather than promising
+   *  this workspace a night of its own. */
   nightlyCap: number
   /** Days after a comment was last read before it is read again. */
   dueAfterDays: number

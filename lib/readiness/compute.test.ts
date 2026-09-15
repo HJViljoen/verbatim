@@ -629,19 +629,32 @@ describe('retention', () => {
   it('dates the next batch due to be read again', () => {
     const row = find(computeReadiness(ossur()), 'retention')
     expect(row.status).toBe('exists')
-    expect(row.detail).toBe('768 comments fall due to be read again on 17 Sep 2026 — one night covers it.')
+    expect(row.detail).toBe(
+      '768 comments fall due to be read again on 17 Sep 2026 — one night’s re-read budget is 5,000 comments, shared across every workspace.',
+    )
   })
 
   it('reads the trial workspace’s own batch', () => {
     expect(find(computeReadiness(sealand()), 'retention').detail)
-      .toBe('351 comments fall due to be read again on 18 Sep 2026 — one night covers it.')
+      .toBe('351 comments fall due to be read again on 18 Sep 2026 — one night’s re-read budget is 5,000 comments, shared across every workspace.')
   })
 
-  it('is only partly there when a batch is bigger than a night', () => {
+  it('never promises this workspace a night of its own', () => {
+    // The nightly job selects the due set with no client filter and caps the
+    // distinct ids globally, so a 4,000-comment batch can share the night with
+    // another workspace's 3,000 and not clear. The row may state the budget;
+    // it may not claim one night covers this batch.
+    const inputs = ossur({ retention: { cohortDay: '2026-09-13', cohortRows: 4000, nightlyCap: 5000, dueAfterDays: 25 } })
+    const row = find(computeReadiness(inputs), 'retention')
+    expect(row.detail).toContain('shared across every workspace')
+    expect(row.detail).not.toContain('one night covers it')
+  })
+
+  it('is only partly there when a batch is bigger than the whole night', () => {
     const inputs = ossur({ retention: { cohortDay: '2026-09-13', cohortRows: 6000, nightlyCap: 5000, dueAfterDays: 25 } })
     const row = find(computeReadiness(inputs), 'retention')
     expect(row.status).toBe('partial')
-    expect(row.detail).toContain('more than one night covers (5,000)')
+    expect(row.detail).toContain('this batch alone is larger, so the rest waits')
   })
 
   it('is in place with nothing waiting', () => {

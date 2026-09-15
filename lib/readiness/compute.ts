@@ -505,12 +505,18 @@ function retention(i: ReadinessInputs): ReadinessRow {
       : r.cohortRows > r.nightlyCap ? 'partial'
         : 'exists'
 
+  // THE BUDGET IS NOT THIS WORKSPACE'S. `refreshYoutubeComments` selects every
+  // due comment with no client filter and then caps the distinct ids — so the
+  // nightly number is shared with every other workspace, and a batch well
+  // under it can still wait because another workspace's batch got there first.
+  // The row therefore states the budget and what it is shared with, and claims
+  // only what this workspace's own count can settle: a batch larger than the
+  // whole night's budget certainly will not clear it.
   const detail = r.cohortDay === null || due === null
     ? 'Nothing is waiting to be read again.'
     : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)} — ` +
-      (r.cohortRows > r.nightlyCap
-        ? `more than one night covers (${fmtInt(r.nightlyCap)}), so the rest waits.`
-        : 'one night covers it.')
+      `one night’s re-read budget is ${fmtInt(r.nightlyCap)} comments, shared across every workspace` +
+      (r.cohortRows > r.nightlyCap ? ', and this batch alone is larger, so the rest waits.' : '.')
 
   return row(
     'retention', 'Retention', 'comments read again before they age out',
