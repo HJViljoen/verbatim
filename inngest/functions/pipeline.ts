@@ -34,7 +34,7 @@ import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
 import { subjectMonthSide } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
-import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary } from '@/lib/subjects/membership'
+import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary, subjectBudgetUsd } from '@/lib/subjects/membership'
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { resolveRunWindow, isStalled, type RunWindow } from '@/lib/pipeline/window'
 import { clusteringKey as clusteringKeyOf, currentClusteringRegime } from '@/lib/pipeline/clustering'
@@ -1319,12 +1319,26 @@ export const runPipeline = inngest.createFunction(
         console.error(`[subject-membership] plan failed, skipping: ${e instanceof Error ? e.message : String(e)}`)
         return []
       })
+    //
+    //     THE CEILING IS THE PASS'S, NOT EACH SUBJECT'S. subjectBudgetUsd() is
+    //     5% of RUN_MODEL_BUDGET_USD — $3 at the default $60 — and it is a
+    //     ceiling on the whole membership pass, which measures $0.17. Handing
+    //     every fan-out step the full $3 would make the real ceiling $24 at
+    //     eight subjects, eight times what SUBJECT_BUDGET_SHARE documents, and
+    //     assertWithinBudget would not catch it: it only trips at $60, by
+    //     which point the run fails and emails. So each step is given what is
+    //     LEFT of the pass, summed off the previous steps' own results. The
+    //     arithmetic is deterministic on a replay, because a memoised step
+    //     returns the same costUsd it returned the first time.
+    const passBudget = subjectBudgetUsd()
+    let subjectSpend = 0
     for (let i = 0; i < subjects.length; i++) {
       const subject = subjects[i]
-      await step
+      const budgetUsd = Math.max(0, passBudget - subjectSpend)
+      const r = await step
         .run(`subject-membership:${i + 1}-of-${subjects.length}`, async () => {
           const admin = createAdminClient()
-          const r = await judgeSubject(admin, subject, { clientId, runId })
+          const r = await judgeSubject(admin, subject, { clientId, runId, budgetUsd })
           console.log(`[subject-membership] ${membershipSummary(r)}`)
           return r
         })
@@ -1332,6 +1346,10 @@ export const runPipeline = inngest.createFunction(
           console.error(`[subject-membership] ${subject.name} out of retries: ${e instanceof Error ? e.message : String(e)}`)
           return null
         })
+      subjectSpend += r?.costUsd ?? 0
+    }
+    if (subjectSpend > 0) {
+      console.log(`[subject-membership] pass spent $${subjectSpend.toFixed(4)} of its $${passBudget.toFixed(2)} ceiling`)
     }
 
     // 5. Cross-reference detection — client-brand mentions under competitor /

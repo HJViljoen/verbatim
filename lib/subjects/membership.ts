@@ -78,7 +78,15 @@ import {
  *  thing that does that, so it carries its own ceiling at 5% of the run's —
  *  $3.00 at the default $60, roughly 18x the measured cost. Past it the pass
  *  stops, keeps what it has already written, and says so; the rest is still
- *  undecided next run, which is the retry. */
+ *  undecided next run, which is the retry.
+ *
+ *  It is the PASS's ceiling in both runners, and that takes arithmetic in each
+ *  because the two spend differently. `judgeAllSubjects` subtracts as it goes.
+ *  The pipeline does not call it — every subject is its own retryable step — so
+ *  the step loop sums the previous steps' `costUsd` and hands each step what is
+ *  left. Handing each step the whole ceiling instead would make the real
+ *  ceiling eight times this one, and `assertWithinBudget` would not catch it:
+ *  it trips at RUN_MODEL_BUDGET_USD, by which point the run has failed. */
 export const SUBJECT_BUDGET_SHARE = 0.05
 
 export const subjectBudgetUsd = (runBudget = RUN_MODEL_BUDGET_USD): number => runBudget * SUBJECT_BUDGET_SHARE
