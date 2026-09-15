@@ -104,7 +104,10 @@ export interface MonthChangeInput {
  * band is still printed — a re-grouping moves which comments sit under a theme,
  * not how much conversation an audience carried, and refusing every comparison
  * across one would refuse nearly every comparison there is. The caveat rides as
- * the `clustering_changed` flag.
+ * the `clustering_changed` flag — or as `clustering_unknown` where one of the
+ * two months carries no key at all, which is not the same claim and, until M2
+ * has landed and runs have stamped a few months, is the one every comparison
+ * on the seeded history earns.
  *
  * A hollow or below-floor month needs no special case: it arrives with a zero
  * or thin denominator and `proportionDelta` answers `too_little_data`, which is
@@ -114,8 +117,15 @@ export function monthChange(input: MonthChangeInput): Verdict {
   const flags = [...(input.flags ?? [])]
   const renamed =
     input.curr.audience != null && input.prev.audience != null && input.curr.audience !== input.prev.audience
+  // Two facts, not one. Both keys known and different is a re-grouping; either
+  // key missing is a stretch nobody recorded a grouping for, which is what
+  // every frozen month on today's corpus looks like. Both stop a direction
+  // word and neither refuses the band, but only one of them may be printed as
+  // "themes were re-grouped".
+  const bothKnown = Boolean(input.curr.clusteringKey) && Boolean(input.prev.clusteringKey)
   const regimeChanged = !sameRegime(input.curr.clusteringKey, input.prev.clusteringKey)
-  if (regimeChanged && !flags.includes('clustering_changed')) flags.push('clustering_changed')
+  const regimeFlag: VerdictFlag = bothKnown ? 'clustering_changed' : 'clustering_unknown'
+  if (regimeChanged && !flags.includes(regimeFlag)) flags.push(regimeFlag)
   if (renamed && !flags.includes('renamed')) flags.push('renamed')
 
   return bandVerdict({

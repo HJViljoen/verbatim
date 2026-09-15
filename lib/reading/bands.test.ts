@@ -103,7 +103,21 @@ describe('monthChange', () => {
       curr: p('2026-08-01', 251, 1000, { clusteringKey: null }),
       prev: p('2026-07-01', 120, 1000, { clusteringKey: null }),
     })
-    expect(v.flags).toContain('clustering_changed')
+    // …but it is NOT the claim "themes were re-grouped", which is what the one
+    // token used to say about every comparison on the seeded history.
+    expect(v.flags).toContain('clustering_unknown')
+    expect(v.flags).not.toContain('clustering_changed')
+  })
+
+  it('says unknown, not changed, when only ONE side carries a key', () => {
+    const v = monthChange({
+      object: THEME,
+      audience: 'industry-other',
+      curr: p('2026-08-01', 251, 1000, { clusteringKey: 'a=v5' }),
+      prev: p('2026-07-01', 120, 1000, { clusteringKey: null }),
+    })
+    expect(v.flags).toEqual(['clustering_unknown'])
+    expect(v.state).toBe('moved')
   })
 
   it('does not mark a clustering change when the keys agree', () => {

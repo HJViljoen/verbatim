@@ -63,11 +63,27 @@ export type ObjectKind = 'subject' | 'theme' | 'kind' | 'rival' | 'audience' | '
 export type RefusedReason = 'unlogged_era' | 'tracking_change' | 'clustering_changed' | 'rename'
 
 /** What a reader has to be told about a reading beside its verdict. `thin`,
- *  `new` and `gone_quiet` are about the object; `re_read`, `clustering_changed`
- *  and `renamed` are about what we did to the corpus underneath it. A flag
- *  never changes the verdict — `refusedReason` does that — it is printed
- *  alongside. */
-export type VerdictFlag = 'new' | 'gone_quiet' | 're_read' | 'clustering_changed' | 'renamed' | 'thin'
+ *  `new` and `gone_quiet` are about the object; `re_read`,
+ *  `clustering_changed`, `clustering_unknown` and `renamed` are about what we
+ *  did to the corpus underneath it. A flag never changes the verdict —
+ *  `refusedReason` does that — it is printed alongside.
+ *
+ *  `clustering_changed` and `clustering_unknown` are two different facts and
+ *  the vocabulary carries both, because on today's corpus the second one is on
+ *  nearly every comparison there is: every month frozen before the fingerprint
+ *  shipped has no key, two unknowns are deliberately not one regime
+ *  (`sameRegime`), and saying "themes were re-grouped" about a pair nobody
+ *  recorded a grouping for is a claim the record does not support. The series
+ *  already keeps them apart (`ClusteringBoundary.kind`); a verdict now can
+ *  too. */
+export type VerdictFlag =
+  | 'new'
+  | 'gone_quiet'
+  | 're_read'
+  | 'clustering_changed'
+  | 'clustering_unknown'
+  | 'renamed'
+  | 'thin'
 
 /** The period a verdict is about. `since` is the tenant's whole readable
  *  history (lib/reading/horizon.ts `sinceStart`). Both bounds are half-open
