@@ -453,6 +453,8 @@ export interface FillingLineInput {
   atLastMonth: number | null
   atLastMonthKnown: boolean
   thin: boolean
+  /** Under a third of the month gone (design §3 OV0's gate). */
+  early?: boolean
 }
 
 /**
@@ -498,8 +500,26 @@ export function fillingLine(input: FillingLineInput): string {
           : `last month at this point: ${fmtInt(input.atLastMonth)}`,
     )
   }
+  // THE DESIGN'S TWO GATES, IN ITS OWN WORDS. "A month under a third complete
+  // prints its month-to-date figures with 'early in the month' beside them and
+  // no banded change at all" (§3 OV0) is a different fact from a thin month
+  // and gets a different sentence; the thin rule's own words win when both are
+  // true, because a thin month is the worse of the two.
   if (input.thin) parts.push('thin month — every change below is suppressed')
+  else if (input.early) parts.push('early in the month — every change below is suppressed')
   return parts.join(' · ')
+}
+
+/** How much of a month has to be gone before a band may be drawn over it
+ *  (design §3 OV0's gate). */
+export const EARLY_FRACTION = 1 / 3
+
+/** Is this month under a third complete at `now`? A complete month never is. */
+export function earlyInMonth(month: string, now: string): boolean {
+  const days = daysInto(month, now)
+  if (days == null) return false
+  const lastDay = new Date(Date.parse(`${nextMonth(monthStartOf(month))}T00:00:00.000Z`) - 86_400_000).getUTCDate()
+  return days / lastDay < EARLY_FRACTION
 }
 
 /**
@@ -1008,12 +1028,18 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // One month is not a median. Under two, the line prints the count alone.
   const expected = trailing.length >= 2 ? medianOf(trailing) : null
   const daysIn = daysInto(month, readingAt)
+  const early = earlyInMonth(month, readingAt)
   const thin = thinMonth(
     { month, videos: monthVideos, k: null },
     trailing,
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   )
   const updateDates = runsRaw.filter((r) => monthStartOf(r.started_at) === month).map((r) => shortDate(r.started_at))
+  // WHAT SUPPRESSES A BAND. Two gates, one answer for the builders: a thin
+  // month, and a month under a third complete (design §3 OV0, "no banded
+  // change at all"). The line says which it is; a builder only needs to know
+  // that it may not draw one.
+  const suppress = thin || early
   const bar: BarBlock = {
     month,
     status: monthStatus,
@@ -1035,6 +1061,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       atLastMonth: lastMonthSoFar.videos,
       atLastMonthKnown: lastMonthSoFar.known,
       thin,
+      early,
     }),
     readings: readingsSoFar,
     counter: readingsCounter(readingsSoFar),
@@ -1055,7 +1082,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
       monthStatus === 'filling' && subjectsAtLastMonth != null
         ? { bySubject: subjectsAtLastMonth, perAudience: lastMonthSoFar.perAudience }
         : null,
-    thin,
+    thin: suppress,
   })
 
   // ── OV3 · what the category is saying ─────────────────────────────────
@@ -1070,7 +1097,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     panel,
     perAudience: audienceMonthVideos(history.denominators),
     recordFrom: started.from,
-    thin,
+    thin: suppress,
   })
 
   // ── OV4 · rivals ───────────────────────────────────────────────────────
@@ -1111,7 +1138,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.growing.map((m) => m.verdict),
     ...category.fading.map((m) => m.verdict),
   ]
-  const head = headline({ verdicts: thin ? [] : sentenceVerdicts })
+  const head = headline({ verdicts: suppress ? [] : sentenceVerdicts })
   const ledger = await loadLedger(supabase, clientId)
   const voices = await loadVoices(supabase, clientId, head.lead, top, themedRunId)
   const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null

@@ -14,6 +14,7 @@ import {
   headline,
   medianOf,
   atThisPointWindow,
+  earlyInMonth,
   firstHeardThisMonth,
   isMissingAnomalyFlags,
   monthlyLineLabel,
@@ -134,6 +135,9 @@ describe('fillingLine', () => {
 
   it('names a thin month and says the changes are suppressed', () => {
     expect(fillingLine({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
+    expect(fillingLine({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    // A thin month is the worse of the two and keeps its own words.
+    expect(fillingLine({ ...base, thin: true, early: true })).not.toContain('early in the month')
   })
 
   it('carries no direction word — the badge carries the movement', () => {
@@ -215,6 +219,21 @@ describe('headline', () => {
     expect(h.lead).toBeNull()
     expect(h.body).toBe('Nothing moved clearly this month. Here is where you stand.')
     expect(h.figures).toEqual({})
+  })
+})
+
+describe('earlyInMonth', () => {
+  it('is the design\u2019s gate: under a third of the month gone', () => {
+    expect(earlyInMonth('2026-09-01', '2026-09-05T08:00:00.000Z')).toBe(true)
+    expect(earlyInMonth('2026-09-01', '2026-09-10T08:00:00.000Z')).toBe(false)
+    expect(earlyInMonth('2026-09-01', '2026-09-15T08:00:00.000Z')).toBe(false)
+  })
+  it('counts the month\u2019s own length', () => {
+    // 10 of 31 is under a third; 10 of 30 is not.
+    expect(earlyInMonth('2026-10-01', '2026-10-10T08:00:00.000Z')).toBe(true)
+  })
+  it('is never true of a month that is over', () => {
+    expect(earlyInMonth('2026-08-01', '2026-09-15T08:00:00.000Z')).toBe(false)
   })
 })
 
