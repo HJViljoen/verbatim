@@ -553,7 +553,9 @@ async function candidateQuotes(
         .from('subject_memberships')
         .select('subject_id, audience_insight_id')
         .eq('client_id', clientId)
-        .eq('is_member', true)
+        // `member`, not `is_member`: the column 20260918093000 declares, and
+        // the one the partial index `subject_memberships_member_idx` is built on.
+        .eq('member', true)
         .in('subject_id', subjects)
         .order('audience_insight_id', { ascending: true }),
     )
@@ -768,7 +770,20 @@ export async function runAnomalyCheck(args: RunAnomalyCheckArgs): Promise<Anomal
   }
 
   // ---- The one model call, and only now ----
-  const quotes = await candidateQuotes(admin, args.clientId, window, reading.flags, args.runId)
+  // THE QUOTE READ CANNOT COST THE WEEK ITS RECORD. `candidateQuotes` makes up
+  // to seven reads across five tables, and any of them can raise — a schema
+  // drift, a cache miss, a migration that has not landed. The flags ARE the
+  // statement; the quotes are material the explainer grounds in. So a failure
+  // here degrades to "no quotes" and is logged, rather than throwing past the
+  // write and leaving the update with no row at all. (The rows are written
+  // after the explainer so one explanation can cover all three flags; this
+  // catch is what makes that order safe.)
+  let quotes: Awaited<ReturnType<typeof candidateQuotes>> = []
+  try {
+    quotes = await candidateQuotes(admin, args.clientId, window, reading.flags, args.runId)
+  } catch (e) {
+    console.error(`[anomaly-check] quotes unavailable, flags still recorded: ${e instanceof Error ? e.message : String(e)}`)
+  }
   const figures = proseFigures(anomalyFigures(reading))
   const verdicts = reading.flags.map((f) => anomalyVerdict(f, window, { from: months[0], to: window.from }))
   const explainer = args.explainer ?? openAiExplainer(admin, args.clientId, args.runId, persist)
