@@ -93,10 +93,10 @@ describe('voicesAcross', () => {
 
 describe('voiceFrom', () => {
   it('never prints an audience key', () => {
-    expect(voiceFrom(CLIENT_AUDIENCE, 'Sealand')).toBe('under a post of yours')
-    expect(voiceFrom(INDUSTRY_AUDIENCE, 'Sealand')).toBe('under a category video')
-    expect(voiceFrom('competitor:Freitag', 'Sealand')).toBe('under a Freitag video')
-    expect(voiceFrom('competitor:Freitag', 'Sealand')).not.toContain('competitor:')
+    expect(voiceFrom(CLIENT_AUDIENCE)).toBe('under a post of yours')
+    expect(voiceFrom(INDUSTRY_AUDIENCE)).toBe('under a category video')
+    expect(voiceFrom('competitor:Freitag')).toBe('under a Freitag video')
+    expect(voiceFrom('competitor:Freitag')).not.toContain('competitor:')
   })
 })
 

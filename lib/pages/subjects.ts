@@ -304,8 +304,8 @@ export function voicesAcross<T>(
 }
 
 /** Where a voice was heard, in the reader's words — never an audience key. */
-export function voiceFrom(audience: string, brand: string): string {
-  if (audience === CLIENT_AUDIENCE) return `under a post of yours`
+export function voiceFrom(audience: string): string {
+  if (audience === CLIENT_AUDIENCE) return 'under a post of yours'
   if (audience === INDUSTRY_AUDIENCE) return 'under a category video'
   const name = audience.startsWith('competitor:') ? audience.slice('competitor:'.length) : audience
   return `under a ${name} video`
@@ -415,7 +415,9 @@ interface RunRow {
   started_at: string
 }
 
-type StoredKindRow = {
+/** A stored `month_kind_readings` row, as the side builder takes it. Exported
+ *  for the fixture — a block test has to be able to build one. */
+export type StoredKindRow = {
   month: string
   audience: string
   kind: string
@@ -689,7 +691,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'subjects')
     const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
     const [voices, unanswered] = await Promise.all([
-      loadVoices(supabase, clientId, brand, memberIds ?? []),
+      loadVoices(supabase, clientId, memberIds ?? []),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: window.from, to: window.to },
         population: perAudience.get(`${month}|${INDUSTRY_AUDIENCE}`) ?? null,
@@ -810,11 +812,17 @@ export function buildSides(input: SidesInput): SubjectSide[] {
     const n = perAudience.get(`${month}|${audience}`) ?? null
     const rowsHere = input.kindRows.filter((r) => monthStartOf(r.month) === month && r.audience === audience)
     if (n == null || rowsHere.length === 0) return { kinds: [], reddit: null }
-    const shares = kindShares(
-      rowsHere.map((r) => ({ kind: r.kind, videos: r.videos, comments: r.comments, ...(r.platform_mix ? { platform_mix: r.platform_mix } : {}) })),
-      n,
-    )
-    return { kinds: shares, reddit: redditRead(shares) }
+    const asRows = rowsHere.map((r) => ({
+      kind: r.kind,
+      videos: r.videos,
+      comments: r.comments,
+      platform_mix: r.platform_mix ?? {},
+    }))
+    // `redditRead` takes the STORED rows, not the shares: a `KindShare` has
+    // already collapsed the platform mix to one reddit count and dropped the
+    // rest, so handing it shares gives a pooled read of nothing at all
+    // (lib/reading/kinds.ts, and lib/pages/overview.ts does the same).
+    return { kinds: kindShares(asRows, n), reddit: redditRead(asRows) }
   }
 
   return sides.map((s) => {
@@ -879,7 +887,6 @@ export function buildSides(input: SidesInput): SubjectSide[] {
 async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
-  brand: string,
   insightIds: readonly string[],
 ): Promise<{ voices: SubjectVoice[]; from: number }> {
   if (insightIds.length === 0) return { voices: [], from: 0 }
@@ -951,7 +958,7 @@ async function loadVoices(
     const m = c.commentId ? meta.get(c.commentId) : undefined
     const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
     const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
-    const from = voiceFrom(audience, brand)
+    const from = voiceFrom(audience)
     const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, from]
       .filter(Boolean).join(' · ')
     const url = key ? urlByKey.get(key) ?? null : null
