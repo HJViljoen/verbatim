@@ -32,6 +32,7 @@ import { persistRunNews } from '@/lib/news/persist'
 import { persistThemes, loadThemes } from '@/lib/pipeline/themes'
 import { writeRunSummary } from '@/lib/pipeline/run-summary'
 import { fillingMonths, freezeMonths, isMissingMonthlyReading, monthsToRefresh } from '@/lib/reading/monthly'
+import { subjectMonthSide } from '@/lib/subjects/read'
 import { embedNullInsights, embedSummary } from '@/lib/pipeline/embed-insights'
 import { embedSubjects, judgeSubject, loadActiveSubjects, membershipSummary } from '@/lib/subjects/membership'
 import { isMissingSubjects } from '@/lib/subjects/types'
@@ -1434,22 +1435,31 @@ export const runPipeline = inngest.createFunction(
         const admin = createAdminClient()
         try {
           const months = monthsToRefresh(new Date().toISOString(), await fillingMonths(admin, clientId))
-          const r = await freezeMonths(admin, { clientId, runId, months })
+          // The subject side rides in the SAME visit, not beside it: the
+          // denominator's freeze is what closes an audience-month to new rows,
+          // so every numerator has to be written before it. A separate subject
+          // freeze running afterwards would be refused by the insert guard,
+          // correctly and permanently.
+          const r = await freezeMonths(admin, {
+            clientId, runId, months, sides: [subjectMonthSide(admin, clientId)],
+          })
+          const sideCounts = Object.entries(r.sides)
+            .map(([table, side]) => `${table} ${side.written} written (${side.frozen} now frozen, ${side.keptFrozen} already frozen and left alone, ${side.deleted} dropped)`)
+            .join(' · ')
           console.log(
             `[freeze-months] ${r.months.join(' ')} · denominators ${r.denominators.written} written ` +
             `(${r.denominators.frozen} now frozen, ${r.denominators.keptFrozen} already frozen and left alone, ` +
-            `${r.denominators.deleted} dropped) · themes ${r.themes.written} written ` +
-            `(${r.themes.frozen} now frozen, ${r.themes.keptFrozen} already frozen and left alone, ` +
-            `${r.themes.deleted} dropped)`,
+            `${r.denominators.deleted} dropped) · ${sideCounts}`,
           )
+          const all = [r.denominators, ...Object.values(r.sides)]
           return {
             months: r.months.length,
             denominators: r.denominators.written,
             themes: r.themes.written,
-            frozen: r.denominators.frozen + r.themes.frozen,
-            keptFrozen: r.denominators.keptFrozen + r.themes.keptFrozen,
-            heldStale: r.denominators.heldStale + r.themes.heldStale,
-            refusedLate: r.denominators.refusedLate + r.themes.refusedLate,
+            frozen: all.reduce((n, s) => n + s.frozen, 0),
+            keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
+            heldStale: all.reduce((n, s) => n + s.heldStale, 0),
+            refusedLate: all.reduce((n, s) => n + s.refusedLate, 0),
           }
         } catch (e) {
           // Its tables and functions do not exist yet: a no-op, not a failure.

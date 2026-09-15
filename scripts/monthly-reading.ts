@@ -9,6 +9,7 @@ import {
   readThemeReadings,
   windowOf,
 } from '../lib/reading/monthly'
+import { subjectMonthSide } from '../lib/subjects/read'
 import type { DenominatorReading, ThemeReading } from '../lib/reading/types'
 
 // The comment-dated monthly reading, read out loud — and, with --write, seeded
@@ -180,21 +181,27 @@ async function main() {
     }
     console.table(table)
 
-    const plan = await freezeMonths(admin, { clientId: id, runId, months, now, dryRun: true })
+    // The subject side is part of the SAME visit, here as in the pipeline: the
+    // denominator's freeze closes the audience-month, so a numerator written
+    // after it is refused. A tenant with no subjects, or a database without
+    // M4, simply contributes an empty side.
+    const sides = [subjectMonthSide(admin, id)]
+    const plan = await freezeMonths(admin, { clientId: id, runId, months, now, dryRun: true, sides })
+    const planSides = Object.values(plan.sides)
     console.log(
       `  a seed would write ${plan.denominators.written} denominator rows ` +
-      `(${plan.denominators.frozen} frozen at once, back-read) and ${plan.themes.written} theme rows ` +
-      `(${plan.themes.frozen} frozen at once); ` +
-      `${plan.denominators.keptFrozen + plan.themes.keptFrozen} stored rows are already frozen and would be left alone.`,
+      `(${plan.denominators.frozen} frozen at once, back-read) and ` +
+      Object.entries(plan.sides).map(([t, s2]) => `${s2.written} ${t} rows (${s2.frozen} frozen at once)`).join(', ') +
+      `; ${plan.denominators.keptFrozen + planSides.reduce((n, s2) => n + s2.keptFrozen, 0)} stored rows are already frozen and would be left alone.`,
     )
-    const held = plan.denominators.heldStale + plan.themes.heldStale
+    const held = plan.denominators.heldStale + planSides.reduce((n, s2) => n + s2.heldStale, 0)
     if (held > 0) {
       console.log(
         `  ${held} stored filling rows would be held rather than dropped: a reading came back empty, ` +
         'which is a reading that did not happen, not a month that emptied.',
       )
     }
-    const late = plan.denominators.refusedLate + plan.themes.refusedLate
+    const late = plan.denominators.refusedLate + planSides.reduce((n, s2) => n + s2.refusedLate, 0)
     if (late > 0) {
       console.log(
         `  ${late} fresh rows would NOT be written: their audience-months have closed and this table ` +
@@ -216,13 +223,16 @@ async function main() {
           'Name one with --run <uuid>, or pass --denominators-only if that is genuinely what you want.',
         )
       }
-      const done = await freezeMonths(admin, { clientId: id, runId, months, now })
+      const done = await freezeMonths(admin, { clientId: id, runId, months, now, sides })
+      const doneSides = Object.values(done.sides)
+      const sum = (pick: (s2: (typeof doneSides)[number]) => number) => doneSides.reduce((n, s2) => n + pick(s2), 0)
       console.log(
-        `  WROTE ${done.denominators.written} denominator rows and ${done.themes.written} theme rows; ` +
-        `${done.denominators.keptFrozen + done.themes.keptFrozen} frozen rows untouched, ` +
-        `${done.denominators.deleted + done.themes.deleted} stale filling rows dropped, ` +
-        `${done.denominators.heldStale + done.themes.heldStale} held because a reading came back empty, ` +
-        `${done.denominators.refusedLate + done.themes.refusedLate} refused because their months have closed.`,
+        `  WROTE ${done.denominators.written} denominator rows and ` +
+        Object.entries(done.sides).map(([t, s2]) => `${s2.written} ${t} rows`).join(', ') + '; ' +
+        `${done.denominators.keptFrozen + sum((s2) => s2.keptFrozen)} frozen rows untouched, ` +
+        `${done.denominators.deleted + sum((s2) => s2.deleted)} stale filling rows dropped, ` +
+        `${done.denominators.heldStale + sum((s2) => s2.heldStale)} held because a reading came back empty, ` +
+        `${done.denominators.refusedLate + sum((s2) => s2.refusedLate)} refused because their months have closed.`,
       )
     }
     console.log()
