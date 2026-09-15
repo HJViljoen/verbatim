@@ -93,6 +93,22 @@ export const VOICES_SHOWN = 2
  *  digits — the same count `figureCount` makes. */
 export const NUMBER_BUDGET = 30
 
+/**
+ * How many rivals OV4 may DECLARE a figure for.
+ *
+ * The budget binds on one axis and not on the other: `SUBJECTS_MAX` caps the
+ * subjects a tenant may name, and nothing caps `tracking_configs.
+ * competitor_names`, so each rival a tenant adds spent another of the thirty
+ * and "exactly 30 on the busiest page a tenant can have" was true of the
+ * fixture rather than of a tenant.
+ *
+ * It caps the DECLARATION and not the rows: every rival keeps its line, which
+ * is what the design asks OV4 for ("one line per rival"), and the largest few
+ * are the ones a model may cite about this page. Which rivals matter enough to
+ * drop a ROW is Competitive's decision to make (WP14), not this block's.
+ */
+export const RIVAL_FIGURES_MAX = 5
+
 // ---- the shapes ---------------------------------------------------------------
 
 /** One side of a subject row: you, your lead rival, or the category. */

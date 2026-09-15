@@ -4,7 +4,8 @@ import { blockAnswers, blockContext, figureConflicts, figureCount, mergeFigures,
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { NUMBER_BUDGET, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
+import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
 import { OVERVIEW_BLOCKS, OverviewPage } from './index'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -13,8 +14,16 @@ const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
 
 const tablesOf = (data: OverviewData) => OVERVIEW_BLOCKS.map((b) => blockAnswers(b, data).figures)
 
-/** The busiest page a tenant can have: eight subjects (SUBJECTS_MAX) and five
- *  rivals plus your own row and the category's. */
+/**
+ * The busiest page a tenant can have: eight subjects (SUBJECTS_MAX) and, on
+ * OV4, your own row, the category's, and as many rivals as a tenant likes —
+ * nothing caps `tracking_configs.competitor_names`. The fixture carries TEN, so
+ * the budget is asserted against a tenant rather than against a number that
+ * happens to fit.
+ *
+ * `base.rivals.rows` is one rival and the client row, so the count below is
+ * ten rivals, the client and the category.
+ */
 function fullHouse(): OverviewData {
   const base = overviewFixture()
   const subject = (i: number): SubjectRow => ({ ...base.subjects.rows[0], id: `s${i}`, label: `Subject ${i}` })
@@ -24,10 +33,17 @@ function fullHouse(): OverviewData {
     label: `Rival ${i}`,
     attention: { k: 1000 + i, n: 41200, pct: 2 + i },
   })
+  const category: RivalRow = {
+    ...base.rivals.rows[1],
+    audience: INDUSTRY_AUDIENCE,
+    label: 'The category',
+    role: 'category',
+    attention: { k: 30000, n: 41200, pct: 72.8 },
+  }
   return {
     ...base,
     subjects: { ...base.subjects, rows: Array.from({ length: 8 }, (_, i) => subject(i)) },
-    rivals: { ...base.rivals, rows: [...Array.from({ length: 5 }, (_, i) => rival(i)), ...base.rivals.rows] },
+    rivals: { ...base.rivals, rows: [...Array.from({ length: 9 }, (_, i) => rival(i)), ...base.rivals.rows, category] },
   }
 }
 
@@ -78,10 +94,37 @@ describe('the 30-number budget', () => {
   })
 
   it('holds on the busiest page a tenant can have', () => {
-    const count = figureCount(tablesOf(fullHouse()))
+    const house = fullHouse()
+    expect(house.rivals.rows.length).toBe(12)
+    const count = figureCount(tablesOf(house))
     expect(count).toBeLessThanOrEqual(NUMBER_BUDGET)
     // Not trivially under it either — the budget is meant to bind.
     expect(count).toBeGreaterThan(20)
+  })
+
+  it('binds however many rivals a tenant tracks — nothing caps that list', () => {
+    const house = fullHouse()
+    const wider = {
+      ...house,
+      rivals: {
+        ...house.rivals,
+        rows: [
+          ...house.rivals.rows,
+          ...Array.from({ length: 20 }, (_, i) => ({
+            ...house.rivals.rows[0],
+            audience: `competitor:More ${i}`,
+            label: `More ${i}`,
+            attention: { k: 10 + i, n: 41200, pct: 0.1 * (i + 1) },
+          })),
+        ],
+      },
+    }
+    expect(figureCount(tablesOf(wider))).toBeLessThanOrEqual(NUMBER_BUDGET)
+    // Every rival keeps its ROW; only the declaration is capped.
+    const markup = render(<OverviewPage data={wider} />)
+    expect(markup).toContain('More 19')
+    expect(Object.keys(blockAnswers(OVERVIEW_BLOCKS[4], wider).figures).filter((k) => k.startsWith('rival_')).length)
+      .toBe(RIVAL_FIGURES_MAX)
   })
 
   it('holds when five of the seven blocks are refusing', () => {

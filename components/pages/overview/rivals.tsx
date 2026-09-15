@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { isRivalAudience } from '@/lib/rivals'
-import { OWN_POSTS_UNREADABLE, type OverviewData, type RivalRow } from '@/lib/pages/overview'
+import { OWN_POSTS_UNREADABLE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
 
 // OV4 · Rivals (design §3 OV4).
 //
@@ -166,10 +166,17 @@ export const overviewRivals: Block<OverviewData> = {
 
   figures(data): FigureTable {
     const out: FigureTable = {}
-    for (const row of data.rivals.rows) {
-      if (row.attention?.pct == null) continue
+    // THE LARGEST FEW, so the page's budget binds on a tenant and not only on
+    // a fixture: nothing caps how many rivals a tenant may track, and every
+    // one of them was spending a number. Every rival still has its row
+    // (RIVAL_FIGURES_MAX).
+    const declared = [...data.rivals.rows]
+      .filter((r) => r.attention?.pct != null)
+      .sort((a, b) => (b.attention?.pct ?? 0) - (a.attention?.pct ?? 0) || a.audience.localeCompare(b.audience))
+      .slice(0, RIVAL_FIGURES_MAX)
+    for (const row of declared) {
       out[`rival_${row.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}_attention`] = {
-        value: row.attention.pct,
+        value: row.attention?.pct as number,
         unit: 'pct',
         label: `${row.label}, share of the panel’s comments this month`,
       }
