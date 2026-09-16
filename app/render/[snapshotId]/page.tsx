@@ -85,7 +85,10 @@ export default async function RenderPage({
     if (token.tileKey) {
       const page = token.tileKey.split('.')[0]
       const section = data.sections.find((s) => s.section.page === page)
-      const r = section ? pageModule(page)?.renderables[token.tileKey] : null
+      // Own keys only — see app/api/export/route.ts. An inherited
+      // Object.prototype key passes a truthiness test and is not a renderable.
+      const mod = section ? pageModule(page) : null
+      const r = mod && Object.hasOwn(mod.renderables, token.tileKey) ? mod.renderables[token.tileKey] : null
       if (!section || !r) notFound()
       return (
         <PrintRoot style={style}>
@@ -108,7 +111,7 @@ export default async function RenderPage({
     // an arbitrary tile through the query string.
     const tileKey = token.tileKey ?? row.ref.tileKey
     if (row.kind === 'tile' || tileKey) {
-      const r = tileKey ? mod.renderables[tileKey] : null
+      const r = tileKey && Object.hasOwn(mod.renderables, tileKey) ? mod.renderables[tileKey] : null
       if (!r) notFound()
       return (
         <PrintRoot style={style}>

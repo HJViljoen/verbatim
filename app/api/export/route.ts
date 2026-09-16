@@ -77,7 +77,14 @@ export async function POST(request: Request) {
 
   const mod = pageModule(page)
   if (!mod) return NextResponse.json({ error: 'That page cannot be exported yet.' }, { status: 400 })
-  if (tileKey && !mod.renderables[tileKey]) return NextResponse.json({ error: 'Unknown tile.' }, { status: 400 })
+  // `Object.hasOwn`, not a bare index tested for truthiness: `constructor`,
+  // `toString` and `valueOf` all come back truthy off Object.prototype, so
+  // `tileKey: "constructor"` got past this 400, was written into
+  // report_snapshots.ref.tileKey, and reached the render route where
+  // `r.render(...)` is undefined — a 500 on a signed, tenant-scoped render.
+  // Block A's convention is `renderables[k]?.render(…)` and this is the same
+  // rule where the lookup is a guard rather than a call.
+  if (tileKey && !Object.hasOwn(mod.renderables, tileKey)) return NextResponse.json({ error: 'Unknown tile.' }, { status: 400 })
 
   const admin = createAdminClient()
 
