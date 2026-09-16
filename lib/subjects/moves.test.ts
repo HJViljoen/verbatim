@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { activationCheck, moveTarget, moveTitle, sameName, subjectSetVerdict } from './moves'
-import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN } from './types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+
+import { activationCheck, MOVE_STATUS_SAID, moveTarget, moveTitle, sameName, setMoveStatus, subjectSetVerdict } from './moves'
+import { MOVE_MAX_THEMES, SUBJECTS_MAX, SUBJECTS_MIN, type MoveStatus } from './types'
 
 describe('moveTarget', () => {
   it('takes a subject for a subject move', () => {
@@ -134,5 +136,30 @@ describe('sameName', () => {
     // A re-description keeps the name and retires the row it replaces; a name
     // already taken by a DIFFERENT live subject is still refused.
     expect(sameName('Comfort', 'Comfort under load')).toBe(false)
+  })
+})
+
+describe('setMoveStatus', () => {
+  it('names the three lifecycle answers without a direction word or a promise', () => {
+    expect(MOVE_STATUS_SAID.done).toBe('Marked done. Its line is kept.')
+    expect(MOVE_STATUS_SAID.dropped).toBe('Marked dropped. Its line is kept.')
+    expect(MOVE_STATUS_SAID.active).toContain('Running again')
+    // Never "we made this happen": the masthead rule (OV5) is that we report
+    // what the conversation did after a move, and never claim it was caused.
+    for (const said of Object.values(MOVE_STATUS_SAID)) {
+      expect(said.toLowerCase()).not.toContain('caused')
+      expect(said).not.toMatch(/\d/)
+    }
+  })
+
+  it('refuses a status the table does not have, before any write', async () => {
+    const supabase = { from: () => { throw new Error('no read should happen') } } as unknown as SupabaseClient
+    const result = await setMoveStatus(
+      { supabase, clientId: 'c1', userId: 'u1' },
+      supabase,
+      { id: 'm1', status: 'finished' as MoveStatus },
+    )
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('done, dropped, or still running')
   })
 })

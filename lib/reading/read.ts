@@ -4,7 +4,7 @@ import { chunk } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
-import { isMissingMonthlyReading, monthEndInstant, monthStartOf } from './monthly'
+import { isMissingMonthlyReading, isMissingMonthTable, monthEndInstant, monthStartOf } from './monthly'
 import {
   buildSeries,
   mergeSeriesNotes,
@@ -22,10 +22,12 @@ import {
   RPC_WINDOW_DENOMINATORS,
   RPC_WINDOW_THEME_READINGS,
   TABLE_DENOMINATORS,
+  TABLE_SUBJECT_READINGS,
   TABLE_THEME_READINGS,
   type Audience,
   type PlatformMix,
 } from './types'
+import { isMissingSubjects, TABLE_SUBJECTS } from '../subjects/types'
 import type { ObjectKind } from './verdicts'
 
 // The reading layer's I/O — the only file here that touches a database
@@ -131,6 +133,10 @@ export interface MonthSeriesOptions {
 
 export interface MonthSeriesSet {
   substrate: Substrate
+  /** The NUMERATOR table's own substrate — `missing` where the migration that
+   *  creates it has not been applied here, and equal to `substrate` otherwise.
+   *  A caller that asked for no objects gets the denominator's answer. */
+  numeratorSubstrate: Substrate
   /** One per RIVAL asked for, per object asked for — a renamed rival is one
    *  series under its newest name, not one per stored key. */
   series: MonthSeries[]
@@ -152,12 +158,21 @@ type StoredNumerator = NumeratorPoint & { theme_id?: string; platform_mix?: Plat
 
 const NUMERATOR_TABLE: Partial<Record<ObjectKind, string>> = {
   theme: TABLE_THEME_READINGS,
+  // M4's sibling (Phase 1 WP12). It carries the same five columns the series
+  // reads — month, audience, videos, comments, run_id — so it attaches here
+  // rather than growing a second loader beside this one. What differs is the
+  // COMPARABILITY key: a theme month is comparable with another under an equal
+  // `run_id`, a subject month under an equal `judge_version`, and a subject's
+  // rows carry no clustering fingerprint at all (lib/subjects/read.ts). That
+  // difference lives in the readers, not here.
+  subject: TABLE_SUBJECT_READINGS,
 }
 
 /** `month_theme_readings.theme_id` is the stable `theme_registry` identity, and
- *  the id column the sibling tables of M4/M5 will carry is their own. */
+ *  the id column the sibling tables of M4/M5 carry is their own. */
 const NUMERATOR_ID_COLUMN: Partial<Record<ObjectKind, string>> = {
   theme: 'theme_id',
+  subject: 'subject_id',
 }
 
 /** Every key one rival has worn, including the one asked for. A key nothing was
@@ -236,23 +251,37 @@ export async function loadMonthSeries(
   const table = objectKind ? NUMERATOR_TABLE[objectKind] : undefined
   const idColumn = objectKind ? NUMERATOR_ID_COLUMN[objectKind] : undefined
   const numerators: StoredNumerator[] = []
+  // THE NUMERATOR HAS ITS OWN SUBSTRATE, and telling it apart from silence is
+  // the point. `month_denominators` is applied and seeded on production;
+  // `month_subject_readings` is not, and will not be until W1. Without this the
+  // subject series came back as an axis of hollow months — "nothing was said"
+  // — for a table that does not exist, which is the one confusion this whole
+  // layer is built to prevent. It is the denominator read's own `isMissing`
+  // shape, narrow by name, applied one table down.
+  let numeratorSubstrate: Substrate = substrate
   if (substrate === 'seeded' && table && idColumn && objectIds && objectIds.length > 0) {
-    for (const ids of chunk(objectIds, 100)) {
-      const part = await selectAll<StoredNumerator>(() => {
-        let q = client
-          .from(table)
-          .select('*')
-          .eq('client_id', clientId)
-          .gte('month', from)
-          .lte('month', to)
-          .in(idColumn, ids)
-        if (audiences) q = q.in('audience', audiences)
-        return q
-          .order('month', { ascending: true })
-          .order('audience', { ascending: true })
-          .order(idColumn, { ascending: true })
-      })
-      numerators.push(...part)
+    try {
+      for (const ids of chunk(objectIds, 100)) {
+        const part = await selectAll<StoredNumerator>(() => {
+          let q = client
+            .from(table)
+            .select('*')
+            .eq('client_id', clientId)
+            .gte('month', from)
+            .lte('month', to)
+            .in(idColumn, ids)
+          if (audiences) q = q.in('audience', audiences)
+          return q
+            .order('month', { ascending: true })
+            .order('audience', { ascending: true })
+            .order(idColumn, { ascending: true })
+        })
+        numerators.push(...part)
+      }
+    } catch (error) {
+      if (!isMissingMonthTable(error) && !isMissingSubjects(error)) throw error
+      numeratorSubstrate = 'missing'
+      numerators.length = 0
     }
   }
 
@@ -313,7 +342,10 @@ export async function loadMonthSeries(
           readings: numeratorById.get(objectId) ?? [],
           changes: seriesChanges,
           renames,
-          substrate,
+          // The OBJECT's substrate, not the denominator's: a series whose
+          // numerator table is absent says "not recorded", never "nothing was
+          // said" (lib/reading/series.ts MonthState).
+          substrate: numeratorSubstrate,
           changeLogFrom,
           updatesByMonth: updates.byMonth,
           firstRunMonth: updates.firstRunMonth,
@@ -324,7 +356,7 @@ export async function loadMonthSeries(
     }
   }
 
-  return { substrate, series, denominators, renames, notes: mergeSeriesNotes(series), changeLogFrom }
+  return { substrate, numeratorSubstrate, series, denominators, renames, notes: mergeSeriesNotes(series), changeLogFrom }
 }
 
 /** The runs that DELIVERED something, per month, and the month of the first one
@@ -407,6 +439,26 @@ async function loadLabels(
   ids: readonly string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>()
+  // A SUBJECT'S LABEL IS ITS NAME, and the name is the client's own words
+  // rather than a clustering artefact — which is the difference the two
+  // branches are about, not the table they read.
+  if (objectKind === 'subject') {
+    for (const part of chunk([...ids], 100)) {
+      const { data, error } = await client
+        .from(TABLE_SUBJECTS)
+        .select('id, name')
+        .eq('client_id', clientId)
+        .in('id', part)
+      if (error) {
+        if (isMissingSubjects(error)) return out
+        throw new Error(`subjects labels: ${error.message}`)
+      }
+      for (const row of (data ?? []) as { id: string; name: string | null }[]) {
+        if (row.name) out.set(row.id, row.name)
+      }
+    }
+    return out
+  }
   if (objectKind !== 'theme') return out
   for (const part of chunk([...ids], 100)) {
     const { data, error } = await client

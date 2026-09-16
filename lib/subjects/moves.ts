@@ -5,6 +5,7 @@ import {
   MOVE_DIRECTIONS,
   MOVE_KINDS,
   MOVE_MAX_THEMES,
+  MOVE_STATUSES,
   SUBJECTS_MAX,
   SUBJECTS_MIN,
   TABLE_MOVES,
@@ -13,6 +14,7 @@ import {
   type Move,
   type MoveDirection,
   type MoveKind,
+  type MoveStatus,
   type SubjectOrigin,
   type SubjectStatus,
 } from './types'
@@ -32,10 +34,16 @@ import {
 // `initiatives` is legacy from here: read by the old Dashboard tile, written by
 // nothing new, dropped in Phase 3.
 //
-// APPEND-ONLY FOR MEMBERS, and that is the plan's word. There is no UPDATE
-// grant on `moves` at all, so `status` is a service-role write today. A page
-// that needs a client to mark a move done is a column grant and a conversation,
-// not a quiet write — and it is one additive line when somebody wants it.
+// APPEND-ONLY FOR MEMBERS, EXCEPT THE ONE COLUMN THAT MEANS "CHANGE" (WP12).
+// `kind`, the target, `title` and `declared_at` carry no UPDATE grant: they are
+// what every point already reported means, and moving one would quietly change
+// what a frozen month was about. `status` is the exception, and the reason it
+// had to become one is SU2: a client who declares a move and finishes it has to
+// be able to say so, or OV5 lists it as active for ever while the person who
+// filed it watches. Marking a move done or dropped measures nothing differently
+// — no month is re-opened and nothing is deleted, a dropped move keeps its line
+// — so the grant is `update (status, updated_at)` and the policy pins the
+// tenant on both sides (20260918093000, amended in WP12; Heinrich accepted).
 //
 // A SUBJECT IS PROPOSED BEFORE IT IS COUNTED. `subjects.status` defaults to
 // 'proposed' and the judge, the month reading and the freeze all read only
@@ -409,6 +417,73 @@ export async function activateSubject(
   // browser can send directly, so a log written only on this path was a log
   // with a hole in it. One row per change, wherever the change came from.
   return { ok: true, message: 'Confirmed. It starts being counted from the next update.', value: null }
+}
+
+/**
+ * Mark a move done, dropped, or active again.
+ *
+ * THE ONLY THING ABOUT A MOVE A BROWSER MAY CHANGE, and the column grant is
+ * what makes that true rather than this function: `update (status, updated_at)
+ * on public.moves to authenticated` means a crafted PATCH at `title` or
+ * `subject_id` is refused by the database before any policy runs. So this adds
+ * a sentence a person can read and an actor on the log, not a boundary.
+ *
+ * NOT PINNED TO `declared_by`. A move is the WORKSPACE's declaration — a
+ * colleague finishing a teammate's move is the normal case, not an
+ * impersonation — and who filed it stays on the row either way. That is the
+ * difference from `rec_decisions`, where the row IS "this person decided".
+ *
+ * The write is on the SESSION client, so RLS pins the tenant; the log goes
+ * through the admin client, because `config_changes` has no insert policy and a
+ * log a tenant can append to is not a log.
+ */
+export async function setMoveStatus(
+  ctx: WriteContext,
+  admin: AdminClient,
+  input: { id: string; status: MoveStatus },
+): Promise<WriteResult<null>> {
+  if (!MOVE_STATUSES.includes(input.status)) return { ok: false, message: 'Say whether it is done, dropped, or still running.' }
+
+  const { data: before, error: readError } = await ctx.supabase
+    .from(TABLE_MOVES).select('id, title, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
+  if (readError) {
+    return { ok: false, message: isMissingSubjects(readError) ? 'Tracking is not switched on for this workspace yet.' : couldNotSave('setMoveStatus read', readError) }
+  }
+  const held = before as { title: string; status: MoveStatus } | null
+  if (!held) return { ok: false, message: 'That move is no longer here.' }
+  if (held.status === input.status) return { ok: true, message: MOVE_STATUS_SAID[input.status], value: null }
+
+  // `select('id')` so a row the policy filtered out comes back as zero rows
+  // rather than as a success — RLS filters an UPDATE, it does not error, and a
+  // client told "saved" about a row that was never touched is the failure this
+  // whole layer is built to avoid.
+  const { data, error } = await ctx.supabase
+    .from(TABLE_MOVES)
+    .update({ status: input.status, updated_at: new Date().toISOString() })
+    .eq('id', input.id)
+    .eq('client_id', ctx.clientId)
+    .select('id')
+  if (error) return { ok: false, message: couldNotSave('setMoveStatus update', error) }
+  if ((data ?? []).length === 0) return { ok: false, message: 'That move is no longer here.' }
+
+  await recordConfigChange(admin, {
+    clientId: ctx.clientId,
+    surface: 'subjects',
+    field: 'moves',
+    before: { id: input.id, status: held.status },
+    after: { id: input.id, status: input.status, title: held.title },
+    actor: actorFor(ctx, `marked a move ${input.status}`),
+  })
+  return { ok: true, message: MOVE_STATUS_SAID[input.status], value: null }
+}
+
+/** What each lifecycle move is called back in the client's own words. Here
+ *  rather than in the component so the page, the Settings list and a test all
+ *  read one string. */
+export const MOVE_STATUS_SAID: Record<MoveStatus, string> = {
+  active: 'Running again. We report what the conversation does from here.',
+  done: 'Marked done. Its line is kept.',
+  dropped: 'Marked dropped. Its line is kept.',
 }
 
 /** Retire a subject. Never a delete: the months it already carries are the

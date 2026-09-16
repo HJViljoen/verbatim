@@ -37,7 +37,7 @@
 --   3. subject_band()          — the pairs a membership run must act on
 --   4. month_subject_readings  — the record, same freeze contract as themes
 --   5. monthly_subject_readings() / window_subject_readings()
---   6. moves                   — "Track this", append-only for members
+--   6. moves                   — "Track this"; append-only but for `status`
 --
 -- Applied by hand in window W1, with no run in flight, and AFTER
 -- 20260918092000_reading_windows.sql (M3) — not merely after it in filename
@@ -929,7 +929,9 @@ create table if not exists public.moves (
 );
 
 comment on table public.moves is
-  'What a client declared it is trying to change, from "Track this" on a subject or a theme, or from accepting a piece of advice. Append-only for members: the target and the date are what every point already reported means, and there is no UPDATE grant at all, so a lifecycle change is a service-role write until a page needs one (then it is a column grant and a conversation, not a quiet write).';
+  'What a client declared it is trying to change, from "Track this" on a subject or a theme, or from accepting a piece of advice. The target, the title and the date are append-only for members — they are what every point already reported means — and the one thing a member may change is `status`, so a move can be marked done or dropped from the page that declared it.';
+comment on column public.moves.status is
+  'active | done | dropped. The only column a member may UPDATE (20260918093000, amended in WP12 for SU2''s Track this). Moving a move through its lifecycle does not change what was measured: the target and declared_at are unchanged, so every point already reported still means what it meant. Nothing re-opens a frozen month and nothing is deleted — a dropped move keeps its line.';
 comment on column public.moves.declared_at is
   'The date the client drew the line, as the database''s current_date — never a form value. Everything measured about this move is measured from here.';
 comment on column public.moves.subject_id is
@@ -1005,12 +1007,38 @@ create policy "Members declare their own moves" on public.moves
   for insert to authenticated
   with check (client_id = public.get_my_client_id() and declared_by = (select auth.uid()));
 
--- No update policy and no delete policy: append-only is enforced by their
--- absence and by the grants below.
+-- THE LIFECYCLE IS THE ONE THING A MEMBER MAY CHANGE (WP12, Heinrich accepted).
+--
+-- This table shipped with no UPDATE grant at all, on the reading that
+-- append-only was the safe default. It is the wrong default for the one column
+-- whose whole meaning is that it changes: a client who declared a move and
+-- finished it had no way to say so, and OV5 would have listed it as active for
+-- ever while the person who filed it watched. Marking a move done or dropped
+-- does not touch what was measured — `kind`, the target, `title` and
+-- `declared_at` stay append-only, so every point already reported still means
+-- exactly what it meant, and no month is re-opened by any of this.
+--
+-- The policy pins the tenant on BOTH sides (`using` and `with check`), so a
+-- member can neither read a foreign row into an update nor push one out of the
+-- tenant, and the column grant is what actually narrows the statement: even
+-- with the policy, `update moves set title = …` is refused by the grant before
+-- any policy runs. `declared_by` is deliberately NOT re-asserted — a move is
+-- the WORKSPACE's declaration, and a colleague finishing a teammate's move is
+-- the normal case; who filed it stays on the row either way.
+--
+-- No delete policy and no delete grant: a declaration a client made about its
+-- own work is never erased, only marked.
+drop policy if exists "Members move their moves along" on public.moves;
+create policy "Members move their moves along" on public.moves
+  for update to authenticated
+  using (client_id = public.get_my_client_id())
+  with check (client_id = public.get_my_client_id());
+
 revoke all on public.moves from authenticated, anon;
 grant select on public.moves to authenticated;
 grant insert (client_id, kind, subject_id, registry_ids, lineage_id, title, note, direction, declared_by)
   on public.moves to authenticated;
+grant update (status, updated_at) on public.moves to authenticated;
 grant select, insert, update on public.moves to service_role;
 -- Deleting a declaration would erase the client's own words about what it was
 -- trying to do, and TRUNCATE is the same act one statement at a time.
@@ -1024,7 +1052,9 @@ revoke delete, truncate on public.moves from service_role;
 --   select proname, prosecdef from pg_proc
 --     where proname in ('subject_band','monthly_subject_readings','window_subject_readings');
 --   select has_function_privilege('authenticated', 'public.monthly_subject_readings(uuid,timestamptz,timestamptz)', 'execute'); -- false
---   select has_table_privilege('authenticated', 'public.moves', 'update');              -- false
+--   select has_column_privilege('authenticated', 'public.moves', 'status', 'update');  -- true
+--   select has_column_privilege('authenticated', 'public.moves', 'title', 'update');   -- false
+--   select has_column_privilege('authenticated', 'public.moves', 'subject_id','update');-- false
 --   select has_table_privilege('authenticated', 'public.moves', 'delete');              -- false
 --   select has_column_privilege('authenticated', 'public.subjects', 'name', 'update');  -- false
 --   select confdeltype from pg_constraint where conrelid = 'public.month_subject_readings'::regclass

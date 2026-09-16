@@ -13,10 +13,8 @@ import type { Quote, Scope } from '../renderables/types'
 import {
   CLIENT_AUDIENCE,
   INDUSTRY_AUDIENCE,
-  isMissingCompetitors,
-  loadCompetitors,
+  loadTrackedRivals,
   rivalKey,
-  type Competitor,
 } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import {
@@ -33,7 +31,7 @@ import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonth
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -45,7 +43,7 @@ import {
 import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
-import { isMissingSubjects, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -426,12 +424,7 @@ export function daysInto(month: string, now: string): number | null {
  * The month it is, then, which the stored rows answer exactly on every horizon,
  * and which is the month every other number on the page is about.
  */
-export function recordWindow(month: string, readingAt: string): RecordWindow {
-  const start = monthStartOf(month)
-  const lastDay = new Date(Date.parse(`${nextMonth(start)}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10)
-  const at = readingAt.slice(0, 10)
-  return { kind: 'month', from: start, to: at < lastDay ? at : lastDay }
-}
+export const recordWindow = monthRecordWindow
 
 /** The median of the numbers that exist — a month with no row is not a zero. */
 export function medianOf(values: readonly (number | null | undefined)[]): number | null {
@@ -720,8 +713,10 @@ export const MOVES_EMPTY =
 export const MOVES_UNLOCK =
   'Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.'
 
-/** The masthead OV5 and Market both carry, code-written. */
-export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
+/** The masthead OV5 and Market both carry, code-written — and the same
+ *  sentence Track this carries where a move is DECLARED, so it is stated once,
+ *  beside the move's own shapes. */
+export const MOVES_MASTHEAD = MOVE_PROMISE
 
 /**
  * What OV4 says under "on their own posts" until M8.
@@ -812,25 +807,6 @@ interface AnomalyFlagRow {
   quote_refs: string[] | null
 }
 
-/** The tenant's rivals, from `competitors` where M1 has landed and from the
- *  tracked list where it has not. One shape either way, so nothing downstream
- *  has to know which of the two answered. */
-async function loadRivals(
-  supabase: SupabaseClient,
-  clientId: string,
-): Promise<{ name: string; retiredAt: string | null }[]> {
-  let stored: Competitor[] = []
-  try {
-    stored = await loadCompetitors(supabase, clientId)
-  } catch (error) {
-    if (!isMissingCompetitors(error)) throw error
-  }
-  if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
-  const res = await supabase.from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
-  const tc = row<{ competitor_names: string[] | null }>(res, 'overview.rivals')
-  return (tc?.competitor_names ?? []).map((name) => ({ name, retiredAt: null }))
-}
-
 /** A stored month table, read straight (not recomputed). Null — never [] —
  *  when the migration that creates it has not been applied here. */
 async function readStoredMonths<T>(
@@ -918,7 +894,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
         .order('started_at', { ascending: true }),
     ),
     fetchRunningRunIds(supabase, clientId, 'overview'),
-    loadRivals(supabase, clientId),
+    loadTrackedRivals(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'

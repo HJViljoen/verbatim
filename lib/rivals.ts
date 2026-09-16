@@ -232,6 +232,42 @@ export function findRival(rivals: readonly Competitor[], nameOrAudience: string 
   return hits.find((r) => !r.retired_at) ?? hits[0] ?? null
 }
 
+/** A rival as a reading surface needs it: the name to print and whether it is
+ *  still tracked. One shape whichever of the two sources answered. */
+export interface TrackedRival {
+  name: string
+  retiredAt: string | null
+}
+
+/**
+ * The tenant's rivals — from `competitors` where M1 has landed, and from the
+ * tracked list where it has not.
+ *
+ * ONE SHAPE EITHER WAY, so nothing downstream has to know which source
+ * answered. `tracking_configs.competitor_names` is a text array with no dates
+ * and no retirement, so the fallback's `retiredAt` is null for every row —
+ * which is honest: before M1 there is no record that a rival was ever stopped,
+ * and three of Sealand's were erased on 9 September with none.
+ *
+ * Lives here rather than on a page because two surfaces already need it
+ * (Overview OV4 and Subjects SU2) and a third is coming; the copy that was in
+ * lib/pages/overview.ts is this function.
+ */
+export async function loadTrackedRivals(client: SupabaseClient, clientId: string): Promise<TrackedRival[]> {
+  let stored: Competitor[] = []
+  try {
+    stored = await loadCompetitors(client, clientId)
+  } catch (error) {
+    if (!isMissingCompetitors(error)) throw error
+  }
+  if (stored.length > 0) return stored.map((r) => ({ name: r.name, retiredAt: r.retired_at }))
+  const { data, error } = await client
+    .from('tracking_configs').select('competitor_names').eq('client_id', clientId).maybeSingle()
+  if (error) throw new Error(`tracking_configs rivals: ${error.message}`)
+  const names = (data as { competitor_names?: string[] | null } | null)?.competitor_names ?? []
+  return names.map((name) => ({ name, retiredAt: null }))
+}
+
 // ---- Creating, renaming and retiring ----------------------------------------
 
 /** What a write to a rival's identity needs: the admin client, the tenant, and

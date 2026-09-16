@@ -1,0 +1,282 @@
+'use client'
+
+import Link from 'next/link'
+import { useActionState, useState, useTransition } from 'react'
+
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import {
+  confirmSubjectAction,
+  EMPTY_STATE,
+  nameSubjectAction,
+  retireSubjectAction,
+  type SubjectFormState,
+} from '@/lib/actions/subjects'
+import { fmtInt, fmtPct, fullDate } from '@/lib/format'
+import { SUPERSEDE_RULE } from '@/lib/pages/subjects'
+import { SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
+
+/**
+ * The subjects editor (design §3 SU1, and §4's "the same editor as SU1").
+ *
+ * ONE COMPONENT, TWO ADDRESSES. The Subjects page draws it as the left rail and
+ * Settings › Subjects (WP16) imports it as a section; the design says in as
+ * many words that they are the same editor, and the reason is that they carry
+ * the same dangerous sentence — renaming or adding a subject starts a NEW line
+ * and keeps the old one. Two copies of this form would be two chances to word
+ * that rule differently, and the rule is the whole identity model.
+ *
+ * WHAT THE FORM CANNOT DO IS WHAT MAKES IT HONEST. There is no "edit" control
+ * on a name or a description, because the database grants no UPDATE on either:
+ * both are read by the judge and both feed the phrase vector, so editing one in
+ * place would re-decide membership under an unchanged judge version and quietly
+ * change what every frozen month was about. Renaming is therefore a NEW subject
+ * that supersedes the old one, and the form says so before it is used rather
+ * than after.
+ *
+ * AND NAMING IS HALF THE ACT. A named subject is `proposed` and nothing counts
+ * it; confirming is the write that starts the counting (decision E). The rail
+ * shows the difference rather than hiding it, because a client who names six
+ * subjects and sees no numbers for a fortnight deserves to know which of the
+ * two things happened.
+ */
+
+export interface SubjectEditorRow {
+  id: string
+  name: string
+  description: string | null
+  namedAt: string
+  status: 'proposed' | 'active' | 'retired'
+  /** Where it came from, in the client's words. */
+  because: string
+  /** Your own level this month, where there is one to show. */
+  level?: { pct: number | null; k: number; n: number } | null
+  /** Why no level is shown. */
+  note?: string | null
+  selected?: boolean
+  href?: string
+}
+
+export interface SubjectEditorProps {
+  rows: readonly SubjectEditorRow[]
+  /** The line above the list — "6 named", or why nothing is counted. */
+  setLine: string
+  /** Said instead of the list where M4 is not applied here. */
+  notRecorded?: string | null
+  /** Settings shows the description and the origin under each row; the page's
+   *  rail is a rail and shows the name, the date and the level. */
+  variant?: 'rail' | 'settings'
+}
+
+const cls = {
+  row: 'flex flex-col gap-0.5 rounded-[4px] px-2.5 py-2 text-left transition-colors',
+  name: 'text-[12.5px] font-medium text-foreground',
+  meta: 'font-mono text-[10.5px] text-muted-foreground',
+}
+
+export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail' }: SubjectEditorProps) {
+  const [adding, setAdding] = useState(false)
+  const [renaming, setRenaming] = useState<SubjectEditorRow | null>(null)
+  const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)
+  const [pending, start] = useTransition()
+
+  const live = rows.filter((r) => r.status !== 'retired')
+  const atCeiling = live.filter((r) => r.status === 'active').length >= SUBJECTS_MAX
+
+  const run = (fn: () => Promise<SubjectFormState>) => {
+    start(async () => {
+      const result = await fn()
+      setSaid({ ok: result.ok, message: result.message })
+    })
+  }
+
+  if (notRecorded) {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="m-0 text-[12px] text-muted-foreground">{notRecorded}</p>
+        <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-h-0 flex-col gap-2">
+      <p className="m-0 font-mono text-[11px] text-muted-foreground">{setLine}</p>
+
+      <ul className="m-0 flex list-none flex-col gap-0.5 p-0">
+        {rows.map((r) => (
+          <li key={r.id}>
+            <div className={`${cls.row} ${r.selected ? 'bg-inner' : 'hover:bg-inner/60'}`}>
+              <span className="flex items-baseline justify-between gap-2">
+                {r.href ? (
+                  <Link href={r.href} className={`${cls.name} underline-offset-2 hover:underline`}>{r.name}</Link>
+                ) : (
+                  <span className={cls.name}>{r.name}</span>
+                )}
+                {r.level && r.level.pct != null ? (
+                  <span data-copy="figure" className="font-mono text-[12px] tabular-nums text-foreground">
+                    {fmtPct(r.level.pct)}
+                  </span>
+                ) : null}
+              </span>
+
+              {r.level && r.level.pct != null ? (
+                <span data-copy="level" className={cls.meta}>
+                  of your videos · {fmtInt(r.level.k)} of {fmtInt(r.level.n)} videos
+                </span>
+              ) : (
+                // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
+                // counted: the chip on the line below already says that, and
+                // the same sentence twice on one row reads as a rendering bug.
+                // What the client actually has to decide is whether to keep it,
+                // and the origin is the argument for keeping it.
+                <span className={cls.meta}>{r.status === 'proposed' ? r.because : r.note ?? 'no reading yet'}</span>
+              )}
+
+              {variant === 'settings' && r.status !== 'proposed' && r.description ? (
+                <span className="text-[11.5px] text-muted-foreground">{r.description}</span>
+              ) : null}
+
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
+                <span className="font-mono">named {fullDate(r.namedAt)}</span>
+                {variant === 'settings' ? <span>· {r.because}</span> : null}
+                {r.status === 'proposed' ? (
+                  <>
+                    <span className="rounded-full bg-inner px-1.5 py-px font-medium text-secondary-foreground">
+                      not counted yet
+                    </span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => run(() => confirmSubjectAction(r.id))}
+                      className="font-sans font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                    >
+                      Confirm
+                    </button>
+                  </>
+                ) : null}
+                <span aria-hidden>·</span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => setRenaming(r)}
+                  className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                >
+                  Rename
+                </button>
+                <span aria-hidden>·</span>
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => run(() => retireSubjectAction(r.id))}
+                  className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                >
+                  Stop
+                </button>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
+
+      {said?.message ? (
+        <p className={`m-0 text-[11.5px] ${said.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">
+          {said.message}
+        </p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => setAdding(true)}
+        disabled={atCeiling}
+        title={atCeiling ? `You are already tracking ${SUBJECTS_MAX}. Stop one before you add another.` : undefined}
+        className="self-start rounded-[3px] text-[12.5px] font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+      >
+        Add a subject →
+      </button>
+
+      <SubjectSheet
+        open={adding}
+        onOpenChange={setAdding}
+        title="Add a subject"
+        description={`Name it the way a buyer would say it. ${SUPERSEDE_RULE} Between ${SUBJECTS_MIN} and ${SUBJECTS_MAX} subjects is the set this reads well at.`}
+      />
+      <SubjectSheet
+        open={renaming != null}
+        onOpenChange={(v) => setRenaming(v ? renaming : null)}
+        title={renaming ? `Rename “${renaming.name}”` : 'Rename'}
+        description={`${SUPERSEDE_RULE} The old one stops being counted from today and everything already reported about it stays exactly as it was.`}
+        supersedes={renaming?.id}
+        defaultName={renaming?.name}
+        defaultDescription={renaming?.description ?? undefined}
+      />
+    </div>
+  )
+}
+
+function SubjectSheet({
+  open, onOpenChange, title, description, supersedes, defaultName, defaultDescription,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  description: string
+  supersedes?: string
+  defaultName?: string
+  defaultDescription?: string
+}) {
+  const [state, action, pending] = useActionState(nameSubjectAction, EMPTY_STATE)
+
+  // Close on a save that worked; a failed one stays open with its reason.
+  // Keyed on the id written, not on `state.ok` — `ok` latches true after the
+  // first save and a second subject named from the same sheet would leave it
+  // open with the first one's message still showing (the initiative-sheet
+  // precedent, and the same bug).
+  const [lastSaved, setLastSaved] = useState<string | undefined>(undefined)
+  if (state.ok && state.id && state.id !== lastSaved) {
+    setLastSaved(state.id)
+    if (open) onOpenChange(false)
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full gap-0 bg-tile p-0 data-[side=right]:sm:max-w-[26rem]">
+        <SheetHeader className="border-b border-border/70 px-5 py-4 pr-12">
+          <SheetTitle className="text-[15px] font-semibold">{title}</SheetTitle>
+          <SheetDescription className="text-[12px]">{description}</SheetDescription>
+        </SheetHeader>
+        <form action={action} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {supersedes ? <input type="hidden" name="supersedes" value={supersedes} /> : null}
+          <input type="hidden" name="origin" value="client" />
+          <fieldset disabled={pending} className="space-y-4">
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">The subject</span>
+              <Input name="name" defaultValue={defaultName} maxLength={60} required autoComplete="off" />
+              <span className="block text-[11px] text-muted-foreground/70">
+                A noun phrase a buyer would say out loud — “durability”, not “product longevity perception”.
+              </span>
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-xs font-medium text-muted-foreground">What you mean by it (optional)</span>
+              <Input name="description" defaultValue={defaultDescription} maxLength={400} autoComplete="off" />
+              <span className="block text-[11px] text-muted-foreground/70">
+                We read this when we decide what counts. Changing it later starts a new line too.
+              </span>
+            </label>
+            <div className="flex items-center gap-3 pt-1">
+              <Button type="submit" size="sm" disabled={pending}>{pending ? 'Saving…' : 'Add it'}</Button>
+              {state.message && !(state.ok && state.id === lastSaved) ? (
+                <span className={`text-[11.5px] ${state.ok ? 'text-positive' : 'text-negative'}`} aria-live="polite">
+                  {state.message}
+                </span>
+              ) : null}
+            </div>
+          </fieldset>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}

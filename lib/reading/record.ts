@@ -5,7 +5,7 @@ import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct } from '../format'
 import { selectAll } from '../supabase-admin'
 
-import { isMissingMonthlyReading, monthStartOf } from './monthly'
+import { isMissingMonthlyReading, monthStartOf, nextMonth } from './monthly'
 import { loadWindowReading } from './read'
 import { TABLE_DENOMINATORS, type PlatformMix } from './types'
 import { isAnswer, type RefusedReason, type Verdict, type VerdictState } from './verdicts'
@@ -45,6 +45,27 @@ export interface RecordWindow {
   from: string
   /** `YYYY-MM-DD`, inclusive. */
   to: string
+}
+
+/**
+ * The record window for ONE month, as every page composes it.
+ *
+ * `to` is INCLUSIVE and is the month's last day, or today while the month is
+ * still filling. Not the first of the next month: `loadRecordInputs` compares
+ * `monthStartOf(from)` with `monthStartOf(to)` and refuses a window that
+ * straddles two months, and `loadFrozenAt` does `.lte('month',
+ * monthStartOf(w.to))`, which would pull the NEXT month's denominator row into
+ * this month's record.
+ *
+ * It lives here, beside the type whose contract it keeps, because two pages
+ * had written it and one of them had written it differently — with a test
+ * pinning the off-by-one month as correct.
+ */
+export function monthRecordWindow(month: string, readingAt: string): RecordWindow {
+  const start = monthStartOf(month)
+  const lastDay = new Date(Date.parse(`${nextMonth(start)}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10)
+  const at = readingAt.slice(0, 10)
+  return { kind: 'month', from: start, to: at < lastDay ? at : lastDay }
 }
 
 /** What was delivered, on the run clock. Never a period key for anything else
