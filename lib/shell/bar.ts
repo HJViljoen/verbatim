@@ -27,6 +27,17 @@ export interface ContextLineInput {
   status: MonthStatus
   /** The instant the reading was taken. */
   readingAt: string
+  /**
+   * What the last artefact about this month read, where it has moved since
+   * (Phase 1 WP18, item 13) — "the report of 1 Oct read 1,388 videos".
+   *
+   * COMPOSED BY THE PAGE, NOT HERE. It is a quotation from a dated document,
+   * and the rule for when it may be printed at all (a still-filling month, a
+   * figure that actually moved, an artefact that went out before the month
+   * closed) lives with the record in lib/reports/monthly.ts. The bar's job is
+   * to put it where a reader meets the reading date.
+   */
+  sent?: string | null
 }
 
 /** "Össur · Sep 2026 · still filling · reading as at 15 Sep 2026" */
@@ -36,6 +47,7 @@ export function contextLine(input: ContextLineInput): string {
   // saying so on every past month would be noise on every page.
   if (input.status === 'filling') parts.push('still filling')
   parts.push(`reading as at ${fullDate(input.readingAt)}`)
+  if (input.sent) parts.push(input.sent)
   return parts.join(' · ')
 }
 

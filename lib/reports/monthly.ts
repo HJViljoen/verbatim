@@ -269,13 +269,22 @@ export function movedSince(sent: SentReading, live: number): boolean {
   return Math.abs(round1(live) - round1(sent.value)) >= MOVED_SINCE_PTS
 }
 
-/** The line itself. Null where the figure has not moved, so a caller writes no
- *  `?? null` and a surface prints nothing rather than an empty span. */
+/**
+ * The line itself. Null where the figure has not moved, so a caller writes no
+ * `?? null` and a surface prints nothing rather than an empty span.
+ *
+ * THE RECORDED VALUE, NOT A RECOMPUTATION OF IT. The record keeps the share AND
+ * both sides, and the two are written together — but "the report of {date} read
+ * X" is a quotation, and re-deriving X from k and n would print a number the
+ * artefact never showed the day a rounding rule changes. So the value is printed
+ * as it was stored and the counts are printed beside it as the evidence they
+ * are, which is also what rule (b) asks of any level.
+ */
 export function sentReadingLine(sent: SentReading, live: number): string | null {
   if (!movedSince(sent, live)) return null
   const value = sent.unit === 'pct'
     ? sent.k != null && sent.n != null && sent.n > 0
-      ? levelLine(sent.k, sent.n)
+      ? `${fmtPct(sent.value)} · ${fmtInt(sent.k)} of ${fmtInt(sent.n)}`
       : fmtPct(sent.value)
     : `${fmtInt(sent.value)} ${sent.unit}`
   return `the report of ${shortDate(sent.readingAt)} read ${value}`

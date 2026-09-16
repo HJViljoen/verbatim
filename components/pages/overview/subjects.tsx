@@ -9,7 +9,8 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import type { Direction } from '@/lib/reading/bands'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { candidateLine, monthlyLineLabel } from '@/lib/pages/overview'
+import { candidateLine, monthlyLineLabel, sentLineFor } from '@/lib/pages/overview'
+import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 
 // OV2 · Your subjects — the hero (design §3 OV2).
 //
@@ -57,6 +58,23 @@ function Side({ side, mode = 'app' }: { side: SideReading | null; mode?: RenderM
     : <span className="font-mono text-[12px] tabular-nums">{body}</span>
 }
 
+/**
+ * "the report of 1 Oct read 19% · 264 of 1,388", or nothing at all (Phase 1
+ * WP18, item 13).
+ *
+ * BESIDE THE LIVE FIGURE, NOT INSTEAD OF IT, and only where a still-filling
+ * month has actually moved since the artefact went out. It is NOT a figure and
+ * carries no `data-copy` mark of its own: it is the same reading, quoted from a
+ * dated document, the way `AtLastMonth` above is a level beside a level. The
+ * date is what makes it readable.
+ */
+function SentLine({ line, mode = 'app' }: { line: string | null; mode?: RenderMode }): ReactNode {
+  if (!line) return null
+  return mode === 'email'
+    ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.faint }}>{line}</div>
+    : <span className="block text-[11px] text-muted-foreground">{line}</span>
+}
+
 /** "at this point last month: 20.5% (264 of 1,290)", or nothing at all. */
 function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth']; mode?: RenderMode }): ReactNode {
   if (!at || at.pct == null) return null
@@ -66,7 +84,7 @@ function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth
     : <span className="block text-[11px] text-muted-foreground">{body}</span>
 }
 
-function Row({ row, mode, appUrl = '' }: { row: SubjectRow; mode: RenderMode; appUrl?: string }) {
+function Row({ row, mode, appUrl = '', sentLine = null }: { row: SubjectRow; mode: RenderMode; appUrl?: string; sentLine?: string | null }) {
   return (
     <tr>
       <td className="py-1.5 pr-3 align-top text-[12.5px] font-medium">
@@ -87,6 +105,7 @@ function Row({ row, mode, appUrl = '' }: { row: SubjectRow; mode: RenderMode; ap
             Time). It is a LEVEL beside a level, not a change: no band is drawn
             over a part-month against a part-month. */}
         <AtLastMonth at={row.categoryAtLastMonth} mode={mode} />
+        <SentLine line={sentLine} mode={mode} />
       </td>
       <td className="py-1.5 pr-3 align-top"><BlockMovement verdict={row.you.verdict} unit="pts" mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top">
@@ -163,6 +182,7 @@ export const overviewSubjects: Block<OverviewData> = {
                 you <Side side={r.you} mode={mode} /> · {s.rivalLabel ?? 'rival'} <Side side={r.rival} mode={mode} /> · {s.categoryLabel.toLowerCase()} <Side side={r.category} mode={mode} />
               </div>
               <AtLastMonth at={r.categoryAtLastMonth} mode={mode} />
+              <SentLine line={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} mode={mode} />
               <div style={{ marginTop: 2 }}>
                 <BlockMovement verdict={r.category.verdict} unit="pts" mode={mode} /> <DirectionWord direction={r.direction} mode={mode} />
               </div>
@@ -189,7 +209,7 @@ export const overviewSubjects: Block<OverviewData> = {
               </tr>
             </thead>
             <tbody className="align-top">
-              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} />)}
+              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} sentLine={sentLineFor(data.sent, INDUSTRY_AUDIENCE, 'subject', r.id, r.category.pct)} />)}
             </tbody>
           </table>
         </div>

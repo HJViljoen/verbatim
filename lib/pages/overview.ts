@@ -5,6 +5,8 @@ import { topRecommendation } from '../dashboard-tiles'
 import { fmtInt, longMonth, monthName, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
+import { loadSentFigures, objectKey, sentMonthOf, type SentMonth } from '../reports/sent-figures'
+import { sentReadingLine } from '../reports/monthly'
 import { proseFigures } from '../prose/figures'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -381,6 +383,21 @@ export interface OverviewData {
   rivals: RivalsBlock
   moves: MovesBlock
   record: RecordBlock
+  /**
+   * WHAT WE LAST TOLD THIS CLIENT ABOUT THIS MONTH (Phase 1 WP18, item 13).
+   *
+   * A month keeps filling for thirty days after it ends, so the figure in the
+   * report of the 1st and the figure on this page on the 20th are different
+   * numbers about the same month, both correct — and until now the page showed
+   * the second in silence. Where a still-filling month has MOVED since an
+   * artefact went out, the bar and OV2 print what that artefact read, beside the
+   * live number.
+   *
+   * Null where nothing has been sent about this month, or where M9 is not
+   * applied here — the second is the state on production until the R2 window,
+   * and neither prints anything, so the page is exactly as it is today.
+   */
+  sent: SentMonth | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -1182,6 +1199,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     freezesOn: freezesOn(month),
   }
 
+  // WHAT WE LAST SENT ABOUT THIS MONTH. Read through the reading client, which
+  // is the service role: `sent_figures` has a tenant SELECT policy, but this
+  // loader already holds the reading handle and a second client for one small
+  // read would be a second answer to "whose month is this". Null where M9 is
+  // not applied, which is every workspace until the R2 window.
+  const sent = sentMonthOf(await loadSentFigures(reading.client, { clientId, month }))
+
   return {
     brand,
     month,
@@ -1199,7 +1223,38 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     rivals: rivalsBlock,
     moves,
     record,
+    sent,
   }
+}
+
+/**
+ * "the report of 1 Oct read 19% · 264 of 1,388", for one object on this page —
+ * or null where nothing was sent about it, where the figure has not moved since,
+ * or where the month was already closed when the artefact went out.
+ *
+ * THE PAGE ASKS, THE RECORD ANSWERS. A block calls this with the audience, kind
+ * and id it is already drawing and the percentage it is about to print; there is
+ * no second lookup key and no chance of the page and the record disagreeing
+ * about which object is which.
+ */
+export function sentLineFor(
+  sent: SentMonth | null,
+  audience: string,
+  kind: string,
+  id: string,
+  live: number | null,
+): string | null {
+  if (!sent || live == null) return null
+  const reading = sent.byObject[objectKey(audience, kind, id)]
+  return reading ? sentReadingLine(reading, live) : null
+}
+
+/** The same, for one of the artefact-level tokens — the month's own size, which
+ *  is the figure the bar prints and the one a reader notices moving. */
+export function sentLineForToken(sent: SentMonth | null, token: string, live: number | null): string | null {
+  if (!sent || live == null) return null
+  const reading = sent.byToken[token]
+  return reading ? sentReadingLine(reading, live) : null
 }
 
 /** The day a month stops moving, off the reading layer's own rule rather than
