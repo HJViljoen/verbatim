@@ -11,7 +11,7 @@ import {
   trackSubjectAction,
 } from '@/lib/actions/subjects'
 import { fullDate } from '@/lib/format'
-import { MOVE_DIRECTIONS, type MoveStatus } from '@/lib/subjects/types'
+import { MOVE_DIRECTIONS, MOVE_PROMISE, type MoveStatus } from '@/lib/subjects/types'
 
 /**
  * "Track this" on a subject (design §3 SU2, the primary button).
@@ -39,10 +39,6 @@ const DIRECTION_LABEL: Record<(typeof MOVE_DIRECTIONS)[number], string> = {
   up: 'more of this conversation',
   down: 'less of this conversation',
 }
-
-/** The promise, in one sentence, wherever a move is declared or listed. */
-export const MOVE_PROMISE =
-  'We report what the conversation did after you acted. We never claim you caused it.'
 
 export function TrackThisSubject({
   subjectId, subjectName, move,

@@ -38,6 +38,19 @@ export type MoveKind = (typeof MOVE_KINDS)[number]
 export const MOVE_STATUSES = ['active', 'done', 'dropped'] as const
 export type MoveStatus = (typeof MOVE_STATUSES)[number]
 
+/**
+ * The promise the product makes about causation, said once.
+ *
+ * A move is the client drawing a line and saying what they are trying to
+ * change; from that date we report what the conversation did, and we never
+ * claim we caused it. It is the masthead OV5 prints over the moves list AND
+ * the sentence the control that CREATES one carries, so it lives beside the
+ * move's own shapes rather than in either surface — two byte-for-byte copies
+ * of a promise are two copies that can drift.
+ */
+export const MOVE_PROMISE =
+  'We report what the conversation did after you acted. We never claim you caused it.'
+
 export const MOVE_DIRECTIONS = ['up', 'down'] as const
 export type MoveDirection = (typeof MOVE_DIRECTIONS)[number]
 

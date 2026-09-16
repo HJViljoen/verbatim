@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   JUDGE_VERSION,
+  MOVE_PROMISE,
   SUBJECTS_MAX,
   SUBJECTS_MIN,
   SUBJECT_JUDGE_MODEL,
@@ -14,6 +15,14 @@ import {
   subjectCalibration,
   subjectEmbedInput,
 } from './types'
+
+describe('the promise a move carries', () => {
+  it('is one string, so the list and the control that creates one cannot drift', async () => {
+    const { MOVES_MASTHEAD } = await import('../pages/overview')
+    expect(MOVES_MASTHEAD).toBe(MOVE_PROMISE)
+    expect(MOVE_PROMISE).toContain('never claim you caused it')
+  })
+})
 
 describe('the band', () => {
   it('has a high threshold above its low one, both inside a cosine range', () => {

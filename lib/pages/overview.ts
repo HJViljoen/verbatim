@@ -43,7 +43,7 @@ import {
 import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
-import { isMissingSubjects, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
+import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'
 import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
@@ -713,8 +713,10 @@ export const MOVES_EMPTY =
 export const MOVES_UNLOCK =
   'Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.'
 
-/** The masthead OV5 and Market both carry, code-written. */
-export const MOVES_MASTHEAD = 'We report what the conversation did after you acted. We never claim you caused it.'
+/** The masthead OV5 and Market both carry, code-written — and the same
+ *  sentence Track this carries where a move is DECLARED, so it is stated once,
+ *  beside the move's own shapes. */
+export const MOVES_MASTHEAD = MOVE_PROMISE
 
 /**
  * What OV4 says under "on their own posts" until M8.
