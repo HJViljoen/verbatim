@@ -87,9 +87,23 @@ describe('MK1 · what we concluded', () => {
     expect(text).toContain('Ordered by strongest evidence first, then by how many videos are behind it')
   })
 
-  it('counts the videos behind a conclusion as a figure, outside the model’s sentence', () => {
+  it('counts the videos behind a conclusion out of the corpus it counted them over', () => {
+    // `distinctVideos` counts over the WHOLE corpus — Össur has 1,699 analysed
+    // videos — and "301 videos behind it" under a heading reading "this month",
+    // beside a Competitive surface saying September held 449, is a share of the
+    // month that does not exist. The copy contract cannot catch it: the node is
+    // a figure, and only a level must carry its "of N".
     const text = renderText(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('157 of 1,699 videos behind it')
+    expect(text).toContain('not over this month alone')
+  })
+
+  it('says the bare count when the corpus could not be read, never a made-up denominator', () => {
+    const base = marketFixture()
+    const data = { ...base, conclusions: { ...base.conclusions, corpusVideos: null } }
+    const text = renderText(marketConclusions.render(data, 'app', ctx))
     expect(text).toContain('157 videos behind it')
+    expect(text).not.toMatch(/157 of \d/)
   })
 })
 

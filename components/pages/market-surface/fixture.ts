@@ -1,6 +1,7 @@
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 import {
-  ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
+  ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, CONCLUSIONS_CORPUS_LINE,
+  MOVES_EMPTY_MK4, MOVES_UNRECORDED,
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
@@ -88,6 +89,8 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           themes: [],
         },
       ],
+      corpusVideos: 1699,
+      corpusLine: CONCLUSIONS_CORPUS_LINE,
       counts: { confirmed: 1, early: 1, archive: 1 },
       belowBar: 1,
       sortedBy: 'strongest evidence first, then by how many videos are behind it',

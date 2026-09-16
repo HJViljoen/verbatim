@@ -68,6 +68,11 @@ export const LEDGER_SHOWN = 12
  *  twenty. */
 export const CONCLUSIONS_SHOWN = 8
 
+/** What MK1's per-row video count is a count out of — said once, under the
+ *  rows, because every row's chip is a share of the same thing. */
+export const CONCLUSIONS_CORPUS_LINE =
+  'The videos behind a conclusion are counted over everything we have read for you, not over this month alone.'
+
 /** Quotes shown under a claim in MK5. */
 export const CLAIM_ROWS = 5
 
@@ -86,6 +91,11 @@ export interface ConclusionRow {
 
 export interface ConclusionsBlock {
   rows: ConclusionRow[]
+  /** Every video this workspace has analysed, ever — the denominator the video
+   *  count on each row is a count OUT OF. Null where it could not be read. */
+  corpusVideos: number | null
+  /** What that denominator is, in the reader's words. */
+  corpusLine: string
   counts: { confirmed: number; early: number; archive: number }
   /** The conclusions below the evidence bar. Labelled, never hidden. */
   belowBar: number
@@ -598,7 +608,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const month = monthStartOf(readingAt)
   const monthStatus = freezeStateFor(month, readingAt)
 
-  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels] = await Promise.all([
+  const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
     supabase.from('market_insights')
       .select('id, insight_type, title, description, evidence, confidence_score, opportunity_score')
       .eq('client_id', clientId).eq('run_id', runId)
@@ -624,6 +634,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     loadMoves(supabase, clientId),
     loadSubjects(supabase, clientId),
     loadRegistryLabels(supabase, clientId),
+    countAnalysedVideos(supabase, clientId),
   ])
 
   const insights = (insightRes.data ?? []) as InsightRow[]
@@ -669,6 +680,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
 
   const conclusions: ConclusionsBlock = {
     rows: conclusionRows.slice(0, CONCLUSIONS_SHOWN),
+    corpusVideos,
+    corpusLine: CONCLUSIONS_CORPUS_LINE,
     counts,
     belowBar: counts.archive,
     sortedBy: 'strongest evidence first, then by how many videos are behind it',
@@ -830,6 +843,34 @@ export function marketSurfaceHref(lineageId?: string | null, params: Record<stri
   if (lineageId) q.set('item', lineageId)
   const s = q.toString()
   return s ? `/dashboard/market?${s}` : '/dashboard/market'
+}
+
+/**
+ * Every video this workspace has analysed, ever.
+ *
+ * THE DENOMINATOR MK1's ROW COUNT NEEDED AND DID NOT HAVE. `distinctVideos`
+ * counts the source videos of a conclusion's cited insights over the WHOLE
+ * CORPUS — Össur has 1,699 analysed videos — and the chip printed "301 videos
+ * behind it" directly under "What we concluded this month", beside a page bar
+ * reading "September 2026 · still filling", on a product whose Competitive
+ * surface says September held 449. A client reads that as a share of the month
+ * and the share does not exist. The copy contract cannot catch it: the node is
+ * a `figure`, and only a `level` must carry its "of N".
+ *
+ * A head count, so nothing is transferred to count rows. Null on failure —
+ * "we could not read it" is not "zero", and the block says the honest one.
+ */
+async function countAnalysedVideos(supabase: SupabaseClient, clientId: string): Promise<number | null> {
+  const { count, error } = await supabase
+    .from('videos')
+    .select('id', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .not('analyzed_run_id', 'is', null)
+  if (error) {
+    console.error(`[pages] market-surface.corpusVideos: ${error.message}`)
+    return null
+  }
+  return count ?? null
 }
 
 /** The month a ledger row's first-made date falls in, in the reader's form. */

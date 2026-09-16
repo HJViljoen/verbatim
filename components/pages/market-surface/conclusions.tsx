@@ -30,11 +30,18 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 // what was adjudicated and what was not. The count beside them is code's and
 // stays `figure`.
 
-function Row({ row, mode, appUrl }: { row: ConclusionRow; mode: RenderMode; appUrl: string }) {
+function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
   const email = mode === 'email'
+  // THE DENOMINATOR IS PRINTED. `distinctVideos` counts over the WHOLE corpus
+  // (Össur: 1,699 analysed videos), and "301 videos behind it" directly under
+  // "What we concluded this month" — beside a page bar reading "September 2026"
+  // and a Competitive surface saying September held 449 — reads as a share of
+  // the month that does not exist.
   const count = (
     <span data-copy="figure" className={email ? undefined : 'font-mono text-[11.5px] tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-      {fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it
+      {corpus != null
+        ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
+        : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
     </span>
   )
   const chips = row.themes.map((t) => {
@@ -81,7 +88,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
       <BlockFrame title={marketConclusions.title} question={marketConclusions.question} mode={mode} meta={meta}>
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
-          {c.rows.map((row) => <Row key={row.id} row={row} mode={mode} appUrl={ctx.appUrl} />)}
+          {c.rows.map((row) => <Row key={row.id} row={row} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />)}
         </div>
         <p
           className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
@@ -93,7 +100,7 @@ export const marketConclusions: Block<MarketSurfaceData> = {
               ids and the monthly reading is keyed on theme_registry ids, with
               nothing joining the two. So the second key is the size of the
               evidence, and a reader is told which one they are looking at. */}
-          Ordered by {c.sortedBy}.
+          Ordered by {c.sortedBy}. {c.corpusLine}
         </p>
       </BlockFrame>
     )
