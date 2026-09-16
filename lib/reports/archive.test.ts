@@ -55,6 +55,23 @@ describe('dateFilterLine', () => {
     expect(dateFilterLine(parseDateFilter('2026-09-01', undefined), 1, 47)).toBe('1 of 47 items from 1 Sep 2026.')
     expect(dateFilterLine(parseDateFilter(undefined, '2026-09-30'), 3, 47)).toBe('3 of 47 items up to 30 Sep 2026.')
   })
+
+  it('says the list was capped where the cap actually hides something', () => {
+    // 340 built, the newest 100 loaded, a filter reaching back past them: the
+    // head alone reads as "this workspace has none in that span", which is a
+    // claim about the archive rather than about what was looked at.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, 100))
+      .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
+  })
+
+  it('adds no caveat where nothing is behind the cap', () => {
+    // A list sitting on its cap with the total AT the cap is a complete list.
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 100, 100))
+      .toBe('12 of 100 items 1 Sep 2026 to 30 Sep 2026.')
+    // An uncapped group is unchanged, passed or omitted.
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47, null))
+      .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
+  })
 })
 
 describe('readingStampOf', () => {

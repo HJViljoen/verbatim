@@ -50,15 +50,36 @@ export function withinDates(iso: string | null | undefined, filter: DateFilter):
   return true
 }
 
-/** The line under the filter, in the reader's words. */
-export function dateFilterLine(filter: DateFilter, shown: number, total: number): string | null {
+/**
+ * The line under the filter, in the reader's words.
+ *
+ * `total` IS EXACT AND `shown` IS NOT DRAWN FROM THE SAME POOL. RP4 replaced
+ * the rail's capped `.length` with a head count, which is the right number for
+ * the rail — but the LIST a filter narrows is still the newest 200 / 100 / 50
+ * rows, so a filter reaching back past that cap answers "0 of 340 items from
+ * 1 Jan 2025" about an archive that holds some. `cappedAt` is the cap the
+ * loaded list is sitting on, and naming it is the difference between "there
+ * are none" and "none of the ones we looked at" — the first is a claim about
+ * the workspace and only the second is true.
+ *
+ * Neither workspace can reach a cap today (13 snapshots and 1 send across
+ * both), so this is the archive being honest before it has to be rather than
+ * after.
+ */
+export function dateFilterLine(filter: DateFilter, shown: number, total: number, cappedAt?: number | null): string | null {
   if (!hasDateFilter(filter)) return null
   const span = filter.from && filter.to
     ? `${fullDate(`${filter.from}T00:00:00.000Z`)} to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
     : filter.from
       ? `from ${fullDate(`${filter.from}T00:00:00.000Z`)}`
       : `up to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
-  return `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
+  const head = `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
+  // Only where the cap actually hides something: a list sitting on its cap
+  // with nothing behind it is a complete list, and a caveat about nothing is
+  // noise.
+  return cappedAt != null && total > cappedAt
+    ? `${head} Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
+    : head
 }
 
 /**

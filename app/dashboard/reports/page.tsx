@@ -145,7 +145,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // built at all.
   const everyBuild = readRows<BuildRow>(buildRes, 'reports.builds')
   const allBuilds = everyBuild.filter((b) => !sentSnapshotIds.has(b.id))
-  const allExports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
+  const exportSnapshots = readRows<ExportSnapshot>(exportRes, 'reports.exports')
+  const allExports = exportedRows(exportSnapshots)
 
   // The date filter narrows every group, on the day each row is dated BY:
   // a send by when it was claimed, a build by when it read (falling back to
@@ -160,6 +161,21 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     built: Math.max((builtTotal.count ?? allBuilds.length) - sentSnapshotIds.size, allBuilds.length),
     exported: exportTotal.count ?? allExports.length,
   }
+
+  // THE RAIL COUNTS ARE EXACT; THE LISTS ARE NOT. Each list above is the newest
+  // LIST_CAP rows, and the date filter narrows what was loaded — so a filter
+  // reaching back past a cap would otherwise report "0 of 340" about an archive
+  // that holds some. `cappedAt` is the cap a group's list is actually sitting
+  // on, and `dateFilterLine` names it only where the total says something is
+  // behind it. `weekly_reports` is uncapped, so the Sent group's cap covers
+  // only its sends: the clause understates the reach of the filter rather than
+  // overstating it, which is the direction to be wrong in.
+  const LIST_CAP = { sent: 200, built: 100, exported: 50 } as const
+  const cappedAt = group === 'sent'
+    ? (allSends.length >= LIST_CAP.sent ? LIST_CAP.sent : null)
+    : group === 'built'
+      ? (everyBuild.length >= LIST_CAP.built ? LIST_CAP.built : null)
+      : (exportSnapshots.length >= LIST_CAP.exported ? LIST_CAP.exported : null)
 
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a
@@ -267,7 +283,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <ArchiveDateFilter
       filter={dates}
       hidden={{ ...(group !== 'sent' ? { group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported)}
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, cappedAt)}
     />
   )
   const list = group === 'sent' ? (
