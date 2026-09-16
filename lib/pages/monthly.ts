@@ -270,7 +270,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
       figures,
       overview.sentence.voices.map((v) => ({ ref: v.quote.ref })),
     ),
-    figures: overview.sentence.figures as unknown as FigureTable,
+    figures: overview.sentence.figures,
     ledger: overview.sentence.ledger,
     nextReading: nextReadingOf(month),
     href: '/dashboard/market',
