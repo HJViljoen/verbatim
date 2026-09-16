@@ -105,6 +105,43 @@ describe('headlineObject', () => {
     expect(head?.audience).toBe('the category')
   })
 
+  // `categoryAtLastMonth` is the CATEGORY side alone, and OV1's lead may be the
+  // client's own brand. Taking one against the other would print "31% of 42
+  // videos read for your own brand, against 24% at this point in August" —
+  // two denominators as one quantity moving.
+  it('refuses the last-month figure when the lead is not the category’s', () => {
+    const data = overview({
+      sentence: {
+        lead: {
+          objectKind: 'subject',
+          objectId: 'durability',
+          objectLabel: 'Durability',
+          audience: 'client',
+          window: { kind: 'month', from: '2026-09-01', to: '2026-09-18' },
+          value: { k: 13, n: 42 },
+          changePts: 5.1,
+          bandPts: 4,
+          state: 'moved',
+          flags: [],
+        },
+        body: '',
+        figures: {},
+      },
+      subjects: {
+        state: 'ready',
+        rows: [subject({ categoryAtLastMonth: { k: 44, n: 244, pct: 18 } })],
+        candidates: [],
+        rivalLabel: null,
+        categoryLabel: 'Category',
+        note: null,
+      },
+    } as unknown as Partial<OverviewData>)
+    const head = headlineObject(data)
+    expect(head?.audience).toBe('your own brand')
+    expect(head?.n).toBe(42)
+    expect(head?.atLastMonth).toBeNull()
+  })
+
   it('falls back to the largest level when nothing cleared a band', () => {
     const data = overview({
       subjects: {

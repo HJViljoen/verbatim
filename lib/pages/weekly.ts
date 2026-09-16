@@ -12,6 +12,7 @@ import { citationLink } from '../evidence-cite'
 import { shortDate } from '../format'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
+import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import {
@@ -241,13 +242,24 @@ export function headlineObject(data: OverviewData): {
   const lead = data.sentence.lead
   if (lead) {
     const row = data.subjects.rows.find((r) => r.id === lead.objectId)
+    // ONE DENOMINATOR, OR NO COMPARISON. `SubjectRow.categoryAtLastMonth` is
+    // documented as the CATEGORY side alone — "the only one of the three with
+    // the n to make the comparison mean anything" — while OV1's lead is chosen
+    // from `[category.verdict, you.verdict, …]` and may therefore be the
+    // client's own brand. Taken together they produced "running at 31% of 42
+    // videos read for your own brand, against 24% at this point in August",
+    // where the 24% is the category's: two denominators printed as one quantity
+    // moving. It cannot fire until M3 fills the window function; it would have
+    // fired on the first weekly send after that, with no further code change.
+    const sameAudience = lead.audience === INDUSTRY_AUDIENCE
+    const last = sameAudience ? row?.categoryAtLastMonth ?? null : null
     return {
       label: lead.objectLabel,
       objectId: lead.objectId,
       audience: audienceInLabel(lead.audience),
       k: lead.value.k,
       n: lead.value.n,
-      atLastMonth: row?.categoryAtLastMonth ? { k: row.categoryAtLastMonth.k, n: row.categoryAtLastMonth.n } : null,
+      atLastMonth: last ? { k: last.k, n: last.n } : null,
     }
   }
   const best = [...data.subjects.rows]
