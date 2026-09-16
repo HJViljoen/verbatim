@@ -444,6 +444,26 @@ select indexname from pg_indexes where schemaname='public'
 Expect both. These are WP23's; without them the reading pages are back to
 7–21 s.
 
+**Then one decision, in the same window, with the migration applied.** M10's
+`videos_analysed_record_idx (client_id, analyzed_run_id, id)` is a strict key
+prefix superset of `videos_analyzed_run_idx (client_id, analyzed_run_id)`, from
+August's incremental-Pass-A migration. Both are now maintained by every gather
+and by every Pass A `updateBookkeeping` — which writes that index's key column
+AND all four of its payload columns per video — so the old one costs write time
+and answers nothing the new one cannot. Dropping it gives most of M10's write
+cost back:
+
+```sql
+-- only after the two indexes above are confirmed present
+drop index if exists public.videos_analyzed_run_idx;
+```
+
+M10 does not do it: a migration for the reading pages should not quietly remove
+an index the pipeline has planned against since August. Check first that nothing
+names it (`grep -r videos_analyzed_run_idx` over the repo, and no plan pinned to
+it), then drop it or leave it deliberately. Leaving it costs one extra index
+maintained per analysed video; it breaks nothing.
+
 ### The two guards, proven rather than counted
 
 Counting triggers proves they are installed. Prove they FIRE, once, on a

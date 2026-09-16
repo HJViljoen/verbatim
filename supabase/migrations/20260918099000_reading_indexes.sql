@@ -110,6 +110,20 @@
 -- that same Pass A bookkeeping, one index tuple per video analysed, on an index
 -- whose key AND payload it writes. Plus ~500 KB of storage.
 --
+-- AND THERE IS AN OFFSET THAT IS NOT TAKEN HERE, BECAUSE IT IS NOT THIS FILE'S
+-- TO TAKE. `videos_analyzed_run_idx (client_id, analyzed_run_id)` — from
+-- 20260818090000_incremental_pass_a.sql — is a strict KEY PREFIX of the index
+-- below, so once this one exists the old one answers no query this one cannot,
+-- and every gather and every `updateBookkeeping` maintains both. Dropping it in
+-- the same W1 window would give most of the write cost above straight back:
+--
+--   drop index if exists public.videos_analyzed_run_idx;   -- W1, deliberately, not here
+--
+-- It is left standing on purpose. A migration that creates an index for the
+-- reading pages should not quietly remove one the pipeline has been planning
+-- against since August, and the check is a person's: confirm nothing plans
+-- `videos_analyzed_run_idx` by name and that this index is actually applied,
+-- then drop it. It is on the deploy checklist beside this file.
 create index if not exists videos_analysed_record_idx
   on public.videos (client_id, analyzed_run_id, id)
   include (platform, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr);
