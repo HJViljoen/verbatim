@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, figureConflicts, mergeFigures, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
+import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
@@ -252,6 +253,17 @@ describe('MR7 · what to decide', () => {
   it('gives the decision a deadline', () => {
     expect(renderText(block.render(monthlyFixture(), 'app', ctx)))
       .toContain('The next reading of this is 1 Oct 2026.')
+  })
+
+  // The frame carried `next reading 1 Oct` and the body says "The next reading
+  // of this is 1 Oct 2026." — the same date twice, three lines apart, in both
+  // rendered emails.
+  it('says the next reading’s date once', () => {
+    const text = renderText(block.render(monthlyFixture(), 'app', ctx))
+    const date = fullDate(monthlyFixture().decide.nextReading)
+    expect(text).toContain(date)
+    expect(text.match(new RegExp(date.replace(/ /g, '\\s'), 'g')) ?? []).toHaveLength(1)
+    expect(text.match(/\b1 Oct\b/g) ?? []).toHaveLength(1)
   })
 
   it('attaches the brief by link and does not claim to have built one', () => {

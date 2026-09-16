@@ -59,7 +59,10 @@ export const monthlyDecide: Block<MonthlyData> = {
         title={monthlyDecide.title}
         question={monthlyDecide.question}
         mode={mode}
-        meta={`next reading ${shortDate(d.nextReading)}`}
+        // NO `meta` WITH THE NEXT READING'S DATE ON IT. The body says "The next
+        // reading of this is 1 Oct 2026." in full, and the frame said the same
+        // date three lines above it — confirmed in both rendered emails. One
+        // date, once, in the sentence a client reads.
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>
           : <Link href={href} className="hover:underline">Open Market →</Link>}
