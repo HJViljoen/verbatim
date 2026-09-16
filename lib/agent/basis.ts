@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, shortDate } from '../format'
 import { SHARE_BAND } from '../report-bands'
+import { isRivalAudience } from '../rivals'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 
 // What an answer was answered AGAINST (design AS3, Phase 1 WP21).
@@ -29,16 +30,25 @@ export interface AskBasis {
    *  the workspace has no delivered update at all. */
   updateAt: string | null
   /** Distinct calendar months a claim about change can actually stand on: one
-   *  whose denominator clears the reading layer's video floor, for any of this
-   *  workspace's audiences. Null when the monthly reading is not recorded in
-   *  this database yet — which is a different fact from zero months.
+   *  whose denominator clears the reading layer's video floor, in one of the
+   *  audiences an ANSWER is drawn from. Null when the monthly reading is not
+   *  recorded in this database yet — which is a different fact from zero
+   *  months.
    *
    *  NOT "months we hold a row for". Össur holds 119 rows over 63 months back
    *  to October 2020 and FOUR of them clear the floor; the movement block on
    *  the same page prints "4 months of readings behind it" for the same tenant,
    *  and a line above it reading "63 monthly readings" says the corpus has five
    *  years of comparable history when it has four months. Counted the way
-   *  `isReadable` counts (lib/reading/series.ts), so the two agree. */
+   *  `isReadable` counts (lib/reading/series.ts), so the two agree.
+   *
+   *  AND NOT A RIVAL'S MONTHS. Retrieval drops every rival's voice before an
+   *  answer is written (`scopeToClientVoices`), so the movement block reads
+   *  `client` and `industry-other` and never `competitor:<name>`. Counting a
+   *  rival's months here would tell a tenant whose tracked rivals carry the
+   *  volume that six months stand behind a claim about their own audience when
+   *  none do. The count is the same audiences the block reads, so the sentence
+   *  and the block under it cannot disagree. */
   monthlyReadings: number | null
   /** Findings a question can reach, and findings there are. NULL is a failed
    *  read, never a zero: they are two independent round trips and the heavier
@@ -127,6 +137,36 @@ export function askBasisLine(
 export const nothingSearchable = (basis: AskBasis): boolean =>
   basis.total != null && basis.embedded != null && basis.total > 0 && basis.embedded === 0
 
+/** One stored `month_denominators` row, as this count needs it. */
+export interface MonthRow {
+  month: string
+  audience: string
+  videos: number | null
+}
+
+/**
+ * Distinct months a claim about change can stand on.
+ *
+ * TWO REDUCTIONS, AND BOTH ARE ABOUT AGREEING WITH THE BLOCK UNDERNEATH. A
+ * month under the reading layer's video floor is not a reading anybody may
+ * compare on, and a RIVAL's month is not history behind an answer about this
+ * client's customers — retrieval drops every rival's voice before an answer is
+ * written, so the movement block reads `client` and `industry-other` and never
+ * `competitor:<name>`. Counting them told a tenant whose tracked rivals carry
+ * the volume that six months stood behind a claim for which none did.
+ *
+ * Pure, and exported, so the scoping rule is argued in a test rather than in a
+ * loader.
+ */
+export function readableMonthCount(rows: readonly MonthRow[]): number {
+  return new Set(
+    rows
+      .filter((m) => !isRivalAudience(m.audience))
+      .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
+      .map((m) => m.month),
+  ).size
+}
+
 /**
  * The three facts about the INDEX, which do not depend on which update an
  * answer was given against — so a thread with four answers reads them once.
@@ -140,14 +180,12 @@ export async function loadIndexFacts(
   clientId: string,
 ): Promise<Omit<AskBasis, 'updateAt'>> {
   const [months, all, embedded, last] = await Promise.all([
-    // DISTINCT READABLE MONTHS, not rows. Two reductions, and both matter:
-    // a month carries one row per audience, so "119 monthly readings" for 63
-    // months is a bigger number about a smaller thing; and a month whose
-    // denominator is under the reading layer's floor is not a reading anybody
-    // may compare on, so counting it tells the client they have history they
-    // cannot use. Össur: 119 rows, 63 months, FOUR readable (Jun–Sep 2026, all
+    // DISTINCT READABLE MONTHS, not rows, and not a rival's — the three
+    // reductions `readableMonthCount` makes and the note above it explains.
+    // Össur: 119 rows, 63 months, FOUR readable (Jun–Sep 2026, all
     // `industry-other`). Sealand: 95, 66, two. Counted in code rather than in
-    // SQL, because PostgREST has no count(distinct).
+    // SQL, because PostgREST has no count(distinct). The AUDIENCE column is
+    // read for the scoping, not just for the page break.
     //
     // PAGED, on the primary key minus the tenant (AGENTS.md: a bare `.select()`
     // caps at 1,000 rows silently). This read is one row per month PER
@@ -157,7 +195,7 @@ export async function loadIndexFacts(
     // a client-facing sentence. `selectAll` throws where a bare read reports,
     // so the throw is turned back into the shape the rest of this function
     // already reads.
-    selectAll<{ month: string; videos: number | null }>(() =>
+    selectAll<MonthRow>(() =>
       client
         .from('month_denominators')
         .select('month, audience, videos')
@@ -180,17 +218,11 @@ export async function loadIndexFacts(
   // own corpus, and "0 of 0 searchable" over three thousand live findings is
   // the confident falsehood this whole line exists to prevent — so a failure
   // reads as "not recorded" and the sentence says so.
-  const monthRows = months.error ? null : ((months.data ?? []) as { month: string; videos: number | null }[])
+  const monthRows = months.error ? null : ((months.data ?? []) as MonthRow[])
   const columnNotThere = isMissingColumnError(last.error, 'embedded_at')
 
   return {
-    monthlyReadings: monthRows
-      ? new Set(
-          monthRows
-            .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
-            .map((m) => m.month),
-        ).size
-      : null,
+    monthlyReadings: monthRows ? readableMonthCount(monthRows) : null,
     // TWO ROUND TRIPS, TWO ANSWERS. Either can fail on its own — they are
     // separate requests inside one `Promise.all` — so neither may borrow the
     // other's success. Null is "we did not get to read this", and the sentence

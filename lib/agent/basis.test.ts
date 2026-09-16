@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { askBasisLine, nothingSearchable, type AskBasis } from './basis'
+import { askBasisLine, nothingSearchable, readableMonthCount, type AskBasis } from './basis'
 
 const base: AskBasis = {
   updateAt: '2026-09-13T04:06:38.483Z',
@@ -102,5 +102,36 @@ describe('nothingSearchable', () => {
     expect(nothingSearchable({ ...base, embedded: null, total: 2872 })).toBe(false)
     expect(nothingSearchable({ ...base, embedded: 0, total: null })).toBe(false)
     expect(nothingSearchable({ ...base, embedded: null, total: null })).toBe(false)
+  })
+})
+
+describe('readableMonthCount', () => {
+  const row = (month: string, audience: string, videos: number | null) => ({ month, audience, videos })
+
+  it('counts a month once however many audiences carry it', () => {
+    expect(readableMonthCount([
+      row('2026-08-01', 'client', 620),
+      row('2026-08-01', 'industry-other', 628),
+      row('2026-09-01', 'industry-other', 388),
+    ])).toBe(2)
+  })
+
+  it('drops a month under the video floor', () => {
+    expect(readableMonthCount([row('2026-08-01', 'client', 20), row('2026-08-01', 'industry-other', 99)])).toBe(0)
+    expect(readableMonthCount([row('2026-08-01', 'industry-other', null)])).toBe(0)
+  })
+
+  it('does not count a rival’s months under an answer about this client', () => {
+    // Retrieval drops every rival's voice, so the movement block below this
+    // sentence never reads them. A tenant whose rivals carry the volume was
+    // told six months stood behind a claim for which none did.
+    expect(readableMonthCount([
+      row('2026-07-01', 'competitor:Ottobock', 900),
+      row('2026-08-01', 'competitor:Blatchford', 700),
+    ])).toBe(0)
+    expect(readableMonthCount([
+      row('2026-08-01', 'competitor:Ottobock', 900),
+      row('2026-08-01', 'industry-other', 628),
+    ])).toBe(1)
   })
 })
