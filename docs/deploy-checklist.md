@@ -60,7 +60,8 @@ and they are in step 5 in the only order that works.
 
 ## 0 · Preconditions
 
-Every one of these is a gate, not a nicety. Do not start until all nine hold.
+Every one of these is a gate, not a nicety. **Eleven of them** — 0.0a, 0.0b and
+0.1 through 0.9 — and do not start until all eleven hold.
 
 | # | Precondition | How you know |
 |---|---|---|
