@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { starterTemplate } from '../reports/templates'
 import { QUARTERLY_STARTER_KEY } from './artefact'
-import { CADENCES } from './types'
+import { CADENCES, cadenceWordOf } from './types'
 import { CADENCE_NOT_STORED, isUnsupportedCadence, normaliseRecipients, recipientsSchema, scheduleInputSchema, splitRecipients } from './validate'
 
 describe('recipients', () => {
@@ -93,5 +93,27 @@ describe('isUnsupportedCadence', () => {
   it('says what has not shipped rather than asking for a retry', () => {
     expect(CADENCE_NOT_STORED).toContain('has not shipped')
     expect(CADENCE_NOT_STORED).not.toContain('Try again')
+  })
+})
+
+// THREE CADENCES, THREE WORDS. Three call sites each wrote
+// `cadence === 'monthly' ? 'monthly' : 'weekly'`, so a quarterly schedule's
+// subject line called itself weekly.
+describe('cadenceWordOf', () => {
+  it('gives every cadence its own word', () => {
+    expect(cadenceWordOf('every_update')).toBe('weekly')
+    expect(cadenceWordOf('monthly')).toBe('monthly')
+    expect(cadenceWordOf('quarterly')).toBe('quarterly')
+  })
+
+  it('covers every cadence the picker offers, so a new one cannot default away', () => {
+    for (const c of CADENCES) expect(cadenceWordOf(c.key)).not.toBe('')
+    expect(CADENCES.map((c) => cadenceWordOf(c.key))).toEqual(['weekly', 'monthly', 'quarterly'])
+  })
+
+  it('falls back to the update rhythm for a row that says nothing', () => {
+    expect(cadenceWordOf(null)).toBe('weekly')
+    expect(cadenceWordOf(undefined)).toBe('weekly')
+    expect(cadenceWordOf('fortnightly')).toBe('weekly')
   })
 })
