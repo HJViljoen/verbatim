@@ -203,11 +203,11 @@ describe('the sizes the design names', () => {
 
 describe('salesCite', () => {
   it('names the platform and the day the comment was written', () => {
-    expect(salesCite('tiktok', '2026-09-12T00:00:00+00:00')).toBe('tiktok · 12 Sep · under a video we read')
+    expect(salesCite('tiktok', '2026-09-12T00:00:00+00:00')).toBe('TikTok · 12 Sep · under a video we read')
   })
 
   it('keeps whichever half it has', () => {
-    expect(salesCite('tiktok', null)).toBe('tiktok · under a video we read')
+    expect(salesCite('tiktok', null)).toBe('TikTok · under a video we read')
     expect(salesCite(null, '2026-09-12T00:00:00+00:00')).toBe('12 Sep · under a video we read')
   })
 

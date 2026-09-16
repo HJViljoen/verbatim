@@ -9,7 +9,7 @@ import type { ReadingHandle } from '../reading/read'
 import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { citationLink } from '../evidence-cite'
-import { shortDate } from '../format'
+import { platformLabel, shortDate } from '../format'
 import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { INDUSTRY_AUDIENCE } from '../rivals'
@@ -806,7 +806,7 @@ interface InsightRow {
 export const SALES_SCAN = 1000
 
 /**
- * How a quoted comment is cited — "tiktok · 12 Sep · under a video we read".
+ * How a quoted comment is cited — "TikTok · 12 Sep · under a video we read".
  *
  * WHERE NEITHER HALF IS KNOWN, IT SAYS SOMETHING ELSE. The parts used to be
  * filtered and joined, so a comment row the lookup did not return collapsed to
@@ -816,7 +816,11 @@ export const SALES_SCAN = 1000
  * say is when it was said, even when the row behind it did not come back.
  */
 export function salesCite(platform: string | null, commentDate: string | null): string {
-  const parts = [platform, commentDate ? shortDate(commentDate) : null].filter(Boolean)
+  // THROUGH `platformLabel`, which exists so a client never sees the column
+  // value. The same email printed "TikTok 87 · Reddit 54" and "TikTok · 12 Sep
+  // · 95 comments read" from WR3, then "tiktok · 12 Sep · under a video we
+  // read" on all four of WR4's rows.
+  const parts = [platform ? platformLabel(platform) : null, commentDate ? shortDate(commentDate) : null].filter(Boolean)
   return parts.length > 0 ? `${parts.join(' · ')} · under a video we read` : 'a comment we read this month'
 }
 

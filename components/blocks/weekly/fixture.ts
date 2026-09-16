@@ -89,7 +89,7 @@ function base(overview = overviewFixture()): WeeklyData {
           label: 'Price',
           rival: 'Freitag',
           quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null },
-          cite: 'tiktok · 12 Sep · under a video we read',
+          cite: 'TikTok · 12 Sep · under a video we read',
           href: 'https://www.tiktok.com/@x/video/1',
         },
         {
