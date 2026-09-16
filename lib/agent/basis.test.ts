@@ -15,7 +15,7 @@ const base: AskBasis = {
 describe('askBasisLine', () => {
   it('states the four facts, in the design’s order', () => {
     expect(askBasisLine(base, { asked: true })).toBe(
-      'Answered against the update of 13 Sep. Today: 4 monthly readings · 3,129 of 3,129 findings searchable · embedded as at 15 Sep',
+      'Answered against the update of 13 Sep. Today: 4 monthly readings · 3,129 of 3,129 findings searchable · indexed as at 15 Sep',
     )
   })
 

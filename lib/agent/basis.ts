@@ -104,8 +104,11 @@ export function askBasisLine(
           ? `none of ${fmtInt(basis.total)} findings searchable`
           : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings searchable`
 
+  // INDEXED, IN BOTH ARMS. "Embedded" is the column name; the reader's word was
+  // already in the other half of this ternary, so the two halves of one
+  // sentence spoke two languages and the one a healthy workspace sees was ours.
   const embedded = basis.lastEmbeddedAt
-    ? `embedded as at ${shortDate(basis.lastEmbeddedAt)}`
+    ? `indexed as at ${shortDate(basis.lastEmbeddedAt)}`
     : 'when they were indexed is not recorded'
 
   // THE TENSE BREAKS AFTER THE UPDATE. Only the first fact belongs to the
