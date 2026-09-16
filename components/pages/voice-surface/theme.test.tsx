@@ -108,16 +108,32 @@ describe('voiceTheme', () => {
     expect(text).toContain('Nothing in the register matches “zzz”')
   })
 
-  it('lists what the register found, with first-heard and months-seen', () => {
+  it('dates a register row by the record, never by the run that opened the entry', () => {
     const base = voiceFixture()
     const text = draw({
       ...base,
       theme: {
         ...base.theme,
-        search: { q: 'zip', total: 1, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: '2026-07-01', monthsSeen: 4, active: false, href: '/dashboard/voice?theme=z' }] },
+        search: { q: 'zip', total: 1, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: '2022-07-01', updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
       },
     })
-    expect(text).toContain('Zips failing after a year first heard 2026-07 · 4 updates have carried it')
+    // `theme_registry.first_seen_at` read 2026-09 for every Sealand theme on
+    // production, including ones the month tables carry from 2022 — a period
+    // dated by the run, printed two lines under a chart that says otherwise.
+    expect(text).toContain('Zips failing after a year first heard Jul 2022 · 4 updates have carried it')
+    expect(text).not.toContain('2022-07')
+  })
+
+  it('says a theme is not read in this audience rather than leaving the date blank', () => {
+    const base = voiceFixture()
+    const text = draw({
+      ...base,
+      theme: {
+        ...base.theme,
+        search: { q: 'zip', total: 1, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: null, updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
+      },
+    })
+    expect(text).toContain('not read in the category · 4 updates have carried it')
   })
 
   it('declares its share, its count and the cold share as figures', () => {

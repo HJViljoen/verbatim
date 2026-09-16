@@ -10,7 +10,7 @@ import { BlockStat } from '@/components/blocks/stat'
 import { DirectionWord } from '@/components/pages/overview/subjects'
 import type { CalendarSeries } from '@/lib/charts/calendar'
 import { PREVALENCE_LABEL } from '@/lib/calibration'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { QuoteRef } from '@/lib/blocks/types'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -294,9 +294,17 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               {search.rows.map((r) => (
                 <li key={r.id} className={email ? undefined : 'text-[12px]'}>
                   <Link href={r.href} className="underline-offset-2 hover:underline">{r.label}</Link>{' '}
+                  {/* THE RECORD'S MONTH, IN THE PAGE'S OWN WORDS. This line
+                      printed `theme_registry.first_seen_at` as "first heard
+                      2026-09" — the day a run opened the register entry, two
+                      lines under a chart drawing the same theme back to 2022,
+                      and in raw ISO where the rest of the page says
+                      "September 2026". */}
                   <span className={email ? undefined : 'text-muted-foreground'}>
-                    {r.firstHeard ? `first heard ${r.firstHeard.slice(0, 7)} · ` : ''}
-                    <span data-copy="figure">{fmtInt(r.monthsSeen)}</span> updates have carried it
+                    {r.firstHeard
+                      ? `first heard ${monthName(r.firstHeard)} · `
+                      : `not read in ${t.audienceLabel.toLowerCase()} · `}
+                    <span data-copy="figure">{fmtInt(r.updates)}</span> updates have carried it
                   </span>
                 </li>
               ))}

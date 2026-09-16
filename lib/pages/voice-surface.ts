@@ -233,8 +233,21 @@ export interface SpokenLine {
 export interface SearchRow {
   id: string
   label: string
+  /** The month this theme was first read in THIS AUDIENCE, off the month
+   *  tables — the same instrument the open theme's own line uses, so a row and
+   *  the pane it opens cannot give a reader two answers.
+   *
+   *  NOT `theme_registry.first_seen_at`, which the first cut printed here as
+   *  "first heard 2026-09": that is the day a RUN opened the register entry, a
+   *  period dated by the run (AGENTS.md), and it sat two lines under a chart
+   *  drawing the same theme back to 2022. Null where this audience's record
+   *  carries no reading of it at all — which is a fact worth printing, not a
+   *  blank. */
   firstHeard: string | null
-  monthsSeen: number
+  /** `theme_registry.observation_count`: UPDATES that carried the theme, not
+   *  months. Named for what it is — a reader of `monthsSeen` would print a
+   *  period count off a run count, which is the thing AGENTS.md forbids. */
+  updates: number
   active: boolean
   href: string
 }
@@ -699,8 +712,10 @@ type RegistryRow = {
   description: string | null
   member_slugs: string[] | null
   status: string | null
-  first_seen_at: string | null
-  last_seen_at: string | null
+  /** How many UPDATES have carried the theme. The register's two dates —
+   *  `first_seen_at` and `last_seen_at` — are deliberately not read: they are
+   *  when a run opened and last touched the entry, and every period on this
+   *  page is dated by the comment (AGENTS.md). */
   observation_count: number | null
 }
 
@@ -799,7 +814,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     }),
     selectAll<RegistryRow>(() =>
       supabase.from('theme_registry')
-        .select('id, canonical_label, description, member_slugs, status, first_seen_at, last_seen_at, observation_count')
+        .select('id, canonical_label, description, member_slugs, status, observation_count')
         .eq('client_id', clientId).order('id', { ascending: true }),
     ),
     readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, readAxis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
@@ -1078,6 +1093,35 @@ function denominatorFor(
   return d?.videos ?? null
 }
 
+/**
+ * The month each of these themes was first read in, in one audience.
+ *
+ * ONE INSTRUMENT FOR EVERY "FIRST HEARD" ON THE PAGE. The open theme reads its
+ * own rows for the platform mix and takes its first month from the same table;
+ * this is the many-themes form, for the register search. Audience-scoped
+ * because the pane it renders inside is, so clicking a row cannot change the
+ * answer the row gave.
+ */
+async function firstHeardByTheme(
+  reading: ReadingHandle,
+  clientId: string,
+  audience: string,
+  themeIds: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (themeIds.length === 0) return out
+  try {
+    const rows = await selectAll<{ theme_id: string; month: string }>(() =>
+      reading.client.from('month_theme_readings').select('theme_id, month')
+        .eq('client_id', clientId).eq('audience', audience).in('theme_id', [...themeIds])
+        .gt('videos', 0).order('month', { ascending: true }))
+    for (const r of rows) if (!out.has(r.theme_id)) out.set(r.theme_id, monthStartOf(r.month))
+  } catch (error) {
+    if (!isMissingMonthTable(error)) throw error
+  }
+  return out
+}
+
 interface ThemeInput {
   supabase: SupabaseClient
   clientId: string
@@ -1106,14 +1150,20 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   const { params, registryAll, audience, month, axis } = input
   const q = (params.q ?? '').trim()
   const searchHits = searchRegistry(registryAll, q)
+  // The month each hit was first read in, off the record and never off the
+  // register's own `first_seen_at`. One query, and only when a reader has
+  // actually typed something.
+  const searchFirstHeard = await firstHeardByTheme(
+    input.reading, input.clientId, audience, searchHits.map((r) => r.id),
+  )
   const search = {
     q,
     total: searchHits.length,
     rows: searchHits.map((r) => ({
       id: r.id,
       label: r.canonical_label ?? r.id,
-      firstHeard: r.first_seen_at ? monthStartOf(r.first_seen_at) : null,
-      monthsSeen: r.observation_count ?? 0,
+      firstHeard: searchFirstHeard.get(r.id) ?? null,
+      updates: r.observation_count ?? 0,
       active: r.id === input.openId,
       href: voiceSurfaceHref(params, { theme: r.id, q: null }),
     })),
