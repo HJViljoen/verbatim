@@ -21,9 +21,9 @@ import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure }
 import { loadOverview, type LedgerRow, type Mover, type OverviewData } from './overview'
 import { loadVoiceSurface, type GoneQuiet, type VoiceSurfaceData } from './voice-surface'
 import {
-  loadMemberInsightIds,
+  loadMemberInsightIdsBySubject,
   loadSubjectRows,
-  loadSubjectVoices,
+  loadSubjectVoicesMany,
   type SubjectVoice,
 } from './subjects'
 
@@ -396,11 +396,17 @@ async function buildMovers(
 /**
  * Section 6 — one voice per subject.
  *
- * SUBJECTS' OWN VOICE READ, ONE ROW EACH. `loadSubjectVoices` draws six voices
- * across the audiences for ONE subject; this asks it for each subject and keeps
- * the first, which is the highest-ranked citation that passes the readability
- * gate. The alternative — a single query across every subject — would rank one
- * loud subject's citations above another's and print the same subject twice.
+ * SUBJECTS' OWN VOICE READ, ONE ROW EACH. `loadSubjectVoicesMany` draws six
+ * voices across the audiences for each subject and this keeps the first, which
+ * is the highest-ranked citation that passes the readability gate. The ranking
+ * is still per subject — a single ranking across every subject would put one
+ * loud subject's citations above another's — and only the READS are shared.
+ *
+ * AND THE READS ARE THE POINT. A `Promise.all` over the subjects asked for one
+ * chunked membership read plus four more reads EACH, so eight subjects fired
+ * roughly thirty-five statements at one instance at once, on the send path.
+ * Two reads now cover every subject's memberships and citations whatever N is
+ * (lib/pages/subjects.ts `loadVoicesMany`).
  *
  * ONE PER SUBJECT AND NEVER TWO OF THE SAME WORDS. A comment can be a member of
  * two subjects; printing it twice under two headings reads as a copy-paste
@@ -420,16 +426,17 @@ async function loadSubjectVoicesPerSubject(
     return { rows: [], note: 'No subject has been confirmed yet, so there is nothing to hear one voice on.', href }
   }
 
-  const perSubject = await Promise.all(
-    active.map(async (s) => {
-      const ids = await loadMemberInsightIds(supabase, clientId, s.id)
-      const read = await loadSubjectVoices(supabase, clientId, ids ?? [])
-      return { subject: s, ids: ids ?? [], read }
-    }),
+  const members = await loadMemberInsightIdsBySubject(supabase, clientId, active.map((s) => s.id))
+  const reads = await loadSubjectVoicesMany(
+    supabase,
+    clientId,
+    active.map((s) => ({ key: s.id, insightIds: members?.get(s.id) ?? [] })),
   )
 
   const shown = new Set<string>()
-  const rows: SubjectVoiceRow[] = perSubject.map(({ subject, ids, read }) => {
+  const rows: SubjectVoiceRow[] = active.map((subject) => {
+    const ids = members?.get(subject.id) ?? []
+    const read = reads.get(subject.id) ?? { voices: [], from: 0, sampled: false }
     const voice = read.voices.find((v) => !shown.has(v.quote.ref)) ?? null
     if (voice) shown.add(voice.quote.ref)
     return {
