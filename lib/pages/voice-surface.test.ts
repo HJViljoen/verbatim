@@ -195,26 +195,33 @@ describe('moversNote', () => {
 })
 
 describe('heardLine', () => {
-  it('says "first heard" only where the axis reaches the beginning of the record', () => {
-    expect(heardLine({ firstHeard: '2026-06-01', axisFromRecordStart: true, monthsSeen: 3, monthsDrawn: 3 }))
+  it('says "first heard" plainly when the month it names is one of the drawn ones', () => {
+    expect(heardLine({ firstHeard: '2026-06-01', firstHeardOnAxis: true, monthsSeen: 3, monthsDrawn: 3 }))
       .toBe('first heard June 2026 · seen in 3 of 3 months drawn')
   })
 
-  it('says "first read here" where it does not, and says the record goes further back', () => {
-    // The claim the drawn months cannot support is not softened, it is not
-    // made: on "this month" the axis is one month long and nothing on it can
-    // establish when a theme was first said.
-    expect(heardLine({ firstHeard: '2026-09-01', axisFromRecordStart: false, monthsSeen: 1, monthsDrawn: 1 }))
-      .toBe('first read here in September 2026 · seen in 1 of 1 month drawn · the record reaches further back')
+  it('still names the month when it sits before the axis, and says it does', () => {
+    // Össur's "Admiration for personal resilience" is carried in the category
+    // from November 2022. Off the drawn axis the line answered September 2026
+    // on this month, July 2026 on the last three and March 2026 on the last
+    // twelve — three answers to a question with one answer.
+    expect(heardLine({ firstHeard: '2022-11-01', firstHeardOnAxis: false, monthsSeen: 1, monthsDrawn: 1 }))
+      .toBe('first heard November 2022, before the months drawn here · seen in 1 of 1 month drawn')
   })
 
-  it('says only what it can when no drawn month carried a reading', () => {
-    expect(heardLine({ firstHeard: null, axisFromRecordStart: true, monthsSeen: 0, monthsDrawn: 2 }))
+  it('does not vary with the horizon — one answer, whatever is drawn', () => {
+    const lines = [1, 3, 12].map((monthsDrawn) =>
+      heardLine({ firstHeard: '2022-11-01', firstHeardOnAxis: false, monthsSeen: 1, monthsDrawn }))
+    expect(new Set(lines.map((l) => l.split(' · ')[0])).size).toBe(1)
+  })
+
+  it('says only the half it can when the record cannot be read at all', () => {
+    expect(heardLine({ firstHeard: null, firstHeardOnAxis: false, monthsSeen: 0, monthsDrawn: 2 }))
       .toBe('seen in 0 of 2 months drawn')
   })
 
   it('agrees with itself about one month', () => {
-    expect(heardLine({ firstHeard: null, axisFromRecordStart: true, monthsSeen: 1, monthsDrawn: 1 })).toContain('1 of 1 month drawn')
+    expect(heardLine({ firstHeard: null, firstHeardOnAxis: false, monthsSeen: 1, monthsDrawn: 1 })).toContain('1 of 1 month drawn')
   })
 })
 

@@ -204,7 +204,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           </div>
 
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-            {heardLine({ firstHeard: t.firstHeard, axisFromRecordStart: t.axisFromRecordStart, monthsSeen: t.monthsSeen, monthsDrawn: t.monthsDrawn })}
+            {heardLine({ firstHeard: t.firstHeard, firstHeardOnAxis: t.firstHeardOnAxis, monthsSeen: t.monthsSeen, monthsDrawn: t.monthsDrawn })}
             {t.onCamera ? <> · <span data-copy="figure">{t.onCamera}</span></> : null}
           </p>
 

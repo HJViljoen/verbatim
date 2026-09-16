@@ -153,7 +153,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
       verdict: verdict(),
       direction: 'growing',
       firstHeard: '2026-07-01',
-      axisFromRecordStart: true,
+      firstHeardOnAxis: true,
       monthsSeen: 3,
       monthsDrawn: axis.length,
       axis,
@@ -289,7 +289,7 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
 /** The "first heard · seen in" line as a block prints it, for a test that
  *  wants the sentence rather than the parts. */
 export const fixtureHeardLine = (d: VoiceSurfaceData): string =>
-  heardLine({ firstHeard: d.theme.firstHeard, axisFromRecordStart: d.theme.axisFromRecordStart, monthsSeen: d.theme.monthsSeen, monthsDrawn: d.theme.monthsDrawn })
+  heardLine({ firstHeard: d.theme.firstHeard, firstHeardOnAxis: d.theme.firstHeardOnAxis, monthsSeen: d.theme.monthsSeen, monthsDrawn: d.theme.monthsDrawn })
 
 /** The page bar's own month line, for the same reason. */
 export const fixtureFillingLine = (d: VoiceSurfaceData): string =>

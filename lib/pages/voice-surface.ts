@@ -255,20 +255,28 @@ export interface ThemeBlock {
   prevalence: PrevalenceTier | null
   verdict: Verdict | null
   direction: Direction | null
-  /** The first month ON THE DRAWN AXIS that carried a reading for this theme.
+  /** The first month THIS THEME carried a reading in, in this audience, over
+   *  the whole stored record — not over the months this page happens to draw.
    *
-   *  NOT `theme_registry.first_seen_at`, which is when a RUN first opened the
-   *  registry entry — a delivery date, and a period is dated by the comment
-   *  and never by the run (AGENTS.md). The two disagree in production and the
-   *  page printed the disagreement: Sealand's lead theme reads in July and
-   *  August and its registry entry was opened in September, so the line said
-   *  "first heard September 2026 · seen in 3 of 3 months". */
+   *  A FACT ABOUT THE THEME, SO IT DOES NOT MOVE WITH THE HORIZON PILL. Read
+   *  off `month_theme_readings` with no window (`themeFirstMonth`), because
+   *  the first cut took it off the drawn axis and the same theme then read
+   *  "first heard September 2026" on this month, "July 2026" on the last
+   *  three and "March 2026" on the last twelve — three answers to a question
+   *  with one answer, and "since we started" printing the latest of them.
+   *
+   *  NOT `theme_registry.first_seen_at` either, which is when a RUN first
+   *  opened the registry entry — a delivery date, and a period is dated by
+   *  the comment and never by the run (AGENTS.md). Össur's lead theme reads
+   *  from 2022-11 in the record and carries a registry entry opened in
+   *  2026-08.
+   *
+   *  Null where the month tables cannot be read at all. */
   firstHeard: string | null
-  /** Whether the drawn axis reaches the beginning of this tenant's readable
-   *  record. Only then may `firstHeard` be called first heard AT ALL rather
-   *  than first heard on the months in front of the reader — a claim the drawn
-   *  months cannot support is not softened, it is not made (WP11's rule). */
-  axisFromRecordStart: boolean
+  /** Whether that month is one of the months drawn here. Where it is not, the
+   *  line says so instead of letting a reader take the leftmost bar in front
+   *  of them for the beginning of the record. */
+  firstHeardOnAxis: boolean
   /** Months on the drawn axis it carried a reading in, and how many were drawn. */
   monthsSeen: number
   monthsDrawn: number
@@ -485,29 +493,33 @@ export function moversNote(input: {
 }
 
 /**
- * "first heard June · seen in 3 of 3 months", as the design writes it — and
- * only where the drawn months can support the first half of it.
+ * "first heard November 2022 · seen in 3 of 3 months drawn", as the design
+ * writes it — and the two halves are read off two different spans on purpose.
  *
- * BOTH CLAIMS COME OFF THE DRAWN AXIS, which is the only span a reader can
- * check against the line beside them. "First heard" therefore states what it
- * is: where the axis begins at the tenant's own record, the first readable
- * month IS the first time this was said; where it does not, the line says the
- * theme was first read HERE and that the record goes further back. The
- * registry's `first_seen_at` is not used for either — it is the day a RUN
+ * FIRST HEARD IS A FACT ABOUT THE THEME; SEEN IN IS A FACT ABOUT THIS PAGE.
+ * The first cut read both off the drawn axis, so the horizon pill changed the
+ * answer to "when was this first said?" — Össur's lead theme read September
+ * 2026 on this month, July 2026 on the last three, March 2026 on the last
+ * twelve and June 2026 on "since we started", while the record carries it from
+ * November 2022. A question with one answer is answered once, off the whole
+ * stored record, and where that month is not on the axis the line says so
+ * rather than letting the leftmost bar pass for the beginning.
+ *
+ * The registry's `first_seen_at` is used for neither half: it is the day a RUN
  * opened the entry, and a period is dated by the comment (AGENTS.md).
  */
 export function heardLine(input: {
   firstHeard: string | null
-  axisFromRecordStart: boolean
+  firstHeardOnAxis: boolean
   monthsSeen: number
   monthsDrawn: number
 }): string {
   const seen = `seen in ${fmtInt(input.monthsSeen)} of ${fmtInt(input.monthsDrawn)} ${input.monthsDrawn === 1 ? 'month' : 'months'} drawn`
   if (!input.firstHeard) return seen
   const month = `${longMonth(input.firstHeard)} ${input.firstHeard.slice(0, 4)}`
-  return input.axisFromRecordStart
+  return input.firstHeardOnAxis
     ? `first heard ${month} · ${seen}`
-    : `first read here in ${month} · ${seen} · the record reaches further back`
+    : `first heard ${month}, before the months drawn here · ${seen}`
 }
 
 /**
@@ -1007,7 +1019,6 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     prevMonth,
     thin: thin,
     denominator: selectedDenom?.videos ?? null,
-    axisFromRecordStart: started.from != null && monthStartOf(axis[0]) <= monthStartOf(started.from),
     reading,
   })
 
@@ -1084,7 +1095,6 @@ interface ThemeInput {
   statsRows: StoredStatsRow[] | null
   thin: boolean
   denominator: number | null
-  axisFromRecordStart: boolean
   reading: ReadingHandle
 }
 
@@ -1118,7 +1128,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     audienceLabel: audienceLabel(audience),
     k: null, n: null, pct: null, prevalence: null,
     verdict: null, direction: null,
-    firstHeard: null, axisFromRecordStart: input.axisFromRecordStart, monthsSeen: 0, monthsDrawn: axis.length,
+    firstHeard: null, firstHeardOnAxis: false, monthsSeen: 0, monthsDrawn: axis.length,
     axis, points: [],
     tone: null,
     toneNote: null,
@@ -1271,20 +1281,34 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     }
   }
 
-  // THIS THEME'S OWN REDDIT COUNT, not the audience's. Read straight off the
-  // theme's month row: the first cut of this line divided by the AUDIENCE's
-  // Reddit videos (66 of Össur's 388) against the theme's 34, and printed
-  // "read from 0 of 34 videos" on every theme on the page — a refusal
-  // manufactured out of the wrong denominator.
+  // THE THEME'S OWN MONTH ROWS, READ ONCE AND UNWINDOWED. Two lines rest on
+  // them and neither may be read off the drawn axis:
+  //
+  //   · THIS MONTH'S REDDIT REACH, this theme's and not the audience's — the
+  //     first cut divided by the AUDIENCE's Reddit videos (66 of Össur's 388)
+  //     against the theme's 34 and printed "read from 0 of 34 videos" on every
+  //     theme on the page, a refusal manufactured out of the wrong
+  //     denominator;
+  //   · WHEN THIS THEME WAS FIRST HEARD, which is a fact about the theme and
+  //     must not change when a reader moves the horizon pill. Taken off the
+  //     drawn months it gave four answers for one Össur theme — September,
+  //     July, March and June 2026 — against a record that carries it from
+  //     November 2022.
+  //
+  // Unwindowed is cheap here: one theme in one audience has as many rows as it
+  // has months (Össur's lead theme, 12; Sealand's, 21), on the
+  // (client_id, theme_id, month) index.
   let themeReddit: number | null = null
+  let recordFirstHeard: string | null = null
   try {
-    const mixRes = await input.reading.client
-      .from('month_theme_readings')
-      .select('platform_mix')
-      .eq('client_id', input.clientId).eq('month', input.month)
-      .eq('audience', input.audience).eq('theme_id', input.openId)
-      .maybeSingle()
-    const mix = row<{ platform_mix: Record<string, number> | null }>(mixRes, 'voice.themeMix')?.platform_mix ?? null
+    const monthRows = await selectAll<{ month: string; videos: number | null; platform_mix: Record<string, number> | null }>(() =>
+      input.reading.client.from('month_theme_readings')
+        .select('month, videos, platform_mix')
+        .eq('client_id', input.clientId).eq('audience', input.audience).eq('theme_id', input.openId as string)
+        .order('month', { ascending: true }))
+    const heard = monthRows.find((r) => (r.videos ?? 0) > 0)
+    recordFirstHeard = heard ? monthStartOf(heard.month) : null
+    const mix = monthRows.find((r) => monthStartOf(r.month) === input.month)?.platform_mix ?? null
     if (mix) themeReddit = Number(mix.reddit ?? 0)
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
@@ -1309,8 +1333,8 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     prevalence: input.mover ? prevalenceTier(input.mover.k, input.mover.n) : null,
     verdict: input.mover?.verdict ?? null,
     direction: input.mover?.direction ?? null,
-    firstHeard: drawnReadable[0]?.month ?? null,
-    axisFromRecordStart: input.axisFromRecordStart,
+    firstHeard: recordFirstHeard,
+    firstHeardOnAxis: recordFirstHeard != null && drawn.has(recordFirstHeard),
     monthsSeen: drawnReadable.length,
     monthsDrawn: axis.length,
     axis,
