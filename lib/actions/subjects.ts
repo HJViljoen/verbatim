@@ -27,14 +27,19 @@ import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/sub
 // the line between them is what the write CHANGES. Naming, confirming and
 // stopping a subject change the measurement itself — every frozen month is
 // about the set that was current when it froze, and decision E says the set is
-// confirmed in Settings by the person who owns the workspace. RLS and the
-// column grants are not that gate: `grant insert (…)` and `grant update
-// (status, superseded_by, updated_at) on public.subjects to authenticated`
-// admit every member of the tenant, so without `canManageTenant` a viewer
-// could rename the thing the product measures. WP12 shipped these ungated and
-// WP16 gated the same three behind its own copy of the actions; the merge
-// keeps the gate and keeps one copy of the write path, so the Subjects page
-// and Settings › Subjects refuse in the same words.
+// confirmed in Settings by the person who owns the workspace. WP12 shipped
+// these ungated and WP16 gated the same three behind its own copy of the
+// actions; the merge keeps the gate and keeps one copy of the write path, so
+// the Subjects page and Settings › Subjects refuse in the same words.
+//
+// THE DATABASE IS THE BOUNDARY; THIS IS THE SENTENCE. M4's two write policies
+// on `subjects` named `client_id` and never a role, so a member's own JWT could
+// PATCH /rest/v1/subjects?id=eq.… with {"status":"retired"} — confirmed on a
+// throwaway cluster — and fire the irreversible freeze. The Block B fix pass
+// put `get_my_role() = any (array['owner','admin'])` into both policies, the
+// shape `tracking_configs` has used since the baseline. The column grants still
+// say WHAT may be written; the policies now say WHO. `canManageTenant` here
+// gives the refusal a sentence a person can read, one turn earlier.
 //
 // A move is the other kind of act: it is the client SAYING they did something,
 // scored later against readings nobody here can touch, and `moves` grants a

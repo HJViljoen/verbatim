@@ -205,20 +205,55 @@ drop policy if exists "Members read their subjects" on public.subjects;
 create policy "Members read their subjects" on public.subjects
   for select to authenticated using (client_id = public.get_my_client_id());
 
--- The actor is pinned as well as the tenant, the same rule `moves` carries and
--- for the same reason: a subject is one member saying what this workspace is to
--- be measured on, and the log of who said it is the whole provenance. Without
--- the second clause one member can file a subject under another member's id.
+-- THE ROLE IS PART OF THE GATE, IN THE DATABASE (Block B fix pass).
+--
+-- These two policies keyed on client_id and never on role, so every
+-- `authenticated` member of the tenant could insert a subject and flip its
+-- status — verified on a throwaway cluster as a role='member' user: `insert
+-- into subjects` -> INSERT 0 1, `update subjects set status='retired'` ->
+-- UPDATE 1. lib/actions/subjects.ts carries `canManageTenant` on all three
+-- subject writes, but a server action is an affordance and PostgREST is a
+-- second door with the same key.
+--
+-- THE RETIREMENT IS THE ONE THAT MATTERS, because this migration also makes it
+-- irreversible: `subject_retirement_freeze` closes every still-filling month,
+-- `subjects_retirement_is_final` refuses retired -> active, and
+-- `month_reading_frozen_guard` refuses any later correction. One PATCH from any
+-- member permanently froze a partial reading nobody may ever correct.
+--
+-- `get_my_role()` is the shape `tracking_configs` and `invitations` already use
+-- for exactly this ("Owners and admins update config", schema baseline), and
+-- the write stays on the SESSION client so `subjects_status_audit` keeps taking
+-- the actor from identity — moving it to the service role would log a role
+-- where a person belongs.
+--
+-- The actor is pinned as well as the tenant on the insert, the same rule
+-- `moves` carries and for the same reason: a subject is one person saying what
+-- this workspace is to be measured on, and the log of who said it is the whole
+-- provenance. Without the second clause one member can file a subject under
+-- another member's id.
 drop policy if exists "Members name their subjects" on public.subjects;
-create policy "Members name their subjects" on public.subjects
+drop policy if exists "Owners and admins name their subjects" on public.subjects;
+create policy "Owners and admins name their subjects" on public.subjects
   for insert to authenticated
-  with check (client_id = public.get_my_client_id() and created_by = (select auth.uid()));
+  with check (
+    client_id = public.get_my_client_id()
+    and created_by = (select auth.uid())
+    and public.get_my_role() = any (array['owner', 'admin'])
+  );
 
 drop policy if exists "Members retire their subjects" on public.subjects;
-create policy "Members retire their subjects" on public.subjects
+drop policy if exists "Owners and admins change a subject's status" on public.subjects;
+create policy "Owners and admins change a subject's status" on public.subjects
   for update to authenticated
-  using (client_id = public.get_my_client_id())
-  with check (client_id = public.get_my_client_id());
+  using (
+    client_id = public.get_my_client_id()
+    and public.get_my_role() = any (array['owner', 'admin'])
+  )
+  with check (
+    client_id = public.get_my_client_id()
+    and public.get_my_role() = any (array['owner', 'admin'])
+  );
 
 drop policy if exists "Members read their subject memberships" on public.subject_memberships;
 create policy "Members read their subject memberships" on public.subject_memberships
@@ -226,6 +261,7 @@ create policy "Members read their subject memberships" on public.subject_members
 
 -- The initiatives ACL shape (20260911142000): revoke everything, then hand back
 -- exactly the columns a browser may write. What is NOT granted is the design.
+-- The columns below say WHAT may be written; the two policies above say WHO.
 revoke all on public.subjects            from authenticated, anon;
 revoke all on public.subject_memberships from authenticated, anon;
 grant select on public.subjects to authenticated;
@@ -241,6 +277,14 @@ grant select on public.subject_memberships to authenticated;
 -- (the config_changes precedent, 2026-09-15).
 grant select, insert, update, delete on public.subjects            to service_role;
 grant select, insert, update, delete on public.subject_memberships to service_role;
+-- TRUNCATE is not in that list and must be taken back explicitly: Supabase's
+-- default ACL grants arwdDxtm to service_role on every new public table, and
+-- `revoke all … from authenticated, anon` leaves it untouched. Emptying the set
+-- the whole product is measured on — or the memberships every frozen month was
+-- read through — in one statement is not an operation any writer here needs.
+-- The five month tables reached the same answer in their own files.
+revoke truncate on public.subjects            from service_role;
+revoke truncate on public.subject_memberships from service_role;
 
 -- 3. The pairs a membership run must act on -------------------------------------
 -- One subject at a time, deliberately. A cross join of every live insight
