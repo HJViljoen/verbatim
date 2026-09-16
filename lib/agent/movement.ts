@@ -210,11 +210,19 @@ export async function loadMovement(
   // second.
   if (set.substrate !== 'seeded' || set.numeratorSubstrate !== 'seeded') return []
 
-  // The month to read is the LAST COMPLETE one wherever the current one is
-  // still filling: a filling month is re-read by every update and comparing
-  // against it reports our own reading schedule as the conversation's movement.
-  // It is still printed — with its own note — because a reader asking today
-  // wants to know what this month looks like so far.
+  // THE MONTH TO READ IS THE CURRENT CALENDAR MONTH, filling or not, against
+  // the month before it — the lib/pages/voice-surface.ts precedent. A filling
+  // month is re-read by every update, so part of its movement is our own
+  // reading schedule rather than the conversation's; it is still the month a
+  // reader asking today wants, so it is PRINTED WITH ITS OWN NOTE — "September
+  // 2026 is still filling and is not yet a settled reading", the first line of
+  // `movementLine`'s notes — rather than held back. Today that means every
+  // Össur line compares a half-finished September (388 videos) against August
+  // (628), and says so beside the verdict.
+  //
+  // An earlier version of this comment opened by claiming the last COMPLETE
+  // month is read wherever the current one is still filling. No such guard
+  // exists here or below, and the next reader should not go looking for one.
   const readings: MovementReading[] = []
   for (const s of set.series) {
     if (!s.objectId) continue
