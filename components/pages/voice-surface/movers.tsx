@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import type { ReactNode } from 'react'
 import type { Block, BlockContext, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
@@ -210,10 +209,7 @@ function prevOf(month: string): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString().slice(0, 10)
 }
 
-/** The three lengths, named once so OV3, VO2 and the weekly report read the
- *  same ladder rather than each choosing a number (design §3 VO2). */
-export const MOVER_LENGTHS = { overview: 3, page: 6, expanded: 10 } as const
-
-export function renderMoverRow(mover: Mover, mode: RenderMode, ctx: BlockContext, level = false): ReactNode {
-  return <MoverRow mover={mover} mode={mode} ctx={ctx} level={level} />
-}
+// MOVER_LENGTHS and renderMoverRow were here and are gone: nothing outside a
+// test read either. The three lengths live where they are used — MOVERS_HERE
+// and MOVERS_EXPANDED in lib/pages/voice-surface.ts, and OV3's own three in
+// lib/pages/overview.ts — and the row is this file's private component.

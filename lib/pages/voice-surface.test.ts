@@ -9,8 +9,6 @@ import {
   audienceThin,
   castMasthead,
   DEEP_LINK_EMPTY,
-  daysInto,
-  fillingLine,
   firstSentences,
   flatMovers,
   heardLine,
@@ -366,25 +364,11 @@ describe('searchRegistry', () => {
   })
 })
 
-// `unnamedShare` was removed with the mock's "No persona 16%" line. It is the
-// remainder of a partition, and a stored profile's groups do not partition
-// anything — Össur's five sum to 674 videos against a 388-video category
-// month. The block states the overlap instead; see CastPersona.videos.
-
-describe('fillingLine and daysInto', () => {
-  it('says the month is still filling and how far in', () => {
-    expect(fillingLine('2026-09-01', 'filling', 16)).toBe('September 2026 · still filling · 16 days in')
-  })
-
-  it('says a frozen month is complete and counts no days', () => {
-    expect(fillingLine('2026-08-01', 'frozen', null)).toBe('August 2026 · complete')
-  })
-
-  it('counts the days of a month still running and none of a month behind us', () => {
-    expect(daysInto('2026-09-01', '2026-09-16T08:00:00.000Z')).toBe(16)
-    expect(daysInto('2026-08-01', '2026-09-16T08:00:00.000Z')).toBeNull()
-  })
-})
+// `unnamedShare` was removed with the mock's "No persona 16%" line — it is the
+// remainder of a partition and a stored profile's groups do not partition
+// anything. `fillingLine` and `daysInto` were removed with it: they were a
+// second declaration of two lib/pages/overview.ts exports under the same names
+// and different signatures, and nothing on this page called either.
 
 describe('firstSentences', () => {
   it('takes a line off a transcript, not the wall', () => {

@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { renderText } from '@/lib/test/render'
-import { MOVER_LENGTHS, voiceMovers } from './movers'
+import { voiceMovers } from './movers'
 import { mover, refusedVoiceFixture, verdict, voiceFixture } from './fixture'
 
 // VO2 · what moved, on one axis (Phase 1 WP13).
@@ -64,10 +64,6 @@ describe('voiceMovers', () => {
     const base = voiceFixture()
     expect(draw()).toContain('Show 10 of each')
     expect(draw({ ...base, movers: { ...base.movers, expanded: true, shown: 10 } })).toContain('Show fewer')
-  })
-
-  it('pins the three lengths the design names', () => {
-    expect(MOVER_LENGTHS).toEqual({ overview: 3, page: 6, expanded: 10 })
   })
 
   it('declares at most two figures — one list may not spend the page budget', () => {

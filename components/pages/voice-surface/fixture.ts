@@ -4,7 +4,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 import type { MonthPoint } from '@/lib/reading/series'
 import type { Mover } from '@/lib/pages/overview'
 import type { VoiceSurfaceData } from '@/lib/pages/voice-surface'
-import { PERSONA_VIDEO_FLOOR, fillingLine, heardLine, voiceSurfaceHref } from '@/lib/pages/voice-surface'
+import { PERSONA_VIDEO_FLOOR, voiceSurfaceHref } from '@/lib/pages/voice-surface'
 
 // Voice's block fixtures (Phase 1 WP13).
 //
@@ -274,12 +274,3 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
     ...over,
   }
 }
-
-/** The "first heard · seen in" line as a block prints it, for a test that
- *  wants the sentence rather than the parts. */
-export const fixtureHeardLine = (d: VoiceSurfaceData): string =>
-  heardLine({ firstHeard: d.theme.firstHeard, firstHeardOnAxis: d.theme.firstHeardOnAxis, monthsSeen: d.theme.monthsSeen, monthsDrawn: d.theme.monthsDrawn })
-
-/** The page bar's own month line, for the same reason. */
-export const fixtureFillingLine = (d: VoiceSurfaceData): string =>
-  fillingLine(d.month, d.monthStatus, 18)

@@ -622,32 +622,14 @@ export function searchRegistry<T extends { id: string; canonical_label: string |
     .slice(0, limit)
 }
 
-/** The cast's "no persona" remainder: the audience's videos no persona was
- *  named on. Null rather than 0 where the denominator is not readable — a
- *  remainder of nothing is not "everyone was named". */
-export function unnamedShare(personaVideos: readonly number[], denominator: number | null): number | null {
-  if (denominator == null || denominator <= 0) return null
-  const named = personaVideos.reduce((n, v) => n + Math.max(0, v), 0)
-  if (named > denominator) return null
-  return round1(((denominator - named) / denominator) * 100)
-}
-
-/** The month a still-filling reading is of, said once for the page. */
-export function fillingLine(month: string, status: MonthStatus, daysIn: number | null): string {
-  const label = `${longMonth(month)} ${month.slice(0, 4)}`
-  if (status === 'frozen') return `${label} · complete`
-  return daysIn == null ? `${label} · still filling` : `${label} · still filling · ${fmtInt(daysIn)} days in`
-}
-
-/** Days of `month` elapsed at `now`, or null when the month is behind us. */
-export function daysInto(month: string, now: string): number | null {
-  const start = monthStartOf(month)
-  const next = nextMonth(start)
-  const at = now.slice(0, 10)
-  if (at >= next) return null
-  if (at < start) return 0
-  return Number(at.slice(8, 10))
-}
+// `unnamedShare`, `fillingLine` and `daysInto` were HERE and are gone.
+// `unnamedShare` went with the mock's "No persona 16%" line — it is the
+// remainder of a partition and a stored profile's groups do not partition
+// anything (see CastPersona.videos). The other two re-declared two exports of
+// lib/pages/overview.ts under the same names with different signatures, read
+// by nothing but two fixture helpers nothing called; the page bar composes its
+// own month line. Two same-named pure functions on two page loaders is a seam
+// WP14 and WP17 can import the wrong half of.
 
 /**
  * What the replies figure actually is, said on the block.
