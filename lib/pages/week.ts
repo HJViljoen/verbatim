@@ -264,7 +264,12 @@ export interface RisingBlock {
   month: string
   monthOf: number
   /**
-   * How many of the pool cleared their band, and how many were banded at all.
+   * How many of the pool cleared their band WITH A LARGER SHARE, and how many
+   * were banded at all.
+   *
+   * `moved` is filled only where the verdict is `moved` and the change is
+   * positive — the same test that decides whether a row is printed — so it is
+   * a count of risers and not of band-clearers. The note beside it says so.
    *
    * THE BLOCK CLAIMS "NOTHING ELSE MOVED CLEARLY", which is a statement about
    * the themes it did NOT print — so every one of them has to have been tested.

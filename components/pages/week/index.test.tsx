@@ -128,7 +128,9 @@ describe('WK §3 · moving now', () => {
     const d = weekFixture()
     const many = { ...d, rising: { ...d.rising, moved: 7 } }
     expect(renderText(weekRising.render(many, 'app', ctx)))
-      .toContain('7 themes cleared their band in this month’s reading; the 1 largest are printed.')
+      // "with a larger share", because `moved` counts only the risers: a theme
+      // that cleared its band downward did clear it and is not in this number.
+      .toContain('7 themes cleared their band with a larger share in this month’s reading; the 1 largest are printed.')
   })
 
   it('says the pooled baseline counts a video once per month', () => {

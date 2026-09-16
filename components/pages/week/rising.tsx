@@ -76,8 +76,16 @@ export const weekRising: Block<WeekData> = {
                 whenever exactly three rows fitted, while the loader stopped
                 banding the moment it had three — so the page stated as fact
                 something it had never tested. §1's shape, in §3's words. */}
+            {/* "CLEARED THEIR BAND" COUNTED ONLY THE ONES THAT WENT UP. The
+                loop that fills `moved` does `if (verdict.state !== 'moved' ||
+                (verdict.changePts ?? 0) <= 0) continue`, so a theme that
+                cleared its band downward did clear its band and was not
+                counted. It cannot fire today — both tenants have at most one
+                riser, so the other arm prints — but it would the first time a
+                month has four or more. The sentence now says which half it is
+                counting, in VO2's own words ("a larger share"). */}
             {r.moved > r.rows.length
-              ? `${fmtInt(r.moved)} themes cleared their band in this month’s reading; the ${fmtInt(r.rows.length)} largest are printed.`
+              ? `${fmtInt(r.moved)} themes cleared their band with a larger share in this month’s reading; the ${fmtInt(r.rows.length)} largest are printed.`
               : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
           </Note>
         ) : null}
