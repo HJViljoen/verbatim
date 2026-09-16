@@ -133,18 +133,37 @@ update public.report_snapshots
    and data ? 'readingAt'
    and data->>'readingAt' ~ ('^[0-9]{4}-[0-9]{2}-[0-9]{2}[T ][0-9]{2}:[0-9]{2}:[0-9]{2}');
 
--- The month, from the same place and by the same rule. `data.month` is
--- 'YYYY-MM' (lib/reading/month-key.ts), so the first of that month is the date.
+-- The month, from the same place and by the same rule.
+--
+-- `data.month` IS THE MONTH'S FIRST DAY, 'YYYY-MM-01', and NOT 'YYYY-MM'. That
+-- is what `monthStartOf` returns (lib/reading/month-key.ts), what lib/pages/week.ts
+-- puts on the weekly reading, and what weekly-build.ts and monthly-build.ts
+-- copy verbatim onto the snapshot — `month 2026-09-01`, read off a live render
+-- of both tenants. The first cut of this clause matched 'YYYY-MM' only and so
+-- matched nothing the product has ever written; and because `window_basis` is
+-- gated on `month is not null`, that clause never fired either. Both forms are
+-- accepted now: the reading layer's key is the ten-character one, the
+-- seven-character one is what a hand-written row is likeliest to hold, and a
+-- backfill that quietly matches neither is worse than one that takes both.
 update public.report_snapshots
-   set month = (data->>'month' || '-01')::date
+   set month = (case
+                  when length(data->>'month') = 7 then (data->>'month') || '-01'
+                  else data->>'month'
+                end)::date
  where month is null
    and data ? 'month'
-   and data->>'month' ~ '^[0-9]{4}-[0-9]{2}$';
+   and data->>'month' ~ '^[0-9]{4}-[0-9]{2}(-[0-9]{2})?$';
 
+-- The month's status, from wherever the artefact actually keeps it. A MONTHLY
+-- snapshot carries it at the top level (`MonthlySnapshotData.monthStatus`); a
+-- WEEKLY one keeps it on the reading — `data.reading.monthStatus`, which is how
+-- lib/schedules/deliver.ts reaches it, and `WeeklySnapshotData` has no
+-- top-level field for it at all. Reading only the top level matched no weekly
+-- row, which is to say none of the rows this column was added for.
 update public.report_snapshots
-   set month_status = data->>'monthStatus'
+   set month_status = coalesce(data->>'monthStatus', data->'reading'->>'monthStatus')
  where month_status is null
-   and data->>'monthStatus' in ('filling', 'frozen');
+   and coalesce(data->>'monthStatus', data->'reading'->>'monthStatus') in ('filling', 'frozen');
 
 -- Only the two artefacts whose every number is a reading of a calendar month
 -- get 'month'. A document brief is NOT backfilled: its figures come off
