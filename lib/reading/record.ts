@@ -526,6 +526,13 @@ function loadCorpus(client: SupabaseClient, clientId: string): Promise<CorpusRow
         .eq('client_id', clientId)
         .not('analyzed_run_id', 'is', null)
         .neq('platform', 'reddit')
+        // ORDERED BY THE INDEX, NOT BY `id`. `selectAll` needs a unique order
+        // to range over, and this pair is one — the filter above excludes the
+        // null `analyzed_run_id`s — but it is also exactly M10's key, so the
+        // read is an Index Only Scan with no sort where M10 is applied and no
+        // worse than the `id` order where it is not (the plan sorted either
+        // way). Nothing here depends on the order; both records are counts.
+        .order('analyzed_run_id', { ascending: true })
         .order('id', { ascending: true }),
     ),
   )
