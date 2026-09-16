@@ -97,7 +97,13 @@ describe('the quarter', () => {
   it('knows when the quarter it is reading is still running', () => {
     const q = quarterFor(2026, 3)
     expect(quarterFilling(q, '2026-09-16T05:00:00Z')).toBe(true)
-    expect(quarterFilling(q, '2026-09-30T23:00:00Z')).toBe(true)
+    // 23:00 UTC on 30 September is ALREADY 1 October in SAST, which is the
+    // clock `quarterOfIn` and `scheduleDue` keep — so the quarter is over.
+    // Sliced off the UTC day this answered `true` while `quarterToReview` had
+    // already moved on, and the masthead said "Q3 still filling" on a review
+    // of Q3 that the schedule had fired as a new quarter's send.
+    expect(quarterFilling(q, '2026-09-30T23:00:00Z')).toBe(false)
+    expect(quarterFilling(q, '2026-09-30T20:00:00Z')).toBe(true)
     expect(quarterFilling(q, '2026-10-01T00:00:00Z')).toBe(false)
   })
 
@@ -112,6 +118,25 @@ describe('the quarter', () => {
     for (const day of ['2026-10-01T00:30:00Z', '2026-11-20T09:00:00Z', '2026-12-31T21:00:00Z']) {
       expect(quarterFilling(quarterToReview(day), day)).toBe(false)
     }
+  })
+
+  // ONE CLOCK, AND ALL OF IT. `quarterOfIn` / `quarterToReview` / `quarterKey`
+  // read SAST; `quarterFilling` and `monthsSoFar` sliced the UTC day, so in the
+  // two hours after 22:00 UTC on a quarter's last day the send reviewed the new
+  // quarter's predecessor while the masthead called the OLD quarter "still
+  // filling" and counted its last month as the one in progress.
+  it('fills and counts months on the same clock it names quarters on', () => {
+    const q3 = quarterFor(2026, 3)
+    const boundary = '2026-09-30T22:30:00Z' // 1 October in SAST
+    expect(quarterOfIn(boundary)).toMatchObject({ year: 2026, q: 4 })
+    expect(quarterFilling(q3, boundary)).toBe(false)
+    expect(monthsSoFar(q3, boundary)).toEqual(q3.months)
+    // Read in UTC it is still September, and every one of the three agrees.
+    expect(quarterOfIn(boundary, 'UTC')).toMatchObject({ year: 2026, q: 3 })
+    expect(quarterFilling(q3, boundary, 'UTC')).toBe(true)
+    // Well inside the quarter nothing changed.
+    expect(quarterFilling(q3, '2026-09-16T05:00:00Z')).toBe(true)
+    expect(monthsSoFar(q3, '2026-08-16T05:00:00Z')).toEqual(['2026-07-01', '2026-08-01'])
   })
 
   it('keeps one clock with the schedule that fires it', () => {

@@ -1,5 +1,5 @@
 import { longMonth, monthName } from '../format'
-import { monthStartOf, nextMonth } from '../reading/month-key'
+import { nextMonth } from '../reading/month-key'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 
 /**
@@ -172,11 +172,17 @@ export function quarterFor(year: number, q: 1 | 2 | 3 | 4): Quarter {
  */
 export const REVIEW_TZ = 'Africa/Johannesburg'
 
+/** The calendar day an instant falls on, on a named wall clock. `en-CA` is
+ *  YYYY-MM-DD, which is the shape every date in this module compares in. */
+export function dayIn(iso: string, tz: string = REVIEW_TZ): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
+}
+
 /** The quarter an instant falls in, on a named wall clock. */
 export function quarterOfIn(iso: string, tz: string = REVIEW_TZ): Quarter {
-  const month = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit' }).format(new Date(iso))
-  const year = Number(month.slice(0, 4))
-  const m = Number(month.slice(5, 7))
+  const day = dayIn(iso, tz)
+  const year = Number(day.slice(0, 4))
+  const m = Number(day.slice(5, 7))
   return quarterFor(year, (Math.floor((m - 1) / 3) + 1) as 1 | 2 | 3 | 4)
 }
 
@@ -224,15 +230,22 @@ export function quarterAgainst(quarter: Quarter, prior: Quarter): string {
 /** Which of the quarter's months are over and which is still running, as at a
  *  reading date. A quarter under way is dated by the comment like every other
  *  period in this product: the months are the calendar's, and the reading date
- *  only decides how many of them have anything in them yet. */
-export function monthsSoFar(quarter: Quarter, readingAt: string): string[] {
-  const now = monthStartOf(readingAt)
+ *  only decides how many of them have anything in them yet.
+ *
+ *  ON THE SAME CLOCK AS THE QUARTER ITSELF. Sliced off the UTC day, this and
+ *  `quarterFilling` below disagreed with `quarterOfIn` for the two hours after
+ *  22:00 UTC on a quarter's last day: the send picked the new quarter's
+ *  predecessor while the masthead still called the OLD quarter "still filling"
+ *  and this still counted its last month as the one in progress. */
+export function monthsSoFar(quarter: Quarter, readingAt: string, tz: string = REVIEW_TZ): string[] {
+  const now = `${dayIn(readingAt, tz).slice(0, 7)}-01`
   return quarter.months.filter((m) => m <= now)
 }
 
-/** Is this quarter still filling — i.e. does the reading date fall inside it? */
-export function quarterFilling(quarter: Quarter, readingAt: string): boolean {
-  const day = readingAt.slice(0, 10)
+/** Is this quarter still filling — i.e. does the reading date fall inside it,
+ *  on the artefact's own clock? */
+export function quarterFilling(quarter: Quarter, readingAt: string, tz: string = REVIEW_TZ): boolean {
+  const day = dayIn(readingAt, tz)
   return day >= quarter.from && day <= quarter.to
 }
 
