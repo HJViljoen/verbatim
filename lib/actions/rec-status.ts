@@ -35,6 +35,18 @@ export interface RecStatusState {
   message: string
 }
 
+/** THE RAW POSTGREST TEXT NEVER REACHES THE BROWSER. These three sites returned
+ *  `Could not save: ${error.message}` — constraint names, table names and
+ *  "violates row-level security policy for table …" in front of a client.
+ *  lib/subjects/moves.ts's `couldNotSave` is the calibrated pattern that fixed
+ *  the same thing across ten sites in WP12: log the raw text with the operation
+ *  named, return a sentence. */
+function couldNotSave(where: string, error: unknown): string {
+  const message = (error as { message?: string } | null)?.message ?? String(error)
+  console.error(`[rec-status] ${where} failed: ${message}`)
+  return 'Could not save. Try again, and tell us if it keeps happening.'
+}
+
 export async function setRecommendationStatus(id: string, status: string): Promise<RecStatusState> {
   if (!z.string().uuid().safeParse(id).success) return { ok: false, message: 'Unknown recommendation.' }
   if (!(REC_STATUSES as readonly string[]).includes(status)) {
@@ -51,7 +63,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
     .eq('id', id)
     .eq('client_id', clientId)
     .maybeSingle()
-  if (readError) return { ok: false, message: `Could not save: ${readError.message}` }
+  if (readError) return { ok: false, message: couldNotSave('setRecStatus read', readError) }
   if (!rec) return { ok: false, message: 'That recommendation is no longer here.' }
 
   // `lineage_id ?? id`: the 111 rows that predate the lineage column are
@@ -80,7 +92,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
     // status is written the way it was written before the ledger existed, and
     // the warning says what that costs.
     if (!isMissingRecDecisions(decisionError)) {
-      return { ok: false, message: `Could not save: ${decisionError.message}` }
+      return { ok: false, message: couldNotSave('setRecStatus decision', decisionError) }
     }
     console.warn(
       '[rec-status] rec_decisions does not exist — apply supabase/migrations/20260915093000_rec_decisions.sql. ' +
@@ -110,7 +122,7 @@ export async function setRecommendationStatus(id: string, status: string): Promi
     if (status === 'in_progress' && (error as { code?: string }).code === '23514') {
       return { ok: false, message: '“Working on it” isn’t available yet — mark it Acknowledged for now.' }
     }
-    return { ok: false, message: `Could not save: ${error.message}` }
+    return { ok: false, message: couldNotSave('setRecStatus update', error) }
   }
   // An update that matched nothing is not a save. (A foreign or deleted id
   // reaches here as success with zero rows — RLS filters, it does not error.)
