@@ -118,8 +118,17 @@ export type StandingsSource = 'panel' | 'corpus'
 export interface StandingsBlock {
   source: StandingsSource
   months: string[]
+  /** The month this table IS — the newest month on the axis that has stored
+   *  rows, which is not always the month in hand. `month_denominators` is
+   *  written by `freeze-months`, so every calendar month has a gap between
+   *  midnight on the 1st and that month's first delivered update (up to a week
+   *  on both tenants) in which the newest row is last month's. */
+  month: string
   monthLabel: string
-  /** The newest month's table. */
+  /** Said when the month in hand has not been read and this table is an
+   *  earlier one; null when they are the same month. */
+  behind: string | null
+  /** The newest read month's table. */
   rows: StandingRow[]
   series: StandingsSeries[]
   /** The two denominators, per month, with their platform mix. */
@@ -215,6 +224,16 @@ export const ATTENTION_UNLOCK =
 
 export const STANDINGS_UNREAD =
   'No month has been read for this workspace yet, so there are no standings to draw.'
+
+/** The month in hand has no stored row yet. NOT the same fact as "nothing was
+ *  observed": the reading has not been written, and a table that answered with
+ *  last month's numbers under this month's name is the defect this replaces. */
+export const standingsUnreadMonth = (month: string): string =>
+  `${monthName(month)} has not been read yet. A month’s row is written by the first update that lands in it, and none has landed in this one.`
+
+/** Said above a table that is an earlier month than the one in hand. */
+export const standingsBehindLine = (month: string, table: string): string =>
+  `${monthName(month)} has not been read yet, so this table is ${monthName(table)}.`
 
 /**
  * A rival's state, from what has actually been read.
@@ -430,7 +449,6 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     axis,
     readAxis,
     month,
-    prevMonth,
     changes,
   })
 
@@ -632,8 +650,9 @@ interface StandingsInputs {
   denominators: StoredDenominatorRow[] | null
   axis: string[]
   readAxis: string[]
+  /** The calendar month in hand. The table's own month is derived from what has
+   *  rows, and the month before it likewise — neither is a caller's to choose. */
   month: string
-  prevMonth: string
   changes: readonly ChangeMark[]
 }
 
@@ -641,22 +660,25 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
   const base = {
     source: 'corpus' as StandingsSource,
     months: input.axis,
-    monthLabel: monthName(input.month),
     precedence: PRECEDENCE_RULE,
     denominatorLine: CORPUS_DENOMINATOR_LINE,
     unlock: ATTENTION_UNLOCK,
   }
+  const nothing = (month: string, empty: string): StandingsBlock => ({
+    ...base,
+    month,
+    monthLabel: monthName(month),
+    behind: null,
+    rows: [],
+    series: [],
+    denominators: [],
+    rules: [],
+    dualMention: null,
+    caveat: null,
+    empty,
+  })
   if (input.denominators == null || input.denominators.length === 0) {
-    return {
-      ...base,
-      rows: [],
-      series: [],
-      denominators: [],
-      rules: [],
-      dualMention: null,
-      caveat: null,
-      empty: STANDINGS_UNREAD,
-    }
+    return nothing(input.month, STANDINGS_UNREAD)
   }
 
   const byMonth = new Map<string, StoredDenominatorRow[]>()
@@ -664,6 +686,21 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     const m = monthStartOf(d.month)
     byMonth.set(m, [...(byMonth.get(m) ?? []), d])
   }
+
+  // THE TABLE IS A MONTH THAT HAS ROWS, AND IT IS LABELLED WITH THAT MONTH.
+  // `input.month` is the calendar month in hand; `freeze-months` writes a
+  // month's `month_denominators` rows when an update lands in it, so from
+  // midnight on the 1st until that month's first delivered run — up to a week
+  // on both tenants — the month in hand holds nothing. The block used to take
+  // the newest STORED denominator and print it under the month in hand's name:
+  // September's 449 videos and 11,330 comments under "October 2026", beside a
+  // table whose every row read "not observed". Three answers, one month, all
+  // disagreeing.
+  const stored = input.axis.filter((m) => byMonth.has(m))
+  const month = stored[stored.length - 1] ?? null
+  if (month == null) return nothing(input.month, standingsUnreadMonth(input.month))
+  const prevMonth = previousMonthOf(month)
+  const behind = month === monthStartOf(input.month) ? null : standingsBehindLine(input.month, month)
 
   // THE CORPUS ROWS WEAR THE PANEL'S SHAPE, and the label says which they are.
   // `buildStandings` divides an audience's videos by the month's videos and its
@@ -682,16 +719,16 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
   const runIdOf = (m: string): string | null => (byMonth.get(m) ?? [])[0]?.run_id ?? null
 
   const rows = buildStandings({
-    month: input.month,
-    rows: rowsOf(input.month),
-    prevRows: byMonth.has(input.prevMonth) ? rowsOf(input.prevMonth) : undefined,
-    prevMonth: input.prevMonth,
+    month,
+    rows: rowsOf(month),
+    prevRows: byMonth.has(prevMonth) ? rowsOf(prevMonth) : undefined,
+    prevMonth,
     rivals: input.rivals.map((r) => ({ name: r.name })),
     clientLabel: input.brand,
     categoryLabel: 'The rest of the category',
-    dualMention: (byMonth.get(input.month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
-    panelId: runIdOf(input.month),
-    prevPanelId: byMonth.has(input.prevMonth) ? runIdOf(input.prevMonth) : null,
+    dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
+    panelId: runIdOf(month),
+    prevPanelId: byMonth.has(prevMonth) ? runIdOf(prevMonth) : null,
   })
 
   const series: StandingsSeries[] = rows.map((r) => ({
@@ -734,13 +771,16 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
 
   return {
     ...base,
+    month,
+    monthLabel: monthName(month),
+    behind,
     rows,
     series,
     denominators,
     rules: trackingRules(input.changes, input.axis),
-    dualMention: (byMonth.get(input.month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
+    dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
     caveat: comparabilityCaveat(denominators),
-    empty: rows.every((r) => !r.observed) ? `Nothing was ${NOT_OBSERVED} in ${monthName(input.month)}.` : null,
+    empty: rows.every((r) => !r.observed) ? `Nothing was ${NOT_OBSERVED} in ${monthName(month)}.` : null,
   }
 }
 

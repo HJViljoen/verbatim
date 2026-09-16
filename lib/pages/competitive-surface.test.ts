@@ -37,7 +37,6 @@ const build = (rows = OSSUR, rivals: { name: string; retiredAt: string | null }[
     axis: ['2026-09-01'],
     readAxis: ['2026-08-01', '2026-09-01'],
     month: '2026-09-01',
-    prevMonth: '2026-08-01',
     changes: [],
   })
 
@@ -76,10 +75,59 @@ describe('CO2 · the standings', () => {
     expect(block.source).toBe('corpus')
   })
 
+  it('names the month the table IS, never the month in hand', () => {
+    // The gap every calendar month has: `freeze-months` writes a month's rows
+    // when an update lands in it, so from the 1st until that month's first
+    // delivered run the newest stored month is last month's. The block used to
+    // print September's 449 videos and 11,330 comments under "Oct 2026".
+    const block = buildStandingsBlock({
+      brand: 'Össur',
+      rivals: [{ name: 'Ottobock', retiredAt: null }],
+      denominators: OSSUR,
+      axis: ['2026-09-01', '2026-10-01'],
+      readAxis: ['2026-08-01', '2026-09-01', '2026-10-01'],
+      month: '2026-10-01',
+      changes: [],
+    })
+    expect(block.month).toBe('2026-09-01')
+    expect(block.monthLabel).toBe('Sep 2026')
+    expect(block.behind).toBe('Oct 2026 has not been read yet, so this table is Sep 2026.')
+    // And the table is September's, so the figures and the rows agree with the
+    // sentence: 19 of 449, not "not observed" under a 449.
+    expect(block.denominators[block.denominators.length - 1].label).toBe('Sep 2026')
+    expect(block.rows.find((r) => r.audience === 'client')!.content).toEqual({ k: 19, n: 449, pct: 4.2 })
+    // August is still what September is compared with — the previous CALENDAR
+    // month of the table's own month, not the previous stored one.
+    expect(block.rows.find((r) => r.audience === 'client')!.contentVerdict).not.toBeNull()
+  })
+
+  it('refuses rather than borrowing another month when the horizon holds no read month', () => {
+    const block = buildStandingsBlock({
+      brand: 'Össur',
+      rivals: [{ name: 'Ottobock', retiredAt: null }],
+      denominators: OSSUR,
+      axis: ['2026-10-01'],
+      readAxis: ['2026-09-01', '2026-10-01'],
+      month: '2026-10-01',
+      changes: [],
+    })
+    expect(block.rows).toEqual([])
+    expect(block.denominators).toEqual([])
+    expect(block.month).toBe('2026-10-01')
+    expect(block.empty).toBe(
+      'Oct 2026 has not been read yet. A month\u2019s row is written by the first update that lands in it, and none has landed in this one.',
+    )
+  })
+
+  it('says nothing is behind when the month in hand is the month read', () => {
+    expect(build().behind).toBeNull()
+    expect(build().month).toBe('2026-09-01')
+  })
+
   it('has nothing to draw when no month has been read', () => {
     const block = buildStandingsBlock({
       brand: 'Sealand', rivals: [], denominators: null,
-      axis: ['2026-09-01'], readAxis: ['2026-09-01'], month: '2026-09-01', prevMonth: '2026-08-01', changes: [],
+      axis: ['2026-09-01'], readAxis: ['2026-09-01'], month: '2026-09-01', changes: [],
     })
     expect(block.empty).toContain('no standings to draw')
     expect(block.rows).toEqual([])

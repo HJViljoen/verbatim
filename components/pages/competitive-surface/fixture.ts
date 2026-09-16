@@ -52,7 +52,6 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
     axis: window.months,
     readAxis: window.months,
     month: MONTH,
-    prevMonth: '2026-08-01',
     changes: [{ changed_at: '2026-09-02T00:00:00.000Z', surface: 'terms', source: 'logged' }],
   })
 

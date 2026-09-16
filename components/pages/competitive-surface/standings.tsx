@@ -80,8 +80,12 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
           style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
         >
           {s.denominatorLine}
+          {/* LABELLED WITH THE ROW'S OWN MONTH. `latest` is the newest month
+              that HAS stored rows; naming it with the month in hand printed
+              September's 449 videos under "October 2026" for every day between
+              midnight on the 1st and that month's first update. */}
           {latest ? (
-            <> {s.monthLabel}: <span data-copy="figure">{fmtInt(latest.videos)}</span> videos ({mixLine(latest.platformMix)}) and <span data-copy="figure">{fmtInt(latest.comments)}</span> comments.</>
+            <> {latest.label}: <span data-copy="figure">{fmtInt(latest.videos)}</span> videos ({mixLine(latest.platformMix)}) and <span data-copy="figure">{fmtInt(latest.comments)}</span> comments.</>
           ) : null}
         </p>
         <p
@@ -131,6 +135,14 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
         meta="no rank is printed"
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {s.behind ? (
+          <p
+            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
+          >
+            {s.behind}
+          </p>
+        ) : null}
         {s.series.length > 0 && s.months.length > 1 ? (
           <div className={email ? undefined : 'grid grid-cols-1 gap-3 lg:grid-cols-2'}>
             <BlockCalendar
