@@ -240,6 +240,45 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **The Supabase client is untyped** (no `Database` generic). Reads past 1000
   rows must use `selectAll` (`lib/supabase-admin.ts`) — a bare `.select()`
   silently caps at 1000.
+- **Never read `audience_insights.embedding` in bulk — count the PREDICATE,
+  never the column.** It is a 1536-float vector on the corpus's largest table,
+  so `count(embedding)` or `select embedding` across a tenant materialises
+  every vector (tens of megabytes a scan) where the question was only ever
+  "how many are not null". On 2026-09-16 one such probe ran 56 s at 08:40 UTC
+  and 94 s at 09:10 UTC; on top of a morning of window-function timing loops it
+  exhausted the instance's disk-IO burst budget, PostgREST could not load its
+  schema cache, GoTrue answered 504, and the live app was down for paying
+  customers for about two hours. A restart does not refill an IO budget — time
+  does, or a larger compute tier. The measure everything actually gates on is a
+  predicate count: `.select('id', { count: 'exact', head: true })
+  .not('embedding', 'is', null)` (`embeddingCoverage` / `embeddedInsightCount`,
+  `lib/agent/retrieve.ts` — the one `subject-membership` refuses below 95% on),
+  or in SQL `count(*) filter (where embedding is not null)`. **`embedded_at is
+  not null` is NOT that measure**: the column arrived 2026-09-15 and is never
+  backfilled, so every vector written before it reads as unembedded — it
+  answers "when was the last vector written", never "how much of the corpus is
+  embedded". The vectors themselves are read by the RPCs
+  (`set_insight_embeddings`, `match_insights`) and by bounded reads of a small
+  table (`lib/pipeline/themes.ts` takes one run's `themes.embedding`), and
+  nowhere else.
+- **Production reads from agents are serialised and rationed.** Five agents
+  reading production at once is what caused the outage above, so this is the
+  fix and not caution. Before the first read of a session, `select 1` through
+  the MCP, timed: over 3 s or an error means no production read for the next
+  15 minutes — work from a local PG 17 cluster and fixtures and retry later.
+  Then: ONE query in flight at a time, never a loop, never a repeated loader
+  run "to measure", never `EXPLAIN ANALYZE` of the window functions; about
+  twenty small, targeted queries per work package, counted in its status note;
+  a page is rendered against production once per tenant per surface, not once
+  per iteration. `scripts/loader-dump.ts` and `scripts/reading-timing.ts` ARE
+  read loops and carry the ration in their own flags (`--confirm`, a probe
+  first, `--max-loads`) — one of them at a time and never beside another
+  reader. **SQL and PostgREST are separate paths and either can be down
+  alone**: measured 2026-09-16 at 15:12 and 15:16 SAST, `select 1` through the
+  MCP returned while every `createAdminClient` read failed with `Could not
+  query the database for the schema cache` — so a green MCP query proves
+  nothing about whether an operator script can run. Check both, and say which
+  one you checked.
 - **Client-facing copy is calibrated**: no pipeline jargon (T#, Pass C, run),
   no raw scores; "comments" vs "conversations" have fixed meanings
   (`lib/calibration.ts` GLOSSARY). Copy claims about behavior must match the
