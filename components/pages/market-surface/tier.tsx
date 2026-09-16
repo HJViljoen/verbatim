@@ -1,6 +1,7 @@
 import type { RenderMode } from '@/lib/blocks/types'
 import { glossaryRule } from '@/lib/calibration'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { fmtInt } from '@/lib/format'
 import type { GateTier } from '@/lib/curation'
 
 // The evidence word, in three modes (Phase 1 WP14).
@@ -47,3 +48,17 @@ export function TierChip({ tier, mode = 'app' }: { tier: GateTier; mode?: Render
 }
 
 export const tierLabel = (tier: GateTier): string => LABEL[tier]
+
+/**
+ * MK1's meta line, in the chips' own words.
+ *
+ * It read "5 confirmed · 1 early · 0 below the bar" — `confirmed` is the
+ * internal `GateTier` key, and `early` and `below the bar` are two more
+ * abbreviations of words the chips beside them spell out in full. Three
+ * vocabularies for three tiers on one block. `tierLabel` was exported for
+ * exactly this and had no caller.
+ */
+export function tierMetaLine(counts: { confirmed: number; early: number; archive: number }): string {
+  const say = (n: number, tier: GateTier) => `${fmtInt(n)} ${LABEL[tier].toLowerCase()}`
+  return [say(counts.confirmed, 'confirmed'), say(counts.early, 'early_signal'), say(counts.archive, 'archive')].join(' · ')
+}

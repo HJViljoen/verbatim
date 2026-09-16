@@ -74,7 +74,9 @@ describe('MK1 · what we concluded', () => {
     expect(text).toContain('Strong evidence')
     expect(text).toContain('Early signal')
     expect(text).toContain('Below the evidence bar')
-    expect(text).toContain('1 below the bar')
+    // The meta line speaks the chips' language, not the GateTier keys'.
+    expect(text).toContain('1 strong evidence · 1 early signal · 1 below the evidence bar')
+    expect(text).not.toMatch(/\bconfirmed\b/)
   })
 
   it('links each conclusion’s themes into Voice by slug', () => {

@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { TierChip } from './tier'
+import { TierChip, tierMetaLine } from './tier'
 import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -82,7 +82,10 @@ export const marketConclusions: Block<MarketSurfaceData> = {
     const c = data.conclusions
     const email = mode === 'email'
     const empty = marketConclusions.emptyState(data)
-    const meta = `${fmtInt(c.counts.confirmed)} confirmed · ${fmtInt(c.counts.early)} early · ${fmtInt(c.belowBar)} below the bar`
+    // THE CHIPS' OWN WORDS. This read "5 confirmed · 1 early · 0 below the
+    // bar" — `confirmed` is the internal GateTier key — beside chips reading
+    // "Strong evidence" / "Early signal" / "Below the evidence bar".
+    const meta = tierMetaLine({ confirmed: c.counts.confirmed, early: c.counts.early, archive: c.belowBar })
 
     return (
       <BlockFrame title={marketConclusions.title} question={marketConclusions.question} mode={mode} meta={meta}>
