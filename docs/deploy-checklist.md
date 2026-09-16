@@ -306,9 +306,12 @@ select
      where table_schema='public' and table_name='month_subject_readings'
        and grantee='service_role' and privilege_type='TRUNCATE')                             as truncate_left;
 ```
-Expect `tables = 4`, `fns = 3`, `triggers = 7`, `policies = 7`
+Expect `tables = 4`, `fns = 3`, `triggers = 7`, `policies = 8`
 (`subjects` 3 · `subject_memberships` 1 · `month_subject_readings` 1 ·
-`moves` 3), `truncate_left = 0`.
+`moves` 3), `truncate_left = 0`. The four in the parenthesis sum to eight; the
+line said seven, which is a correct apply reading as a mismatch, and an
+operator who waves one mismatched count through at 22:00 waves the next one
+through too.
 
 **M5 · `20260918094000_kind_mood_attention.sql`**
 ```sql
