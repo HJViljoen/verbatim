@@ -40,7 +40,7 @@ import {
   type MonthSeries,
   type Substrate,
 } from '../reading/series'
-import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
+import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { isMissingSubjects, MOVE_PROMISE, RPC_WINDOW_SUBJECT_READINGS, TABLE_MOVES, TABLE_SUBJECTS, type Move, type Subject } from '../subjects/types'

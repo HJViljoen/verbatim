@@ -190,15 +190,27 @@ comment on column public.report_schedules.artefact is
 create unique index if not exists report_schedules_one_per_artefact
   on public.report_schedules (client_id, artefact) where artefact is not null;
 
--- The two live rows are both the workspace digest, both named 'Weekly digest'
--- and both carrying starter_key 'weekly_digest'. That, and only that, is what
--- is claimed here: a hand-made schedule pointing at a workspace template is
--- left null for a person to name.
+-- WHAT PRODUCTION ACTUALLY HOLDS, CHECKED RATHER THAN ASSUMED. This backfill
+-- used to read `and starter_key = 'weekly_digest'` and its comment asserted
+-- that both live rows carried that key. They do not: both are named 'Weekly
+-- digest', both are is_default and active, and both carry starter_key NULL and
+-- a report_id — backfill-digest-reports.ts moved them onto `reports` rows whose
+-- template_key is weekly_digest. `select count(*) from report_schedules where
+-- is_default and starter_key='weekly_digest'` is 0 on 2026-09-16.
+--
+-- AND THE LEGACY ROWS ARE STILL LEFT ALONE, DELIBERATELY. Widening this to
+-- `is_default` would name both live digests 'weekly', and `scheduleArtefact`
+-- reads the column before the starter key — so applying a migration would flip
+-- both tenants from the digest they receive today to WP17's weekly report, with
+-- no operator decision and no config_changes row. That switch has a door:
+-- scripts/migrate-schedule-keys.ts, which plan §5 names in the R1 checklist and
+-- which writes starter_key, report_id and artefact together, per tenant, with a
+-- record. A row that already sends the weekly report is claimed here, because
+-- for that row the column only writes down what the starter key already says.
 update public.report_schedules
    set artefact = 'weekly'
  where artefact is null
-   and is_default
-   and starter_key = 'weekly_digest';
+   and starter_key = 'weekly_report';
 
 -- The quarterly review (item 14) runs four times a year, which no cadence in
 -- this table could express. Dropped and rebuilt rather than ALTERed: the

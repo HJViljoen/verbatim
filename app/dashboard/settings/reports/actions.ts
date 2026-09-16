@@ -78,12 +78,42 @@ export async function updateArtefactRecipients(
   }
 
   const admin = createAdminClient()
-  const { data: existing, error: readError } = await admin
+  let { data: existing, error: readError } = await admin
     .from('report_schedules')
     .select('id, name, cadence, recipients, active')
     .eq('client_id', clientId)
     .eq('artefact', parsed.data.artefact)
     .maybeSingle()
+
+  // ADOPT THE WORKSPACE'S OWN WEEKLY ROW RATHER THAN INSERT BESIDE IT.
+  //
+  // Both live tenants have one `is_default` schedule — "Weekly digest", active,
+  // cadence every_update — and its `artefact` is null, because M8's backfill
+  // deliberately does not claim it (a migration must not flip what a tenant
+  // receives). Matching on `artefact` alone therefore found nothing here and
+  // took the INSERT branch: a SECOND active every_update schedule, so
+  // inngest/functions/report.ts would run both on one update — two emails, two
+  // recipient lists, on the page whose whole premise is "who receives what".
+  // It also blocked scripts/migrate-schedule-keys.ts for ever, because
+  // `report_schedules_one_per_artefact` refuses the artefact it wants to write.
+  //
+  // WEEKLY ONLY. The other six artefacts have no legacy row to adopt, and
+  // is_default names the workspace's weekly send and nothing else. Naming the
+  // column on this row is what makes the weekly report the thing it sends —
+  // which is the owner's own deliberate act, on a form that says so, and it is
+  // recorded below.
+  if (!existing && !readError && parsed.data.artefact === 'weekly') {
+    const adopted = await admin
+      .from('report_schedules')
+      .select('id, name, cadence, recipients, active')
+      .eq('client_id', clientId)
+      .eq('is_default', true)
+      .is('artefact', null)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    if (adopted.error) { readError = adopted.error } else { existing = adopted.data }
+  }
 
   if (readError) {
     if (isMissingArtefact(readError)) {
@@ -102,7 +132,7 @@ export async function updateArtefactRecipients(
 
   const write = existing
     ? admin.from('report_schedules')
-      .update({ recipients: parsed.data.recipients, active, updated_at: new Date().toISOString() })
+      .update({ artefact: parsed.data.artefact, recipients: parsed.data.recipients, active, updated_at: new Date().toISOString() })
       .eq('id', existing.id)
     : admin.from('report_schedules').insert({
       client_id: clientId,
