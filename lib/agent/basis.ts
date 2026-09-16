@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, shortDate } from '../format'
-import { isMissingColumnError } from '../supabase-admin'
+import { isMissingColumnError, selectAll } from '../supabase-admin'
 
 // What an answer was answered AGAINST (design AS3, Phase 1 WP21).
 //
@@ -101,7 +101,26 @@ export async function loadIndexFacts(
     // monthly readings" for 63 months would be a bigger number about a smaller
     // thing. Counted in code off the month column rather than in SQL, because
     // PostgREST has no count(distinct).
-    client.from('month_denominators').select('month').eq('client_id', clientId),
+    //
+    // PAGED, on the primary key minus the tenant (AGENTS.md: a bare `.select()`
+    // caps at 1,000 rows silently). This read is one row per month PER
+    // AUDIENCE, and the audience list carries one entry per tracked rival —
+    // Össur 119 rows and Sealand 95 today, but a dozen rivals over five years
+    // crosses the cap and the count would then shrink with no error at all, on
+    // a client-facing sentence. `selectAll` throws where a bare read reports,
+    // so the throw is turned back into the shape the rest of this function
+    // already reads.
+    selectAll<{ month: string }>(() =>
+      client
+        .from('month_denominators')
+        .select('month, audience')
+        .eq('client_id', clientId)
+        .order('month', { ascending: true })
+        .order('audience', { ascending: true }),
+    ).then(
+      (data) => ({ data, error: null as unknown }),
+      (error: unknown) => ({ data: null, error }),
+    ),
     client.from('audience_insights_current').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     client.from('audience_insights_current').select('id', { count: 'exact', head: true })
       .eq('client_id', clientId).not('embedding', 'is', null),
