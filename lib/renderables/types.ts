@@ -94,6 +94,16 @@ export interface Scope {
    * (lib/reading/read.ts).
    */
   reading: ReadingHandle
+  /**
+   * Whether this reader may change what the page lets them change.
+   *
+   * OPTIONAL AND DEFAULTS CLOSED. Only Subjects reads it today: SU1 draws the
+   * subject editor, whose controls are an affordance over a write that
+   * `canManageTenant` and M4's two policies both gate. An export or a script
+   * has no role to speak of and gets no controls, which is the right answer for
+   * a PDF anyway.
+   */
+  canEdit?: boolean
   clientId: string
   /** The page's own URL params, verbatim. Selection lives here (`?item=`,
    *  `?theme=`, `?vs=`, `?persona=`…), so a loader resolves the same selection

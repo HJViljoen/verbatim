@@ -199,6 +199,17 @@ export interface SubjectListBlock {
   /** Null where `subjects` is readable; a sentence where M4 is not applied. */
   notRecorded: string | null
   setLine: string
+  /**
+   * Whether this reader may change the set.
+   *
+   * THE AFFORDANCE, NOT THE GATE — the three subject writes carry
+   * `canManageTenant` in lib/actions/subjects.ts, and M4's two write policies
+   * key on `get_my_role()` as well as on client_id. It is on the BLOCK because
+   * the block draws the controls and the page knows the role: SU1 used to rely
+   * on the editor's `canEdit` defaulting to true, which is a permission flag
+   * open by default, and the one thing a permission flag must not be.
+   */
+  canEdit: boolean
 }
 
 export interface SubjectVoice {
@@ -832,6 +843,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       ? 'Your subjects are not recorded for this workspace yet.'
       : null,
     setLine: setLine(active.length, proposed.length),
+    canEdit: scope.canEdit ?? false,
   }
 
   let selected: SubjectPane | null = null

@@ -94,6 +94,20 @@ describe('SU1 · the subjects list', () => {
     expect(text).toContain('Confirm')
   })
 
+  // A PERMISSION FLAG MUST NOT BE OPEN BY DEFAULT. SU1 used to rely on
+  // SubjectEditor's `canEdit` defaulting to true, so a caller that forgot the
+  // prop offered the write rather than hiding the button. It is now data on the
+  // block, taken from the session's role.
+  it('draws no write control for a reader who may not change the set', () => {
+    const data = candidatesFixture()
+    data.list.canEdit = false
+    const text = renderText(subjectsList.render(data, 'app', ctx))
+    expect(text).toContain('Durability')
+    expect(text).not.toContain('Confirm')
+    expect(text).not.toContain('Rename')
+    expect(text).not.toContain('Stop')
+  })
+
   it('is email-safe', () => {
     const markup = render(subjectsList.render(subjectsFixture(), 'email', ctx))
     expect(markup).toContain('<table')

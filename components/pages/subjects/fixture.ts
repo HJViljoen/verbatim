@@ -138,6 +138,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       rule: SUPERSEDE_RULE,
       notRecorded: null,
       setLine: setLine(rows.length, 0),
+      canEdit: true,
     },
     selected: {
       id: 's1',
@@ -201,6 +202,7 @@ export function refusedFixture(over: Partial<SubjectsData> = {}): SubjectsData {
       rule: SUPERSEDE_RULE,
       notRecorded: 'Your subjects are not recorded for this workspace yet.',
       setLine: setLine(0, 0),
+      canEdit: true,
     },
     selected: null,
     ...over,
@@ -226,6 +228,7 @@ export function candidatesFixture(over: Partial<SubjectsData> = {}): SubjectsDat
       rule: SUPERSEDE_RULE,
       notRecorded: null,
       setLine: setLine(0, 2),
+      canEdit: true,
     },
     selected: null,
     ...over,

@@ -45,6 +45,7 @@ export const subjectsList: Block<SubjectsData> = {
             }))}
             setLine={l.setLine}
             notRecorded={l.notRecorded}
+            canEdit={l.canEdit}
           />
         </BlockFrame>
       )

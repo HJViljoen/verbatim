@@ -73,13 +73,15 @@ export interface SubjectEditorProps {
    * measured on, and the column grants already decide what may be written
    * (`name` and `description` carry no UPDATE at all).
    *
-   * BUT ROLE IS NOT IN THE GRANTS. `grant insert (…)` and
-   * `grant update (status, superseded_by, …) on public.subjects to
-   * authenticated` admit every member of the tenant, so a viewer could name,
-   * confirm and stop a subject with nothing but RLS in the way. Settings
-   * passes `canManageTenant(role)` and the write path refuses the same set of
-   * calls server-side (`lib/actions/subjects.ts`); this flag is the
-   * affordance, not the gate.
+   * AND THE GATE IS NOT HERE. Settings passes `canManageTenant(role)`, the
+   * write path refuses the same set of calls server-side
+   * (`lib/actions/subjects.ts`), and M4's two write policies now key on
+   * `get_my_role()` as well as on client_id, so the database refuses a
+   * member's PATCH too. This flag is the affordance.
+   *
+   * DEFAULTS CLOSED. A permission flag whose default is true puts the burden on
+   * every future caller to remember. Both call sites pass it; a forgotten prop
+   * is now a missing button rather than an offered write.
    */
   canEdit?: boolean
 }
@@ -90,7 +92,7 @@ const cls = {
   meta: 'font-mono text-[10.5px] text-muted-foreground',
 }
 
-export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = true }: SubjectEditorProps) {
+export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = false }: SubjectEditorProps) {
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<SubjectEditorRow | null>(null)
   const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)

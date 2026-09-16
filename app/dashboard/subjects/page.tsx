@@ -1,4 +1,4 @@
-import { getSessionContext } from '@/lib/auth'
+import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { readingHandle } from '@/lib/reading/read'
 import { loadSubjectsPage } from '@/lib/pages/subjects'
 import { SubjectsPage } from '@/components/pages/subjects'
@@ -19,7 +19,7 @@ export default async function Page({
   searchParams?: Promise<Record<string, string | undefined>>
 }) {
   const sp = (await searchParams) ?? {}
-  const { supabase, clientId } = await getSessionContext()
-  const data = await loadSubjectsPage({ supabase, clientId, reading: readingHandle(clientId), params: sp })
+  const { supabase, clientId, role } = await getSessionContext()
+  const data = await loadSubjectsPage({ supabase, clientId, reading: readingHandle(clientId), params: sp, canEdit: canManageTenant(role) })
   return <SubjectsPage data={data} params={sp} />
 }
