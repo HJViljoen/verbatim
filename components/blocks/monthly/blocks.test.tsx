@@ -4,6 +4,8 @@ import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { fmtInt, fmtPct } from '@/lib/format'
+import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
@@ -367,5 +369,52 @@ describe('the five sections that are Overview’s', () => {
     const data = monthlyFixture()
     const merged = mergeFigures(ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data).figures))
     expect(Object.keys(merged).length).toBeGreaterThan(0)
+  })
+})
+
+describe('what the artefact printed and what the record keeps', () => {
+  // THE ASSERTION NOTHING MADE BEFORE. `sent_figures` is append-only — no
+  // UPDATE grant and a BEFORE UPDATE trigger — so a row that disagrees with the
+  // sheet it was written from is a permanently wrong statement about a client's
+  // month. The two come off one reading in production; a fixture can put them
+  // out of step (and did: a mover's verdict carried another row's label and
+  // counts), and the render tier is the only place that can catch it.
+  const recorded = (data: ReturnType<typeof monthlyFixture>) => {
+    const answers = ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data))
+    return sentFigureRows({
+      month: data.month,
+      monthStatus: data.monthStatus,
+      artefact: 'monthly',
+      verdicts: answers.flatMap((a) => a.verdicts),
+      figures: mergeFigures(answers.map((a) => a.figures)),
+      figureAudience: 'artefact',
+    })
+  }
+
+  it('state the same level, the same two sides and the same label per object', () => {
+    const data = monthlyFixture()
+    const rows = new Map(recorded(data).map((r) => [`${r.objectKind}/${r.objectId}`, r]))
+    const printed = renderText(MONTHLY_BLOCKS['monthly.movers'].render(data, 'app', ctx))
+    let checked = 0
+    for (const m of [...data.movers.growing, ...data.movers.fading]) {
+      const row = rows.get(`theme/${m.id}`)
+      if (!row) continue
+      checked += 1
+      expect(row.label).toBe(m.label)
+      expect(row.k).toBe(m.k)
+      expect(row.n).toBe(m.n)
+      expect(row.value).toBe(m.pct)
+      // And the sheet printed that level, beside that label, in those words.
+      expect(printed).toContain(m.label)
+      expect(printed).toContain(`${fmtPct(m.pct as number)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`)
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+
+  it('never file two rows under one object and one measure', () => {
+    for (const data of STATES) {
+      const keys = recorded(data).map((r) => `${r.audience}/${r.objectKind}/${r.objectId}/${r.measure}`)
+      expect(new Set(keys).size).toBe(keys.length)
+    }
   })
 })
