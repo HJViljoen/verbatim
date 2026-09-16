@@ -640,16 +640,31 @@ async function loadIncoming(
   ])
 
   const byPlatform = new Map<string, number>()
-  let analysed = 0
-  let analysedKnown = false
   for (const v of videoRes) {
     const p = v.platform ?? 'unknown'
     byPlatform.set(p, (byPlatform.get(p) ?? 0) + 1)
-    if (v.analyzed_run_id !== undefined) {
-      analysedKnown = true
-      if (v.analyzed_run_id === run.id) analysed += 1
-    }
   }
+
+  // "ANALYSED" IS EVERY VIDEO THIS UPDATE ANALYSED, not the ones it also
+  // gathered. This was counted inside the `run_id = run.id` fetch above — so it
+  // was videos this update both GATHERED and ANALYSED — and the sent email said
+  // "618 videos gathered · 214 analysed" while This week, off the same update,
+  // said 508. Measured on production (Össur's newest run): gathered 618,
+  // gathered-and-analysed 214, analysed 508. AGENTS.md's incremental-Pass-A
+  // rule is why 508 is the number a client means: insights belong to VIDEOS,
+  // not runs, so 294 videos an earlier update gathered were re-read by this one
+  // and their analysis is this update's work.
+  //
+  // A head count and not a fetch: the only thing printed is the integer. The
+  // column arrives with 20260818090000, and a workspace whose schema predates
+  // it gets `null` — "how many were analysed is not recorded for this update" —
+  // which is the same fallback the fetch above keeps for the same reason.
+  const analysedRes = await supabase
+    .from('videos')
+    .select('platform', { count: 'exact', head: true })
+    .eq('client_id', clientId)
+    .eq('analyzed_run_id', run.id)
+  const analysed = analysedRes.error ? null : analysedRes.count ?? null
   const topRivals = videoRes
     .filter((v) => v.is_competitor && v.competitor_name)
     .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
@@ -667,7 +682,7 @@ async function loadIncoming(
 
   return {
     gathered: videoRes.length,
-    analysed: analysedKnown ? analysed : null,
+    analysed,
     platforms: [...byPlatform.entries()]
       .map(([platform, videos]) => ({ platform, videos }))
       .sort((a, b) => b.videos - a.videos),
