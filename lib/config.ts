@@ -1157,19 +1157,22 @@ export const AGENT_MAX_QUERIES = 5
  *  an answer. A point that cannot muster one is not grounded. */
 export const AGENT_QUOTES_PER_POINT = 3
 
-/** Runs of history shown to the agent. Twelve weekly readings is a quarter —
- *  enough to see a movement, short enough that the model is not handed a year
- *  of numbers to find a pattern in. */
-export const AGENT_TREND_MAX_RUNS = 12
+/** Calendar months of history the agent reads for a "has this changed?"
+ *  question (Phase 1 WP21). Twelve is a year — long enough that a direction
+ *  word has room to be earned three times over and a seasonal tenant is
+ *  compared with its own year, short enough that the model is not handed a
+ *  decade of numbers to find a pattern in. The THREE constants this replaced
+ *  (AGENT_TREND_MAX_RUNS / MIN_POINTS / MIN_EVIDENCE) were floors on a
+ *  run-indexed series and have no meaning on the monthly one: the floors are
+ *  SHARE_BAND's, applied by the same band every other reading uses. */
+export const AGENT_MOVEMENT_MONTHS = 12
 
-/** Readings needed before a direction is claimed at all. Three to six weekly
- *  points is noise; a product that calls noise a trend is the one that gets
- *  caught. Below this the honest answer is "too few readings yet". */
-export const AGENT_TREND_MIN_POINTS = 3
-
-/** Evidence rows a theme needs before its movement means anything. 2 → 4 is a
- *  doubling and it is also nothing. */
-export const AGENT_TREND_MIN_EVIDENCE = 5
+/** Themes whose movement one answer's prompt carries. A question retrieves up
+ *  to AGENT_INSIGHTS_TOTAL insights across many themes; every one of them with
+ *  a year of months would be most of the prompt, and a specific question would
+ *  get a general answer. Ranked by whether the line SAYS anything
+ *  (lib/agent/movement.ts rankMovement), never by chance. */
+export const AGENT_MOVEMENT_TOPICS = 8
 
 // AGENT_ENABLED IS RETIRED (Phase 1 WP21, decision B). It was the master switch
 // for the Verbatim Agent and it never switched the surface off: the pages
@@ -1309,7 +1312,24 @@ export type DirectionReader =
   | 'dashboard.themes'
   /** Reports & briefs · a theme's trajectory word in a document block. */
   | 'documents.trajectory'
-  /** Ask · the movement paragraph a "trend" question is answered from. */
+  /**
+   * Ask · the movement paragraph a "trend" question is answered from.
+   *
+   * TRUE SINCE PHASE 1 WP21, and the first key in this map to flip. The block
+   * it gates no longer reads `theme_observations` — one row per theme per RUN,
+   * dated by the wall clock at persist, with a ±25% ratio against the mean of
+   * the prior readings and no denominator anywhere. It reads
+   * `month_theme_readings` against `month_denominators`: calendar months dated
+   * by the comment, each with its own n, compared by the product's own band,
+   * and a direction word only where `directionWord` earns one over three
+   * consecutive months in one clustering regime under one name.
+   *
+   * That is the re-basing this map exists for, and it is why this key flips
+   * while the other six do not: the others still name a surface reading the
+   * run-indexed series. The gated branch is KEPT and tested — turning this off
+   * returns the agent to saying a topic's history is not readable, not to the
+   * old series, which is deleted.
+   */
   | 'agent.movement'
   /** Initiatives · whether the conversation went the way the client said they wanted. */
   | 'initiatives'
@@ -1354,7 +1374,10 @@ export const DIRECTION_WORDS_BY_READER: Record<DirectionReader, boolean> = {
   'voice.movers': false,
   'dashboard.themes': false,
   'documents.trajectory': false,
-  'agent.movement': false,
+  // The one true key: Ask's movement block re-based on the comment-dated
+  // monthly reading in WP21. See the type above for why this one and not the
+  // other six.
+  'agent.movement': true,
   'initiatives': false,
   'competitive.deltas': false,
   'profile.mix': false,

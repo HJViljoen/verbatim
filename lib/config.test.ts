@@ -151,11 +151,18 @@ describe('persona evidence floors (Pass E) — the numbers that decide what a cl
 // reader turns on the day its own series is re-based on the comment-dated
 // monthly reading, and not one day before, so these tests guard the shape
 // rather than the values — every reader present, every reader readable, and
-// the whole map still off.
+// every reader still off EXCEPT the ones that have re-based.
 describe('directionWordsFor', () => {
-  it('answers for every reader, and every reader is still off', () => {
+  // Ask's movement block re-based in WP21: it reads month_theme_readings
+  // against month_denominators, banded, with directionWord earning the word
+  // over three consecutive months. Every other key still names a surface
+  // reading the run-indexed series, and a key added here without its surface
+  // re-basing is the bug this list exists to make visible.
+  const REBASED: readonly string[] = ['agent.movement']
+
+  it('answers for every reader, and only a re-based reader is on', () => {
     for (const reader of DIRECTION_READERS) {
-      expect(directionWordsFor(reader), reader).toBe(false)
+      expect(directionWordsFor(reader), reader).toBe(REBASED.includes(reader))
     }
   })
 
