@@ -85,10 +85,21 @@ export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly']
 
 export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
 
-/** What to tell someone naming recipients for an artefact nothing builds yet.
+/** What to tell someone naming recipients for an artefact nothing SENDS yet.
+ *
+ *  THE SENTENCE IS ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT, and it used to
+ *  say the other thing: "We do not produce the sales brief yet." Össur has a
+ *  built report titled "Sales brief" (reports, template_key 'sales_brief',
+ *  status 'built'), the Studio still offers sales_objections_competitors from
+ *  starterTemplates(), and two Block B surfaces send a reader to it in the same
+ *  week — This week's "Open the sales brief →" and the weekly email's "This is
+ *  the Sales brief's short form — open the full brief →".
+ *  BUILDABLE_ARTEFACTS is about what a SCHEDULE can send, which is the only
+ *  thing this form decides.
+ *
  *  Client wording: what happens to their list, not which work package. */
 export const notBuiltYet = (a: Artefact): string =>
-  `We do not produce ${ARTEFACT_COPY[a].label.replace(/^The /, 'the ')} yet. We will keep this list and start sending the day we do.`
+  `Nothing sends ${ARTEFACT_COPY[a].label.replace(/^The /, 'the ')} on a schedule yet. We will keep this list and start sending the day something does.`
 
 /** The label for a schedule whose artefact column is still null — a legacy
  *  starter row from before the seven existed. It is named by what it actually

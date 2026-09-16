@@ -88,6 +88,12 @@ describe('artefacts', () => {
     expect(isBuildable('weekly')).toBe(true)
     expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly'])
     expect(notBuiltYet('monthly')).toContain('the monthly reading')
+    // ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT. Össur has a built report
+    // titled "Sales brief" and two Block B surfaces link to it in the same
+    // week, so "we do not produce the sales brief yet" was false on screen.
+    expect(notBuiltYet('brief:sales')).toBe(
+      'Nothing sends the sales brief on a schedule yet. We will keep this list and start sending the day something does.',
+    )
   })
 
   it('counts addresses once across artefacts', () => {

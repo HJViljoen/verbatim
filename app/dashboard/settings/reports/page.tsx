@@ -71,7 +71,7 @@ export default async function SettingsReportsPage() {
                     {r.buildable ? (r.schedule ? cadenceLabel(r.schedule.cadence) : '—') : 'not yet'}
                     {r.schedule && !r.sending && (
                       <span className="block">
-                        {!r.buildable ? 'we do not produce this yet'
+                        {!r.buildable ? 'nothing sends this on a schedule yet'
                           : inputs.period === 'paused' ? 'paused'
                             : r.schedule.active ? 'nobody to send to' : 'switched off'}
                       </span>
