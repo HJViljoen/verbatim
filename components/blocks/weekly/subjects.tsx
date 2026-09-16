@@ -49,16 +49,17 @@ function Contribution({ videos, mode }: { videos: number | undefined; mode: Rend
     : <span className="text-[11.5px] text-muted-foreground"> · {body}</span>
 }
 
-function Row({ row, contribution, rivalLabel, categoryLabel, mode }: {
+function Row({ row, contribution, rivalLabel, categoryLabel, mode, appUrl }: {
   row: SubjectRow
   contribution: number | undefined
   rivalLabel: string | null
   categoryLabel: string
   mode: RenderMode
+  appUrl: string
 }) {
   const label = mode === 'email'
     ? <strong>{row.label}</strong>
-    : <Link href={row.href} className="underline-offset-2 hover:underline">{row.label}</Link>
+    : <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
   const line = (
     <>
       you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} /> · {categoryLabel.toLowerCase()} <Side side={row.category} mode={mode} />
@@ -104,7 +105,7 @@ export const weeklySubjects: Block<WeeklyData> = {
         meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named · month to date` : undefined}
         footer={mode === 'email'
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
-          : <Link href="/dashboard/subjects" className="hover:underline">Open Subjects →</Link>}
+          : <Link href={href} className="hover:underline">Open Subjects →</Link>}
       >
         {children}
       </BlockFrame>
@@ -124,6 +125,7 @@ export const weeklySubjects: Block<WeeklyData> = {
             rivalLabel={s.rivalLabel}
             categoryLabel={s.categoryLabel}
             mode={mode}
+            appUrl={ctx.appUrl}
           />
         ))}
         {note

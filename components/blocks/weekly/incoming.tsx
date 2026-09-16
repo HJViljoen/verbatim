@@ -45,6 +45,9 @@ export const weeklyIncoming: Block<WeeklyData> = {
     const i = data.incoming
     const mix = i.platforms.map((p) => `${platformLabel(p.platform)} ${fmtInt(p.videos)}`).join(' · ')
     const empty = weeklyIncoming.emptyState(data)
+    // Absolute in every mode: print goes into a PDF and the share page is read
+    // outside the app (lib/blocks/types.ts, BlockContext.appUrl).
+    const weekHref = `${ctx.appUrl}/dashboard/week`
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={weeklyIncoming.title}
@@ -52,8 +55,8 @@ export const weeklyIncoming: Block<WeeklyData> = {
         mode={mode}
         meta={weeklyPeriod(data.window, data.month)}
         footer={mode === 'email'
-          ? <a href={`${ctx.appUrl}/dashboard/week`} style={{ color: EMAIL.ink }}>Open This week →</a>
-          : <Link href="/dashboard/week" className="hover:underline">Open This week →</Link>}
+          ? <a href={weekHref} style={{ color: EMAIL.ink }}>Open This week →</a>
+          : <Link href={weekHref} className="hover:underline">Open This week →</Link>}
       >
         {children}
       </BlockFrame>

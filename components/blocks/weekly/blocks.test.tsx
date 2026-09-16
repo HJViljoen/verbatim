@@ -51,11 +51,19 @@ describe('the six blocks', () => {
     }
   })
 
-  it('links out absolutely in email, so a link works outside the app', () => {
-    for (const block of weeklyBlocksFor()) {
-      const markup = render(block.render(weeklyFixture(), 'email', ctx))
-      for (const href of markup.match(/href="([^"]+)"/g) ?? []) {
-        expect(href).toMatch(/href="https?:\/\//)
+  // EVERY MODE, not just email. The contract is `ctx.appUrl` — "print goes into
+  // a PDF and email into a client that has no idea what host it came from" —
+  // and the share page is read outside the app too. Only the email arm obeyed
+  // it, so the PDF's one-link-per-section were dead hrefs.
+  it('links out absolutely in every mode, so a link works outside the app', () => {
+    for (const data of STATES) {
+      for (const block of weeklyBlocksFor()) {
+        for (const mode of MODES) {
+          const markup = render(block.render(data, mode, ctx))
+          for (const href of markup.match(/href="([^"]+)"/g) ?? []) {
+            expect(href).toMatch(/href="https?:\/\//)
+          }
+        }
       }
     }
   })

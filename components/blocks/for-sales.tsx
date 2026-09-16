@@ -48,14 +48,20 @@ export const forSales: Block<WeeklyData> = {
 
   render(data, mode = 'app', ctx) {
     const s = data.sales
+    // ABSOLUTE IN EVERY MODE (lib/blocks/types.ts, BlockContext.appUrl). Only
+    // the email obeyed this, so the PDF's "one link per section" were dead
+    // hrefs and the share page's links were relative although its own header
+    // claims they "point at the app, absolutely".
+    const briefHref = `${ctx.appUrl}${s.briefHref}`
+    const voiceHref = `${ctx.appUrl}/dashboard/voice`
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={forSales.title}
         question={forSales.question}
         mode={mode}
         footer={mode === 'email'
-          ? <a href={`${ctx.appUrl}${s.briefHref}`} style={{ color: EMAIL.ink }}>This is the Sales brief’s short form — open the full brief →</a>
-          : <Link href={s.briefHref} className="hover:underline">This is the Sales brief’s short form — open the full brief →</Link>}
+          ? <a href={briefHref} style={{ color: EMAIL.ink }}>This is the Sales brief’s short form — open the full brief →</a>
+          : <Link href={briefHref} className="hover:underline">This is the Sales brief’s short form — open the full brief →</Link>}
       >
         {children}
       </BlockFrame>
@@ -89,8 +95,8 @@ export const forSales: Block<WeeklyData> = {
             link is what the line was for. */}
         {s.hasMore ? (
           mode === 'email'
-            ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><a href={`${ctx.appUrl}/dashboard/voice`} style={{ color: EMAIL.link, textDecoration: 'none' }}>More in their own words →</a></div>
-            : <Link href="/dashboard/voice" className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">More in their own words →</Link>
+            ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><a href={voiceHref} style={{ color: EMAIL.link, textDecoration: 'none' }}>More in their own words →</a></div>
+            : <Link href={voiceHref} className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">More in their own words →</Link>
         ) : null}
         {s.note
           ? mode === 'email'

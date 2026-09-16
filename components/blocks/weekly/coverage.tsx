@@ -26,14 +26,17 @@ export const weeklyCoverage: Block<WeeklyData> = {
   render(data, mode = 'app', ctx) {
     const c = data.coverage
     const email = mode === 'email'
+    // Absolute in every mode: this link is drawn on paper and on a share page
+    // as well as in the app (lib/blocks/types.ts, BlockContext.appUrl).
+    const href = `${ctx.appUrl}${c.href}`
     return (
       <BlockFrame
         title={weeklyCoverage.title}
         question={weeklyCoverage.question}
         mode={mode}
         footer={email
-          ? <a href={`${ctx.appUrl}${c.href}`} style={{ color: EMAIL.ink }}>The record →</a>
-          : <Link href={c.href} className="hover:underline">The record →</Link>}
+          ? <a href={href} style={{ color: EMAIL.ink }}>The record →</a>
+          : <Link href={href} className="hover:underline">The record →</Link>}
       >
         <div>
           <div

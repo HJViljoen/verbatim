@@ -53,14 +53,19 @@ export const weeklyContent: Block<WeeklyData> = {
 
   render(data, mode = 'app', ctx) {
     const c = data.content
+    // ABSOLUTE IN EVERY MODE (lib/blocks/types.ts, BlockContext.appUrl): print
+    // goes into a PDF and the share page is read outside the app, so a relative
+    // href is a dead link there. The app passes appUrl '' and keeps the
+    // relative form it wants.
+    const weekHref = `${ctx.appUrl}${c.weekHref}`
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={weeklyContent.title}
         question={weeklyContent.question}
         mode={mode}
         footer={mode === 'email'
-          ? <a href={`${ctx.appUrl}${c.weekHref}`} style={{ color: EMAIL.ink }}>Open This week →</a>
-          : <Link href={c.weekHref} className="hover:underline">Open This week →</Link>}
+          ? <a href={weekHref} style={{ color: EMAIL.ink }}>Open This week →</a>
+          : <Link href={weekHref} className="hover:underline">Open This week →</Link>}
       >
         {children}
       </BlockFrame>

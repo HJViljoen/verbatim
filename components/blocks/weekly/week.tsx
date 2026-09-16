@@ -95,7 +95,7 @@ function Flag({ flag, index, mode, appUrl }: { flag: WeekFlag; index: number; mo
         </div>
       ) : null}
       <FlagQuotes quotes={flag.quotes} mode={mode} />
-      <Link href={flag.href} className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">See the week →</Link>
+      <Link href={href} className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">See the week →</Link>
     </div>
   )
 }
