@@ -2007,6 +2007,19 @@ async function loadSalesCitations(
  * lib/engage.ts has used since the digest shipped). Chunks are disjoint and
  * concatenating them in chunk order keeps the output order a serial loop
  * produced.
+ *
+ * THE SIZE IS PART OF THE OUTPUT ORDER, SO CHANGING IT IS NOT ONLY A
+ * PERFORMANCE CHANGE. The output is chunk order, then row order within a chunk,
+ * so where the boundary falls decides the sequence — and `tenantInsights`'
+ * sequence reaches `fetchQuoteCitationsByAudience`, whose Map is keyed in the
+ * order the EVIDENCE ROWS arrive, and then `pool.slice(0, refs.length)`. That
+ * chain is exactly how a chunk size in lib/quotes.ts turned out to be choosing
+ * four of Sealand's "For sales" quotes (the note beside `fetchChunks`, which is
+ * pinned at 120 for that reason). It is bounded here today — a flag's refs are
+ * a handful, so a caller almost never has more than one chunk — but "bounded
+ * today" is a thing to check, not to assume: anyone moving this size should
+ * diff the loader's whole output on both tenants, because no test states what
+ * the order should be.
  */
 async function inChunks<T>(
   ids: readonly string[],
