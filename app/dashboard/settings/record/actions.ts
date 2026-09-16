@@ -57,7 +57,31 @@ export async function fileGateAppeal(_prev: AppealState, formData: FormData): Pr
     return { ok: false, message: 'We could not read which post that was. Refresh the page and try again.' }
   }
 
-  const { error } = await createAdminClient().from(GATE_APPEALS_TABLE).insert({
+  const admin = createAdminClient()
+
+  // RESOLVED AGAINST A VERDICT THAT EXISTS, AND ONE OF THIS TENANT'S. The
+  // migration deliberately declares no foreign key, so nothing else checks
+  // this: an owner- or admin-shaped POST could seed the operator queue with any
+  // platform/video pair, one per key. Role-gated, append-only and confined to
+  // the caller's own tenant, so it was queue noise rather than exposure — but
+  // it was the one place in Block B where a client-supplied identifier reached
+  // a write without being resolved against anything.
+  const verdict = await admin
+    .from('gate_verdicts')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('platform', parsed.data.platform)
+    .eq('video_id', parsed.data.videoId)
+    .limit(1)
+  if (verdict.error && !isMissingGateAppeals(verdict.error)) {
+    console.error(`[record] appeal lookup failed for ${clientId}: ${verdict.error.code ?? '?'} ${verdict.error.message}`)
+    return { ok: false, message: 'We could not take that just now. Try again, and tell us if it keeps happening.' }
+  }
+  if ((verdict.data ?? []).length === 0) {
+    return { ok: false, message: 'We have no record of looking at that post for this workspace, so there is nothing to appeal.' }
+  }
+
+  const { error } = await admin.from(GATE_APPEALS_TABLE).insert({
     client_id: clientId,
     run_id: parsed.data.runId,
     platform: parsed.data.platform,
