@@ -11,12 +11,18 @@ import { isDocumentData } from '../reports/documents/types'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import type { ReportSnapshotData } from '../reports/types'
 import type { WeeklySnapshotData as WeeklySnapshot } from '../reports/weekly-build'
+import type { MonthlySnapshotData as MonthlySnapshot } from '../reports/monthly-build'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { renderWeeklyEmail } from '../email/weekly'
+import { renderMonthlyEmail } from '../email/monthly'
 import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
+import { MonthlyEmptyError, recordSend, snapshotMonthly } from '../reports/monthly-build'
+import type { SentFigureRow } from '../reports/sent-figures'
+import { sentFigureRows } from '../reports/sent-figures'
 import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
-import { sendsWeekly } from './artefact'
+import { monthlyBlocksFor } from '../../components/blocks/monthly'
+import { sendsBlockArtefact, sendsMonthly, sendsWeekly } from './artefact'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -205,7 +211,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // a company name, which is the one thing `resolveScheduleReport` would have
     // been asked for.
     const weekly = sendsWeekly(schedule)
-    const resolved = weekly ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
+    const monthly = sendsMonthly(schedule)
+    const arranged = sendsBlockArtefact(schedule)
+    const resolved = arranged ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
     if (!resolved) {
       await mark('failed', 'The template this schedule sends no longer exists.')
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
@@ -229,8 +237,41 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // what differs is the reading that is frozen and the body that is rendered
     // from it. A schedule says which it is through `lib/schedules/artefact.ts`,
     // and a schedule that says nothing sends exactly what it sent before.
-    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot; title: string; sections: number }
-    if (weekly) {
+    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | MonthlySnapshot; title: string; sections: number }
+    // WHAT THE RECORD WILL SAY THIS ARTEFACT PRINTED, held until the send has
+    // actually happened. Empty for anything that is not a block artefact: a
+    // document brief's figures are display strings with no object behind them
+    // (research/refute-10), and WP19 is what re-bases those.
+    let sentRecord: { rows: SentFigureRow[]; readingAt: string; month: string; monthStatus: 'filling' | 'frozen' } | null = null
+    if (monthly) {
+      let built
+      try {
+        built = await snapshotMonthly({
+          admin,
+          supabase: admin,
+          clientId: schedule.client_id,
+          userId: null,
+          company: resolved.company,
+          answersOf: (reading, keys) => monthlyBlocksFor(keys).map((b) => {
+            const answers = blockAnswers(b, reading)
+            return { figures: answers.figures, verdicts: answers.verdicts }
+          }),
+        })
+      } catch (e) {
+        if (e instanceof MonthlyEmptyError) {
+          await mark('skipped', e.message)
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
+      }
+      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.keys.length }
+      sentRecord = {
+        rows: built.rows,
+        readingAt: built.data.readingAt,
+        month: built.data.month,
+        monthStatus: built.data.monthStatus,
+      }
+    } else if (weekly) {
       let built
       try {
         built = await snapshotWeekly({
@@ -249,6 +290,25 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         throw e
       }
       snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.keys.length }
+      // THE WEEKLY ARTEFACT ENTERS THE RECORD TOO, and the WP asks for exactly
+      // that ("sent figures written at send time for weekly and monthly"). Its
+      // reading is the SAME MONTH — every number on a weekly report is the
+      // month so far — so the rows are keyed by that month and marked with the
+      // artefact that printed them, and four weekly readings plus one monthly
+      // of September are five statements a reader can line up.
+      sentRecord = {
+        rows: sentFigureRows({
+          month: built.data.month,
+          monthStatus: built.data.reading.monthStatus,
+          artefact: 'weekly',
+          verdicts: weeklyBlocksFor(built.data.keys).flatMap((b) => blockAnswers(b, built.data.reading).verdicts),
+          figures: built.data.figures,
+          figureAudience: 'artefact',
+        }),
+        readingAt: built.data.readingAt,
+        month: built.data.month,
+        monthStatus: built.data.reading.monthStatus,
+      }
     } else {
       try {
         const built = await snapshotReport({ admin, supabase: admin, clientId: schedule.client_id, userId: null, report: resolved.report!, company: resolved.company })
@@ -264,7 +324,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     snapshotId = snap.snapshotId
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
-      weekly
+      monthly
+        ? renderMonthlyEmail({ data: snap.data as MonthlySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : weekly
         ? renderWeeklyEmail({ data: snap.data as WeeklySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data: snap.data as ReportSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
 
@@ -281,7 +343,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // The weekly report says every number in words (lib/email/weekly.tsx), so
     // it asks the runner for no PNGs at all and an image-blocking client loses
     // nothing.
-    const imageTiles = reviewing || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = reviewing || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return (snap.data as ReportSnapshotData).sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
@@ -374,6 +436,20 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         .eq('id', sendId)
       if (sent) await admin.from('report_schedules').update({ last_sent_at: now }).eq('id', schedule.id)
       if (schedule.report_id) await admin.from('reports').update({ status: 'built', latest_snapshot_id: snapshotId, updated_at: now }).eq('id', schedule.report_id)
+    }
+    // 7. THE RECORD, AFTER THE FACT AND ONLY IF THERE IS ONE. A send that did
+    // not go out printed nothing to anybody, so nothing is recorded for it; a
+    // send that did is stamped with what it was a reading of and what it said,
+    // non-fatally — see recordSend. Test sends and previews never reach here.
+    if (recording && sent && sentRecord) {
+      await recordSend(admin, {
+        clientId: schedule.client_id,
+        snapshotId,
+        readingAt: sentRecord.readingAt,
+        month: sentRecord.month,
+        monthStatus: sentRecord.monthStatus,
+        rows: sentRecord.rows,
+      })
     }
     return { status: sent ? 'sent' : 'failed', sendId, snapshotId, artifactId, shareUrl: shareUrl ?? undefined, subject: email.subject, ms: ms(), ...(sent ? {} : { error: 'email not sent, provider not configured or the send failed' }) }
   } catch (e) {

@@ -17,22 +17,26 @@ import type { MonthlyData } from '@/lib/pages/monthly'
  * year. The monthly report owns its own eight keys; what it does not own is the
  * code behind five of them.
  *
- * THE TITLE MAY CHANGE, THE ANSWERS MAY NOT. `title` and `question` are the
- * artefact's words — the mock heads section 4 "Rivals' month" where the page
- * heads it "Rivals" — but `figures`, `verdicts`, `quotes` and `emptyState` are
- * forwarded untouched, because those are the reading, and a report that
- * declared different figures from the page it is made of would be a second
- * reading of one month.
+ * THE HEADING IS THE PAGE'S, AND IT HAS TO BE. The mock heads section 4
+ * "Rivals' month" where the page heads it "Rivals", and an adapter could carry
+ * a different `title` — but a Block renders its OWN heading inside its own
+ * frame (`BlockFrame title={overviewRivals.title}`), so an override would reach
+ * the deck's sheet heading and the artefact's contents list and NOT the words
+ * printed over the table. A reader would see "Rivals' month" at the top of the
+ * sheet and "Rivals" three lines under it. One heading is worth more than the
+ * mock's adjective, so `title` is forwarded like everything else, and the month
+ * is said once, in the masthead, where it belongs.
+ *
+ * `figures`, `verdicts`, `quotes` and `emptyState` are forwarded untouched for
+ * a different reason: those are the READING, and a report that declared
+ * different figures from the page it is made of would be a second reading of
+ * one month.
  */
-export function fromOverview(
-  key: string,
-  block: Block<OverviewData>,
-  over: { title?: string; question?: string } = {},
-): Block<MonthlyData> {
+export function fromOverview(key: string, block: Block<OverviewData>): Block<MonthlyData> {
   return {
     key,
-    title: over.title ?? block.title,
-    ...(over.question ?? block.question ? { question: over.question ?? block.question } : {}),
+    title: block.title,
+    ...(block.question ? { question: block.question } : {}),
     render(data, mode, ctx) {
       return block.render(data.overview, mode, ctx)
     },

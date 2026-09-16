@@ -44,6 +44,23 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     sections: [],
   },
   {
+    // THE MONTHLY REPORT (Phase 1 WP18), and it is here for exactly the reason
+    // the weekly one is: a schedule names what it sends through `starter_key`
+    // until M8's `report_schedules.artefact` column lands, and every guard that
+    // asks "is this a template we know?" must answer yes for it — otherwise the
+    // moment an operator points a schedule at the monthly report, editing its
+    // recipients is refused with "Pick a template." `artefact: true` keeps it
+    // out of the picker: it is an arrangement of BLOCK keys
+    // (lib/reports/monthly.ts) and carries no sections, so it is not a starting
+    // point for a report anybody could edit.
+    key: 'monthly_report',
+    artefact: true,
+    name: 'Monthly report',
+    audience: 'general',
+    description: 'The month in full: where you stand on your subjects, what moved, the rivals’ month, your moves, one voice per subject and what to decide before the next reading.',
+    sections: [],
+  },
+  {
     // RETIRED (Phase 1 WP17). The weekly REPORT replaces it — an arranged
     // report over block keys, stated month-to-date against the trailing
     // baseline, rather than the dashboard's run-indexed tiles. It stays here,

@@ -8,7 +8,9 @@ import { hydratedShare, recordShareView } from '@/lib/reports/share-view'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData } from '@/lib/reports/monthly-build'
 import { WeeklyShareShell } from '@/components/share/weekly-share-shell'
+import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 
@@ -71,6 +73,15 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <main>
         <WeeklyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // A monthly report (Phase 1 WP18): eight blocks over one reading, in the same
+  // screen rendering the app draws, so the link and the email agree.
+  if (isMonthlyData(data)) {
+    return (
+      <main>
+        <MonthlyShareShell data={data} appUrl={APP_URL} />
       </main>
     )
   }

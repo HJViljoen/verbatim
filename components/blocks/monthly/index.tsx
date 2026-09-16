@@ -25,11 +25,9 @@ import { monthlyDecide } from './decide'
  */
 export const MONTHLY_BLOCKS: Record<MonthlyBlockKey, Block<MonthlyData>> = {
   'monthly.month': monthlyMonth,
-  // OV2, under the mock's own heading. The page asks how we are seen; the
-  // artefact is read once a month and says which month it is about.
-  'monthly.subjects': fromOverview('monthly.subjects', overviewSubjects, { title: 'Your subjects this month' }),
+  'monthly.subjects': fromOverview('monthly.subjects', overviewSubjects),
   'monthly.movers': monthlyMovers,
-  'monthly.rivals': fromOverview('monthly.rivals', overviewRivals, { title: 'The rivals’ month' }),
+  'monthly.rivals': fromOverview('monthly.rivals', overviewRivals),
   'monthly.moves': fromOverview('monthly.moves', overviewMoves),
   'monthly.voices': monthlyVoices,
   'monthly.decide': monthlyDecide,

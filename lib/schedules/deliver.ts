@@ -9,7 +9,14 @@ import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
 import { isWeeklyData } from '../reports/weekly-build'
+import { isMonthlyData } from '../reports/monthly-build'
 import { renderWeeklyEmail } from '../email/weekly'
+import { renderMonthlyEmail } from '../email/monthly'
+import { recordSend } from '../reports/monthly-build'
+import { sentFigureRows } from '../reports/sent-figures'
+import { blockAnswers } from '../blocks/types'
+import { weeklyBlocksFor } from '../../components/blocks/weekly'
+import { monthlyBlocksFor } from '../../components/blocks/monthly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -76,7 +83,7 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isWeeklyData(data)
+  const subject = isWeeklyData(data) || isMonthlyData(data)
     ? data.subject
     : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
@@ -197,10 +204,13 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // A written report carries no inline tile pictures: its pages are the
     // report, and the email is the way in.
     const document = isDocumentData(data) ? data : null
-    // A weekly artefact says every number in words and asks for no PNGs.
+    // A block artefact says every number in words and asks for no PNGs — the
+    // monthly report's per-row lines are SVG on paper and words in the email.
     const weekly = isWeeklyData(data) ? data : null
+    const monthly = isMonthlyData(data) ? data : null
+    const arranged = weekly ?? monthly
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
-    const imageTiles = document || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = document || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
@@ -261,7 +271,9 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       images[k] = `cid:${cid}`
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
-    const email = weekly
+    const email = monthly
+      ? renderMonthlyEmail({ data: monthly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : weekly
       ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : document
         ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
@@ -286,6 +298,34 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       })
       .eq('id', sendId)
     await admin.from('report_schedules').update({ last_sent_at: now }).eq('id', schedule.id)
+
+    // THE RECORD, AFTER THE FACT. A review send reaches its recipients HERE
+    // rather than in runSchedule — a member pressed Send, possibly days after
+    // the build — so this is where that artefact's figures enter `sent_figures`.
+    // The reading date is the build's, not this moment's: the numbers are the
+    // ones that were frozen, and dating them now would say we read the month on
+    // the day somebody clicked. Non-fatal, and only for a block artefact; a
+    // document brief's figures are display strings with no object behind them
+    // until WP19 re-bases them.
+    if (arranged) {
+      await recordSend(admin, {
+        clientId: schedule.client_id,
+        snapshotId: snapRow.id,
+        readingAt: arranged.readingAt,
+        month: arranged.month,
+        monthStatus: monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling'),
+        rows: sentFigureRows({
+          month: arranged.month,
+          monthStatus: monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling'),
+          artefact: monthly ? 'monthly' : 'weekly',
+          verdicts: monthly
+            ? monthlyBlocksFor(monthly.keys).flatMap((b) => blockAnswers(b, monthly.reading).verdicts)
+            : weeklyBlocksFor(weekly!.keys).flatMap((b) => blockAnswers(b, weekly!.reading).verdicts),
+          figures: arranged.figures,
+          figureAudience: 'artefact',
+        }),
+      })
+    }
     return { status: 'sent', subject: email.subject, ms: ms() }
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e)

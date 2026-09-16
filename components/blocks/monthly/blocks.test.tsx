@@ -282,10 +282,18 @@ describe('the five sections that are Overview’s', () => {
     expect(Object.keys(subjects).length).toBeGreaterThan(0)
   })
 
-  it('take the artefact’s heading where the mock gives them one', () => {
-    expect(MONTHLY_BLOCKS['monthly.rivals'].title).toBe('The rivals’ month')
-    expect(MONTHLY_BLOCKS['monthly.subjects'].title).toBe('Your subjects this month')
+  // A Block renders its own heading inside its own frame, so an adapter that
+  // renamed one would print the new name on the deck's sheet and the old one
+  // three lines under it. The page's heading travels, and the month is said
+  // once, in the masthead.
+  it('keep the page’s own heading, so the sheet and the table agree', () => {
+    expect(MONTHLY_BLOCKS['monthly.rivals'].title).toBe('Rivals')
+    expect(MONTHLY_BLOCKS['monthly.subjects'].title).toBe('Your subjects')
     expect(MONTHLY_BLOCKS['monthly.sound'].title).toBe('How sound is this month')
+    for (const key of ['monthly.subjects', 'monthly.rivals', 'monthly.moves', 'monthly.sound'] as const) {
+      const text = renderText(MONTHLY_BLOCKS[key].render(monthlyFixture(), 'app', ctx))
+      expect(text).toContain(MONTHLY_BLOCKS[key].title)
+    }
   })
 
   it('merge into one figure table with no key printed two ways', () => {
