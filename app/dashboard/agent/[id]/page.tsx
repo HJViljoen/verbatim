@@ -75,6 +75,44 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
     )
   }
 
+  // A DOCUMENT THREAD WITH NO CHECK ON IT. The cap slot is taken before the
+  // spend (app/api/agent/route.ts), so a check that fails after the thread is
+  // written leaves this behind: the model call failed, the document held no
+  // claim about customers or the market, or the check ran and could not be
+  // saved. Before this it fell through to the question branch and read "that
+  // QUESTION did not get an answer — something went wrong on our side rather
+  // than in your data", which for the middle case is false twice over: it was
+  // not a question, and the route had just told the reader the fault was a fact
+  // about their document. WHICH of the three it was is not recorded — the
+  // outcome column is checked to ('answered','partial','silent') and widening
+  // it is a migration — so the sentence names both possibilities instead of
+  // picking one, and says the thing the reader cannot see: it still counted.
+  //
+  // No composer either. "Push back, or narrow it down" belongs under an answer;
+  // there is nothing here to push back on, and the way to retry a document is
+  // to bring it again from the box on the Ask page.
+  if (data.kind === 'document') {
+    return (
+      <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
+        <div className="space-y-6">
+          {head}
+          <Card className="bg-popover">
+            <CardContent className="py-5">
+              <p className="text-[15px] leading-relaxed text-foreground">
+                Nothing was saved against this document. Either nothing in it read as a claim about
+                customers or the market, or the check failed on our side before it finished.
+              </p>
+              <p className="mt-3 text-[13px] text-muted-foreground">
+                It still counted as one of this month&rsquo;s questions. You can bring the document
+                again from the box on the Ask page.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </ExportScope>
+    )
+  }
+
   const last = data.turns[data.turns.length - 1]
   return (
     <ExportScope page="agent" params={{ thread: id }} tiles={exportTiles}>
