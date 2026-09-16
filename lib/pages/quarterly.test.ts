@@ -162,6 +162,27 @@ describe('unsettledItems', () => {
     expect(items).toHaveLength(1)
   })
 
+  it('names the side, so two audiences’ readings of one object are two rows', () => {
+    // The dedup key is object AND audience, and the title carried
+    // `${v.audience ? '' : ''}` — both branches empty — so the last page
+    // printed two identically-titled rows.
+    const side = (a: string) => (a === 'client' ? 'in your own videos' : a === 'industry-other' ? 'in the category' : null)
+    const items = unsettledItems(
+      [
+        verdict({ objectId: 'a', objectLabel: 'Durability', audience: 'client', state: 'too_little_data' }),
+        verdict({ objectId: 'a', objectLabel: 'Durability', audience: 'industry-other', state: 'too_little_data' }),
+      ],
+      { side },
+    )
+    expect(items.map((i) => i.title).sort()).toEqual([
+      'Whether Durability moved, in the category',
+      'Whether Durability moved, in your own videos',
+    ])
+    // A side nobody can name leaves the title as it was, rather than inventing.
+    expect(unsettledItems([verdict({ state: 'refused', audience: 'competitor:Nobody' })], { side })[0].title)
+      .toBe('Whether Durability moved')
+  })
+
   it('carries a band where there is one and the honest phrase where there is not', () => {
     const [banded] = unsettledItems([verdict({ state: 'too_little_data', bandPts: 6.75 })])
     expect(banded.why).toBe('band ±6.8')

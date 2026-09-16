@@ -433,9 +433,22 @@ export function flagOutcome(flag: { label: string }, later: readonly Verdict[]):
   return 'the month it fell in has no baseline behind it yet'
 }
 
-/** The still-unsettled items, off the verdicts the pages drew. One per object,
- *  worst first, so the last page is a list and not a transcript. */
-export function unsettledItems(verdicts: readonly Verdict[], limit = 4): UnsettledItem[] {
+/**
+ * The still-unsettled items, off the verdicts the pages drew. One per object,
+ * worst first, so the last page is a list and not a transcript.
+ *
+ * AND THE TITLE NAMES THE SIDE. The dedup key is object AND audience, so two
+ * audiences' readings of one object are two rows — which is right — but the
+ * title was `Whether ${label} moved${v.audience ? '' : ''}`, both branches
+ * empty, so they arrived as two identically-titled rows and a reader could
+ * not tell which was theirs. `side` turns an audience key into the reader's
+ * words; where it answers nothing the title stays as it was.
+ */
+export function unsettledItems(
+  verdicts: readonly Verdict[],
+  options: { limit?: number; side?: (audience: string) => string | null } = {},
+): UnsettledItem[] {
+  const limit = options.limit ?? 4
   const rank: Record<string, number> = { refused: 0, too_little_data: 1, baseline_forming: 2 }
   const seen = new Set<string>()
   return verdicts
@@ -449,7 +462,7 @@ export function unsettledItems(verdicts: readonly Verdict[], limit = 4): Unsettl
     })
     .slice(0, limit)
     .map((v) => ({
-      title: `Whether ${v.objectLabel} moved${v.audience ? '' : ''}`,
+      title: `Whether ${v.objectLabel} moved${audienceSuffix(v.audience, options.side)}`,
       why:
         v.state === 'refused'
           ? 'comparison refused'
@@ -462,6 +475,13 @@ export function unsettledItems(verdicts: readonly Verdict[], limit = 4): Unsettl
         v.baseline ? `, against ${fmtInt(v.baseline.k)} of ${fmtInt(v.baseline.n)} before it` : ''
       }.`,
     }))
+}
+
+/** ", in your own videos" — or nothing, where nobody can name the side. */
+function audienceSuffix(audience: string | null | undefined, side?: (audience: string) => string | null): string {
+  if (!audience || !side) return ''
+  const words = side(audience)
+  return words ? `, ${words}` : ''
 }
 
 // ---- the loader ---------------------------------------------------------------
@@ -806,6 +826,18 @@ function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: num
   else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
   if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
   return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
+}
+
+/** An audience key in the reader's words — "in your own videos", "in the
+ *  category", "under Freitag" — or null where this workspace does not name it.
+ *  The rival labels are the operator's own from Settings. */
+function audienceSideIn(overview: OverviewData): (audience: string) => string | null {
+  return (audience: string): string | null => {
+    if (audience === CLIENT_AUDIENCE) return 'in your own videos'
+    if (audience === overview.category.audience) return `in ${overview.category.label.toLowerCase()}`
+    const rival = overview.rivals.rows.find((r) => r.audience === audience)
+    return rival ? `under ${rival.label}` : null
+  }
 }
 
 /** One audience's videos in a windowed read, or null when that audience was
@@ -1337,7 +1369,7 @@ function buildUnsettled(a: {
   // month, so the arithmetic is honest and the page says on what assumption.
   const settlesIn = firstQuarterVerdictMonth(a.readings, a.overview.month)
   return {
-    items: unsettledItems(a.verdicts),
+    items: unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) }),
     waiting,
     heldBack,
     settles: quarterUnlocked(a.readings)
