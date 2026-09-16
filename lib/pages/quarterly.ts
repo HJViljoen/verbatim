@@ -1233,7 +1233,14 @@ function buildRivals(a: {
     standingsNote: co ? co.standings.empty : 'The standings could not be read for this workspace.',
     questions: co?.questions.rows.slice(0, 6) ?? [],
     questionsLine: co
-      ? `${fmtInt(co.questions.videos)} rival videos in this window carried a question, over ${fmtInt(co.questions.insights)} readings.`
+      // FINDINGS, NOT READINGS. `co.questions.insights` counts question-kind
+      // audience_insights rows. "Reading" is one of the thirteen words and is
+      // fixed as a measurement of a PERIOD — the cover stamp six pages earlier
+      // in this same document says "your 8th monthly reading" — so one artefact
+      // printed the word twice meaning two different things. Ask already uses
+      // the reader's word for these rows ("3,129 of 3,129 findings
+      // searchable", lib/agent/basis.ts).
+      ? `${fmtInt(co.questions.videos)} rival videos in this window carried a question, over ${fmtInt(co.questions.insights)} findings.`
       : 'What the category asks under a rival’s videos could not be read for this workspace.',
     rivalsNote: a.overview.rivals.standingsNote,
     dualMention: a.overview.rivals.dualMention,
