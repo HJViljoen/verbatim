@@ -1,9 +1,11 @@
-import { SettingsCard, SettingsFrame, SettingsRow, SettingsTable } from '@/components/settings-frame'
+import { FactRow, SettingsCard, SettingsFrame, SettingsRow, SettingsTable } from '@/components/settings-frame'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate } from '@/lib/format'
 import { CADENCE_COPY, type ScheduleCadence } from '@/lib/schedules/types'
 import { notBuiltYet, recipientRows, sendingSummary, unnamedSchedules } from '@/lib/settings/artefacts'
 import { loadReportsPage } from '@/lib/settings/reports-load'
+import { capLine, capNote, monthStartIso } from '@/lib/ask/quota'
+import { ASK_MONTHLY_CAP } from '@/lib/config'
 import { RecipientsForm } from './recipients-form'
 
 // Settings › Reports and recipients (Phase 1 WP16, design ST6's recipient
@@ -34,10 +36,24 @@ export default async function SettingsReportsPage() {
   const { supabase, clientId, role } = await getSessionContext()
   const canEdit = canManageTenant(role)
 
-  const [{ data: client }, inputs] = await Promise.all([
+  // Questions asked this month, through the SESSION client: `agent_messages`
+  // is tenant-readable (client_id = get_my_client_id()), which is one of the
+  // two reasons the cap counts that table rather than the ledger — the ledger
+  // is superadmin-only and this row could not exist over it (lib/ask/quota.ts).
+  const [{ data: client }, inputs, { count: asked, error: askedErr }] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadReportsPage(supabase, clientId),
+    supabase
+      .from('agent_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('role', 'user')
+      .gte('created_at', monthStartIso(new Date())),
   ])
+  // A count that failed to read is not zero. The route fails closed on the same
+  // read; this page says it could not count rather than printing "0 of 40" over
+  // a workspace that has asked forty.
+  const askedThisMonth = askedErr ? null : asked ?? 0
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
 
   const rows = recipientRows(inputs.schedules, inputs.period)
@@ -109,6 +125,23 @@ export default async function SettingsReportsPage() {
           <p className="mt-2 text-[11.5px] text-muted-foreground">
             A report rides the update — it goes out after one, and never on a clock of its own. Nothing is sent at
             all while updates are paused.
+          </p>
+        </SettingsCard>
+
+        <SettingsCard
+          title="Questions"
+          description="What this workspace can ask, and how much of it is left."
+        >
+          <FactRow label="This month">
+            {askedThisMonth == null
+              ? <span className="text-muted-foreground">we could not read this just now</span>
+              : <span className="tabular-nums">{capLine(askedThisMonth, ASK_MONTHLY_CAP)}</span>}
+          </FactRow>
+          <p className="mt-2 text-[11.5px] text-muted-foreground">
+            {askedThisMonth == null
+              ? `Up to ${ASK_MONTHLY_CAP} questions a month on this workspace. A question counts one, and so does a document checked.`
+              : capNote(askedThisMonth, ASK_MONTHLY_CAP)}
+            {' '}Everyone here can read every answer; owners and admins can ask.
           </p>
         </SettingsCard>
 

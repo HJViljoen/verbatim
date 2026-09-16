@@ -1123,10 +1123,28 @@ export const AGENT_INSIGHTS_PER_QUERY = 40
  *  fits a prompt alongside their quotes, not by what retrieval can find. */
 export const AGENT_INSIGHTS_TOTAL = 60
 
-/** Agent turns per tenant per UTC day, separate from ASK_DAILY_LIMIT because a
- *  conversation burns turns far faster than a plan check burns submissions.
- *  Starting value — revisit on real use rather than on a guess. */
-export const AGENT_DAILY_LIMIT = 50
+/**
+ * Questions per TENANT per calendar month (Phase 1 WP21, decision B).
+ *
+ * It replaced AGENT_DAILY_LIMIT = 50, which could not fire underneath it: a
+ * workspace hits forty in a month long before it hits fifty in a day, and a cap
+ * that can never refuse anything teaches a reader that the other one will not
+ * either.
+ *
+ * Priced from the question path, not from the pooled ledger. The $0.058 that
+ * has been quoted for a question is a figure about the document builder — 141
+ * of production's 151 `agent_answer` rows are its research calls. On the ten
+ * rows that are a real question the mean is $0.0469 + $0.0003 interpret =
+ * $0.047, spread $0.019-$0.068. Forty questions is therefore ~$1.90 a month,
+ * and up to ~$20 if every one of them is a large document check
+ * (lib/ask/quota.ts prices a big plan at $0.35-0.50).
+ *
+ * Counted on `agent_messages`, in lib/ask/quota.ts — which says why that table
+ * and not the ledger. Raising it for one workspace is a code change today, not
+ * a column; a per-tenant override is worth having the first time a client asks
+ * for one, and not before.
+ */
+export const ASK_MONTHLY_CAP = 40
 
 /** Reasoning effort for the agent's synthesis call, SEPARATE from the
  *  pipeline's SYNTHESIS_REASONING_EFFORT. A weekly report can afford to think

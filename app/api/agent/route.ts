@@ -7,8 +7,8 @@ import { extractPdfText, pageWarning, PdfTooLargeError, PdfUnreadableError } fro
 import { latestRunId } from '@/lib/agent/retrieve'
 import { canAsk, ASK_NOT_YOURS } from '@/lib/agent/access'
 import { outcomeOf } from '@/lib/agent/types'
-import { AGENT_DAILY_LIMIT, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
-import { dayStartIso, evaluateQuota } from '@/lib/ask/quota'
+import { ASK_MONTHLY_CAP, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
+import { monthStartIso, evaluateMonthlyCap } from '@/lib/ask/quota'
 
 // POST /api/agent — ask the Verbatim Agent a question.
 //
@@ -43,22 +43,24 @@ export async function POST(request: Request) {
 
   const admin0 = createAdminClient()
 
-  // Daily cap covers BOTH faces — one tenant, one budget. Counted on questions
-  // asked, which a document check also is.
-  const { count: usedToday, error: quotaErr } = await admin0
+  // The monthly cap covers BOTH faces — one tenant, one budget. Counted on
+  // questions asked, which a document check also is. The index this rides is
+  // agent_messages_client_role_created_idx (client_id, role, created_at desc),
+  // which is exactly this query.
+  const { count: usedThisMonth, error: quotaErr } = await admin0
     .from('agent_messages')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
     .eq('role', 'user')
-    .gte('created_at', dayStartIso(new Date()))
-  // Fail CLOSED. An unchecked error here made `count` undefined, which
-  // evaluateQuota read as 0 — so the only spend limit in the product
-  // disappeared exactly when the database was unhealthy.
+    .gte('created_at', monthStartIso(new Date()))
+  // Fail CLOSED. An unchecked error here made `count` undefined, which the cap
+  // read as 0 — so the only spend limit in the product disappeared exactly when
+  // the database was unhealthy.
   if (quotaErr) {
-    console.error('[agent] quota read failed:', quotaErr)
+    console.error('[agent] cap read failed:', quotaErr)
     return NextResponse.json({ error: 'Could not start that just now. Try again shortly.' }, { status: 503 })
   }
-  const cap = evaluateQuota(usedToday ?? 0, AGENT_DAILY_LIMIT)
+  const cap = evaluateMonthlyCap(usedThisMonth ?? 0, ASK_MONTHLY_CAP)
   if (!cap.ok) return NextResponse.json({ error: cap.message }, { status: 429 })
 
   // ── Document mode ────────────────────────────────────────────────────────
@@ -258,6 +260,37 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
   const { data: client } = await admin
     .from('clients').select('company_name').eq('id', clientId).maybeSingle()
 
+  // THE SLOT IS TAKEN BEFORE THE SPEND, as it is on the question path. It used
+  // to be taken after the whole check had run and been stored, so a check that
+  // failed late — the 502 below, or "no claims" — spent three model calls and
+  // counted nothing, which under a monthly cap is an unbounded hole. The thread
+  // and the submission row go in here, and the check attaches to them
+  // afterwards; a failure leaves a thread saying a document was brought and not
+  // answered, which is exactly what the question path leaves and exactly what
+  // happened.
+  const { data: thread, error: threadErr } = await admin
+    .from('agent_threads')
+    .insert({
+      client_id: clientId, kind: 'document',
+      title: sourceFilename || 'Document',
+      created_by: userId,
+    })
+    .select('id')
+    .single()
+  if (threadErr || !thread) {
+    return NextResponse.json({ error: 'Could not start that check.' }, { status: 500 })
+  }
+  const threadId = (thread as { id: string }).id
+  // The submission counts as a question for the cap and for the demand log —
+  // what a client brings to be checked is a demand signal like any other.
+  await admin.from('agent_messages').insert({
+    thread_id: threadId,
+    client_id: clientId,
+    run_id: runId,
+    role: 'user',
+    content: sourceFilename ? `Checked: ${sourceFilename}` : 'Checked a pasted document',
+  })
+
   let result
   try {
     result = await runAsk(admin, {
@@ -294,32 +327,14 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
     return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
   }
 
-  const { data: thread, error: threadErr } = await admin
+  await admin
     .from('agent_threads')
-    .insert({
-      client_id: clientId, kind: 'document',
-      title: result.title || sourceFilename || 'Document',
-      plan_check_id: (check as { id: string }).id,
-      created_by: userId,
-    })
-    .select('id')
-    .single()
-  if (threadErr || !thread) {
-    return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
-  }
-
-  // The submission counts as a question for the daily cap and for the demand
-  // log — what a client brings to be checked is a demand signal like any other.
-  await admin.from('agent_messages').insert({
-    thread_id: (thread as { id: string }).id,
-    client_id: clientId,
-    run_id: runId,
-    role: 'user',
-    content: sourceFilename ? `Checked: ${sourceFilename}` : 'Checked a pasted document',
-  })
+    .update({ title: result.title || sourceFilename || 'Document', plan_check_id: (check as { id: string }).id })
+    .eq('id', threadId)
+    .eq('client_id', clientId)
 
   return NextResponse.json({
-    threadId: (thread as { id: string }).id,
+    threadId,
     notice: clip.clipped || result.clipped
       ? 'That document was longer than I can read in one go — only the earlier part was checked.'
       : notice,
