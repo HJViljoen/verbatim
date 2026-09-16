@@ -428,7 +428,7 @@ written as measured, not as intended:
 named on the row. **Five of these depend on migrations M1–M10, which are
 authored on the branch and not yet applied** — each says what it does before
 its migration lands, written as measured. The order they run in on a deploy is
-not free: it is in `status/deploy-checklist.md`, and `monthly-reading.ts
+not free: it is in [`docs/deploy-checklist.md`](docs/deploy-checklist.md), and `monthly-reading.ts
 --write` is a ONE-SHOT that cannot be re-run against a month it has closed.
 
 | Script | Purpose |
