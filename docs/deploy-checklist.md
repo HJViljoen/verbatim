@@ -345,8 +345,10 @@ select
      where tablename in ('gate_verdicts','gate_appeals','video_claims'))                     as policies,
   (select count(*) from pg_indexes where indexname='report_schedules_one_per_artefact')      as uniq;
 ```
-**Both column lists, and neither is optional.** `gv_cols` must be exactly
-`{created_at, client_id, id, kept, keyword, platform, run_id, source, video_id}`
+**Both column lists, and neither is optional.** Both are
+`array_agg(… order by column_name)`, so they print alphabetically and can be
+diffed against these strings character for character. `gv_cols` must be exactly
+`{client_id, created_at, id, kept, keyword, platform, run_id, source, video_id}`
 and must **not** contain `caption_excerpt`, `account_name` or `reason`.
 `vc_cols` must be exactly
 `{claim, client_id, created_at, entity, id, platform, run_id, source_video_id}`
