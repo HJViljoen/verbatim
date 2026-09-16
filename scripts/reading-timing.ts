@@ -128,10 +128,22 @@ const PAGES: [string, Loader][] = [
 
 async function time(name: string, clientId: string, load: Loader, detail: number) {
   calls.length = 0
-  // TWO CLIENTS, as a page route has: the session client for `supabase` and a
-  // separate service-role client for the reading handle. The reading layer's
-  // request memo is keyed on the client object, so sharing one here would
+  // TWO CLIENT OBJECTS, as a page route has: one for `supabase` and a separate
+  // one for the reading handle. That part is not cosmetic — the reading layer's
+  // request memo is keyed on the client OBJECT, so sharing one here would
   // report a saving a real page does not get.
+  //
+  // BUT BOTH CARRY THE SERVICE-ROLE KEY, AND A PAGE'S DO NOT. `supabase` in a
+  // route is the session client: the `authenticated` role, under RLS, with
+  // statement_timeout = 8s. Here it bypasses both. So this harness measures
+  // ROUND TRIPS AND WAVE SHAPE, which is what it was written for, and it cannot
+  // see an RLS regression, a missing column grant or a statement that times out
+  // for a tenant but not for the service role — including on the discard read,
+  // which this package widened on exactly that path. A run that is clean here
+  // is not a page that works; open the page.
+  //
+  // (An anon-key client would not fix it: with no JWT, RLS returns nothing and
+  // every loader below would time an empty database.)
   const supabase = instrumented()
   const scope = { supabase, clientId, reading: readingHandle(clientId, instrumented()), params: {}, canEdit: false }
   const started = Date.now()
@@ -170,6 +182,11 @@ async function main() {
   ).from('clients').select('id, company_name').order('company_name')
   if (error) throw new Error(`clients: ${error.message}`)
   const tenants = ((data ?? []) as Tenant[]).filter((t) => !wantedClient || t.id === wantedClient)
+
+  // Said on every run, because a table of milliseconds invites more trust than
+  // this harness earns: both of its clients are service-role, so nothing below
+  // exercises RLS, the column grants or `authenticated`'s statement timeout.
+  console.log('Both clients here are SERVICE ROLE: this times round trips and wave shape, not RLS, grants or the tenant timeout.')
 
   for (let round = 1; round <= rounds; round++) {
     const summary: { name: string; total: number; reads: number; failure: string | null }[] = []
