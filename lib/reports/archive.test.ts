@@ -65,12 +65,20 @@ describe('dateFilterLine', () => {
   })
 
   it('adds no caveat where nothing is behind the cap', () => {
-    // A list sitting on its cap with the total AT the cap is a complete list.
-    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 100, 100))
-      .toBe('12 of 100 items 1 Sep 2026 to 30 Sep 2026.')
     // An uncapped group is unchanged, passed or omitted.
     expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47, null))
       .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47))
+      .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
+  })
+
+  it('does not weigh the cap against a total drawn from another pool', () => {
+    // The Built group's total is the head count minus the snapshots a send has
+    // taken; the cap applies to the head count. 130 built, 40 sent, the newest
+    // 100 loaded: the old `total > cappedAt` test compared 90 against 100 and
+    // suppressed the caveat over 30 rows that were never looked at.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 90, 100))
+      .toBe('0 of 90 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
   })
 })
 

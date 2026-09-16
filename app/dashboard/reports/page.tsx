@@ -165,17 +165,22 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // THE RAIL COUNTS ARE EXACT; THE LISTS ARE NOT. Each list above is the newest
   // LIST_CAP rows, and the date filter narrows what was loaded — so a filter
   // reaching back past a cap would otherwise report "0 of 340" about an archive
-  // that holds some. `cappedAt` is the cap a group's list is actually sitting
-  // on, and `dateFilterLine` names it only where the total says something is
-  // behind it. `weekly_reports` is uncapped, so the Sent group's cap covers
-  // only its sends: the clause understates the reach of the filter rather than
-  // overstating it, which is the direction to be wrong in.
+  // that holds some. `cappedAt` is the cap a group's list is sitting on where
+  // the TABLE holds more than it.
+  //
+  // THE TEST IS THE HEAD COUNT OF THE POOL THE LIST WAS DRAWN FROM, NOT THE
+  // NUMBER ON THE RAIL. The Built list loads every `kind='report'` row and the
+  // rail then subtracts the ones a send has taken, so the two are different
+  // pools: 130 built, 40 of them sent, and a rail reading 90 against a cap of
+  // 100 said "nothing is hidden" while 30 rows were never loaded — the exact
+  // claim about the workspace this caveat exists to prevent.
   const LIST_CAP = { sent: 200, built: 100, exported: 50 } as const
+  const capOf = (total: number | null | undefined, cap: number) => ((total ?? 0) > cap ? cap : null)
   const cappedAt = group === 'sent'
-    ? (allSends.length >= LIST_CAP.sent ? LIST_CAP.sent : null)
+    ? capOf(sendTotal.count, LIST_CAP.sent)
     : group === 'built'
-      ? (everyBuild.length >= LIST_CAP.built ? LIST_CAP.built : null)
-      : (exportSnapshots.length >= LIST_CAP.exported ? LIST_CAP.exported : null)
+      ? capOf(builtTotal.count, LIST_CAP.built)
+      : capOf(exportTotal.count, LIST_CAP.exported)
 
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a

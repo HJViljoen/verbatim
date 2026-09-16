@@ -62,9 +62,15 @@ export function withinDates(iso: string | null | undefined, filter: DateFilter):
  * are none" and "none of the ones we looked at" — the first is a claim about
  * the workspace and only the second is true.
  *
- * Neither workspace can reach a cap today (13 snapshots and 1 send across
- * both), so this is the archive being honest before it has to be rather than
- * after.
+ * `cappedAt` IS ALREADY THE ANSWER, NOT AN INPUT TO ONE. This function used to
+ * append the clause only where `total > cappedAt`, which is a test the caller's
+ * own numbers cannot always pass: the Built group's `total` is the head count
+ * MINUS the sends that took a snapshot out of the list, while the cap applies
+ * to the head count itself, so a workspace with 130 builds and 40 of them sent
+ * compared 90 against 100 and printed the claim with no caveat. Whether a cap
+ * hides anything is a question about the pool the LIST was drawn from, and only
+ * the caller knows that pool; here, a cap that is passed is a cap that hides
+ * something.
  */
 export function dateFilterLine(filter: DateFilter, shown: number, total: number, cappedAt?: number | null): string | null {
   if (!hasDateFilter(filter)) return null
@@ -74,10 +80,9 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number,
       ? `from ${fullDate(`${filter.from}T00:00:00.000Z`)}`
       : `up to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
   const head = `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
-  // Only where the cap actually hides something: a list sitting on its cap
-  // with nothing behind it is a complete list, and a caveat about nothing is
-  // noise.
-  return cappedAt != null && total > cappedAt
+  // A cap that hides nothing is not passed: a list sitting on its cap with
+  // nothing behind it is a complete list, and a caveat about nothing is noise.
+  return cappedAt != null
     ? `${head} Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
     : head
 }
