@@ -42,3 +42,70 @@ export const UUID_IN_CHUNK = 250
 /** The same, for a sha-256 hex hash (64 characters + the separator): 150 × 66
  *  bytes ≈ 9.9 KB, the same margin under the same measured cap. */
 export const HASH_IN_CHUNK = 150
+
+/**
+ * How many chunked reads a loader may have in flight at once.
+ *
+ * WHY THERE IS A CEILING AT ALL, AND WHY IT IS NOT LOW. In isolation, more
+ * concurrency is simply better: 32 concurrent 100-id reads of `comments`
+ * against production finish in 382 ms against 6,714 ms one at a time, because
+ * the cost here is the round trip and not the query. But a page does not issue
+ * one shape of read in isolation — This week issues sixty-odd — and when the
+ * burst is wide enough this instance goes into a state where EVERYTHING is slow
+ * together: the same page on the same tenant took 5.2 s in one run and 49.5 s
+ * in the next, and in the slow run a one-row `videos` read took 12.6 s and a
+ * read that returns nothing took 1.9 s. That is not a query getting slower.
+ *
+ * MEASURED, five runs of This week per setting (Össur · Sealand, 16 September):
+ *
+ *     4   9.0 · 11.0   7.0 · 7.8          too few: the latency stops overlapping
+ *     6   4.5 ·  5.8   4.2 · 11.1
+ *    12   4.6 ·  4.6   3.6 ·  4.0         the steadiest
+ *    24   3.4 ·  3.9   3.2 · 12.9
+ *   none  4.9 ·  4.4   3.6 ·  3.9
+ *
+ * Twelve, then: enough that a loader's chunks still overlap and the 200-300 ms
+ * a round trip costs is still paid in parallel, and a ceiling on the burst
+ * rather than a throttle on the page. The tail above 10 s appears at 6, at 24
+ * and unbounded alike, so it belongs to the instance and not to this number —
+ * which is the honest reading, and the reason not to tune it further.
+ *
+ * It is a CEILING PER CALL, not a global semaphore. A global one would make one
+ * slow section of a page block another, which is the serialisation this package
+ * spent its time removing.
+ */
+export const READ_CONCURRENCY = 12
+
+/**
+ * `items.map(fn)` awaited together, with at most `limit` running at once, and
+ * the results in the order the items were given.
+ *
+ * Rejection behaves like `Promise.all`: the first failure is what the caller
+ * gets. Workers stop taking new items once one has failed, so a page that is
+ * going to fail does not first finish paying for every chunk of the read that
+ * failed.
+ */
+export async function mapWithLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length <= 1 || limit >= items.length) return Promise.all(items.map((item, i) => fn(item, i)))
+  const out = new Array<R>(items.length)
+  let next = 0
+  let failed = false
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = next++
+      if (i >= items.length || failed) return
+      try {
+        out[i] = await fn(items[i], i)
+      } catch (error) {
+        failed = true
+        throw error
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.max(1, limit) }, worker))
+  return out
+}

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
@@ -275,23 +275,21 @@ export async function loadMonthSeries(
   // had never been asked for.
   const numeratorsAhead =
     table && idColumn && objectIds && objectIds.length > 0
-      ? Promise.all(
-          chunk(objectIds, UUID_IN_CHUNK).map((ids) =>
-            selectAll<StoredNumerator>(() => {
-              let q = client
-                .from(table)
-                .select('*')
-                .eq('client_id', clientId)
-                .gte('month', from)
-                .lte('month', to)
-                .in(idColumn, ids)
-              if (audiences) q = q.in('audience', audiences)
-              return q
-                .order('month', { ascending: true })
-                .order('audience', { ascending: true })
-                .order(idColumn, { ascending: true })
-            }),
-          ),
+      ? mapWithLimit(chunk(objectIds, UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+          selectAll<StoredNumerator>(() => {
+            let q = client
+              .from(table)
+              .select('*')
+              .eq('client_id', clientId)
+              .gte('month', from)
+              .lte('month', to)
+              .in(idColumn, ids)
+            if (audiences) q = q.in('audience', audiences)
+            return q
+              .order('month', { ascending: true })
+              .order('audience', { ascending: true })
+              .order(idColumn, { ascending: true })
+          }),
         )
       : null
   numeratorsAhead?.catch(() => {})
@@ -528,8 +526,8 @@ function loadLabels(
     // branches are about, not the table they read.
     const table = objectKind === 'subject' ? TABLE_SUBJECTS : 'theme_registry'
     const column = objectKind === 'subject' ? 'name' : 'canonical_label'
-    const answers = await Promise.all(
-      parts.map((part) =>
+    const answers = await mapWithLimit(parts, READ_CONCURRENCY, (part) =>
+      Promise.resolve(
         client
           .from(table)
           .select(objectKind === 'subject' ? 'id, name' : 'id, canonical_label')

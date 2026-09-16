@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
 import { fmtInt, monthName, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -612,7 +612,7 @@ async function readByIds<T>(
   fetch: (part: string[]) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
 ): Promise<T[]> {
   if (ids.length === 0) return []
-  const pages = await Promise.all(chunk([...ids], ID_CHUNK).map((part) => selectAll<T>(() => fetch(part))))
+  const pages = await mapWithLimit(chunk([...ids], ID_CHUNK), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
   return pages.flat()
 }
 

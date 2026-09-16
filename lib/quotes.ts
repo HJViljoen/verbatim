@@ -5,7 +5,7 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
-import { chunk, HASH_IN_CHUNK } from './chunk'
+import { chunk, HASH_IN_CHUNK, mapWithLimit, READ_CONCURRENCY } from './chunk'
 import { memoRead } from './reading/memo'
 import { audienceOf } from './rivals'
 import { selectAll } from './supabase-admin'
@@ -332,8 +332,8 @@ interface EvidenceClient {
  *  disjoint by id, so processing the results in chunk order gives the same
  *  per-id ordering the serial loop did. */
 async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
-  const pages = await Promise.all(
-    chunk(ids, size).map((part) => selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> })),
+  const pages = await mapWithLimit(chunk(ids, size), READ_CONCURRENCY, (part) =>
+    selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> }),
   )
   return pages.flat()
 }

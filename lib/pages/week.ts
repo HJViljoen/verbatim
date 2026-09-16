@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
-import { chunk, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
@@ -2008,7 +2008,7 @@ async function inChunks<T>(
   size: number = UUID_IN_CHUNK,
 ): Promise<T[]> {
   const parts = chunk([...new Set(ids)], size)
-  const pages = await Promise.all(parts.map((part) => selectAll<T>(build(part))))
+  const pages = await mapWithLimit(parts, READ_CONCURRENCY, (part) => selectAll<T>(build(part)))
   return pages.flat()
 }
 
