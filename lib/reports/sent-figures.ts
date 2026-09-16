@@ -101,11 +101,32 @@ export const objectKey = (audience: string, kind: string, id: string): string =>
  *   are filed under `object_kind = 'figure'` so nothing joins them to an object
  *   by accident.
  *
- * A TOKEN THAT A VERDICT ALREADY COVERS IS DROPPED. `figures()` on a block that
- * also issues verdicts declares the same share twice — once as a number a model
- * may cite and once as a comparison — and writing both would put two rows about
- * one reading in a record whose whole purpose is to be compared against. The
- * verdict wins, because it is the one that carries an identity.
+ * A TOKEN THAT A VERDICT ALREADY COVERS IS DROPPED, and `covers` is a real
+ * test rather than a key comparison. The first cut of this rule keyed both
+ * halves through `objectKey` and then checked `seen` — but a token's kind is
+ * the literal 'figure' and a verdict's is theme | subject | rival | kind, so
+ * the two key spaces cannot collide and the rule never fired once. Measured on
+ * production: Össur's September would have written eleven rows, of which
+ * `theme / Admiration for personal resilience / 8.8 pct`, MR1's `t1_share`
+ * ("Admiration…'s share of the month", 8.8 pct) and MR3's `moved_…_share`
+ * ("Admiration…, share of the month", 8.8 pct) are one reading, plus two rows
+ * carrying the identical label "videos that raised Admiration for personal
+ * resilience / 34 videos". Two themes arriving as eleven statements is the
+ * opposite of a record that can be compared against.
+ *
+ * So a token is dropped when a verdict ALREADY RECORDED NAMES ITS OBJECT and
+ * states the same number: the token's label contains the verdict's object label
+ * (every such label is built from it — `${label}'s share of the month`,
+ * `videos that raised ${label}`) and the token's value is either that verdict's
+ * share or its numerator. Both halves are required, so an unrelated token that
+ * happens to read 8.8% survives and the month's own denominator — which names
+ * no object — is never touched. The verdict wins, because it is the one that
+ * carries an identity.
+ *
+ * AND TWO TOKENS THAT PRINT THE SAME WORDS ABOUT THE SAME NUMBER ARE ONE
+ * STATEMENT. Two blocks reaching the same figure declare it under two token
+ * ids; the record keeps the first and drops the second rather than filing one
+ * reading twice under two build-local names.
  *
  * `audience` on a verdict is the literal bucket string, which is a NAME and not
  * an identity: renaming a rival leaves its sent figures under the old string and
@@ -155,10 +176,20 @@ export function sentFigureRows(input: {
     })
   }
 
+  // What the verdicts above already state, for the covering test. Built once
+  // and from `out`, so it is exactly the rows that were kept.
+  const stated = out.map((r) => ({ label: r.label.toLowerCase(), pct: r.value, k: r.k }))
+  const said = new Set<string>()
+
   const audience = input.figureAudience ?? 'artefact'
   for (const [token, figure] of Object.entries(input.figures)) {
     const k = key(audience, 'figure', token)
     if (seen.has(k)) continue
+    const value = round1(figure.value)
+    if (coveredByVerdict(figure.label, figure.unit, value, stated)) continue
+    const words = [figure.label.trim().toLowerCase(), figure.unit, value].join(KEY_SEP)
+    if (said.has(words)) continue
+    said.add(words)
     seen.add(k)
     out.push({
       month: input.month,
@@ -166,7 +197,7 @@ export function sentFigureRows(input: {
       objectKind: 'figure',
       objectId: token,
       label: figure.label,
-      value: round1(figure.value),
+      value,
       unit: figure.unit,
       // A TOKEN HAS NO SIDES. `FigureTable` holds a value, a unit and a label
       // and nothing else — which is exactly why the object-keyed half exists —
@@ -183,6 +214,45 @@ export function sentFigureRows(input: {
     })
   }
   return out
+}
+
+/** One recorded verdict, reduced to what a covering test needs. */
+interface StatedReading {
+  label: string
+  pct: number
+  k: number | null
+}
+
+/**
+ * Does a verdict already recorded say this token's number about this token's
+ * object?
+ *
+ * BOTH HALVES, ALWAYS. The label test alone would drop a second, different
+ * reading of the same theme ("videos that raised X" beside "X's share"); the
+ * value test alone would drop any token that happened to read 8.8% in a month
+ * where some theme did. Together they identify the case that actually occurs:
+ * a block declaring, as a citable number, the very reading its own verdict
+ * carries with an identity.
+ *
+ * The labels are built FROM the object's label — `${label}'s share of the
+ * month`, `${label}, share of the month`, `videos that raised ${label}` — so
+ * containment is the join, case-folded because one surface lower-cases its
+ * label on the way in. A verdict with an empty label matches nothing.
+ */
+function coveredByVerdict(
+  label: string,
+  unit: SentUnit,
+  value: number,
+  stated: readonly StatedReading[],
+): boolean {
+  const l = label.trim().toLowerCase()
+  if (!l) return false
+  return stated.some(
+    (s) =>
+      s.label.length > 0 &&
+      l.includes(s.label) &&
+      ((unit === 'pct' && s.pct === value) || (unit === 'videos' && s.k != null && s.k === value)),
+  )
 }
 
 /**

@@ -113,6 +113,59 @@ describe('what a delivered artefact writes down', () => {
     expect(rows).toHaveLength(1)
   })
 
+  // Össur's September would have written eleven rows for two themes: the
+  // theme's own verdict, MR1's t1_share and MR3's moved_…_share are one
+  // reading of the same share, and two tokens carried the identical words
+  // "videos that raised …" over the same count. The rule that was meant to
+  // stop that keyed both halves through objectKey, where a token's kind is
+  // 'figure' and a verdict's never is, so it could not fire once.
+  it('drops a token that a recorded verdict already states about the same object', () => {
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [verdict()],
+      figures: {
+        t1_share: { value: 22, unit: 'pct', label: "Durability's share of the month" },
+        moved_t1_share: { value: 22, unit: 'pct', label: 'Durability, share of the month' },
+        t1_videos: { value: 305, unit: 'videos', label: 'videos that raised Durability' },
+        moved_t1_videos: { value: 305, unit: 'videos', label: 'videos that raised Durability' },
+      },
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0].objectKind).toBe('theme')
+  })
+
+  it('keeps a token that names the object but states a different number', () => {
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [verdict()],
+      figures: { t1_last: { value: 14.2, unit: 'pct', label: "Durability's share last month" } },
+    })
+    expect(rows.map((r) => r.objectId)).toEqual(['t1', 't1_last'])
+  })
+
+  it('keeps a token that reads the same number about something else', () => {
+    // A coincidence of value is not a reading of the same thing, and the
+    // month's own denominator names no object at all.
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [verdict()],
+      figures: { own_share: { value: 22, unit: 'pct', label: 'share of your own videos this month' } },
+    })
+    expect(rows.map((r) => r.objectId)).toEqual(['t1', 'own_share'])
+  })
+
+  it('writes two tokens that print the same words about the same number once', () => {
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [],
+      figures: {
+        month_videos: { value: 449, unit: 'videos', label: 'videos read into this month' },
+        bar_videos: { value: 449, unit: 'videos', label: 'videos read into this month' },
+      },
+    })
+    expect(rows.map((r) => r.objectId)).toEqual(['month_videos'])
+  })
+
   it('keeps one object per audience, because three audiences read it differently', () => {
     const rows = sentFigureRows({
       ...base,
