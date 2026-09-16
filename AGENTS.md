@@ -128,9 +128,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
   being removed" from "this record is being erased" without trusting the
   caller. It exists because `month_theme_readings` cascades from
   `theme_registry` and one merge there would have taken 2,957 frozen rows.
-  The insert guard has exactly ONE opening — decision K's arm, which accepts
-  the FIRST back-read of an audience-month that closed before the table
-  existed. That is a one-shot, and the seed below is what spends it.
+  The insert guard has exactly ONE opening for a NEW row — decision K's arm,
+  which accepts the FIRST back-read of an audience-month that closed before the
+  table existed. That is a one-shot, and the seed below is what spends it. It
+  has a second `return new` and that one is not an opening: an
+  `insert … on conflict do update` fires BEFORE INSERT before it detects the
+  conflict, so a row whose primary key already exists arrives looking like an
+  insert and is let through to the DO UPDATE path, where the UPDATE guard
+  judges it as it always has. **Do not delete that arm's transaction-local
+  marker** (`verbatim.month_reading_refreshed`): a refreshed row carries this
+  transaction's `xmin`, so without the marker decision K's arm can no longer
+  see that the audience-month was already held, and a brand-new key later in
+  the same statement slips in behind the freeze.
 - **The seed/freeze discipline is an order, and out of order the loss is
   permanent.** `scripts/monthly-reading.ts --write` is the only thing that will
   ever give the 201 already-frozen audience-months their subject rows and their
