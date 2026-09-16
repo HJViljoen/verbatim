@@ -741,8 +741,18 @@ decision somebody has to have made rather than a typo to be kept. If
 `report_sends` shows a different set, believe `report_sends`: it is the record
 of what was delivered, and `report_emails` is a column nothing has read since
 T0-10.
-`select subject, recipients, created_at from public.report_sends where client_id = '<össur uuid>' order by created_at desc limit 3;`
-is the record of who actually received one.
+```
+select subject, recipients, status, sent_at
+from public.report_sends
+where client_id = '<össur uuid>' and status = 'sent'
+order by sent_at desc limit 3;
+```
+is the record of who actually received one. **`report_sends` has no
+`created_at`** — the row is written when the dispatcher claims the send
+(`claimed_at`, which is also the index: `report_sends_client_sent_idx
+(client_id, claimed_at desc)`) and stamped `sent_at` when Resend accepts it.
+Drop the `status` filter and order by `claimed_at` if you want every attempt
+including the failures; keep it as written if the question is who received one.
 
 **Sealand gets none from this file.** Its schedule has never had recipients and
 nobody has asked for one; leaving it empty is the safe answer and a decision,
