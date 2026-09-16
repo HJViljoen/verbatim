@@ -2,7 +2,7 @@
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
-import { QUARTERLY_RULE } from '@/lib/reports/quarterly'
+import { QUARTERLY_RULE, QUARTER_PAGE_IN_SENTENCE, quarterPageKindOf } from '@/lib/reports/quarterly'
 import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { Button, Hairline, text } from './primitives'
@@ -46,10 +46,27 @@ export interface QuarterlyEmailProps {
 
 const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 } as const
 
+/** "a, b and c" — the product's own list joining, so a two-key arrangement
+ *  reads as English rather than as a comma. */
+function andList(parts: readonly string[]): string {
+  if (parts.length <= 1) return parts[0] ?? ''
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
 export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: QuarterlyEmailProps) {
   const carried = data.keys.filter((k) => QUARTERLY_EMAIL_KEYS.includes(k))
   const blocks = quarterlyBlocksFor(carried)
-  const held = data.keys.length - carried.length
+  // THE PAGES THIS NOTE IS NOT CARRYING, NAMED FROM THE ARRANGEMENT. The
+  // sentence counted the stored keys and then named all six remaining pages in
+  // fixed text, so a four-key arrangement read "the other 1 — your subjects,
+  // the category, the rivals, your moves, how the quarter was read and what we
+  // could not settle — are in the review itself."
+  const heldNames = data.keys
+    .filter((k) => !QUARTERLY_EMAIL_KEYS.includes(k))
+    .map(quarterPageKindOf)
+    .filter((k): k is NonNullable<typeof k> => k != null)
+    .map((k) => QUARTER_PAGE_IN_SENTENCE[k])
+  const held = heldNames.length
   return (
     <html lang="en">
       <head>
@@ -92,7 +109,9 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                         <div style={{ ...text.small, marginTop: 12 }}>
                           {attached ? 'The PDF is attached. ' : ''}
                           {held > 0
-                            ? `This note carries the first two pages; the other ${held} — your subjects, the category, the rivals, your moves, how the quarter was read and what we could not settle — are in the review itself.`
+                            ? `This note carries ${carried.length === 1 ? 'one page' : `the first ${carried.length} pages`}; ${
+                                held === 1 ? 'the other one' : `the other ${held}`
+                              } — ${andList(heldNames)} — ${held === 1 ? 'is' : 'are'} in the review itself.`
                             : 'The review itself carries every page.'}
                         </div>
                         <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>

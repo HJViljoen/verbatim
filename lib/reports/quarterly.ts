@@ -89,6 +89,32 @@ export const QUARTER_PAGE_QUESTION: Record<QuarterPageKind, string> = {
   unsettled: 'What could we not settle?',
 }
 
+/**
+ * What each page is called INSIDE a sentence — lower case, no verb, no claim.
+ *
+ * The email's covering note names the pages it is not carrying. It named all
+ * six in fixed text, so a stored arrangement of four keys read "the other 1 —
+ * your subjects, the category, the rivals, your moves, how the quarter was
+ * read and what we could not settle — are in the review itself." The same
+ * words, keyed by page, so the sentence is built from the arrangement.
+ */
+export const QUARTER_PAGE_IN_SENTENCE: Record<QuarterPageKind, string> = {
+  cover: 'the quarter',
+  read: 'our read',
+  subjects: 'your subjects',
+  category: 'the category',
+  rivals: 'the rivals',
+  moves: 'your moves',
+  method: 'how the quarter was read',
+  unsettled: 'what we could not settle',
+}
+
+/** The page a block key names, or null for a key this build does not know. */
+export function quarterPageKindOf(key: string): QuarterPageKind | null {
+  const kind = key.startsWith('quarterly.') ? key.slice('quarterly.'.length) : ''
+  return (QUARTER_PAGE_KINDS as readonly string[]).includes(kind) ? (kind as QuarterPageKind) : null
+}
+
 // ---- the quarter --------------------------------------------------------------
 
 export interface Quarter {

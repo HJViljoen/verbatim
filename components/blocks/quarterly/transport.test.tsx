@@ -69,6 +69,27 @@ describe('the email', () => {
     expect(email.html).toContain('The PDF is attached.')
   })
 
+  it('names the pages it is not carrying FROM the arrangement, not from fixed text', () => {
+    // A stored arrangement of four keys used to read "the other 1 — your
+    // subjects, the category, the rivals, your moves, how the quarter was read
+    // and what we could not settle — are in the review itself."
+    const four = renderQuarterlyEmail({
+      data: { ...snapshot, keys: ['quarterly.cover', 'quarterly.read', 'quarterly.subjects', 'quarterly.method'] },
+      shareUrl: null,
+      appUrl: APP,
+      attached: false,
+    })
+    expect(four.html).toContain('the other 2 — your subjects and how the quarter was read — are in the review itself')
+    expect(four.html).not.toContain('the rivals')
+    const three = renderQuarterlyEmail({
+      data: { ...snapshot, keys: ['quarterly.cover', 'quarterly.read', 'quarterly.unsettled'] },
+      shareUrl: null,
+      appUrl: APP,
+      attached: false,
+    })
+    expect(three.html).toContain('the other one — what we could not settle — is in the review itself')
+  })
+
   it('is table markup at the artefact width, with no class and no CSS variable', () => {
     expect(email.html).toContain(String(QUARTERLY_EMAIL_WIDTH))
     expect(email.html).not.toMatch(/class="/)
