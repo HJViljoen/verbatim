@@ -11,6 +11,8 @@
 //   - a real finding suppressed because it did not perfectly resolve (FALSE
 //     SILENCE). Enforcement therefore DEMOTES rather than drops.
 
+import { fullDate, platformLabel } from '../format'
+
 export interface GroundedPoint {
   /** Stable within one answer, so judgement can cite it. */
   id: string
@@ -149,3 +151,28 @@ export function saidHeading(points: readonly { voices: 'client' | 'category' }[]
 export const NEAREST_HEADING = 'Not what you asked, but close'
 
 export const JUDGEMENT_HEADING = 'What I’d take from that'
+
+// ── Where a quoted voice was said, said once (Phase 1 WP21 fix pass) ────────
+//
+// The footnote numbering was unified across the two renderers and the DATE was
+// not: the screen printed `shortDate(meta.date)` — "30 Aug" — and the deck's
+// evidence appendix printed the stored string raw, "2026-08-30", for the same
+// numbered quote. A reader comparing the answer on screen with the appendix in
+// the PDF saw one fact rendered two ways.
+//
+// THE YEAR STAYS. `fullDate`, not `shortDate`: an answer retrieves across the
+// whole corpus, whose comments run back to 2020 on this tenant, and a column of
+// citations reading "30 Aug" beside "30 Aug" is two different Augusts (the rule
+// lib/format.ts already writes down for the readiness page). The screen gains
+// the year rather than the deck losing it.
+
+/** "YouTube · 30 Aug 2026", with whichever halves are recorded. Empty when
+ *  neither is — the caller says "source on file", which is a different
+ *  sentence in each renderer's own furniture. */
+export function citationWhere(
+  meta: { platform?: string | null; date?: string | null } | null | undefined,
+): string {
+  return [meta?.platform ? platformLabel(meta.platform) : null, meta?.date ? fullDate(meta.date) : null]
+    .filter(Boolean)
+    .join(' · ')
+}

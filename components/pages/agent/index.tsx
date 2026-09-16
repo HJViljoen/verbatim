@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
-import { platformLabel, weekdayDate } from '@/lib/format'
+import { weekdayDate } from '@/lib/format'
 import type { Verdict } from '@/lib/ask/types'
 import {
   agentThreadSlides, loadAgentThread, documentPages, CITATIONS_PER_SLIDE, GROUNDED_PER_SLIDE,
   type AgentThreadData, type ThreadAnswer, type Turn,
 } from '@/lib/pages/agent-thread'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, saidHeading } from '@/lib/agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, citationWhere, saidHeading } from '@/lib/agent/types'
 import { askBasisLine } from '@/lib/agent/basis'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
@@ -127,7 +127,10 @@ function Citations({ d, from, to }: { d: D; from: number; to: number }) {
           <div className="min-w-0">
             <p className="font-serif text-foreground">“{c.text}”</p>
             <p className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-              {[c.platform ? platformLabel(c.platform) : null, c.date].filter(Boolean).join(' · ') || 'source on file'}
+              {/* The screen's own rendering, through the shared helper: this
+                  appendix printed the stored `2026-08-30` while the answer on
+                  screen said "30 Aug" for the same numbered quote. */}
+              {citationWhere(c) || 'source on file'}
               {c.href && <> · <a href={c.href} className="underline decoration-dotted underline-offset-2">{c.commentLevel ? 'the comment' : 'the post'}</a></>}
             </p>
           </div>
