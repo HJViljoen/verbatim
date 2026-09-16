@@ -25,6 +25,15 @@ describe('OV4 · rivals', () => {
     expect(text).toContain('15% 150 of 1,000')
   })
 
+  // OV4 READS THE PANEL, CO2 READS THE CORPUS, AND THE META LINE SAYS WHICH.
+  // The line named CO2's denominator for three work packages; it is latent only
+  // while every cell reads "not recorded yet".
+  it('names the panel as its denominator, never the corpus', () => {
+    const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('both shares of a frozen panel of accounts')
+    expect(text).not.toContain('what our search plan found')
+  })
+
   it('prints no rank and says so', () => {
     const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
     expect(text).toContain('no rank is printed')

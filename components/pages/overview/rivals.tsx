@@ -114,7 +114,15 @@ export const overviewRivals: Block<OverviewData> = {
         title={overviewRivals.title}
         question={overviewRivals.question}
         mode={mode}
-        meta="both shares of what our search plan found · no rank is printed"
+        // THE PANEL'S DENOMINATOR, NOT THE CORPUS'S. This line read "both
+        // shares of what our search plan found", which is
+        // CORPUS_DENOMINATOR_LINE's claim — the sentence WP14 wrote for CO2,
+        // whose shares come off `month_denominators`. OV4's come off
+        // `month_audience_stats.panel_videos` / `.attention_comments`, which
+        // M5 defines as a FROZEN PANEL of accounts: upload-dated, Reddit
+        // excluded by construction, re-based by a re-freeze. Different
+        // population, different sentence.
+        meta="both shares of a frozen panel of accounts · no rank is printed"
         footer={footer}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
