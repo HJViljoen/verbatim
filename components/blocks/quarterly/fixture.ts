@@ -221,6 +221,43 @@ export function afterQuarterFixture(): QuarterlyData {
 }
 
 /**
+ * A THIN MONTH: the window pair reads, the clustering reads, and the month's
+ * movers are empty — so no theme is named to follow across the quarter.
+ *
+ * Not a hypothetical. `quarterThemeIds` is the current month's growing and
+ * fading, at most six; a month that moved nothing clearly names none, and the
+ * category page used to report that as "Nothing the category talked about
+ * carried a reading on both sides of this quarter" — a measurement, about a
+ * question nobody asked.
+ */
+export function thinMonthFixture(): QuarterlyData {
+  const overview = overviewFixture()
+  return composeQuarterly({
+    overview: {
+      ...overview,
+      bar: { ...overview.bar, readings: 8 },
+      category: {
+        ...overview.category,
+        growing: [],
+        fading: [],
+        moversNote: 'Nothing moved clearly this month.',
+      },
+    },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13),
+  })
+}
+
+/**
  * A frozen quarterly artefact, over one of the readings above.
  *
  * Built the way `snapshotQuarterly` builds one — the same title, period,

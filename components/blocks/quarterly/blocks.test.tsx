@@ -7,7 +7,7 @@ import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib
 import { CLIENT_AUDIENCE } from '@/lib/rivals'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -156,6 +156,33 @@ describe('the method page dates the quarter in words', () => {
     expect(text).toContain('1 Jul – 30 Sep 2026')
     expect(text).not.toContain('2026-07-01')
     expect(text).not.toContain('2026-09-30')
+  })
+})
+
+// THE CATEGORY PAGE'S FOUR SILENCES, AND NO TWO OF THEM THE SAME CLAIM. The
+// quarter's theme read is bounded to the movers the month named; a month that
+// moved nothing names none, and that used to fall through to the measurement
+// sentence — reporting a comparison that was never attempted as one that found
+// nothing.
+describe('the category page names which silence it is in', () => {
+  it('says nothing was named to follow when the month moved nothing', () => {
+    const thin = thinMonthFixture()
+    // No theme comparison exists, because no theme was named to compare.
+    expect(thin.category.quarter.some((v) => v.objectKind === 'theme')).toBe(false)
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(thin, 'app', ctx))
+    expect(text).toContain('no theme was named to follow across this quarter')
+    expect(text).not.toContain('carried a reading on both sides of this quarter')
+    // And the state it is NOT in: the movers of a month that moved.
+    expect(quarterlyFixture().category.quarter.some((v) => v.objectKind === 'theme')).toBe(true)
+  })
+
+  it('says the migration is missing where it is', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(formingFixture(), 'app', ctx))
+    expect(text).toContain('not recorded for this workspace yet')
+  })
+
+  it('says nothing at all where the pair was read and answered', () => {
+    expect(quarterlyFixture().category.quarterNote).toBeNull()
   })
 })
 

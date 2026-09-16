@@ -580,12 +580,19 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   // the labels live on the month series the pages already loaded, so the
   // quarter is read for the objects those pages name and an unlabelled id can
   // never reach a page.
-  const themeIds = [...overview.category.growing, ...overview.category.fading].map((m) => m.id)
+  const themeIds = quarterThemeIds(overview)
 
   // THE WINDOW PAIR. One read per side, over DISTINCT videos — never three
   // month rows added together.
   const reading = scope.reading?.client ?? readingClient()
-  const themeOptions = { runId: themedRunId, objectIds: themeIds.length ? themeIds : undefined }
+  // AN EMPTY SET IS NOT "NO BOUND". A thin month names no mover, and
+  // `objectIds: undefined` turned that into an UNBOUNDED read whose every row
+  // was then dropped for want of a label — a read of the whole quarter, paid
+  // for, thrown away, and reported as though the pair had been compared and
+  // found nothing. Nothing was asked; `buildCategory` says so in its own words.
+  const themeOptions = themeIds.length
+    ? { runId: themedRunId, objectIds: themeIds }
+    : { runId: null }
   const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, record] = await Promise.all([
     quarterWindowFor(reading, clientId, quarter, themeOptions),
     quarterWindowFor(reading, clientId, prior, themeOptions),
@@ -645,6 +652,19 @@ export async function subjectWindowFor(
   }
 }
 
+/**
+ * The themes this artefact follows across the quarter: the movers its own
+ * category page drew, and no others.
+ *
+ * One definition, read by the LOAD (to bound the window read) and by the
+ * COMPOSE (to tell "nothing was asked" from "nothing was found"). Empty is a
+ * real answer — a thin month moves nothing clearly — and it means the quarter's
+ * theme half is not read at all rather than read and discarded.
+ */
+export function quarterThemeIds(overview: OverviewData): string[] {
+  return [...overview.category.growing, ...overview.category.fading].map((m) => m.id)
+}
+
 export interface ComposeQuarterlyInput {
   overview: OverviewData
   market: MarketSurfaceData | null
@@ -692,6 +712,12 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // The theme half is its own read and its own silence: a window pair can
   // carry denominators and no clustering to count numerators under.
   const themesRead = a.thisQuarter.themes != null && a.lastQuarter.themes != null
+  // …and whether any theme was NAMED to follow. The set is the current month's
+  // movers; a month that moved nothing clearly names none, and a quarter read
+  // for no object has not been compared and found nothing — it has not been
+  // asked. Four silences on that page now, and no two of them are the same
+  // claim.
+  const themesAsked = quarterThemeIds(overview).length > 0
   const subjectsRead = windowApplied && a.subjectsNow != null && a.subjectsBefore != null
   // The month the month-level pages are of is the month the PRODUCT is in, and
   // on a review of a closed quarter that is a month outside it. Every page that
@@ -709,6 +735,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     gate,
     windowApplied,
     themesRead,
+    themesAsked,
     monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
@@ -1115,6 +1142,7 @@ function buildCategory(a: {
   gate: string
   windowApplied: boolean
   themesRead: boolean
+  themesAsked: boolean
   monthNote: string | null
   thisQuarter: WindowReading
   lastQuarter: WindowReading
@@ -1155,17 +1183,22 @@ function buildCategory(a: {
     mood: c.mood,
     moodNote: c.moodNote,
     quarter,
-    // THREE SILENCES, AND THEY ARE NOT THE SAME CLAIM. No windowed reading at
-    // all is a migration that has not been applied; a windowed reading with no
-    // clustering behind it is an update that has not themed; and a pair of
-    // reads that produced no comparable row is a measurement.
+    // FOUR SILENCES, AND NO TWO OF THEM ARE THE SAME CLAIM. No windowed
+    // reading at all is a migration that has not been applied; no theme named
+    // to follow is a month that moved nothing clearly, so nothing was LOOKED
+    // FOR; a windowed reading with no clustering behind it is an update that
+    // has not themed; and a pair of reads that produced no comparable row is a
+    // measurement. The fourth used to be folded into the last, which stated a
+    // measurement about a question nobody asked.
     quarterNote: !a.windowApplied
       ? 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.'
-      : !a.themesRead
-        ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
-        : quarter.length === 0
-          ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
-          : null,
+      : !a.themesAsked
+        ? `Nothing moved clearly in ${a.monthLabel}, so no theme was named to follow across this quarter.`
+        : !a.themesRead
+          ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
+          : quarter.length === 0
+            ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
+            : null,
     quarterVolume: videos != null && before != null ? { videos, before } : null,
   }
 }
