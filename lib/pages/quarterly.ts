@@ -176,6 +176,11 @@ export interface CategoryPage {
    *  could be taken. Empty where M3 is not applied. */
   quarter: Verdict[]
   quarterNote: string | null
+  /** The category's videos this quarter and the quarter before it, as two
+   *  counts. NOT a verdict: a volume is not a share of itself, and banding one
+   *  against the other prints "4,147 of 4,147 · no clear change". Null where
+   *  the window read could not be taken. */
+  quarterVolume: { videos: number; before: number } | null
 }
 
 export interface RivalsPage {
@@ -538,7 +543,15 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
   const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel })
-  const category = buildCategory({ overview, quarterVerdicts, monthLabel, windowApplied, themesRead })
+  const category = buildCategory({
+    overview,
+    quarterVerdicts,
+    monthLabel,
+    windowApplied,
+    themesRead,
+    thisQuarter: a.thisQuarter,
+    lastQuarter: a.lastQuarter,
+  })
   const rivals = buildRivals({ overview, competitive: a.competitive })
   const moves = buildMoves({ overview, market: a.market, quarter })
 
@@ -605,24 +618,19 @@ function buildQuarterVerdicts(a: {
   const now = a.thisQuarter.denominators
   const before = a.lastQuarter.denominators
   if (!now || !before) return []
-  const priorByAudience = new Map(before.map((d) => [d.audience, d]))
   const out: Verdict[] = []
-  for (const d of now) {
-    const was = priorByAudience.get(d.audience)
-    if (!was) continue
-    out.push(
-      quarterChange({
-        object: { kind: 'audience', id: d.audience, label: audienceName(d.audience, a.overview) },
-        audience: d.audience,
-        window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
-        basis: { from: a.prior.from, to: a.prior.to },
-        value: { k: d.videos, n: d.videos },
-        baseline: { k: was.videos, n: was.videos },
-        readings: a.readings,
-      }),
-    )
-  }
-  // The theme side, where the window read carried numerators.
+  // NO VERDICT ON AN AUDIENCE'S OWN VOLUME. The first cut built one per
+  // audience as `value: {k: videos, n: videos}` against the same pair before
+  // it — 100% against 100%, so `proportionDelta` answered 0 points and the
+  // state was `no_clear_change` however much the quarter moved. It rendered as
+  // "The category · 4,147 of 4,147 · no clear change", and it counted as an
+  // ANSWERED comparison in `confidenceOf`, inflating the confidence word with
+  // a comparison that could not fail. A quarter's volume is a pair of counts,
+  // not a share of itself: it is stated as one on the category page and never
+  // banded.
+  //
+  // The theme side, where the window read carried numerators against a real
+  // denominator, is the comparison that means something.
   const themesNow = a.thisQuarter.themes ?? []
   const themesBefore = new Map((a.lastQuarter.themes ?? []).map((t) => [`${t.audience}:${t.theme_id}`, t]))
   const denomNow = new Map(now.map((d) => [d.audience, d.videos]))
@@ -678,10 +686,12 @@ function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: num
   return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
 }
 
-function audienceName(audience: string, overview: OverviewData): string {
-  if (audience === overview.category.audience) return overview.category.label
-  const rival = overview.rivals.rows.find((r) => r.audience === audience)
-  return rival?.label ?? audience
+/** One audience's videos in a windowed read, or null when that audience was
+ *  not in it (or the read could not be taken at all). Never a sum across
+ *  audiences: every audience counts the same category videos from a different
+ *  side, so adding them counts one corpus several times. */
+function windowVideos(reading: WindowReading, audience: string): number | null {
+  return reading.denominators?.find((d) => d.audience === audience)?.videos ?? null
 }
 
 // ---- page 1 · the cover -------------------------------------------------------
@@ -858,10 +868,14 @@ function buildCategory(a: {
   monthLabel: string
   windowApplied: boolean
   themesRead: boolean
+  thisQuarter: WindowReading
+  lastQuarter: WindowReading
 }): CategoryPage {
   const c = a.overview.category
   const prevMonthLabel = longMonth(previousMonthOf(a.overview.month))
   const quarter = a.quarterVerdicts.filter((v) => v.audience === c.audience)
+  const videos = windowVideos(a.thisQuarter, c.audience)
+  const before = windowVideos(a.lastQuarter, c.audience)
   return {
     audience: c.audience,
     label: c.label,
@@ -893,6 +907,7 @@ function buildCategory(a: {
         : quarter.length === 0
           ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
           : null,
+    quarterVolume: videos != null && before != null ? { videos, before } : null,
   }
 }
 

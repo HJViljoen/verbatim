@@ -115,9 +115,22 @@ export const quarterlyCategory: Block<QuarterlyData> = {
 
         {c.attentionNote ? <Note mode={mode}>{c.attentionNote}</Note> : null}
 
-        {c.quarter.length > 0 ? (
+        {c.quarterVolume || c.quarter.length > 0 ? (
           <div className={mode === 'email' ? undefined : 'mt-3'}>
             <Note mode={mode} tone="body">The quarter against the quarter before it</Note>
+            {/* TWO COUNTS, NOT A BADGE. How much was read is a volume and not
+                a share of anything, so it is stated and never banded — the
+                first cut compared it with itself and printed "4,147 of 4,147 ·
+                no clear change" for every audience on the page. */}
+            {c.quarterVolume ? (
+              <Row mode={mode} label="How much was read">
+                <Figure
+                  mode={mode}
+                  value={`${fmtInt(c.quarterVolume.videos)} videos`}
+                  of={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it`}
+                />
+              </Row>
+            ) : null}
             {c.quarter.map((v) => (
               <Row
                 key={`${v.objectKind}:${v.objectId}`}
@@ -128,6 +141,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 <Figure mode={mode} value={`${fmtInt(v.value.k)} of ${fmtInt(v.value.n)}`} />
               </Row>
             ))}
+            {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}
           </div>
         ) : c.quarterNote ? (
           <Note mode={mode}>{c.quarterNote}</Note>

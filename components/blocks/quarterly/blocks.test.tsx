@@ -134,6 +134,33 @@ describe('what each page owes the reader', () => {
     expect(text).toMatch(/Movers and the mix are \w+ against \w+\./)
   })
 
+  it('draws the quarter’s own reading where the window pair was taken', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'app', ctx))
+    expect(text).toContain('The quarter against the quarter before it')
+    // The theme half — unreachable until the window read asked for it.
+    expect(text).toContain('Will it survive a wet commute')
+    // And the volume as two counts, never as a share of itself. The defect
+    // this replaces printed "4,147 of 4,147 · no clear change".
+    expect(text).toContain('4,147 videos')
+    expect(text).toContain('against 3,810 in the quarter before it')
+    expect(text).not.toContain('4,147 of 4,147')
+  })
+
+  it('never counts a comparison that cannot fail as an answered one', () => {
+    // `confidenceOf` reads the same verdict list, so a self-comparison — which
+    // always answered `no_clear_change` — inflated the confidence word too.
+    for (const state of STATES) {
+      for (const v of state.category.quarter) expect(v.value.k).not.toBe(v.value.n)
+      for (const v of state.read.verdicts) expect(v.objectKind).not.toBe('audience')
+    }
+  })
+
+  it('states the volume of a read quarter and the silence of an unread one', () => {
+    expect(forming.category.quarterVolume).toBeNull()
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx))
+    expect(text).toContain('not recorded for this workspace yet')
+  })
+
   it('states the rule of the moves page on the moves page', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'app', ctx))
     expect(text).toContain('We never claim you caused it.')
