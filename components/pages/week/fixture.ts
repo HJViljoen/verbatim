@@ -135,6 +135,7 @@ export function weekFixture(): WeekData {
       // compared and came back inside its band.
       moved: 1,
       pooled: 30,
+      pooledBaseline: true,
       unread: null,
       rows: [{
         id: 'reg-1',
@@ -283,6 +284,7 @@ export function thinFixture(): WeekData {
       monthOf: 452,
       moved: 0,
       pooled: 30,
+      pooledBaseline: true,
       unread: null,
       rows: [],
     },

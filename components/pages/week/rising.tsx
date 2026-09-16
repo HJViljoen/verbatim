@@ -81,7 +81,7 @@ export const weekRising: Block<WeekData> = {
               : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
           </Note>
         ) : null}
-        {r.rows.length > 0 ? (
+        {r.rows.length > 0 && r.pooledBaseline ? (
           <Note mode={mode}>
             {/* THE BASELINE IS VIDEO-MONTHS, NOT DISTINCT VIDEOS, and a reader
                 comparing one month with three has to be told. The three months
@@ -92,7 +92,9 @@ export const weekRising: Block<WeekData> = {
                 this block's shape. Measured read-only on production: Sealand's
                 category Jun–Aug is 449 video-months against 446 distinct
                 videos, so the numbers are fine today and the exposure is the
-                rule. */}
+                rule. Printed only where the window read could not answer —
+                once M3 is applied the baseline is a window and this sentence
+                would be false, so it is gated on `pooledBaseline`. */}
             The three months behind it are added together, so a video that was
             talked about in two of them is counted in both.
           </Note>

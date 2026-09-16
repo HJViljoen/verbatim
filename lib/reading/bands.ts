@@ -178,7 +178,17 @@ export interface QuarterChangeInput {
   /** Both sides come from the WINDOW read (`window_denominators` /
    *  `window_theme_readings`), never from summing month rows: a video whose
    *  thread spans two months is one member of a window and two of a sum, and
-   *  the surplus runs to +38.7% over twelve months on live data. */
+   *  the surplus runs to +38.7% over twelve months on live data.
+   *
+   *  THE RULE HOLDS EVERYWHERE, and This week's §3 is the one place it had to
+   *  be reconciled rather than asserted (Block B fix pass). That block bands a
+   *  month-to-date share against the three months behind it, and it took its
+   *  baseline off a sum of month rows — disclosed, tested, and measured at 449
+   *  video-months against 446 distinct videos on Sealand, so the digits were
+   *  fine and the product held two contradictory rules ~600 lines apart.
+   *  `buildRising` now reads that baseline over its window, keeps the sum as a
+   *  fallback for as long as M3's functions are unapplied, and prints the
+   *  "added together" note only on that fallback. */
   value: { k: number; n: number }
   baseline: { k: number; n: number }
   /** How many monthly readings exist behind this comparison — the count of

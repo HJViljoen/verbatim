@@ -138,6 +138,15 @@ describe('WK §3 · moving now', () => {
     // distinct videos on production today.
     const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
     expect(text).toContain('added together, so a video that was talked about in two of them is counted in both')
+
+    // AND NOT PRINTED WHEN THE BASELINE IS A WINDOW. `QuarterChangeInput`
+    // forbids summing month rows for a banded n; §3 does it only while M3's
+    // window functions are unapplied, and the note is the disclosure of that.
+    // Once the window read answers, the sentence is false of the reading.
+    const windowed = weekFixture()
+    windowed.rising.pooledBaseline = false
+    expect(renderText(weekRising.render(windowed, 'app', ctx)))
+      .not.toContain('added together')
   })
 
   it('refuses rather than printing "of 0 category videos"', () => {

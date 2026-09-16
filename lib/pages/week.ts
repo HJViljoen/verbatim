@@ -275,6 +275,17 @@ export interface RisingBlock {
    */
   moved: number
   pooled: number
+  /**
+   * Whether the baseline is a SUM of three month rows rather than a window
+   * read.
+   *
+   * True while `window_denominators` / `window_theme_readings` (M3) are not
+   * applied: the n the band is drawn on is then video-months, a video talked
+   * about in two of the three counts in both, and the block prints the note
+   * that says so. False once the window read answers, and the note is not
+   * printed, because it is not true of that reading.
+   */
+  pooledBaseline: boolean
   unread: string | null
 }
 
@@ -977,7 +988,7 @@ async function buildRising(input: {
   denominators: readonly { month: string; audience: string; videos: number }[]
 }): Promise<{ block: RisingBlock; series: MonthSeries[] }> {
   const { reading, clientId, month, monthOf } = input
-  const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, moved: 0, pooled: 0, unread: null }
+  const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, moved: 0, pooled: 0, pooledBaseline: true, unread: null }
   const nothing = (unread: string | null) => ({ block: { ...base, unread }, series: [] as MonthSeries[] })
 
   // NO DENOMINATOR, NO SHARE. `monthOf` is 0 when the month has no
@@ -987,7 +998,43 @@ async function buildRising(input: {
   if (monthOf <= 0) return nothing(RISING_NO_DENOMINATOR)
 
   const baselineMonths = trailingMonths(month, BASELINE_MONTHS)
-  const baselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)
+  const summedBaselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)
+
+  // THE BASELINE IS READ OVER ITS WINDOW WHERE THE WINDOW CAN BE READ.
+  //
+  // `QuarterChangeInput` states the rule in the strongest terms the reading
+  // layer has — "never from summing month rows: a video whose thread spans two
+  // months is one member of a window and two of a sum, and the surplus runs to
+  // +38.7% over twelve months on live data" — and this block summed three month
+  // rows for the n its band is drawn on. It was fully disclosed (in the loader,
+  // in the printed note, in a test and in f8e4895, which measured 449
+  // video-months against 446 distinct videos on Sealand), so the digits were
+  // fine; the defect was that the product held one banded comparison that sums
+  // month rows and one that forbids it, ~600 lines apart, each arguing its own
+  // case. Reconciled here, in the one that was summing.
+  //
+  // `window_denominators` / `window_theme_readings` are M3's and are NOT
+  // applied on production, so this is the isMissing* guard shape: the read
+  // comes back null, the sum stays, and the block prints the note that says so.
+  // Where the read answers, the note is not printed, because it is not true.
+  const baselineWindow = {
+    from: `${baselineMonths[0] ?? month}T00:00:00.000Z`,
+    to: `${month}T00:00:00.000Z`,
+  }
+  const windowRead = await loadWindowReading(reading.client, clientId, {
+    ...baselineWindow,
+    audiences: [INDUSTRY_AUDIENCE],
+    runId: input.themedRunId,
+  })
+  const windowOf = windowRead.denominators?.find((d) => d.audience === INDUSTRY_AUDIENCE)?.videos ?? null
+  const windowThemes = windowRead.themes
+    ? new Map(windowRead.themes.filter((t) => t.audience === INDUSTRY_AUDIENCE).map((t) => [t.theme_id, t.videos]))
+    : null
+  // BOTH SIDES OR NEITHER. A distinct-video numerator over a summed denominator
+  // is a third number that is neither reading, so the window baseline is used
+  // only when the window answered for the denominator AND for the theme.
+  const pooledBaseline = windowOf == null || windowOf <= 0 || windowThemes == null
+  const baselineOf = pooledBaseline ? summedBaselineOf : windowOf
 
   let stored: { month: string; audience: string; theme_id: string; videos: number }[]
   try {
@@ -1052,12 +1099,17 @@ async function buildRising(input: {
     const nowN = now?.videos ?? monthOf
     let beforeK = 0
     let beforeN = 0
-    for (const p of points) {
-      if (p.month === month || !within.has(p.month)) continue
-      beforeK += p.k ?? 0
-      beforeN += p.videos ?? 0
+    if (!pooledBaseline) {
+      beforeK = windowThemes.get(r.id) ?? 0
+      beforeN = windowOf
+    } else {
+      for (const p of points) {
+        if (p.month === month || !within.has(p.month)) continue
+        beforeK += p.k ?? 0
+        beforeN += p.videos ?? 0
+      }
+      if (beforeN === 0) { beforeK = r.before; beforeN = baselineOf }
     }
-    if (beforeN === 0) { beforeK = r.before; beforeN = baselineOf }
     const label = series?.objectLabel ?? 'An unnamed theme'
     const verdict = bandVerdict({
       objectKind: 'theme',
@@ -1096,7 +1148,7 @@ async function buildRising(input: {
   }
 
   return {
-    block: { ...base, rows: risers, moved: moved.length, pooled: ranked.length },
+    block: { ...base, rows: risers, moved: moved.length, pooled: ranked.length, pooledBaseline },
     series: themeSet.series,
   }
 }
