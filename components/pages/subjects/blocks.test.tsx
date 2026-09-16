@@ -232,6 +232,16 @@ describe('SU3 · questions your posts did not answer', () => {
     expect(text).toContain('counts, not shares')
   })
 
+  it('says which half of your posts it matched on, because the other half is unreadable', () => {
+    // `video_claims` carries RLS and no tenant SELECT policy until M8, so the
+    // claims half of the haystack came back empty with no error on every page
+    // a client opens — and an empty half reads as "you never answered this".
+    // The OV4 precedent: name the side that cannot be read.
+    const text = renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('what your posts are about')
+    expect(text).toContain('not readable yet')
+  })
+
   it('names Reddit’s 40-comment cap where the questions lean on it', () => {
     expect(renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx)))
       .toContain('we read up to 40 comments on each')

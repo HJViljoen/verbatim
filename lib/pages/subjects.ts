@@ -87,6 +87,21 @@ export const UNANSWERED_GATE = 10
 export const UNANSWERED_BASIS =
   'Counted in the videos we have read for this subject, not in a calendar month — so these are counts, not shares, and carry no change.'
 
+/**
+ * What SU3 says about the half of your posts it cannot read.
+ *
+ * A question is "answered" here when one of your own posts is ABOUT it —
+ * `videos.topics`. The other half of the evidence is what those posts CLAIM
+ * (`video_claims`), and no tenant may select that table until M8 (WP16): RLS
+ * is on and there is not one policy, so a member's read comes back empty with
+ * no error. An empty half that reads as "you never answered this" is the
+ * failure this block exists to avoid, so the block says which half it read —
+ * the OV4 precedent, where a side that cannot be read is named and not drawn
+ * as a zero.
+ */
+export const UNANSWERED_CLAIMS_UNREADABLE =
+  'We match these against what your posts are about. What your posts claim is not readable yet — Verbatim engineering.'
+
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
   'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'
@@ -183,6 +198,9 @@ export interface UnansweredBlock {
   yourPosts: number
   lead: string | null
   basis: string
+  /** What half of your posts this matched on, while the other half is
+   *  unreadable. Null the day M8 lands and the claims can be read. */
+  claims: string | null
   reddit: string | null
   refusal: string | null
 }
@@ -1045,7 +1063,8 @@ async function loadUnanswered(
 ): Promise<UnansweredBlock> {
   const empty: UnansweredBlock = {
     rows: [], questionVideos: 0, population: input.population, yourPosts: 0,
-    lead: null, basis: UNANSWERED_BASIS, reddit: null, refusal: null,
+    lead: null, basis: UNANSWERED_BASIS, claims: UNANSWERED_CLAIMS_UNREADABLE,
+    reddit: null, refusal: null,
   }
   if (insightIds.length === 0) {
     return { ...empty, refusal: 'Nothing has been matched to this subject yet.' }
@@ -1088,20 +1107,19 @@ async function loadUnanswered(
       .lt('upload_date', input.window.to.slice(0, 10))
       .order('id', { ascending: true }),
   )
-  const ownClaims = ownVideos.length > 0
-    ? await selectAll<{ claim: string }>(() =>
-        supabase
-          .from('video_claims')
-          .select('claim, source_video_id')
-          .eq('client_id', clientId)
-          .in('source_video_id', ownVideos.map((v) => v.id).slice(0, 1000))
-          .order('id', { ascending: true }),
-      )
-    : []
-  const haystack = [
-    ...ownVideos.flatMap((v) => v.topics ?? []),
-    ...ownClaims.map((c) => c.claim),
-  ]
+  // WHAT YOUR POSTS ARE ABOUT, AND NOT WHAT THEY CLAIM. The obvious second
+  // half of this haystack is `video_claims` — and `video_claims` carries RLS
+  // with NO tenant SELECT policy until M8 (WP16), verified on production
+  // 2026-09-16: relrowsecurity true, zero policies. A signed-in member's read
+  // of it returns zero rows and NO error, so the claims half was silently
+  // empty on every page a client will ever open, and a question one of your
+  // posts did answer printed as a gap. The OV4 precedent is the answer: the
+  // half we cannot read is named rather than pretended (OWN_POSTS_UNREADABLE),
+  // and it arrives the day M8 does. Reading it on the service role instead
+  // would work and is refused: `reading.client` is the month tables' client,
+  // and "one careless `reading.client.from('<not a month table>')` away from an
+  // RLS bypass" is the rule that file states about itself.
+  const haystack = ownVideos.flatMap((v) => v.topics ?? [])
 
   const nonOwned = new Set<string>()
   const questionInsights: InsightRow[] = []
@@ -1169,6 +1187,7 @@ async function loadUnanswered(
     yourPosts: ownVideos.length,
     lead: unansweredLead(shown, ownVideos.length, input.monthLabel),
     basis: UNANSWERED_BASIS,
+    claims: UNANSWERED_CLAIMS_UNREADABLE,
     reddit: redditVideos > 0 ? REDDIT_THREAD_CAP : null,
     refusal: shown.length === 0
       ? 'Your posts touch every question the category asks on this subject.'

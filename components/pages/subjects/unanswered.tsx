@@ -86,6 +86,7 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         ) : null}
         <div>{u.rows.map((r) => <Row key={r.id} row={r} mode={mode} />)}</div>
         {small(u.basis)}
+        {u.claims ? small(u.claims) : null}
         {u.reddit ? small(u.reddit) : null}
       </BlockFrame>
     )
