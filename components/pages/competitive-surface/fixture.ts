@@ -127,14 +127,22 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
 }
 
 /** A rival the tenant configured and nothing of whose content has ever been
- *  read — Rareform's exact state on Sealand today. */
+ *  read.
+ *
+ *  NOT RAREFORM'S STATE, and it used to claim to be. Rareform has ONE analysed
+ *  video on Sealand, and `rivalState` returns 'quiet' the moment `analysed` is
+ *  above zero — the live page reads "Rareform tracked · nothing of theirs was
+ *  read this window · 1 of their videos read". The fixture paired 'configured'
+ *  with `analysed: 1`, a combination the loader cannot produce, and the test on
+ *  it asserted "nothing of theirs has been read yet" against a row that also
+ *  renders "· 1 of their videos read". `quietRivalFixture` below is Rareform. */
 export function unreadRivalFixture(): CompetitiveSurfaceData {
   const base = competitiveFixture()
   const option = {
     audience: 'competitor:Rareform',
     name: 'Rareform',
     state: 'configured' as const,
-    analysed: 1,
+    analysed: 0,
     retiredAt: null,
     href: competitiveSurfaceHref('Rareform', {}),
     selected: true,
@@ -152,6 +160,21 @@ export function unreadRivalFixture(): CompetitiveSurfaceData {
       rows: [],
       cleared: false,
       empty: questionsEmpty({ rival: 'Rareform', videos: 0, floor: 10 }),
+    },
+  }
+}
+
+/** Rareform's actual state on Sealand: tracked, one analysed video, nothing
+ *  read in this window and no question under any of it. */
+export function quietRivalFixture(): CompetitiveSurfaceData {
+  const base = unreadRivalFixture()
+  const option = { ...base.rivals.selected!, state: 'quiet' as const, analysed: 1 }
+  return {
+    ...base,
+    rivals: {
+      ...base.rivals,
+      options: base.rivals.options.map((o) => (o.name === 'Rareform' ? option : o)),
+      selected: option,
     },
   }
 }

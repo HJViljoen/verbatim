@@ -9,11 +9,11 @@ import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
 import { competitiveUnlocks } from './unlocks'
-import { competitiveFixture, oneMonthFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
+import { competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [competitiveFixture(), unreadRivalFixture(), unreadMonthsFixture(), oneMonthFixture()]
+const STATES = [competitiveFixture(), unreadRivalFixture(), quietRivalFixture(), unreadMonthsFixture(), oneMonthFixture()]
 
 describe('Competitive · every block, every mode, every state', () => {
   it('keeps the copy contract', () => {
@@ -48,6 +48,20 @@ describe('CO1 · the rival selection', () => {
     expect(text).toContain('Ottobock')
     expect(text).toContain('Rareform')
     expect(text).toContain('nothing of theirs has been read yet')
+    // … and the row says nothing has been read, so it cannot also count what
+    // was read. The fixture used to pair 'configured' with `analysed: 1`, a
+    // state the loader cannot produce, and this assertion passed beside
+    // "· 1 of their videos read" in the same sentence.
+    expect(text).not.toMatch(/has been read yet\s*·\s*\d+ of their videos read/)
+  })
+
+  it('says a tracked rival went quiet, with the videos of theirs we did read', () => {
+    // Rareform's actual state on Sealand: one analysed video, none of it in
+    // this window. `rivalState` returns 'quiet' the moment analysed is above
+    // zero, and that is a different sentence from "never read".
+    const text = renderText(competitiveRivals.render(quietRivalFixture(), 'app', ctx))
+    expect(text).toContain('nothing of theirs was read this window')
+    expect(text).toContain('1 of their videos read')
   })
 
   it('says a rival you stopped tracking cannot be listed yet', () => {
