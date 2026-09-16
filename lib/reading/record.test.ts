@@ -154,6 +154,16 @@ describe('recordLines — every fact with its basis', () => {
   const lines = recordLines(inputs())
   const has = (fragment: string) => lines.some((l) => l.includes(fragment))
 
+  // RAW ISO DATES REACHED TWO SENT ARTEFACTS. `delivery.dates` are
+  // `started_at.slice(0, 10)`, and the line read "3 updates delivered,
+  // 2026-09-01 to 2026-09-13" beside a masthead saying "reading as at 18 Sep
+  // 2026" — the monthly report's section 8 and the quarterly review's method
+  // page, which reads the same RecordInputs.
+  it('dates the delivery line in the reader’s form, never in ISO', () => {
+    expect(has('3 updates delivered, 1 Sep to 13 Sep 2026, longest gap 6 days.')).toBe(true)
+    for (const line of lines) expect(line).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+  })
+
   it('prints the three read-depth shares and names the exclusion', () => {
     expect(has('speech was read on 50%, translated on 13%, and on-screen text read on 17%')).toBe(true)
     // AND THE BASIS IS ON THE LINE. ReadDepthRecord.basis is
@@ -164,7 +174,7 @@ describe('recordLines — every fact with its basis', () => {
   })
 
   it('carries the discard record’s late start, because no month before it can show one', () => {
-    expect(has('38% of what was looked at was set aside, recorded only from 2026-08-23')).toBe(true)
+    expect(has('38% of what was looked at was set aside, recorded only from 23 Aug 2026')).toBe(true)
   })
 
   // `source: 'default'` is three facts wearing one value, and the record used
@@ -208,7 +218,7 @@ describe('recordLines — every fact with its basis', () => {
   })
 
   it('prints the change log’s own boundary and how much of it was reconstructed', () => {
-    expect(has('No change record before 2026-09-15')).toBe(true)
+    expect(has('No change record before 15 Sep 2026')).toBe(true)
     expect(has('9 entries were reconstructed from what each update searched')).toBe(true)
   })
 

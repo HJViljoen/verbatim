@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
-import { fmtInt, fmtPct, fullDate } from '../format'
+import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { selectAll } from '../supabase-admin'
 
 import { memoRead } from './memo'
@@ -958,6 +958,18 @@ export function discardCaveat(g: DiscardRecord): string {
  * The record itself, as lines (OV6 and the record page). Each line is one fact
  * with its basis; a fact nothing has recorded says so rather than printing a
  * zero.
+ *
+ * AND THE DATES ARE IN THE READER'S FORM. `delivery.dates` are
+ * `started_at.slice(0, 10)`, so the delivery line read "3 updates delivered,
+ * 2026-09-06 to 2026-09-13" beside a masthead saying "reading as at 18 Sep
+ * 2026" — on the monthly report's section 8 and on the quarterly review's
+ * method page, which reads the same `RecordInputs`. Block B named it on the
+ * weekly masthead and fixed it there; this is the same defect one line over.
+ * The last date carries its year, because a record window may cross one and
+ * "6 Jan to 13 Jan" beside a December report is two different Januaries. The
+ * discard record's `recordedFrom` and the change log's `loggedFrom` were raw in
+ * the same way and are dated the same way now; one test asserts no line of the
+ * record holds an ISO day.
  */
 export function recordLines(input: RecordInputs): string[] {
   const lines: string[] = []
@@ -965,7 +977,7 @@ export function recordLines(input: RecordInputs): string[] {
   lines.push(
     d.delivered === 0
       ? 'No update was delivered in this window.'
-      : `${plural(d.delivered, 'update')} delivered${d.dates.length ? `, ${d.dates[0]} to ${d.dates[d.dates.length - 1]}` : ''}${d.longestGapDays != null ? `, longest gap ${plural(d.longestGapDays, 'day')}` : ''}.`,
+      : `${plural(d.delivered, 'update')} delivered${d.dates.length ? `, ${shortDate(d.dates[0])} to ${fullDate(d.dates[d.dates.length - 1])}` : ''}${d.longestGapDays != null ? `, longest gap ${plural(d.longestGapDays, 'day')}` : ''}.`,
   )
 
   if (input.coverage == null) lines.push('The month-by-month reading has not been recorded for this workspace yet.')
@@ -985,7 +997,7 @@ export function recordLines(input: RecordInputs): string[] {
       // THE BASIS IS STATED, BECAUSE IT IS NOT THIS WINDOW'S. `ReadDepthRecord
       // .basis` is 'all_time_non_reddit' and the type says so; the sentence did
       // not, and it is printed between two lines that both end "in this window"
-      // ("2 updates delivered, 6 Sep to 13 Sep" and "449 videos carried
+      // ("2 updates delivered, 6 Sep to 13 Sep 2026" and "449 videos carried
       // conversation in this window"). The three shares are internally
       // consistent — all three numerators are head counts over the same
       // `analysed` denominator — so this was a basis that was not stated rather
@@ -1017,8 +1029,8 @@ export function recordLines(input: RecordInputs): string[] {
       : g.recordedFrom == null
       ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
       : g.judged === 0
-        ? `Nothing was looked at and set aside in this window — the record of it begins ${g.recordedFrom}.`
-        : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${g.recordedFrom}, so no month before that can show it${discardCaveat(g)}.`,
+        ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
+        : `${share(g.setAside, g.judged)} of what was looked at was set aside, recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}.`,
   )
 
   const i = input.instrument
@@ -1045,7 +1057,7 @@ export function recordLines(input: RecordInputs): string[] {
   lines.push(
     c.loggedFrom == null
       ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
-      : `No change record before ${c.loggedFrom}${c.reconstructed > 0 ? `, though ${fmtInt(c.reconstructed)} ${c.reconstructed === 1 ? 'entry was' : 'entries were'} reconstructed from what each update searched` : ''}.`,
+      : `No change record before ${fullDate(c.loggedFrom)}${c.reconstructed > 0 ? `, though ${fmtInt(c.reconstructed)} ${c.reconstructed === 1 ? 'entry was' : 'entries were'} reconstructed from what each update searched` : ''}.`,
   )
 
   if (input.comparisonsRefused != null) lines.push(refusedSentence(input.refusals))
