@@ -655,6 +655,18 @@ async function loadDiscard(
   // `authenticated` nine columns and `reason` is not one of them, and a select
   // naming it is refused against the TABLE, which would take the page down
   // rather than thin the caveat.
+  //
+  // AND IT IS WIDER ON THE ONE ROLE THAT HAS A TIMEOUT. `access: 'tenant'` is
+  // the settings page's default (lib/settings/record-load.ts), and there the
+  // client is the SESSION client: `authenticated`, which carries
+  // statement_timeout = 8s where `service_role` carries none. Two head counts
+  // that transferred no rows became up to three paged 1,000-row reads of the
+  // same window, over what is still a Seq Scan until M10 is applied. The
+  // measured statement is ~235 ms for Sealand's 2,777-row September, so this is
+  // headroom and not a bug — but it is headroom that shrinks as a tenant's
+  // window grows, and the index that removes the scan is the unapplied half of
+  // this package. If this ever times out before M10 lands, the window is the
+  // thing to narrow.
   const byReason = access === 'service'
   // Two spellings written out, because the select string is a TYPE here (the
   // PostgREST client parses it) and a ternary over two literals is what keeps
