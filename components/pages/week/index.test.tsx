@@ -174,6 +174,17 @@ describe('WK §4 · what came in', () => {
       .toContain('this update’s contribution to September so far: 394 of 475')
   })
 
+  it('hands it back per audience too, which is what the plan asks for', () => {
+    // Each row's own window against that audience's own month — the windowed
+    // RPC already answers per audience, so this costs no extra read.
+    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('this update’s contribution to September so far: 14 of 96')
+    expect(text).toContain('this update’s contribution to September so far: 47 of 118')
+    // And says nothing per row where the windowed read is not available.
+    expect(renderText(weekCameIn.render(thinFixture(), 'app', ctx)))
+      .not.toContain('this update’s contribution to September so far: 0 of')
+  })
+
   it('says when the window reached back into an earlier month', () => {
     const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
     expect(text).toContain('also covered days of August')

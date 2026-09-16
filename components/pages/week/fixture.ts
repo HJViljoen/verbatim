@@ -149,9 +149,9 @@ export function weekFixture(): WeekData {
     cameIn: {
       window: OSSUR_WINDOW,
       rows: [
-        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 } },
-        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 } },
-        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 } },
+        { audience: 'industry-other', label: 'The category', gathered: 429, analysed: 360, platformMix: { youtube: 210, instagram: 85, tiktok: 45, reddit: 20 }, contribution: { videos: 144, of: 398 } },
+        { audience: 'competitor:Ottobock', label: 'Ottobock', gathered: 137, analysed: 96, platformMix: { youtube: 52, instagram: 30, tiktok: 12, reddit: 2 }, contribution: { videos: 47, of: 118 } },
+        { audience: 'client', label: 'Your own brand', gathered: 52, analysed: 52, platformMix: { youtube: 33, instagram: 12, tiktok: 7 }, contribution: { videos: 14, of: 96 } },
       ],
       gathered: 618,
       analysed: 508,
@@ -289,9 +289,9 @@ export function thinFixture(): WeekData {
     cameIn: {
       window: SEALAND_WINDOW,
       rows: [
-        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 } },
-        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 } },
-        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 } },
+        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: null },
+        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: null },
+        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: null },
       ],
       gathered: 1098,
       analysed: 253,

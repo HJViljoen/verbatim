@@ -288,6 +288,18 @@ export interface AudienceRow {
    *  from, and never the same number as the one above. */
   analysed: number
   platformMix: PlatformMix
+  /**
+   * What THIS audience's window put into the month, and the month's own
+   * denominator for it.
+   *
+   * THE PLAN ASKS FOR IT PER ROW and the page printed one line for the whole
+   * update. It costs nothing to do properly — the windowed read already comes
+   * back per audience (`WindowDenominator.audience`) and so do the stored month
+   * rows — and a per-audience line is the one that makes the block's own point:
+   * a window is not a period, whoever's conversation it was. Null where the
+   * windowed read is not available.
+   */
+  contribution: { videos: number; of: number } | null
 }
 
 /** A theme first heard in this update that cleared the floor. */
@@ -712,7 +724,12 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   // ── §4 · what came in ──────────────────────────────────────────────────
   const cameIn = await buildCameIn({
     supabase, clientId, runId: anchor.id, window, month, videos, rivals,
-    windowRead, contributionVideos, monthVideos, subjects, themedRunId,
+    windowRead,
+    // The window clipped to the month where it crosses one, and the window
+    // itself where it does not — per audience, which is what the plan's
+    // per-row contribution line needs and what the RPC already returns.
+    contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
+    contributionVideos, denominators, monthVideos, subjects, themedRunId,
   })
 
   // ── §5 · for sales ─────────────────────────────────────────────────────
@@ -1095,7 +1112,12 @@ async function buildCameIn(input: {
   videos: VideoRow[]
   rivals: { name: string; retiredAt: string | null }[]
   windowRead: Awaited<ReturnType<typeof loadWindowReading>> | null
+  /** The window clipped to the month, per audience — the contribution's
+   *  numerator, and never a sum of month rows. */
+  contributionRead: { audience: string; videos: number }[] | null
   contributionVideos: number | null
+  /** Every stored month row, for the contribution's per-audience denominator. */
+  denominators: readonly { month: string; audience: string; videos: number }[]
   monthVideos: number
   subjects: Subject[] | null
   themedRunId: string | null
@@ -1106,10 +1128,11 @@ async function buildCameIn(input: {
   const take = (audience: string): AudienceRow => {
     const held = byAudience.get(audience)
     if (held) return held
-    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {} }
+    const made: AudienceRow = { audience, label: audienceLabel(audience), gathered: 0, analysed: 0, platformMix: {}, contribution: null }
     byAudience.set(audience, made)
     return made
   }
+  const addedBy = new Map((input.contributionRead ?? []).map((d) => [d.audience, d.videos]))
   for (const v of videos) {
     const audience = v.is_client ? CLIENT_AUDIENCE : v.is_competitor ? rivalKey(v.competitor_name) : INDUSTRY_AUDIENCE
     const rowOut = take(audience)
@@ -1117,6 +1140,13 @@ async function buildCameIn(input: {
     if (v.analyzed_run_id === runId) {
       rowOut.analysed += 1
       rowOut.platformMix[v.platform] = (rowOut.platformMix[v.platform] ?? 0) + 1
+    }
+  }
+  for (const rowOut of byAudience.values()) {
+    if (input.contributionRead == null) continue
+    rowOut.contribution = {
+      videos: addedBy.get(rowOut.audience) ?? 0,
+      of: sumAudienceMonth(input.denominators, month, rowOut.audience),
     }
   }
   const audienceRows = [...byAudience.values()].sort((a, b) => b.analysed - a.analysed || b.gathered - a.gathered)

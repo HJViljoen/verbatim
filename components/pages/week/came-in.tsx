@@ -89,7 +89,7 @@ export const weekCameIn: Block<WeekData> = {
               </Note>
             )}
             {c.crossesInto ? <Note mode={mode}>{crossingLine(data.month, c.crossesInto)}</Note> : null}
-            <Audiences rows={c.rows} mode={mode} />
+            <Audiences rows={c.rows} mode={mode} month={data.month} />
           </>
         ) : null}
 
@@ -130,7 +130,7 @@ export const weekCameIn: Block<WeekData> = {
 
 /** One row per audience. Analysed leads, found follows, and the platform mix
  *  is of the ANALYSED videos — the set every reading is drawn from. */
-function Audiences({ rows, mode }: { rows: CameInBlock['rows']; mode: 'app' | 'print' | 'email' }) {
+function Audiences({ rows, mode, month }: { rows: CameInBlock['rows']; mode: 'app' | 'print' | 'email'; month: string }) {
   const email = mode === 'email'
   if (email) {
     return (
@@ -138,6 +138,11 @@ function Audiences({ rows, mode }: { rows: CameInBlock['rows']; mode: 'app' | 'p
         {rows.map((r) => (
           <div key={r.audience} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0' }}>
             {r.label} — <span data-copy="figure">{fmtInt(r.analysed)}</span> analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}
+            {r.contribution ? (
+              <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
+                {contributionLine(month, r.contribution.videos, r.contribution.of)}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -149,6 +154,16 @@ function Audiences({ rows, mode }: { rows: CameInBlock['rows']; mode: 'app' | 'p
         <p key={r.audience} className="m-0 text-[12px]">
           <span className="font-medium">{r.label}</span> — <span data-copy="figure">{fmtInt(r.analysed)}</span>{' '}
           <span className="text-muted-foreground">analysed · {fmtInt(r.gathered)} newly found · {platformMixLine(r.platformMix) || 'no platform recorded'}</span>
+          {/* ONE PER AUDIENCE, which is what the plan's WK5 bullet asks for and
+              what makes this block's point ON EVERY ROW: each count above is of
+              a WINDOW, and a window is not a period, whoever's conversation it
+              was. It costs no extra read — the windowed RPC already comes back
+              per audience, and so do the stored month rows. */}
+          {r.contribution ? (
+            <span className="block text-[11.5px] text-muted-foreground">
+              {contributionLine(month, r.contribution.videos, r.contribution.of)}
+            </span>
+          ) : null}
         </p>
       ))}
     </div>
