@@ -719,37 +719,44 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     ? totalVideos(monthWindowRead.denominators)
     : windowVideos
 
-  // ── §1 · unusual this week ─────────────────────────────────────────────
+  // ── §§1-5, TOGETHER ────────────────────────────────────────────────────
+  // Five sections, each of which reads. They were awaited one after another,
+  // and not one of them takes another's output — every input below comes off
+  // wave 2 or off the arithmetic between. Measured against production, §5's
+  // cited comments alone are nine seconds of waiting; done in sequence behind
+  // four other sections that also wait, This week took 13-20 s while its
+  // database was idle most of it. (The reads they share are read once: the
+  // reading layer's memo is keyed on the client, so two sections asking for the
+  // same labels or the same change log ask once.)
   const baseline = pooledBaseline(denominators, month, windowVideos ?? 0)
-  const unusual = await buildUnusual({
-    supabase, clientId, check, flags, baseline, month,
-  })
-
-  // ── §2 · this week in your subjects ────────────────────────────────────
-  const subjectsBlock = await buildSubjects({
-    reading, clientId, subjects, month, window, audiences,
-  })
-
-  // ── §3 · rising now ────────────────────────────────────────────────────
-  const risingRead = await buildRising({
-    supabase, reading, clientId, month, window, themedRunId,
-    monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
-    denominators,
-  })
-
-  // ── §4 · what came in ──────────────────────────────────────────────────
-  const cameIn = await buildCameIn({
-    supabase, clientId, runId: anchor.id, window, month, videos, rivals,
-    windowRead,
-    // The window clipped to the month where it crosses one, and the window
-    // itself where it does not — per audience, which is what the plan's
-    // per-row contribution line needs and what the RPC already returns.
-    contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
-    contributionVideos, denominators, monthVideos, subjects, themedRunId,
-  })
-
-  // ── §5 · for sales ─────────────────────────────────────────────────────
-  const sales = await buildSales({ supabase, clientId, window, windowVideos, subjects })
+  const [unusual, subjectsBlock, risingRead, cameIn, sales] = await Promise.all([
+    // ── §1 · unusual this week ───────────────────────────────────────────
+    buildUnusual({
+      supabase, clientId, check, flags, baseline, month,
+    }),
+    // ── §2 · this week in your subjects ──────────────────────────────────
+    buildSubjects({
+      reading, clientId, subjects, month, window, audiences,
+    }),
+    // ── §3 · rising now ──────────────────────────────────────────────────
+    buildRising({
+      supabase, reading, clientId, month, window, themedRunId,
+      monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
+      denominators,
+    }),
+    // ── §4 · what came in ────────────────────────────────────────────────
+    buildCameIn({
+      supabase, clientId, runId: anchor.id, window, month, videos, rivals,
+      windowRead,
+      // The window clipped to the month where it crosses one, and the window
+      // itself where it does not — per audience, which is what the plan's
+      // per-row contribution line needs and what the RPC already returns.
+      contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
+      contributionVideos, denominators, monthVideos, subjects, themedRunId,
+    }),
+    // ── §5 · for sales ───────────────────────────────────────────────────
+    buildSales({ supabase, clientId, window, windowVideos, subjects }),
+  ])
 
   // ── §6 · what worked ───────────────────────────────────────────────────
   const worked = buildWorked(videos)

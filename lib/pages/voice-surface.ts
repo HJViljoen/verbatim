@@ -23,7 +23,7 @@ import { monthStartOf, nextMonth } from '../reading/month-key'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { moodChange, moodShares, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type DenominatorPoint, type MonthLabel, type MonthPoint, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
@@ -810,14 +810,19 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const horizon = parseHorizon(params.horizon)
 
   // ── wave 1: who this is, and what has been delivered ───────────────────
-  const [clientRes, runsRaw, runningIds, rivals] = await Promise.all([
+  // The themed run joins wave 1 (WP23): it waits on the running-run ids and on
+  // nothing else, and waiting for the axis first put it alone on the critical
+  // path between two waves.
+  const [clientRes, runsRaw, themedRunId, rivals] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'voice-surface'),
+    fetchRunningRunIds(supabase, clientId, 'voice-surface').then((ids) =>
+      fetchThemedRunId(supabase, clientId, ids, 'voice-surface'),
+    ),
     loadRivals(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'voice.client')
@@ -862,8 +867,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   )
   const selected = pickAudience(params.audience, audiences)
 
-  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'voice-surface')
   const searching = (params.q ?? '').trim().length >= 2
+
+  // The record's reads need the month and nothing else; the refusals are
+  // arithmetic over verdicts and are added below.
+  const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
+  recordAhead.catch(() => {})
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const top = themedRunId
@@ -1108,7 +1117,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ? (asked.found ? askedId : null)
     : largestRead(pool)
 
-  const themeBlock = await buildTheme({
+  const themeBlockAhead = buildTheme({
     supabase,
     clientId,
     params,
@@ -1129,6 +1138,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     denominator: selectedDenom?.videos ?? null,
     reading,
   })
+  themeBlockAhead.catch(() => {})
 
   // ── the cast ────────────────────────────────────────────────────────────
   const profile = row<{
@@ -1136,7 +1146,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     insight_population: number | null; theme_population: number | null
   }>(profileRes, 'voice.consumerProfile')
   const newestRun = row<{ id: string }>(newestRunRes, 'voice.newestRun')
-  const cast = await buildCast({ supabase, params, profile, newestRunId: newestRun?.id ?? null })
+  // The open theme's pane and the cast read different tables and neither takes
+  // the other's answer.
+  const [themeBlock, cast] = await Promise.all([
+    themeBlockAhead,
+    buildCast({ supabase, params, profile, newestRunId: newestRun?.id ?? null }),
+  ])
 
   // ── the record ──────────────────────────────────────────────────────────
   const pageVerdicts = [
@@ -1144,12 +1159,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     ...Object.values(kindVerdicts).filter((v): v is Verdict => v != null),
     ...(themeBlock.tone?.verdict ? [themeBlock.tone.verdict] : []),
   ]
-  const recordInputs = await loadRecordInputs(
-    reading.client,
-    clientId,
-    recordWindow(month, readingAt),
-    { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
-  )
+  const recordInputs: RecordInputs = {
+    ...(await recordAhead),
+    comparisonsRefused: countRefused(pageVerdicts),
+    refusals: refusals(pageVerdicts),
+  }
 
   return {
     brand,
