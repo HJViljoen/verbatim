@@ -124,12 +124,27 @@ export function recipientRows(schedules: readonly ScheduleLike[], period: string
 export const unnamedSchedules = (schedules: readonly ScheduleLike[]): ScheduleLike[] =>
   schedules.filter((s) => !isArtefact(s.artefact))
 
-/** The sentence under the table. Counts the artefacts that will actually go
- *  out, not the ones with a row. */
-export function sendingSummary(rows: readonly RecipientRow[], period: string): string {
+/**
+ * The sentence under the table. Counts the artefacts that will actually go out,
+ * not the ones with a row.
+ *
+ * `unnamed` is not decoration. Both live tenants have a "Weekly digest" that
+ * predates the seven, is active and has recipients — so "nothing is being sent"
+ * is true of the SEVEN and false of the workspace, and a reader would have to
+ * scroll past it to find out. The sentence names the older schedules instead.
+ */
+export function sendingSummary(
+  rows: readonly RecipientRow[],
+  period: string,
+  unnamed: readonly ScheduleLike[] = [],
+): string {
   if (period === 'paused') return 'Updates are paused for this workspace, so nothing is sent.'
+  const stillSending = unnamed.filter((s) => s.active && s.recipients.length > 0)
+  const older = stillSending.length === 0
+    ? ''
+    : ` ${stillSending.length} older schedule${stillSending.length === 1 ? ' is' : 's are'} still going out, below.`
   const sending = rows.filter((r) => r.sending)
-  if (sending.length === 0) return 'Nothing is being sent yet — no artefact has a recipient.'
+  if (sending.length === 0) return `None of these has a recipient yet.${older}`
   const people = new Set(sending.flatMap((r) => r.recipients.map((e) => e.toLowerCase())))
-  return `${sending.length} of ${rows.length} artefacts are being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.`
+  return `${sending.length} of ${rows.length} artefacts are being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.${older}`
 }

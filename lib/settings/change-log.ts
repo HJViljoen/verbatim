@@ -25,6 +25,29 @@ import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
  * Pure. The caller reads the rows and supplies the viewer.
  */
 
+/**
+ * `config_changes.affects_audiences` / `.affects_months` arrive with M1, and
+ * the log itself arrived a migration earlier — so there is a real window in
+ * which the table exists and those two columns do not. It is the live state of
+ * production as this is written.
+ *
+ * A reader that named them in its select got "column
+ * config_changes.affects_audiences does not exist" and took the page down,
+ * which is the failure the readiness module's guards exist to prevent. The
+ * honest degradation is already written into the column's own doc comment:
+ * NULL means "not known", and 91 of the 93 stored rows carry null on both
+ * halves anyway. So the reader retries without them and `breakClause` says
+ * "not recorded" — the same sentence it says for a row that has them and left
+ * them empty.
+ */
+export function isMissingAffects(error: unknown): boolean {
+  if (!error) return false
+  const { code, message } = (typeof error === 'object' ? error : {}) as { code?: string; message?: string }
+  const text = message ?? (error instanceof Error ? error.message : String(error))
+  if (!/affects_audiences|affects_months/.test(text)) return false
+  return code === undefined || ['42703', 'PGRST204', 'PGRST205'].includes(code) || /does not exist/i.test(text)
+}
+
 // ---- Who -------------------------------------------------------------------
 
 /**

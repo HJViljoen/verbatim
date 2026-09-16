@@ -99,6 +99,33 @@ export function communityRows(args: {
   })
 }
 
+/**
+ * What the table actually draws.
+ *
+ * Every CONFIGURED community, always: those are the list, and a list with rows
+ * missing from it is not a list. Then the biggest of the ones the search
+ * dragged in, because measured on production that set is 103 communities on
+ * Össur and 175 on Sealand — almost all of them one or two posts of noise —
+ * and a settings panel that printed 178 rows would bury the twenty that matter
+ * along with the three that are configured.
+ *
+ * The remainder is not dropped silently: `unconfiguredShare` counts every one
+ * of them and the line under the table says how many and how much they carry.
+ */
+export const UNCONFIGURED_SHOWN = 10
+
+export function tableRows(rows: readonly CommunityRow[]): { shown: CommunityRow[]; hidden: number; hiddenPosts: number } {
+  const configured = rows.filter((r) => !r.unconfigured)
+  const found = rows.filter((r) => r.unconfigured)
+  const shown = found.slice(0, UNCONFIGURED_SHOWN)
+  const hidden = found.slice(UNCONFIGURED_SHOWN)
+  return {
+    shown: [...configured, ...shown],
+    hidden: hidden.length,
+    hiddenPosts: hidden.reduce((n, r) => n + r.posts, 0),
+  }
+}
+
 /** The one line under the table: how much of what is stored came from nowhere
  *  anybody chose. The same arithmetic readiness row 3 prints. */
 export function unconfiguredShare(rows: readonly CommunityRow[]): { posts: number; fromUnconfigured: number; pct: number } {

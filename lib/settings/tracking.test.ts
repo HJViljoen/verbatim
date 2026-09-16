@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SubredditEntry } from '../gather/types'
 import type { Competitor } from '../rivals'
-import { communityRows, communityWords, unconfiguredShare } from './communities'
+import { communityRows, communityWords, tableRows, unconfiguredShare, UNCONFIGURED_SHOWN } from './communities'
 import { RIVAL_PRECEDENCE, rivalRows, rivalState } from './rivals-view'
 import { termYieldByMonth, TERM_YIELD_BASIS, type KeywordRunRow } from './terms'
 
@@ -88,6 +88,23 @@ describe('communityRows', () => {
 
   it('orders watched, then proposed, then ruled out, then the uninvited', () => {
     expect(rows.map((r) => r.key)).toEqual(['prosthetics', 'onebag', 'bionics', 'sekiro', 'amputee'])
+  })
+
+  it('draws every configured community and only the biggest of the uninvited', () => {
+    // Measured on production the search drags in 103 communities on Össur and
+    // 175 on Sealand, almost all one or two posts. A panel that printed them
+    // all would bury the three that are configured.
+    const noisy = Array.from({ length: UNCONFIGURED_SHOWN + 4 }, (_, i) => ({
+      subreddit: `noise${i}`, posts: UNCONFIGURED_SHOWN + 4 - i, eligible: 0, comments: 0, insights: 0, yield: 0,
+    }))
+    const all = communityRows({ entries: [entry({ name: 'amputee' })], roi: noisy })
+    const table = tableRows(all)
+    expect(table.shown.filter((r) => !r.unconfigured).map((r) => r.key)).toEqual(['amputee'])
+    expect(table.shown.filter((r) => r.unconfigured)).toHaveLength(UNCONFIGURED_SHOWN)
+    expect(table.hidden).toBe(4)
+    // Nothing is dropped from the arithmetic, only from the table.
+    expect(table.hiddenPosts).toBe(4 + 3 + 2 + 1)
+    expect(unconfiguredShare(all).fromUnconfigured).toBe(noisy.reduce((n, r) => n + r.posts, 0))
   })
 })
 

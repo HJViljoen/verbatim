@@ -52,7 +52,20 @@ describe('artefacts', () => {
   it('does not count an active schedule with no addresses as sending', () => {
     const rows = recipientRows([schedule({ recipients: [] })], 'weekly')
     expect(rows[0].sending).toBe(false)
-    expect(sendingSummary(rows, 'weekly')).toBe('Nothing is being sent yet — no artefact has a recipient.')
+    expect(sendingSummary(rows, 'weekly')).toBe('None of these has a recipient yet.')
+  })
+
+  it('names the older schedules that ARE still going out, instead of saying nothing is', () => {
+    // Both live tenants carry a "Weekly digest" that predates the seven, is
+    // active and has recipients — so "nothing is being sent" is true of the
+    // seven and false of the workspace.
+    const legacy = schedule({ artefact: null, recipients: ['a@x.test'] })
+    const rows = recipientRows([legacy], 'weekly')
+    expect(sendingSummary(rows, 'weekly', [legacy]))
+      .toBe('None of these has a recipient yet. 1 older schedule is still going out, below.')
+    // An older schedule with nobody on it is not "still going out".
+    expect(sendingSummary(rows, 'weekly', [schedule({ artefact: null, recipients: [] })]))
+      .toBe('None of these has a recipient yet.')
   })
 
   it('counts addresses once across artefacts', () => {

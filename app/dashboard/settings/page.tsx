@@ -4,7 +4,7 @@ import {
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { platformLabel } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
-import { communityRows, communityWords, unconfiguredShare } from '@/lib/settings/communities'
+import { communityRows, communityWords, tableRows, unconfiguredShare } from '@/lib/settings/communities'
 import { RIVAL_PRECEDENCE, rivalRows, rivalState } from '@/lib/settings/rivals-view'
 import { termDateWords } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
@@ -49,6 +49,7 @@ export default async function SettingsTrackingPage() {
 
   const dates = Object.fromEntries([...inputs.termDates].map(([term, date]) => [term, termDateWords(date)]))
   const communities = communityRows({ entries: inputs.entries, roi: inputs.roi, gate: inputs.communityKept ?? [] })
+  const table = tableRows(communities)
   const unconfigured = unconfiguredShare(communities)
   const rivals = rivalRows({ names, handles, identities: inputs.rivals, census: inputs.census })
 
@@ -93,7 +94,7 @@ export default async function SettingsTrackingPage() {
               head={['Community', 'State', 'Posts', 'Comments', 'Kept', 'Findings']}
               empty="No community is watched for this workspace."
             >
-              {communities.map((r) => (
+              {table.shown.map((r) => (
                 <SettingsRow
                   key={r.key}
                   cells={[
@@ -113,6 +114,13 @@ export default async function SettingsTrackingPage() {
                 />
               ))}
             </SettingsTable>
+            {table.hidden > 0 && (
+              <p className="mt-2 text-[11.5px] text-muted-foreground">
+                {table.hidden} further communit{table.hidden === 1 ? 'y is' : 'ies are'} not shown, between them
+                carrying {table.hiddenPosts.toLocaleString('en-GB')} post{table.hiddenPosts === 1 ? '' : 's'} — one
+                or two each, dragged in by a search and not by anyone&rsquo;s choice.
+              </p>
+            )}
             {unconfigured.posts > 0 && unconfigured.fromUnconfigured > 0 && (
               <p className="mt-2 text-[11.5px] text-muted-foreground">
                 {unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put
@@ -151,7 +159,11 @@ export default async function SettingsTrackingPage() {
                       ) : (
                         r.perPlatform.map((p) => (
                           <span key={p.platform} className="block font-mono text-[10.5px] text-muted-foreground">
-                            {platformLabel(p.platform)} {p.handle ? `@${p.handle}` : '— not tracked'}
+                            {/* No `@` on YouTube: it is read by CHANNEL ID and
+                                an @name reads nothing at all, so printing one
+                                as a handle would teach a client the wrong shape
+                                to paste (lib/provisioning.ts YOUTUBE_CHANNEL_ID). */}
+                            {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : '— not tracked'}
                             {p.captured > 0 ? ` · ${p.captured} captured, ${p.read} read` : ''}
                           </span>
                         ))

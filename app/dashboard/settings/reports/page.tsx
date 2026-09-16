@@ -49,7 +49,7 @@ export default async function SettingsReportsPage() {
 
         <SettingsCard
           title="Who receives what"
-          description={sendingSummary(rows, inputs.period)}
+          description={sendingSummary(rows, inputs.period, unnamed)}
         >
           <SettingsTable head={['Report', 'When', 'Who receives it', 'Last sent']}>
             {rows.map((r) => (

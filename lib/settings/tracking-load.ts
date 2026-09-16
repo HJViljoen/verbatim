@@ -9,6 +9,7 @@ import { loadCompetitors, type Competitor } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { loadTermPerformance } from '../keywords/performance'
 import type { TermSummary } from '../keywords/value'
+import { isMissingAffects } from './change-log'
 import { keptByCommunity, type KeptRate } from './reject-log'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals } from './record-load'
 import type { RivalCensusRow } from './rivals-view'
@@ -63,14 +64,31 @@ async function loadChangeLog(client: SupabaseClient, clientId: string): Promise<
   const probe = await client.from(CONFIG_CHANGES_TABLE).select('id').limit(1)
   if (isMissingConfigLog(probe.error)) return []
   if (probe.error) throw probe.error
-  return selectAll<ConfigChange>(() =>
-    client.from(CONFIG_CHANGES_TABLE)
-      .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note, affects_audiences, affects_months')
-      .eq('client_id', clientId)
-      .eq('surface', 'terms')
-      .order('changed_at', { ascending: true })
-      .order('id', { ascending: true }),
-  )
+  // Both column lists written out: a variable in `.select()` types every row
+  // as a parser error (lib/readiness/load.ts states the rule).
+  try {
+    return await selectAll<ConfigChange>(() =>
+      client.from(CONFIG_CHANGES_TABLE)
+        .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note, affects_audiences, affects_months')
+        .eq('client_id', clientId)
+        .eq('surface', 'terms')
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+  } catch (error) {
+    // M1's two columns may not be applied yet, and a term's date does not need
+    // them (change-log.ts isMissingAffects).
+    if (!isMissingAffects(error)) throw error
+    const rows = await selectAll<Omit<ConfigChange, 'affects_audiences' | 'affects_months'>>(() =>
+      client.from(CONFIG_CHANGES_TABLE)
+        .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note')
+        .eq('client_id', clientId)
+        .eq('surface', 'terms')
+        .order('changed_at', { ascending: true })
+        .order('id', { ascending: true }),
+    )
+    return rows.map((r) => ({ ...r, affects_audiences: null, affects_months: null }))
+  }
 }
 
 async function loadTermYield(client: SupabaseClient, clientId: string): Promise<{ rows: TermYield[]; gathers: number }> {

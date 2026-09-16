@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { isMissingAffects } from './change-log'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { loadRecordInputs, type RecordInputs, type RecordWindow } from '../reading/record'
 import type { UpdateInput } from '../readiness/types'
@@ -101,14 +102,34 @@ async function loadChanges(client: SupabaseClient, clientId: string): Promise<{ 
   const probe = await client.from(CONFIG_CHANGES_TABLE).select('id').limit(1)
   if (isMissingConfigLog(probe.error)) return { available: false, rows: [] }
   if (probe.error) throw probe.error
-  const rows = await selectAll<ConfigChange>(() =>
-    client.from(CONFIG_CHANGES_TABLE)
-      .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note, affects_audiences, affects_months')
-      .eq('client_id', clientId)
-      .order('changed_at', { ascending: false })
-      .order('id', { ascending: false }),
-  )
-  return { available: true, rows }
+  // Both column lists are written out, not built: the client's own types read
+  // the select string, and a variable there types every row as a parser error
+  // (the rule lib/readiness/load.ts already states).
+  try {
+    return {
+      available: true,
+      rows: await selectAll<ConfigChange>(() =>
+        client.from(CONFIG_CHANGES_TABLE)
+          .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note, affects_audiences, affects_months')
+          .eq('client_id', clientId)
+          .order('changed_at', { ascending: false })
+          .order('id', { ascending: false }),
+      ),
+    }
+  } catch (error) {
+    if (!isMissingAffects(error)) throw error
+    const rows = await selectAll<Omit<ConfigChange, 'affects_audiences' | 'affects_months'>>(() =>
+      client.from(CONFIG_CHANGES_TABLE)
+        .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note')
+        .eq('client_id', clientId)
+        .order('changed_at', { ascending: false })
+        .order('id', { ascending: false }),
+    )
+    return {
+      available: true,
+      rows: rows.map((r) => ({ ...r, affects_audiences: null, affects_months: null })),
+    }
+  }
 }
 
 async function loadGate(
