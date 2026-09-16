@@ -216,8 +216,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   window says so, and Sealand's newest update covers thirty days, not seven.
 - **New reading surfaces say "videos".** `conversations` keeps its meaning and
   its name on the legacy pages that still compute it (`lib/calibration.ts`
-  GLOSSARY); the thirteen-word calibrated ladder counts videos, and a level
-  without its "of N" is a score, which this product does not show.
+  GLOSSARY); a new surface counts videos, and a level without its "of N" is a
+  score, which this product does not show. **A new surface draws its vocabulary
+  from `THIRTEEN_WORDS` plus the two `READER_FLAGS`** (`lib/calibration.ts`) and
+  prints no term outside them — that is a WORD LIST, and it is not the ladders:
+  `SENTIMENT_LADDER` and the evidence ladder above it are cutoffs that decide
+  which word a measurement earns. The rest of GLOSSARY is legacy, kept because
+  the pages that print those words have not retired yet.
 - **Every configuration write carries an actor.** `tracking_configs` UPDATEs go
   through `updateWithActor` / `withActor` (`lib/config-log.ts`) so the
   `tracking_configs_audit` trigger logs a person instead of a role; surfaces the
