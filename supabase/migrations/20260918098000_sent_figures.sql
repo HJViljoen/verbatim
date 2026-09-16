@@ -342,8 +342,8 @@ language plpgsql
 set search_path = public, pg_temp
 as $guard$
 begin
-  raise exception 'a sent figure is never rewritten: snapshot %, month %, audience %, % %',
-    old.snapshot_id, old.month, old.audience, old.object_kind, old.object_id
+  raise exception 'a sent figure is never rewritten: snapshot %, month %, audience %, % % (%)',
+    old.snapshot_id, old.month, old.audience, old.object_kind, old.object_id, old.measure
     using errcode = 'restrict_violation',
           hint = 'A figure that has been sent is a statement made to named people on a date. Write a new reading; do not correct an old one.';
   return null;
