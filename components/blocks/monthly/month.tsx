@@ -6,6 +6,7 @@ import { BlockQuotes } from '@/components/blocks/quote'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, shortDate } from '@/lib/format'
+import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AnomalyLine } from '@/lib/pages/overview'
 import type { MonthlyData } from '@/lib/pages/monthly'
@@ -86,17 +87,22 @@ export const monthlyMonth: Block<MonthlyData> = {
       )
     ) : null
 
-    const voices = s.voices.length > 0 ? (
+    // A WITHDRAWN COMMENT LEAVES ITS WRAPPER BEHIND. The quote is a FIELD of
+    // `{ quote, cite, href }`, so `resolveQuotes` nulls it where it stands
+    // rather than dropping it from the list; the count and the renderer both
+    // have to read the survivors, not the wrappers.
+    const said = s.voices.filter(hasQuote)
+    const voices = said.length > 0 ? (
       <div className={email ? undefined : 'flex flex-col gap-2'}>
         <span
           className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
           style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
         >
-          {s.voices.length} of {fmtInt(Math.max(s.voicesFrom, s.voices.length))} voices
+          {said.length} of {fmtInt(Math.max(s.voicesFrom, said.length))} voices
         </span>
         <BlockQuotes
           mode={mode}
-          quotes={s.voices.map((v) => ({
+          quotes={said.map((v) => ({
             quote: v.quote,
             cite: v.href
               ? <a href={v.href} rel="noreferrer" target="_blank" style={email ? { color: EMAIL.muted } : undefined}>{v.cite}</a>
@@ -153,8 +159,8 @@ export const monthlyMonth: Block<MonthlyData> = {
 
   quotes(data): QuoteRef[] {
     const s = data.overview.sentence
-    const refs = s.voices.map((v) => v.quote.ref)
-    return s.anomaly?.quote ? [...refs, s.anomaly.quote.ref] : refs
+    const refs = s.voices.filter(hasQuote).map((v) => v.quote.ref)
+    return hasQuote(s.anomaly) ? [...refs, s.anomaly.quote.ref] : refs
   },
 
   emptyState(data) {

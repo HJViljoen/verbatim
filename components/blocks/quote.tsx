@@ -21,17 +21,23 @@ import type { Quote } from '@/lib/renderables/types'
  * render — which is also what makes an erasure reach a stored artefact. A quote
  * whose text is still empty at render is one whose voice is gone, and it says
  * so rather than printing an empty pair of quotation marks.
+ *
+ * AND `null` IS THE SAME EVENT. `resolveQuotes` drops an unresolvable quote
+ * from an array but NULLS one that is a field of a wrapper, so a caller that
+ * kept the wrapper hands this a `quote` of null — on exactly the event the ref
+ * spine exists for. It reads as the erasure it is, rather than throwing inside
+ * a share-link render.
  */
 export function BlockQuote({
   quote, cite, mode = 'app', gone = 'counted, not quotable — this comment has since been removed',
 }: {
-  quote: Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>
+  quote: (Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>) | null
   cite?: ReactNode
   mode?: RenderMode
   /** What to say when the words did not resolve. */
   gone?: string
 }) {
-  if (!quote.text.trim()) {
+  if (!quote || !quote.text.trim()) {
     return mode === 'email'
       ? <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 11, color: '#8a867e' }}>{gone}</div>
       : <p className="m-0 font-mono text-[10.5px] text-muted-foreground">{gone}</p>
@@ -44,7 +50,7 @@ export function BlockQuote({
 export function BlockQuotes({
   quotes, mode = 'app',
 }: {
-  quotes: readonly { quote: Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>; cite?: ReactNode }[]
+  quotes: readonly { quote: (Pick<Quote, 'text'> & Partial<Pick<Quote, 'lang' | 'english'>>) | null; cite?: ReactNode }[]
   mode?: RenderMode
 }) {
   if (!quotes.length) return null
