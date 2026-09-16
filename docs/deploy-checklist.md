@@ -22,7 +22,7 @@ the document you follow.
 
 | Fact | Today | Query |
 |---|---|---|
-| Phase 1's tables absent — **M1–M10 are not applied** | `to_regclass` null for `competitors`, `subjects`, `sent_figures` | precondition 0 |
+| Phase 1's tables absent — **M1–M11 are not applied** | `to_regclass` null for `competitors`, `subjects`, `sent_figures` | precondition 0 |
 | **No run in flight** | `pipeline_runs` not in (`completed`,`failed`,`partial`) → **0** | 0.1 |
 | **201 frozen audience-months of 214** | exactly as the `monthly-reading.ts` header says | 5.4 |
 | **Two schedules, both `active`, ZERO with recipients** | `report_schedules` → 2 / 2 active / 0 with recipients | 5.3, 5.6 |
@@ -48,7 +48,7 @@ The one figure I could not get is embedding coverage: the query kept timing out
 **This is ONE deploy, not two.** The plan (§5) split it R1 / R2 because R1
 turns on the weekly email and R2 the monthly artefact. That split has no force
 any more: **nothing emails anybody until an operator sets recipients**, and
-both weekly schedules have none. So the code, all eleven migrations and every
+both weekly schedules have none. So the code, all twelve migrations and every
 backfill go out in one window, the recipients go on last and on purpose, and
 the first email is a decision rather than a consequence of a deploy. The two
 -window version is kept at the bottom, unchanged, in case something in step 1
@@ -69,9 +69,9 @@ Every one of these is a gate, not a nicety. **Twelve of them** — 0.0a, 0.0b,
 
 | # | Precondition | How you know |
 |---|---|---|
-| 0.0a | **The database answers first time** | `select count(*) from clients;` through the MCP. If it times out, STOP. On 16 Sep the instance returned roughly one query in four while reporting `ACTIVE_HEALTHY`; applying eleven migrations through a transport that drops one connection in four is how you end up not knowing which of them landed. |
+| 0.0a | **The database answers first time** | `select count(*) from clients;` through the MCP. If it times out, STOP. On 16 Sep the instance returned roughly one query in four while reporting `ACTIVE_HEALTHY`; applying twelve migrations through a transport that drops one connection in four is how you end up not knowing which of them landed. |
 | 0.0b | **PostgREST answers too — it is a SEPARATE path and it can be down while SQL works** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. On 16 Sep the MCP's direct SQL connection was intermittently fine while PostgREST returned `Could not query the database for the schema cache. Retrying.` on every attempt. **Every operator script in step 5 goes through PostgREST** (`createAdminClient`), so a green MCP query proves nothing about whether the backfills can run. Check both. |
-| 0.0c | **The disk-IO budget is healthy — or the compute tier has been upgraded** | Supabase dashboard → Reports → **Disk IO**, and the burst balance in particular. 0.0a and 0.0b are the symptom; this is the cause. On 16 Sep five agents reading at once, one of them counting a vector column, spent the budget by 09:10 UTC and it had not come back by 15:16 SAST — `select 1` returned while the next catalog query timed out and PostgREST still refused its schema cache. **A restart does not refill an IO budget; hours do, or a larger instance.** This deploy is eleven migrations, two backfills that read the whole corpus and a rehearsal run, and the reading pages already load in 8–12 s on this tier (41–69 s when it is starved) — so **the recommendation is to upgrade compute before the deploy, not after it** (plan §Status, "Known and open after Block B", item 1 — where the 8–12 s page load is the R1 blocker and the fix is WP23's performance pass; the compute upgrade itself is a RECOMMENDATION, the plan's Status line of 2026-09-16 ~12:05, not a gate anybody has signed off). If you deploy on the current tier anyway, do it on a day nothing else is reading and expect step 5 to be slow rather than broken. |
+| 0.0c | **The disk-IO budget is healthy — or the compute tier has been upgraded** | Supabase dashboard → Reports → **Disk IO**, and the burst balance in particular. 0.0a and 0.0b are the symptom; this is the cause. On 16 Sep five agents reading at once, one of them counting a vector column, spent the budget by 09:10 UTC and it had not come back by 15:16 SAST — `select 1` returned while the next catalog query timed out and PostgREST still refused its schema cache. **A restart does not refill an IO budget; hours do, or a larger instance.** This deploy is twelve migrations, two backfills that read the whole corpus and a rehearsal run, and the reading pages already load in 8–12 s on this tier (41–69 s when it is starved) — so **the recommendation is to upgrade compute before the deploy, not after it** (plan §Status, "Known and open after Block B", item 1 — where the 8–12 s page load is the R1 blocker and the fix is WP23's performance pass; the compute upgrade itself is a RECOMMENDATION, the plan's Status line of 2026-09-16 ~12:05, not a gate anybody has signed off). If you deploy on the current tier anyway, do it on a day nothing else is reading and expect step 5 to be slow rather than broken. |
 | 0.1 | **No run in flight** on either tenant | `select id, client_id, status, started_at from pipeline_runs where status not in ('completed','failed','partial') order by started_at desc;` → zero rows (**verified 0 on 2026-09-16**). A run mid-flight when the code deploys replays completed steps by id, and M3's INSERT guard would meet Phase 0's writer inside an open freeze. |
 | 0.2 | **Outside 04:00–09:00 SAST** | The retention sweep runs at 04:00 (live since 24 Aug) and the Sunday dispatcher wakes in that band. Deploy after 09:00 and before 22:00 SAST, and not on a Sunday. |
 | 0.3 | **OpenAI credits present** | The balance has been zero all week and a model call fails 429. Three backfills spend: subject-membership ($0.14–0.25/tenant), translate-quotes ($0.7–1.8/tenant), propose-subjects ($0.002/tenant). Check the dashboard, not a note. |
@@ -140,12 +140,12 @@ So: ship, confirm READY, then apply — and keep the gap short.
 
 **Only once §1 reads READY.** See §1's first paragraph for why the apply
 follows the deploy rather than leading it. Do not leave the gap open longer
-than it takes to read eleven verification queries: between §1 and §2 every
+than it takes to read twelve verification queries: between §1 and §2 every
 Phase 1 surface says "not recorded", and a Sunday dispatcher or a manual
 trigger in that gap runs the new pipeline against a Phase 0 schema — which its
 steps no-op against by design, but it is a run that does less than it should.
 
-Eleven files, **in filename order**, one at a time through the Supabase MCP
+Twelve files, **in filename order**, one at a time through the Supabase MCP
 (project `mkwjlckescdveosvrvaq`). Read the verification query's answer before
 starting the next file. A regex character class inside a migration must be
 written with `chr()` — the MCP transport decodes `\u` escapes (Phase 0's
@@ -156,13 +156,13 @@ tables that rely on the same function; M6's delete guard installs triggers on
 all six month tables and therefore needs M4 and M5 to have created theirs.
 
 **There is no separate index step, and that is deliberate.** **Thirty**
-indexes are created across the eleven files — competitors 3, subjects 7,
+indexes are created across the twelve files — competitors 3, subjects 7,
 kind_mood_attention 5, quote_translations 3, anomaly_flags 3, settings 4,
 sent_figures 3, reading_indexes 2, **five** of them `unique`
 (`competitors_client_slug_live_idx`, `subjects_live_name_idx`,
 `gate_appeals_one_per_verdict`, `gate_appeals_one_per_unrun_verdict`,
 `report_schedules_one_per_artefact`); theme_key,
-reading_windows and plan_check_notice create none — and **not one is
+reading_windows, plan_check_notice and report_family_grants create none — and **not one is
 `CONCURRENTLY`**
 — a concurrent build cannot run inside the transaction a migration is applied
 in, and every table being indexed is small (M10's own note: `videos` 8,377 rows
@@ -174,8 +174,9 @@ own step here and its own migration file, because it cannot share theirs.
 
 Each file was applied twice over `schema-baseline.sql` on a throwaway PG 17
 cluster (the Block C merge: 62 migrations, 0 errors; the eleven re-applied over
-themselves, 0 errors). They are idempotent. Re-running one after a partial
-failure is safe.
+themselves, 0 errors — and the block fixer re-ran the whole set plus M11 on a
+fresh PG 17.11 cluster, 0 errors, M11 applied twice). They are idempotent.
+Re-running one after a partial failure is safe.
 
 ### The verification query per migration
 
@@ -495,6 +496,40 @@ an index the pipeline has planned against since August. Check first that nothing
 names it (`grep -r videos_analyzed_run_idx` over the repo, and no plan pinned to
 it), then drop it or leave it deliberately. Leaving it costs one extra index
 maintained per analysed video; it breaks nothing.
+
+**M11 · `20260918099500_report_family_grants.sql`**
+```sql
+select table_name, string_agg(distinct privilege_type, ',' order by privilege_type) as privs
+from information_schema.role_table_grants
+where table_schema='public' and grantee in ('anon','authenticated')
+  and table_name in ('report_snapshots','report_sends','report_builds','report_edits',
+                     'reports','artifacts','export_events','weekly_reports',
+                     'share_links','agent_threads','agent_messages')
+group by 1 order by 1;
+```
+Expect **ten rows reading `SELECT` and nothing else** — and `share_links`
+absent from the result, because it holds no TABLE-level SELECT at all (its
+`authenticated` grant is a column list, which is how the token and the password
+hash stay off a session client). Check that too, and check the token is still
+not in it:
+```sql
+select string_agg(column_name, ', ' order by column_name)
+from information_schema.column_privileges
+where table_name='share_links' and grantee='authenticated' and privilege_type='SELECT';
+```
+Expect `client_id, created_at, created_by, expires_at, id, last_viewed_at,
+revoked_at, snapshot_id, title, view_count` — ten columns, with `token` and
+`password_hash` absent.
+
+**Why it exists:** those eleven tables carried the project's default ALL grant
+for `anon` and `authenticated` with ONE policy each, all SELECT. RLS covers
+SELECT, INSERT, UPDATE and DELETE; it does not cover TRUNCATE, and there is no
+TRUNCATE policy to write. Measured on the cluster as `authenticated`: DELETE 0,
+UPDATE 0, INSERT refused — and `truncate public.agent_threads cascade` emptied
+both tenants' threads and their messages. Nothing reaches it through PostgREST,
+which issues no TRUNCATE verb, so this is a posture fix rather than an incident.
+It touches no service-role grant and no SELECT, so nothing the app does can
+change: every writer on this family is the service role.
 
 ### The two guards, proven rather than counted
 
@@ -1040,7 +1075,9 @@ Kept because step 5.4 is irreversible and you may want to see the pages with
 real numbers before you spend it.
 
 **R1** — preconditions 0.1–0.9 · **step 1, the code** · then migrations M1–M8
-(stop before `20260918098000_sent_figures.sql`) · step 3 · step 4 ·
+(stop before `20260918098000_sent_figures.sql`) — **but take M11 with them**,
+out of filename order, because it is the file that closes the TRUNCATE grant
+and R1's whole window is the gap in which nothing else does · step 3 · step 4 ·
 backfills 5.1, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
 **recipients NOT set** · the Sunday watch minus items 4 and 5. The code-then-
 migrations order is the same here and for the same reason (§1's first
@@ -1105,7 +1142,7 @@ stands as of that earlier pass.
   silently.
 - **The instance's health is itself a precondition.** If a `select count(*)`
   through the MCP does not return first time, do not start step 2. Applying
-  eleven migrations through a transport that drops one connection in four is
+  twelve migrations through a transport that drops one connection in four is
   how you end up not knowing which of them landed.
 - **The For-sales duplication is still open.** Two blocks say the same thing to
   a salesperson and a change has to be made twice. It has no owner.
