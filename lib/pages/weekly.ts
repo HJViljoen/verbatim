@@ -10,7 +10,7 @@ import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs,
 import { quoteRef } from '../renderables/quotes-freeze'
 import { citationLink } from '../evidence-cite'
 import { shortDate } from '../format'
-import { monthStartOf, prevMonth } from '../reading/month-key'
+import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
@@ -719,6 +719,25 @@ interface InsightRow {
   category: string
   theme: string
   source_video_id: string | null
+  strength_score?: number | null
+}
+
+/**
+ * How many of the month's quoted comments section 4 scans for words to print.
+ *
+ * One PostgREST page, newest first. The pool only has to be large enough to
+ * find four quotes over four kinds, and an unbounded read here would make a
+ * popular tenant's weekly build scan every comment anyone was ever quoted on. A
+ * month that holds more than this is why the section links out rather than
+ * counting.
+ */
+export const SALES_SCAN = 1000
+
+/** Evidence rows chunked into `.in()` lists the database will accept. */
+const chunked = <T>(xs: readonly T[], size: number): T[][] => {
+  const out: T[][] = []
+  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size))
+  return out
 }
 
 async function loadSales(
@@ -734,20 +753,57 @@ async function loadSales(
     note: 'Nothing a customer said this month was an objection, a complaint, a switching signal or a selling point we could quote.',
     briefHref,
   }
-  // The month's own videos, so a quote is dated by the COMMENT's month the way
-  // every other figure on the artefact is — a run-indexed read here would put
-  // September's words under August's heading the first time an update crossed a
-  // boundary.
+  // A QUOTE IS DATED BY THE COMMENT, NEVER BY THE RUN (AGENTS.md).
+  //
+  // This read used to be `audience_insights_current … gte('created_at', month
+  // start)`, which is when the PIPELINE WROTE THE ROW. Verified on production:
+  // insights created in 2026-09 on Össur cite comments back to 2026-04, and
+  // those created in 2026-08 cite comments back to 2021 — so a masthead reading
+  // "Every number below is this month so far" sat over a quote cited "9 Mar",
+  // and the empty state's "Nothing a customer said this month" was a sentence
+  // the query could not support.
+  //
+  // So the read is driven from the side the date is on: the month's own
+  // COMMENTS, newest first, inner-joined to the evidence that quotes them. That
+  // is also the cheaper direction — `comments(client_id, …)` narrows first and
+  // `idx_insight_evidence_comment` does the join; driving from
+  // `insight_evidence` ordered by its primary key cost 3.1s on Össur and timed
+  // out once on Sealand.
   const from = monthStartOf(month)
-  const insightRes = await supabase
-    .from('audience_insights_current')
-    .select('id, category, theme, source_video_id')
+  const to = nextMonth(month)
+  const evidenceRes = await supabase
+    .from('comments')
+    .select('id, insight_evidence!inner(audience_insight_id)')
     .eq('client_id', clientId)
-    .in('category', [...SALES_KINDS])
-    .gte('created_at', from)
-    .order('strength_score', { ascending: false })
-    .limit(120)
-  const insights = rows<InsightRow>(insightRes, 'weekly.salesInsights')
+    .gte('comment_date', from)
+    .lt('comment_date', to)
+    .eq('insight_evidence.redacted', false)
+    // Newest first, then by id, so two builds of the same minute scan the same
+    // pool: an unordered page is whatever the planner hands back.
+    .order('comment_date', { ascending: false })
+    .order('id')
+    .limit(SALES_SCAN)
+  const quoted = rows<{ id: string; insight_evidence: { audience_insight_id: string }[] }>(evidenceRes, 'weekly.salesEvidence')
+  if (quoted.length === 0) return empty
+  // The comments this month holds, so a citation quoting an OLDER comment of
+  // the same insight is not printed under a month heading either.
+  const thisMonth = new Set(quoted.map((c) => c.id))
+  const scanned = [...new Set(quoted.flatMap((c) => (c.insight_evidence ?? []).map((e) => e.audience_insight_id)))]
+
+  // Which of those are the four kinds sales reads, strongest first — through
+  // the CURRENT view, so an insight a later run superseded is not quoted as
+  // though it were still the video's analysis.
+  const found: InsightRow[] = []
+  for (const chunk of chunked(scanned, 200)) {
+    const res = await supabase
+      .from('audience_insights_current')
+      .select('id, category, theme, source_video_id, strength_score')
+      .eq('client_id', clientId)
+      .in('category', [...SALES_KINDS])
+      .in('id', chunk)
+    found.push(...rows<InsightRow>(res, 'weekly.salesInsights'))
+  }
+  const insights = found.sort((a, b) => (b.strength_score ?? 0) - (a.strength_score ?? 0)).slice(0, 120)
   if (insights.length === 0) return empty
 
   const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
@@ -772,6 +828,10 @@ async function loadSales(
       if (picked.length >= SALES_ROWS) break
       if (pass === 0 && usedKinds.has(insight.category)) continue
       for (const c of (citations.get(insight.id) ?? []).sort((a, b) => a.rank - b.rank)) {
+        // AN INSIGHT MAY BE EVIDENCED FROM SEVERAL MONTHS. It reaches this loop
+        // because ONE of its comments was written this month; only that comment
+        // may be printed under a month heading.
+        if (!c.commentId || !thisMonth.has(c.commentId)) continue
         const text = cleanQuote(c.quote)
         const key = text.toLowerCase()
         if (!text || seen.has(key) || !readsAsHeroQuote(text, c)) continue
