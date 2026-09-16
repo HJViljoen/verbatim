@@ -96,8 +96,21 @@ export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
  * "nothing sends this on a schedule yet", hid the Active checkbox, and wrote
  * `active = false` over whatever the operator ticked — an inert schedule for
  * the one other artefact the product can in fact send.
+ *
+ * `quarterly` JOINED IT IN WP20, with `snapshotQuarterly`
+ * (lib/reports/quarterly-build.ts) behind it, the eight-page deck in
+ * components/print/quarterly-deck.tsx and the `sendsQuarterly` branch in
+ * lib/schedules/run.ts. A schedule created for it must carry
+ * `QUARTERLY_STARTER_KEY` ('quarterly_review') OR the M8 `artefact` column, for
+ * the reason the paragraph above gives: with neither, the default starter makes
+ * it send the WEEKLY report under the quarterly review's name.
+ *
+ * The four BRIEFS are deliberately NOT here. WP19 builds all four, but it
+ * builds them in the Studio and on the Reports page; nothing in
+ * `lib/schedules/run.ts` sends a brief, and this constant is about what a
+ * SCHEDULE can send. They join the day a `sendsBrief` branch does.
  */
-export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly', 'monthly']
+export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly', 'monthly', 'quarterly']
 
 export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
 

@@ -40,12 +40,20 @@ export const RETIRED_DIGEST_KEY = 'weekly_digest'
 export const isWeeklyArtefact = (a: Artefact | null): boolean => a === 'weekly'
 export const isMonthlyArtefact = (a: Artefact | null): boolean => a === 'monthly'
 
+/** The starter key the quarterly review is sent under, for a workspace whose
+ *  `report_schedules.artefact` column (M8) is not applied yet — the same two
+ *  steps the weekly report reads, for the same reason. */
+export const QUARTERLY_STARTER_KEY = 'quarterly_review'
+
+export const isQuarterlyArtefact = (a: Artefact | null): boolean => a === 'quarterly'
+
 /** What this schedule sends, or null where nothing has said. */
 export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): Artefact | null {
   const stored = typeof schedule.artefact === 'string' ? schedule.artefact.trim() : ''
   if (stored) return stored
   if (schedule.starter_key === WEEKLY_STARTER_KEY) return 'weekly'
   if (schedule.starter_key === MONTHLY_STARTER_KEY) return 'monthly'
+  if (schedule.starter_key === QUARTERLY_STARTER_KEY) return 'quarterly'
   return null
 }
 
@@ -59,11 +67,19 @@ export function sendsMonthly(schedule: Pick<ScheduleRow, 'starter_key'> & { arte
   return isMonthlyArtefact(scheduleArtefact(schedule))
 }
 
-/** Either of the two block-arranged artefacts. Both take the same transport and
- *  differ only in the reading they freeze and the body they render, so the send
- *  path asks this once rather than asking two questions in six places. */
+/** And the quarterly review (Phase 1 WP20). */
+export function sendsQuarterly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
+  return isQuarterlyArtefact(scheduleArtefact(schedule))
+}
+
+/** ANY of the block-arranged artefacts — the weekly report, the monthly reading
+ *  and the quarterly review. All three take the same transport and differ only
+ *  in the reading they freeze and the body they render; none has a `reports`
+ *  row to resolve or a tile to render into an email. The send path asks this
+ *  once rather than asking three questions in six places. A brief is NOT one:
+ *  it is a written document with its own build. */
 export function sendsBlockArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
-  return sendsWeekly(schedule) || sendsMonthly(schedule)
+  return sendsWeekly(schedule) || sendsMonthly(schedule) || sendsQuarterly(schedule)
 }
 
 /**
@@ -80,7 +96,7 @@ export function artefactTitle(artefact: Artefact | null): string {
   if (!artefact) return 'Sending'
   if (artefact === 'weekly') return 'Weekly report'
   if (artefact === 'monthly') return 'Monthly report'
-  if (artefact === 'quarterly') return 'Quarterly report'
+  if (artefact === 'quarterly') return 'Quarterly review'
   if (artefact.startsWith('brief:')) {
     const who = artefact.slice('brief:'.length).replace(/[_-]+/g, ' ').trim()
     return who ? `${who.charAt(0).toUpperCase()}${who.slice(1)} brief` : 'Brief'

@@ -6,9 +6,14 @@ import { ALL_SECTION_PAGES } from './types'
 describe('starter templates', () => {
   it('name only static keys of their own page, and every audience is real', () => {
     // Seven: four arrangements, the retiring digest, and the two ARTEFACTS —
-    // the weekly report (WP17) and the monthly one (WP18) — each composed from
-    // block keys and carrying no sections at all.
-    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_report', 'monthly_report', 'weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
+    // the weekly report (WP17), the monthly one (WP18) and the quarterly
+    // review (WP20) — each composed from block keys and carrying no sections
+    // at all. They are in this list so that a schedule naming one through
+    // `starter_key` resolves; they are never offered as a starting point for a
+    // report.
+    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_report', 'monthly_report', 'quarterly_review', 'weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
+    expect(starterTemplates().map((t) => t.key)).not.toContain('monthly_report')
+    expect(starterTemplates().map((t) => t.key)).not.toContain('quarterly_review')
     for (const t of STARTER_TEMPLATES) {
       for (const s of t.sections) {
         // ALL_, not SECTION_: the weekly digest and the leadership one-pager

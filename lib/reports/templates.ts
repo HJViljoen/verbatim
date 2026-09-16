@@ -61,6 +61,22 @@ export const STARTER_TEMPLATES: ReportTemplate[] = [
     sections: [],
   },
   {
+    // THE QUARTERLY REVIEW (Phase 1 WP20), and it is not an arrangement of
+    // pages either: eight blocks over one reading (lib/reports/quarterly.ts).
+    // It is here for the single reason the weekly report is — a schedule names
+    // what it sends through `starter_key` until M8's `artefact` column is
+    // applied, and every guard that asks "is this a template we know?" must
+    // answer yes. Without this entry a quarterly schedule created through
+    // Settings is refused by app/dashboard/studio/actions.ts with "Pick a
+    // template." the moment anyone edits its recipients.
+    key: 'quarterly_review',
+    artefact: true,
+    name: 'Quarterly review',
+    audience: 'general',
+    description: 'The quarter against the quarter before it, where six monthly readings stand behind both sides: the eight pages that go out after the first update of each quarter.',
+    sections: [],
+  },
+  {
     // RETIRED (Phase 1 WP17). The weekly REPORT replaces it — an arranged
     // report over block keys, stated month-to-date against the trailing
     // baseline, rather than the dashboard's run-indexed tiles. It stays here,

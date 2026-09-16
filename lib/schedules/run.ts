@@ -20,10 +20,13 @@ import { monthScopedFigures } from '../reports/weekly'
 import { MonthlyEmptyError, recordSend, snapshotMonthly } from '../reports/monthly-build'
 import type { SentFigureRow } from '../reports/sent-figures'
 import { sentFigureRows } from '../reports/sent-figures'
+import { renderQuarterlyEmail } from '../email/quarterly'
+import { snapshotQuarterly, QuarterlyEmptyError, type QuarterlySnapshotData } from '../reports/quarterly-build'
 import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
 import { monthlyBlocksFor } from '../../components/blocks/monthly'
-import { sendsBlockArtefact, sendsMonthly, sendsWeekly } from './artefact'
+import { quarterlyBlocksFor } from '../../components/blocks/quarterly'
+import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly } from './artefact'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -212,7 +215,11 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // a company name, which is the one thing `resolveScheduleReport` would have
     // been asked for.
     const weekly = sendsWeekly(schedule)
+    // THE MONTHLY READING (WP18) AND THE QUARTERLY REVIEW (WP20) NAME NO
+    // TEMPLATE EITHER, for the same reason. All three are arrangements over
+    // BLOCK keys, so `sendsBlockArtefact` asks the question once.
     const monthly = sendsMonthly(schedule)
+    const quarterly = sendsQuarterly(schedule)
     const arranged = sendsBlockArtefact(schedule)
     const resolved = arranged ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
     if (!resolved) {
@@ -238,11 +245,18 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // what differs is the reading that is frozen and the body that is rendered
     // from it. A schedule says which it is through `lib/schedules/artefact.ts`,
     // and a schedule that says nothing sends exactly what it sent before.
-    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | MonthlySnapshot; title: string; sections: number }
+    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | MonthlySnapshot | QuarterlySnapshotData; title: string; sections: number }
     // WHAT THE RECORD WILL SAY THIS ARTEFACT PRINTED, held until the send has
     // actually happened. Empty for anything that is not a block artefact: a
     // document brief's figures are display strings with no object behind them
     // (research/refute-10), and WP19 is what re-bases those.
+    //
+    // THE QUARTERLY REVIEW LEAVES IT NULL TOO, and that is the honest state of
+    // the merge rather than an oversight: `sent_figures` is M9, which is
+    // WP18's, and WP20 wrote no rows into it. A quarterly send is recorded as
+    // a send; what it PRINTED is not yet in the record. Filing quarter-wide
+    // figures under a single `sent_figures.month` would be filing them under
+    // the wrong period, which that table's NOT NULL exists to prevent.
     let sentRecord: { rows: SentFigureRow[]; readingAt: string; month: string; monthStatus: 'filling' | 'frozen' } | null = null
     if (monthly) {
       let built
@@ -272,6 +286,27 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
         month: built.data.month,
         monthStatus: built.data.monthStatus,
       }
+    } else if (quarterly) {
+      // THE QUARTERLY REVIEW, on the same transport (Phase 1 WP20): eight
+      // blocks over one reading, no `reports` row, no sections.
+      let built
+      try {
+        built = await snapshotQuarterly({
+          admin,
+          supabase: admin,
+          clientId: schedule.client_id,
+          userId: null,
+          company: resolved.company,
+          figuresOf: (reading, keys) => quarterlyBlocksFor(keys).map((b) => blockAnswers(b, reading).figures),
+        })
+      } catch (e) {
+        if (e instanceof QuarterlyEmptyError) {
+          await mark('skipped', e.message)
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
+      }
+      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.keys.length }
     } else if (weekly) {
       let built
       try {
@@ -333,6 +368,8 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
       monthly
         ? renderMonthlyEmail({ data: snap.data as MonthlySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : quarterly
+        ? renderQuarterlyEmail({ data: snap.data as QuarterlySnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : weekly
         ? renderWeeklyEmail({ data: snap.data as WeeklySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data: snap.data as ReportSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })

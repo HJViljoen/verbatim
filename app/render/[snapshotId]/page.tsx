@@ -16,6 +16,9 @@ import { WeeklyDeck } from '@/components/print/weekly-deck'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { QuarterlyDeck } from '@/components/print/quarterly-deck'
+import { quarterlyBlocksFor } from '@/components/blocks/quarterly'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
@@ -86,6 +89,25 @@ export default async function RenderPage({
       return (
         <PrintRoot style={style}>
           <MonthlyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // A quarterly review (Phase 1 WP20): eight pages over one reading, one
+    // page per sheet. Its tile key is a BLOCK key, exactly as the weekly
+    // report's is, and the block renders itself.
+    if (isQuarterlyData(data)) {
+      if (token.tileKey) {
+        const block = quarterlyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <QuarterlyDeck data={data} />
         </PrintRoot>
       )
     }

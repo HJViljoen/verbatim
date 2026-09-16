@@ -18,6 +18,8 @@ import { sentFigureRows } from '../reports/sent-figures'
 import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
 import { monthlyBlocksFor } from '../../components/blocks/monthly'
+import { isQuarterlyData } from '../reports/quarterly-build'
+import { renderQuarterlyEmail } from '../email/quarterly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -84,7 +86,7 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isWeeklyData(data) || isMonthlyData(data)
+  const subject = isWeeklyData(data) || isMonthlyData(data) || isQuarterlyData(data)
     ? data.subject
     : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
@@ -206,10 +208,21 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // report, and the email is the way in.
     const document = isDocumentData(data) ? data : null
     // A block artefact says every number in words and asks for no PNGs — the
-    // monthly report's per-row lines are SVG on paper and words in the email.
+    // monthly report's per-row lines are SVG on paper and words in the email,
+    // and the quarterly review's are the same (lib/email/quarterly.tsx).
     const weekly = isWeeklyData(data) ? data : null
     const monthly = isMonthlyData(data) ? data : null
-    const arranged = weekly ?? monthly
+    const quarterly = isQuarterlyData(data) ? data : null
+    const arranged = weekly ?? monthly ?? quarterly
+    // AND THE TWO OF THE THREE THAT ARE A READING OF A MONTH. `arranged`
+    // answers "does this email carry tile pictures?", which is no for all
+    // three. The record below answers "under which month do these figures
+    // file?", and the quarterly review has no answer to it: `sent_figures`
+    // (M9) is keyed by one month and NOT NULL, and a quarter's figures filed
+    // under any single month of it would be filed under the wrong period.
+    // A quarterly send is recorded as a send; what it PRINTED is not yet in
+    // the record, and that is WP18's table to extend, not this merge's.
+    const recordable = weekly ?? monthly
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
     const imageTiles = document || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
@@ -276,6 +289,8 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       ? renderMonthlyEmail({ data: monthly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : weekly
       ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : quarterly
+      ? renderQuarterlyEmail({ data: quarterly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : document
         ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
@@ -318,11 +333,11 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // `ready`, from which a person can press Send and the client receives the
     // artefact twice. Nothing after the mail has gone may be able to say the
     // send did not happen.
-    if (arranged) {
+    if (recordable) {
       try {
         const monthStatus = monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling')
         const rows = sentFigureRows({
-          month: arranged.month,
+          month: recordable.month,
           monthStatus,
           artefact: monthly ? 'monthly' : 'weekly',
           verdicts: monthly
@@ -331,14 +346,14 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
           // The weekly artefact's week-scoped tokens are not a reading of its
           // month, and `sent_figures.month` is NOT NULL (lib/reports/weekly.ts
           // isMonthScopedFigure).
-          figures: monthly ? arranged.figures : monthScopedFigures(arranged.figures),
+          figures: monthly ? recordable.figures : monthScopedFigures(recordable.figures),
           figureAudience: 'artefact',
         })
         await recordSend(admin, {
           clientId: schedule.client_id,
           snapshotId: snapRow.id,
-          readingAt: arranged.readingAt,
-          month: arranged.month,
+          readingAt: recordable.readingAt,
+          month: recordable.month,
           monthStatus,
           rows,
         })

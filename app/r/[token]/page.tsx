@@ -11,6 +11,8 @@ import { isWeeklyData } from '@/lib/reports/weekly-build'
 import { isMonthlyData } from '@/lib/reports/monthly-build'
 import { WeeklyShareShell } from '@/components/share/weekly-share-shell'
 import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { QuarterlyShareShell } from '@/components/share/quarterly-share-shell'
 import { applyEdits, loadEdits } from '@/lib/reports/documents/edits'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
 
@@ -82,6 +84,15 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
     return (
       <main>
         <MonthlyShareShell data={data} appUrl={APP_URL} />
+      </main>
+    )
+  }
+  // A quarterly review (Phase 1 WP20): eight pages over one reading, in the
+  // same screen rendering the app and the PDF draw.
+  if (isQuarterlyData(data)) {
+    return (
+      <main>
+        <QuarterlyShareShell data={data} appUrl={APP_URL} />
       </main>
     )
   }

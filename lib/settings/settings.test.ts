@@ -75,20 +75,30 @@ describe('artefacts', () => {
   // active row would email that one under this one's name and stamp
   // last_sent_at as if the right thing had gone out.
   it('does not call an artefact nothing builds "being sent", however its row is set', () => {
+    // THE EXAMPLE USED TO BE `quarterly`, AND WP20 BUILT IT. A brief is the
+    // unbuilt case now: WP19 builds all four in the Studio, but nothing in
+    // lib/schedules/run.ts sends one, so a row pointed at the sales brief
+    // would resolve through its starter to a different artefact.
     const rows = recipientRows([
       schedule({ id: 'a', artefact: 'weekly' }),
-      schedule({ id: 'q', artefact: 'quarterly', cadence: 'quarterly' }),
+      schedule({ id: 'b', artefact: 'brief:sales' }),
     ], 'weekly')
     expect(rows[0].buildable).toBe(true)
     expect(rows[0].sending).toBe(true)
-    expect(rows[2].artefact).toBe('quarterly')
-    expect(rows[2].buildable).toBe(false)
-    expect(rows[2].sending).toBe(false)
+    expect(rows[3].artefact).toBe('brief:sales')
+    expect(rows[3].buildable).toBe(false)
+    expect(rows[3].sending).toBe(false)
     // "reports", not "artefacts": this module's docblock bans the dialect and
     // then reached for the one word in it that is in neither GLOSSARY nor the
     // thirteen.
     expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 reports is being sent, to 1 address.')
-    expect(notBuiltYet('quarterly')).toContain('the quarterly review')
+    expect(isBuildable('weekly')).toBe(true)
+    // `monthly` joined the buildable list in WP18 and `quarterly` in WP20,
+    // each with a builder, a deck and a `sends*` branch in the runner behind
+    // it. The four briefs are still not here: WP19 builds them, but nothing
+    // sends one on a schedule.
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly', 'quarterly'])
+    expect(notBuiltYet('brief:sales')).toContain('the sales brief')
     // ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT. Össur has a built report
     // titled "Sales brief" and two Block B surfaces link to it in the same
     // week, so "we do not produce the sales brief yet" was false on screen.
@@ -100,12 +110,20 @@ describe('artefacts', () => {
   // WP18 is the monthly report's builder — sendsMonthly names the schedule,
   // snapshotMonthly builds it, renderMonthlyEmail is the body — and it shipped
   // without this entry, so Settings called the monthly reading "not yet", hid
-  // the Active checkbox and switched off whatever an operator ticked.
-  it('calls the two artefacts that have a builder buildable, and no others', () => {
-    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly'])
-    const rows = recipientRows([schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' })], 'monthly')
+  // the Active checkbox and switched off whatever an operator ticked. WP20 did
+  // the same for the quarterly review, and the merge of the two is why this
+  // test names three.
+  it('calls the three artefacts that have a builder buildable, and no others', () => {
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly', 'quarterly'])
+    const rows = recipientRows([
+      schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' }),
+      schedule({ id: 'q', artefact: 'quarterly', cadence: 'quarterly' }),
+    ], 'monthly')
     expect(rows[1].buildable).toBe(true)
     expect(rows[1].sending).toBe(true)
+    expect(rows[2].artefact).toBe('quarterly')
+    expect(rows[2].buildable).toBe(true)
+    expect(rows[2].sending).toBe(true)
   })
 
   it('counts addresses once across artefacts', () => {
