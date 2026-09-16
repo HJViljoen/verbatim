@@ -14,6 +14,8 @@ import {
   checkNotRecorded,
   firstScreenCount,
   flagFigures,
+  isMonthScopedFigure,
+  monthScopedFigures,
   levelOf,
   section1Figures,
   weekCheck,
@@ -258,6 +260,26 @@ describe('the 12-number first-screen budget', () => {
   it('counts the same figure once when two blocks name it', () => {
     const s = section1()
     expect(Object.keys(section1Figures(s)).length).toBe(firstScreenCount(s))
+  })
+
+  // `sent_figures.month` is NOT NULL because a figure with no period is the
+  // run-indexed reading this phase exists to remove — and a week's share filed
+  // under September is a period key that is wrong rather than absent. The
+  // artefact still prints all of these; only the record refuses them.
+  it('knows which of its own tokens are not a reading of the month', () => {
+    expect(isMonthScopedFigure('flag_1_week_share')).toBe(false)
+    expect(isMonthScopedFigure('flag_2_baseline_share')).toBe(false)
+    expect(isMonthScopedFigure('flag_1_change')).toBe(false)
+    expect(isMonthScopedFigure('update_videos')).toBe(false)
+    expect(isMonthScopedFigure('o_t1_last')).toBe(false)
+    expect(isMonthScopedFigure('month_videos')).toBe(true)
+    expect(isMonthScopedFigure('o_t1_share')).toBe(true)
+    expect(isMonthScopedFigure('o_t1_of')).toBe(true)
+  })
+
+  it('keeps every month figure and drops every week one', () => {
+    const table = { ...flagFigures(flag(), 0), month_videos: { value: 449, unit: 'videos' as const, label: 'videos in the month so far' } }
+    expect(Object.keys(monthScopedFigures(table))).toEqual(['month_videos'])
   })
 })
 

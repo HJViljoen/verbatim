@@ -16,6 +16,7 @@ import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
 import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
+import { monthScopedFigures } from '../reports/weekly'
 import { MonthlyEmptyError, recordSend, snapshotMonthly } from '../reports/monthly-build'
 import type { SentFigureRow } from '../reports/sent-figures'
 import { sentFigureRows } from '../reports/sent-figures'
@@ -302,7 +303,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
           monthStatus: built.data.reading.monthStatus,
           artefact: 'weekly',
           verdicts: weeklyBlocksFor(built.data.keys).flatMap((b) => blockAnswers(b, built.data.reading).verdicts),
-          figures: built.data.figures,
+          // ONLY WHAT IS A READING OF THAT MONTH. The weekly artefact also
+          // declares a flag's share of the WEEK, its share across the three
+          // months behind it, the movement between those two and the videos
+          // this update gathered — none of which is a September figure, and
+          // `sent_figures.month` is NOT NULL because a figure filed under the
+          // wrong period is worse than one with none.
+          figures: monthScopedFigures(built.data.figures),
           figureAudience: 'artefact',
         }),
         readingAt: built.data.readingAt,

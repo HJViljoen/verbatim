@@ -415,6 +415,43 @@ export function flagFigures(flag: WeekFlag, index: number): FigureTable {
   }
 }
 
+/**
+ * Which of the weekly artefact's tokens are a reading of its MONTH.
+ *
+ * `sent_figures.month` is NOT NULL, and M9's own comment says why: "a figure
+ * with no period is the run-indexed reading this whole phase exists to remove".
+ * A week's share filed under September is a period key that is WRONG rather
+ * than absent, which is worse — WP19's archive groups by month, and nothing in
+ * the row shape says "this one is not a month". The denominator column carries
+ * the label, which saves a careful reader; a careful reader is not a guard.
+ *
+ * FOUR SHAPES ARE NOT THE MONTH, and each says so in its own label: a flag's
+ * share of the WEEK, the same flag's share across the THREE MONTHS behind it,
+ * the movement between those two, and the videos THIS UPDATE gathered. A fifth
+ * is a reading of the month BEFORE this one — "share at this point last month"
+ * — which is a real period key and not this row's.
+ *
+ * A PREDICATE, NOT A LIST AT THE CALL SITE: a new token is recorded by default
+ * and a new week-scoped one has to be named here, which is the way round that
+ * fails loudly.
+ */
+export function isMonthScopedFigure(token: string): boolean {
+  if (token === 'update_videos') return false
+  if (/^flag_\d+_(week_share|baseline_share|change)$/.test(token)) return false
+  if (/^o_.+_last$/.test(token)) return false
+  return true
+}
+
+/** The same table with what is not a reading of the month removed. FOR THE
+ *  RECORD ONLY — the artefact still prints every one of them. */
+export function monthScopedFigures(figures: FigureTable): FigureTable {
+  const out: FigureTable = {}
+  for (const [token, figure] of Object.entries(figures)) {
+    if (isMonthScopedFigure(token)) out[token] = figure
+  }
+  return out
+}
+
 /** Every number section 1 puts in front of a reader, by token. */
 export function section1Figures(s: Section1): FigureTable {
   return mergeFigures([s.sentence.figures, ...s.check.flags.map((f, i) => flagFigures(f, i))])

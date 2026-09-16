@@ -9,6 +9,7 @@ import { renderMany } from '../render/render'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
 import { isWeeklyData } from '../reports/weekly-build'
+import { monthScopedFigures } from '../reports/weekly'
 import { isMonthlyData } from '../reports/monthly-build'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
@@ -327,7 +328,10 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
           verdicts: monthly
             ? monthlyBlocksFor(monthly.keys).flatMap((b) => blockAnswers(b, monthly.reading).verdicts)
             : weeklyBlocksFor(weekly!.keys).flatMap((b) => blockAnswers(b, weekly!.reading).verdicts),
-          figures: arranged.figures,
+          // The weekly artefact's week-scoped tokens are not a reading of its
+          // month, and `sent_figures.month` is NOT NULL (lib/reports/weekly.ts
+          // isMonthScopedFigure).
+          figures: monthly ? arranged.figures : monthScopedFigures(arranged.figures),
           figureAudience: 'artefact',
         })
         await recordSend(admin, {
