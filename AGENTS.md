@@ -104,7 +104,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   a cross-month comparison is like-for-like only where `run_id` is equal; and
   `audience` is a NAME (`competitor:<competitor_name>`, free text from Settings),
   so renaming a rival splits its series — the frozen months stay under the old
-  string and cannot be re-keyed.
+  string and cannot be re-keyed. The one month in this product that is NOT the
+  comment's is a **budget**: Ask's `ASK_MONTHLY_CAP` counts a workspace's
+  questions over the calendar month on the WALL CLOCK (`monthStartIso` in
+  `lib/ask/quota.ts`, deliberately eight lines rather than an import of
+  `lib/reading/monthly.ts`). A spend limit is dated by the day the money is
+  spent; sharing a clock between the two would date a bill by when a stranger
+  wrote a comment.
 - **A reader reads the series; it never sums videos across months.** Every
   Phase 1 surface goes through `lib/reading` — `loadMonthSeries` /
   `loadWindowReading` (`lib/reading/read.ts`) off `Scope.reading`, which is a
@@ -239,7 +245,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (`lib/calibration.ts` GLOSSARY). Copy claims about behavior must match the
   code (a page once claimed "no email is sent" while Resend sent).
 - **No direction word on the run-indexed series** (`directionWordsFor(reader)`
-  in `lib/config.ts`, all seven readers false since 2026-09-15). Gaining /
+  in `lib/config.ts`; all seven readers went false on 2026-09-15 and **exactly
+  one is true today — `agent.movement`**, flipped by WP21 when Ask's movement
+  block stopped reading `theme_observations` and started reading the
+  comment-dated months through `lib/agent/movement.ts`. That is what a flip
+  means: a key turns true the day the surface it names re-bases on the monthly
+  reading, never as a re-wording, and `lib/config.test.ts` pins the re-based
+  list so a second `true` has to be argued for in a diff). Gaining /
   fading / New compares two readings of one cumulative corpus taken at two
   arbitrary moments, not two periods — a missed week moves the number as much
   as the conversation does. One flag PER READER (`voice.movers`,
