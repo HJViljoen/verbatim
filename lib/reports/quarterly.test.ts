@@ -19,7 +19,6 @@ import {
   quarterFor,
   quarterGateSentence,
   quarterLabel,
-  quarterOf,
   quarterOfIn,
   quarterToReview,
   quarterUnlocked,
@@ -60,12 +59,12 @@ describe('the eight pages', () => {
 })
 
 describe('the quarter', () => {
-  it('names the quarter a day falls in', () => {
-    expect(quarterOf('2026-09-16T05:00:00Z')).toMatchObject({ year: 2026, q: 3, from: '2026-07-01', to: '2026-09-30' })
-    expect(quarterOf('2026-01-01').q).toBe(1)
-    expect(quarterOf('2026-03-31').q).toBe(1)
-    expect(quarterOf('2026-04-01').q).toBe(2)
-    expect(quarterOf('2026-12-31')).toMatchObject({ q: 4, from: '2026-10-01', to: '2026-12-31' })
+  it('names the quarter an instant falls in, on the artefact’s own clock', () => {
+    expect(quarterOfIn('2026-09-16T05:00:00Z')).toMatchObject({ year: 2026, q: 3, from: '2026-07-01', to: '2026-09-30' })
+    expect(quarterOfIn('2026-01-01T12:00:00Z').q).toBe(1)
+    expect(quarterOfIn('2026-03-31T12:00:00Z').q).toBe(1)
+    expect(quarterOfIn('2026-04-01T12:00:00Z').q).toBe(2)
+    expect(quarterOfIn('2026-12-31T12:00:00Z')).toMatchObject({ q: 4, from: '2026-10-01', to: '2026-12-31' })
   })
 
   it('ends each quarter on its own last day, February included', () => {
@@ -120,7 +119,6 @@ describe('the quarter', () => {
     // fires, so the artefact must call it Q4 too and review Q3. Read in UTC
     // it is still September, and the review would have been of Q2.
     expect(quarterOfIn('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 4 })
-    expect(quarterOf('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 3 })
     expect(quarterToReview('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 3 })
     expect(quarterKey('2026-09-30T22:30:00Z', REVIEW_TZ)).toBe('2026-Q4')
     // A timezone the caller names is honoured, so the pair cannot drift.

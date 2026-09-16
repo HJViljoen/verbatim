@@ -163,7 +163,6 @@ export interface SubjectsPage {
   /** Why the two quarter columns are empty, when they are. Null once a row
    *  carries one. */
   quarterNote: string | null
-  setLine: string | null
 }
 
 export interface CategoryPage {
@@ -238,18 +237,15 @@ export interface MovesPage {
   rule: string
 }
 
+// WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
+// `objectKind` rode along from the row and were rendered nowhere; the object
+// key `flagOutcome` joins on is read off the FlagRow where the join happens.
 export interface QuarterFlag {
   label: string
-  objectKind: string
-  /** The flag's own object key, kept beside the label because the label is
-   *  decoration: `flagOutcome` joins on this and on the kind. */
-  objectId: string
   weekStart: string
   weekEnd: string
   k: number
   n: number
-  changePts: number
-  bandPts: number
   denominator: string
   /** What it turned out to be — the next reading's verdict on the same object,
    *  or the honest absence of one. */
@@ -263,7 +259,7 @@ export interface MethodPage {
   line: string
   lines: string[]
   /** How many checks ran this quarter, and how many fired. */
-  checks: { ran: number; flagged: number; quiet: number; recorded: boolean }
+  checks: { ran: number; flagged: number; recorded: boolean }
   flags: QuarterFlag[]
   flagsNote: string | null
   /** The corpus in numbers, row by row. */
@@ -1106,7 +1102,6 @@ function buildSubjects(a: {
       : !a.subjectsRead
         ? 'Your subjects are not counted as one window for this workspace yet, so the quarter columns cannot be drawn.'
         : 'No subject carried a reading on both sides of this quarter, so the quarter columns are empty.',
-    setLine: null,
   }
 }
 
@@ -1283,14 +1278,10 @@ function buildMethod(a: {
 
   const flags: QuarterFlag[] = checks.flags.map((f) => ({
     label: f.label,
-    objectKind: f.object_kind,
-    objectId: f.object_id,
     weekStart: f.week_start,
     weekEnd: f.week_end,
     k: f.week_k,
     n: f.week_n,
-    changePts: Number(f.change_pts),
-    bandPts: Number(f.band_pts),
     denominator: f.denominator,
     outcome: flagOutcome({ objectKind: f.object_kind, objectId: f.object_id }, a.verdicts),
     sentences: f.explanation?.sentences ?? [],
@@ -1312,7 +1303,6 @@ function buildMethod(a: {
     checks: {
       ran: checks.ran,
       flagged: checks.flaggedRuns,
-      quiet: Math.max(0, checks.ran - checks.flaggedRuns),
       recorded: checks.recorded,
     },
     flags,

@@ -157,23 +157,18 @@ export function quarterFor(year: number, q: 1 | 2 | 3 | 4): Quarter {
   }
 }
 
-/** The quarter a day falls in. Any instant or day names its quarter. */
-export function quarterOf(iso: string): Quarter {
-  const month = monthStartOf(iso)
-  const year = Number(month.slice(0, 4))
-  const m = Number(month.slice(5, 7))
-  return quarterFor(year, (Math.floor((m - 1) / 3) + 1) as 1 | 2 | 3 | 4)
-}
-
 /**
  * THE CLOCK A SCHEDULE KEEPS, and therefore the clock this artefact keeps.
  *
  * `scheduleDue` decides "the first update of a new quarter" in SAST, the
- * scheduler's own timezone; `quarterOf` above reads a day in UTC. Those two
- * disagree for two hours at every quarter boundary, and with `quarterToReview`
- * below the disagreement is no longer cosmetic — a send claimed at
- * 2026-09-30T22:30Z is Q4 to the schedule and Q3 to UTC, so the artefact would
- * review Q2 while the schedule believed it had sent the Q3 review. One clock.
+ * scheduler's own timezone. A `quarterOf` that read the day in UTC used to sit
+ * here beside it: the two disagree for two hours at every quarter boundary,
+ * and with `quarterToReview` below the disagreement is not cosmetic — a send
+ * claimed at 2026-09-30T22:30Z is Q4 to the schedule and Q3 to UTC, so the
+ * artefact would review Q2 while the schedule believed it had sent the Q3
+ * review. That function is gone rather than kept for callers who might want
+ * the other answer, because this module claims ONE arithmetic and a second one
+ * in reach is how the first drift happened.
  */
 export const REVIEW_TZ = 'Africa/Johannesburg'
 
