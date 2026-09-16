@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { fmtInt, fullDate, longMonth, monthName } from '../format'
+import { fmtInt, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
@@ -1312,7 +1312,12 @@ export function methodNumbers(
     // `overview.monthStatus` this row said "still filling" about a quarter that
     // had closed weeks earlier, because the MONTH the product is in was
     // filling.
-    { label: 'Period', value: `${quarter.from} – ${quarter.to}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
+    // AND IN THE READER'S DATES. This row printed the bounds raw — "Period ·
+    // 2026-07-01 – 2026-09-30" — on a client-facing sheet where every other
+    // date goes through fullDate / shortDate / longMonth; the mock's own row
+    // reads "1 Jul – 28 Sep 2026". The year is on the second date only,
+    // because a quarter never crosses one.
+    { label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
     out.push({ label: 'The corpus', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })

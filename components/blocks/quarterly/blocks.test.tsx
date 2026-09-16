@@ -147,6 +147,18 @@ describe('the six-month gate', () => {
 // is the quarter's. `counted` walked the full verdict list — month verdicts
 // included — under "What is counted under it", two lines below a paragraph
 // saying "this quarter".
+// EVERY DATE ON A CLIENT-FACING SHEET IS THE READER'S. The method table printed
+// the quarter's bounds raw — "Period · 2026-07-01 – 2026-09-30" — where every
+// other date on the eight pages goes through fullDate / shortDate / longMonth.
+describe('the method page dates the quarter in words', () => {
+  it('prints the period as dates a reader reads', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(quarterlyFixture(), 'app', ctx))
+    expect(text).toContain('1 Jul – 30 Sep 2026')
+    expect(text).not.toContain('2026-07-01')
+    expect(text).not.toContain('2026-09-30')
+  })
+})
+
 describe('the read page counts over the same window it argues over', () => {
   it('counts nothing where no quarter comparison could be made', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(formingFixture(), 'app', ctx))
