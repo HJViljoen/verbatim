@@ -223,6 +223,38 @@ describe('readingLine', () => {
   })
 })
 
+// A MONTHLY SEND IS THE ONE ARTEFACT WHOSE IDENTITY IS A MONTH, and the
+// archive dropped it: `readingStampOf` took its month from
+// `reading.monthLabel`, which only a WP19 brief has. WP17's weekly and WP18's
+// monthly carry `month: '2026-09'` TOP-LEVEL, so the month — and with it the
+// "(still filling)" marker, which readingLine prints only inside the month
+// clause — never reached the line.
+describe('readingStampOf over the month carriers', () => {
+  it('takes a brief’s label as it stands', () => {
+    const stamp = readingStampOf({ created_at: '2026-10-01T00:00:00Z', reading: { readingAt: '2026-10-01T06:00:00Z', monthLabel: 'September 2026', monthStatus: 'filling' } })
+    expect(readingLine(stamp)).toBe('September 2026 (still filling) · read as at 1 Oct 2026')
+  })
+
+  it('takes a weekly’s or a monthly’s top-level month key and says it in words', () => {
+    const stamp = readingStampOf({ created_at: '2026-10-01T00:00:00Z', readingAt: '2026-10-01T06:00:00Z', dataMonth: '2026-09', monthStatus: 'filling' })
+    expect(stamp.month).toBe('September 2026')
+    expect(readingLine(stamp)).toBe('September 2026 (still filling) · read as at 1 Oct 2026')
+  })
+
+  // M9's `month` is a Postgres date, so PostgREST hands back '2026-09-01'.
+  // Preferring the column must not start printing a raw date.
+  it('says M9’s date column in words too', () => {
+    const stamp = readingStampOf({ created_at: '2026-10-01T00:00:00Z', reading_at: '2026-10-01T06:00:00Z', month: '2026-09-01', month_status: 'frozen' })
+    expect(readingLine(stamp)).toBe('September 2026 · read as at 1 Oct 2026')
+  })
+
+  it('still says nothing about a month where no carrier has one', () => {
+    const stamp = readingStampOf({ created_at: '2026-10-01T00:00:00Z', readingAt: '2026-10-01T06:00:00Z' })
+    expect(stamp.month).toBeNull()
+    expect(readingLine(stamp)).toBe('read as at 1 Oct 2026')
+  })
+})
+
 describe('sentFigures', () => {
   const figures: FigureTable = {
     videos: { label: 'videos analysed', value: '618', kind: 'count' },

@@ -73,6 +73,12 @@ interface BuildRow {
   /** `data.reading` — the month a brief read (WP19); absent on everything
    *  built before item 43 and on every arranged report. */
   reading?: unknown
+  /** `data.month` / `data.monthStatus` — WP17's weekly and WP18's monthly put
+   *  the month TOP-LEVEL, not under `reading`. Aliased under their own names
+   *  because `month` and `month_status` are M9's columns and naming those
+   *  fails the whole select until the migration lands. */
+  dataMonth?: string | null
+  monthStatus?: string | null
   /** `data.template` — which document this is, where it is one. */
   template?: string | null
   artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[]
@@ -130,7 +136,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // recorded" beside a snapshot that carries the date. The sent-snapshot
       // read below already aliased it; this list did not, and the monthly
       // report merged in beside it (WP18) is the artefact that made it visible.
-      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
+      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, dataMonth:data->>month, monthStatus:data->>monthStatus, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
       .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(LIST_CAP.built),
     supabase.from('report_snapshots')
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
@@ -274,11 +280,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // `reading` and `readingAt` flat, under their aliases. Re-nesting it here
   // was what hid the bug: this one call site read correctly and the three on
   // the Built group and the cards did not.
-  interface SentSnapshot { id: string; created_at: string; figures: StoredFigures | null; reading: unknown; readingAt: string | null }
+  interface SentSnapshot { id: string; created_at: string; figures: StoredFigures | null; reading: unknown; readingAt: string | null; dataMonth: string | null; monthStatus: string | null }
   let sentSnapshot: SentSnapshot | null = null
   if (selectedSend?.snapshot_id) {
     const { data: snap } = await supabase.from('report_snapshots')
-      .select('id, created_at, figures:data->figures, reading:data->reading, readingAt:data->>readingAt')
+      .select('id, created_at, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, dataMonth:data->>month, monthStatus:data->>monthStatus')
       .eq('client_id', clientId).eq('id', selectedSend.snapshot_id).maybeSingle()
     sentSnapshot = (snap as SentSnapshot | null) ?? null
   }

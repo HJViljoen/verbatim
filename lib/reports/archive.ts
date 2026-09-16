@@ -1,4 +1,4 @@
-import { fullDate } from '../format'
+import { fullDate, longMonth } from '../format'
 import { proseFigures } from '../prose/figures'
 import type { FigureTable as MeasuredFigures } from '../reading/verdicts'
 import { isOpaqueFigureKey, type Figure, type FigureTable } from './types'
@@ -196,7 +196,17 @@ export function emptyGroupLine(args: {
  * under the same words would be the archive asserting a reading date it does
  * not have.
  *
- * M9'S COLUMN IS READ AND IS NOT YET SELECTED, AND THAT SEAM IS OPEN. This
+ * AND THE MONTH IS A CARRIER TOO, IN THREE SPELLINGS. A brief puts a LABEL in
+ * `data.reading.monthLabel` ("September 2026"); WP17's weekly and WP18's
+ * monthly put a KEY top-level in `data.month` ("2026-09"); M9's column is a
+ * Postgres `date` PostgREST hands back as "2026-09-01". Only the brief's was
+ * read, so a monthly send printed "read as at 1 Oct 2026" where a brief printed
+ * "September 2026 (still filling) · read as at 1 Oct 2026" — and the status,
+ * which both shapes carry, was discarded with it, because `readingLine` prints
+ * it only inside the month clause. `monthLabelOf` normalises all three, which
+ * is also why preferring M9's column cannot start printing a raw date.
+ *
+ * M9'S COLUMNS ARE READ AND ARE NOT YET SELECTED, AND THAT SEAM IS OPEN. This
  * function prefers `reading_at` / `month` / `month_status` over every data
  * carrier, but no query on the Reports page asks for them: naming a column
  * PostgREST does not have fails the WHOLE select, so a page that selected them
@@ -234,23 +244,45 @@ export interface ReadingStampRow {
   reading?: unknown
   /** `readingAt:data->>readingAt`, aliased flat by the select. */
   readingAt?: string | null
+  /** `dataMonth:data->>month` / `monthStatus:data->>monthStatus` — WP17's
+   *  weekly and WP18's monthly carry both TOP-LEVEL, not under `reading`.
+   *  Aliased under their own names because `month` and `month_status` are M9's
+   *  columns and naming those fails the whole select until it lands. */
+  dataMonth?: string | null
+  monthStatus?: string | null
   /** The whole `data` column, where a caller selected it whole. */
   data?: unknown
 }
 
+/** A month in any of the three spellings the carriers use, as the reader's
+ *  words. A value that is already a label comes back untouched. */
+export function monthLabelOf(value: string | null | undefined): string | null {
+  if (!value) return null
+  const m = /^(\d{4})-(\d{2})(?:-\d{2})?/.exec(value)
+  if (!m) return value
+  return `${longMonth(`${m[1]}-${m[2]}-01`)} ${m[1]}`
+}
+
 export function readingStampOf(snapshot: ReadingStampRow): ReadingStamp {
   type Reading = { readingAt?: unknown; monthLabel?: unknown; monthStatus?: unknown }
-  const d = (snapshot.data ?? {}) as { readingAt?: unknown; reading?: Reading }
+  const d = (snapshot.data ?? {}) as { readingAt?: unknown; month?: unknown; monthStatus?: unknown; reading?: Reading }
   const reading = (snapshot.reading ?? d.reading ?? null) as Reading | null
   const flatAt = typeof snapshot.readingAt === 'string' ? snapshot.readingAt : null
   const fromData = typeof reading?.readingAt === 'string' ? reading.readingAt
     : flatAt ?? (typeof d.readingAt === 'string' ? d.readingAt : null)
   const at = snapshot.reading_at ?? fromData
+  const month = snapshot.month
+    ?? snapshot.dataMonth
+    ?? (typeof reading?.monthLabel === 'string' ? reading.monthLabel : null)
+    ?? (typeof d.month === 'string' ? d.month : null)
   return {
     at: at ?? snapshot.created_at,
     inferred: at == null,
-    month: snapshot.month ?? (typeof reading?.monthLabel === 'string' ? reading.monthLabel : null),
-    monthStatus: snapshot.month_status ?? (typeof reading?.monthStatus === 'string' ? reading.monthStatus : null),
+    month: monthLabelOf(month),
+    monthStatus: snapshot.month_status
+      ?? snapshot.monthStatus
+      ?? (typeof reading?.monthStatus === 'string' ? reading.monthStatus : null)
+      ?? (typeof d.monthStatus === 'string' ? d.monthStatus : null),
   }
 }
 
