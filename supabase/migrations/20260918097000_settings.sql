@@ -127,8 +127,19 @@ create table if not exists public.gate_appeals (
   note text
 );
 
-create unique index if not exists gate_appeals_unique
-  on public.gate_appeals (client_id, run_id, platform, video_id);
+-- TWO PARTIAL INDEXES, BECAUSE NULLS ARE DISTINCT. gate_verdicts.run_id is
+-- nullable and this key mirrors it, so a single unique index over the four
+-- columns would let the same verdict be appealed any number of times whenever
+-- run_id is null — the 23505 "Already filed" branch in the appeal action would
+-- simply never fire, and the comment above would be a claim the database does
+-- not keep. The UI folds a null run to 'none' and hides the button, so this is
+-- the constraint catching up with the sentence rather than a live duplicate.
+create unique index if not exists gate_appeals_one_per_verdict
+  on public.gate_appeals (client_id, run_id, platform, video_id)
+  where run_id is not null;
+create unique index if not exists gate_appeals_one_per_unrun_verdict
+  on public.gate_appeals (client_id, platform, video_id)
+  where run_id is null;
 create index if not exists gate_appeals_queue_idx
   on public.gate_appeals (client_id, filed_at desc);
 
@@ -243,8 +254,11 @@ comment on column public.video_claims.quote is
 --     rather than doubling it, and service_role's DELETE is refused
 --     ("permission denied for table gate_verdicts");
 --   * gate_appeals takes one row per (client, run, platform, video) and refuses
---     the second on gate_appeals_unique; a tenant session reads its own and its
---     INSERT is refused; service_role's DELETE is refused;
+--     the second — with a run id on gate_appeals_one_per_verdict, and WITHOUT
+--     one on gate_appeals_one_per_unrun_verdict, which a single index over the
+--     four columns did not catch because NULLs are distinct; a tenant session
+--     reads its own and its INSERT is refused; service_role's DELETE is
+--     refused;
 --   * video_claims hands a tenant session its own `client` claim and NOT the
 --     `competitor` row beside it (the entity predicate is in the policy), and
 --     `select quote` is refused;
