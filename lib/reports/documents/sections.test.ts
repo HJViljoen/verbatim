@@ -139,6 +139,19 @@ describe('missingSentence', () => {
     expect(line).not.toContain('closes this')
   })
 
+  // months-of-history is OPS and is a `needs` of most sections in all four
+  // maps, so on a workspace whose months are not seeded — the new-tenant case,
+  // and the case a brief most wants to explain — this is the sentence the
+  // client's brief prints most often.
+  it('an ops-owned gap is a promise too, never our own set-up instruction', () => {
+    const ops = { ...m, id: 'months-of-history' as const, owner: 'Verbatim ops', ownerRole: 'ops' as const, unlocks: 'Apply the monthly reading and seed it once per workspace; every update after that keeps it.' }
+    const line = missingSentence(ops)
+    expect(line).toContain('We are setting it up, and it appears here the moment it is there.')
+    expect(line).not.toContain('Apply the monthly reading')
+    expect(line).not.toContain('seed it')
+    expect(line).not.toContain('closes this')
+  })
+
   it('never doubles a full stop', () => {
     expect(missingSentence(m)).not.toMatch(/\.\./)
   })

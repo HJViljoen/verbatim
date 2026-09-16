@@ -303,15 +303,21 @@ export function missingSentence(m: MissingInput): string {
   // obvious wording reads "we have no the rival accounts we read". The verb
   // carries the sentence instead, and the input is quoted as the row it is.
   const head = `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}.`
-  // AN ENGINEERING ROW'S `unlocks` IS NOT CLIENT COPY and must not be printed
-  // as one. `subject-set` reads "Phase 1 builds the subject set and the form
-  // that names them" — a project phase, in a document a customer reads, telling
-  // them to do something they cannot do. The owner is still named, because RP1
-  // asks for it; what changes is that a gap only we can close is a promise and
-  // not an instruction.
-  const act = m.ownerRole === 'engineering'
-    ? 'We are building it, and it appears here the moment it is there.'
-    : `${m.owner} closes this — ${trimStop(m.unlocks)}.`
+  // `unlocks` IS AN INSTRUCTION TO WHOEVER OWNS THE ROW, and only the CLIENT
+  // can act on theirs. Every other row's act is our own operator copy and must
+  // not be printed as if the reader could do it: `subject-set` reads "Phase 1
+  // builds the subject set and the form that names them" — a project phase, in
+  // a document a customer reads — and `months-of-history`, which is ops and is
+  // a `needs` of most sections in all four maps, reads "Apply the monthly
+  // reading and seed it once per workspace", which is the sentence a
+  // new-tenant brief would print most often and the one a client can do least
+  // about. The owner is still named, because RP1 asks for it; what changes is
+  // that a gap only we can close is a PROMISE and never an instruction.
+  const act = m.ownerRole === 'client'
+    ? `${m.owner} closes this — ${trimStop(m.unlocks)}.`
+    : m.ownerRole === 'ops'
+      ? 'We are setting it up, and it appears here the moment it is there.'
+      : 'We are building it, and it appears here the moment it is there.'
   return `${head} ${act} It is on Settings › Readiness.`
 }
 
