@@ -6,6 +6,8 @@ import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct, fullDate } from '../format'
 import { selectAll } from '../supabase-admin'
 
+import { memoRead } from './memo'
+
 import { isMissingMonthlyReading, monthStartOf, nextMonth } from './monthly'
 import { loadWindowReading } from './read'
 import { TABLE_DENOMINATORS, type PlatformMix } from './types'
@@ -488,28 +490,85 @@ async function loadStoredMonth(client: SupabaseClient, clientId: string, month: 
   }
 }
 
-const headCount = async (q: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
-  const { count, error } = await q
-  if (error) throw new Error(`record head count: ${(error as { message?: string }).message ?? String(error)}`)
-  return count ?? 0
+/**
+ * The analysed corpus, read ONCE for the two records drawn off it.
+ *
+ * WHY ONE READ. `loadReadDepth` asked five `count: exact` head queries and
+ * `loadLanguage` then paged the same rows for `transcript_lang` — seven round
+ * trips over one population. Measured against production on 16 September, that
+ * was 7.2 s of Össur's Overview and 4.8 s of Sealand's, and every one of the
+ * five counts was the same index scan over the same 1,596 rows with a different
+ * filter on top (`explain analyze`: Index Scan using videos_analyzed_run_idx,
+ * 990 ms each, all buffers already in cache — the instance's cost is per
+ * STATEMENT, not per row). One paged read of five small columns answers both
+ * records off the same rows, and the arithmetic is the arithmetic the counts
+ * were doing.
+ *
+ * Five columns, not `*`: `videos` carries transcripts and OCR text, and the two
+ * records need a language tag and three booleans.
+ *
+ * Memoised per request: Overview loads the record once, but a report builds
+ * several artefacts through one client and each wants the same corpus.
+ */
+interface CorpusRow {
+  transcript_lang: string | null
+  analyzed_with_transcript: boolean | null
+  analyzed_with_translation: boolean | null
+  analyzed_with_ocr: boolean | null
+}
+
+function loadCorpus(client: SupabaseClient, clientId: string): Promise<CorpusRow[]> {
+  return memoRead(client, `record:corpus:${clientId}`, () =>
+    selectAll<CorpusRow>(() =>
+      client
+        .from('videos')
+        .select('id, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr')
+        .eq('client_id', clientId)
+        .not('analyzed_run_id', 'is', null)
+        .neq('platform', 'reddit')
+        // ORDERED BY `id`, WHICH NEVER CHANGES. `selectAll` ranges over this
+        // read in 1,000-row pages, and what range paging needs of its order key
+        // is not that it is UNIQUE but that it is IMMUTABLE while the pages are
+        // being fetched: a row that moves in the sort between page 1 and page 2
+        // is read twice or not at all. This was briefly ordered by
+        // `(analyzed_run_id, id)` to match M10's key — a unique pair, but
+        // `analyzed_run_id` is exactly the column incremental Pass A stamps one
+        // video at a time as it goes (lib/pipeline/pass-a.ts updateBookkeeping,
+        // both lanes), and these pages are expected to load while a run is in
+        // flight. One video re-stamped mid-read moves to a new random uuid and
+        // lands anywhere in the order; the counts below then silently count it
+        // twice or not at all. `id` is the primary key and is never rewritten.
+        //
+        // It costs a sort, and not the index: with M10 applied the plan is an
+        // Index Only Scan over the matching rows (Heap Fetches 0) feeding a
+        // top-N heapsort — 49 buffers a page against 1,520 without the index,
+        // measured on the local cluster this package's migration was verified
+        // on. The heap, not the sort, was the cost this read had.
+        .order('id', { ascending: true }),
+    ),
+  )
+}
+
+/** `.eq(col, true)` counts rows where the column IS true; `.is(col, null)`
+ *  counts rows where it is null. Neither counts a stored `false`, and the
+ *  difference is the whole of the `unflagged` figure — so the predicates are
+ *  written out rather than folded into a truthiness test. */
+export function readDepthOf(rows: readonly CorpusRow[]): ReadDepthRecord {
+  let speech = 0
+  let translated = 0
+  let onScreenText = 0
+  let unflagged = 0
+  for (const row of rows) {
+    if (row.analyzed_with_transcript === true) speech += 1
+    if (row.analyzed_with_translation === true) translated += 1
+    if (row.analyzed_with_ocr === true) onScreenText += 1
+    if (row.analyzed_with_transcript === null || row.analyzed_with_transcript === undefined) unflagged += 1
+  }
+  return { analysed: rows.length, speech, translated, onScreenText, unflagged, basis: 'all_time_non_reddit' }
 }
 
 async function loadReadDepth(client: SupabaseClient, clientId: string): Promise<ReadDepthRecord> {
-  const analysed = () =>
-    client
-      .from('videos')
-      .select('id', { count: 'exact', head: true })
-      .eq('client_id', clientId)
-      .not('analyzed_run_id', 'is', null)
-      .neq('platform', 'reddit')
-  const [total, speech, translated, onScreenText, unflagged] = await Promise.all([
-    headCount(analysed()),
-    headCount(analysed().eq('analyzed_with_transcript', true)),
-    headCount(analysed().eq('analyzed_with_translation', true)),
-    headCount(analysed().eq('analyzed_with_ocr', true)),
-    headCount(analysed().is('analyzed_with_transcript', null)),
-  ])
-  return { analysed: total, speech, translated, onScreenText, unflagged, basis: 'all_time_non_reddit' }
+  return readDepthOf(await loadCorpus(client, clientId))
 }
 
 /** English, by the pipeline's own normaliser's rule — `en`, `english`, `en-*`,
@@ -521,16 +580,7 @@ export function isEnglishTag(lang: string | null | undefined): boolean {
   return t === 'en' || t === 'english' || /^en[-_]/.test(t)
 }
 
-async function loadLanguage(client: SupabaseClient, clientId: string): Promise<LanguageRecord> {
-  const rows = await selectAll<{ transcript_lang: string | null }>(() =>
-    client
-      .from('videos')
-      .select('id, transcript_lang')
-      .eq('client_id', clientId)
-      .not('analyzed_run_id', 'is', null)
-      .neq('platform', 'reddit')
-      .order('id', { ascending: true }),
-  )
+export function languageOf(rows: readonly { transcript_lang: string | null }[]): LanguageRecord {
   let unknown = 0
   let english = 0
   let notEnglish = 0
@@ -541,6 +591,10 @@ async function loadLanguage(client: SupabaseClient, clientId: string): Promise<L
     else notEnglish += 1
   }
   return { analysed: rows.length, unknown, english, notEnglish, basis: 'video_speech' }
+}
+
+async function loadLanguage(client: SupabaseClient, clientId: string): Promise<LanguageRecord> {
+  return languageOf(await loadCorpus(client, clientId))
 }
 
 /** Nothing readable: the shape a tenant session gets until M8 is applied. Every
@@ -558,15 +612,21 @@ const noDiscard: DiscardRecord = {
   basis: 'run_clock',
 }
 
+/** The three columns the discard counts are drawn from. */
+interface GateRow {
+  kept: boolean | null
+  source: string | null
+  reason?: string | null
+}
+
 /**
  * What was looked at and set aside, in whichever of the gate's two regimes this
  * client is in (lib/gate-record.ts).
  *
- * On a tenant session the three `reason` counts are NOT asked for at all:
- * PostgreSQL requires SELECT on a column named in a WHERE clause, and M8
- * withholds `reason` from `authenticated`, so the head count would be refused
- * and `headCount` would take the page down with it. They come back null, and
- * the caveat they feed is simply not said.
+ * On a tenant session the three `reason` counts are NOT asked for at all: M8
+ * withholds `reason` from `authenticated`, and a select naming a column a role
+ * has no grant on is refused against the table, which would take the page down
+ * with it. They come back null, and the caveat they feed is simply not said.
  */
 async function loadDiscard(
   client: SupabaseClient,
@@ -582,22 +642,47 @@ async function loadDiscard(
     if (isMissingGateAppeals(probe.error)) return noDiscard
     if (probe.error) throw probe.error
   }
+  // ONE READ, NOT FIVE COUNTS. This was five `count: exact` head queries over
+  // the same window with a different filter on each — and `explain analyze`
+  // against production says every one of them is the SAME Seq Scan on
+  // gate_verdicts (no index leads with client_id and created_at; M10 adds one),
+  // so the window was scanned five times to answer five questions about the
+  // same rows. Sealand's September window is 2,777 rows of three narrow
+  // columns; reading them once and counting in TypeScript is the same answer
+  // for a third of the statements.
+  //
+  // `reason` is still only asked for on the service path: M8 grants
+  // `authenticated` nine columns and `reason` is not one of them, and a select
+  // naming it is refused against the TABLE, which would take the page down
+  // rather than thin the caveat.
+  //
+  // AND IT IS WIDER ON THE ONE ROLE THAT HAS A TIMEOUT. `access: 'tenant'` is
+  // the settings page's default (lib/settings/record-load.ts), and there the
+  // client is the SESSION client: `authenticated`, which carries
+  // statement_timeout = 8s where `service_role` carries none. Two head counts
+  // that transferred no rows became up to three paged 1,000-row reads of the
+  // same window, over what is still a Seq Scan until M10 is applied. The
+  // measured statement is ~235 ms for Sealand's 2,777-row September, so this is
+  // headroom and not a bug — but it is headroom that shrinks as a tenant's
+  // window grows, and the index that removes the scan is the unapplied half of
+  // this package. If this ever times out before M10 lands, the window is the
+  // thing to narrow.
   const byReason = access === 'service'
-  const gate = () =>
+  // Two spellings written out, because the select string is a TYPE here (the
+  // PostgREST client parses it) and a ternary over two literals is what keeps
+  // both parseable.
+  const window = () =>
     client
       .from('gate_verdicts')
-      .select('id', { count: 'exact', head: true })
+      .select(byReason ? 'id, kept, source, reason' : 'id, kept, source')
       .eq('client_id', clientId)
       .gte('created_at', dayStart(w.from))
       .lte('created_at', dayEnd(w.to))
-  const reason = (value: string): Promise<number | null> =>
-    byReason ? headCount(gate().eq('source', 'default').eq('reason', value)) : Promise.resolve(null)
-  const [judged, kept, clearedByHeuristic, gateOff, failedOpen, first] = await Promise.all([
-    headCount(gate()),
-    headCount(gate().eq('kept', true)),
-    reason(GATE_DEFAULT_REASONS.undecided),
-    reason(GATE_DEFAULT_REASONS.off),
-    reason(GATE_DEFAULT_REASONS.failedOpen),
+      .order('id', { ascending: true }) as unknown as {
+      range: (from: number, to: number) => PromiseLike<{ data: GateRow[] | null; error: unknown }>
+    }
+  const [rows, first] = await Promise.all([
+    selectAll<GateRow>(window),
     client
       .from('gate_verdicts')
       .select('created_at')
@@ -609,15 +694,43 @@ async function loadDiscard(
   if (first.error) throw new Error(`gate_verdicts first: ${first.error.message}`)
   const recordedFrom = (first.data as { created_at?: string } | null)?.created_at ?? null
   return {
+    ...discardCounts(rows, byReason),
     readable: true,
-    judged,
-    kept,
-    setAside: judged - kept,
-    clearedByHeuristic,
-    gateOff,
-    failedOpen,
     recordedFrom: recordedFrom ? recordedFrom.slice(0, 10) : null,
     basis: 'run_clock',
+  }
+}
+
+/**
+ * The five counts the five head queries used to ask, off the window's rows.
+ *
+ * The three `reason` counts carry `source = 'default'` as they always did — a
+ * verdict reached by a rule the operator wrote is not the default gate's doing,
+ * and the caveat is about the default gate. `null` where the column was not
+ * asked for, which is "nobody could look", not "none".
+ */
+export function discardCounts(
+  rows: readonly GateRow[],
+  byReason: boolean,
+): Pick<DiscardRecord, 'judged' | 'kept' | 'setAside' | 'clearedByHeuristic' | 'gateOff' | 'failedOpen'> {
+  let kept = 0
+  let clearedByHeuristic = 0
+  let gateOff = 0
+  let failedOpen = 0
+  for (const row of rows) {
+    if (row.kept === true) kept += 1
+    if (!byReason || row.source !== 'default') continue
+    if (row.reason === GATE_DEFAULT_REASONS.undecided) clearedByHeuristic += 1
+    else if (row.reason === GATE_DEFAULT_REASONS.off) gateOff += 1
+    else if (row.reason === GATE_DEFAULT_REASONS.failedOpen) failedOpen += 1
+  }
+  return {
+    judged: rows.length,
+    kept,
+    setAside: rows.length - kept,
+    clearedByHeuristic: byReason ? clearedByHeuristic : null,
+    gateOff: byReason ? gateOff : null,
+    failedOpen: byReason ? failedOpen : null,
   }
 }
 

@@ -7,7 +7,7 @@ import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, t
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import type { ReadingHandle } from '../reading/read'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import type { MonthStatus } from '../reading/types'
@@ -588,21 +588,35 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const reading: ReadingHandle = scope.reading
   const readingAt = new Date().toISOString()
 
-  const [clientRes, latestRunRes, runningIds] = await Promise.all([
+  // THE THEMED RUN JOINS WAVE 1 (WP23). It waits on the running-run ids and on
+  // nothing else, and was a serial wait beside the one Promise.all this loader
+  // had. The record starts below, as soon as the empty state is ruled out.
+  const month = monthStartOf(readingAt)
+  const [clientRes, latestRunRes, themedRunId] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
       .eq('client_id', clientId).in('status', ['completed', 'partial'])
       .order('started_at', { ascending: false }).limit(1).maybeSingle(),
-    fetchRunningRunIds(supabase, clientId, 'market-surface'),
+    fetchRunningRunIds(supabase, clientId, 'market-surface').then((ids) =>
+      fetchThemedRunId(supabase, clientId, ids, 'market-surface'),
+    ),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'market-surface.client')
   const brand = client?.company_name ?? 'Your brand'
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market-surface.latestRun')
   if (!latestRun) return null
 
+  // AFTER THE EMPTY STATE, NOT BEFORE IT. The record's window is this month
+  // whatever the page finds, so it can start as soon as the page is going to be
+  // drawn at all — but not sooner: a tenant with no delivered update returns
+  // above, and starting the record there would spend eight service-role reads
+  // on a page that draws nothing and would force `readingHandle`'s lazily built
+  // service-role client (lib/reading/read.ts) into existence to do it. Overview
+  // makes the same call in the same place, for the same reason.
+  const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
+  recordAhead.catch(() => {})
+
   const runId = latestRun.id
-  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'market-surface')
-  const month = monthStartOf(readingAt)
   const monthStatus = freezeStateFor(month, readingAt)
 
   const [insightRes, recRows, decisions, summaryRes, bucketRows, moves, subjects, themeLabels, corpusVideos] = await Promise.all([
@@ -763,12 +777,11 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // conclusions are the model's, the ledger's dates are dates, and a move with
   // one reading prints a month rather than a direction — so the refusal counter
   // is zero honestly rather than unset.
-  const recordInputs = await loadRecordInputs(
-    reading.client,
-    clientId,
-    recordWindow(month, readingAt),
-    { comparisonsRefused: countRefused([]), refusals: refusals([]), now: readingAt },
-  )
+  const recordInputs: RecordInputs = {
+    ...(await recordAhead),
+    comparisonsRefused: countRefused([]),
+    refusals: refusals([]),
+  }
 
   return {
     brand,

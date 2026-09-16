@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
+import { idsKey, memoRead } from './memo'
 import { isMissingMonthlyReading, isMissingMonthTable, monthEndInstant, monthStartOf } from './monthly'
 import {
   buildSeries,
@@ -241,12 +242,65 @@ export async function loadMonthSeries(
   // is expanded through the chain before the query, and the answer is keyed by
   // the head, which is also what stops one rival coming back as two series
   // when the caller named no audiences at all.
+  // THE THREE READS THAT DEPEND ON NOTHING GO FIRST, TOGETHER. The change log,
+  // the object labels and the tenant's update count are each a function of the
+  // arguments alone — none of them waits on the month rows — and they were
+  // awaited one after another around the reads that do. Started here and
+  // collected at the bottom, they cost one wait instead of three. (A rejection
+  // is collected at the bottom too, so it still fails the load; `void` on the
+  // handles keeps an early throw elsewhere from being an unhandled rejection.)
+  const table = objectKind ? NUMERATOR_TABLE[objectKind] : undefined
+  const idColumn = objectKind ? NUMERATOR_ID_COLUMN[objectKind] : undefined
+  const labelsAhead = table && objectIds ? loadLabels(client, clientId, objectKind, objectIds) : null
+  const updatesAhead =
+    options.updatesByMonth !== undefined || options.firstRunMonth !== undefined
+      ? null
+      : loadUpdates(client, clientId, from, to)
+  labelsAhead?.catch(() => {})
+  updatesAhead?.catch(() => {})
+
   const changes = await loadChanges(client, clientId)
   const renames = changes.map(renameFrom).filter((r): r is RenameRecord => r != null)
   const askedChains = renameChains(asked ?? [], renames)
   const audiences = asked
     ? [...new Set(asked.flatMap((a) => namesFor(askedChains, a)))]
     : null
+
+  // THE NUMERATORS GO OUT WITH THE DENOMINATORS. They were read after, because
+  // the numerator read is skipped when the denominator table turns out not to
+  // exist — but `month_denominators` is applied and the skip is for a case that
+  // is not the live one, so the page paid a whole round trip to learn something
+  // it almost always already knows. Started here and judged below: where the
+  // substrate is not `seeded` the answer is dropped unread, exactly as if it
+  // had never been asked for.
+  //
+  // MULTI_ROW_IN_CHUNK, NOT THE UUID SIZE. One object id names a row per month
+  // per audience here (the reading tables are keyed
+  // (client_id, month, audience, <object>)), so a twelve-month window over five
+  // audiences is ~60 rows an id: 100 ids is one 1,000-row page and a bit, 250
+  // would be six pages read one after another inside a single chunk. The win in
+  // this read is that the chunks go out TOGETHER at all; a wider chunk would
+  // take that back.
+  const numeratorsAhead =
+    table && idColumn && objectIds && objectIds.length > 0
+      ? mapWithLimit(chunk(objectIds, MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+          selectAll<StoredNumerator>(() => {
+            let q = client
+              .from(table)
+              .select('*')
+              .eq('client_id', clientId)
+              .gte('month', from)
+              .lte('month', to)
+              .in(idColumn, ids)
+            if (audiences) q = q.in('audience', audiences)
+            return q
+              .order('month', { ascending: true })
+              .order('audience', { ascending: true })
+              .order(idColumn, { ascending: true })
+          }),
+        )
+      : null
+  numeratorsAhead?.catch(() => {})
 
   let substrate: Substrate = 'seeded'
   let denominators: StoredDenominator[] = []
@@ -278,8 +332,6 @@ export async function loadMonthSeries(
     }
   }
 
-  const table = objectKind ? NUMERATOR_TABLE[objectKind] : undefined
-  const idColumn = objectKind ? NUMERATOR_ID_COLUMN[objectKind] : undefined
   const numerators: StoredNumerator[] = []
   // THE NUMERATOR HAS ITS OWN SUBSTRATE, and telling it apart from silence is
   // the point. `month_denominators` is applied and seeded on production;
@@ -289,25 +341,12 @@ export async function loadMonthSeries(
   // layer is built to prevent. It is the denominator read's own `isMissing`
   // shape, narrow by name, applied one table down.
   let numeratorSubstrate: Substrate = substrate
-  if (substrate === 'seeded' && table && idColumn && objectIds && objectIds.length > 0) {
+  if (substrate === 'seeded' && numeratorsAhead) {
     try {
-      for (const ids of chunk(objectIds, 100)) {
-        const part = await selectAll<StoredNumerator>(() => {
-          let q = client
-            .from(table)
-            .select('*')
-            .eq('client_id', clientId)
-            .gte('month', from)
-            .lte('month', to)
-            .in(idColumn, ids)
-          if (audiences) q = q.in('audience', audiences)
-          return q
-            .order('month', { ascending: true })
-            .order('audience', { ascending: true })
-            .order(idColumn, { ascending: true })
-        })
-        numerators.push(...part)
-      }
+      // The chunks are disjoint by object id, so they were sent at once and are
+      // concatenated in chunk order — the same per-id ordering a serial loop
+      // gave.
+      for (const part of await numeratorsAhead) numerators.push(...part)
     } catch (error) {
       if (!isMissingMonthTable(error) && !isMissingSubjects(error)) throw error
       numeratorSubstrate = 'missing'
@@ -325,11 +364,10 @@ export async function loadMonthSeries(
     source: c.source ?? null,
   }))
 
-  const labels = table && objectIds ? await loadLabels(client, clientId, objectKind, objectIds) : new Map<string, string>()
-  const updates =
-    options.updatesByMonth !== undefined || options.firstRunMonth !== undefined
-      ? { byMonth: options.updatesByMonth ?? {}, firstRunMonth: options.firstRunMonth ?? null }
-      : await loadUpdates(client, clientId, from, to)
+  const labels = labelsAhead ? await labelsAhead : new Map<string, string>()
+  const updates = updatesAhead
+    ? await updatesAhead
+    : { byMonth: options.updatesByMonth ?? {}, firstRunMonth: options.firstRunMonth ?? null }
 
   // One key per RIVAL, not per stored string: a renamed rival holds months
   // under both names, and keying by the raw distinct set would return the same
@@ -403,16 +441,32 @@ async function loadUpdates(
   to: string,
 ): Promise<{ byMonth: Record<string, number>; firstRunMonth: string | null }> {
   const delivered = ['completed', 'partial']
-  const runs = await selectAll<{ started_at: string | null }>(() =>
-    client
-      .from('pipeline_runs')
-      .select('id, started_at')
-      .eq('client_id', clientId)
-      .in('status', delivered)
-      .gte('started_at', `${from}T00:00:00.000Z`)
-      .lt('started_at', monthEndInstant(to))
-      .order('started_at', { ascending: true })
-      .order('id', { ascending: true }),
+  // The two reads are independent — the axis's runs and the tenant's very first
+  // — and were awaited one after the other. Memoised together on the axis,
+  // because a page draws several series over the same months.
+  const [runs, first] = await memoRead(client, `reading:updates:${clientId}:${from}:${to}`, () =>
+    Promise.all([
+      selectAll<{ started_at: string | null }>(() =>
+        client
+          .from('pipeline_runs')
+          .select('id, started_at')
+          .eq('client_id', clientId)
+          .in('status', delivered)
+          .gte('started_at', `${from}T00:00:00.000Z`)
+          .lt('started_at', monthEndInstant(to))
+          .order('started_at', { ascending: true })
+          .order('id', { ascending: true }),
+      ),
+      client
+        .from('pipeline_runs')
+        .select('started_at')
+        .eq('client_id', clientId)
+        .in('status', delivered)
+        .not('started_at', 'is', null)
+        .order('started_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+    ]),
   )
   const byMonth: Record<string, number> = {}
   for (const run of runs) {
@@ -421,15 +475,6 @@ async function loadUpdates(
     byMonth[month] = (byMonth[month] ?? 0) + 1
   }
 
-  const first = await client
-    .from('pipeline_runs')
-    .select('started_at')
-    .eq('client_id', clientId)
-    .in('status', delivered)
-    .not('started_at', 'is', null)
-    .order('started_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
   if (first.error) throw new Error(`pipeline_runs first run: ${first.error.message}`)
   const startedAt = (first.data as { started_at?: string | null } | null)?.started_at ?? null
   return { byMonth, firstRunMonth: startedAt ? monthStartOf(startedAt) : null }
@@ -438,20 +483,25 @@ async function loadUpdates(
 /** Every change this tenant has logged, oldest first. An empty list when the
  *  log does not exist yet — the readiness precedent: a reader says "not
  *  recorded", it does not fail. */
-async function loadChanges(client: SupabaseClient, clientId: string): Promise<ConfigChange[]> {
-  try {
-    return await selectAll<ConfigChange>(() =>
-      client
-        .from(CONFIG_CHANGES_TABLE)
-        .select('*')
-        .eq('client_id', clientId)
-        .order('changed_at', { ascending: true })
-        .order('id', { ascending: true }),
-    )
-  } catch (error) {
-    if (isMissingConfigLog(error)) return []
-    throw error
-  }
+function loadChanges(client: SupabaseClient, clientId: string): Promise<ConfigChange[]> {
+  // MEMOISED, because every series on a page asks for it: a change log is a
+  // tenant-wide fact, and one loadOverview read it three times over the same
+  // 102 rows. The list is treated as readonly everywhere here.
+  return memoRead(client, `reading:changes:${clientId}`, async () => {
+    try {
+      return await selectAll<ConfigChange>(() =>
+        client
+          .from(CONFIG_CHANGES_TABLE)
+          .select('*')
+          .eq('client_id', clientId)
+          .order('changed_at', { ascending: true })
+          .order('id', { ascending: true }),
+      )
+    } catch (error) {
+      if (isMissingConfigLog(error)) return []
+      throw error
+    }
+  })
 }
 
 /** The first REAL entry: reconstructed rows are inference from what each update
@@ -464,46 +514,56 @@ function firstLoggedAt(changes: readonly ConfigChange[]): string | null {
 
 /** The objects' display labels. Never a key — theme labels churn ~88% run to
  *  run, which is the whole reason `theme_registry.id` exists. */
-async function loadLabels(
+function loadLabels(
   client: SupabaseClient,
   clientId: string,
   objectKind: ObjectKind | null,
   ids: readonly string[],
 ): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
-  // A SUBJECT'S LABEL IS ITS NAME, and the name is the client's own words
-  // rather than a clustering artefact — which is the difference the two
-  // branches are about, not the table they read.
-  if (objectKind === 'subject') {
-    for (const part of chunk([...ids], 100)) {
-      const { data, error } = await client
-        .from(TABLE_SUBJECTS)
-        .select('id, name')
-        .eq('client_id', clientId)
-        .in('id', part)
+  if (objectKind !== 'subject' && objectKind !== 'theme') return Promise.resolve(new Map())
+  // The chunks are disjoint by id and were awaited ONE AT A TIME; an id names
+  // at most one label, so a wider chunk is strictly fewer requests and they can
+  // all go at once. Memoised on the asked-for set, because two blocks drawing
+  // the same objects want the same names (Overview read theme_registry twice
+  // for the same 120 ids).
+  return memoRead(client, `reading:labels:${clientId}:${objectKind}:${idsKey(ids)}`, async () => {
+    const out = new Map<string, string>()
+    const parts = chunk([...new Set(ids)], UUID_IN_CHUNK)
+    // A SUBJECT'S LABEL IS ITS NAME, and the name is the client's own words
+    // rather than a clustering artefact — which is the difference the two
+    // branches are about, not the table they read.
+    const table = objectKind === 'subject' ? TABLE_SUBJECTS : 'theme_registry'
+    const column = objectKind === 'subject' ? 'name' : 'canonical_label'
+    const answers = await mapWithLimit(parts, READ_CONCURRENCY, (part) =>
+      Promise.resolve(
+        client
+          .from(table)
+          .select(objectKind === 'subject' ? 'id, name' : 'id, canonical_label')
+          .eq('client_id', clientId)
+          .in('id', part),
+      ),
+    )
+    for (const { data, error } of answers) {
       if (error) {
-        if (isMissingSubjects(error)) return out
-        throw new Error(`subjects labels: ${error.message}`)
+        // The names collected so far are still names. The serial loop this
+        // replaced returned what it had when M3 turned out to be unapplied, and
+        // a caller that gets a partial map falls back to "an unnamed subject"
+        // for the rest — so handing back an empty one would lose labels that
+        // were read successfully. (Reachable only if one chunk answers and
+        // another says the table is missing, which the database does not
+        // really do; kept because the answer to "what did we learn" is not
+        // "nothing" either way.)
+        if (objectKind === 'subject' && isMissingSubjects(error)) return out
+        throw new Error(`${table} labels: ${error.message}`)
       }
-      for (const row of (data ?? []) as { id: string; name: string | null }[]) {
-        if (row.name) out.set(row.id, row.name)
+      for (const row of (data ?? []) as unknown as Record<string, string | null>[]) {
+        const label = row[column]
+        const id = row.id
+        if (id && label) out.set(id, label)
       }
     }
     return out
-  }
-  if (objectKind !== 'theme') return out
-  for (const part of chunk([...ids], 100)) {
-    const { data, error } = await client
-      .from('theme_registry')
-      .select('id, canonical_label')
-      .eq('client_id', clientId)
-      .in('id', part)
-    if (error) throw new Error(`theme_registry labels: ${error.message}`)
-    for (const row of (data ?? []) as { id: string; canonical_label: string | null }[]) {
-      if (row.canonical_label) out.set(row.id, row.canonical_label)
-    }
-  }
-  return out
+  })
 }
 
 // ---- The windowed figure -----------------------------------------------------

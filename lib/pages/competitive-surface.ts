@@ -9,7 +9,7 @@ import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
@@ -518,11 +518,18 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   const readingAt = new Date().toISOString()
   const horizon = parseHorizon(params.horizon)
 
-  const [clientRes, rivals, subreddits] = await Promise.all([
+  // THE CHANGE LOG, THE ANALYSED COUNTS AND "ARE THERE SUBJECTS" JOIN WAVE 1
+  // (WP23). None of the three depends on the axis, and each was awaited alone
+  // on the critical path further down.
+  const [clientRes, rivals, subreddits, changes, subjectsNamed] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     loadRivals(supabase, clientId),
     loadSubreddits(supabase, clientId),
+    loadConfigChanges(reading.client, clientId),
+    subjectsExist(supabase, clientId),
   ])
+  const analysedAhead = countAnalysedByRival(supabase, clientId, rivals.rivals)
+  analysedAhead.catch(() => {})
   const brand = row<{ company_name: string | null }>(clientRes, 'competitive-surface.client')?.company_name ?? 'Your brand'
 
   // ── the axis ───────────────────────────────────────────────────────────
@@ -541,7 +548,11 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
 
   const denominators = storedDenominators(history, readAxis)
-  const changes = await loadConfigChanges(reading.client, clientId)
+
+  // The record's reads depend on the month and nothing else; the refusals it
+  // also carries are arithmetic over verdicts, added below.
+  const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
+  recordAhead.catch(() => {})
 
   const standings = buildStandingsBlock({
     brand,
@@ -554,7 +565,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   })
 
   // ── CO1 · the rival selection ──────────────────────────────────────────
-  const analysedByRival = await countAnalysedByRival(supabase, clientId, rivals.rivals)
+  const analysedByRival = await analysedAhead
   const observed = new Set(
     (denominators ?? [])
       .filter((d) => axis.includes(monthStartOf(d.month)) && d.videos > 0)
@@ -593,17 +604,16 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     rival: selected?.name ?? null,
     window,
     subreddits,
-    subjectsNamed: await subjectsExist(supabase, clientId),
+    subjectsNamed,
   })
 
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
-  const recordInputs = await loadRecordInputs(
-    reading.client,
-    clientId,
-    recordWindow(month, readingAt),
-    { comparisonsRefused: countRefused(verdicts), refusals: refusals(verdicts), now: readingAt },
-  )
+  const recordInputs: RecordInputs = {
+    ...(await recordAhead),
+    comparisonsRefused: countRefused(verdicts),
+    refusals: refusals(verdicts),
+  }
 
   return {
     brand,

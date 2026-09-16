@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk } from '../chunk'
+import { chunk, mapWithLimit, READ_CONCURRENCY } from '../chunk'
 import { fmtInt, monthName, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -16,7 +16,7 @@ import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import type { FigureTable, Verdict } from '../reading/verdicts'
@@ -612,7 +612,7 @@ async function readByIds<T>(
   fetch: (part: string[]) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
 ): Promise<T[]> {
   if (ids.length === 0) return []
-  const pages = await Promise.all(chunk([...ids], ID_CHUNK).map((part) => selectAll<T>(() => fetch(part))))
+  const pages = await mapWithLimit(chunk([...ids], ID_CHUNK), READ_CONCURRENCY, (part) => selectAll<T>(() => fetch(part)))
   return pages.flat()
 }
 
@@ -720,14 +720,19 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const readingAt = new Date().toISOString()
   const horizon = parseHorizon(params.horizon)
 
-  const [clientRes, runsRaw, runningIds, rivals, subjectRows, moveRows] = await Promise.all([
+  // The themed run joins wave 1 (WP23) — it waits on the running-run ids and
+  // on nothing else, and it was being read inside the selected subject's
+  // branch, behind the whole axis.
+  const [clientRes, runsRaw, themedRunId, rivals, subjectRows, moveRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'subjects'),
+    fetchRunningRunIds(supabase, clientId, 'subjects').then((ids) =>
+      fetchThemedRunId(supabase, clientId, ids, 'subjects'),
+    ),
     loadTrackedRivals(supabase, clientId),
     loadSubjectRows(supabase, clientId),
     loadSubjectMoves(supabase, clientId),
@@ -759,6 +764,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
   const monthStatus = freezeStateFor(month, readingAt)
+
+  // The record's reads depend on the month alone; its refusals are arithmetic
+  // over verdicts the page has not made yet and are added below.
+  const recordAhead = loadRecordInputs(reading.client, clientId, monthRecordWindow(month, readingAt), { now: readingAt })
+  recordAhead.catch(() => {})
 
   const perAudience = new Map<string, number>()
   const denominatorByMonth = new Map<string, number>()
@@ -863,7 +873,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     })
     const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null)
 
-    const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'subjects')
     const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
     const [voices, unanswered] = await Promise.all([
       loadVoices(supabase, clientId, memberIds ?? []),
@@ -906,12 +915,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
 
   // ── the record ────────────────────────────────────────────────────────
   const pageVerdicts = (selected?.sides ?? []).map((s) => s.verdict).filter((v): v is Verdict => v != null)
-  const recordInputs = await loadRecordInputs(
-    reading.client,
-    clientId,
-    monthRecordWindow(month, readingAt),
-    { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
-  )
+  const recordInputs: RecordInputs = {
+    ...(await recordAhead),
+    comparisonsRefused: countRefused(pageVerdicts),
+    refusals: refusals(pageVerdicts),
+  }
 
   return {
     brand,

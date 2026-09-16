@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
-import { chunk } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
@@ -719,37 +719,44 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     ? totalVideos(monthWindowRead.denominators)
     : windowVideos
 
-  // ── §1 · unusual this week ─────────────────────────────────────────────
+  // ── §§1-5, TOGETHER ────────────────────────────────────────────────────
+  // Five sections, each of which reads. They were awaited one after another,
+  // and not one of them takes another's output — every input below comes off
+  // wave 2 or off the arithmetic between. Measured against production, §5's
+  // cited comments alone are nine seconds of waiting; done in sequence behind
+  // four other sections that also wait, This week took 13-20 s while its
+  // database was idle most of it. (The reads they share are read once: the
+  // reading layer's memo is keyed on the client, so two sections asking for the
+  // same labels or the same change log ask once.)
   const baseline = pooledBaseline(denominators, month, windowVideos ?? 0)
-  const unusual = await buildUnusual({
-    supabase, clientId, check, flags, baseline, month,
-  })
-
-  // ── §2 · this week in your subjects ────────────────────────────────────
-  const subjectsBlock = await buildSubjects({
-    reading, clientId, subjects, month, window, audiences,
-  })
-
-  // ── §3 · rising now ────────────────────────────────────────────────────
-  const risingRead = await buildRising({
-    supabase, reading, clientId, month, window, themedRunId,
-    monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
-    denominators,
-  })
-
-  // ── §4 · what came in ──────────────────────────────────────────────────
-  const cameIn = await buildCameIn({
-    supabase, clientId, runId: anchor.id, window, month, videos, rivals,
-    windowRead,
-    // The window clipped to the month where it crosses one, and the window
-    // itself where it does not — per audience, which is what the plan's
-    // per-row contribution line needs and what the RPC already returns.
-    contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
-    contributionVideos, denominators, monthVideos, subjects, themedRunId,
-  })
-
-  // ── §5 · for sales ─────────────────────────────────────────────────────
-  const sales = await buildSales({ supabase, clientId, window, windowVideos, subjects })
+  const [unusual, subjectsBlock, risingRead, cameIn, sales] = await Promise.all([
+    // ── §1 · unusual this week ───────────────────────────────────────────
+    buildUnusual({
+      supabase, clientId, check, flags, baseline, month,
+    }),
+    // ── §2 · this week in your subjects ──────────────────────────────────
+    buildSubjects({
+      reading, clientId, subjects, month, window, audiences,
+    }),
+    // ── §3 · rising now ──────────────────────────────────────────────────
+    buildRising({
+      supabase, reading, clientId, month, window, themedRunId,
+      monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
+      denominators,
+    }),
+    // ── §4 · what came in ────────────────────────────────────────────────
+    buildCameIn({
+      supabase, clientId, runId: anchor.id, window, month, videos, rivals,
+      windowRead,
+      // The window clipped to the month where it crosses one, and the window
+      // itself where it does not — per audience, which is what the plan's
+      // per-row contribution line needs and what the RPC already returns.
+      contributionRead: (monthWindowRead ?? windowRead)?.denominators ?? null,
+      contributionVideos, denominators, monthVideos, subjects, themedRunId,
+    }),
+    // ── §5 · for sales ───────────────────────────────────────────────────
+    buildSales({ supabase, clientId, window, windowVideos, subjects }),
+  ])
 
   // ── §6 · what worked ───────────────────────────────────────────────────
   const worked = buildWorked(videos)
@@ -1709,6 +1716,15 @@ async function loadNewThemes(
       supabase.from('month_theme_readings').select('theme_id, videos')
         .eq('client_id', clientId).eq('month', month).in('theme_id', part)
         .order('theme_id', { ascending: true }),
+      // ONE THEME IS NOT ONE ROW HERE. `month_theme_readings` is keyed
+      // (client_id, month, audience, theme_id) and this read names no audience,
+      // so one month gives a row per theme PER AUDIENCE — the client, the
+      // industry and every rival. What binds a chunk of this shape is the ROW
+      // cap, not the URL cap: PostgREST answers 1,000 rows at a time and
+      // `selectAll` pages the rest SERIALLY, inside a chunk that was going to be
+      // one of several concurrent requests. lib/chunk.ts MULTI_ROW_IN_CHUNK has
+      // the arithmetic.
+      MULTI_ROW_IN_CHUNK,
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
@@ -1991,13 +2007,27 @@ async function loadSalesCitations(
  * lib/engage.ts has used since the digest shipped). Chunks are disjoint and
  * concatenating them in chunk order keeps the output order a serial loop
  * produced.
+ *
+ * THE SIZE IS PART OF THE OUTPUT ORDER, SO CHANGING IT IS NOT ONLY A
+ * PERFORMANCE CHANGE. The output is chunk order, then row order within a chunk,
+ * so where the boundary falls decides the sequence — and `tenantInsights`'
+ * sequence reaches `fetchQuoteCitationsByAudience`, whose Map is keyed in the
+ * order the EVIDENCE ROWS arrive, and then `pool.slice(0, refs.length)`. That
+ * chain is exactly how a chunk size in lib/quotes.ts turned out to be choosing
+ * four of Sealand's "For sales" quotes (the note beside `fetchChunks`, which is
+ * pinned at 120 for that reason). It is bounded here today — a flag's refs are
+ * a handful, so a caller almost never has more than one chunk — but "bounded
+ * today" is a thing to check, not to assume: anyone moving this size should
+ * diff the loader's whole output on both tenants, because no test states what
+ * the order should be.
  */
 async function inChunks<T>(
   ids: readonly string[],
   build: (part: string[]) => Parameters<typeof selectAll<T>>[0],
+  size: number = UUID_IN_CHUNK,
 ): Promise<T[]> {
-  const parts = chunk([...new Set(ids)], 100)
-  const pages = await Promise.all(parts.map((part) => selectAll<T>(build(part))))
+  const parts = chunk([...new Set(ids)], size)
+  const pages = await mapWithLimit(parts, READ_CONCURRENCY, (part) => selectAll<T>(build(part)))
   return pages.flat()
 }
 
