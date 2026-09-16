@@ -368,7 +368,15 @@ export async function nameSubject(
     if (isMissingSubjects(error)) return { ok: false, message: SUBJECTS_NOT_APPLIED, missing: true }
     // The partial unique index: one live subject per name per tenant.
     if ((error as { code?: string }).code === '23505') return { ok: false, message: `You are already tracking "${name}".` }
-    const stopped = retiredFirst ? ` "${name}" has been stopped and the replacement was not saved — add it again.` : ''
+    // AND THE MONTH IS CLOSED, WHICH "stopped" DOES NOT SAY. Retiring the
+    // superseded subject fires `subject_retirement_freeze` immediately, so if
+    // the retry then fails the old subject's current month stays frozen at a
+    // partial reading that `subjects_retirement_is_final` now guarantees can
+    // never be reopened. "Add it again" starts a NEW line; the sentence has to
+    // say what the old one cost.
+    const stopped = retiredFirst
+      ? ` "${name}" has been stopped and its months are closed at the numbers they held; the replacement was not saved, and adding it again starts a new line.`
+      : ''
     return { ok: false, message: couldNotSave('nameSubject insert', error, stopped) }
   }
   const id = (data as { id: string } | null)?.id
