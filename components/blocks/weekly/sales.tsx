@@ -30,6 +30,15 @@ import type { ForSalesBlock, SalesRow } from '@/lib/pages/weekly'
 // d.sales)`. Until then: if you change what a salesperson is told, change it
 // in BOTH, and prefer WP15's as the one the product is heading for.
 //
+// THE COPY HALF IS CLOSED ALREADY (Block B fix pass). The two blocks asked a
+// salesperson two different questions about the same week — this one "What are
+// customers pushing back on, and what are they buying on?" and This week's
+// "What is being pushed back on, and what can be repeated?" — so both now ask
+// this one. WP19 still owns the rest: this prints four uncounted quotes, one
+// per kind, where This week prints counts, a denominator caveat and "Grouped by
+// theme — the grouping is ours and it can change." Same reading, same week, two
+// shapes, until the data half is folded.
+//
 // SO IT TAKES `{ sales }`, NOT `WeeklyData`. The status note pinned the shape
 // as `Block<{ sales: ForSalesBlock }>` and said WP15 should hand it the
 // loader's own rows without a translation layer — and the code declared

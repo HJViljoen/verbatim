@@ -32,7 +32,12 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
   const block: Block<D> = {
     key,
     title: 'For sales',
-    question: 'What is being pushed back on, and what can be repeated?',
+    // ONE QUESTION FOR ONE READING. Until WP19 folds the two "For sales"
+    // blocks into this one, the weekly artefact draws its own
+    // (components/blocks/weekly/sales.tsx) — and the two asked a salesperson
+    // two different questions about the same week. The shapes still differ,
+    // deliberately and documented; the question does not have to.
+    question: 'What are customers pushing back on, and what are they buying on?',
 
     render(data, mode = 'app', ctx) {
       const d = pick(data)
