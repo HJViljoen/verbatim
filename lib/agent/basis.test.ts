@@ -3,7 +3,10 @@ import { askBasisLine, nothingSearchable, type AskBasis } from './basis'
 
 const base: AskBasis = {
   updateAt: '2026-09-13T04:06:38.483Z',
-  monthlyReadings: 63,
+  // Össur's real figure: 119 denominator rows over 63 months, FOUR of which
+  // clear the video floor — which is what the movement block on the same page
+  // counts, and what a claim about change can stand on.
+  monthlyReadings: 4,
   embedded: 3129,
   total: 3129,
   lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
@@ -12,7 +15,7 @@ const base: AskBasis = {
 describe('askBasisLine', () => {
   it('states the four facts, in the design’s order', () => {
     expect(askBasisLine(base, { asked: true })).toBe(
-      'Answered against the update of 13 Sep · 63 monthly readings · 3,129 of 3,129 findings searchable · embedded as at 15 Sep',
+      'Answered against the update of 13 Sep · 4 monthly readings · 3,129 of 3,129 findings searchable · embedded as at 15 Sep',
     )
   })
 
@@ -28,7 +31,15 @@ describe('askBasisLine', () => {
 
   it('tells a failed month read apart from a workspace with no months', () => {
     expect(askBasisLine({ ...base, monthlyReadings: null })).toContain('monthly readings not recorded here yet')
-    expect(askBasisLine({ ...base, monthlyReadings: 0 })).toContain('no monthly readings yet')
+    expect(askBasisLine({ ...base, monthlyReadings: 0 })).toContain('no month yet carries enough videos to compare on')
+  })
+
+  // The number and the movement block below it are the SAME count, and on
+  // Össur they used to disagree by a factor of fifteen: "63 monthly readings"
+  // over a block reading "4 months of readings behind it".
+  it('counts what a comparison can stand on, not every month we hold a row for', () => {
+    expect(askBasisLine({ ...base, monthlyReadings: 4 })).toContain('4 monthly readings')
+    expect(askBasisLine({ ...base, monthlyReadings: 4 })).not.toContain('63')
   })
 
   it('says one reading in the singular', () => {

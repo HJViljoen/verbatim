@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { fmtInt, shortDate } from '../format'
+import { SHARE_BAND } from '../report-bands'
 import { isMissingColumnError, selectAll } from '../supabase-admin'
 
 // What an answer was answered AGAINST (design AS3, Phase 1 WP21).
@@ -27,9 +28,17 @@ export interface AskBasis {
   /** When the update this was (or will be) answered against started. Null when
    *  the workspace has no delivered update at all. */
   updateAt: string | null
-  /** Distinct calendar months with a reading of this workspace's audiences.
-   *  Null when the monthly reading is not recorded in this database yet — which
-   *  is a different fact from zero months. */
+  /** Distinct calendar months a claim about change can actually stand on: one
+   *  whose denominator clears the reading layer's video floor, for any of this
+   *  workspace's audiences. Null when the monthly reading is not recorded in
+   *  this database yet — which is a different fact from zero months.
+   *
+   *  NOT "months we hold a row for". Össur holds 119 rows over 63 months back
+   *  to October 2020 and FOUR of them clear the floor; the movement block on
+   *  the same page prints "4 months of readings behind it" for the same tenant,
+   *  and a line above it reading "63 monthly readings" says the corpus has five
+   *  years of comparable history when it has four months. Counted the way
+   *  `isReadable` counts (lib/reading/series.ts), so the two agree. */
   monthlyReadings: number | null
   /** Findings a question can reach, and findings there are. */
   embedded: number
@@ -59,7 +68,7 @@ export function askBasisLine(basis: AskBasis, opts: { asked?: boolean } = {}): s
     basis.monthlyReadings == null
       ? 'monthly readings not recorded here yet'
       : basis.monthlyReadings === 0
-        ? 'no monthly readings yet'
+        ? 'no month yet carries enough videos to compare on'
         : `${fmtInt(basis.monthlyReadings)} monthly ${basis.monthlyReadings === 1 ? 'reading' : 'readings'}`
 
   // A share, always with its denominator (the GLOSSARY's rule for a level).
@@ -97,10 +106,14 @@ export async function loadIndexFacts(
   clientId: string,
 ): Promise<Omit<AskBasis, 'updateAt'>> {
   const [months, all, embedded, last] = await Promise.all([
-    // DISTINCT MONTHS, not rows: a month carries one row per audience, and "119
-    // monthly readings" for 63 months would be a bigger number about a smaller
-    // thing. Counted in code off the month column rather than in SQL, because
-    // PostgREST has no count(distinct).
+    // DISTINCT READABLE MONTHS, not rows. Two reductions, and both matter:
+    // a month carries one row per audience, so "119 monthly readings" for 63
+    // months is a bigger number about a smaller thing; and a month whose
+    // denominator is under the reading layer's floor is not a reading anybody
+    // may compare on, so counting it tells the client they have history they
+    // cannot use. Össur: 119 rows, 63 months, FOUR readable (Jun–Sep 2026, all
+    // `industry-other`). Sealand: 95, 66, two. Counted in code rather than in
+    // SQL, because PostgREST has no count(distinct).
     //
     // PAGED, on the primary key minus the tenant (AGENTS.md: a bare `.select()`
     // caps at 1,000 rows silently). This read is one row per month PER
@@ -110,10 +123,10 @@ export async function loadIndexFacts(
     // a client-facing sentence. `selectAll` throws where a bare read reports,
     // so the throw is turned back into the shape the rest of this function
     // already reads.
-    selectAll<{ month: string }>(() =>
+    selectAll<{ month: string; videos: number | null }>(() =>
       client
         .from('month_denominators')
-        .select('month, audience')
+        .select('month, audience, videos')
         .eq('client_id', clientId)
         .order('month', { ascending: true })
         .order('audience', { ascending: true }),
@@ -133,11 +146,17 @@ export async function loadIndexFacts(
   // own corpus, and "0 of 0 searchable" over three thousand live findings is
   // the confident falsehood this whole line exists to prevent — so a failure
   // reads as "not recorded" and the sentence says so.
-  const monthRows = months.error ? null : ((months.data ?? []) as { month: string }[])
+  const monthRows = months.error ? null : ((months.data ?? []) as { month: string; videos: number | null }[])
   const columnNotThere = isMissingColumnError(last.error, 'embedded_at')
 
   return {
-    monthlyReadings: monthRows ? new Set(monthRows.map((m) => m.month)).size : null,
+    monthlyReadings: monthRows
+      ? new Set(
+          monthRows
+            .filter((m) => (m.videos ?? 0) >= SHARE_BAND.minN)
+            .map((m) => m.month),
+        ).size
+      : null,
     embedded: embedded.error ? 0 : embedded.count ?? 0,
     total: all.error ? 0 : all.count ?? 0,
     lastEmbeddedAt: columnNotThere || last.error ? null : ((last.data?.embedded_at as string | undefined) ?? null),
