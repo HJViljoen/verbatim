@@ -44,6 +44,27 @@ export const UUID_IN_CHUNK = 250
 export const HASH_IN_CHUNK = 150
 
 /**
+ * Ids per `.in()` filter when ONE ID NAMES MANY ROWS — the month readings, and
+ * anything else whose `.in()` column is not a key of the table.
+ *
+ * The URL cap is not the binding constraint on such a read; the ROW cap is.
+ * PostgREST answers at most 1,000 rows a request (server-side `db-max-rows`),
+ * so `selectAll` pages a chunk that returns more — and those pages are SERIAL,
+ * inside a chunk that was going to be one of several concurrent requests. Ids
+ * per chunk should therefore be about 1,000 / rows-per-id, not the URL's 250:
+ * `month_theme_readings` is keyed (client_id, month, audience, theme_id), so a
+ * twelve-month window over a client, its industry and three rivals is ~60 rows
+ * per theme id, and 250 themes is 15,000 rows — fifteen requests in a row where
+ * 100 themes is six, and the six can overlap with the next chunk's.
+ *
+ * A hundred, then: the size these readers were measured at, and the right order
+ * of magnitude for a read of a few tens of rows per id. Raising it does not buy
+ * fewer round trips on this shape of read — it trades concurrent ones for
+ * sequential ones.
+ */
+export const MULTI_ROW_IN_CHUNK = 100
+
+/**
  * How many chunked reads a loader may have in flight at once.
  *
  * WHY THERE IS A CEILING AT ALL, AND WHY IT IS NOT LOW. In isolation, more

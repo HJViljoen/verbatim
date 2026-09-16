@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { renameChains, renameFrom, type RenameChains, type RenameRecord } from '../rivals'
 import { createAdminClient, selectAll } from '../supabase-admin'
@@ -273,9 +273,17 @@ export async function loadMonthSeries(
   // it almost always already knows. Started here and judged below: where the
   // substrate is not `seeded` the answer is dropped unread, exactly as if it
   // had never been asked for.
+  //
+  // MULTI_ROW_IN_CHUNK, NOT THE UUID SIZE. One object id names a row per month
+  // per audience here (the reading tables are keyed
+  // (client_id, month, audience, <object>)), so a twelve-month window over five
+  // audiences is ~60 rows an id: 100 ids is one 1,000-row page and a bit, 250
+  // would be six pages read one after another inside a single chunk. The win in
+  // this read is that the chunks go out TOGETHER at all; a wider chunk would
+  // take that back.
   const numeratorsAhead =
     table && idColumn && objectIds && objectIds.length > 0
-      ? mapWithLimit(chunk(objectIds, UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
+      ? mapWithLimit(chunk(objectIds, MULTI_ROW_IN_CHUNK), READ_CONCURRENCY, (ids) =>
           selectAll<StoredNumerator>(() => {
             let q = client
               .from(table)

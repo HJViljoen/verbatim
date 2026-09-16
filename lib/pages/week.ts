@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
-import { chunk, mapWithLimit, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
+import { chunk, mapWithLimit, MULTI_ROW_IN_CHUNK, READ_CONCURRENCY, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
@@ -1716,9 +1716,15 @@ async function loadNewThemes(
       supabase.from('month_theme_readings').select('theme_id, videos')
         .eq('client_id', clientId).eq('month', month).in('theme_id', part)
         .order('theme_id', { ascending: true }),
-      // One month, one audience-less read: at most one row per theme, so the
-      // default chunk is right here too.
-      UUID_IN_CHUNK,
+      // ONE THEME IS NOT ONE ROW HERE. `month_theme_readings` is keyed
+      // (client_id, month, audience, theme_id) and this read names no audience,
+      // so one month gives a row per theme PER AUDIENCE — the client, the
+      // industry and every rival. What binds a chunk of this shape is the ROW
+      // cap, not the URL cap: PostgREST answers 1,000 rows at a time and
+      // `selectAll` pages the rest SERIALLY, inside a chunk that was going to be
+      // one of several concurrent requests. lib/chunk.ts MULTI_ROW_IN_CHUNK has
+      // the arithmetic.
+      MULTI_ROW_IN_CHUNK,
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
