@@ -303,7 +303,10 @@ export function thinFixture(): WeekData {
       rivals: [
         { audience: 'competitor:Freitag', label: 'Freitag', byThem: 44, aboutThem: 94, comments: 0, ownPostsUnread: false },
         { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', byThem: 18, aboutThem: 9, comments: 0, ownPostsUnread: false },
-        { audience: 'competitor:Rareform', label: 'Rareform', byThem: 0, aboutThem: 0, comments: 0, ownPostsUnread: true },
+        // POSTS READ, NONE THIS UPDATE. The row the old filter dropped, which
+        // is how "Rareform went quiet" reached a reader as silence rather than
+        // as a zero.
+        { audience: 'competitor:Rareform', label: 'Rareform', byThem: 0, aboutThem: 0, comments: 0, ownPostsUnread: false },
       ],
       quotes: [],
       quotesTotal: null,

@@ -201,6 +201,13 @@ describe('WK §4 · what came in', () => {
     expect(thin).toContain('the same conversation under a new label')
   })
 
+  it('shows a rival who posted nothing as a zero, not as silence', () => {
+    // Sealand's Rareform: their posts ARE read and none came in. Dropping the
+    // row let "Rareform went quiet" reach the reader as nothing at all.
+    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('Rareform')
+  })
+
   it('states the by/about distinction, and why a zero is a zero', () => {
     // Össur has never captured a post of Ottobock's in six months of
     // gathering, handle configured or not: "0 posts of their own" would read

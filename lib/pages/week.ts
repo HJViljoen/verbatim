@@ -1173,8 +1173,17 @@ async function buildCameIn(input: {
       // EVER captured a post of this rival's: never, and their own posts are
       // not being read; sometimes, and a zero this update is a real zero.
       ownPostsUnread: !everOwned.has(audience),
+      retired: r.retiredAt != null,
     }
-  }).filter((r) => r.byThem > 0 || r.aboutThem > 0 || r.ownPostsUnread)
+  })
+  // A TRACKED RIVAL WITH NOTHING THIS UPDATE IS A ZERO, NOT AN ABSENCE. The
+  // row used to be dropped unless something was found or their own posts were
+  // unread, so a rival whose posts ARE read and who posted nothing reached the
+  // reader as silence — "Freitag went quiet" is a fact about a rival and the
+  // page said it by saying nothing. A RETIRED rival with nothing is different:
+  // nobody is watching them any more, and a zero there is about us.
+  .filter((r) => !r.retired || r.byThem > 0 || r.aboutThem > 0)
+  .map(({ retired: _retired, ...r }) => r)
 
   const newThemes = await loadNewThemes(supabase, clientId, runId, month)
   const subjectQuotes = window
