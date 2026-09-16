@@ -174,6 +174,26 @@ export function readableMonthCount(rows: readonly MonthRow[]): number {
  * Through the SESSION client wherever a page has one: `month_denominators` and
  * `audience_insights_current` are both tenant-readable (the view is
  * `security_invoker`), so none of this needs the service role.
+ *
+ * WHAT THIS COSTS, AND WHAT THE FIX IS WHEN IT MATTERS. Three uncached
+ * tenant-wide round trips per render: two `count: 'exact'` reads over the
+ * joined `audience_insights_current` view and a fully paged read of
+ * `month_denominators`. Every Ask page load pays it, every thread render pays
+ * it, and — because `agentPage.load` IS `loadAgentThread` — so does every
+ * export and every snapshot build of a thread. An exact count over a joined
+ * view, per page load, is the shape that starved this instance on 16
+ * September; a busy afternoon of one Ask page and two thread exports is six of
+ * them over the tenant's whole insight corpus.
+ *
+ * The PREDICATE is not the problem and must not be "fixed": `embedding is not
+ * null` is a null test, it does not detoast the vector, and `embedded_at` is
+ * null for every vector written before that column existed — counting by it
+ * would understate a client-facing figure by most of the corpus. The answer is
+ * a STORED count (a counter maintained where insights are embedded, read here
+ * in one cheap row), which is a schema change and belongs to the next
+ * reading-layer performance package rather than to Ask. WP23 measured the six
+ * reading pages and never saw this one, so it is written down here, where the
+ * reads are, instead of in a brief that has closed.
  */
 export async function loadIndexFacts(
   client: SupabaseClient,
