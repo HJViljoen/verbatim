@@ -155,6 +155,16 @@ lesson, proven harmless once and not worth proving twice).
 tables that rely on the same function; M6's delete guard installs triggers on
 all six month tables and therefore needs M4 and M5 to have created theirs.
 
+**There is no separate index step, and that is deliberate.** Twenty-odd
+indexes are created across the eleven files and **not one is `CONCURRENTLY`**
+— a concurrent build cannot run inside the transaction a migration is applied
+in, and every table being indexed is small (M10's own note: `videos` 8,377 rows
+/ 27 MB, `gate_verdicts` smaller). So each index is built by the file that
+needs it, inside its apply, in the seconds that takes. If you are looking for a
+list of indexes to run by hand after the migrations, there isn't one; if a
+future index lands on a table big enough to need `CONCURRENTLY`, it needs its
+own step here and its own migration file, because it cannot share theirs.
+
 Each file was applied twice over `schema-baseline.sql` on a throwaway PG 17
 cluster (the Block C merge: 62 migrations, 0 errors; the eleven re-applied over
 themselves, 0 errors). They are idempotent. Re-running one after a partial
@@ -959,6 +969,18 @@ safety margin and the only reason to take the split at all.
 
 ## Owed, and not done in WP22
 
+**Second pass, 2026-09-16 15:10–15:20 SAST (the Block C merge head).** Four
+production calls in total, and they are the whole budget this pass spent:
+`select 1` through the MCP returned in about two seconds; the next catalog
+query (`pg_stat_activity`, one row, no user table) died with `Connection
+terminated due to connection timeout`; and `stored-artefacts-smoke` failed on
+its first read, twice, five minutes apart, with `Could not query the database
+for the schema cache. Retrying.` **So the instance is still where it was this
+morning** — SQL answering about one call in two, PostgREST not answering at
+all — and this was not the hour to scan `audience_insights`. Nothing was
+re-read that had already been read today; the table at the top of this file
+stands as of that earlier pass.
+
 - **Embedding coverage (step 4) is the one figure I could not read.** The
   Supabase instance was unreachable for most of WP22 (~09:17 to ~10:45 SAST on
   16 Sep — `Connection terminated due to connection timeout` through the MCP,
@@ -968,9 +990,16 @@ safety margin and the only reason to take the split at all.
   the table at the top were read through that. The `audience_insights` coverage
   query is heavier and timed out every attempt. **It is precondition-shaped:
   run it at step 4, before you spend anything on 5.1.**
+  The query in step 4 is now the RIGHT one (`count(*) filter (where embedding
+  is not null)` over `audience_insights_current`); until 16 Sep this file
+  printed `count(embedding)`, which is the probe that took production down, so
+  the figure being owed is partly why the fix was found.
 - `stored-artefacts-smoke` 36/36 is precondition 0.7 and has not passed since
-  Block B. I started it while the instance was intermittently answering and it
-  did not finish. **Run it on a healthy instance before the deploy.**
+  Block B — three attempts on 16 Sep, all three killed by PostgREST's schema
+  cache rather than by anything the smoke found. **Run it on a healthy instance
+  before the deploy**, and remember WP19 replaced the Reports page since it
+  last passed: this is the check that catches a stored page key breaking
+  silently.
 - **The instance's health is itself a precondition.** If a `select count(*)`
   through the MCP does not return first time, do not start step 2. Applying
   eleven migrations through a transport that drops one connection in four is
