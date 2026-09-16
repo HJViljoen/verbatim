@@ -7,6 +7,7 @@ import { render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
+import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
 
@@ -193,6 +194,22 @@ describe('MR3 · what moved', () => {
   it('says what it could not read rather than printing an empty list', () => {
     expect(block.emptyState(formingMonthlyFixture()))
       .toBe('Too little conversation this month to say what moved.')
+  })
+
+  // THE STATE NO FIXTURE REACHED. Voice unreadable is not an empty section —
+  // the block keeps its eight sections and prints the sentence instead — and
+  // that sentence said "What grew and faded has not been read for this
+  // workspace yet.", two direction words outside a verdict node, in all three
+  // modes, for as long as nothing rendered it.
+  it('keeps the copy contract when Voice could not be read at all', () => {
+    const data = monthlyFixture()
+    data.movers = {
+      ...data.movers,
+      growing: [], fading: [], newcomers: [], goneQuiet: [], notes: [],
+      note: MOVERS_UNREAD_NOTE, rereadNote: null,
+    }
+    for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
+    expect(renderText(block.render(data, 'email', ctx))).toContain(MOVERS_UNREAD_NOTE)
   })
 })
 

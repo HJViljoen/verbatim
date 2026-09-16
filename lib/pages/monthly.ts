@@ -340,6 +340,24 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
  * loaded at all still gets the section with the sentence saying so, because the
  * artefact keeps the same eight sections every month (the design's own gate).
  */
+/**
+ * What section 3 says when Voice could not be read at all.
+ *
+ * RULE (c), AND THE HEADING'S OWN WORDS. It used to read "What grew and faded
+ * has not been read for this workspace yet." — two direction words outside a
+ * verdict node, on the one artefact that goes to people outside the workspace,
+ * in the block that refuses those exact two words in its own heading eleven
+ * lines away (`components/blocks/monthly/movers.tsx`). It also named the
+ * section by a title the artefact does not use: the heading is "What moved
+ * this month".
+ *
+ * EXPORTED SO THE CONTRACT CAN BE RUN OVER IT. This string reaches the reader
+ * as `monthlyMovers.emptyState` and as the block's trailing notes line, and no
+ * fixture produced it — which is why two direction words survived a green
+ * suite. The block test renders it now.
+ */
+export const MOVERS_UNREAD_NOTE = 'What moved has not been read for this workspace yet.'
+
 async function buildMovers(
   reading: ReadingHandle,
   clientId: string,
@@ -359,7 +377,7 @@ async function buildMovers(
       goneQuiet: [],
       audienceLabel,
       span: spanOf(months),
-      note: 'What grew and faded has not been read for this workspace yet.',
+      note: MOVERS_UNREAD_NOTE,
       rereadNote: null,
       href,
     }
