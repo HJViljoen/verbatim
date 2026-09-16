@@ -28,7 +28,7 @@ const inputs = (over: Partial<RecordInputs> = {}): RecordInputs => ({
   ],
   readDepth: { analysed: 1_596, speech: 798, translated: 208, onScreenText: 269, unflagged: 0, basis: 'all_time_non_reddit' },
   language: { analysed: 1_596, unknown: 491, english: 730, notEnglish: 375, basis: 'video_speech' },
-  discard: { judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 97, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' },
+  discard: { readable: true, judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 97, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' },
   instrument: { themesPerVideo: 2.4, themeAttachments: 960, analysedVideos: 400, runId: 'run-1' },
   changes: { inWindow: 1, loggedFrom: '2026-09-15', reconstructed: 9 },
   comparisonsRefused: 2,
@@ -166,12 +166,31 @@ describe('recordLines — every fact with its basis', () => {
   })
 
   it('says it plainly when the check really did return nothing', () => {
-    const line = recordLines(inputs({ discard: { judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 0, gateOff: 0, failedOpen: 4, recordedFrom: '2026-08-23', basis: 'run_clock' } }))
+    const line = recordLines(inputs({ discard: { readable: true, judged: 1_700, kept: 1_051, setAside: 649, clearedByHeuristic: 0, gateOff: 0, failedOpen: 4, recordedFrom: '2026-08-23', basis: 'run_clock' } }))
     expect(line.some((l) => l.includes('4 videos entered without a judgement because the check itself returned none'))).toBe(true)
   })
 
   it('says nothing at all when nothing went unjudged', () => {
-    expect(discardCaveat({ judged: 10, kept: 9, setAside: 1, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' })).toBe('')
+    expect(discardCaveat({ readable: true, judged: 10, kept: 9, setAside: 1, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: '2026-08-23', basis: 'run_clock' })).toBe('')
+  })
+
+  // The three counts come off `reason`, which M8 withholds from a tenant
+  // session. Null is "we did not look", and a caveat built out of it would be a
+  // sentence about a column the reader was never allowed to read.
+  it('says nothing about the three when the reason column was never read', () => {
+    expect(discardCaveat({ readable: true, judged: 10, kept: 9, setAside: 1, clearedByHeuristic: null, gateOff: null, failedOpen: null, recordedFrom: '2026-08-23', basis: 'run_clock' })).toBe('')
+  })
+
+  // The failure the research called disqualifying: before M8 a tenant's read of
+  // gate_verdicts is EMPTIED by RLS rather than refused, and the old line turned
+  // that silence into a confident falsehood about a workspace holding 1,700
+  // verdicts.
+  it('does not tell a workspace its discards are unrecorded when it simply cannot read them', () => {
+    const line = recordLines(inputs({
+      discard: { readable: false, judged: 0, kept: 0, setAside: 0, clearedByHeuristic: null, gateOff: null, failedOpen: null, recordedFrom: null, basis: 'run_clock' },
+    }))
+    expect(line.some((l) => l.includes('is not recorded at all'))).toBe(false)
+    expect(line.some((l) => l.includes('we do not yet show it to you'))).toBe(true)
   })
 
   it('says outright that the comment language is not recorded', () => {

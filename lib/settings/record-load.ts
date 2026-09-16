@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { isMissingAffects } from './change-log'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { loadRecordInputs, type RecordInputs, type RecordWindow } from '../reading/record'
@@ -38,15 +39,13 @@ import { REJECT_ROWS, appealKey, type GateVerdict, type RejectRow } from './reje
  * trusted, and the panel says so instead of printing a confident nothing.
  */
 
-export const GATE_APPEALS_TABLE = 'gate_appeals'
-
-/** PostgREST's two ways of saying "no such table", for the appeals probe. */
-export function isMissingGateAppeals(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false
-  const e = error as { code?: string | null; message?: string | null }
-  const code = e.code ?? ''
-  return (code === 'PGRST205' || code === '42P01') && (e.message ?? '').includes(GATE_APPEALS_TABLE)
-}
+// The probe and the two regimes it distinguishes now live in lib/gate-record.ts:
+// THREE modules read this table on a client whose access depends on who is
+// asking — this loader, lib/reading/record.ts (the coverage block) and
+// lib/readiness/load.ts (row 8) — and a probe defined in one page's loader is a
+// probe the other two do not run. Re-exported because the appeal action and the
+// tracking loader import it from here.
+export { GATE_APPEALS_TABLE, isMissingGateAppeals }
 
 export interface GateHalf {
   /** False until M8 is applied. Every number below is then meaningless and the
@@ -201,6 +200,11 @@ export async function loadRecordPage(args: {
   tenant: string
   window: RecordWindow
   now?: string
+  /** Which regime `client` is in (lib/gate-record.ts gateAccessFor). The
+   *  coverage block reads `gate_verdicts` through the reading layer, and
+   *  without this it prints "not recorded at all" to a workspace with 1,700
+   *  verdicts. */
+  gate?: GateAccess
 }): Promise<RecordPageInputs> {
   const { client, admin, clientId, tenant, window } = args
   const [updates, changes, emails, gate, coverage] = await Promise.all([
@@ -208,7 +212,7 @@ export async function loadRecordPage(args: {
     loadChanges(client, clientId),
     loadEmails(client, clientId),
     loadGate(client, admin, clientId),
-    loadRecordInputs(client, clientId, window, { now: args.now }),
+    loadRecordInputs(client, clientId, window, { now: args.now, gate: args.gate ?? 'tenant' }),
   ])
   return {
     tenant,
