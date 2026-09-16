@@ -67,6 +67,16 @@ describe('askBasisLine', () => {
     expect(askBasisLine({ ...base, embedded: 0, total: 0 })).toContain('nothing to search yet')
   })
 
+  it('tells a failed count apart from an empty index', () => {
+    // The two counts are separate round trips and the heavier one times out
+    // first. Reported as zero it read "none of 3,129 findings searchable" over
+    // a corpus that is entirely embedded — the 16 September shape.
+    expect(askBasisLine({ ...base, embedded: null })).toContain('how much of it is searchable is not recorded')
+    expect(askBasisLine({ ...base, embedded: null })).not.toContain('none of')
+    expect(askBasisLine({ ...base, total: null })).toContain('how much of it is searchable is not recorded')
+    expect(askBasisLine({ ...base, embedded: null, total: null })).not.toContain('3,129')
+  })
+
   it('says not recorded, never never, for a vector written before the column', () => {
     const line = askBasisLine({ ...base, lastEmbeddedAt: null })
     expect(line).toContain('when they were indexed is not recorded')
@@ -84,5 +94,13 @@ describe('nothingSearchable', () => {
     expect(nothingSearchable({ ...base, embedded: 0, total: 2872 })).toBe(true)
     expect(nothingSearchable({ ...base, embedded: 0, total: 0 })).toBe(false)
     expect(nothingSearchable(base)).toBe(false)
+  })
+
+  it('never fires on a read that did not happen', () => {
+    // It switches the only control on the page off. A timed-out count is not
+    // evidence that nothing is searchable, and one of the two can fail alone.
+    expect(nothingSearchable({ ...base, embedded: null, total: 2872 })).toBe(false)
+    expect(nothingSearchable({ ...base, embedded: 0, total: null })).toBe(false)
+    expect(nothingSearchable({ ...base, embedded: null, total: null })).toBe(false)
   })
 })

@@ -40,9 +40,15 @@ export interface AskBasis {
    *  years of comparable history when it has four months. Counted the way
    *  `isReadable` counts (lib/reading/series.ts), so the two agree. */
   monthlyReadings: number | null
-  /** Findings a question can reach, and findings there are. */
-  embedded: number
-  total: number
+  /** Findings a question can reach, and findings there are. NULL is a failed
+   *  read, never a zero: they are two independent round trips and the heavier
+   *  of them — the one carrying the `embedding is not null` filter over the
+   *  joined view — is the likelier to time out under load. Reported as zero,
+   *  one timeout printed "none of 3,129 findings searchable" over a fully
+   *  embedded corpus AND switched the composer off, which is the confident
+   *  falsehood the rest of this file exists to refuse. */
+  embedded: number | null
+  total: number | null
   /** When the newest vector was written, or null. Null for every vector
    *  written before the column existed, which is most of them — the line says
    *  "not recorded", never "never". */
@@ -80,11 +86,13 @@ export function askBasisLine(
   // Zero embedded is stated as zero rather than as "0 of N", because "0 of
   // 2,872 searchable" reads as a rounding error and it is the whole corpus.
   const searchable =
-    basis.total === 0
-      ? 'nothing to search yet'
-      : basis.embedded === 0
-        ? `none of ${fmtInt(basis.total)} findings searchable`
-        : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings searchable`
+    basis.total == null || basis.embedded == null
+      ? 'how much of it is searchable is not recorded'
+      : basis.total === 0
+        ? 'nothing to search yet'
+        : basis.embedded === 0
+          ? `none of ${fmtInt(basis.total)} findings searchable`
+          : `${fmtInt(basis.embedded)} of ${fmtInt(basis.total)} findings searchable`
 
   const embedded = basis.lastEmbeddedAt
     ? `embedded as at ${shortDate(basis.lastEmbeddedAt)}`
@@ -106,14 +114,18 @@ export function askBasisLine(
  *  `answerQuestion` throws on, said before the reader spends a turn finding
  *  out.
  *
- *  Read by /dashboard/agent, which disables the box and names the state in it.
- *  That call site is the whole point of the predicate and it was missing: the
- *  comment promised the reader was told first while nothing imported it, and a
- *  question asked into an unembedded corpus takes one of the month's forty
- *  slots on its way to throwing. Total of zero is NOT this state — a workspace
- *  with no findings at all has its own sentence — and neither is a failed read,
- *  which reports zero for both and so fails open. */
-export const nothingSearchable = (basis: AskBasis): boolean => basis.total > 0 && basis.embedded === 0
+ *  Read by /dashboard/agent and by the thread page, which disable the box and
+ *  name the state in it. That call site is the whole point of the predicate and
+ *  it was missing: the comment promised the reader was told first while nothing
+ *  imported it, and a question asked into an unembedded corpus takes one of the
+ *  month's forty slots on its way to throwing. Total of zero is NOT this state
+ *  — a workspace with no findings at all has its own sentence.
+ *
+ *  BOTH COUNTS MUST HAVE BEEN READ. A failed read is null, and a null answers
+ *  false here: this predicate switches a paying reader's only control off, so
+ *  it may fire on a measurement and never on the absence of one. */
+export const nothingSearchable = (basis: AskBasis): boolean =>
+  basis.total != null && basis.embedded != null && basis.total > 0 && basis.embedded === 0
 
 /**
  * The three facts about the INDEX, which do not depend on which update an
@@ -179,8 +191,12 @@ export async function loadIndexFacts(
             .map((m) => m.month),
         ).size
       : null,
-    embedded: embedded.error ? 0 : embedded.count ?? 0,
-    total: all.error ? 0 : all.count ?? 0,
+    // TWO ROUND TRIPS, TWO ANSWERS. Either can fail on its own — they are
+    // separate requests inside one `Promise.all` — so neither may borrow the
+    // other's success. Null is "we did not get to read this", and the sentence
+    // and the composer both know the difference.
+    embedded: embedded.error ? null : embedded.count ?? 0,
+    total: all.error ? null : all.count ?? 0,
     lastEmbeddedAt: columnNotThere || last.error ? null : ((last.data?.embedded_at as string | undefined) ?? null),
   }
 }
