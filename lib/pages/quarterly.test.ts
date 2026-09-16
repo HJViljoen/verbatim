@@ -259,7 +259,7 @@ describe('methodNumbers', () => {
     expect(rows.find((r) => r.label === 'Comments')?.value).toBe('8,900')
     expect(rows.map((r) => r.label)).not.toContain('Conversations')
     expect(rows.find((r) => r.label === 'Updates')?.note).toBe('longest gap 35 days')
-    expect(rows[0]).toMatchObject({ label: 'Period', value: '2026-07-01 – 2026-09-30', note: 'still filling' })
+    expect(rows[0]).toMatchObject({ label: 'Period', value: '1 Jul – 30 Sep 2026', note: 'still filling' })
   })
 
   it('says a CLOSED quarter is closed, whatever the month the product is in', () => {
