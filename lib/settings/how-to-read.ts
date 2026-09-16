@@ -39,7 +39,11 @@ export interface ReadingCard {
 export const READING_CARDS: readonly ReadingCard[] = [
   {
     key: 'overview',
-    tells: 'Where you stand this month: how much conversation there was, how your subjects read against the category and against each named rival, what grew and faded, what you said you would do, and what the reading rests on.',
+    // NOT "what grew and faded": DIRECTION_WORDS_BY_READER is false for all
+    // seven readers, so Overview prints a level and a banded change ("5.1 pts
+    // down", "no clear change") and no direction word at all. Subjects is the
+    // one Block B surface that earns one, and its card lists `direction`.
+    tells: 'Where you stand this month: how much conversation there was, how your subjects read against the category and against each named rival, what moved most and by how much against its band, what you said you would do, and what the reading rests on.',
     read: ['month', 'video', 'audience', 'level', 'change'],
     cannot: [
       'It is a reading of a calendar month, and the current one is still filling — every figure on it moves until thirty days after the month ends, and the page says which month and as at when.',
