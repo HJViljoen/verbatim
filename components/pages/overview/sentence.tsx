@@ -8,7 +8,7 @@ import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { AnomalyLine, OverviewData } from '@/lib/pages/overview'
-import { TokenProse } from './prose'
+import { TokenProse } from '@/components/blocks/prose'
 
 // OV1 · In one sentence, anything unusual, and the one thing to do
 // (design §3 OV1). The first sixty seconds of the meeting.

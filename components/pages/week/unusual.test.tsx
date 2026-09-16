@@ -53,7 +53,30 @@ describe('WK1 · unusual this week', () => {
   it('labels the model’s paragraph as an interpretation and says who wrote it', () => {
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Interpretation · written by a model, from the figures above')
-    expect(text).toContain('Most of the pushback this update sits under one creator’s fitting video')
+    expect(text).toContain('Most of the pushback sits under one creator’s fitting video')
+  })
+
+  it('writes the model’s figure tokens in, and never prints one', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      // The stored sentence says `[[flag_1_week_share]]`; the reader sees the
+      // product's own measured value, in the product's own formatting.
+      expect(text, mode).not.toMatch(/\[\[/)
+      expect(text, mode).toContain('Objections ran at 13.7% of this update against 3.5% across the three months behind it.')
+    }
+  })
+
+  it('drops whole a sentence citing a figure the block does not hold', () => {
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).not.toContain('is dropped whole')
+  })
+
+  it('marks the model’s own words as prose and the substituted number as a figure', () => {
+    // Rule (a): a digit inside a prose node is a number the model typed, so the
+    // markup has to let the contract tell the two apart inside one paragraph.
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(markup).toMatch(/data-copy="prose"/)
+    expect(markup).toMatch(/data-copy="figure"[^>]*>13\.7%/)
   })
 
   it('carries the two quotes the explanation rests on', () => {
@@ -99,6 +122,10 @@ describe('WK1 · unusual this week', () => {
     expect(figures.week_videos).toEqual({ value: 205, unit: 'videos', label: 'videos this update covered' })
     expect(figures.flag_1_week_videos.value).toBe(28)
     expect(figures.flag_1_band.value).toBe(4.9)
+    // The two keys the explainer's own table offers, so the sentence it is
+    // most likely to write resolves instead of being dropped.
+    expect(figures.flag_1_week_share).toEqual({ value: 13.7, unit: 'pct', label: 'Objections — share of this update' })
+    expect(figures.flag_1_baseline_share.value).toBe(3.5)
   })
 
   it('speaks no direction word — one week against three months is two readings', () => {

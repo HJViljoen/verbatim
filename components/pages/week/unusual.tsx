@@ -2,6 +2,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
+import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth, monthName } from '@/lib/format'
 import { baselineFormingLine, flagFigures, type UnusualFlag, type WeekData } from '@/lib/pages/week'
@@ -66,7 +67,20 @@ export const weekUnusual: Block<WeekData> = {
           </Line>
         ) : null}
 
-        {u.flags.map((flag, i) => <Flag key={`${flag.objectKind}:${flag.objectId}`} flag={flag} n={i + 1} mode={mode} />)}
+        {u.flags.map((flag, i) => (
+          <Flag
+            key={`${flag.objectKind}:${flag.objectId}`}
+            flag={flag}
+            n={i + 1}
+            mode={mode}
+            // THE WHOLE BLOCK'S TABLE, not one flag's. The explainer is shown
+            // every flag's figures at once and writes ONE paragraph about all
+            // of them (`anomaly-check.ts`: "one explanation covers the week's
+            // flags"), so a sentence stored on flag 1 may cite
+            // `[[flag_2_week_share]]` or the update's own `[[week_videos]]`.
+            figures={weekUnusual.figures?.(data) ?? {}}
+          />
+        ))}
 
         {u.state === 'flagged' && u.flaggedCount > u.flags.length ? (
           <Line mode={mode}>
@@ -121,7 +135,7 @@ export const weekUnusual: Block<WeekData> = {
 
 /** One flag, in full: the object, the week, the months behind it, the band,
  *  the n, and the explanation labelled as an interpretation. */
-function Flag({ flag, n, mode }: { flag: UnusualFlag; n: number; mode: 'app' | 'print' | 'email' }) {
+function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 'app' | 'print' | 'email'; figures: FigureTable }) {
   const email = mode === 'email'
   const weekPct = pct(flag.week.k, flag.week.n)
   const basePct = pct(flag.baseline.k, flag.baseline.n)
@@ -158,7 +172,7 @@ function Flag({ flag, n, mode }: { flag: UnusualFlag; n: number; mode: 'app' | '
       ) : null}
 
       {flag.sentences.length > 0 ? (
-        <Interpretation sentences={flag.sentences} model={flag.explanationModel} mode={mode} />
+        <Interpretation sentences={flag.sentences} model={flag.explanationModel} mode={mode} figures={figures} />
       ) : null}
 
       {flag.quotes.map((q, i) => <BlockQuote key={i} quote={q.quote} cite={q.cite} mode={mode} />)}
@@ -167,31 +181,47 @@ function Flag({ flag, n, mode }: { flag: UnusualFlag; n: number; mode: 'app' | '
 }
 
 /**
- * The model's paragraph, labelled.
+ * The model's paragraph, labelled — with its figure tokens written in.
  *
- * `data-copy="prose"` and no digits inside it: the model explains and code
- * rates (copy contract rule (a)). Every number the explanation wants was
- * handed to it as a figure KEY and substituted by the product before it
- * reached the page — so a digit surfacing here is a number a model typed,
- * which is the one thing the contract exists to catch.
+ * `Interpretation.sentences` CARRY `[[key]]` TOKENS INTACT (lib/prose/
+ * interpret.ts), because the explainer is instructed to cite every figure as a
+ * placeholder and `explanationJson` stores exactly what it wrote. Printing the
+ * string as it stands puts a literal `[[flag_1_week_share]]` in front of a
+ * paying client, which is what this block did until 2026-09-16 — the fixture's
+ * hand-written token-free prose meant no test ever saw it.
+ *
+ * So the sentences go through `TokenProse`, the same door Overview's
+ * interpretation uses: the value is substituted from the block's own measured
+ * table, marked `data-copy="figure"` so the contract can tell code's number
+ * from the model's words, and any sentence citing a key the table lacks is
+ * dropped WHOLE rather than printed with a gap in it.
+ *
+ * Joined with a space and substituted once: `substituteFigures` splits on
+ * sentences itself, so the drop stays per sentence.
  */
-function Interpretation({ sentences, model, mode }: { sentences: readonly string[]; model: string | null; mode: 'app' | 'print' | 'email' }) {
+function Interpretation({
+  sentences, model, mode, figures,
+}: {
+  sentences: readonly string[]
+  model: string | null
+  mode: 'app' | 'print' | 'email'
+  figures: FigureTable
+}) {
   const email = mode === 'email'
   const label = model ? 'Interpretation · written by a model, from the figures above' : 'Interpretation'
+  const body = sentences.join(' ')
   if (email) {
     return (
       <div style={{ background: EMAIL.inner, borderRadius: 4, padding: '10px 12px', marginTop: 8 }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
-        {sentences.map((s, i) => (
-          <p key={i} data-copy="prose" style={{ margin: '5px 0 0', fontFamily: FONT.sans, fontSize: 12.5, lineHeight: 1.5, color: EMAIL.ink }}>{s}</p>
-        ))}
+        <TokenProse body={body} figures={figures} mode={mode} model />
       </div>
     )
   }
   return (
     <div className="flex flex-col gap-1.5 rounded bg-muted/50 px-3 py-2.5">
       <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
-      {sentences.map((s, i) => <p key={i} data-copy="prose" className="m-0 text-[12.5px] leading-relaxed">{s}</p>)}
+      <TokenProse body={body} figures={figures} mode={mode} model className="m-0 text-[12.5px] leading-relaxed" />
     </div>
   )
 }

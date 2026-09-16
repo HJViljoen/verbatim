@@ -5,9 +5,11 @@ import type { FigureTable as ReadingFigures } from '@/lib/reading/verdicts'
 import { proseFigures } from '@/lib/prose/figures'
 import { EMAIL, FONT } from '@/lib/email/theme'
 
-// Prose with the numbers written in at render (Phase 1 WP11).
+// Prose with the numbers written in at render (Phase 1 WP11; moved under
+// components/blocks in WP15, when This week's interpretation became the second
+// surface to print a model's sentence with figure tokens in it).
 //
-// EVERY SENTENCE ON THIS PAGE THAT CARRIES A FIGURE CARRIES IT AS A TOKEN.
+// EVERY SENTENCE ON A READING PAGE THAT CARRIES A FIGURE CARRIES IT AS A TOKEN.
 // `[[share_now]]` travels in the string and the value is substituted here, from
 // the reading layer's own figure table — which is what lets the same sentence
 // be written by code (OV1's headline) or by a model (the interpretation) under

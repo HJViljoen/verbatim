@@ -478,11 +478,24 @@ export function coverageLine(input: {
 export const PRIVACY_LINE =
   'Commenters are never identified; quotes carry platform and date only.'
 
-/** The figures a block declares for one flag, by token. Exported so the
- *  first-screen budget is counted over the same table the block prints. */
+/**
+ * The figures a block declares for one flag, by token. Exported so the
+ * first-screen budget is counted over the same table the block prints.
+ *
+ * AND SO THE MODEL'S OWN KEYS RESOLVE. The explainer is told to cite every
+ * figure as a `[[placeholder]]` and is handed the check's table
+ * (`lib/pipeline/anomaly-check.ts anomalyFigures`), which is where
+ * `flag_N_week_share` and `flag_N_baseline_share` come from — the two keys the
+ * paragraph is most likely to cite, because the shares are what the flag IS.
+ * A key this table lacks drops its sentence whole at render
+ * (`substituteFigures`), so the two tables have to name the same things: these
+ * are computed from the same k and n the check divided, not stored twice.
+ */
 export function flagFigures(flag: UnusualFlag, n: number): FigureTable {
   const k = `flag_${n}`
   return {
+    [`${k}_week_share`]: { value: round1(share(flag.week.k, flag.week.n)), unit: 'pct', label: `${flag.label} — share of this update` },
+    [`${k}_baseline_share`]: { value: round1(share(flag.baseline.k, flag.baseline.n)), unit: 'pct', label: `${flag.label} — share across the three months behind it` },
     [`${k}_week_videos`]: { value: flag.week.k, unit: 'videos', label: `${flag.label} — videos this update` },
     [`${k}_week_of`]: { value: flag.week.n, unit: 'videos', label: `${flag.label} — videos this update covered` },
     [`${k}_baseline_videos`]: { value: flag.baseline.k, unit: 'videos', label: `${flag.label} — videos across the three months behind it` },

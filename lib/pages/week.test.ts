@@ -204,11 +204,22 @@ describe('a flag’s figures', () => {
   it('declares every number the block prints, with its unit', () => {
     const figures = flagFigures(flag, 1)
     expect(Object.keys(figures).sort()).toEqual([
-      'flag_1_band', 'flag_1_baseline_of', 'flag_1_baseline_videos',
-      'flag_1_change', 'flag_1_week_of', 'flag_1_week_videos',
+      'flag_1_band', 'flag_1_baseline_of', 'flag_1_baseline_share', 'flag_1_baseline_videos',
+      'flag_1_change', 'flag_1_week_of', 'flag_1_week_share', 'flag_1_week_videos',
     ])
     expect(figures.flag_1_week_videos).toEqual({ value: 28, unit: 'videos', label: 'Objections — videos this update' })
     expect(figures.flag_1_change.unit).toBe('pts')
+  })
+
+  it('names the two share keys the explainer’s own table offers', () => {
+    // `anomaly-check.ts anomalyFigures` hands the model `flag_N_week_share`
+    // and `flag_N_baseline_share`; a sentence citing a key this table lacks is
+    // dropped whole at render, and those are the two the paragraph is most
+    // likely to cite, because the shares are what the flag IS.
+    const figures = flagFigures(flag, 1)
+    expect(figures.flag_1_week_share.value).toBe(13.7)
+    expect(figures.flag_1_week_share.unit).toBe('pct')
+    expect(figures.flag_1_baseline_share.value).toBe(3.5)
   })
 
   it('rounds the points to the one decimal the page prints', () => {

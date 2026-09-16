@@ -63,7 +63,9 @@ describe('every block on This week', () => {
     for (const fixture of FIXTURES) {
       expect(weekFigureCount(fixture(), FIRST_SCREEN)).toBeLessThanOrEqual(FIRST_SCREEN_BUDGET)
     }
-    expect(weekFigureCount(weekFixture(), FIRST_SCREEN)).toBe(7)
+    // Nine on the flagged fixture: a flag's six numbers, the two shares its
+    // interpretation cites, and the update's own n.
+    expect(weekFigureCount(weekFixture(), FIRST_SCREEN)).toBe(9)
   })
 })
 

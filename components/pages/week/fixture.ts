@@ -94,9 +94,17 @@ export function weekFixture(): WeekData {
         baselineFilling: ['2026-08-01'],
         changePts: 10.2,
         bandPts: 4.9,
+        // WITH THE MODEL'S OWN TOKENS IN THEM, because that is what the column
+        // holds: the explainer is told to cite every figure as a
+        // `[[placeholder]]` and `explanationJson` stores the string it wrote.
+        // Token-free prose here is why this block printed a literal
+        // `[[flag_1_week_share]]` until 2026-09-16 with a green suite. The
+        // last sentence cites a key no table holds and must never be rendered.
         sentences: [
-          'Most of the pushback this update sits under one creator’s fitting video, where commenters compare socket prices rather than sockets.',
+          'Objections ran at [[flag_1_week_share]] of this update against [[flag_1_baseline_share]] across the three months behind it.',
+          'Most of the pushback sits under one creator’s fitting video, where commenters compare socket prices rather than sockets.',
           'The objection is about cost, not about comfort — the comfort talk in the same thread runs the other way.',
+          'A sentence citing [[a_key_no_table_holds]] is dropped whole.',
         ],
         explanationModel: 'gpt-4.1-mini',
         quotes: [
