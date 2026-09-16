@@ -236,19 +236,37 @@ export async function loadRecordPage(args: {
   tenant: string
   window: RecordWindow
   now?: string
-  /** Which regime `client` is in (lib/gate-record.ts gateAccessFor). The
-   *  coverage block reads `gate_verdicts` through the reading layer, and
-   *  without this it prints "not recorded at all" to a workspace with 1,700
-   *  verdicts. */
-  gate?: GateAccess
+  /**
+   * The READING client, and the regime it is in.
+   *
+   * ONE WORKSPACE MUST NOT BE TOLD TWO THINGS ABOUT ITS OWN DISCARD. The
+   * coverage block below is `loadRecordInputs`, which is also what the record
+   * drawer behind "the record →" draws on Overview, Voice, Market, Competitive
+   * and Subjects. Those five pass `reading.client` — the reading handle's
+   * service-role client, with the tenant id taken from the session — and get
+   * the discard line in full. This page used to pass `session.supabase` and
+   * `gate: 'tenant'`, whose probe finds no `gate_appeals` table and returns the
+   * refusal "we do not yet show it to you". Measured on production in the same
+   * window: Össur read "30% of what was looked at was set aside … 97 videos
+   * passed the quick check" in the drawer and the refusal here, one nav click
+   * apart. One of them was false either way.
+   *
+   * So this page reads the coverage block the way the five surfaces do. The
+   * column grant M8 makes is not undone by it: that grant is about what a
+   * TENANT SESSION may select, and nothing here hands a tenant session a column
+   * it is not granted — the twenty discarded candidates with their caption
+   * excerpt are still read on `admin`, and still only after canManageTenant.
+   */
+  reading?: { client: SupabaseClient; gate: GateAccess }
 }): Promise<RecordPageInputs> {
   const { client, admin, clientId, tenant, window } = args
+  const coverageOn = args.reading ?? { client, gate: 'tenant' as GateAccess }
   const [updates, changes, emails, gate, coverage] = await Promise.all([
     loadUpdates(client, clientId),
     loadChanges(client, clientId),
     loadEmails(client, clientId),
     loadGate(client, admin, clientId),
-    loadRecordInputs(client, clientId, window, { now: args.now, gate: args.gate ?? 'tenant' }),
+    loadRecordInputs(coverageOn.client, clientId, window, { now: args.now, gate: coverageOn.gate }),
   ])
   return {
     tenant,

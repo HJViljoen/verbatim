@@ -1,9 +1,9 @@
 import { SettingsCard, SettingsFrame, SettingsRow, SettingsTable } from '@/components/settings-frame'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { changeLogBoundary } from '@/lib/config-log'
-import { gateAccessFor } from '@/lib/gate-record'
 import { fullDate, monthName } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
+import { readingHandle } from '@/lib/reading/read'
 import { recordLines } from '@/lib/reading/record'
 import { CHANGE_LOG_ROWS, readChangeLog, showingLine } from '@/lib/settings/change-log'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
@@ -34,7 +34,7 @@ import { AppealButton } from './appeal-button'
 // confident nothing.
 
 export default async function SettingsRecordPage() {
-  const { supabase, clientId, role, userId, operator } = await getSessionContext()
+  const { supabase, clientId, role, userId } = await getSessionContext()
   const canSeeExcerpt = canManageTenant(role)
 
   const now = new Date()
@@ -49,11 +49,14 @@ export default async function SettingsRecordPage() {
     tenant,
     window: recordWindow(`${month}-01`, now.toISOString()),
     now: now.toISOString(),
-    // Which client `supabase` is: the service role only for an operator viewing
-    // this workspace from outside it. The coverage block below reads the gate's
-    // record through it, and a tenant session's read of that table is emptied
-    // by RLS rather than refused until M8 lands.
-    gate: gateAccessFor(operator),
+    // THE SAME READ THE RECORD DRAWER MAKES, so this page and the drawer behind
+    // "the record →" on the five reading surfaces cannot tell one workspace two
+    // different things about its own discard. The reading handle is the
+    // service-role client with the tenant id taken from the session — what
+    // every reading surface already holds — so the gate regime is 'service'.
+    // The discarded candidates with their caption excerpt are unaffected: they
+    // are still read on `admin`, still only after canManageTenant.
+    reading: { client: readingHandle(clientId).client, gate: 'service' },
   })
 
   const delivery = deliveryRecord({ updates: inputs.updates, slotsRecorded: inputs.slotsRecorded })
