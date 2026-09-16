@@ -1341,12 +1341,20 @@ async function buildSales(input: {
   // "2 comments · someone said they were moving between brands" came to be
   // printed on both tenants whatever the real number was.
   const switching = cited.filter((c) => c.category === 'switching_signal')
+  // AND COUNTED AS COMMENTS, BECAUSE THAT IS WHAT IT SAYS. `cited` holds one
+  // row per (insight × evidence) citation, so a comment two switching_signal
+  // insights both cite was counted twice — and the number renders as "N
+  // comments · someone said they were moving between brands" and freezes into
+  // the snapshot as `switching_comments`. Measured read-only over the whole
+  // corpus: Sealand 131 citation rows over 122 distinct comments, Össur 58 over
+  // 57. Inside this update's window the two happen to agree today.
+  const switchingComments = new Set(switching.map((c) => c.commentUuid)).size
   return {
     ...base,
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
     praise: cited.filter((c) => c.category === 'praise').slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
     switching: switching.slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
-    switchingTotal: switching.length,
+    switchingTotal: switchingComments,
     rivalComplaints: rivalComplaints.slice(0, SALES_GROUPS_SHOWN),
   }
 }
@@ -1357,6 +1365,9 @@ interface SalesCitation {
   themeLabel: string
   audience: string
   videoUuid: string
+  /** The comment this citation quotes. One comment can be cited by two
+   *  insights, so a count of citations is not a count of comments. */
+  commentUuid: string
   evidenceId: string
   quote: string
   lang: string | null
@@ -1895,6 +1906,7 @@ async function loadSalesCitations(
         themeLabel: insight.theme ? cap(pretty(insight.theme)) : 'Unnamed',
         audience: video.is_client ? CLIENT_AUDIENCE : video.is_competitor ? rivalKey(video.competitor_name) : INDUSTRY_AUDIENCE,
         videoUuid: video.id,
+        commentUuid: comment.id,
         evidenceId: c.evidenceId,
         quote: text,
         lang: c.lang ?? null,
