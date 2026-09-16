@@ -1011,7 +1011,15 @@ function buildRead(a: {
     advice,
     adviceNote: a.market ? a.market.advice.empty : 'The advice ledger could not be read for this workspace.',
     confidence: confidenceOf(a.verdicts, a.unlocked),
-    counted: countedLines(a.verdicts),
+    // THE QUARTER HALF, LIKE THE INTERPRETATION TWO LINES ABOVE IT. Handed the
+    // whole list, "What is counted under it" printed a MONTH's figure under a
+    // paragraph arguing about the quarter — September against August under
+    // "Nothing cleared its band this quarter", and on a workspace where no
+    // quarter verdict can be built at all every counted line was a month's. On
+    // a populated read a Q3 line and a September line sat in one list with
+    // nothing to tell them apart. A month's counted figures belong under a
+    // heading that names the month, and this heading does not.
+    counted: countedLines(a.quarterVerdicts),
   }
 }
 

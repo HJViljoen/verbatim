@@ -143,6 +143,28 @@ describe('the six-month gate', () => {
 // unanswered and the page fell to "Every comparison this quarter asked for was
 // drawn.", five pages after one saying the quarter-on-quarter reading is not
 // recorded for this workspace.
+// THE READ PAGE ARGUES OVER THE QUARTER, so what it counts under that argument
+// is the quarter's. `counted` walked the full verdict list — month verdicts
+// included — under "What is counted under it", two lines below a paragraph
+// saying "this quarter".
+describe('the read page counts over the same window it argues over', () => {
+  it('counts nothing where no quarter comparison could be made', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(formingFixture(), 'app', ctx))
+    expect(text).not.toContain('What is counted under it')
+  })
+
+  it('counts the quarter’s own readings where they exist', () => {
+    const read = quarterlyFixture()
+    const quarter = read.read.verdicts.filter((v) => v.window.kind === 'quarter')
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(read, 'app', ctx))
+    expect(text).toContain('What is counted under it')
+    for (const line of read.read.counted) {
+      // Every counted line names an object the QUARTER read, not a month one.
+      expect(quarter.some((v) => line.startsWith(`${v.objectLabel}:`))).toBe(true)
+    }
+  })
+})
+
 describe('the last page tells a silence from a settled question', () => {
   it('says the quarter comparison was never attempted where it could not be', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(formingFixture(), 'app', ctx))
