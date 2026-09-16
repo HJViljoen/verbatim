@@ -202,10 +202,10 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const concerns = s.concerns.map((c) =>
     `${c.id} (${countKey(c.id)}; heard from ${c.buckets.map((b) => bucketWord(b.bucket, s.company)).join(', ')}; ${c.trajectory || 'history unknown'}): ${c.label}. ${c.description}`)
 
-  const deltaWords = deltaInWords(s)
+  const deltaWords = deltaInWords(s, a.figures)
 
   const competitors = s.competitors.map((c) => [
-    `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; share key [[${slug(c.name)}_share_pct]]`,
+    `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; ${figureKeyFor(a.figures, c.name)}`,
     c.claims.length ? `  What they say in their own videos:\n${c.claims.map((cl) => `  - ${cl.claim}`).join('\n')}` : '  What they say in their own videos: nothing captured this update.',
     // A separate list with its own label, for the same reason Pass C gained a
     // second block: these lines are a creator's or a reviewer's, and read
@@ -261,23 +261,58 @@ export function bucketWord(bucket: string, company: string): string {
   return bucket
 }
 
+/**
+ * WHAT THE PROMPT MAY NAME AS A FIGURE KEY.
+ *
+ * `substituteFigures` (lib/reports/cover.ts) DROPS WHOLE SENTENCES whose key
+ * is missing, so a key advertised to the writer and absent from the table does
+ * not print a blank — it silently deletes a paragraph of a paid document. The
+ * month path withdraws `<slug>_share_pct`, `client_share_pct`,
+ * `competitor_videos`, `prev_*` and `new_themes` on purpose (documentFigures),
+ * and the prompt went on steering the model into citing them. `countKey`
+ * already had the right shape: offer the key where it exists and say "do not
+ * cite a count" where it does not. These two do the same for the rest.
+ */
+const hasKey = (figures: FigureTable, key: string): boolean => Boolean(figures[key])
+
+/** What a rival may be cited by: its share where the update figures stand, its
+ *  own month's video count on the month path, and nothing at all where the
+ *  table carries neither. */
+export function figureKeyFor(figures: FigureTable, name: string): string {
+  const share = `${slug(name)}_share_pct`
+  const videos = `${slug(name)}_videos`
+  if (hasKey(figures, share)) return `share key [[${share}]]`
+  if (hasKey(figures, videos)) return `video count key [[${videos}]]`
+  return 'no figure key for them: do not cite a number about them'
+}
+
 /** The delta as words for the writer: verdicts and directions, never the
- *  numbers (those are figure keys). */
-export function deltaInWords(s: Pick<Signals, 'delta' | 'updatesCount' | 'trackedCompetitors'>): string[] {
+ *  numbers (those are figure keys). A line whose key the table does not carry
+ *  is dropped rather than written — an unsubstitutable citation is a deleted
+ *  sentence, not a missing number. */
+export function deltaInWords(s: Pick<Signals, 'delta' | 'updatesCount' | 'trackedCompetitors'>, figures: FigureTable = {}): string[] {
   const d = s.delta
   if (!d) return [s.updatesCount <= 1 ? 'This is the first update; nothing to compare with yet.' : 'No earlier update to compare with.']
+  const has = (...keys: string[]) => keys.every((k) => hasKey(figures, k))
   const out: string[] = []
   if (d.sentiment) {
     const dir = d.sentiment.now > d.sentiment.prev ? 'up' : d.sentiment.now < d.sentiment.prev ? 'down' : 'level'
     const v = d.sentiment.verdict.state
-    out.push(v === 'moved' ? `Positive sentiment moved ${dir} since the previous update (key [[positive_pct]] now, [[prev_positive_pct]] before).` : v === 'too_little_data' ? 'Too few judged conversations to say whether sentiment moved.' : `Positive sentiment is about where it was (key [[positive_pct]]).`)
+    if (v === 'too_little_data') out.push('Too few judged conversations to say whether sentiment moved.')
+    else if (v === 'moved' && has('positive_pct', 'prev_positive_pct')) out.push(`Positive sentiment moved ${dir} since the previous update (key [[positive_pct]] now, [[prev_positive_pct]] before).`)
+    else if (has('positive_pct')) out.push('Positive sentiment is about where it was (key [[positive_pct]]).')
   }
   if (d.share) {
     const dir = d.share.now.client > d.share.prev.client ? 'up' : d.share.now.client < d.share.prev.client ? 'down' : 'level'
     const v = d.share.verdict.state
-    out.push(v === 'moved' ? `The company's share of tracked conversation moved ${dir} (key [[client_share_pct]]).` : v === 'too_little_data' ? 'Too few videos to say whether the company\'s share of tracked conversation moved.' : `The company's share of tracked conversation is about where it was (key [[client_share_pct]]).`)
+    if (v === 'too_little_data') out.push('Too few videos to say whether the company\'s share of tracked conversation moved.')
+    else if (has('client_share_pct')) out.push(v === 'moved' ? `The company's share of tracked conversation moved ${dir} (key [[client_share_pct]]).` : `The company's share of tracked conversation is about where it was (key [[client_share_pct]]).`)
   }
-  if (d.newThemes) out.push(d.newThemes.count ? `Themes new this update (key [[new_themes]]): ${d.newThemes.labels.slice(0, 6).join(', ')}.` : 'No confirmed theme is new this update.')
-  if (d.conversations) out.push(`Conversations this update (key [[conversations]]) against the previous update (key [[prev_conversations]]).`)
+  if (d.newThemes) {
+    if (!d.newThemes.count) out.push('No confirmed theme is new this update.')
+    else if (has('new_themes')) out.push(`Themes new this update (key [[new_themes]]): ${d.newThemes.labels.slice(0, 6).join(', ')}.`)
+    else out.push(`Themes new this update: ${d.newThemes.labels.slice(0, 6).join(', ')}. Do not cite a count of them.`)
+  }
+  if (d.conversations && has('conversations', 'prev_conversations')) out.push(`Conversations this update (key [[conversations]]) against the previous update (key [[prev_conversations]]).`)
   return out.length ? out : ['Nothing measurable moved.']
 }

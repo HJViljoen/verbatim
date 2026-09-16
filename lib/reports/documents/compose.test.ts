@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
-import { buildWriterPrompts, deltaInWords, writerSchema, type WriterOutput } from './write'
+import { buildWriterPrompts, deltaInWords, figureKeyFor, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
@@ -90,6 +90,14 @@ describe('buildWriterPrompts', () => {
     expect(system).not.toMatch(/[—–]/)
     expect(user).toContain('Arrange a trial fitting.')
   })
+  // The month path withdraws <slug>_share_pct on purpose; the prompt used to
+  // advertise it anyway, per rival, on every brief.
+  it('advertises no rival figure key the table has withdrawn', () => {
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals, answers: [], previous: null, thin: false })
+    expect(user).not.toContain('_share_pct]]')
+    expect(user).toContain('do not cite a number about them')
+  })
+
   it('says the update was thin and asks for fewer findings', () => {
     const { system, user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: { ...signals, runStatus: 'partial' }, answers: [], previous: null, thin: true })
     expect(system).toContain('at most 3 findings')
@@ -128,11 +136,32 @@ describe('buildWriterPrompts', () => {
 
 describe('deltaInWords', () => {
   it('speaks in verdicts and keys, never numbers', () => {
-    const words = deltaInWords(signals)
+    const words = deltaInWords(signals, documentFigures(signals, answers))
     expect(words.join(' ')).toContain('about where it was (key [[positive_pct]])')
     expect(words.join(' ')).toContain('[[new_themes]]')
     expect(words.join(' ')).not.toMatch(/\d/)
     expect(deltaInWords({ delta: null, updatesCount: 1, trackedCompetitors: [] })[0]).toContain('first update')
+  })
+
+  // substituteFigures deletes whole sentences whose key is missing, so a key
+  // the table does not carry must never reach the prompt.
+  it('cites no key the figure table does not carry', () => {
+    const words = deltaInWords(signals, {}).join(' ')
+    expect(words).not.toContain('[[positive_pct]]')
+    expect(words).not.toContain('[[prev_conversations]]')
+    expect(words).not.toContain('[[new_themes]]')
+    expect(words).toContain('Do not cite a count of them')
+  })
+})
+
+describe('figureKeyFor', () => {
+  it('offers the share key on the update path and the month\'s own video count on the month path', () => {
+    expect(figureKeyFor({ ottobock_share_pct: { label: 'x', value: '9%', kind: 'pct' } }, 'Ottobock')).toBe('share key [[ottobock_share_pct]]')
+    expect(figureKeyFor({ ottobock_videos: { label: 'x', value: '42', kind: 'count' } }, 'Ottobock')).toBe('video count key [[ottobock_videos]]')
+  })
+
+  it('tells the writer not to cite a number rather than naming a withdrawn key', () => {
+    expect(figureKeyFor({}, 'Ottobock')).toBe('no figure key for them: do not cite a number about them')
   })
 })
 
