@@ -191,23 +191,29 @@ export function spanOf(months: readonly string[]): string {
 /**
  * Why a subject shows no voice this month.
  *
- * TWO SILENCES AND THEY ARE NOT ONE. "Nothing was said about it" is a reading
- * of the month; "nothing readable was said" is a reading of what we could quote
- * (a quote must pass the same gate Overview's two voices pass — item 8). One
- * sentence for both would tell a client their customers were quiet when what
- * happened is that nothing they said could be quoted.
+ * FOUR SILENCES AND THEY ARE NOT ONE. "Nothing has been said about it at all"
+ * is a reading of the whole corpus; "nothing readable was said" is a reading of
+ * what we could quote (a quote must pass the same gate Overview's two voices
+ * pass — item 8); "nothing quotable was said THIS MONTH" is a reading of the
+ * month; and the fourth is this artefact's own doing — the same comment can be
+ * a member of two subjects and it is printed once. One sentence for all four
+ * would tell a client their customers were quiet when what happened is that we
+ * quoted them one section earlier.
  *
- * AND THERE IS NO THIRD. The first cut had "we do not count this subject yet"
- * as well, and it could never be reached: the loader filters to
- * `status === 'active'` and then asked whether the subject was active, so
- * `counted` was always true. A workspace with no confirmed subject is answered
- * one level up, by the section's own note, which says exactly that — an arm
- * only a test could reach is an arm a reader never sees.
+ * AND IT ALWAYS SAYS SOMETHING. A row with no voice and no note renders an
+ * empty paragraph under a subject's name, which reads as a bug rather than as a
+ * silence.
+ *
+ * NO ARM MAY CLAIM A MONTH THE POOL IS NOT SCOPED TO. `readable` counts the
+ * whole corpus and `inMonth` counts the month, because the citations are
+ * filtered by their comment's date (AGENTS.md: a period is dated by the
+ * comment) — so the month is named only in the arm that is about it.
  */
-export function voiceNote(input: { citations: number; readable: number }): string | null {
-  if (input.citations === 0) return 'nothing was said about this one this month'
-  if (input.readable === 0) return 'what was said this month could not be quoted — too short, or nothing but a handle'
-  return null
+export function voiceNote(input: { citations: number; readable: number; inMonth: number }): string {
+  if (input.citations === 0) return 'nothing has been said about this one yet'
+  if (input.readable === 0) return 'what was said about this one could not be quoted — too short, or nothing but a handle'
+  if (input.inMonth === 0) return 'nothing quotable was said about this one this month'
+  return 'the voices from this month are already quoted above'
 }
 
 /** When the next monthly reading lands: the first of the month after this one.
@@ -245,7 +251,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     // own "show ten" control sets, so the artefact prints exactly what a reader
     // who pressed it would see.
     loadVoiceSurface({ ...monthScope, params: { ...monthScope.params, movers: 'all' } }),
-    loadSubjectVoicesPerSubject(supabase, scope.clientId),
+    loadSubjectVoicesPerSubject(supabase, scope.clientId, month),
     loadBriefLink(supabase, scope.clientId, readingAt),
     loadConfirming(reading.client, scope.clientId, month),
   ])
@@ -415,6 +421,7 @@ async function buildMovers(
 async function loadSubjectVoicesPerSubject(
   supabase: SupabaseClient,
   clientId: string,
+  month: string,
 ): Promise<VoicesSection> {
   const href = '/dashboard/subjects'
   const subjects = await loadSubjectRows(supabase, clientId)
@@ -431,12 +438,16 @@ async function loadSubjectVoicesPerSubject(
     supabase,
     clientId,
     active.map((s) => ({ key: s.id, insightIds: members?.get(s.id) ?? [] })),
+    // THE MONTH THE ARTEFACT IS ABOUT, and the block asks "what does this month
+    // actually sound like?" — so the pool is dated by the comment rather than
+    // taken from the whole corpus and printed under a September heading.
+    { month },
   )
 
   const shown = new Set<string>()
   const rows: SubjectVoiceRow[] = active.map((subject) => {
     const ids = members?.get(subject.id) ?? []
-    const read = reads.get(subject.id) ?? { voices: [], from: 0, sampled: false }
+    const read = reads.get(subject.id) ?? { voices: [], from: 0, sampled: false, readable: 0 }
     const voice = read.voices.find((v) => !shown.has(v.quote.ref)) ?? null
     if (voice) shown.add(voice.quote.ref)
     return {
@@ -445,7 +456,7 @@ async function loadSubjectVoicesPerSubject(
       voice,
       note: voice
         ? null
-        : voiceNote({ citations: ids.length, readable: read.voices.length }),
+        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from }),
       href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}`,
     }
   })

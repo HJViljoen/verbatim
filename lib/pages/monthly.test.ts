@@ -32,19 +32,34 @@ describe('the months a mover’s line is drawn on', () => {
 })
 
 describe('why a subject shows no voice', () => {
-  // Two, not three: the loader filters to active subjects, so the arm that
-  // said "not counted yet" could only ever be reached by a test calling it
-  // directly. A workspace with no confirmed subject is answered by the
-  // section's own note.
-  it('tells the two silences apart', () => {
-    expect(voiceNote({ citations: 0, readable: 0 }))
-      .toBe('nothing was said about this one this month')
-    expect(voiceNote({ citations: 12, readable: 0 }))
-      .toBe('what was said this month could not be quoted — too short, or nothing but a handle')
+  // Four, and the loader can reach all four: nothing said at all, nothing
+  // quotable in the corpus, nothing quotable IN THIS MONTH (the pool is dated
+  // by the comment), and a voice this artefact has already printed under
+  // another subject. A workspace with no confirmed subject is answered one
+  // level up, by the section's own note.
+  it('tells the silences apart', () => {
+    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0 }))
+      .toBe('nothing has been said about this one yet')
+    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0 }))
+      .toBe('what was said about this one could not be quoted — too short, or nothing but a handle')
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0 }))
+      .toBe('nothing quotable was said about this one this month')
   })
 
-  it('says nothing where there is a voice to print', () => {
-    expect(voiceNote({ citations: 12, readable: 4 })).toBeNull()
+  // Only the arm that IS about the month may name one: the other two are
+  // readings of the whole corpus, and the citations behind them carry comment
+  // dates from any month.
+  it('names the month in the one arm the month is about', () => {
+    expect(voiceNote({ citations: 0, readable: 0, inMonth: 0 })).not.toContain('this month')
+    expect(voiceNote({ citations: 12, readable: 0, inMonth: 0 })).not.toContain('this month')
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 0 })).toContain('this month')
+  })
+
+  // A row with no voice and no note renders an empty paragraph under a
+  // subject's name, which reads as a bug rather than as a silence.
+  it('always says something, including when the voice went to another subject', () => {
+    expect(voiceNote({ citations: 12, readable: 4, inMonth: 2 }))
+      .toBe('the voices from this month are already quoted above')
   })
 })
 

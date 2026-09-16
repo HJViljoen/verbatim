@@ -1132,13 +1132,25 @@ async function loadVoices(
 /** What one subject's voice read answers with. */
 export interface VoiceRead {
   voices: SubjectVoice[]
-  /** How many citations were looked at. */
+  /** How many citations were looked at — inside the month, where one was
+   *  asked for. */
   from: number
   /** Whether either cap bit, so the block stops claiming a denominator. */
   sampled: boolean
+  /** How many citations passed the readability gate BEFORE any month filter.
+   *  Zero is "nothing about this subject can be quoted at all", which is a
+   *  different silence from "nothing was quotable this month". */
+  readable: number
 }
 
-const NO_VOICES: VoiceRead = { voices: [], from: 0, sampled: false }
+const NO_VOICES: VoiceRead = { voices: [], from: 0, sampled: false, readable: 0 }
+
+export interface VoiceReadOptions {
+  /** Keep only citations whose COMMENT falls in this month ('2026-09' or its
+   *  first day). A monthly artefact asks for one; the Subjects page, which is
+   *  read over a horizon and says so, asks for none. */
+  month?: string
+}
 
 /**
  * The same read, for many subjects at once, in a fixed number of statements.
@@ -1161,6 +1173,7 @@ async function loadVoicesMany(
   supabase: SupabaseClient,
   clientId: string,
   groups: readonly { key: string; insightIds: readonly string[] }[],
+  opts?: VoiceReadOptions,
 ): Promise<Map<string, VoiceRead>> {
   const out = new Map<string, VoiceRead>(groups.map((g) => [g.key, NO_VOICES]))
   const capped = groups.map((g) => ({
@@ -1237,7 +1250,20 @@ async function loadVoicesMany(
   }
 
   for (const p of pools) {
-    if (p.considered.length === 0) continue
+    // A PERIOD IS DATED BY THE COMMENT (AGENTS.md), so a caller that asks for a
+    // month gets the citations whose comment falls in it and no others — a
+    // citation whose comment cannot be dated is not in any month. Without this
+    // an artefact headed September prints a June comment under it.
+    const considered = opts?.month
+      ? p.considered.filter((c) => {
+          const date = c.commentId ? meta.get(c.commentId)?.comment_date ?? null : null
+          return date != null && date.slice(0, 7) === opts.month!.slice(0, 7)
+        })
+      : p.considered
+    if (considered.length === 0) {
+      out.set(p.key, { voices: [], from: 0, sampled: p.sampled, readable: p.considered.length })
+      continue
+    }
     const audienceOf = (c: QuoteCitation): string => {
       const m = c.commentId ? meta.get(c.commentId) : undefined
       const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
@@ -1247,7 +1273,7 @@ async function loadVoicesMany(
     // Grouped by the audience the quote was HEARD in, then drawn round-robin so
     // one loud side cannot fill the list.
     const byAudience = new Map<string, QuoteCitation[]>()
-    for (const c of p.considered) {
+    for (const c of considered) {
       const audience = audienceOf(c)
       byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
     }
@@ -1274,7 +1300,7 @@ async function loadVoicesMany(
         from,
       }
     })
-    out.set(p.key, { voices, from: p.considered.length, sampled: p.sampled })
+    out.set(p.key, { voices, from: considered.length, sampled: p.sampled, readable: p.considered.length })
   }
   return out
 }
@@ -1310,8 +1336,9 @@ export function loadSubjectVoicesMany(
   supabase: SupabaseClient,
   clientId: string,
   groups: readonly { key: string; insightIds: readonly string[] }[],
+  opts?: VoiceReadOptions,
 ): Promise<Map<string, VoiceRead>> {
-  return loadVoicesMany(supabase, clientId, groups)
+  return loadVoicesMany(supabase, clientId, groups, opts)
 }
 
 // ---- SU3 -----------------------------------------------------------------------
