@@ -6,6 +6,7 @@ import {
   buildSides,
   matchWords,
   originLine,
+  periodPhrase,
   railNote,
   recordWindow,
   selectSubject,
@@ -136,25 +137,43 @@ describe('unansweredLead', () => {
     // Measured on production: a large group of Össur question insights sits
     // under a theme the model called "Praise for prosthetic look". "The
     // category asked ‘Praise for prosthetic look’" is not true of anything.
-    expect(unansweredLead([row], 9, 'September')).toContain('Questions grouped as')
+    expect(unansweredLead([row], 9, 'in Sep')).toContain('Questions grouped as')
   })
 
-  it('says the count and the population, and no share', () => {
-    const line = unansweredLead([row], 9, 'September')!
-    expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read — none of your 9 September posts touched it.')
+  it('says the count and the period, and no share', () => {
+    const line = unansweredLead([row], 9, 'in Sep')!
+    expect(line).toBe('Questions grouped as “Will it survive a wet commute” came up in 130 of the videos we have read — none of your 9 posts in Sep touched it.')
     expect(line).not.toContain('%')
   })
 
+  it('labels the posts with the period they were counted in, never with one month', () => {
+    // The count is over the WHOLE horizon; "none of your 900 September posts"
+    // was the sentence on Last 12 months, beside a meta line that said "in
+    // this window" about the same number.
+    expect(unansweredLead([row], 900, 'in the last 12 months'))
+      .toContain('none of your 900 posts in the last 12 months touched it')
+  })
+
   it('says you published nothing rather than "none of your 0 posts"', () => {
-    expect(unansweredLead([row], 0, 'September')).toContain('you published nothing in September')
+    expect(unansweredLead([row], 0, 'in Sep')).toContain('you published nothing in Sep')
   })
 
   it('has nothing to say when every question is answered', () => {
-    expect(unansweredLead([{ ...row, answered: true }], 9, 'September')).toBeNull()
+    expect(unansweredLead([{ ...row, answered: true }], 9, 'in Sep')).toBeNull()
   })
 
   it('states the basis once, in the block’s own words', () => {
     expect(UNANSWERED_BASIS).toContain('counts, not shares')
+  })
+})
+
+describe('periodPhrase', () => {
+  it('words each horizon as the control does, and never as a month it is not', () => {
+    // The product's own month token, the one the metas and the mock use.
+    expect(periodPhrase('this_month', '2026-09-01')).toBe('in Sep')
+    expect(periodPhrase('last_3', '2026-09-01')).toBe('in the last 3 months')
+    expect(periodPhrase('last_12', '2026-09-01')).toBe('in the last 12 months')
+    expect(periodPhrase('since_start', '2026-09-01')).toBe('since we started')
   })
 })
 

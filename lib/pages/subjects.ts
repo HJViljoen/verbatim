@@ -8,7 +8,7 @@ import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeBoundary, freezeStateFor, isMissingMonthTable } from '../reading/monthly'
@@ -408,14 +408,30 @@ export function answeredBy(label: string, haystack: readonly string[]): boolean 
 export function unansweredLead(
   rows: readonly UnansweredRow[],
   yourPosts: number,
-  monthLabel: string,
+  period: string,
 ): string | null {
   const top = rows.find((r) => !r.answered)
   if (!top) return null
   const posts = yourPosts > 0
-    ? `none of your ${fmtInt(yourPosts)} ${monthLabel} post${yourPosts === 1 ? '' : 's'} touched it`
-    : `you published nothing in ${monthLabel}`
+    ? `none of your ${fmtInt(yourPosts)} post${yourPosts === 1 ? '' : 's'} ${period} touched it`
+    : `you published nothing ${period}`
   return `Questions grouped as “${top.label}” came up in ${fmtInt(top.videos)} of the videos we have read — ${posts}.`
+}
+
+/**
+ * The period the reader chose, in the reader's words, inside a sentence.
+ *
+ * NOT THE MONTH'S NAME. The lead sentence counted your posts over the whole
+ * HORIZON and labelled them with the current month — "none of your 900
+ * September posts" on Last 12 months — while the block's own meta line said
+ * "in this window" about the same number. One number, two statements, one of
+ * them false. The control's own words are the words: it is the only period the
+ * reader has been shown.
+ */
+export function periodPhrase(horizon: Horizon, month: string): string {
+  if (horizon === 'this_month') return `in ${monthName(month).split(' ')[0]}`
+  if (horizon === 'since_start') return 'since we started'
+  return `in the ${HORIZON_LABEL[horizon].toLowerCase()}`
 }
 
 /** The words above the axis about which lines carry an n (design §3 SU2's
@@ -748,7 +764,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: window.from, to: window.to },
         population: perAudience.get(`${month}|${INDUSTRY_AUDIENCE}`) ?? null,
-        monthLabel: monthName(month).split(' ')[0],
+        period: periodPhrase(horizon, month),
         themedRunId,
       }),
     ])
@@ -1036,7 +1052,8 @@ interface UnansweredInput {
    *  are read inside it: the question videos AND your own posts. */
   window: { from: string; to: string }
   population: number | null
-  monthLabel: string
+  /** The period the reader chose, as `periodPhrase` words it. */
+  period: string
   /** The update whose clustering names the questions. Null where no update has
    *  produced themes — then there is nothing to group by and the block says so
    *  rather than printing pipeline slugs. */
@@ -1211,7 +1228,7 @@ async function loadUnanswered(
     questionVideos,
     population: input.population,
     yourPosts: ownVideos.length,
-    lead: unansweredLead(shown, ownVideos.length, input.monthLabel),
+    lead: unansweredLead(shown, ownVideos.length, input.period),
     basis: UNANSWERED_BASIS,
     claims: UNANSWERED_CLAIMS_UNREADABLE,
     reddit: redditVideos > 0 ? REDDIT_THREAD_CAP : null,
