@@ -180,8 +180,16 @@ function Brief({ brief, mode, appUrl }: { brief: BriefLink; mode: RenderMode; ap
   // recipient can open and is not readable with nothing else; saying "attached"
   // over one sends a reader to a page that asks them for something they have
   // not been given.
+  //
+  // AND NOTHING HERE IS ATTACHED. The public arm said "The brief is attached,
+  // one link per block." about a URL in the very next clause, in an email whose
+  // footer eleven lines later says "The PDF is attached." about something else
+  // — two attachments claimed, one of them a link (AGENTS.md: "a page once
+  // claimed 'no email is sent' while Resend sent"). "block" was ours as well:
+  // the same email's footer says the reader-facing noun, "One link per
+  // section", so one artefact carried two words for one thing.
   const lead = brief.public
-    ? 'The brief is attached, one link per block.'
+    ? 'The brief opens from the link below, one link per section.'
     : brief.locked
     ? 'The brief opens from the link below, which asks for the password your workspace set on it.'
     : 'The brief is in the workspace.'

@@ -268,9 +268,14 @@ describe('MR7 · what to decide', () => {
     expect(text.match(/\b1 Oct\b/g) ?? []).toHaveLength(1)
   })
 
-  it('attaches the brief by link and does not claim to have built one', () => {
+  // NOTHING IS ATTACHED AND "block" IS OURS. The line used to read "The brief
+  // is attached, one link per block." about a URL in the next clause, eleven
+  // lines above a footer saying "The PDF is attached." about something else.
+  it('offers the brief by link, says nothing is attached, and says "section"', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
-    expect(text).toContain('The brief is attached, one link per block.')
+    expect(text).toContain('The brief opens from the link below, one link per section.')
+    expect(text).not.toContain('attached')
+    expect(text).not.toContain('per block')
     expect(text).toContain('Marketing brief')
   })
 
