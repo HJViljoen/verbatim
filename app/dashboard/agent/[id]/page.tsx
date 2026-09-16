@@ -61,6 +61,13 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <div className="agent-fixed relative flex min-h-0 flex-1 flex-col gap-4">
           {head}
+          {/* AS3, as the exported deck carries it: what this document was
+              CHECKED against. A document thread has no answer to hang it
+              under, which is how the screen and the deck both came to leave
+              it off. */}
+          <p className="-mt-2 text-[11.5px] text-muted-foreground">
+            {askBasisLine(data.basis, { asked: true, verb: 'Checked' })}
+          </p>
           <AgentDocumentSplit
             claims={doc.claims}
             summary={doc.summary}

@@ -164,6 +164,17 @@ function DocumentPage({ d, page }: { d: D; page: number }) {
             {doc.summary.supported} supported · {doc.summary.contradicted} contradicted · {doc.summary.untested} untested
           </p>
         )}
+        {/* AS3 on the document deck. The clipped-reading notice below says how
+            much of the document was read; this says what it was read AGAINST,
+            which a reader six weeks from now has no other way to recover. The
+            question deck has carried it since AS3 landed and this one did not —
+            agentThreadSlides returns early for a document, so none of its
+            slides passed through the Question component that renders it. */}
+        {page === 0 && (
+          <p className="mb-3 font-mono text-[9.5px] text-muted-foreground">
+            {askBasisLine(d.basis, { asked: true, verb: 'Checked' })}
+          </p>
+        )}
         {/* Where the reading stopped, on the page that leaves the building. A
             deck showing verdicts over a document it only half read, without
             saying so, is the one thing a PDF must not do. */}

@@ -53,15 +53,20 @@ export interface AskBasis {
  * The AS3 sentence.
  *
  * `asked` is the thread's tense: an answer already given was answered against
- * an update, and the box on the landing page will be. Pure, so the copy is
- * argued with in a test rather than in production.
+ * an update, and the box on the landing page will be. `verb` says which kind of
+ * turn it was — a document was CHECKED against an update, not answered against
+ * it, and the deck that leaves the building should not call it an answer. Pure,
+ * so the copy is argued with in a test rather than in production.
  */
-export function askBasisLine(basis: AskBasis, opts: { asked?: boolean } = {}): string {
+export function askBasisLine(
+  basis: AskBasis,
+  opts: { asked?: boolean; verb?: 'Answered' | 'Checked' } = {},
+): string {
   if (!basis.updateAt) {
     return 'Nothing has been read for this workspace yet, so there is nothing to answer from.'
   }
   const lead = opts.asked
-    ? `Answered against the update of ${shortDate(basis.updateAt)}`
+    ? `${opts.verb ?? 'Answered'} against the update of ${shortDate(basis.updateAt)}`
     : `Answers are given against the update of ${shortDate(basis.updateAt)}`
 
   const months =
