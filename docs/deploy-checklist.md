@@ -786,9 +786,13 @@ monthly send is the artefact nobody has seen against a frozen month.
   the demo tenant looks exactly like a run that worked.
 - The weekly report preview for Össur, read against the page: same
   month-to-date figures.
-- `node --env-file=.env.local --import tsx scripts/reading-timing.ts --page overview --rounds 2 --client <uuid>` — read the SECOND round. WP23's target
+- `node --env-file=.env.local --import tsx scripts/reading-timing.ts --confirm --page overview --rounds 2 --client <uuid>` — read the SECOND round. WP23's target
   is 1.6–4.6 s; the read COUNT is the number that does not move when the
-  instance has a bad minute.
+  instance has a bad minute. **One page, one tenant, and `--confirm` is not
+  decoration**: the script is a read LOOP (22–64 statements a page load), it
+  refuses a plan above six page loads, and it probes the instance first and
+  refuses to run if that probe takes over 3 s. An unnarrowed two-round sweep is
+  ~1,400 statements — the pattern that starved this instance on 16 September.
 - `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`
   again, **after** the migrations and the deploy. 36/36.
 
