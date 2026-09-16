@@ -11,7 +11,7 @@ import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, t
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture()]
+const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture()]
 
 describe('the eight pages', () => {
   it('render in all three modes on every state and keep the copy contract', () => {
