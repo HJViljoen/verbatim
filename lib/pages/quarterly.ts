@@ -1,9 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { fmtInt, fullDate, longMonth, monthName } from '../format'
-import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
-import { fetchQuoteResolutionsByRefs } from '../quotes'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
 import {
@@ -113,14 +111,15 @@ export interface CoverPage {
 }
 
 export interface StandingAdvice {
+  /** The lineage — the row's identity, and what a list keys on. NOT an href:
+   *  the field was a `/dashboard/market?advice=…` link nothing ever rendered
+   *  as one, used only as a React key. */
+  id: string
   title: string
   /** "first raised in July" / "new in September". */
   age: string
-  /** Grounded in N videos — a figure with its denominator named in `of`. */
-  videos: number | null
   status: string
   decidedAt: string | null
-  href: string
 }
 
 export interface ReadPage {
@@ -252,7 +251,6 @@ export interface MethodPage {
   /** The corpus in numbers, row by row. */
   numbers: { label: string; value: string; note?: string }[]
   unit: string
-  href: string
   /** The comparisons this artefact asked for and did not draw, and why —
    *  printed, not promised (lib/reading/record.ts `refusedSentence`). */
   refusedLine: string | null
@@ -316,8 +314,10 @@ export function readingCounter(readings: number, needed = QUARTER_UNLOCKS_AT): s
 export function ordinal(n: number): string {
   const rem100 = n % 100
   if (rem100 >= 11 && rem100 <= 13) return `${n}th`
-  const suffix = ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
-  return `${n}${n % 10 <= 3 ? suffix : 'th'}`
+  // The lookup already answers for every digit — 4 through 9 read 'th' off the
+  // end of a four-entry array. The `n % 10 <= 3 ? suffix : 'th'` that used to
+  // sit here was a second guard over a table that needed none.
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
 }
 
 /**
@@ -926,15 +926,14 @@ function buildRead(a: {
   )
   const ledger = a.market?.advice.rows ?? []
   const advice: StandingAdvice[] = ledger.slice(0, 5).map((row) => ({
+    id: row.lineageId,
     title: row.title,
     age:
       row.monthsRepeated > 1
         ? `first raised ${longMonth(`${row.firstMade.slice(0, 7)}-01`)} · ${row.monthsRepeated} months`
         : `new in ${longMonth(`${row.firstMade.slice(0, 7)}-01`)}`,
-    videos: null,
     status: row.statusLabel,
     decidedAt: row.decidedAt,
-    href: `/dashboard/market?advice=${encodeURIComponent(row.lineageId)}`,
   }))
   return {
     interpretation,
@@ -1208,7 +1207,6 @@ function buildMethod(a: {
       : 'The unusual-week check is not recorded for this workspace yet, so this quarter has no check record to print.',
     numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
-    href: '/dashboard/settings/record',
     refusedLine: refused.length ? refusedSentence(refused) : null,
   }
 }
@@ -1350,21 +1348,10 @@ function buildUnsettled(a: {
   }
 }
 
-/** The refs this artefact shows, so a snapshot can freeze ids and resolve the
- *  words at render (lib/renderables/quotes-freeze.ts). */
-export function quarterlyQuoteRefs(data: QuarterlyData): string[] {
-  return [...new Set(data.read.quotes.map((q) => q.quote.ref).filter(Boolean))]
-}
-
-/** Resolve a stored artefact's quote refs back to words. Never stored: a
- *  snapshot holds ids and numbers, and a third party's sentence resolves live
- *  so an erasure reaches it. */
-export async function resolveQuarterlyQuotes(supabase: SupabaseClient, refs: readonly string[]): Promise<Map<string, Quote>> {
-  if (!refs.length) return new Map()
-  const resolved = await fetchQuoteResolutionsByRefs(supabase, [...refs], { onReadError: 'degrade' })
-  const out = new Map<string, Quote>()
-  for (const [ref, one] of resolved) out.set(ref, { ref, text: one.text, lang: one.lang ?? null, english: one.english ?? null })
-  return out
-}
-
-export { quoteRef }
+/*
+ * NO QUOTE HELPERS HERE. The first cut exported `quarterlyQuoteRefs` and
+ * `resolveQuarterlyQuotes` and nothing called either: `createSnapshot`
+ * (lib/snapshots.ts) freezes every quote's words on the way in and resolves
+ * them on the way out, for every artefact on the spine, and the weekly report
+ * has no such pair for exactly that reason.
+ */

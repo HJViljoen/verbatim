@@ -281,12 +281,3 @@ export function quarterlySubject(company: string, quarter: Quarter, readings: nu
   const head = `${company}: your quarterly review — ${quarterLabel(quarter, false)}`
   return quarterUnlocked(readings) ? head : `${head} (your own side is still forming)`
 }
-
-/** The month the quarter's own reading is dated by — the last month of the
- *  quarter that the reading date has reached. Used wherever a page states "as
- *  at". */
-export function quarterReadingMonth(quarter: Quarter, readingAt: string): string {
-  // A reading taken AFTER the quarter closed is dated by the quarter's last
-  // month, not by the month the reader happens to be standing in.
-  return latestMonthOf(quarter, readingAt) ?? quarter.months[2]
-}

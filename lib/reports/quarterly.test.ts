@@ -21,7 +21,6 @@ import {
   quarterLabel,
   quarterOf,
   quarterOfIn,
-  quarterReadingMonth,
   quarterToReview,
   quarterUnlocked,
   quarterlyPeriod,
@@ -101,12 +100,6 @@ describe('the quarter', () => {
     expect(quarterFilling(q, '2026-09-16T05:00:00Z')).toBe(true)
     expect(quarterFilling(q, '2026-09-30T23:00:00Z')).toBe(true)
     expect(quarterFilling(q, '2026-10-01T00:00:00Z')).toBe(false)
-  })
-
-  it('dates a closed quarter by its own last month, not by today', () => {
-    const q = quarterFor(2026, 3)
-    expect(quarterReadingMonth(q, '2026-09-16T00:00:00Z')).toBe('2026-09-01')
-    expect(quarterReadingMonth(q, '2027-02-01T00:00:00Z')).toBe('2026-09-01')
   })
 
   it('reviews the quarter that CLOSED, never the one that has just begun', () => {

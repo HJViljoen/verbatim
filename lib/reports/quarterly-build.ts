@@ -7,6 +7,7 @@ import { loadQuarterly } from '../pages/quarterly'
 import { readingHandle } from '../reading/read'
 import {
   QUARTERLY_BLOCK_KEYS,
+  isQuarterlyBlockKey,
   quarterlySubject,
   quarterlyTitle,
   type Quarter,
@@ -104,9 +105,7 @@ export async function snapshotQuarterly(args: {
     throw new QuarterlyEmptyError('Nothing to review yet — your first update has not landed.')
   }
 
-  const known = (args.keys ?? QUARTERLY_BLOCK_KEYS).filter((k): k is QuarterlyBlockKey =>
-    (QUARTERLY_BLOCK_KEYS as readonly string[]).includes(k),
-  )
+  const known = (args.keys ?? QUARTERLY_BLOCK_KEYS).filter(isQuarterlyBlockKey)
   const keys: QuarterlyBlockKey[] = known.length > 0 ? known : [...QUARTERLY_BLOCK_KEYS]
   const company = args.company || reading.brand
   const data: QuarterlySnapshotData = {

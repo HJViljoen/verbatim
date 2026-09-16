@@ -76,7 +76,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
               <Note mode={mode} tone="body">Standing advice, by age</Note>
               {r.advice.map((a) => (
                 <Row
-                  key={a.href}
+                  key={a.id}
                   mode={mode}
                   label={<Stored slot="pass_d_b_recommendation">{a.title}</Stored>}
                   aside={<Note mode={mode}>{a.status} · {a.decidedAt ? `you decided ${fullDate(a.decidedAt)}` : 'no decision yet'}</Note>}
