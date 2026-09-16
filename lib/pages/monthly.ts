@@ -125,10 +125,14 @@ export interface DecideSection {
 /** The Marketing brief, attached BY LINK. */
 export interface BriefLink {
   title: string
-  /** Where it opens — a share link where the workspace has minted one, and the
-   *  in-app viewer otherwise. */
+  /** The brief's snapshot. The app href is built from it, and a share link is
+   *  resolved from it at SEND time — never frozen (see `loadBriefLink`). */
+  snapshotId: string
+  /** Where it opens — the in-app viewer as loaded and frozen, replaced with a
+   *  share link on the email path alone (`withBriefShareLink`). */
   href: string
-  /** Whether that link is readable with nothing else — no account, no password. */
+  /** Whether that link is readable with nothing else — no account, no password.
+   *  False as loaded; only the send path can know. */
   public: boolean
   /** A share link that will ask for a password. Real and forwardable, and not
    *  the same promise as a public one. */
@@ -541,16 +545,31 @@ async function loadSubjectVoicesPerSubject(
  * several model calls, and building a second one to attach to a report that
  * already contains its numbers would spend that twice for one reading.
  *
+ * AND NO SHARE TOKEN IS FROZEN HERE. This function used to resolve the brief's
+ * `share_links.token` and write `/r/<token>` straight into the reading — which
+ * `snapshotMonthly` then stores in `report_snapshots.data`, a row every tenant
+ * MEMBER can select, while `share_links.token` itself is deliberately withheld
+ * from that grant ("The token and the password hash never reach a session
+ * client", 20260830090000). So every monthly report sent froze a live
+ * unauthenticated URL, plus whether it was password-protected, where anyone
+ * signed in could read it — and the report's own share page and PDF handed a
+ * recipient of one artefact's link another artefact's link, which the email
+ * intended and the share page did not.
+ *
+ * The snapshot therefore carries the SNAPSHOT ID and the app href, and the send
+ * path resolves the share link at render (`withBriefShareLink`,
+ * lib/reports/monthly-build.ts): the token reaches the email, which is what
+ * needed it, and nothing else.
+ *
  * A SHARE LINK IF THERE IS ONE, THE APP IF THERE IS NOT — and the block says
  * which. This artefact is emailed to a list that may include people with no
  * account, and a `/dashboard` link handed to one of them is a login screen.
  *
- * A LOCKED LINK IS NOT A PUBLIC ONE. `share_links.password_hash` was not read,
- * so a password-protected link came back `public: true` and the artefact told a
- * recipient the brief was attached for a page that will ask them for a password
- * they have not been given. It is still the right link — the workspace can hand
- * the password over — so the link stands and the sentence says what opening it
- * will ask for.
+ * A LOCKED LINK IS NOT A PUBLIC ONE. A password-protected link came back
+ * `public: true` once and the artefact told a recipient the brief was attached
+ * for a page that will ask them for a password they have not been given. It is
+ * still the right link — the workspace can hand the password over — so the link
+ * stands and the sentence says what opening it will ask for.
  *
  * AND IT SAYS WHEN THE BRIEF WAS BUILT. Sealand's newest marketing brief was
  * built on 12 September; a report sent on 1 October that links to it without
@@ -586,27 +605,12 @@ async function loadBriefLink(
   const report = (data as ReportRow[] | null)?.[0]
   if (!report?.latest_snapshot_id) return null
 
-  // The token is withheld from the authenticated grant, so this read only
-  // answers on the service-role path — which is the send path, and the one that
-  // needs a link a recipient can actually open.
-  type LinkRow = { token: string; expires_at: string | null; password_hash: string | null }
-  const { data: links } = await supabase
-    .from('share_links')
-    .select('token, expires_at, password_hash')
-    .eq('client_id', clientId)
-    .eq('snapshot_id', report.latest_snapshot_id)
-    .is('revoked_at', null)
-    .order('created_at', { ascending: false })
-    .limit(5)
-  const live = ((links as LinkRow[] | null) ?? []).find(
-    (l) => !l.expires_at || l.expires_at > readingAt,
-  )
-
   return {
     title: report.title,
-    href: live ? `/r/${live.token}` : `/dashboard/reports?view=${encodeURIComponent(report.latest_snapshot_id)}`,
-    public: Boolean(live) && !live?.password_hash,
-    locked: Boolean(live?.password_hash),
+    snapshotId: report.latest_snapshot_id,
+    href: `/dashboard/reports?view=${encodeURIComponent(report.latest_snapshot_id)}`,
+    public: false,
+    locked: false,
     builtAt: report.updated_at,
     // The brief is this reading's companion only if it was built during the
     // month the artefact is ABOUT.

@@ -152,6 +152,67 @@ export async function snapshotMonthly(args: {
 }
 
 /**
+ * The brief's share link, resolved AT SEND and never frozen.
+ *
+ * WHY IT IS NOT IN THE SNAPSHOT. `report_snapshots.data` is readable by every
+ * tenant member ("Users see their own report_snapshots"); `share_links.token`
+ * is not — SELECT is revoked and granted back column by column, with the
+ * comment "The token and the password hash never reach a session client". A
+ * `/r/<token>` written into the frozen reading is that token, published to
+ * everyone who can open the Reports page, plus whether it is
+ * password-protected. It is also the only place in the tree where a /r/ token
+ * was written into frozen page data.
+ *
+ * SO THE TOKEN TRAVELS ON THE SEND. The email is rendered in a route handler
+ * that already holds the admin client; this returns a COPY of the reading with
+ * the brief's href, `public` and `locked` filled in, and the stored row is left
+ * exactly as it was frozen. The share page and the PDF render the snapshot as
+ * stored, so a recipient of one artefact's link is no longer handed another
+ * artefact's — which the email intended and the share page never did.
+ *
+ * Non-fatal: a failed read leaves the app href, which is the honest fallback
+ * `loadBriefLink` already froze.
+ */
+export async function withBriefShareLink(
+  admin: SupabaseClient,
+  clientId: string,
+  data: MonthlySnapshotData,
+): Promise<MonthlySnapshotData> {
+  const brief = data.reading.brief
+  if (!brief?.snapshotId) return data
+  type LinkRow = { token: string; expires_at: string | null; password_hash: string | null }
+  let links: LinkRow[] = []
+  try {
+    const { data: rows } = await admin
+      .from('share_links')
+      .select('token, expires_at, password_hash')
+      .eq('client_id', clientId)
+      .eq('snapshot_id', brief.snapshotId)
+      .is('revoked_at', null)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    links = (rows as LinkRow[] | null) ?? []
+  } catch (error) {
+    console.warn('[send] could not resolve the brief’s share link', error)
+    return data
+  }
+  const live = links.find((l) => !l.expires_at || l.expires_at > data.readingAt)
+  if (!live) return data
+  return {
+    ...data,
+    reading: {
+      ...data.reading,
+      brief: {
+        ...brief,
+        href: `/r/${live.token}`,
+        public: !live.password_hash,
+        locked: Boolean(live.password_hash),
+      },
+    },
+  }
+}
+
+/**
  * The record, written once the artefact has actually gone out.
  *
  * BOTH HALVES ARE NON-FATAL AND THE CALLER IS TOLD WHICH LANDED. This runs

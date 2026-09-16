@@ -131,6 +131,7 @@ describe('the next reading', () => {
 describe('the brief attached by link', () => {
   const brief = (over: Partial<BriefLink> = {}): BriefLink => ({
     title: 'Marketing brief',
+    snapshotId: 's1',
     href: '/r/abc',
     public: true,
     locked: false,

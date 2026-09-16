@@ -11,7 +11,7 @@ import { isDocumentData } from '../reports/documents/types'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import type { ReportSnapshotData } from '../reports/types'
 import type { WeeklySnapshotData as WeeklySnapshot } from '../reports/weekly-build'
-import type { MonthlySnapshotData as MonthlySnapshot } from '../reports/monthly-build'
+import { withBriefShareLink, type MonthlySnapshotData as MonthlySnapshot } from '../reports/monthly-build'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
@@ -366,9 +366,15 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     }
     snapshotId = snap.snapshotId
     const cadenceWord = cadenceWordOf(schedule.cadence)
+    // THE BRIEF'S SHARE TOKEN REACHES THE EMAIL AND NOT THE SNAPSHOT. The
+    // stored reading carries the brief's snapshot id and the app href; the
+    // token is resolved here, on the send, and the frozen row is untouched.
+    const monthlyForEmail = monthly
+      ? await withBriefShareLink(admin, schedule.client_id, snap.data as MonthlySnapshot)
+      : null
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
-      monthly
-        ? renderMonthlyEmail({ data: snap.data as MonthlySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      monthlyForEmail
+        ? renderMonthlyEmail({ data: monthlyForEmail, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : quarterly
         ? renderQuarterlyEmail({ data: snap.data as QuarterlySnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : weekly

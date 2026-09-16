@@ -116,6 +116,10 @@ export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
     },
     brief: {
       title: 'Marketing brief',
+      // AS THE SEND PATH HANDS IT TO THE BLOCKS. The stored snapshot carries
+      // the app href and `public: false`; `withBriefShareLink` swaps in the
+      // token at render, and this fixture is that render.
+      snapshotId: '11111111-1111-4111-8111-111111111111',
       href: '/r/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       public: true,
       locked: false,

@@ -7,7 +7,7 @@ import { renderDocumentEmail } from '@/lib/email/document-brief'
 import { loadEdits } from '@/lib/reports/documents/edits'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
-import { isMonthlyData } from '@/lib/reports/monthly-build'
+import { isMonthlyData, withBriefShareLink } from '@/lib/reports/monthly-build'
 import { renderWeeklyEmail } from '@/lib/email/weekly'
 import { renderMonthlyEmail } from '@/lib/email/monthly'
 import { isQuarterlyData } from '@/lib/reports/quarterly-build'
@@ -64,7 +64,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return page(renderWeeklyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
     }
     if (isMonthlyData(data)) {
-      return page(renderMonthlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+      // The brief's share token lives on the send, not in the snapshot, so
+      // "the email as sent" resolves it again here (lib/reports/monthly-build).
+      const withBrief = await withBriefShareLink(admin, session.clientId, data)
+      return page(renderMonthlyEmail({ data: withBrief, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
     }
     if (isQuarterlyData(data)) {
       return page(renderQuarterlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)

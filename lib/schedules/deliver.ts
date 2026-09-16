@@ -10,7 +10,7 @@ import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
 import { isWeeklyData } from '../reports/weekly-build'
 import { monthScopedFigures } from '../reports/weekly'
-import { isMonthlyData } from '../reports/monthly-build'
+import { isMonthlyData, withBriefShareLink } from '../reports/monthly-build'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
 import { recordSend } from '../reports/monthly-build'
@@ -287,7 +287,10 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
     const email = monthly
-      ? renderMonthlyEmail({ data: monthly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      // THE BRIEF'S SHARE TOKEN REACHES THE EMAIL AND NOT THE SNAPSHOT. The
+      // stored reading carries the brief's snapshot id and the app href; the
+      // token is resolved here, on the send, and the frozen row is untouched.
+      ? renderMonthlyEmail({ data: await withBriefShareLink(admin, schedule.client_id, monthly), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : weekly
       ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : quarterly
