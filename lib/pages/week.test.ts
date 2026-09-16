@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 
+import { CLASSIFIED_TYPES, HOOK_STYLES } from '../pipeline/schemas'
 import { baselineStateOf } from '../reading/anomaly'
+import { directionRe } from '../test/copy-contract'
 import {
   baselineFormingLine,
   baselineStartsWith,
@@ -16,6 +18,7 @@ import {
   refTargets,
   typicalTag,
   windowDays,
+  workedLabel,
   type UnusualFlag,
   type WeekWindow,
 } from './week'
@@ -225,6 +228,27 @@ describe('a flag’s figures', () => {
   it('rounds the points to the one decimal the page prints', () => {
     expect(flagFigures({ ...flag, changePts: 10.23456, bandPts: 4.8712 }, 2).flag_2_change.value).toBe(10.2)
     expect(flagFigures({ ...flag, changePts: 10.23456, bandPts: 4.8712 }, 2).flag_2_band.value).toBe(4.9)
+  })
+})
+
+describe('the labels What worked prints', () => {
+  it('calls the trend-riding hook what it opens on, not what it trends', () => {
+    // `hook_style = 'trend-riding'` humanises to "Trend riding", and `trend` is
+    // a direction word: a live Sealand render failed the copy contract with
+    // `[direction-word] "Trend" outside a data-copy="verdict" node (D1)` while
+    // the block tests passed on invented hook labels.
+    expect(workedLabel('trend-riding')).toBe('Riding what is current')
+    expect(workedLabel('before-after')).toBe('Before and after')
+    expect(workedLabel('statistic')).toBe('Statistic')
+    expect(workedLabel('behind-the-scenes')).toBe('Behind the scenes')
+  })
+
+  it('speaks no direction word anywhere in the classifier’s vocabulary', () => {
+    // The whole enum, not the three values a fixture happened to carry — the
+    // fixture is exactly how this reached production unseen.
+    for (const slug of [...HOOK_STYLES, ...CLASSIFIED_TYPES]) {
+      expect(directionRe().test(workedLabel(slug)), slug).toBe(false)
+    }
   })
 })
 

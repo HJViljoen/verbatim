@@ -316,6 +316,9 @@ export interface CameInBlock {
 
 /** One format or hook, with its n. */
 export interface WorkedRow {
+  /** The reader's label, already humanised by `workedLabel` — not the slug.
+   *  Done in the loader so the email arm, which has no stylesheet to
+   *  capitalise with, and the report get the same words as the page. */
   label: string
   videos: number
   /** Average engagement rate of that group, AS THE COLUMN STORES IT — a
@@ -1277,8 +1280,36 @@ function buildWorked(videos: readonly VideoRow[]): WorkedBlock {
   }
 }
 
+/**
+ * A classifier slug as a reader's label.
+ *
+ * MOSTLY `cap(pretty(…))`, AND THREE EXCEPTIONS THAT ARE NOT COSMETIC.
+ * `hook_style` and `classified_type` are fixed enums (lib/pipeline/schemas.ts)
+ * and one of their values — `trend-riding` — humanises to "Trend riding", which
+ * carries a DIRECTION WORD: `trend` is in the shared movement vocabulary, so a
+ * live Sealand render failed the copy contract with `[direction-word] "Trend"
+ * outside a data-copy="verdict" node (D1)` while the block tests passed on
+ * invented hook labels. The name of a hook is not a claim about where anything
+ * is headed, and the honest answer is to call the hook what it is — it opens on
+ * a current sound, format or meme, which is HOOK_STYLE_DEFS' own wording —
+ * rather than to exempt one heading from the rule the rest of Phase 1 is built
+ * on.
+ *
+ * The other two are plain readability: "Before after" and "How to" are the slug
+ * showing through.
+ */
+const WORKED_LABELS: Readonly<Record<string, string>> = {
+  'trend-riding': 'Riding what is current',
+  'before-after': 'Before and after',
+  'how-to': 'How-to',
+}
+
+export function workedLabel(slug: string): string {
+  return WORKED_LABELS[slug] ?? cap(pretty(slug))
+}
+
 function toWorkedRow(p: PerfMultiple): WorkedRow {
-  return { label: p.k, videos: p.count, engagement: p.avgEng, multiple: p.multiple }
+  return { label: workedLabel(p.k), videos: p.count, engagement: p.avgEng, multiple: p.multiple }
 }
 
 // ---- the reads ---------------------------------------------------------------

@@ -3,8 +3,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { cap, fmtInt, fmtPct, listNames } from '@/lib/format'
-import { pretty } from '@/lib/content-tiles'
+import { fmtInt, fmtPct, listNames } from '@/lib/format'
 import { type WeekData, type WorkedRow } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
 
@@ -91,10 +90,14 @@ function Group({
       <BlockRanked
         mode={mode}
         rows={rows.map((r) => ({
-          // `cap(pretty(…))` and never CSS `capitalize`: an email client
-          // applies no stylesheet, and a slug that reads as a label on screen
-          // would read as `talking_head` in the inbox.
-          label: cap(pretty(r.label)),
+          // ALREADY A LABEL — humanised by `workedLabel` in the loader, and
+          // never CSS `capitalize`: an email client applies no stylesheet, and
+          // a slug that reads as a label on screen would read as
+          // `trend-riding` in the inbox. It happens there rather than here
+          // because one of the enum's own values humanises into a direction
+          // word, which is a decision about the product's vocabulary and not
+          // about this markup.
+          label: r.label,
           pct: (r.videos / max) * 100,
           color: 'var(--cat)',
           // THE LEVEL AND ITS DENOMINATOR TOGETHER. A multiple on its own is a

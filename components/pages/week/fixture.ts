@@ -191,14 +191,21 @@ export function weekFixture(): WeekData {
       unread: null,
     },
     worked: {
+      // THE CLASSIFIER'S OWN VOCABULARY, through `workedLabel` — not invented
+      // labels. `classified_type` and `hook_style` are fixed enums
+      // (lib/pipeline/schemas.ts), and one of the hooks a live tenant carries
+      // is `trend-riding`, which humanises straight into a direction word. The
+      // fixture said `direct_question` and `before_after`, which exist nowhere,
+      // so a D1 violation shipped on production with a green suite.
       formats: [
-        { label: 'talking_head', videos: 128, engagement: 3.8, multiple: 1.8 },
-        { label: 'product_demo', videos: 71, engagement: 3.1, multiple: 1.4 },
-        { label: 'day_in_the_life', videos: 53, engagement: 5.2, multiple: 2.4 },
+        { label: 'Promotional', videos: 128, engagement: 3.8, multiple: 1.8 },
+        { label: 'Educational', videos: 71, engagement: 3.1, multiple: 1.4 },
+        { label: 'Review', videos: 53, engagement: 5.2, multiple: 2.4 },
       ],
       hooks: [
-        { label: 'direct_question', videos: 181, engagement: 4.1, multiple: 1.9 },
-        { label: 'before_after', videos: 97, engagement: 3.6, multiple: 1.7 },
+        { label: 'Question', videos: 181, engagement: 4.1, multiple: 1.9 },
+        { label: 'Riding what is current', videos: 97, engagement: 3.6, multiple: 1.7 },
+        { label: 'Before and after', videos: 44, engagement: 3.3, multiple: 1.5 },
       ],
       rated: 331,
       excluded: ['Reddit'],

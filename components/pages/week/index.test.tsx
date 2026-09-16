@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
-import { render, renderText } from '@/lib/test/render'
+import { markupText, render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, LATER_LINE, type WeekData } from '@/lib/pages/week'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
@@ -245,8 +245,19 @@ describe('WK §5 · for sales', () => {
 describe('WK §6 · what worked', () => {
   it('puts an n on every row, beside the multiple', () => {
     const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('Talking head')
+    expect(text).toContain('Promotional')
     expect(text).toContain('1.8× the median · 128 of 331 videos')
+  })
+
+  it('names a hook without claiming a direction', () => {
+    // `hook_style = 'trend-riding'` is a real value a live tenant carries, and
+    // "Trend riding" put a direction word outside a verdict node on Sealand's
+    // production render. The label says what the hook opens ON.
+    for (const mode of MODES) {
+      const markup = render(weekWorked.render(weekFixture(), mode, ctx))
+      expect(markupText(markup), mode).toContain('Riding what is current')
+      assertCopyContract(markup)
+    }
   })
 
   it('prints the engagement figure as the column stores it, a percentage', () => {
