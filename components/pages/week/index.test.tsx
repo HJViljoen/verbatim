@@ -225,6 +225,16 @@ describe('WK §4 · what came in', () => {
     expect(renderText(weekCameIn.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
   })
 
+  it('words its own no-window sentence, not the sales section’s', () => {
+    // It used to print "there is nothing to read a week of objections out of"
+    // under the heading "New on your subjects" — one string, wrong noun.
+    const d = thinFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, quotesUnread: 'This update covered no window, so there are no days for a new comment on your subjects to have been written in.' } }
+    const text = renderText(weekCameIn.render(data, 'app', ctx))
+    expect(text).toContain('no days for a new comment on your subjects to have been written in')
+    expect(text).not.toContain('a week of objections')
+  })
+
   it('says why there are no subject quotes, rather than showing none', () => {
     const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
     expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')

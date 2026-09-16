@@ -1188,7 +1188,7 @@ async function buildCameIn(input: {
   const newThemes = await loadNewThemes(supabase, clientId, runId, month)
   const subjectQuotes = window
     ? await loadSubjectQuotes(supabase, clientId, input.subjects, window)
-    : { shown: [], total: null, unread: SALES_UNREAD_NO_WINDOW }
+    : { shown: [], total: null, unread: QUOTES_NO_WINDOW }
 
   return {
     window,
@@ -1212,6 +1212,12 @@ async function buildCameIn(input: {
 
 const QUOTES_UNREAD =
   'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.'
+
+/** §4's own sentence for a run with no window. It used to borrow §5's, which
+ *  is about objections, and printed it under the heading "New on your
+ *  subjects" — one string, wrong noun. */
+const QUOTES_NO_WINDOW =
+  'This update covered no window, so there are no days for a new comment on your subjects to have been written in.'
 
 /**
  * The comments this update's window carried that sit under one of the client's
