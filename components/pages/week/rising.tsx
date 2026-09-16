@@ -152,7 +152,7 @@ function Row({ riser, mode, month }: { riser: Riser; mode: 'app' | 'print' | 'em
           // The theme's own name, not a calibrated word: `pass_b_theme` is
           // policy 'none', so the label is never direction-scrubbed and the
           // register carries labels like "Concerns about declining quality".
-          word: <span data-copy="subject">{riser.label}</span>,
+          word: <span data-copy="subject" data-slot="pass_b_theme">{riser.label}</span>,
           of: `of ${fmtInt(riser.month.n)} category videos in ${longMonth(month)}`,
         }}
         base={`against ${fmtPct(pct(riser.baseline.k, riser.baseline.n), 1)} across the three months behind it${

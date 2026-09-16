@@ -229,17 +229,37 @@ describe('copyViolations — the `subject` node the prose policy table exempts',
 
   it('lets a direction word stand where the words are the model’s about the thing itself', () => {
     expect(
-      copyViolations('<p data-copy="subject">Grief collides with pain, falls, slow progress.</p>'),
+      copyViolations('<p data-copy="subject" data-slot="pass_e_persona">Grief collides with pain, falls, slow progress.</p>'),
     ).toEqual([])
   })
 
   it('lets a number stand too — "a 16-inch laptop sleeve" is a legitimate label', () => {
-    expect(copyViolations('<p data-copy="subject">Will a 16-inch laptop fit?</p>')).toEqual([])
+    expect(copyViolations('<p data-copy="subject" data-slot="pass_b_theme">Will a 16-inch laptop fit?</p>')).toEqual([])
   })
 
   it('still catches an unsubstituted figure token, which is a defect in every slot', () => {
-    const bad = copyViolations('<p data-copy="subject">Heard in [[n]] videos.</p>')
+    const bad = copyViolations('<p data-copy="subject" data-slot="pass_b_theme">Heard in [[n]] videos.</p>')
     expect(bad.map((v) => v.rule)).toEqual(['prose-figure-token'])
+    // AND `stored` IS CHECKED FOR IT NOW TOO. The two kinds were exempt from
+    // opposite halves of the contract for no stated reason: `subject` and
+    // `prose` were swept for `[[n]]` and `stored` was not, though an
+    // unsubstituted token is the same broken sentence whoever wrote the words.
+    expect(
+      copyViolations('<p data-copy="stored" data-slot="pass_d_a_insight">Heard in [[n]] videos.</p>').map((v) => v.rule),
+    ).toEqual(['prose-figure-token'])
+  })
+
+  // AND IT PAYS FOR ITS EXEMPTION. A `subject` node used to buy rule (c)'s
+  // silence for nothing: any node anywhere could declare data-copy="subject"
+  // over its own text with nothing recording why. It now names the model call
+  // that wrote the words, exactly as a `stored` node does — which is the merge
+  // note's own proposal, and it makes every one of the marked nodes on Voice,
+  // Overview, This week and the weekly artefact auditable against PROSE_POLICY.
+  it('refuses a subject node that names no prose slot', () => {
+    expect(copyViolations('<p data-copy="subject">Grief collides with pain, falls, slow progress.</p>').map((v) => v.rule))
+      .toEqual(['unknown-slot', 'direction-word'])
+    expect(copyViolations('<p data-copy="subject" data-slot="not_a_slot">x</p>').map((v) => v.rule))
+      .toEqual(['unknown-slot'])
   })
 
   it('does not widen `prose`: a direction word in prose about a READING still fails', () => {
@@ -248,7 +268,7 @@ describe('copyViolations — the `subject` node the prose policy table exempts',
   })
 
   it('is one of the kinds the marker check accepts', () => {
-    expect(copyViolations('<span data-copy="subject">a group</span>').filter((v) => v.rule === 'unknown-kind')).toEqual([])
+    expect(copyViolations('<span data-copy="subject" data-slot="pass_b_theme">a group</span>').filter((v) => v.rule === 'unknown-kind')).toEqual([])
   })
 })
 

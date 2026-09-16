@@ -69,7 +69,7 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
           should improve access". Rule (c) sweeps unmarked markup, so an
           unmarked label fails the contract on whichever theme happens to rank
           — the word is about the thing, not about a reading of it. */}
-      <span data-copy="subject" className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
+      <span data-copy="subject" data-slot="pass_b_theme" className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
       <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>
         {mover.pct == null ? '—' : fmtPct(mover.pct)} {fmtInt(mover.k)} of {fmtInt(mover.n)}
       </span>

@@ -32,6 +32,7 @@ import { PROSE_POLICY, type ProseSlot } from '../prose/scrub'
 //     <span data-copy="level">Dominant · 21 of 36 videos</span>
 //     <span data-copy="verdict">up 4 pts since August</span>
 //     <p data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</p>
+//     <h3 data-copy="subject" data-slot="pass_b_theme">{theme.label}</h3>
 //
 // A `figure` nested inside a `prose` is the normal case and is how rule (a)
 // stays satisfiable: the checker takes each prose node's OWN words — the text
@@ -361,7 +362,11 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   }
 
   for (const n of nodes) {
-    if (n.kind === 'subject' && n.ownText.includes('[[n]]')) {
+    // AN UNSUBSTITUTED FIGURE TOKEN IS A DEFECT WHOEVER WROTE THE WORDS.
+    // `subject` and `prose` were checked and `stored` was not, so the two kinds
+    // were exempt from opposite halves of the contract for no stated reason —
+    // and `[[n]]` on a page is the same broken sentence in all three.
+    if ((n.kind === 'subject' || n.kind === 'stored') && n.ownText.includes('[[n]]')) {
       bad.push({ rule: 'prose-figure-token', text: n.ownText, detail: 'an unsubstituted [[n]] figure token reached the page' })
     }
     if (n.kind === 'prose') {
@@ -377,9 +382,14 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
     if (n.kind === 'level' && !DENOMINATOR_RE.test(n.text)) {
       bad.push({ rule: 'level-denominator', text: n.text, detail: 'a calibrated level with no "of N" — a word without its evidence is a score' })
     }
-    // A `stored` node buys two exemptions and pays for them by naming the
-    // model call that wrote the words. An unnamed one is an unaudited hole.
-    if (n.kind === 'stored' && !(n.slot != null && n.slot in PROSE_POLICY)) {
+    // A `subject` node buys a rule-(c) exemption on the same terms a `stored`
+    // one does: by naming the model call that wrote the words. It used to buy
+    // it for nothing, so any node anywhere could silence rule (c) on its own
+    // text by declaring data-copy="subject" with nothing recording why. The
+    // five that exist are all `pass_b_theme` or `pass_e_persona`, and both are
+    // slots the prose policy never direction-scrubs — which is the whole
+    // argument for the kind, and is now written down on each node.
+    if ((n.kind === 'stored' || n.kind === 'subject') && !(n.slot != null && n.slot in PROSE_POLICY)) {
       bad.push({
         rule: 'unknown-slot',
         text: n.text.slice(0, 80),
@@ -396,11 +406,21 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   // policy never ran the rule (see the header).
   let rest = markup
   const marked = scan(markup)
+  // A SUBJECT NODE IS EXEMPT ON THE SAME TERMS A STORED ONE IS, and used to be
+  // exempt on none: `n.kind === 'subject'` alone let any node anywhere silence
+  // rule (c) over its own text with nothing recording why. Both kinds now have
+  // to name a prose slot whose policy never ran the direction rule — which is
+  // exactly what makes the exemption checkable against PROSE_POLICY.
+  //
+  // The two predicates being identical is the merge note's own observation ("a
+  // `stored` node carrying data-slot='pass_b_theme' is what a `subject` node
+  // is"). Folding the two kinds into one is a later, separate change; this
+  // closes the hole without rewriting VO4's markup a second time.
   const exempt = marked.filter(
     (n) =>
       n.kind === 'verdict' ||
-      n.kind === 'subject' ||
-      (n.kind === 'stored' && n.slot != null && n.slot in PROSE_POLICY && !runsDirectionRule(n.slot)),
+      ((n.kind === 'stored' || n.kind === 'subject') &&
+        n.slot != null && n.slot in PROSE_POLICY && !runsDirectionRule(n.slot)),
   )
   const outermost = exempt.filter((n) => !exempt.some((p) => p !== n && n.start >= p.start && n.end <= p.end))
   for (const n of [...outermost].sort((x, y) => y.start - x.start)) rest = rest.slice(0, n.start) + ' ' + rest.slice(n.end)

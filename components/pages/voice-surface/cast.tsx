@@ -64,7 +64,7 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
         // "emotional pull [that] fades fast". The digit half of that policy is
         // enforced at WRITE time, where the scrubber is wired, rather than
         // here.
-        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
+        <p data-copy="subject" data-slot="pass_e_persona" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
           {persona.oneLiner}
         </p>
       ) : null}
@@ -75,19 +75,19 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
         // Only the model's own sentence is marked.
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>Drives</span>{' '}
-          <span data-copy="subject">{persona.wants}</span>
+          <span data-copy="subject" data-slot="pass_e_persona">{persona.wants}</span>
         </p>
       ) : null}
       {persona.blockers ? (
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>Stops</span>{' '}
-          <span data-copy="subject">{persona.blockers}</span>
+          <span data-copy="subject" data-slot="pass_e_persona">{persona.blockers}</span>
         </p>
       ) : null}
       {persona.triggers ? (
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
           <span className={email ? undefined : 'text-muted-foreground'}>What made them look</span>{' '}
-          <span data-copy="subject">{persona.triggers}</span>
+          <span data-copy="subject" data-slot="pass_e_persona">{persona.triggers}</span>
         </p>
       ) : null}
       {persona.platformMix.length > 0 ? (

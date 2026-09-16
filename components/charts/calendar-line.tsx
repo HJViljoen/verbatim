@@ -163,7 +163,7 @@ export function CalendarLine({
           {series.map((s) => (
             <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-              {s.labelKind === 'subject' ? <span data-copy="subject">{s.label}</span> : s.label}
+              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.label}</span> : s.label}
               {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
             </span>
           ))}
@@ -290,7 +290,10 @@ export function CalendarLine({
                 end — the node is marked as a whole, and only where one of its
                 series says its name is the model's (`labelKind`). Every other
                 chart's hover stays under rule (c) like any other markup. */}
-            <title data-copy={c.entries.some((e) => e.series.labelKind === 'subject') ? 'subject' : undefined}>{columnTitle(c, format)}</title>
+            <title
+              data-copy={c.entries.find((e) => e.series.labelSlot) ? 'subject' : undefined}
+              data-slot={c.entries.find((e) => e.series.labelSlot)?.series.labelSlot}
+            >{columnTitle(c, format)}</title>
           </rect>
         ))}
       </svg>
@@ -374,7 +377,7 @@ function SeriesMarks({
 
       {end && endX != null && end.value != null && (
         <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
-          {series.labelKind === 'subject' ? <tspan data-copy="subject">{series.label}</tspan> : series.label}{' '}
+          {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
           {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
         </text>

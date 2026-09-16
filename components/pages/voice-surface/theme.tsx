@@ -102,8 +102,8 @@ function themeSeries(t: ThemeBlock): CalendarSeries | null {
     // personal resilience" did, in the production render. The full label is
     // the heading two lines above; this one only has to identify the line.
     label: t.label.length > 28 ? `${t.label.slice(0, 27).trimEnd()}…` : t.label,
-    // The model's words, so the chart marks them (see CalendarSeries.labelKind).
-    labelKind: 'subject',
+    // The model's words, so the chart marks them (see CalendarSeries.labelSlot).
+    labelSlot: 'pass_b_theme',
     color: 'var(--cat)',
     endNote: t.n != null ? `of ${fmtInt(t.n)}` : undefined,
     points: points.map((p) => ({
@@ -176,7 +176,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             {/* THE LABEL CARRIES THE SAME KIND AS THE DESCRIPTION BELOW IT.
                 Both are `pass_b_theme`, both are never direction-scrubbed, and
                 the label is the half that ranks onto other surfaces. */}
-            <h3 data-copy="subject" className={email ? undefined : 'm-0 text-[15px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink } : undefined}>
+            <h3 data-copy="subject" data-slot="pass_b_theme" className={email ? undefined : 'm-0 text-[15px] font-semibold'} style={email ? { fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink } : undefined}>
               {t.label}
             </h3>
             {t.description ? (
@@ -185,7 +185,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               // label and description are the one slot the product never
               // direction-scrubs, because a direction word in them is about
               // the thing rather than about a reading of it.
-              <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
+              <p data-copy="subject" data-slot="pass_b_theme" className={email ? undefined : 'm-0 text-[12.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.muted } : undefined}>
                 {t.description}
               </p>
             ) : null}
@@ -317,7 +317,7 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             <ul className={email ? undefined : 'm-0 flex list-none flex-col gap-1 p-0'}>
               {search.rows.map((r) => (
                 <li key={r.id} className={email ? undefined : 'text-[12px]'}>
-                  <Link data-copy="subject" href={r.href} className="underline-offset-2 hover:underline">{r.label}</Link>{' '}
+                  <Link data-copy="subject" data-slot="pass_b_theme" href={r.href} className="underline-offset-2 hover:underline">{r.label}</Link>{' '}
                   {/* THE RECORD'S MONTH, IN THE PAGE'S OWN WORDS. This line
                       printed `theme_registry.first_seen_at` as "first heard
                       2026-09" — the day a run opened the register entry, two
