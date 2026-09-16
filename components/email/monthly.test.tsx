@@ -12,6 +12,7 @@ import {
 } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from '@/components/blocks/monthly/fixture'
+import type { MonthLabel } from '@/lib/reading/series'
 import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { MonthlyShareShell } from '@/components/share/monthly-share-shell'
 import { MonthlyEmail } from './monthly'
@@ -42,6 +43,15 @@ const body = (data: MonthlySnapshotData) =>
 const words = (data: MonthlySnapshotData) => markupText(body(data))
 
 const STATES = [monthlyFixture(), refusedMonthlyFixture(), formingMonthlyFixture()]
+
+const CAVEAT = 'We did not record how themes were grouped for Sep 2026, so it is not strictly comparable with the months around it.'
+
+/** The reading both live tenants have today: one unrecorded-clustering note. */
+const withNote = () => {
+  const reading = monthlyFixture()
+  const note: MonthLabel = { kind: 'clustering_changed', text: CAVEAT }
+  return { ...reading, notes: [note] }
+}
 
 describe('the monthly email', () => {
   it('is 640 wide, the mock’s width', () => {
@@ -114,6 +124,18 @@ describe('the monthly email', () => {
     expect(text).toContain('The month')
     expect(text).not.toContain('One voice per subject')
   })
+
+  // Both live tenants carry clustering_changed today, and the sentence appeared
+  // zero times in either rendered email while MR3 drew an Apr → Sep line per
+  // row across exactly those months. An artefact is read with nobody beside
+  // the reader to add what the reading cannot support.
+  it('prints the reading’s caveat, which the page prints and the artefact did not', () => {
+    expect(words(snapshot(withNote()))).toContain(CAVEAT)
+  })
+
+  it('prints no empty line where the reading has nothing to caveat', () => {
+    expect(words(snapshot())).not.toContain(CAVEAT)
+  })
 })
 
 describe('the monthly report on paper', () => {
@@ -133,6 +155,11 @@ describe('the monthly report on paper', () => {
     expect(hits).toBe(8)
   })
 
+  it('carries the reading’s caveat on every sheet, beside the rule', () => {
+    const markup = render(<MonthlyDeck data={snapshot(withNote())} date="16 Sep 2026" />)
+    expect(markup.split(CAVEAT).length - 1).toBe(8)
+  })
+
   it('says so on its own sheet when it knows none of the stored keys', () => {
     const markup = render(<MonthlyDeck data={snapshot(monthlyFixture(), { keys: [] })} date="16 Sep 2026" />)
     expect(markupText(markup)).toContain('This report names no section this build knows how to draw.')
@@ -148,6 +175,11 @@ describe('the shared monthly report', () => {
   it('says the figures are frozen and the voices are read live', () => {
     const markup = render(<MonthlyShareShell data={snapshot()} appUrl="https://app.verbatimintel.com" />)
     expect(markupText(markup)).toContain('figures frozen when this was sent')
+  })
+
+  it('carries the reading’s caveat, for a reader with nobody beside them', () => {
+    const markup = render(<MonthlyShareShell data={snapshot(withNote())} appUrl="https://app.verbatimintel.com" />)
+    expect(markupText(markup)).toContain(CAVEAT)
   })
 
   it('draws every section the link names', () => {

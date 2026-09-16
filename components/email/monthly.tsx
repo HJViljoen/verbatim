@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { MONTHLY_EMAIL_WIDTH, monthlyRuleFor } from '@/lib/reports/monthly'
+import { MONTHLY_EMAIL_WIDTH, monthlyRuleFor, readingCaveat } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { Button, Hairline, text } from './primitives'
@@ -43,6 +43,7 @@ const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, bor
 
 export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: MonthlyEmailProps) {
   const blocks = monthlyBlocksFor(data.keys)
+  const caveat = readingCaveat(data.reading.notes)
   return (
     <html lang="en">
       <head>
@@ -70,6 +71,12 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                             page cannot word the same three facts three ways. */}
                         <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period}</div>
                         <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{monthlyRuleFor(data.monthStatus)}</div>
+                        {/* AND WHAT THE READING CANNOT SUPPORT, beside the rule
+                            that says how to read it. One sentence for the whole
+                            artefact (lib/reading/series.ts mergeNotes), on the
+                            surface that is read with nobody beside the reader
+                            to add it. */}
+                        {caveat ? <div style={{ ...text.small, color: EMAIL.muted, marginTop: 8 }}>{caveat}</div> : null}
                       </td>
                     </tr>
                     <tr>

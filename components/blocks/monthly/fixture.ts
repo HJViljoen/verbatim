@@ -97,6 +97,7 @@ export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
       audienceLabel: 'the category',
       span: spanOf(MONTHS),
       note: null,
+      notes: [],
       rereadNote: voice.movers.rereadNote,
       href: '/dashboard/voice?movers=all',
     },

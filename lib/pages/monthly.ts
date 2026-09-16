@@ -5,7 +5,7 @@ import { proseFigures } from '../prose/figures'
 import type { Scope } from '../renderables/types'
 import { nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadMonthSeries, readingHandle, type ReadingHandle } from '../reading/read'
-import { pointsByMonth, type MonthLabel } from '../reading/series'
+import { mergeNotes, mergeSeriesNotes, pointsByMonth, type MonthLabel } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import {
@@ -80,6 +80,12 @@ export interface MoversSection {
   span: string
   note: string | null
   rereadNote: string | null
+  /** The reading caveats of the series these lines were drawn from. Carried
+   *  rather than dropped: MR3 draws a six-month trail and a sparkline PER ROW,
+   *  and a run of months whose clustering was never recorded is exactly what a
+   *  line across them must be read against. Merged with the page's own at the
+   *  artefact's level, so the reader is told once. */
+  notes: MonthLabel[]
   href: string
 }
 
@@ -268,7 +274,13 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     month,
     monthStatus,
     readingAt,
-    notes: overview.notes,
+    // ONE CAVEAT FOR THE WHOLE ARTEFACT, over both reads. The page's own notes
+    // are about the themes Overview drew; MR3's are about the series its per-row
+    // lines are drawn from, and the two overlap. Merged, so a run of months
+    // whose clustering was never recorded is said once and names the union of
+    // its months — the convention Block B set, applied to the one surface a
+    // client reads unaccompanied.
+    notes: mergeNotes([overview.notes, moversSection.notes]),
     overview,
     movers: moversSection,
     voices,
@@ -307,6 +319,7 @@ async function buildMovers(
       growing: [],
       fading: [],
       newcomers: [],
+      notes: [],
       goneQuiet: [],
       audienceLabel,
       span: spanOf(months),
@@ -321,6 +334,7 @@ async function buildMovers(
   const ids = [...new Set([...growing, ...fading].map((m) => m.id))]
 
   let byObject = new Map<string, (number | null)[]>()
+  let seriesNotes: MonthLabel[] = []
   if (ids.length > 0) {
     const set = await loadMonthSeries(reading.client, clientId, {
       from: months[0],
@@ -343,6 +357,13 @@ async function buildMovers(
           return [s.objectId as string, months.map((m) => points.get(m)?.pct ?? null)] as const
         }),
     )
+    // AND WHAT THE SERIES SAY ABOUT THEMSELVES. These lines cross the same
+    // months the page's caveat is about — a run whose clustering was never
+    // recorded is not strictly comparable — and this read's notes were being
+    // dropped on the floor while the block drew a trail and a sparkline across
+    // exactly them. Merged rather than concatenated, so twenty themes present
+    // in different months still produce one sentence.
+    seriesNotes = mergeSeriesNotes(set.series)
   }
 
   const withSpark = (m: Mover): MoverRow => {
@@ -359,6 +380,7 @@ async function buildMovers(
     span: spanOf(months),
     note: voice.movers.note,
     rereadNote: voice.movers.rereadNote,
+    notes: seriesNotes,
     href,
   }
 }

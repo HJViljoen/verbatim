@@ -2,7 +2,7 @@ import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
-import { monthlyRuleFor } from '@/lib/reports/monthly'
+import { monthlyRuleFor, readingCaveat } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
 import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { Slide } from './slide'
@@ -29,14 +29,22 @@ export function MonthlyDeck({ data, date = fmtDate(new Date()) }: { data: Monthl
   const blocks = monthlyBlocksFor(data.keys)
   // THE RULE ON EVERY SHEET. A reader of a PDF has no masthead to scroll back
   // to, which is the same reason the method note is on every slide of a report.
+  //
+  // AND THE READING'S CAVEAT UNDER IT, for the same reason and with more force:
+  // the sheet that carries the movers draws a six-month line per row, and the
+  // months it crosses are the ones the caveat is about.
+  const caveat = readingCaveat(data.reading.notes)
   const chrome = {
     context: `${data.company} · ${data.period}`,
     footer: (
-      <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        <span className="text-secondary-foreground">{monthlyRuleFor(data.monthStatus)}</span>
-        <span aria-hidden> · </span>
-        <span>{date}</span>
-      </p>
+      <>
+        <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          <span className="text-secondary-foreground">{monthlyRuleFor(data.monthStatus)}</span>
+          <span aria-hidden> · </span>
+          <span>{date}</span>
+        </p>
+        {caveat ? <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">{caveat}</p> : null}
+      </>
     ),
   }
   if (blocks.length === 0) {

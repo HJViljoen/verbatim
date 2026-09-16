@@ -98,6 +98,29 @@ export const MONTHLY_RULE_FROZEN =
 export const monthlyRuleFor = (status: MonthlyStatus): string =>
   status === 'frozen' ? MONTHLY_RULE_FROZEN : MONTHLY_RULE
 
+/**
+ * The reading's own caveats, said once, on the artefact.
+ *
+ * THE PAGE PRINTS THESE AND THE ARTEFACT DID NOT. `MonthlyData.notes` was
+ * loaded, frozen into the snapshot and rendered by nothing — while MR3 drew an
+ * Apr → Sep trail and a sparkline per row across exactly the months the caveat
+ * is about. Both live tenants carry `clustering_changed` today ("We did not
+ * record how themes were grouped for Sep 2026, so it is not strictly comparable
+ * with the months around it") and that sentence appeared zero times in either
+ * rendered email. Decision L is that a reading says what it cannot support, and
+ * an artefact a client reads unaccompanied is the surface where that matters
+ * most — there is nobody beside them to add it.
+ *
+ * ONE SENTENCE FOR A RUN OF MONTHS, never one per bar: the merge is
+ * `mergeNotes` in the reading layer, and this only joins what it returns.
+ * Null where there is nothing to say, so a surface prints nothing rather than
+ * an empty line.
+ */
+export function readingCaveat(notes: readonly { text: string }[]): string | null {
+  const text = notes.map((n) => n.text.trim()).filter(Boolean).join(' ')
+  return text.length > 0 ? text : null
+}
+
 /** A month either keeps moving or it does not (`lib/reading/types.ts`
  *  MonthStatus, re-stated here so a pure composer needs nothing else). */
 export type MonthlyStatus = 'filling' | 'frozen'
