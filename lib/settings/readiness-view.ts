@@ -26,11 +26,18 @@ import type { ReadinessRow } from '../readiness/types'
  *
  * THE UNLOCK SENTENCE IS RE-WORDED, NOT THE MEASUREMENT. "Apply the change
  * log", "Run the one-off backfill" and "Seed it once per workspace" are our
- * words about our work. `detail` and `notes` are already client-safe on every
- * row; only `unlocks` carries the operator dialect, so only `unlocks` is
- * replaced, and only where the owner is not the client. A row the CLIENT owns
- * keeps its sentence exactly, because that sentence is the thing they can act
- * on and rewriting it would blunt the only two actionable rows on the page.
+ * words about our work. `notes` is client-safe on every row, and so is `detail`
+ * on every row but one — so `unlocks` is replaced, and only where the owner is
+ * not the client. A row the CLIENT owns keeps its sentence exactly, because
+ * that sentence is the thing they can act on and rewriting it would blunt the
+ * only two actionable rows on the page.
+ *
+ * THE ONE ROW `detail` IS NOT CLIENT-SAFE ON is retention, which read "768
+ * comments fall due to be read again on 17 Sep 2026 — one night's re-read
+ * budget is 5,000 comments, shared across every workspace." That is right on
+ * /dashboard/ops/readiness and it tells a paying client their re-reads queue
+ * behind other customers'. A row that has something only we may hear puts the
+ * client's half in `clientDetail`, and this is where it is preferred.
  *
  * Pure.
  */
@@ -89,6 +96,7 @@ export function clientReadiness(
     const by = opts.by?.[r.id] ?? null
     return {
       ...r,
+      detail: r.clientDetail ?? r.detail,
       unlocks: r.owner === 'client' ? r.unlocks : (CLIENT_UNLOCKS[r.id] ?? r.unlocks),
       ownerWords: OWNER_WORDS[r.owner],
       by: by ? fullDate(by) : null,

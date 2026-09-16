@@ -53,8 +53,9 @@ function row(
   owner: OwnerRole,
   unlocks: string,
   notes: string[] = [],
+  clientDetail?: string,
 ): ReadinessRow {
-  return { id, block, input, status, detail, owner, unlocks, notes }
+  return { id, block, input, status, detail, owner, unlocks, notes, ...(clientDetail ? { clientDetail } : {}) }
 }
 
 // ---- 1 · the rival accounts --------------------------------------------------
@@ -584,11 +585,20 @@ function retention(i: ReadinessInputs): ReadinessRow {
       `one night’s re-read budget is ${fmtInt(r.nightlyCap)} comments, shared across every workspace` +
       (r.cohortRows > r.nightlyCap ? ', and this batch alone is larger, so the rest waits.' : '.')
 
+  // THE BUDGET CLAUSE IS OURS, AND THE FIRST CLAUSE IS THEIRS. WP16 put the
+  // operator page's `detail` in front of the tenant on the strength of "detail
+  // and notes are already client-safe on every row"; this row is the exception
+  // that claim was false about, so it carries the client's half explicitly.
+  const clientDetail = r.cohortDay === null || due === null
+    ? 'Nothing is waiting to be read again.'
+    : `${plural(r.cohortRows, 'comment')} fall due to be read again on ${fullDate(due)}.`
+
   return row(
     'retention', 'Retention', 'comments read again before they age out',
     status, detail, 'ops',
     'Nothing to configure: each batch is read again nightly, and what the platform has removed is deleted with it.',
     r.cohortDay ? [`Deleting a comment changes any month it was counted in — the count stays as it was written down`] : [],
+    clientDetail,
   )
 }
 

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { computeReadiness, longestGapDays, summarise } from './compute'
 import type { CommunityInput, MonthCountRow, ReadinessInputs, ReadinessRow } from './types'
+import { clientReadiness } from '../settings/readiness-view'
 
 // Both workspaces' shapes, from the read-only production measurements the
 // Phase 0 research recorded (research/subjects-readiness-data.md §2–§8,
@@ -779,6 +780,17 @@ describe('retention', () => {
     const row = find(computeReadiness(inputs), 'retention')
     expect(row.detail).toContain('shared across every workspace')
     expect(row.detail).not.toContain('one night covers it')
+  })
+
+  // AND THE CLIENT IS NOT TOLD ABOUT THE BUDGET AT ALL. Settings › Readiness
+  // shows `detail`, which is right for twelve rows and wrong for this one: the
+  // shared cap is a fact about our infrastructure, not about their workspace.
+  it('keeps the shared budget out of the sentence a client is shown', () => {
+    const row = find(computeReadiness(ossur()), 'retention')
+    expect(row.clientDetail).toBe('768 comments fall due to be read again on 17 Sep 2026.')
+    expect(row.clientDetail).not.toContain('budget')
+    expect(row.clientDetail).not.toContain('workspace')
+    expect(clientReadiness([row]).rows[0].detail).toBe(row.clientDetail)
   })
 
   it('is only partly there when a batch is bigger than the whole night', () => {

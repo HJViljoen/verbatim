@@ -54,6 +54,17 @@ export interface ReadinessRow {
   status: ReadinessStatus
   /** What is measured today, in one sentence. */
   detail: string
+  /**
+   * The same sentence for a CLIENT, where the operator one cannot be shown.
+   *
+   * Almost every `detail` is client-safe, which is why this is optional and why
+   * Settings › Readiness shows `detail` by default. The retention row is not:
+   * it names the nightly re-read budget and says it is shared across every
+   * workspace, which is true, is what an operator needs, and tells a paying
+   * client their re-reads queue behind other customers'. A row whose detail
+   * says something only we may hear says it here instead.
+   */
+  clientDetail?: string
   owner: OwnerRole
   /** The act that changes the status. One sentence, always something someone
    *  can do — never "it will be built at some point". */
