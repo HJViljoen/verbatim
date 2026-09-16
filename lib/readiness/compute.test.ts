@@ -192,6 +192,18 @@ describe('computeReadiness', () => {
     expect(computeReadiness(sealand()).map((r) => r.id)).toEqual(ids)
   })
 
+  // A BRIEF COMPOSES A SENTENCE AROUND `input`. "We have not recorded {input}."
+  // is only English while every input is a lower-case noun phrase carrying its
+  // own article; one capitalised row label would put a proper noun mid-sentence
+  // in a paid document, and nothing between here and there would catch it.
+  it('keeps every input a lower-case noun phrase, which a brief writes into a sentence', () => {
+    for (const inputs of [ossur(), sealand()]) {
+      for (const row of computeReadiness(inputs)) {
+        expect(row.input).toBe(row.input.charAt(0).toLowerCase() + row.input.slice(1))
+      }
+    }
+  })
+
   it('never puts pipeline vocabulary in a label', () => {
     const banned = /\b(run|runs|pass a|pass b|pass c|pass d|pass e|corpus|tier ?\d|t\d\b)/i
     for (const inputs of [ossur(), sealand()]) {

@@ -293,9 +293,16 @@ export function missingInputs(
 /**
  * The sentence a brief prints in place of a section it could not fill.
  *
- * NAMES THE INPUT AND ITS OWNER, which is the whole of RP1's rule. Client
- * wording: a readiness row id is a key and never reaches a reader, and
- * "Readiness" is the screen it is named on.
+ * NAMES THE INPUT AND WHO CLOSES IT, which is the whole of RP1's rule. Every
+ * word of it is read by a client, in a PDF and behind a share link, so it
+ * names people the way the document does: "we" for Verbatim and "you" for the
+ * reader. It does NOT name them the way our own readiness screen does —
+ * `OWNER_LABEL.client` is the string "Client", and "Client closes this" puts a
+ * paying reader in the third person under an internal taxonomy. The client
+ * branch is not a corner case: `decisions` becomes client-owned the moment the
+ * decision record exists and is the only `needs` of both the marketing and the
+ * leadership brief's moves section, so a fresh workspace's first build prints
+ * this.
  */
 export function missingSentence(m: MissingInput): string {
   // NOT "we have no {input}". Every readiness `input` is a noun phrase that
@@ -313,8 +320,12 @@ export function missingSentence(m: MissingInput): string {
   // new-tenant brief would print most often and the one a client can do least
   // about. The owner is still named, because RP1 asks for it; what changes is
   // that a gap only we can close is a PROMISE and never an instruction.
+  // THE ACT IS ITS OWN SENTENCE. `unlocks` is written as an imperative with its
+  // own capital ("Mark a recommendation done…"), so hanging it off a dash put a
+  // capital mid-sentence in a paid document. A full stop before it costs
+  // nothing and takes the wording of every row as it stands.
   const act = m.ownerRole === 'client'
-    ? `${m.owner} closes this — ${trimStop(m.unlocks)}.`
+    ? `This one is yours to close. ${trimStop(m.unlocks)}.`
     : m.ownerRole === 'ops'
       ? 'We are setting it up, and it appears here the moment it is there.'
       : 'We are building it, and it appears here the moment it is there.'

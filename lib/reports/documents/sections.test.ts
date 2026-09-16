@@ -5,6 +5,7 @@ import { SUBJECT_BLOCKS } from '../../../components/pages/subjects'
 import { VOICE_BLOCKS } from '../../../components/pages/voice-surface'
 import { MARKET_BLOCKS } from '../../../components/pages/market-surface'
 import { COMPETITIVE_BLOCKS } from '../../../components/pages/competitive-surface'
+import { OWNER_LABEL } from '../../readiness/types'
 import { DOCUMENT_ROLES } from './types'
 import {
   BRIEF_MAPS,
@@ -125,10 +126,26 @@ describe('missingInputs', () => {
 describe('missingSentence', () => {
   const m = missingInputs(briefMap('leadership_brief'), READINESS)[0]
 
-  it('names the input, the owner and the screen — and no work package', () => {
+  it('names the input and who closes it — and no work package', () => {
     expect(missingSentence(m)).toBe(
-      'Your subjects could not be filled. We have not recorded the five to eight subjects this workspace is read against. Client closes this — Name the subjects in Settings › Subjects. It is on Settings › Readiness.',
+      'Your subjects could not be filled. We have not recorded the five to eight subjects this workspace is read against. This one is yours to close. Name the subjects in Settings › Subjects. It is on Settings › Readiness.',
     )
+  })
+
+  it('never puts our own owner taxonomy in front of the reader', () => {
+    // OWNER_LABEL is the readiness screen's vocabulary: "Client", "Verbatim
+    // ops", "Verbatim engineering". A brief is read by the client, so none of
+    // the three may be printed AT them.
+    for (const role of ['client', 'ops', 'engineering'] as const) {
+      const line = missingSentence({ ...m, ownerRole: role, owner: OWNER_LABEL[role] })
+      for (const label of Object.values(OWNER_LABEL)) expect(line).not.toContain(label)
+    }
+  })
+
+  it('does not hang a capitalised imperative off a dash', () => {
+    // `unlocks` opens with a capital. Mid-sentence it read "Client closes this
+    // — Name the subjects…"; it is its own sentence now.
+    expect(missingSentence(m)).not.toMatch(/— [A-Z]/)
   })
 
   it('an engineering-owned gap is a promise, never that row\'s own sentence', () => {
