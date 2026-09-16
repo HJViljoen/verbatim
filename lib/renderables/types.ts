@@ -82,10 +82,12 @@ export interface Scope {
    * optional handle means every caller that forgot one gets a page that is
    * silently thinner than the same page reached another way — the app route
    * with a reading and the export route without it, answering the same
-   * question two ways. NINE construction sites supply it, and the list is not
-   * kept by hand — `grep -rn 'reading: readingHandle' app lib scripts` is: six
-   * app routes (/dashboard, /dashboard/{voice,videos,market-intel,
-   * competitive-intel}, /dashboard/agent/[id]), /api/export,
+   * question two ways. The list is not kept by hand and the COUNT here was
+   * wrong within one work package of being written — Block B joined
+   * /dashboard/{subjects,market,competitive,week} and nobody re-counted. Run
+   * `grep -rn 'reading: readingHandle' app lib scripts`: ten app routes
+   * (/dashboard, /dashboard/{subjects,voice,videos,market,market-intel,
+   * competitive,competitive-intel,week}, /dashboard/agent/[id]), /api/export,
    * lib/reports/build.ts and scripts/render-page.ts, which is a script and not
    * a page route. A loader that reads no month simply ignores it, and pays
    * nothing for it: the handle builds its service-role client lazily

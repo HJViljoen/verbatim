@@ -31,14 +31,16 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // it here is what makes the table an answer to "who receives the monthly
 // reading" rather than a list of whatever happens to exist.
 //
-// AND IT NEVER ARMS ONE. Nothing in the send path reads `artefact`: the runner
-// takes every active, due schedule for the tenant and resolves the document
-// from `starter_key`. A row written here for the monthly reading or a brief
-// therefore names the starter, and left active it would email THE WEEKLY DIGEST
-// under that artefact's name and stamp last_sent_at so this page called it
-// sent. So a list for an artefact nothing builds is stored SWITCHED OFF,
-// whatever the checkbox said, and the form says so
-// (lib/settings/artefacts.ts BUILDABLE_ARTEFACTS).
+// AND IT NEVER ARMS ONE. The runner takes every active, due schedule for the
+// tenant and resolves the document from the artefact column and then from
+// `starter_key` (WP17 — `artefact` is the FIRST thing the send path reads, and
+// the sentence here used to say the opposite). A row written here for the
+// monthly reading or a brief names a starter because every schedule needs
+// exactly one source, and left active it would email the WEEKLY REPORT under
+// that artefact's name and stamp last_sent_at so this page called it sent. So a
+// list for an artefact nothing builds is stored SWITCHED OFF, whatever the
+// checkbox said, and the form says so (lib/settings/artefacts.ts
+// BUILDABLE_ARTEFACTS).
 
 export interface RecipientsState {
   ok: boolean

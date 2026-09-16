@@ -65,11 +65,15 @@ export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
  * The artefacts something can actually BUILD today, and the reason this list
  * exists at all.
  *
- * Nothing in the send path reads `artefact`. A due schedule is resolved by
- * `starter_key` (lib/schedules/resolve.ts), and a new artefact row has to name
- * a starter because every schedule needs exactly one source — so a row created
- * for the monthly reading and left active would send THE WEEKLY DIGEST,
- * monthly, to those addresses, under the monthly reading's name, and then stamp
+ * THE SEND PATH READS `artefact` FIRST — WP17 made it so, and this docblock
+ * said the opposite until the Block B fix pass. `scheduleArtefact`
+ * (lib/schedules/artefact.ts) takes the column before the starter key and
+ * lib/schedules/run.ts branches on `sendsWeekly`. What has not changed is the
+ * reason this list exists: a new artefact row still has to name a starter
+ * because every schedule needs exactly one source, and
+ * DEFAULT_SCHEDULE_STARTER is now 'weekly_report' — so a row created for the
+ * monthly reading and left active would send THE WEEKLY REPORT, monthly, to
+ * those addresses, under the monthly reading's name, and then stamp
  * last_sent_at so the page reported it as sent. That is the rule this WP states
  * about the cadence picker — "an option that produces a schedule the builder
  * cannot serve is a form that lies" (lib/schedules/types.ts) — applied to the
