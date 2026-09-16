@@ -60,6 +60,7 @@ describe('the brief attached by link', () => {
     title: 'Marketing brief',
     href: '/r/abc',
     public: true,
+    locked: false,
     builtAt: '2026-09-12T08:25:00.000Z',
     stale: true,
     ...over,

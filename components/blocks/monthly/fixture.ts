@@ -113,6 +113,7 @@ export function monthlyFixture(over: Partial<MonthlyData> = {}): MonthlyData {
       title: 'Marketing brief',
       href: '/r/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       public: true,
+      locked: false,
       builtAt: '2026-09-12T08:25:00.000Z',
       stale: false,
     },

@@ -173,7 +173,15 @@ function Brief({ brief, mode, appUrl }: { brief: BriefLink; mode: RenderMode; ap
   const email = mode === 'email'
   const href = brief.href.startsWith('http') ? brief.href : `${appUrl}${brief.href}`
   const tail = brief.stale ? ` ${briefStaleLine(brief)}` : ''
-  const lead = brief.public ? 'The brief is attached, one link per block.' : 'The brief is in the workspace.'
+  // THREE PROMISES, NOT TWO. A link with a password on it is a real link a
+  // recipient can open and is not readable with nothing else; saying "attached"
+  // over one sends a reader to a page that asks them for something they have
+  // not been given.
+  const lead = brief.public
+    ? 'The brief is attached, one link per block.'
+    : brief.locked
+    ? 'The brief opens from the link below, which asks for the password your workspace set on it.'
+    : 'The brief is in the workspace.'
   if (email) {
     return (
       <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 8 }}>

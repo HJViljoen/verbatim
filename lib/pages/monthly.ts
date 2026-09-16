@@ -125,8 +125,11 @@ export interface BriefLink {
   /** Where it opens — a share link where the workspace has minted one, and the
    *  in-app viewer otherwise. */
   href: string
-  /** Whether that link is readable without an account. */
+  /** Whether that link is readable with nothing else — no account, no password. */
   public: boolean
+  /** A share link that will ask for a password. Real and forwardable, and not
+   *  the same promise as a public one. */
+  locked: boolean
   /** When it was last built. */
   builtAt: string
   /** True where the latest build pre-dates this reading — the brief is real and
@@ -454,6 +457,13 @@ async function loadSubjectVoicesPerSubject(
  * which. This artefact is emailed to a list that may include people with no
  * account, and a `/dashboard` link handed to one of them is a login screen.
  *
+ * A LOCKED LINK IS NOT A PUBLIC ONE. `share_links.password_hash` was not read,
+ * so a password-protected link came back `public: true` and the artefact told a
+ * recipient the brief was attached for a page that will ask them for a password
+ * they have not been given. It is still the right link — the workspace can hand
+ * the password over — so the link stands and the sentence says what opening it
+ * will ask for.
+ *
  * AND IT SAYS WHEN THE BRIEF WAS BUILT. Sealand's newest marketing brief was
  * built on 12 September; a report sent on 1 October that links to it without
  * saying so is offering a reader last month's document as this month's
@@ -480,10 +490,10 @@ async function loadBriefLink(
   // The token is withheld from the authenticated grant, so this read only
   // answers on the service-role path — which is the send path, and the one that
   // needs a link a recipient can actually open.
-  type LinkRow = { token: string; expires_at: string | null }
+  type LinkRow = { token: string; expires_at: string | null; password_hash: string | null }
   const { data: links } = await supabase
     .from('share_links')
-    .select('token, expires_at')
+    .select('token, expires_at, password_hash')
     .eq('client_id', clientId)
     .eq('snapshot_id', report.latest_snapshot_id)
     .is('revoked_at', null)
@@ -496,7 +506,8 @@ async function loadBriefLink(
   return {
     title: report.title,
     href: live ? `/r/${live.token}` : `/dashboard/reports?view=${encodeURIComponent(report.latest_snapshot_id)}`,
-    public: Boolean(live),
+    public: Boolean(live) && !live?.password_hash,
+    locked: Boolean(live?.password_hash),
     builtAt: report.updated_at,
     // The brief is this reading's companion only if it was built during it.
     stale: report.updated_at < monthStartOfReading(readingAt),

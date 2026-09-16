@@ -255,6 +255,17 @@ describe('MR7 · what to decide', () => {
     expect(renderText(block.render(data, 'app', ctx))).toContain('before this reading')
   })
 
+  // loadBriefLink did not read share_links.password_hash, so a locked link came
+  // back public and the artefact told a recipient the brief was attached for a
+  // page that will ask them for a password.
+  it('says a locked link will ask for a password rather than calling it attached', () => {
+    const data = monthlyFixture()
+    data.brief = { ...data.brief!, public: false, locked: true }
+    const text = renderText(block.render(data, 'app', ctx))
+    expect(text).toContain('asks for the password your workspace set on it')
+    expect(text).not.toContain('The brief is attached')
+  })
+
   it('says the brief is in the workspace where the link needs an account', () => {
     const data = monthlyFixture()
     data.brief = { ...data.brief!, public: false, href: '/dashboard/reports?view=x' }
