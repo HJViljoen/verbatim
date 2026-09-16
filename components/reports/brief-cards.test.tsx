@@ -14,6 +14,7 @@ const card = (over: Partial<BriefCard> = {}): BriefCard => ({
   cadence: 'Every update',
   recipients: [],
   sending: false,
+  scheduleKnown: true,
   ...over,
 })
 
@@ -38,6 +39,13 @@ describe('deliveryLine', () => {
 
   it('says there is no schedule at all where there is none', () => {
     expect(deliveryLine({ cadence: null, recipients: [], sending: false })).toContain('Not on a schedule')
+  })
+
+  // A failed read and a workspace with no schedule rendered the same card.
+  it('does not turn a failed schedule read into "not on a schedule"', () => {
+    const line = deliveryLine({ cadence: null, recipients: [], sending: false, scheduleKnown: false })
+    expect(line).not.toContain('Not on a schedule')
+    expect(line).toContain('could not read')
   })
 
   it('does not claim a send that is not happening', () => {

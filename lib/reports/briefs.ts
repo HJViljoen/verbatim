@@ -35,6 +35,9 @@ export interface BriefCard {
   recipients: string[]
   /** True where a schedule would actually send it today. */
   sending: boolean
+  /** False where the schedules could not be read at all. "Not on a schedule"
+   *  is an assertion, and a failed read does not support it. */
+  scheduleKnown: boolean
 }
 
 /** The three the page draws, in the design's order. */
@@ -91,7 +94,12 @@ export function cadenceWord(cadence: string | null | undefined): string | null {
  * card that printed a cadence and left the recipients implied would read as if
  * it were going out.
  */
-export function deliveryLine(card: Pick<BriefCard, 'cadence' | 'recipients' | 'sending'>): string {
+export function deliveryLine(card: Pick<BriefCard, 'cadence' | 'recipients' | 'sending'> & { scheduleKnown?: boolean }): string {
+  // A FAILED READ IS NOT "NOT ON A SCHEDULE". The page degrades rather than
+  // throws, so without this the cards assert a fact about delivery that
+  // nothing supports — the same class of thing as an empty archive standing in
+  // for a broken query (lib/pages/read.ts).
+  if (card.scheduleKnown === false) return 'We could not read this workspace’s schedule just now. Try again, or look in Settings › Reports and recipients.'
   if (card.recipients.length === 0) {
     return card.cadence
       ? `${card.cadence} · nobody receives this yet — add people in Settings › Reports and recipients.`

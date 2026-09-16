@@ -130,7 +130,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const allSends = readRows<SendRow>(sendRes, 'reports.sends')
   const allLegacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
   const sentSnapshotIds = new Set(allSends.map((s) => s.snapshot_id).filter(Boolean))
-  const allBuilds = readRows<BuildRow>(buildRes, 'reports.builds').filter((b) => !sentSnapshotIds.has(b.id))
+  // EVERY build, before the Sent group takes its own back. The Built LIST
+  // subtracts what was sent (an artefact belongs in one group), but a card's
+  // "last one built" must not: once a brief is emailed once, subtracting it
+  // would make the card name an older build, or say the brief has never been
+  // built at all.
+  const everyBuild = readRows<BuildRow>(buildRes, 'reports.builds')
+  const allBuilds = everyBuild.filter((b) => !sentSnapshotIds.has(b.id))
   const allExports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
 
   // The date filter narrows every group, on the day each row is dated BY:
@@ -148,10 +154,12 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   }
 
   // ── RP1: the three cards ───────────────────────────────────────────────
-  const documentReports = ((reportRows.data ?? []) as { id: string; template_key: string | null }[])
+  // readRows, for the reason stated above: a failed read must not read as a
+  // workspace that has never set a brief up.
+  const documentReports = readRows<{ id: string; template_key: string | null }>(reportRows, 'reports.documents')
   const scheduleRows = schedules?.schedules ?? []
   const cards: BriefCard[] = BRIEF_CARDS.map(({ role, artefact }) => {
-    const latest = allBuilds.find((b) => b.template === role) ?? null
+    const latest = everyBuild.find((b) => b.template === role) ?? null
     const schedule = scheduleRows.find((x) => isArtefact(x.artefact) && x.artefact === artefact) ?? null
     const recipients = schedule?.recipients ?? []
     return {
@@ -164,6 +172,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       cadence: cadenceWord(schedule?.cadence ?? null),
       recipients,
       sending: cardSending({ artefact, active: Boolean(schedule?.active), recipients, period: schedules?.period ?? 'weekly' }),
+      scheduleKnown: schedules != null,
     }
   })
 
