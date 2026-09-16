@@ -71,6 +71,14 @@ export interface ListPool {
  * A group read from two tables (Sent: the sends and the updates emailed before
  * schedules existed) passes both, so the clause names what was searched across
  * the group rather than one table's cap.
+ *
+ * NO WORKSPACE'S ROW COUNT IS WRITTEN DOWN HERE. The first draft of this rule
+ * argued a cap was unreachable today and named the snapshots both live
+ * workspaces held; the number was measured once, disagreed with the next
+ * pass's own query, and would have gone on being quoted by everyone who read
+ * the file. "Verify claims against code and DB, not docs or notes" — whether a
+ * cap is reachable is a question for the head count at render time, and that
+ * is the only thing this function is given.
  */
 export function listCap(pools: readonly ListPool[]): number | null {
   let searched = 0
