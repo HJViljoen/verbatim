@@ -106,10 +106,13 @@ describe('the six-month gate', () => {
     expect(text.split(sentence).length - 1).toBeLessThanOrEqual(1)
   })
 
-  it('is on the last page, with when it settles', () => {
+  it('is on the last page, with when it settles AND the month it settles in', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(forming, 'app', ctx))
     expect(text).toContain('Quarter against quarter needs six months')
     expect(text).toContain('once six stand behind it')
+    // Three readings, the latest September: October, November, December make
+    // six. `firstQuarterVerdictMonth` computes it and was called by nothing.
+    expect(text).toContain('at one reading a month, with Dec 2026')
   })
 
   it('is gone once six readings stand behind it', () => {

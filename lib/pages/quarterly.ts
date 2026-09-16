@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { fmtInt, fullDate, longMonth } from '../format'
+import { fmtInt, fullDate, longMonth, monthName } from '../format'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { fetchQuoteResolutionsByRefs } from '../quotes'
@@ -23,6 +23,7 @@ import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import {
+  firstQuarterVerdictMonth,
   previousQuarter,
   quarterFilling,
   quarterGateSentence,
@@ -268,9 +269,9 @@ export interface UnsettledPage {
   items: UnsettledItem[]
   waiting: string[]
   heldBack: string[]
-  /** When the first quarter-on-quarter verdict lands, in the reader's words. */
+  /** When the first quarter-on-quarter verdict lands, in the reader's words —
+   *  with the month it settles in, where that can be counted. */
   settles: string
-  changeLog: string[]
 }
 
 export interface QuarterlyData {
@@ -1331,14 +1332,21 @@ function buildUnsettled(a: {
   if (a.method.checks.recorded && a.method.checks.ran === 0) {
     heldBack.push('No unusual-week check ran inside this quarter, so nothing here rests on one.')
   }
+  // WITH THE MONTH IT SETTLES IN. `firstQuarterVerdictMonth` computes exactly
+  // this and was called by nothing but its own test — so the last page said
+  // "lands once six stand behind it" and named no month, and the reader who
+  // wanted to know when had to count on their fingers. It is one reading a
+  // month, so the arithmetic is honest and the page says on what assumption.
+  const settlesIn = firstQuarterVerdictMonth(a.readings, a.overview.month)
   return {
     items: unsettledItems(a.verdicts),
     waiting,
     heldBack,
     settles: quarterUnlocked(a.readings)
       ? 'Every comparison this quarter could answer is on the pages before this one.'
-      : `${quarterGateSentence(a.readings)} The first quarter-on-quarter verdict for your own audience lands once six stand behind it.`,
-    changeLog: a.overview.notes.map((n) => n.text).slice(0, 4),
+      : `${quarterGateSentence(a.readings)} The first quarter-on-quarter verdict for your own audience lands once six stand behind it${
+          settlesIn ? ` — at one reading a month, with ${monthName(settlesIn)}` : ''
+        }.`,
   }
 }
 
