@@ -185,8 +185,14 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // pools: 130 built, 40 of them sent, and a rail reading 90 against a cap of
   // 100 said "nothing is hidden" while 30 rows were never loaded — the exact
   // claim about the workspace this caveat exists to prevent.
+  // The Sent group is read from TWO tables and its caveat has to count both.
+  // `totals.sent` adds the legacy updates to the sends, so weighing it against
+  // the sends' cap alone told a workspace with exactly 200 sends and 47 legacy
+  // rows — a complete list, searched end to end — that "only the 200 most
+  // recent are searched". `listCap` takes both pools and answers about the
+  // group.
   const cappedAt = group === 'sent'
-    ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }])
+    ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }, { total: legacyTotal.count, cap: LIST_CAP.legacy }])
     : group === 'built'
       ? listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
       : listCap([{ total: exportTotal.count, cap: LIST_CAP.exported }])
