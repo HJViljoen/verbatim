@@ -4,7 +4,7 @@ import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
 import { directionWord, monthChange, type Direction } from '../reading/bands'
 import { loadMonthSeries } from '../reading/read'
-import { isReadable, pointsByMonth, type MonthPoint, type MonthSeries } from '../reading/series'
+import { isReadable, pointsByMonth, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 
