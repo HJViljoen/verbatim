@@ -169,7 +169,10 @@ describe('MR3 · what moved', () => {
     expect(markup).toMatch(/data-copy="verdict"[^>]*>\s*gone quiet/)
   })
 
-  it('declares four figures, not forty — the record takes the rest off verdicts', () => {
+  // FOUR ROWS, EIGHT FIGURES — two tokens a row, a share and a count. The
+  // test was named for the rows and asserted the figures, and the status note
+  // repeated the wrong one of the two.
+  it('declares eight figures, not forty — the record takes the rest off verdicts', () => {
     const data = monthlyFixture()
     const answers = blockAnswers(block, data)
     expect(Object.keys(answers.figures).length).toBeLessThanOrEqual(8)

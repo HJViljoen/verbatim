@@ -91,7 +91,9 @@ export const monthlyMovers: Block<MonthlyData> = {
   },
 
   figures(data): FigureTable {
-    // THE FOUR LARGEST MOVEMENTS, TWO A SIDE, AND NOT THE TWENTY ROWS. A figure
+    // THE FOUR LARGEST MOVEMENTS, TWO A SIDE, AND NOT THE TWENTY ROWS — four
+    // rows, and eight figures, because each row declares its share and the
+    // count behind it. A figure
     // is a number a model may cite and a number budget is counted over; a block
     // that declared forty of them would spend the whole artefact's on one list.
     // VO2 makes the same cut at two. Nothing is lost from the RECORD by it:
