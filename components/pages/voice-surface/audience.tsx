@@ -164,7 +164,12 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             {a.replies ? (
               <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
                 <span data-copy="figure">{a.replies.pct == null ? '—' : fmtPct(a.replies.pct)}</span> of this month’s comments were replies to another comment —{' '}
-                <span data-copy="figure">{fmtInt(a.replies.replies)} of {fmtInt(a.replies.comments)}</span>{a.replies.reddit != null ? (
+                {/* THE TRAILING CLAUSE IS SUPPRESSED WHEN IT REPEATS THE NUMBER BEFORE
+                    IT. Rendered on production: "7.1% ... - 835 of 11,712, 835
+                    of them on Reddit." A reader who does not compare the two
+                    digits reads two populations, and the note under this line
+                    already says every reply we can see is a Reddit reply. */}
+                <span data-copy="figure">{fmtInt(a.replies.replies)} of {fmtInt(a.replies.comments)}</span>{a.replies.reddit != null && a.replies.reddit !== a.replies.replies ? (
                   <>, <span data-copy="figure">{fmtInt(a.replies.reddit)}</span> of them on Reddit</>
                 ) : null}.
               </p>
