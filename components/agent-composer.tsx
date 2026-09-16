@@ -23,6 +23,7 @@ export function AgentComposer({
   threadId,
   showFigure = false,
   placeholder = 'Ask about your customers',
+  ask,
 }: {
   canSend: boolean
   threadId?: string
@@ -30,10 +31,14 @@ export function AgentComposer({
    *  thread the conversation is the subject and the art would be in the way. */
   showFigure?: boolean
   placeholder?: string
+  /** A question the box opens with, so a page that sends a reader here can
+   *  send WHAT they were reading with them. The reader owns it from the first
+   *  keystroke: it is the initial value of the box, never a controlled one. */
+  ask?: string
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [question, setQuestion] = useState('')
+  const [question, setQuestion] = useState(ask ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)

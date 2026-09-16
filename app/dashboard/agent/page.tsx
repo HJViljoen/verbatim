@@ -15,8 +15,12 @@ import { isPlatformAdmin } from '@/lib/agent/access'
 // No subheading either. The profile page lost its tagline in the July pass for
 // the same reason: a description is read once and then it is furniture.
 
-export default async function AgentPage() {
+/** `?ask=` is a question another page sent the reader here with — Subjects'
+ *  "Ask about this" is the first. It fills the box and nothing else: the
+ *  reader reads it, edits it, and presses send. */
+export default async function AgentPage({ searchParams }: { searchParams?: Promise<{ ask?: string }> }) {
   const { supabase, clientId, userId } = await getSessionContext()
+  const ask = (await searchParams)?.ask?.slice(0, 300)
   // The admin check and the thread list are independent — one wave (round
   // trips, not rows, are the cost: the DB pays a ~0.5s wake-up on the first
   // requests after idle, and every sequential wave pays it again).
@@ -45,7 +49,7 @@ export default async function AgentPage() {
       <AgentCrowdRing />
       <div className="agent-centre-in relative z-10 grid h-full place-items-center">
         <div className="w-full pb-24">  {/* clears the taller peek below */}
-          <AgentComposer canSend={canSend} showFigure />
+          <AgentComposer canSend={canSend} showFigure ask={ask} />
         </div>
       </div>
       <AgentHistory threads={threads} />

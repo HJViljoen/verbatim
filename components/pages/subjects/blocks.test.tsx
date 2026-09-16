@@ -127,6 +127,13 @@ describe('SU2 · the subject in full', () => {
     expect(renderText(subjectsSubject.render(subjectsFixture(), 'print', ctx))).not.toContain('Ask about this')
   })
 
+  it('sends the subject to Ask, as a question the page can answer', () => {
+    // /dashboard/agent?subject=<id> was read by nothing: the Agent page took
+    // no search params, so the client landed on a blank composer.
+    const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    expect(markup).toContain('/dashboard/agent?ask=How%20are%20we%20seen%20on%20Durability%3F')
+  })
+
   it('links the videos behind YOUR figure, with the count', () => {
     const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('/dashboard/videos?subject=s1')

@@ -88,7 +88,10 @@ export const subjectsSubject: Block<SubjectsData> = {
       )
     }
 
-    const href = `${ctx.appUrl}/dashboard/agent?subject=${encodeURIComponent(pane.id)}`
+    // THE SUBJECT TRAVELS WITH THE READER. `?subject=<id>` was read by nothing
+    // — the Agent page took no params at all — so the button landed a client on
+    // a blank composer. A subject id is not a question either; the question is.
+    const href = `${ctx.appUrl}/dashboard/agent?ask=${encodeURIComponent(`How are we seen on ${pane.name}?`)}`
     const meta = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
 
     return (
