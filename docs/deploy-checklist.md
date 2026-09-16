@@ -1,10 +1,14 @@
 # Phase 1 — the deploy checklist
 
-Written in WP22 from the real state of `feat/phase1` @ `d4e7dc1`
-(`/Users/heinrichviljoen/Documents/code/verbatim-phase1`), every command read
-off the script's own header on the branch and every migration object read off
-the migration file. Production was read-only throughout; where a figure could
-not be re-checked today it says so on the line rather than quoting a note.
+Written in WP22 from the real state of `feat/phase1` @ `d4e7dc1`, and
+re-checked against the **Block C merge head `8d0d4ab`** (WP18–WP21 and WP23
+merged in on 2026-09-16 at 14:37–14:43) in WP22's second pass — every command
+read off the script's own header on the branch and every migration object read
+off the migration file. Production was read-only throughout; where a figure
+could not be re-checked it says so on the line rather than quoting a note.
+Three things moved in that second pass: the gate baseline (0.5), the way the
+Inngest ids are counted (0.8), and step 4's coverage query, which until then
+printed the query that took production down.
 
 **This file lives in the repo on purpose.** It is the one Phase 1 artefact an
 operator needs at the keyboard, it names migrations and scripts that are in
@@ -60,21 +64,22 @@ and they are in step 5 in the only order that works.
 
 ## 0 · Preconditions
 
-Every one of these is a gate, not a nicety. **Eleven of them** — 0.0a, 0.0b and
-0.1 through 0.9 — and do not start until all eleven hold.
+Every one of these is a gate, not a nicety. **Twelve of them** — 0.0a, 0.0b,
+0.0c and 0.1 through 0.9 — and do not start until all twelve hold.
 
 | # | Precondition | How you know |
 |---|---|---|
 | 0.0a | **The database answers first time** | `select count(*) from clients;` through the MCP. If it times out, STOP. On 16 Sep the instance returned roughly one query in four while reporting `ACTIVE_HEALTHY`; applying eleven migrations through a transport that drops one connection in four is how you end up not knowing which of them landed. |
 | 0.0b | **PostgREST answers too — it is a SEPARATE path and it can be down while SQL works** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. On 16 Sep the MCP's direct SQL connection was intermittently fine while PostgREST returned `Could not query the database for the schema cache. Retrying.` on every attempt. **Every operator script in step 5 goes through PostgREST** (`createAdminClient`), so a green MCP query proves nothing about whether the backfills can run. Check both. |
+| 0.0c | **The disk-IO budget is healthy — or the compute tier has been upgraded** | Supabase dashboard → Reports → **Disk IO**, and the burst balance in particular. 0.0a and 0.0b are the symptom; this is the cause. On 16 Sep five agents reading at once, one of them counting a vector column, spent the budget by 09:10 UTC and it had not come back by 15:16 SAST — `select 1` returned while the next catalog query timed out and PostgREST still refused its schema cache. **A restart does not refill an IO budget; hours do, or a larger instance.** This deploy is eleven migrations, two backfills that read the whole corpus and a rehearsal run, and the reading pages already load in 8–12 s on this tier (41–69 s when it is starved) — so **the recommendation is to upgrade compute before the deploy, not after it** (Block B known-and-open item 1; it is an R1 blocker in the plan). If you deploy on the current tier anyway, do it on a day nothing else is reading and expect step 5 to be slow rather than broken. |
 | 0.1 | **No run in flight** on either tenant | `select id, client_id, status, started_at from pipeline_runs where status not in ('completed','failed','partial') order by started_at desc;` → zero rows (**verified 0 on 2026-09-16**). A run mid-flight when the code deploys replays completed steps by id, and M3's INSERT guard would meet Phase 0's writer inside an open freeze. |
 | 0.2 | **Outside 04:00–09:00 SAST** | The retention sweep runs at 04:00 (live since 24 Aug) and the Sunday dispatcher wakes in that band. Deploy after 09:00 and before 22:00 SAST, and not on a Sunday. |
 | 0.3 | **OpenAI credits present** | The balance has been zero all week and a model call fails 429. Three backfills spend: subject-membership ($0.14–0.25/tenant), translate-quotes ($0.7–1.8/tenant), propose-subjects ($0.002/tenant). Check the dashboard, not a note. |
-| 0.4 | **`main` merged into `feat/phase1`** | `git fetch origin && git merge origin/main` on the branch, then the four gates again. Any hotfix landed on `main` since `39cfa15` has to be under the branch before it goes back. |
-| 0.5 | **All four gates green on the merged head** | `npx vitest run` (baseline 241 files / 4,432 tests) · `npx tsc --noEmit` · `npm run lint` · `npx next build --webpack`. If `tsc` reports `Cannot find module '…/route.js'` from `.next/types/`, rebuild first — stale generated types, not a defect. |
+| 0.4 | **`main` merged into `feat/phase1`** | `git fetch origin && git merge origin/main` on the branch, then the four gates again. Any hotfix landed on `main` since the branch's merge base (`git merge-base main HEAD` — `d27c98d`, merged in on 2026-09-16) has to be under the branch before it goes back. |
+| 0.5 | **All four gates green on the merged head** | `npx vitest run` (**242 files / 4,514 tests**, measured on the Block C merge head `8d0d4ab`, 2026-09-16 15:06 SAST; the 241 / 4,432 in the first draft of this file predates WP18–WP21 and WP23) · `npx tsc --noEmit` · `npm run lint` · `npx next build --webpack`. If `tsc` reports `Cannot find module '…/route.js'` from `.next/types/`, rebuild first — stale generated types, not a defect. |
 | 0.6 | **The Turbopack build green too** | `TURBOPACK_ROOT=/Users/heinrichviljoen/Documents/code npx next build`. This is the bundler Vercel runs and the only gate that catches a bundler-only break before a deploy does. |
-| 0.7 | **`stored-artefacts-smoke` 36/36** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. **This one is owed** — the Supabase instance has been unreachable since ~09:17 on 16 Sep and the Block C merge could not run it. WP19 REPLACED the Reports page, and this is the check that catches a stored page key breaking silently. Do not deploy without it. |
-| 0.8 | **The Inngest step-id diff is five insertions and nothing else** | `git diff origin/main..HEAD -- inngest/functions/pipeline.ts` and read the ids. `main` 49 → branch 54, in their own positions: `plan-translate-quotes` / `translate-quotes:N-of-M` (after the Pass A wave, before `embed-insights`), `plan-subject-membership` / `subject-membership:N-of-M` (before `cross-reference`), `anomaly-check` (after `freeze-months`). Zero removals, zero reorderings. |
+| 0.7 | **`stored-artefacts-smoke` 36/36** | `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`. **This one is still owed.** Attempted three times on 16 Sep — once during the Block C merge (~10:30) and twice in WP22's second pass (15:12 and 15:16 SAST): every attempt died on its FIRST read, `reports: Could not query the database for the schema cache. Retrying.`, while `select 1` through the MCP returned in about two seconds. That is 0.0b's case, live. WP19 REPLACED the Reports page, and this is the check that catches a stored page key breaking silently. Do not deploy without it. |
+| 0.8 | **The Inngest step-id diff is five insertions and nothing else** | `git diff origin/main..HEAD -- inngest/functions/pipeline.ts` and read the ids. **`grep -c '\.run(' inngest/functions/pipeline.ts` → 48 on `main`, 53 on the branch** (49 and 54 if you also count `step.sendEvent('request-report')`, which Inngest memoises the same way — both pairs appear in the notes, so say which you counted). In their own positions: `plan-translate-quotes` / `translate-quotes:N-of-M` (after the Pass A wave, before `embed-insights`), `plan-subject-membership` / `subject-membership:N-of-M` (before `cross-reference`), `anomaly-check` (after `freeze-months`). Zero removals, zero reorderings. |
 | 0.9 | **A whole-branch review has run** (plan §3.2) | Fresh eyes, never an author. |
 
 ---
