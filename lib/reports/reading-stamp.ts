@@ -45,8 +45,16 @@ export function isMissingReadingColumns(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text) || /column/i.test(text)
 }
 
+/**
+ * AND THE TENANT IS ON THE WRITE. This was the block's one service-role UPDATE
+ * keyed by `id` alone. Not reachable today — the id comes from a snapshot the
+ * same call just created — but every other service-role write in this block
+ * pairs the id with `client_id`, the function is exported, and the brief's
+ * freeze path and the quarterly review are the next two callers. A parameter.
+ */
 export async function stampSnapshotReading(
   admin: SupabaseClient,
+  clientId: string,
   snapshotId: string,
   stamp: ReadingStamp,
 ): Promise<boolean> {
@@ -58,6 +66,7 @@ export async function stampSnapshotReading(
       month_status: stamp.monthStatus,
       window_basis: stamp.windowBasis,
     })
+    .eq('client_id', clientId)
     .eq('id', snapshotId)
   if (!error) return true
   if (isMissingReadingColumns(error)) return false

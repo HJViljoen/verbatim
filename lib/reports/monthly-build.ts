@@ -239,7 +239,7 @@ export async function recordSend(
   let stamped = false
   let figures: number | null = null
   try {
-    stamped = await stampSnapshotReading(admin, args.snapshotId, {
+    stamped = await stampSnapshotReading(admin, args.clientId, args.snapshotId, {
       readingAt: args.readingAt,
       month: args.month,
       monthStatus: args.monthStatus,
