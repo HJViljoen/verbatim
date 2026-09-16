@@ -263,6 +263,18 @@ export interface RisingBlock {
   audience: string
   month: string
   monthOf: number
+  /**
+   * How many of the pool cleared their band, and how many were banded at all.
+   *
+   * THE BLOCK CLAIMS "NOTHING ELSE MOVED CLEARLY", which is a statement about
+   * the themes it did NOT print — so every one of them has to have been tested.
+   * The loader used to stop the moment it had three, leaving the rest of the
+   * pool unbanded and the sentence an assertion about comparisons nobody drew.
+   * §1 gets this right ("N cleared the band this update; the 3 largest are
+   * printed") and these two numbers are what let §3 say the same thing.
+   */
+  moved: number
+  pooled: number
   unread: string | null
 }
 
@@ -941,7 +953,7 @@ async function buildRising(input: {
   denominators: readonly { month: string; audience: string; videos: number }[]
 }): Promise<{ block: RisingBlock; series: MonthSeries[] }> {
   const { reading, clientId, month, monthOf } = input
-  const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, unread: null }
+  const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, moved: 0, pooled: 0, unread: null }
   const nothing = (unread: string | null) => ({ block: { ...base, unread }, series: [] as MonthSeries[] })
 
   const baselineMonths = trailingMonths(month, BASELINE_MONTHS)
@@ -998,9 +1010,11 @@ async function buildRising(input: {
     themeSet.series.filter((s) => s.objectId).map((s) => [s.objectId as string, s]),
   )
 
-  const risers: Riser[] = []
+  // EVERY ONE OF THE POOL IS BANDED, not just enough of them to fill three
+  // rows: the note under the rows is a claim about the ones that are not
+  // printed, and a loop that breaks at three has never tested them.
+  const moved: Riser[] = []
   for (const r of ranked) {
-    if (risers.length >= RISERS_SHOWN) break
     const series = seriesOf.get(r.id)
     const points = series?.points ?? []
     const now = points.find((p) => p.month === month)
@@ -1030,7 +1044,7 @@ async function buildRising(input: {
     // rise, and the other three are the product declining to give one. The
     // design's "nothing moved clearly" is what an empty list means here.
     if (verdict.state !== 'moved' || (verdict.changePts ?? 0) <= 0) continue
-    risers.push({
+    moved.push({
       id: r.id,
       label,
       month: { k: nowK, n: nowN },
@@ -1041,6 +1055,9 @@ async function buildRising(input: {
     })
   }
 
+  // Quotes only for the rows a reader will see — the rest were banded to make
+  // the sentence true, not to be printed.
+  const risers = moved.slice(0, RISERS_SHOWN)
   if (risers.length > 0 && input.themedRunId) {
     const quoted = await Promise.all(
       risers.map((r) => loadThemeQuotes(input.supabase, clientId, input.themedRunId as string, r.id, 2)),
@@ -1048,7 +1065,10 @@ async function buildRising(input: {
     risers.forEach((r, i) => { r.quotes = quoted[i] })
   }
 
-  return { block: { ...base, rows: risers }, series: themeSet.series }
+  return {
+    block: { ...base, rows: risers, moved: moved.length, pooled: ranked.length },
+    series: themeSet.series,
+  }
 }
 
 // ---- §4 ----------------------------------------------------------------------

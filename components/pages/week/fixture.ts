@@ -130,6 +130,11 @@ export function weekFixture(): WeekData {
       audience: 'industry-other',
       month: '2026-09-01',
       monthOf: 398,
+      // ONE of the thirty banded cleared, and one is printed — so the note
+      // under the rows is about the other twenty-nine, every one of which was
+      // compared and came back inside its band.
+      moved: 1,
+      pooled: 30,
       unread: null,
       rows: [{
         id: 'reg-1',
@@ -276,6 +281,8 @@ export function thinFixture(): WeekData {
       audience: 'industry-other',
       month: '2026-09-01',
       monthOf: 452,
+      moved: 0,
+      pooled: 30,
       unread: null,
       rows: [],
     },

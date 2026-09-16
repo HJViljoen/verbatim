@@ -6,7 +6,7 @@ import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, longMonth } from '@/lib/format'
-import { RISERS_SHOWN, type Riser, type WeekData } from '@/lib/pages/week'
+import { type Riser, type WeekData } from '@/lib/pages/week'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 
 // WK §3 · Moving now (design §3 WK4 "Rising now"; the mock's §9).
@@ -71,9 +71,14 @@ export const weekRising: Block<WeekData> = {
         {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} />)}
         {r.rows.length > 0 ? (
           <Note mode={mode}>
-            {r.rows.length === RISERS_SHOWN
-              ? 'The three largest movements in this month’s reading; nothing else moved clearly.'
-              : `${fmtInt(r.rows.length)} moved clearly in this month’s reading; nothing else did.`}
+            {/* A CLAIM ABOUT THE THEMES THAT ARE NOT PRINTED, so it names how
+                many were compared. "Nothing else moved clearly" was printed
+                whenever exactly three rows fitted, while the loader stopped
+                banding the moment it had three — so the page stated as fact
+                something it had never tested. §1's shape, in §3's words. */}
+            {r.moved > r.rows.length
+              ? `${fmtInt(r.moved)} themes cleared their band in this month’s reading; the ${fmtInt(r.rows.length)} largest are printed.`
+              : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
           </Note>
         ) : null}
       </BlockFrame>

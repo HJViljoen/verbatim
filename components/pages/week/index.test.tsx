@@ -119,6 +119,18 @@ describe('WK §3 · moving now', () => {
     assertCopyContract(render(weekRising.render(weekFixture(), 'app', ctx)))
   })
 
+  it('claims nothing about a theme it never banded', () => {
+    // The note is a statement about the themes NOT printed, so it names how
+    // many were compared. With more movers than rows it says how many cleared.
+    const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('Nothing else of the 30 themes read against their band this month moved clearly.')
+
+    const d = weekFixture()
+    const many = { ...d, rising: { ...d.rising, moved: 7 } }
+    expect(renderText(weekRising.render(many, 'app', ctx)))
+      .toContain('7 themes cleared their band in this month’s reading; the 1 largest are printed.')
+  })
+
   it('says "nothing moved clearly", which is a reading and not a refusal', () => {
     const text = renderText(weekRising.render(thinFixture(), 'app', ctx))
     expect(text).toContain('Nothing moved clearly in September’s reading so far')
