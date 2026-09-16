@@ -36,6 +36,13 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
  * and a chunk past 1,000 rows pages SERIALLY inside itself — so a bigger chunk
  * can trade concurrent requests for sequential ones. Use it where an id names
  * at most a handful of rows, and say so where you don't.
+ *
+ * AND IT MUST NOT BE THE ONLY THING KEEPING A READ UNDER 1,000 ROWS. PostgREST
+ * truncates at a thousand SILENTLY; a reader that does not page just prints
+ * fewer labels. Every caller of this constant pages through `selectAll`, which
+ * is what makes raising it a performance decision rather than a correctness
+ * one — keep it that way, or the next person who reads "half the largest size
+ * proven to work" and doubles it will be right and still wrong.
  */
 export const UUID_IN_CHUNK = 250
 
@@ -82,6 +89,8 @@ export const MULTI_ROW_IN_CHUNK = 100
  *   lib/reading/read.ts loadLabels    UUID_IN_CHUNK (250)  a key column, one
  *                                     label per id, and nothing downstream
  *                                     reads the order (it builds a Map by id).
+ *                                     Pages through `selectAll`, so raising
+ *                                     the constant past 1,000 loses no label.
  *   lib/reading/read.ts numerators,   MULTI_ROW_IN_CHUNK   a NON-key column:
  *   lib/pages/week.ts   new themes    (100)                months × audiences
  *                                     rows per id, so the row cap binds first.

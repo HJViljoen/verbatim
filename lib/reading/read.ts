@@ -534,17 +534,28 @@ function loadLabels(
     // branches are about, not the table they read.
     const table = objectKind === 'subject' ? TABLE_SUBJECTS : 'theme_registry'
     const column = objectKind === 'subject' ? 'name' : 'canonical_label'
-    const answers = await mapWithLimit(parts, READ_CONCURRENCY, (part) =>
-      Promise.resolve(
-        client
-          .from(table)
-          .select(objectKind === 'subject' ? 'id, name' : 'id, canonical_label')
-          .eq('client_id', clientId)
-          .in('id', part),
-      ),
-    )
-    for (const { data, error } of answers) {
-      if (error) {
+    // THROUGH `selectAll`, THOUGH ONE CHUNK CANNOT FILL A PAGE TODAY. The
+    // `.in()` column is the primary key, so 250 ids is at most 250 rows and a
+    // bare `.select()` would be correct — but `UUID_IN_CHUNK` is a SHARED
+    // constant whose own docstring invites raising it (it is half the largest
+    // size proven to work), and the failure above 1,000 would not be an error:
+    // PostgREST would truncate and the page would print "an unnamed subject"
+    // for the rest. That is the one rule AGENTS.md states about reads past
+    // 1,000 rows, and a reader of the constant cannot see which of its four
+    // callers pages and which does not. So this one pages, the order key is the
+    // key it filters on, and the coupling is gone rather than merely true.
+    const answers = await mapWithLimit(parts, READ_CONCURRENCY, async (part) => {
+      try {
+        const rows = await selectAll<Record<string, string | null>>(() =>
+          client
+            .from(table)
+            .select(objectKind === 'subject' ? 'id, name' : 'id, canonical_label')
+            .eq('client_id', clientId)
+            .in('id', part)
+            .order('id', { ascending: true }),
+        )
+        return { rows, missing: false }
+      } catch (error) {
         // The names collected so far are still names. The serial loop this
         // replaced returned what it had when M3 turned out to be unapplied, and
         // a caller that gets a partial map falls back to "an unnamed subject"
@@ -553,10 +564,15 @@ function loadLabels(
         // another says the table is missing, which the database does not
         // really do; kept because the answer to "what did we learn" is not
         // "nothing" either way.)
-        if (objectKind === 'subject' && isMissingSubjects(error)) return out
-        throw new Error(`${table} labels: ${error.message}`)
+        if (objectKind === 'subject' && isMissingSubjects(error)) return { rows: [], missing: true }
+        throw new Error(`${table} labels: ${error instanceof Error ? error.message : String(error)}`)
       }
-      for (const row of (data ?? []) as unknown as Record<string, string | null>[]) {
+    })
+    for (const answer of answers) {
+      // Chunk order, so the map holds exactly what the serial loop's would have
+      // held when it stopped: the chunks before the one that found no table.
+      if (answer.missing) return out
+      for (const row of answer.rows) {
         const label = row[column]
         const id = row.id
         if (id && label) out.set(id, label)
