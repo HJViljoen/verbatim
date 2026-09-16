@@ -18,8 +18,12 @@ import type { MonthlySnapshotData } from '../reports/monthly-build'
  * ONE BLOCK DRAWS A CHART AND IT STILL ASKS FOR NO PNG. MR3's per-row line is
  * an SVG on screen and on paper; in the email the same row prints its readings
  * in words ("Jul 5.1% → Aug 6.8% → Sep 9.4%"), which is what the mock does too.
- * So `MONTHLY_IMAGE_BLOCKS` is empty, the runner renders one job for a monthly
- * send rather than nine, and a client that blocks images loses no number.
+ * So this email asks for no image at all, the runner renders one job for a
+ * monthly send rather than nine, and a client that blocks images loses no
+ * number. (There was a `MONTHLY_IMAGE_BLOCKS: []` here saying so; an empty list
+ * nothing reads is a claim with no reader, and the runner's own branch —
+ * `document || arranged ? [] : EMAIL_IMAGE_TILES…` in lib/schedules/deliver.ts
+ * — is where the decision is actually taken.)
  */
 
 export interface RenderMonthlyArgs {
@@ -30,9 +34,6 @@ export interface RenderMonthlyArgs {
   /** blockKey → `cid:` URL of an inline image the runner attached. */
   images?: Record<string, string>
 }
-
-/** Block keys whose email says it with a picture. Empty on purpose: see above. */
-export const MONTHLY_IMAGE_BLOCKS: readonly string[] = []
 
 export function renderMonthlyEmail(a: RenderMonthlyArgs): { subject: string; html: string; text: string } {
   const ctx: BlockContext = {

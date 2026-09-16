@@ -270,14 +270,6 @@ export function shortMonth(month: string): string {
   return long.slice(0, 3)
 }
 
-/** "22% · 305 of 1,388" — a level and the count it rests on, never one alone
- *  (the copy contract's rule (b)). The weekly report's own `levelOf`, restated
- *  here rather than imported, so the monthly composer does not depend on the
- *  weekly one; they are one line and two artefacts. */
-export function levelLine(k: number, n: number): string {
-  return n > 0 ? `${fmtPct((k / n) * 100)} · ${fmtInt(k)} of ${fmtInt(n)}` : `${fmtInt(k)} videos`
-}
-
 // ---- the sent figures a live surface prints beside its own ---------------------
 
 /**

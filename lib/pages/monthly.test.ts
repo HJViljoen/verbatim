@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   MONTHLY_SPARK_MONTHS,
   briefStaleLine,
-  monthlyStatusOf,
   leadOf,
   nextReadingOf,
   pickLed,
@@ -140,13 +139,6 @@ describe('the brief attached by link', () => {
 
   it('says when the attached brief is not this reading’s', () => {
     expect(briefStaleLine(brief())).toBe('Built 12 Sep, before this reading — the numbers in it are that day’s.')
-  })
-})
-
-describe('a month’s status is one vocabulary', () => {
-  it('passes straight through, because the two types are the same two strings', () => {
-    expect(monthlyStatusOf('filling')).toBe('filling')
-    expect(monthlyStatusOf('frozen')).toBe('frozen')
   })
 })
 

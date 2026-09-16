@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { renderText } from '@/lib/test/render'
 import { voiceMovers } from './movers'
-import { mover, refusedVoiceFixture, verdict, voiceFixture } from './fixture'
+import { mover, refusedVoiceFixture, voiceFixture } from './fixture'
 
 // VO2 · what moved, on one axis (Phase 1 WP13).
 

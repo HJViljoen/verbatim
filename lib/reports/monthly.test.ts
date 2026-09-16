@@ -10,7 +10,6 @@ import {
   confirmingLine,
   freezesOn,
   leadVerdict,
-  levelLine,
   monthlyPeriod,
   monthlyRuleFor,
   monthlySubject,
@@ -185,16 +184,6 @@ describe('the series trail under a mover row', () => {
 
   it('abbreviates the month without repeating the year', () => {
     expect(shortMonth('2026-09')).toBe('Sep')
-  })
-})
-
-describe('a level never prints alone', () => {
-  it('carries its denominator', () => {
-    expect(levelLine(305, 1388)).toBe('22% · 305 of 1,388')
-  })
-
-  it('prints a count as a count when there is no population', () => {
-    expect(levelLine(12, 0)).toBe('12 videos')
   })
 })
 

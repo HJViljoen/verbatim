@@ -14,7 +14,6 @@ import {
   monthlySubject,
   seriesTrail,
   shortMonth,
-  type MonthlyStatus,
 } from '../reports/monthly'
 import { confirmingLine } from '../reports/monthly'
 import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure } from '../reports/sent-figures'
@@ -653,10 +652,6 @@ export function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
   if (moved.length === 0) return null
   return [...moved].sort((a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0))[0]
 }
-
-/** The status a stored month carries, in the monthly report's own vocabulary —
- *  the two types are the same two strings and this is where they meet. */
-export const monthlyStatusOf = (status: MonthStatus): MonthlyStatus => status
 
 export const briefStaleLine = (brief: BriefLink): string =>
   `Built ${shortDate(brief.builtAt)}, before this reading — the numbers in it are that day’s.`
