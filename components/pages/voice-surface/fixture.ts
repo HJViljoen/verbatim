@@ -168,7 +168,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         verdict: verdict({ objectKind: 'mood', objectId: 'negative', objectLabel: 'Cold', state: 'no_clear_change', changePts: 2 }),
       },
       toneNote: null,
-      onCamera: '17 said on camera',
+      onCamera: '17 of the 120 quotes behind this theme were said on camera rather than typed — counted over the whole update, not over this month.',
       quotes: [
         { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
         { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },

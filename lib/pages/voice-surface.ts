@@ -28,7 +28,6 @@ import { pointsByMonth, type DenominatorPoint, type MonthLabel, type MonthPoint,
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { selectAll } from '../supabase-admin'
-import { onCameraNote } from '../voice-tiles'
 import {
   firstHeardThisMonth,
   longMonth,
@@ -299,7 +298,17 @@ export interface ThemeBlock {
    *  with the negative share banded (decision T). Null with M5 unapplied. */
   tone: { shares: MoodShare[]; judged: number; verdict: Verdict | null } | null
   toneNote: string | null
-  /** "17 said on camera", or null where the theme is comment-only. */
+  /** The on-camera count WITH THE SCOPE IT WAS COUNTED OVER, or null where the
+   *  theme is comment-only.
+   *
+   *  `themes.video_evidence_count` is the run's whole evidence for the theme,
+   *  every month of it. Printed bare it sat one line above a reach note that
+   *  divides THIS MONTH's platform mix, and production produced the
+   *  contradiction today: Össur's `prosthetist_skill` read "· 1 said on
+   *  camera" immediately above "read from 0 of 2 videos — Reddit carries no
+   *  speech and no on-screen text". Two scopes, one line apart, neither
+   *  saying which it was. The sentence says it now, and stands beside the
+   *  reach note rather than in the line about months. */
   onCamera: string | null
   quotes: Quote[]
   quoteCites: string[]
@@ -560,6 +569,26 @@ export function heardLine(input: {
   return input.firstHeardOnAxis
     ? `first heard ${month} · ${seen}`
     : `first heard ${month}, before the months drawn here · ${seen}`
+}
+
+/**
+ * "1 of the 12 quotes behind this theme was said on camera rather than typed —
+ * over the whole update, not this month."
+ *
+ * THE SCOPE IS PART OF THE FIGURE. `themes.video_evidence_count` and
+ * `themes.evidence_count` are a RUN's counts over the theme's whole evidence,
+ * however many months that reaches; nothing month-scoped counts on-camera
+ * evidence (`month_theme_readings.excluded_on_camera` counts the citations no
+ * month can carry, which is a different thing and is identical on every month
+ * row). So the count is kept — a creator who filmed an opinion put more into
+ * it than a commenter — and it says what it is counted over, beside the reach
+ * note that is counted over the month.
+ */
+export function onCameraScope(videoEvidenceCount: number | null | undefined, evidenceCount: number): string | null {
+  const total = Math.max(0, Math.trunc(Number(evidenceCount)))
+  const n = Math.min(Math.trunc(Number(videoEvidenceCount ?? 0)), total)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return `${fmtInt(n)} of the ${fmtInt(total)} quotes behind this theme ${n === 1 ? 'was' : 'were'} said on camera rather than typed — counted over the whole update, not over this month.`
 }
 
 /**
@@ -1381,7 +1410,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     }>(themeRes, 'voice.themeRow')
     if (themeRow) {
       description = description ?? themeRow.description
-      onCamera = onCameraNote(themeRow.video_evidence_count, themeRow.evidence_count)
+      onCamera = onCameraScope(themeRow.video_evidence_count, themeRow.evidence_count)
       const insightIds = (themeRow.supporting_insight_ids ?? []).slice(0, EVIDENCE_PER_THEME)
       const videoIds = (themeRow.supporting_video_ids ?? []).slice(0, 4)
       const [evidenceRes, videoRes] = await Promise.all([
@@ -1478,8 +1507,11 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   const notes: string[] = []
   if (!input.themedRunId) notes.push('No update has grouped this month’s conversation into themes yet, so the evidence behind this theme cannot be shown.')
   if (!spoken && !onScreen && input.themedRunId) notes.push('No video behind this theme carries readable speech or on-screen text.')
+  // The two scopes stand together, each saying which it is: the update's
+  // on-camera count, then this month's speech-readable reach.
+  if (onCamera) notes.push(onCamera)
   const reach = onCameraReach({ videos: input.mover?.k ?? 0, reddit: themeReddit })
-  if (onCamera && reach) notes.push(reach)
+  if (reach) notes.push(`This month it was ${reach}.`)
 
   return {
     state: 'ready',

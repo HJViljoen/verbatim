@@ -18,6 +18,7 @@ import {
   moversNote,
   newMovers,
   onCameraReach,
+  onCameraScope,
   openRefusal,
   pickAudience,
   platformShares,
@@ -290,6 +291,29 @@ describe('heardLine', () => {
 
   it('agrees with itself about one month', () => {
     expect(heardLine({ firstHeard: null, firstHeardOnAxis: false, monthsSeen: 1, monthsDrawn: 1 })).toContain('1 of 1 month drawn')
+  })
+})
+
+describe('onCameraScope', () => {
+  it('says what the on-camera count was counted over, because it is not this month', () => {
+    // Production, Össur ?themes=prosthetist_skill: "· 1 said on camera" sat one
+    // line above "read from 0 of 2 videos". The first is the update's whole
+    // evidence, the second this month's platform mix.
+    expect(onCameraScope(1, 12))
+      .toBe('1 of the 12 quotes behind this theme was said on camera rather than typed — counted over the whole update, not over this month.')
+  })
+
+  it('agrees with itself about more than one', () => {
+    expect(onCameraScope(17, 120)).toContain('17 of the 120 quotes behind this theme were said on camera')
+  })
+
+  it('says nothing about a theme heard only in comments — a zero on every pane is noise', () => {
+    expect(onCameraScope(0, 12)).toBeNull()
+    expect(onCameraScope(null, 12)).toBeNull()
+  })
+
+  it('never claims more on camera than there is evidence', () => {
+    expect(onCameraScope(40, 12)).toContain('12 of the 12 quotes')
   })
 })
 

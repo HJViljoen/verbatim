@@ -204,8 +204,12 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           </div>
 
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+            {/* THE MONTHS, AND ONLY THE MONTHS. The on-camera count is the
+                update's, over every month it read, and printed here it sat one
+                line above a reach note divided out of THIS month's platform
+                mix. It is a note now, next to the reach it has to be read
+                against, and it says which scope it was counted over. */}
             {heardLine({ firstHeard: t.firstHeard, firstHeardOnAxis: t.firstHeardOnAxis, monthsSeen: t.monthsSeen, monthsDrawn: t.monthsDrawn })}
-            {t.onCamera ? <> · <span data-copy="figure">{t.onCamera}</span></> : null}
           </p>
 
           {series ? (
@@ -268,7 +272,9 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           ) : null}
 
           {t.notes.length > 0 ? (
-            <p className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
+            // The notes carry code's own counts (the on-camera scope line, the
+            // reach line), so the paragraph is a figure node rather than prose.
+            <p data-copy="figure" className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
               {t.notes.join(' ')}
             </p>
           ) : null}
