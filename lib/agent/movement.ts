@@ -109,14 +109,22 @@ const side = (s: { month: string; k: number | null; n: number | null }): string 
 
 /** What the reader (and the model) is told BESIDE the verdict. Each flag is a
  *  fact about our own bookkeeping, not about the conversation, and each gets
- *  its own sentence rather than a code. */
+ *  its own sentence rather than a code.
+ *
+ *  FOUR, BECAUSE FOUR IS WHAT CAN ARRIVE. `monthChange` computes
+ *  `clustering_changed`, `clustering_unknown` and `renamed`; `thin` is the one
+ *  flag this file supplies, off the month's own label. The two that used to sit
+ *  here — `re_read` and `measurement_changed` — are produced nowhere this block
+ *  reads (`measurement_changed` belongs to `moodChange`, and nothing writes
+ *  `re_read` at all), so they were sentences a maintainer could read as a
+ *  warning the block already gives. A flag with no note is skipped in
+ *  `movementLine`, so the day one of them does arrive it is silent, not a
+ *  code. */
 const FLAG_NOTE: Partial<Record<VerdictFlag, string>> = {
   clustering_changed: 'themes were re-grouped between these two months, so the two sides may not be like for like',
   clustering_unknown: 'we did not record how themes were grouped for these months, so the two sides may not be like for like',
   renamed: 'these two months are filed under two names for the same rival',
   thin: 'that month is thin against this audience’s own year',
-  re_read: 'part of the corpus was re-read between them',
-  measurement_changed: 'what this measures changed between them',
 }
 
 const STATE_NOTE: Record<string, string> = {

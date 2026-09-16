@@ -90,13 +90,25 @@ describe('movementLine', () => {
   })
 
   it('names every flag it prints in words, never as a code', () => {
-    const flags: VerdictFlag[] = ['renamed', 'thin', 're_read', 'measurement_changed']
+    // The four that can arrive: three from monthChange, and `thin` from the
+    // month's own label.
+    const flags: VerdictFlag[] = ['renamed', 'thin', 'clustering_unknown']
     const line = movementLine(reading({ verdict: verdict({ flags }) }))
     // The snake_case tokens are the codes; `thin` and `renamed` are also
     // ordinary words and appear inside the sentences that explain them.
     for (const f of flags.filter((x) => x.includes('_'))) expect(line).not.toContain(f)
     expect(line).toContain('two names for the same rival')
-    expect(line).toContain('what this measures changed between them')
+    expect(line).toContain('thin against this audience’s own year')
+  })
+
+  it('stays silent about a flag it has no sentence for, rather than printing a code', () => {
+    // `measurement_changed` is moodChange's, and nothing writes `re_read` at
+    // all; both carried reader-facing sentences here that no path could reach.
+    const line = movementLine(reading({ verdict: verdict({ flags: ['re_read', 'measurement_changed'] }) }))
+    expect(line).not.toContain('re_read')
+    expect(line).not.toContain('measurement_changed')
+    // Two lines and no caveat bullet: the reading and its history, nothing else.
+    expect(line.split('\n')).toHaveLength(2)
   })
 
   it('counts the history behind a line, in the singular where there is one', () => {
