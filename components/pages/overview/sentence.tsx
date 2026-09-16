@@ -73,10 +73,20 @@ export const overviewSentence: Block<OverviewData> = {
       </div>
     ) : null
 
+    // THE TITLE IS A MODEL'S WORDS READ BACK OUT OF A COLUMN, so it carries the
+    // `stored` kind and names the slot that wrote it — the exemption WP14
+    // argued and won for exactly this slot on Market (advice.tsx). WP11 did
+    // not, and Overview passed rule (c) only by luck: `topRecommendation` ranks
+    // by priority then grounding over a table deleted and reinserted every
+    // update, and two of Össur's live ledger titles fail it — "Increase Content
+    // Volume to Improve Share of Voice" twice, "Increase Brand Presence to
+    // Capitalize on Low Competitor…" once.
     const ledger = s.ledger ? (
       email ? (
         <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 8 }}>
-          {s.ledger.title}
+          {/* The marker wraps the model's value and nothing else — the meta
+              line below it is code's and stays under rule (c). */}
+          <span data-copy="stored" data-slot="pass_d_b_recommendation">{s.ledger.title}</span>
           <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>
             {ledgerMeta(s.ledger)}
           </div>
@@ -84,7 +94,7 @@ export const overviewSentence: Block<OverviewData> = {
       ) : (
         <div className="flex flex-col gap-0.5">
           <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Top recommendation</span>
-          <Link href={s.ledger.href} className="text-[13px] font-medium underline-offset-2 hover:underline">{s.ledger.title}</Link>
+          <Link data-copy="stored" data-slot="pass_d_b_recommendation" href={s.ledger.href} className="text-[13px] font-medium underline-offset-2 hover:underline">{s.ledger.title}</Link>
           <span className="text-[11.5px] text-muted-foreground">{ledgerMeta(s.ledger)}</span>
         </div>
       )

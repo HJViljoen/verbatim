@@ -19,6 +19,23 @@ describe('OV1 · in one sentence', () => {
     }
   })
 
+  // A LIVE LEDGER TITLE IS MODEL PROSE AND FAILS RULE (c) UNMARKED. Two of
+  // Össur's 56 recommendations are "Increase Content Volume to Improve Share of
+  // Voice" and "Increase Brand Presence to Capitalize on Low Competitor…", and
+  // topRecommendation ranks over a table deleted and reinserted every update,
+  // so which one lands on the front page changes with the run.
+  it('marks the top recommendation’s title as stored prose, naming its slot', () => {
+    for (const mode of MODES) {
+      const data = overviewFixture()
+      data.sentence.ledger = { ...data.sentence.ledger!, title: 'Increase Content Volume to Improve Share of Voice' }
+      const markup = render(overviewSentence.render(data, mode, ctx))
+      const node = copyNodes(markup).find((n) => n.text.startsWith('Increase Content Volume'))
+      expect(node?.kind).toBe('stored')
+      expect(node?.slot).toBe('pass_d_b_recommendation')
+      assertCopyContract(markup)
+    }
+  })
+
   it('writes the figures into the sentence and marks them as code’s', () => {
     const node = overviewSentence.render(overviewFixture(), 'app', ctx)
     const markup = render(node)
