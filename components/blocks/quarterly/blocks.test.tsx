@@ -137,6 +137,26 @@ describe('the six-month gate', () => {
   })
 })
 
+// A COMPARISON NEVER ATTEMPTED IS NOT A COMPARISON DRAWN. `unsettledItems`
+// reads the verdicts the pages BUILT, so on a workspace whose quarter half
+// cannot be read at all — production today, M3 unapplied — nothing is
+// unanswered and the page fell to "Every comparison this quarter asked for was
+// drawn.", five pages after one saying the quarter-on-quarter reading is not
+// recorded for this workspace.
+describe('the last page tells a silence from a settled question', () => {
+  it('says the quarter comparison was never attempted where it could not be', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(formingFixture(), 'app', ctx))
+    expect(text).toContain('No quarter-on-quarter comparison was attempted')
+    expect(text).not.toContain('Every comparison this quarter asked for was drawn')
+  })
+
+  it('still says every comparison was drawn where every comparison was made', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(quarterlyFixture(), 'app', ctx))
+    expect(text).toContain('Every comparison this quarter asked for was drawn')
+    expect(text).not.toContain('was attempted')
+  })
+})
+
 describe('what each page owes the reader', () => {
   const data = quarterlyFixture()
   const forming = formingFixture()

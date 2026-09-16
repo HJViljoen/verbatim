@@ -46,6 +46,13 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
           Where the count is too thin, we say so rather than round it into a verdict.
         </Note>
 
+        {/* WHAT WAS NEVER ASKED COMES FIRST, and it is not the same claim as
+            a comparison that was drawn. An empty list on a workspace whose
+            quarter half cannot be read at all printed "Every comparison this
+            quarter asked for was drawn." five pages after one saying the
+            quarter-on-quarter reading is not recorded. */}
+        {u.notAsked ? <Note mode={mode}>{u.notAsked}</Note> : null}
+
         {u.items.length > 0 ? (
           u.items.map((item, n) => (
             <Row
@@ -57,7 +64,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
               {item.body}
             </Row>
           ))
-        ) : (
+        ) : u.notAsked ? null : (
           <Note mode={mode}>Every comparison this quarter asked for was drawn.</Note>
         )}
 

@@ -272,6 +272,13 @@ export interface UnsettledItem {
 
 export interface UnsettledPage {
   items: UnsettledItem[]
+  /** What was never ASKED, as against what was asked and could not be
+   *  answered. `items` can only hold comparisons that were BUILT, so on a
+   *  workspace whose quarter half cannot be read at all the list is empty and
+   *  the page used to read "Every comparison this quarter asked for was drawn."
+   *  — on the same artefact whose other pages say the quarter-on-quarter
+   *  reading is not recorded. Null when both halves were attempted. */
+  notAsked: string | null
   waiting: string[]
   heldBack: string[]
   /** When the first quarter-on-quarter verdict lands, in the reader's words —
@@ -700,7 +707,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
   const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt })
   const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
-  const unsettled = buildUnsettled({ verdicts, readings, overview, method })
+  const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
 
   return {
     brand: overview.brand,
@@ -1393,6 +1400,11 @@ function buildUnsettled(a: {
   readings: number
   overview: OverviewData
   method: MethodPage
+  /** Whether the quarter's own window read could be taken at all, and whether
+   *  the subject half of it could. A comparison never attempted is not a
+   *  comparison drawn, and this is the page that has to say which it was. */
+  windowApplied: boolean
+  subjectsRead: boolean
 }): UnsettledPage {
   const waiting: string[] = []
   if (!quarterUnlocked(a.readings)) {
@@ -1409,8 +1421,21 @@ function buildUnsettled(a: {
   // wanted to know when had to count on their fingers. It is one reading a
   // month, so the arithmetic is honest and the page says on what assumption.
   const settlesIn = firstQuarterVerdictMonth(a.readings, a.overview.month)
+  // WHAT WAS NEVER ASKED. `unsettledItems` reads the verdicts the pages DREW,
+  // so where no quarter comparison could be built there is nothing unanswered
+  // and the page fell to "Every comparison this quarter asked for was drawn."
+  // — the one page whose whole job is confession, contradicting the four
+  // before it. The silences are the category page's own: no windowed reading
+  // at all is a migration, and a windowed reading with no subject half is a
+  // narrower one.
+  const notAsked = !a.windowApplied
+    ? 'No quarter-on-quarter comparison was attempted. This quarter is not counted as one window for this workspace yet, so nothing below is a reading of the quarter against the one before it.'
+    : !a.subjectsRead
+      ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
+      : null
   return {
     items: unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) }),
+    notAsked,
     waiting,
     heldBack,
     settles: quarterUnlocked(a.readings)
