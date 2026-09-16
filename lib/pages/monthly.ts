@@ -275,7 +275,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     // who pressed it would see.
     loadVoiceSurface({ ...monthScope, params: { ...monthScope.params, movers: 'all' } }),
     loadSubjectVoicesPerSubject(supabase, scope.clientId, month),
-    loadBriefLink(supabase, scope.clientId, readingAt),
+    loadBriefLink(supabase, scope.clientId, readingAt, month),
     loadConfirming(reading.client, scope.clientId, month),
   ])
 
@@ -514,6 +514,7 @@ async function loadBriefLink(
   supabase: SupabaseClient,
   clientId: string,
   readingAt: string,
+  month: string,
 ): Promise<BriefLink | null> {
   type ReportRow = { id: string; title: string; latest_snapshot_id: string | null; updated_at: string }
   const { data } = await supabase
@@ -550,15 +551,24 @@ async function loadBriefLink(
     public: Boolean(live) && !live?.password_hash,
     locked: Boolean(live?.password_hash),
     builtAt: report.updated_at,
-    // The brief is this reading's companion only if it was built during it.
-    stale: report.updated_at < monthStartOfReading(readingAt),
+    // The brief is this reading's companion only if it was built during the
+    // month the artefact is ABOUT.
+    stale: report.updated_at < monthStartInstant(month),
   }
 }
 
-/** The first instant of the month this reading is in — what "built during this
- *  reading" means. */
-function monthStartOfReading(readingAt: string): string {
-  return `${readingAt.slice(0, 7)}-01T00:00:00.000Z`
+/**
+ * The first instant of the month this artefact is about.
+ *
+ * OFF THE MONTH KEY, NEVER OFF THE READING INSTANT. The first cut sliced the
+ * UTC month out of `readingAt`, which for a tenant two hours ahead of UTC is
+ * the WRONG MONTH for any reading taken between local midnight and 02:00 on the
+ * 1st — the hours a monthly schedule fires in. The month key is the artefact's
+ * own answer to "which month is this?", so the brief's staleness and the
+ * report's title cannot disagree.
+ */
+function monthStartInstant(month: string): string {
+  return `${month.slice(0, 7)}-01T00:00:00.000Z`
 }
 
 /**
