@@ -726,6 +726,22 @@ rehearsal; it wants no addresses at all.)
 emails anybody; after it, the next Sunday does. That is why it is last and why
 it is not a script.
 
+**For Össur this is a RESTORATION, not a new list.** Both schedules are
+`active` with ZERO recipients today (read on production 2026-09-16, the row at
+the top of this file) — and a digest went to **four** Össur addresses on
+13 September. The list did not shrink on purpose: it moved to
+`report_schedules.recipients` at T0-10 and those four never came with it, which
+is why `tracking_configs.report_emails` still holds them and why step 5.5 tells
+you to copy them out BEFORE you clear that column. Put the same four back, read
+them one by one against the send that went out, and treat a fifth address as a
+decision somebody has to have made rather than a typo to be kept.
+`select subject, recipients, created_at from public.report_sends where client_id = '<össur uuid>' order by created_at desc limit 3;`
+is the record of who actually received one.
+
+**Sealand gets none from this file.** Its schedule has never had recipients and
+nobody has asked for one; leaving it empty is the safe answer and a decision,
+not an omission.
+
 Verify: `select id, name, active, cadence, artefact, recipients from public.report_schedules;`
 — and read the addresses, not the count.
 
