@@ -766,13 +766,22 @@ decision somebody has to have made rather than a typo to be kept. If
 `report_sends` shows a different set, believe `report_sends`: it is the record
 of what was delivered, and nothing has SENT to `report_emails` since T0-10.
 
-**You may not need a production query at all here.** Settings › Reports reads
-`tracking_configs.report_emails` on every load (`lib/settings/reports-load.ts`
-→ `deadRecipients`) and prints the addresses in the "An old list we no longer
-use" card (`app/dashboard/settings/reports/page.tsx`). The four are on the page
-you are already standing on in 5.6 — read them there, not out of the database,
-on an instance in the state 0.0c describes. That card is also why 5.5 comes
-first and why 5.5 is a visible change: clearing the column empties the card.
+**THE CARD IS GONE BY THE TIME YOU GET HERE — use the copy you took in 5.5.**
+Settings › Reports reads `tracking_configs.report_emails` on every load
+(`lib/settings/reports-load.ts` → `deadRecipients`) and prints the addresses in
+the "An old list we no longer use" card, which
+`app/dashboard/settings/reports/page.tsx` gates on
+`inputs.deadRecipients.length > 0`. Step 5.5 clears that column, so after it
+there is no card and no addresses on the page. That is exactly why 5.5 tells
+you to copy them somewhere first, and why 5.5 is a visible change: clearing the
+column empties the card.
+
+An earlier draft of this step said the opposite — "you may not need a
+production query at all here … the four are on the page you are already
+standing on in 5.6" — in the step that decides which real people start
+receiving a client's report. If you have the copy from 5.5, you need no query.
+If you do not, the query below is how you get the list back, and it is the
+better source anyway: it is the record of what was DELIVERED.
 ```
 select subject, recipients, status, sent_at
 from public.report_sends
