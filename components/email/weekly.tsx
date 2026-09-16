@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { WEEKLY_EMAIL_WIDTH, WEEKLY_RULE } from '@/lib/reports/weekly'
+import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Button, Hairline, text } from './primitives'
@@ -64,7 +64,7 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                         <div style={text.eyebrow}>{data.company} · consumer intelligence</div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 22, fontWeight: 500, lineHeight: '1.25', color: EMAIL.ink, marginTop: 8 }}>{data.subject}</div>
                         <div style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, marginTop: 6 }}>{data.period} · reading as at {readAt}</div>
-                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{WEEKLY_RULE}</div>
+                        <div style={{ ...text.small, fontStyle: 'italic', marginTop: 10 }}>{weeklyRuleFor(periodNounFor(data.reading.window))}</div>
                       </td>
                     </tr>
                     <tr>

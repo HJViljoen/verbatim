@@ -3,7 +3,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { WeeklyData } from '@/lib/pages/weekly'
-import { WEEKLY_RULE } from '@/lib/reports/weekly'
+import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 
 // WR6 · Coverage, in one line (design §3 WR section 6).
 //
@@ -58,7 +58,7 @@ export const weeklyCoverage: Block<WeeklyData> = {
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 10, fontStyle: 'italic' } : undefined}
             className={email ? undefined : 'mt-2.5 text-[11.5px] italic text-muted-foreground'}
           >
-            {WEEKLY_RULE}
+            {weeklyRuleFor(periodNounFor(data.window))}
           </div>
         </div>
       </BlockFrame>

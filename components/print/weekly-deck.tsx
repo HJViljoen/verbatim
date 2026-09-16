@@ -1,7 +1,7 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { WEEKLY_RULE } from '@/lib/reports/weekly'
+import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
@@ -34,7 +34,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
     context: `${data.company} · ${data.period} · reading as at ${data.readingAt.slice(0, 10)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        <span className="text-secondary-foreground">{WEEKLY_RULE}</span>
+        <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>
         <span aria-hidden> · </span>
         <span>{date}</span>
       </p>

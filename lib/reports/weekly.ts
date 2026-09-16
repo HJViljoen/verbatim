@@ -84,10 +84,29 @@ export function periodNounFor(window: { from: string; to: string } | null): Peri
  *  take the same preposition and half-substituted English is worse than either. */
 export const inPeriod = (noun: PeriodNoun): string => (noun === 'week' ? 'this week' : 'in this update')
 
-/** Printed under the masthead, every week, in the design's own words. */
+/** Printed under the masthead, every week, in the design's own words.
+ *
+ *  The 'week' arm, and the constant every caller that has no window still
+ *  reaches for. The second sentence takes the noun — see `weeklyRuleFor`. */
 export const WEEKLY_RULE =
   'Every number below is this month so far, against the three months before it. ' +
   'The week is how much of it arrived since the last update.'
+
+/**
+ * The masthead rule in the word this update's window supports.
+ *
+ * THE RULE WAS THE LAST FIXED "WEEK" IN THE ARTEFACT, and the most printed one:
+ * twice in the app and email modes and SEVEN times in the print deck, once in
+ * every page footer. Sealand's frozen window is thirty days, so "The week is how
+ * much of it arrived since the last update" sat under a masthead reading
+ * "11 Aug – 10 Sep". `periodNounFor` was written for exactly this and the
+ * headings already adapt; this string did not.
+ */
+export const weeklyRuleFor = (noun: PeriodNoun): string =>
+  noun === 'week'
+    ? WEEKLY_RULE
+    : 'Every number below is this month so far, against the three months before it. ' +
+      'This update is how much of it arrived since the last one.'
 
 /**
  * The first screen's budget (design §3 WR section 1: "Budget: 12 printed
@@ -288,6 +307,10 @@ export const nothingUnusualLine = (noun: PeriodNoun): string =>
 export const CHECK_NOT_RECORDED =
   'The weekly check is not recorded for this workspace yet.'
 
+/** The same line, in the word this update's window supports. */
+export const checkNotRecorded = (noun: PeriodNoun): string =>
+  noun === 'week' ? CHECK_NOT_RECORDED : 'This update’s check is not recorded for this workspace yet.'
+
 export const CHECK_NO_WINDOW =
   'This update does not record the days it covered, so no week could be cut out of it and nothing was compared.'
 
@@ -369,7 +392,7 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
     return { state: 'no_window', noun, line: CHECK_NO_WINDOW, baseline: null, reason: null, flags: [], moreFlags: 0 }
   }
   if (input.state === 'not_recorded') {
-    return { state: 'not_recorded', noun, line: CHECK_NOT_RECORDED, baseline: null, reason: null, flags: [], moreFlags: 0 }
+    return { state: 'not_recorded', noun, line: checkNotRecorded(noun), baseline: null, reason: null, flags: [], moreFlags: 0 }
   }
   return { state: 'nothing_unusual', noun, line: nothingUnusualLine(noun), baseline: null, reason: null, flags: [], moreFlags: 0 }
 }
@@ -452,13 +475,18 @@ export function weeklySubject(company: string, check: WeekCheck): string {
     case 'nothing_unusual':
       return `${head} — nothing unusual ${inPeriod(check.noun)}`
     case 'baseline_forming':
-      return `${head} — the weekly check is still forming`
+      // THE NOUN, HERE TOO. Sealand's window is thirty days and its subject
+      // read "the weekly check is still forming"; Össur's read "the weekly
+      // check is not recorded yet", which lands on a client as a system fault
+      // rather than as a young workspace. These two branches were the last
+      // fixed "weekly" in a composer whose every sibling already took the noun.
+      return `${head} — ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is still forming`
     case 'suppressed':
       return `${head} — ${check.noun === 'week' ? 'this week' : 'this update'} was not compared`
     case 'no_window':
       return `${head} — no window was recorded for it`
     case 'not_recorded':
-      return `${head} — the weekly check is not recorded yet`
+      return `${head} — ${check.noun === 'week' ? 'the weekly check' : 'this update’s check'} is not recorded yet`
   }
 }
 

@@ -10,6 +10,8 @@ import {
   WEEKLY_BLOCK_KEYS,
   WEEKLY_EMAIL_WIDTH,
   WEEKLY_RULE,
+  weeklyRuleFor,
+  checkNotRecorded,
   firstScreenCount,
   flagFigures,
   levelOf,
@@ -74,6 +76,20 @@ describe('the arrangement', () => {
   })
 
   it('prints the rule that keeps it honest, naming the month and the week', () => {
+    // A THIRTY-DAY UPDATE DOES NOT CALL ITSELF A WEEK. Sealand's frozen window
+    // is 2026-08-11 → 2026-09-10, and the rule prints twice in the app and
+    // email modes and seven times in the print deck.
+    expect(weeklyRuleFor('week')).toBe(WEEKLY_RULE)
+    expect(weeklyRuleFor('update')).toContain('This update is how much of it arrived since the last one.')
+    expect(weeklyRuleFor('update')).not.toContain('The week is')
+    expect(weeklySubject('Sealand', { state: 'baseline_forming', noun: 'update' } as never))
+      .toBe('Sealand: your update — this update’s check is still forming')
+    expect(weeklySubject('Sealand', { state: 'not_recorded', noun: 'update' } as never))
+      .toBe('Sealand: your update — this update’s check is not recorded yet')
+    expect(weeklySubject('Össur', { state: 'not_recorded', noun: 'week' } as never))
+      .toBe('Össur: your update — the weekly check is not recorded yet')
+    expect(checkNotRecorded('update')).toContain('This update’s check')
+
     expect(WEEKLY_RULE).toContain('this month so far')
     expect(WEEKLY_RULE).toContain('since the last update')
     // No direction word anywhere on the masthead.
