@@ -36,6 +36,13 @@ export function chunk<T>(items: readonly T[], size: number): T[][] {
  * and a chunk past 1,000 rows pages SERIALLY inside itself — so a bigger chunk
  * can trade concurrent requests for sequential ones. Use it where an id names
  * at most a handful of rows, and say so where you don't.
+ *
+ * AND IT MUST NOT BE THE ONLY THING KEEPING A READ UNDER 1,000 ROWS. PostgREST
+ * truncates at a thousand SILENTLY; a reader that does not page just prints
+ * fewer labels. Every caller of this constant pages through `selectAll`, which
+ * is what makes raising it a performance decision rather than a correctness
+ * one — keep it that way, or the next person who reads "half the largest size
+ * proven to work" and doubles it will be right and still wrong.
  */
 export const UUID_IN_CHUNK = 250
 
@@ -82,6 +89,8 @@ export const MULTI_ROW_IN_CHUNK = 100
  *   lib/reading/read.ts loadLabels    UUID_IN_CHUNK (250)  a key column, one
  *                                     label per id, and nothing downstream
  *                                     reads the order (it builds a Map by id).
+ *                                     Pages through `selectAll`, so raising
+ *                                     the constant past 1,000 loses no label.
  *   lib/reading/read.ts numerators,   MULTI_ROW_IN_CHUNK   a NON-key column:
  *   lib/pages/week.ts   new themes    (100)                months × audiences
  *                                     rows per id, so the row cap binds first.
@@ -131,6 +140,24 @@ export const READ_CONCURRENCY = 12
  * gets. Workers stop taking new items once one has failed, so a page that is
  * going to fail does not first finish paying for every chunk of the read that
  * failed.
+ *
+ * WHAT A FAILURE COSTS, AND WHY IT IS WRITTEN DOWN. Up to `limit` items are in
+ * flight before any failure can be observed, so a chunked read whose FAILURE IS
+ * THE ANSWER — an `isMissing*` guard learning that a migration is not applied
+ * yet — pays up to min(chunks, limit) requests for a one-request answer, where
+ * the serial loop it replaced paid one and stopped. Three readers are in that
+ * position right now, in the window before M4/M5 are applied: the month
+ * numerators and the labels in lib/reading/read.ts, and loadNewThemes in
+ * lib/pages/week.ts. It is acceptable there because their id sets are tens to
+ * low hundreds — one or two chunks, so one or two requests, concurrent — and
+ * that is the condition, not a general licence.
+ *
+ * IF AN ID SET HERE EVER REACHES TENS OF CHUNKS, settle the first chunk alone
+ * and parallelise the rest, or probe once before the chunks go out at all:
+ * `readTranslations` in lib/quotes.ts is the second shape, written when sixty
+ * chunks were each being told the same missing table. Removing N round trips
+ * for a one-round-trip answer is this package's whole thesis, and a ceiling
+ * that quietly reintroduces twelve of them would be the same bug in miniature.
  */
 export async function mapWithLimit<T, R>(
   items: readonly T[],

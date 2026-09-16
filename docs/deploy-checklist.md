@@ -444,6 +444,26 @@ select indexname from pg_indexes where schemaname='public'
 Expect both. These are WP23's; without them the reading pages are back to
 7–21 s.
 
+**Then one decision, in the same window, with the migration applied.** M10's
+`videos_analysed_record_idx (client_id, analyzed_run_id, id)` is a strict key
+prefix superset of `videos_analyzed_run_idx (client_id, analyzed_run_id)`, from
+August's incremental-Pass-A migration. Both are now maintained by every gather
+and by every Pass A `updateBookkeeping` — which writes that index's key column
+AND all four of its payload columns per video — so the old one costs write time
+and answers nothing the new one cannot. Dropping it gives most of M10's write
+cost back:
+
+```sql
+-- only after the two indexes above are confirmed present
+drop index if exists public.videos_analyzed_run_idx;
+```
+
+M10 does not do it: a migration for the reading pages should not quietly remove
+an index the pipeline has planned against since August. Check first that nothing
+names it (`grep -r videos_analyzed_run_idx` over the repo, and no plan pinned to
+it), then drop it or leave it deliberately. Leaving it costs one extra index
+maintained per analysed video; it breaks nothing.
+
 ### The two guards, proven rather than counted
 
 Counting triggers proves they are installed. Prove they FIRE, once, on a
@@ -786,11 +806,25 @@ monthly send is the artefact nobody has seen against a frozen month.
   the demo tenant looks exactly like a run that worked.
 - The weekly report preview for Össur, read against the page: same
   month-to-date figures.
-- `node --env-file=.env.local --import tsx scripts/reading-timing.ts --page overview --rounds 2 --client <uuid>` — read the SECOND round. WP23's target
+- `node --env-file=.env.local --import tsx scripts/reading-timing.ts --confirm --page overview --rounds 2 --client <uuid>` — read the SECOND round. WP23's target
   is 1.6–4.6 s; the read COUNT is the number that does not move when the
-  instance has a bad minute.
+  instance has a bad minute. **One page, one tenant, and `--confirm` is not
+  decoration**: the script is a read LOOP (22–64 statements a page load), it
+  refuses a plan above six page loads, and it probes the instance first and
+  refuses to run if that probe takes over 3 s. An unnarrowed two-round sweep is
+  ~1,400 statements — the pattern that starved this instance on 16 September.
 - `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`
   again, **after** the migrations and the deploy. 36/36.
+- **The loader-output dump, if a reading page looks different to anyone.**
+  `node --env-file=.env.local --import tsx scripts/loader-dump.ts --confirm --out scratch/dump-new`
+  writes every page's loader output for both tenants on a frozen clock; the same
+  command in a worktree at the baseline sha writes the other side, and `diff -r`
+  is the answer. **WP23's "nothing a client reads has changed" was proved this
+  way against `eb8d787` and was NOT re-proved on the merged tree** — it is a
+  reasoned expectation there, not a checked fact, and this is how to convert it.
+  It is twelve page loads a side, ~500 statements: a quiet window, once per
+  tree. The one defect WP23 found in itself — a chunk size silently choosing
+  four of a tenant's quotes — was found by this diff and by nothing else.
 
 ---
 

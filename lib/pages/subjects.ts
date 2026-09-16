@@ -732,18 +732,15 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const readingAt = new Date().toISOString()
   const horizon = parseHorizon(params.horizon)
 
-  // The themed run joins wave 1 (WP23) — it waits on the running-run ids and
-  // on nothing else, and it was being read inside the selected subject's
-  // branch, behind the whole axis.
-  const [clientRes, runsRaw, themedRunId, rivals, subjectRows, moveRows] = await Promise.all([
+  // Wave 1 holds what the empty-state guard itself needs and what the page
+  // cannot be shaped without; anything else starts on the line after the guard,
+  // so a tenant that draws nothing pays for nothing.
+  const [clientRes, runsRaw, rivals, subjectRows, moveRows] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
-    ),
-    fetchRunningRunIds(supabase, clientId, 'subjects').then((ids) =>
-      fetchThemedRunId(supabase, clientId, ids, 'subjects'),
     ),
     loadTrackedRivals(supabase, clientId),
     loadSubjectRows(supabase, clientId),
@@ -751,6 +748,27 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   ])
   const brand = (clientRes.data as { company_name?: string | null } | null)?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
+
+  // WHICH SUBJECT IS SELECTED IS A PURE FUNCTION OF WAVE 1 AND THE URL, so it
+  // is answered here rather than after the axis — the themed run is the only
+  // read that depends on the answer, and asking it early is what lets that read
+  // overlap wave 2 instead of sitting alone between two waves.
+  const active = (subjectRows ?? []).filter((s) => s.status === 'active')
+  const proposed = (subjectRows ?? []).filter((s) => s.status === 'proposed')
+  const selectedId = selectSubject(active, params.item)
+
+  // THE THEMED RUN, STARTED HERE AND TAKEN WHERE IT IS USED (WP23). It waits
+  // on the running-run ids and on nothing else, and it used to be read inside
+  // the selected subject's branch, behind the whole axis. Started here it
+  // overlaps wave 2 — and ONLY WHEN A SUBJECT IS SELECTED, because the pane is
+  // the only thing that reads it: a rail with nothing open makes the two reads
+  // it made before this package, not two more.
+  const themedRunAhead = selectedId
+    ? fetchRunningRunIds(supabase, clientId, 'subjects').then((ids) =>
+        fetchThemedRunId(supabase, clientId, ids, 'subjects'),
+      )
+    : null
+  themedRunAhead?.catch(() => {})
 
   const updatesByMonth: Record<string, number> = {}
   for (const r of runsRaw) {
@@ -800,13 +818,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
   )
 
-  const active = (subjectRows ?? []).filter((s) => s.status === 'active')
-  const proposed = (subjectRows ?? []).filter((s) => s.status === 'proposed')
-
   // ── SU2 · the selected subject's months ───────────────────────────────
+  // `active`, `proposed` and `selectedId` are settled above wave 2, beside the
+  // read that depends on them.
   const leadRival = rivals.find((r) => !r.retiredAt) ?? rivals[0] ?? null
   const audiences = [CLIENT_AUDIENCE, ...rivals.map((r) => rivalKey(r.name)), INDUSTRY_AUDIENCE]
-  const selectedId = selectSubject(active, params.item)
 
   const [subjectSet, kindRows] = await Promise.all([
     selectedId
@@ -886,6 +902,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     const series = sides.map((side) => seriesFor(subject.id, side.audience)).filter((s): s is MonthSeries => s != null)
 
     const memberIds = await loadMemberInsightIds(supabase, clientId, subject.id)
+    const themedRunId = themedRunAhead ? await themedRunAhead : null
     const [voices, unanswered] = await Promise.all([
       loadVoices(supabase, clientId, memberIds ?? []),
       loadUnanswered(supabase, clientId, memberIds ?? [], {

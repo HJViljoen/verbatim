@@ -409,28 +409,38 @@ export const TRANSLATION_COLUMNS = 'text_hash, language, english'
  * the first one. A page cannot be under three seconds while it is asking a
  * missing table seventy questions.
  *
- * One cheap row, memoised on the client, so the answer is reached once per
- * request whichever loader asks first. The cost when the table IS there is one
- * small extra round trip per request and one extra hop before the chunks go
- * out; the cost when it is not is one request instead of seventy.
+ * One cheap row, asked before the chunks go out, and a YES memoised on the
+ * client so it is reached once per request whichever loader asks first. The
+ * cost when the table IS there is one small extra round trip per request and
+ * one extra hop before the chunks; the cost when it is not is one request per
+ * load instead of one per chunk — seventy-one became four.
  *
  * ANY failure is "not reachable", not only a missing table. A cache that
  * cannot be read is a page of quotes without their English, which is exactly
  * what the catch below already produced — this only reaches that answer
  * sooner, and says the same thing in the same place.
+ *
+ * BUT ONLY THE YES IS REMEMBERED. The probe THROWS its "no" rather than
+ * returning one, so `memoRead`'s own rule applies to it: a rejection is evicted
+ * before it is handed on, and the next caller in the same request asks again.
+ * The two failures are not the same failure. A missing table is SETTLED — every
+ * chunk of every load would have been told the same thing, which is what makes
+ * seventy-one reads into one. A TIMED-OUT ROUND TRIP IS NOT SETTLED, and this
+ * instance produces them: an empty read measured 1.9 s and a one-row read
+ * 12.6 s on a bad minute of the same afternoon. Remembering that "no" would
+ * take the English off every quote in the whole request — This week loads
+ * quotes twice, Voice twice — for one unlucky probe, where before the probe
+ * existed a flaky read cost its own chunk and no more. So the settled answer is
+ * sticky and the flaky one is retried; a caller pays at most one wasted probe.
  */
-function translationsReachable(client: unknown): Promise<{ ok: boolean; why: string }> {
+function translationsReachable(client: unknown): Promise<true> {
   return memoRead(client, 'quotes:translations-reachable', async () => {
-    try {
-      const c = client as unknown as {
-        from(table: string): { select(cols: string): { limit(n: number): PromiseLike<{ error: unknown }> } }
-      }
-      const { error } = await c.from('comment_translations').select('text_hash').limit(1)
-      if (error) return { ok: false, why: (error as { message?: string }).message ?? String(error) }
-      return { ok: true, why: '' }
-    } catch (e) {
-      return { ok: false, why: e instanceof Error ? e.message : String(e) }
+    const c = client as unknown as {
+      from(table: string): { select(cols: string): { limit(n: number): PromiseLike<{ error: unknown }> } }
     }
+    const { error } = await c.from('comment_translations').select('text_hash').limit(1)
+    if (error) throw new Error((error as { message?: string }).message ?? String(error))
+    return true as const
   })
 }
 
@@ -438,9 +448,10 @@ export async function readTranslations(client: unknown, texts: readonly string[]
   const out = new Map<string, { lang: string; english: string | null }>()
   const hashes = [...new Set(texts.map((t) => cleanQuote(t)).filter(Boolean).map(quoteTextHash))]
   if (!hashes.length) return out
-  const reachable = await translationsReachable(client)
-  if (!reachable.ok) {
-    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${reachable.why}`)
+  try {
+    await translationsReachable(client)
+  } catch (e) {
+    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${e instanceof Error ? e.message : String(e)}`)
     return out
   }
   try {

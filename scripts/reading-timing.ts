@@ -3,8 +3,28 @@
 // throws their answers away, spends no OpenAI or Apify money, and writes
 // nothing.
 //
-//   node --env-file=.env.local --import tsx scripts/reading-timing.ts
-//   … --page "this week" --rounds 3 --client <uuid> --detail 30
+//   node --env-file=.env.local --import tsx scripts/reading-timing.ts --confirm
+//   … --page "this week" --rounds 2 --client <uuid> --detail 30
+//
+// THIS IS A READ LOOP AND .env.local IS PRODUCTION. Read the numbers before
+// running it: one page load makes 22-64 statements, and the loop is
+// rounds x tenants x pages, so the unnarrowed `--rounds 2` is 24 page loads —
+// roughly 1,400 statements, issued as fast as the loaders can issue them, by a
+// SERVICE-ROLE client with no statement timeout. On 16 September this instance
+// was starved twice in one morning by exactly that pattern (several agents
+// reading at once, this harness among them) and the live app returned 504s to
+// paying users. So:
+//
+//   * it will not start without `--confirm`;
+//   * it probes first — one small read, timed — and REFUSES to run if that
+//     takes more than 3 s or errors, because a slow probe is an instance that
+//     has nothing to spare (come back in fifteen minutes);
+//   * it refuses a plan above `--max-loads` (default 6 page loads). Narrow with
+//     `--page` and `--client` rather than raising it; a whole-sweep comparison
+//     is a deliberate act and should be typed out as one.
+//
+// The cheapest useful invocation is one page, one tenant, two rounds, and the
+// second round is the one to read: 2 page loads, ~80 statements.
 //
 // WHY THIS IS A SCRIPT AND NOT A SCRATCH FILE. Phase 1 WP23 took the reading
 // pages from 7-21 s to 1.6-4.6 s against production, and the whole of that came
@@ -170,18 +190,59 @@ async function time(name: string, clientId: string, load: Loader, detail: number
   return { name, total, reads: made.length, failure }
 }
 
+/** Reads per page load, measured 16 September — for the plan this prints before
+ *  it asks to be let through. Overview 39-42, Subjects 22-24, Voice 37-40,
+ *  Market 30-31, Competitive 26-30, This week 53-64. */
+const READS_PER_LOAD = 40
+
 async function main() {
   const rounds = Number(flag('rounds', '1')) || 1
   const detail = Number(flag('detail', '20')) || 20
   const wantedPage = flag('page').toLowerCase()
   const wantedClient = flag('client')
+  const maxLoads = Number(flag('max-loads', '6')) || 6
+  const confirmed = args.includes('--confirm')
 
+  if (!confirmed) {
+    console.error(
+      'reading-timing reads PRODUCTION in a loop (22-64 statements a page load) and will not start without --confirm.\n' +
+        'Narrow it first: --page overview --client <uuid> --rounds 2 is 2 loads, ~80 statements.\n' +
+        'The header says why: this pattern starved the instance on 16 September and the app returned 504s.',
+    )
+    process.exit(2)
+  }
+
+  // THE PROBE, BEFORE ANYTHING ELSE. The smallest read there is, timed. A slow
+  // answer here is not this script's problem to work around — it is an instance
+  // with nothing to spare, and the next thing this script would do is ask it
+  // for a thousand statements. Stop, and come back in fifteen minutes.
+  const probeStarted = Date.now()
   const { data, error } = await createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
     process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
   ).from('clients').select('id, company_name').order('company_name')
-  if (error) throw new Error(`clients: ${error.message}`)
+  const probeMs = Date.now() - probeStarted
+  if (error) throw new Error(`clients: ${error.message} (the probe failed in ${probeMs} ms — do not read this instance for fifteen minutes)`)
+  console.log(`Probe: the client list answered in ${probeMs} ms.`)
+  if (probeMs > 3_000) {
+    console.error(
+      `The probe took ${probeMs} ms (the line is 3,000). This instance has nothing to spare; a timing sweep now is\n` +
+        'what takes the app down rather than what measures it. Wait fifteen minutes and probe again.',
+    )
+    process.exit(3)
+  }
+
   const tenants = ((data ?? []) as Tenant[]).filter((t) => !wantedClient || t.id === wantedClient)
+  const pagesPerRound = PAGES.filter(([page]) => !wantedPage || wantedPage === 'all' || page.toLowerCase() === wantedPage).length
+  const loads = rounds * tenants.length * pagesPerRound
+  console.log(`Plan: ${loads} page loads (${rounds} round(s) x ${tenants.length} tenant(s) x ${pagesPerRound} page(s)), roughly ${loads * READS_PER_LOAD} statements.`)
+  if (loads > maxLoads) {
+    console.error(
+      `That is more than --max-loads (${maxLoads}). Narrow it with --page and --client, or say --max-loads ${loads}\n` +
+        'deliberately — a full sweep of both tenants is ~1,400 statements and belongs in a quiet window.',
+    )
+    process.exit(4)
+  }
 
   // Said on every run, because a table of milliseconds invites more trust than
   // this harness earns: both of its clients are service-role, so nothing below

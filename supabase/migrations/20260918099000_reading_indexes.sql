@@ -38,19 +38,58 @@
 -- `count: exact` head queries plus a paged read over the same population), and
 -- the remaining one is the biggest read on the Overview.
 --
--- The plan today:
+-- WHAT IT COSTS TODAY, AND WHAT IT COSTS WITH THE INDEX. Three corpora, one
+-- table, because the same read on the same shape of data gives different
+-- numbers on different heaps and the difference IS the argument. The read is
+-- the one loadCorpus issues (`order by id`, one 1,000-row page); "without" is
+-- the plan the planner picks when this index is absent.
 --
---   Index Scan using videos_analyzed_run_idx on videos
---     Index Cond: (client_id = … AND analyzed_run_id IS NOT NULL)
---     Filter: (platform <> 'reddit')
---     rows=1596  Buffers: shared hit=1267  actual time=886 ms
+--   corpus                              row     rows in    without this index          with it
+--                                       width   the read
+--   ---------------------------------------------------------------------------------------------------------
+--   production, 8,377 videos / 27 MB    3.3 KB   1,596     Index Scan on                (not applied here;
+--   (explain analyze, read-only,                           videos_analyzed_run_idx,     the local clusters
+--   16 September)                                          1,267 buffers, 886 ms        below stand in)
 --
--- 1,267 buffers for 1,596 rows, every one of them already in cache. That is
--- the HEAP: a `videos` row averages 3.3 KB because it carries transcripts and
--- OCR text, so barely more than one row fits on a page, and the scan visits a
--- page per row to read five narrow columns. The index below carries those five
--- columns as payload, so the same read is an Index Only Scan that never opens
--- the heap.
+--   cluster A, 38,400 videos across     3.3 KB   3,491     Bitmap Heap Scan + sort,     Index Only Scan +
+--   two tenants at production's                            1,512 heap blocks,           top-N sort,
+--   width                                                  1,520 buffers                Heap Fetches 0,
+--                                                                                       49 buffers
+--
+--   cluster B, 20,000 videos / 78 MB,   3.9 KB   4,571     Index Scan using             Index Only Scan +
+--   transcripts INLINE (storage main,                      videos_pkey over the whole   top-N heapsort,
+--   incompressible)                                        table, filtered,             Heap Fetches 0,
+--                                                          4,443 buffers, 16.9 ms       62 buffers, 4.6 ms
+--
+--   cluster B, the SAME 20,000 rows     ~0.7 KB  4,571     Index Scan using             the planner did not
+--   at 13 MB — a compressible                              videos_pkey,                 use this index at
+--   transcript, so the text TOASTs                         4,286 buffers                all: 4,286 buffers
+--   out of line
+--
+-- READ THE ROW WIDTH COLUMN, NOT THE ROW COUNT. Cluster B reports three times
+-- cluster A's buffers on half the videos for two reasons that are both about
+-- the heap and neither about the index: its rows are wider, and with no index
+-- to bitmap the planner fell back to scanning `videos_pkey` over the whole
+-- table instead of over the read's own population. The last row is the control
+-- and the most useful line here: the same rows, the same read, a narrow heap —
+-- and the index buys nothing, because there was never anything to save but
+-- heap pages. THE DAY `videos` STOPS CARRYING ITS TRANSCRIPTS INLINE (a
+-- transcript table, a storage change, a column moved), THIS INDEX STOPS PAYING
+-- AND SHOULD BE DROPPED RATHER THAN CARRIED.
+--
+-- HEAP FETCHES: 0 IS THE BEST CASE, NOT THE CASE. An index-only scan skips the
+-- heap only for pages the visibility map marks all-visible, and `videos` is
+-- written constantly: by every gather, and — per video, all run long — by Pass
+-- A's `updateBookkeeping`, which rewrites `analyzed_run_id` and all four
+-- `analyzed_with_*` columns of this index in one statement. On cluster A, 200
+-- videos re-stamped the way Pass A stamps them and no autovacuum since:
+--
+--   Heap Fetches: 736   788 buffers        (and back to 0 / 52 after a VACUUM)
+--
+-- So a production run leaves this scan partly reading the heap until autovacuum
+-- catches up. It still wins — 788 buffers against the 1,520 of the scan with no
+-- index at all, and 49 once the table settles — but the number to plan on is
+-- the range, not the zero.
 --
 -- The key is `videos_analyzed_run_idx`'s plus `id`, and the INCLUDE columns are
 -- the five the record selects. `platform` is among them because it is a FILTER
@@ -67,43 +106,30 @@
 -- and never opens the heap. `id` stays in the KEY rather than the payload
 -- because that is what makes the tuple whole and the index unique.
 --
--- MEASURED on a throwaway PostgreSQL 17 cluster over schema-baseline plus every
--- migration, with 38,400 videos across two tenants and the target tenant at
--- production's share of them. The read as it is actually issued (`order by id`,
--- one 1,000-row page):
---
---   with this index    Index Only Scan + top-N sort  Heap Fetches: 0   49 buffers
---   without it         Bitmap Heap Scan + sort       1,512 heap blocks  1,520 buffers
---
--- — a thirtieth of the pages, and on production the heap side is worse still:
--- 1,267 buffers for 1,596 rows.
---
--- HEAP FETCHES: 0 IS THE BEST CASE, NOT THE CASE. An index-only scan skips the
--- heap only for pages the visibility map marks all-visible, and `videos` is
--- written constantly: by every gather, and — per video, all run long — by Pass
--- A's `updateBookkeeping`, which rewrites `analyzed_run_id` and all four
--- `analyzed_with_*` columns of this index in one statement. On the same cluster,
--- 200 videos re-stamped the way Pass A stamps them and no autovacuum since:
---
---   Heap Fetches: 736   788 buffers        (and back to 0 / 52 after a VACUUM)
---
--- So a production run leaves this scan partly reading the heap until autovacuum
--- catches up. It still wins — 788 buffers against the 1,520 of the scan with no
--- index at all, and 49 once the table settles — but the number to plan on is
--- the range, not the zero.
---
--- The cost is on the write side, and the heavier half is not the gather: it is
+-- THE COST IS ON THE WRITE SIDE, and the heavier half is not the gather: it is
 -- that same Pass A bookkeeping, one index tuple per video analysed, on an index
--- whose key AND payload it writes. Plus ~500 KB of storage. Measured against
--- what it saves on the one page every client opens first, that is the right
--- trade; if a gather or a Pass A run ever slows for it, this is the index to
--- question.
+-- whose key AND payload it writes. Plus ~500 KB of storage.
+--
+-- AND THERE IS AN OFFSET THAT IS NOT TAKEN HERE, BECAUSE IT IS NOT THIS FILE'S
+-- TO TAKE. `videos_analyzed_run_idx (client_id, analyzed_run_id)` — from
+-- 20260818090000_incremental_pass_a.sql — is a strict KEY PREFIX of the index
+-- below, so once this one exists the old one answers no query this one cannot,
+-- and every gather and every `updateBookkeeping` maintains both. Dropping it in
+-- the same W1 window would give most of the write cost above straight back:
+--
+--   drop index if exists public.videos_analyzed_run_idx;   -- W1, deliberately, not here
+--
+-- It is left standing on purpose. A migration that creates an index for the
+-- reading pages should not quietly remove one the pipeline has been planning
+-- against since August, and the check is a person's: confirm nothing plans
+-- `videos_analyzed_run_idx` by name and that this index is actually applied,
+-- then drop it. It is on the deploy checklist beside this file.
 create index if not exists videos_analysed_record_idx
   on public.videos (client_id, analyzed_run_id, id)
   include (platform, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr);
 
 comment on index public.videos_analysed_record_idx is
-  'Covering index for the record''s corpus read (lib/reading/record.ts loadCorpus): the five columns the read-depth and language records are computed from, carried as INCLUDE payload, so the scan is index-only. The read itself pages by `id`, which cannot move under it while Pass A stamps analyzed_run_id per video, so it sorts index tuples rather than opening the heap. Without this index the same read is a Bitmap Heap Scan visiting 1,267 heap pages for 1,596 rows, because a videos row averages 3.3 KB. Phase 1 WP23.';
+  'Covering index for the record''s corpus read (lib/reading/record.ts loadCorpus): the five columns the read-depth and language records are computed from, carried as INCLUDE payload, so the scan is index-only. The read itself pages by `id`, which cannot move under it while Pass A stamps analyzed_run_id per video, so it sorts index tuples rather than opening the heap. Without this index the same read opens a heap page per row — 1,267 buffers for 1,596 rows on production — because a videos row averages 3.3 KB; the saving is the heap and nothing else, so it stops paying the day transcripts stop living inline. Phase 1 WP23.';
 
 -- ============================================================================
 -- 2 · gate_verdicts — the discard record's window, by time

@@ -810,24 +810,30 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const horizon = parseHorizon(params.horizon)
 
   // ── wave 1: who this is, and what has been delivered ───────────────────
-  // The themed run joins wave 1 (WP23): it waits on the running-run ids and on
-  // nothing else, and waiting for the axis first put it alone on the critical
-  // path between two waves.
-  const [clientRes, runsRaw, themedRunId, rivals] = await Promise.all([
+  // Wave 1 is above the empty-state guard, so it holds only what the guard
+  // needs and what the page cannot be shaped without. The rest starts on the
+  // line after it.
+  const [clientRes, runsRaw, rivals] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'voice-surface').then((ids) =>
-      fetchThemedRunId(supabase, clientId, ids, 'voice-surface'),
-    ),
     loadRivals(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'voice.client')
   const brand = client?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
+
+  // THE THEMED RUN, STARTED HERE AND TAKEN IN WAVE 3 (WP23). It waits on the
+  // running-run ids and on nothing else, and waiting for the axis first put it
+  // alone on the critical path between two waves; started here it overlaps
+  // wave 2 and costs a tenant with no delivered update nothing at all.
+  const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'voice-surface').then((ids) =>
+    fetchThemedRunId(supabase, clientId, ids, 'voice-surface'),
+  )
+  themedRunAhead.catch(() => {})
 
   const updatesByMonth: Record<string, number> = {}
   for (const r of runsRaw) {
@@ -875,6 +881,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   recordAhead.catch(() => {})
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
+  const themedRunId = await themedRunAhead
   const top = themedRunId
     ? await loadTopObjects(reading.client, clientId, {
         objectKind: 'theme', audiences: [selected], from: readAxis[0], to: month, limit: VOICE_MOVER_POOL,
