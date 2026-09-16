@@ -8,6 +8,7 @@ import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type TrackedRival } from '../rivals'
 import { audienceLabel } from '../readiness/types'
+import { SHARE_BAND } from '../report-bands'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
 import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
@@ -909,10 +910,11 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   }
 }
 
-/** The denominator floor a side is called hollow against — `SHARE_BAND.minN`,
- *  the same 100 videos every other reading uses. Restated as a number here so
- *  the axis note does not import the band module for one field. */
-const FLOOR_N = 100
+/** The denominator floor a side is called hollow against: the band's own, so
+ *  the sentence above the axis cannot disagree with the verdicts drawn beside
+ *  it the day the band moves. (The design's "30" at final-v3.md:271 is
+ *  superseded — research/bands-horizon-direction.md:882 pins minN = 100.) */
+const FLOOR_N = SHARE_BAND.minN
 
 function previousMonthOf(month: string): string {
   const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
