@@ -530,6 +530,16 @@ export async function retireSubject(
     .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
   if (readError) return { ok: false, message: couldNotSave('retireSubject read', readError) }
   if (!before) return { ok: false, message: 'That subject is not yours.' }
+  // STOPPING A STOPPED SUBJECT IS NOT A NO-OP, AND THAT IS WHY IT IS REFUSED.
+  // The write below sets `superseded_by` to `input.supersededBy ?? null`, and a
+  // second Stop passes none — so it erased the pointer joining a renamed
+  // subject's frozen months to its successor. retired -> retired also passes
+  // `subjects_retirement_is_final` and does NOT fire `subjects_status_audit`
+  // (which is `when (new.status is distinct from old.status)`), so the erasure
+  // left no config_changes row behind it.
+  if ((before as { status?: string }).status === 'retired') {
+    return { ok: true, message: 'It was already stopped. The months it carries are closed.', value: null }
+  }
 
   const { error } = await ctx.supabase
     .from(TABLE_SUBJECTS)
@@ -540,5 +550,10 @@ export async function retireSubject(
   // Logged by `subjects_status_audit`, not here — see confirmSubject. This is
   // the write that permanently freezes the subject's open months, so the record
   // of who made it has to sit where nothing can bypass it.
-  return { ok: true, message: 'Stopped. The months it already carries keep their line.', value: null }
+  // NOT "keep their line": no surface draws a stopped subject's series — the
+  // rail excludes it, OV2 reads `in('status', ['active','proposed'])`, and
+  // Market lists only the moves. What is true is that the months are closed at
+  // the numbers they held and nothing will rewrite them, which is the thing the
+  // reader is actually deciding about.
+  return { ok: true, message: 'Stopped. The months it already carries are closed and keep their numbers.', value: null }
 }

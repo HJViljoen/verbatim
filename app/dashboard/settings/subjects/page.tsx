@@ -55,7 +55,11 @@ export default async function SettingsSubjectsPage() {
     namedAt: s.named_at,
     status: s.status,
     because: originLine(s.origin),
-    href: `/dashboard/subjects?subject=${s.id}`,
+    // NO LINK ON A STOPPED SUBJECT. `loadSubjectRows` excludes retired subjects
+    // from the rail and `selectSubject` falls back to rail[0] with no notice —
+    // the defect aa32043 fixed for `?themes=` — so this href opened a DIFFERENT
+    // subject's page under the name the reader clicked.
+    href: s.status === 'retired' ? undefined : `/dashboard/subjects?subject=${s.id}`,
   }))
 
   const named = rows.filter((s) => s.status !== 'proposed')

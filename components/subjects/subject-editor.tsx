@@ -146,7 +146,18 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 // the same sentence twice on one row reads as a rendering bug.
                 // What the client actually has to decide is whether to keep it,
                 // and the origin is the argument for keeping it.
-                <span className={cls.meta}>{r.status === 'proposed' ? r.because : r.note ?? 'no reading yet'}</span>
+                <span className={cls.meta}>
+                  {r.status === 'proposed'
+                    ? r.because
+                    : r.status === 'retired'
+                      // NOT "no reading yet", WHICH IS THE OPPOSITE OF TRUE. A
+                      // stopped subject carries every month it was read in,
+                      // frozen at the instant it was stopped, and they are the
+                      // record. Settings passes no `level` for any row, so
+                      // every stopped subject read "no reading yet".
+                      ? 'stopped · the months it carries are closed'
+                      : r.note ?? 'no reading yet'}
+                </span>
               )}
 
               {variant === 'settings' && r.status !== 'proposed' && r.description ? (
@@ -156,6 +167,15 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
               <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-muted-foreground">
                 <span className="font-mono">named {fullDate(r.namedAt)}</span>
                 {variant === 'settings' ? <span>· {r.because}</span> : null}
+                {r.status === 'retired' ? (
+                  // A STOPPED SUBJECT IS MARKED AND CARRIES NO CONTROLS. It
+                  // rendered with the same name, the same Rename and Stop
+                  // buttons and "no reading yet" — presenting the one state
+                  // this product cannot undo as if it were live.
+                  <span className="rounded-full bg-inner px-1.5 py-px font-medium text-secondary-foreground">
+                    stopped
+                  </span>
+                ) : null}
                 {r.status === 'proposed' ? (
                   <>
                     <span className="rounded-full bg-inner px-1.5 py-px font-medium text-secondary-foreground">
@@ -173,7 +193,7 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     ) : null}
                   </>
                 ) : null}
-                {canEdit ? (
+                {canEdit && r.status !== 'retired' ? (
                   <>
                     <span aria-hidden>·</span>
                     <button
