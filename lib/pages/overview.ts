@@ -234,6 +234,14 @@ export interface RivalRow {
 
 export interface RivalsBlock {
   rows: RivalRow[]
+  /**
+   * Whether the panel reading behind the two shares exists at all.
+   *
+   * False means `month_audience_stats` is not applied for this workspace, so
+   * no row was ever looked at. A cell then reads "not recorded yet" and NOT
+   * "not observed", which is a measurement (lib/reading/standings.ts).
+   */
+  recorded: boolean
   /** Said instead of the shares when M5 is not applied here. */
   standingsNote: string | null
   /** Videos of the client's own that also name a tracked rival. */
@@ -1893,20 +1901,40 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
   }
 
   if (input.statsRows == null) {
+    // M5 IS NOT APPLIED HERE, AND THE CELLS MUST SAY SO. This branch used to
+    // return every rival with `observed: false`, which the block renders as
+    // "not observed" — the sentence for "we looked at the panel and this brand
+    // was not in it". Nobody looked: `month_audience_stats` does not exist, and
+    // a missing migration turned into a measurement is the same defect as a
+    // missing migration turned into a zero, in the other direction. `recorded`
+    // carries the difference to the block, which prints NOT_RECORDED instead.
+    //
+    // THE TABLE ALSO KEEPS ITS SHAPE. `buildStandings` over an empty panel
+    // returns the same wanted rows it will return the day M5 lands — your own
+    // brand, each tracked rival, the category — so the table does not grow two
+    // rows and re-order itself on the first render after the migration.
     return {
-      rows: input.rivals.map((r) => ({
-        audience: rivalKey(r.name),
-        label: r.name,
-        role: 'rival' as const,
-        observed: false,
-        attention: null,
-        content: null,
-        attentionVerdict: null,
-        contentVerdict: null,
+      rows: buildStandings({
+        month: input.month,
+        rows: [],
+        rivals: input.rivals.map((r) => ({ name: r.name })),
+        clientLabel: input.brand,
+        categoryLabel: audienceLabel(INDUSTRY_AUDIENCE),
+        dualMention: input.dualMention,
+      }).map((s) => ({
+        audience: s.audience,
+        label: s.label,
+        role: s.role,
+        observed: s.observed,
+        attention: s.attention,
+        content: s.content,
+        attentionVerdict: s.attentionVerdict,
+        contentVerdict: s.contentVerdict,
         ownPosts: null,
-        raisedMost: raisedMost(rivalKey(r.name)),
-        retiredAt: r.retiredAt,
+        raisedMost: raisedMost(s.audience),
+        retiredAt: retiredBy.get(s.audience) ?? null,
       })),
+      recorded: false,
       standingsNote:
         'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
       dualMention: input.dualMention,
@@ -1962,7 +1990,13 @@ export function buildRivals(input: RivalsInput): RivalsBlock {
       raisedMost: raisedMost(s.audience),
       retiredAt: retiredBy.get(s.audience) ?? null,
     })),
-    standingsNote: standings.every((s) => !s.observed) ? `Nothing was ${NOT_OBSERVED} on this month’s panel.` : null,
+    recorded: true,
+    // NO SUMMARY SENTENCE. This arm used to print "Nothing was not observed on
+    // this month's panel" when every row was unobserved — which says the
+    // opposite of what it means, and every one of those rows already says "not
+    // observed" in both of its own cells. `buildStandingsBlock` deleted the
+    // same sentence on CO2; it was still reachable here.
+    standingsNote: null,
     dualMention: input.dualMention,
     caveat,
   }

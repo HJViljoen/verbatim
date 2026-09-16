@@ -32,9 +32,23 @@ describe('OV4 · rivals', () => {
   })
 
   it('says "not observed" for a brand the panel holds nothing for, never 0%', () => {
-    const text = renderText(overviewRivals.render(refusedFixture(), 'app', ctx))
+    const data = overviewFixture()
+    const rows = data.rivals.rows.map((r) => ({ ...r, observed: false, attention: null, content: null }))
+    const text = renderText(overviewRivals.render({ ...data, rivals: { ...data.rivals, rows } }, 'app', ctx))
     expect(text).toContain('not observed')
     expect(text).not.toContain('0% 0 of')
+  })
+
+  // A MISSING TABLE IS NOT A MEASUREMENT. `recorded: false` means
+  // month_audience_stats is not applied for this workspace — nobody looked —
+  // and the cells said "not observed" on both live tenants while Competitive,
+  // off a table that IS applied, printed a rival at 9.4% of the same month.
+  it('says "not recorded yet" — never "not observed" — while the panel reading does not exist', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewRivals.render(refusedFixture(), mode, ctx))
+      expect(text).toContain('not recorded yet')
+      expect(text).not.toContain('not observed')
+    }
   })
 
   it('says their own posts are not tracked rather than implying they said nothing', () => {

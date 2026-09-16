@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { NOT_OBSERVED, standingText, type StandingShare } from '@/lib/reading/standings'
+import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { isRivalAudience } from '@/lib/rivals'
 import { OWN_POSTS_UNREADABLE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
@@ -22,15 +22,21 @@ import { OWN_POSTS_UNREADABLE, RIVAL_FIGURES_MAX, type OverviewData, type RivalR
 // NO RANK, NO TINT. The design forbids a rank headline and a colour tint on a
 // rival's row; the row is a reading, not a league table.
 
-/** A share cell: the percentage and the two counts under it, or the words. A
- *  brand the panel holds nothing for reads "not observed" — never 0%, which
- *  would say the brand was silent when what happened is that we looked and
- *  found nothing. */
-function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode }): ReactNode {
+/** A share cell: the percentage and the two counts under it, or the words.
+ *
+ *  THREE STATES AND NOT TWO. A brand the panel holds nothing for reads "not
+ *  observed" — never 0%, which would say the brand was silent when what
+ *  happened is that we looked and found nothing. A workspace whose panel
+ *  reading has not been written at all reads "not recorded yet", because
+ *  nobody looked: `recorded` is the block's own flag for that, and without it
+ *  this cell asserted a measurement on every row of both live tenants while
+ *  Competitive, off a table that IS applied, printed a rival at 9.4%. */
+function Share({ share, recorded, mode }: { share: StandingShare | null; recorded: boolean; mode: RenderMode }): ReactNode {
   if (share == null || share.pct == null) {
+    const words = recorded ? NOT_OBSERVED : NOT_RECORDED
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{NOT_OBSERVED}</span>
-      : <span className="text-[12px] text-muted-foreground">{NOT_OBSERVED}</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{words}</span>
+      : <span className="text-[12px] text-muted-foreground">{words}</span>
   }
   const body = <>
     <span data-copy="figure">{standingText(share)}</span>{' '}
@@ -119,7 +125,7 @@ export const overviewRivals: Block<OverviewData> = {
               <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                 <strong>{row.label}</strong>{row.retiredAt ? <span style={{ color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
                 <div style={{ marginTop: 2 }}>
-                  attention <Share share={row.attention} mode={mode} /> · content <Share share={row.content} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} />
+                  attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} /> <BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} />
                 </div>
                 <div style={{ marginTop: 2 }}>raised most under their content: <Raised row={row} mode={mode} /></div>
               </div>
@@ -147,8 +153,8 @@ export const overviewRivals: Block<OverviewData> = {
                         {row.label}
                         {row.retiredAt ? <span className="ml-1 text-[11px] font-normal text-muted-foreground">tracked until {shortDate(row.retiredAt)}</span> : null}
                       </td>
-                      <td className="py-1.5 pr-3"><Share share={row.attention} mode={mode} /></td>
-                      <td className="py-1.5 pr-3"><Share share={row.content} mode={mode} /></td>
+                      <td className="py-1.5 pr-3"><Share share={row.attention} recorded={r.recorded} mode={mode} /></td>
+                      <td className="py-1.5 pr-3"><Share share={row.content} recorded={r.recorded} mode={mode} /></td>
                       <td className="py-1.5 pr-3"><BlockMovement verdict={row.attentionVerdict} unit="pts" mode={mode} /></td>
                       <td className="py-1.5 pr-3"><OwnPosts row={row} mode={mode} /></td>
                       <td className="py-1.5"><Raised row={row} mode={mode} /></td>

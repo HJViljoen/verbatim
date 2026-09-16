@@ -231,6 +231,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           retiredAt: null,
         },
       ],
+      recorded: true,
       standingsNote: null,
       dualMention: 41,
       caveat: RIVALS_CAVEAT,
@@ -311,6 +312,7 @@ export function refusedFixture(): OverviewData {
         attentionVerdict: null,
         contentVerdict: null,
       })),
+      recorded: false,
       standingsNote:
         'How much attention each brand drew is not recorded month by month for this workspace yet — what is printed here is what was raised under their content.',
     },

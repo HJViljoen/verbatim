@@ -630,12 +630,27 @@ describe('buildRivals', () => {
       rivals: [{ name: 'Freitag', retiredAt: null }],
       statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
     })
+    const freitag = b.rows.find((r) => r.label === 'Freitag')
+    expect(b.recorded).toBe(false)
     expect(b.standingsNote).toContain('not recorded month by month')
-    expect(b.rows[0].observed).toBe(false)
-    expect(b.rows[0].attention).toBeNull()
-    expect(b.rows[0].raisedMost).toMatchObject({ label: 'Does the tarp smell', k: 41, n: 142 })
+    expect(freitag?.observed).toBe(false)
+    expect(freitag?.attention).toBeNull()
+    expect(freitag?.raisedMost).toMatchObject({ label: 'Does the tarp smell', k: 41, n: 142 })
     expect(b.caveat).toContain('counts in your audience only')
     expect(b.dualMention).toBe(41)
+  })
+
+  // THE TABLE DOES NOT CHANGE SHAPE ON THE DAY M5 LANDS. The unrecorded arm
+  // used to draw the tracked rivals and nothing else, so your own row and the
+  // category's appeared the first time the migration was applied.
+  it('draws your own row and the category’s while the panel is not recorded', () => {
+    const b = buildRivals({
+      rivals: [{ name: 'Freitag', retiredAt: null }],
+      statsRows: null, month: '2026-09-01', prevMonth: '2026-08-01', brand: 'Sealand', series, dualMention: 41,
+    })
+    expect(b.rows.map((r) => r.role)).toEqual(['client', 'rival', 'category'])
+    expect(b.rows.map((r) => r.label)).toEqual(['Sealand', 'Freitag', 'The category'])
+    expect(b.rows.every((r) => !r.observed && r.attention == null && r.content == null)).toBe(true)
   })
 
   it('bands the two shares when the panel rows are there', () => {
@@ -661,6 +676,6 @@ describe('buildRivals', () => {
       rivals: [{ name: 'Poler', retiredAt: '2026-09-09' }],
       statsRows: null, month: '2026-09-01', prevMonth: null, brand: 'Sealand', series, dualMention: null,
     })
-    expect(b.rows[0].retiredAt).toBe('2026-09-09')
+    expect(b.rows.find((r) => r.label === 'Poler')?.retiredAt).toBe('2026-09-09')
   })
 })

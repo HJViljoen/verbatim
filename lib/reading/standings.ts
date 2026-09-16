@@ -277,6 +277,20 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
  *  zero never leaks onto a standings table. */
 export const NOT_OBSERVED = 'not observed'
 
+/**
+ * What a cell says when the READING ITSELF does not exist.
+ *
+ * `NOT_OBSERVED` is a measurement: we looked at this month's panel and this
+ * brand was not in it. It is the wrong word when the table it would be drawn
+ * from has not been applied — nobody looked, and a missing migration must not
+ * be turned into a measurement any more than into a zero. Overview's OV4 said
+ * "not observed" for every rival on both tenants while Competitive, reading
+ * `month_denominators` for the same month, printed Ottobock at 9.4% of the
+ * content; one page said we found nothing and the other said we found a tenth
+ * of everything.
+ */
+export const NOT_RECORDED = 'not recorded yet'
+
 /** What a standings cell shows: the figure, or the words. Calibrated copy —
  *  "not observed" says we looked and found nothing, which is what happened; "0%"
  *  would say the brand was silent, which we do not know. */
