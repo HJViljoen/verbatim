@@ -23,20 +23,20 @@ the document you follow.
 | **201 frozen audience-months of 214** | exactly as the `monthly-reading.ts` header says | 5.4 |
 | **Two schedules, both `active`, ZERO with recipients** | `report_schedules` → 2 / 2 active / 0 with recipients | 5.3, 5.6 |
 | **Four dead addresses in `tracking_configs.report_emails`** | Össur 4, Sealand 0 | 5.5 |
-| Tracked rivals: **4, not 7** | Össur `{Ottobock}`; Sealand `{Cotopaxi, Freitag, Rareform}` | M1 |
+| Tracked rivals **4**; `competitors` should hold **7** | tracked: Össur `{Ottobock}`, Sealand `{Cotopaxi, Freitag, Rareform}`; plus three Sealand retired | M1 |
 | Tenants | 2 — Össur `e52cac94-…`, Sealand `ac16988e-…` | — |
 
 The zero-recipients row is the one the single-window recommendation rests on,
-and it holds. **The rivals row corrects the plan:** §2's M1 line reads as seven
-tracked names, and `tracking_configs.competitor_names` holds four today. M1's
-backfill does not read that column alone — it unions the tracked list with
-every rival the evidence names (`month_denominators.audience`,
+and it holds. **The rivals row says two things and they are both true.** The
+plan's §2 M1 line reads as seven TRACKED names and
+`tracking_configs.competitor_names` holds four today (re-read 2026-09-16) — so
+the tracked list is four. `competitors` is not the tracked list: M1's backfill
+unions it with every rival the evidence names (`month_denominators.audience`,
 `keyword_performance`, `themes`, `theme_registry`) and dates the untracked ones
-`2026-09-09 18:10+02`. Three rival audiences exist in `month_denominators`
-(`competitor:Ottobock`, `competitor:Cotopaxi`, `competitor:Freitag`), so four
-live plus the erased Sealand set is the shape to expect. **Read the count M1
-actually writes and reconcile it against the four tracked names — do not expect
-seven because the plan says seven.**
+`2026-09-09 18:10+02`. The migration states its own answer — seven rows, four
+tracked plus Patagonia, Topo Designs and Poler retired — and that is what to
+expect after the apply. **Four rows after M1 is a failed backfill, not a
+correction to the plan.**
 
 The one figure I could not get is embedding coverage: the query kept timing out
 (see "Owed" at the bottom). It is step 4 and it gates step 5.1 anyway.
@@ -171,18 +171,35 @@ select
      where conname like 'config_changes%surface%check%' limit 1)               as surface_check;
 ```
 Expect: `cc_cols = 2`, `fns = 2`, `policies = 1`, and `surface_check`
-containing `prompt_version` and `rival_rename`. For `rivals`: **four tracked
-names exist today** (Össur `{Ottobock}`, Sealand `{Cotopaxi, Freitag,
-Rareform}` — checked 2026-09-16), and the backfill adds every rival the
-evidence names but the tracked list does not, dated `2026-09-09 18:10+02`. So
-expect `rivals ≥ 4` with `retired = rivals − 4`, and reconcile:
+containing `prompt_version` and `rival_rename`.
+
+**`rivals = 7`, `retired = 3`, and the three are nameable in advance.** The
+migration says so itself — `20260918090000_competitors.sql`, the backfill's
+own head: "Seven rows: Össur 1 (Ottobock), Sealand 6 (Cotopaxi, Freitag,
+Rareform tracked; Patagonia, Topo Designs, Poler retired)" — and its post-apply
+check is `select count(*) from public.competitors; -- 7`. Four of those are the
+tracked list (Össur `{Ottobock}`, Sealand `{Cotopaxi, Freitag, Rareform}` —
+re-read on production 2026-09-16); the other three are rivals Sealand once
+tracked and no longer does, which the backfill finds in the evidence
+(`theme_registry` carries `competitor:Patagonia` and `competitor:Topo Designs`,
+`keyword_performance` carries `poler` — read read-only in the WP22 review;
+today's re-check dropped its connection twice, which is the instance's known
+flakiness and not a change in the answer) and dates `2026-09-09 18:10+02`.
+
+**`rivals = 4` is a FAILURE, not a pass.** It means the backfill's evidence
+arms found none of the three and Sealand's erased set is silently absent from
+the identity table — the exact loss `competitors` exists to prevent. Read the
+number M1 writes against 7, and reconcile:
 ```sql
 select name, slug, first_seen_at, retired_at from public.competitors order by client_id, name;
 ```
 against `select client_id, competitor_names from public.tracking_configs;`.
-A row with a `retired_at` that is NOT one of the erased Sealand names is a
-backfill picking up a sentinel — check it is not `unknown` (the migration
-excludes it deliberately at line 277).
+The three `retired_at` rows must be Patagonia, Topo Designs and Poler. A fourth
+retired row, or one under another name, is the backfill picking up a sentinel —
+check it is not `unknown` (the migration excludes that one deliberately). More
+than seven rows is a rival the evidence names and this note did not; read it
+before you move on, because a name here is what a frozen month's `audience`
+string will be reconciled against for the rest of the product's life.
 
 **M2 · `20260918091000_theme_key.sql`**
 ```sql
