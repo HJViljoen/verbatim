@@ -782,6 +782,21 @@ interface InsightRow {
  */
 export const SALES_SCAN = 1000
 
+/**
+ * How a quoted comment is cited — "tiktok · 12 Sep · under a video we read".
+ *
+ * WHERE NEITHER HALF IS KNOWN, IT SAYS SOMETHING ELSE. The parts used to be
+ * filtered and joined, so a comment row the lookup did not return collapsed to
+ * the bare trailing phrase "under a video we read", which reads like a
+ * truncation. It is also no longer the true sentence: every quote section 4
+ * prints was found through the month's own comments, so the thing we can always
+ * say is when it was said, even when the row behind it did not come back.
+ */
+export function salesCite(platform: string | null, commentDate: string | null): string {
+  const parts = [platform, commentDate ? shortDate(commentDate) : null].filter(Boolean)
+  return parts.length > 0 ? `${parts.join(' · ')} · under a video we read` : 'a comment we read this month'
+}
+
 /** Evidence rows chunked into `.in()` lists the database will accept. */
 const chunked = <T>(xs: readonly T[], size: number): T[][] => {
   const out: T[][] = []
@@ -921,7 +936,7 @@ async function loadSales(
         text: citation.quote,
         ...(citation.lang != null ? { lang: citation.lang, english: citation.english ?? null } : {}),
       },
-      cite: [m?.platform, m?.comment_date ? shortDate(m.comment_date) : null, 'under a video we read'].filter(Boolean).join(' · '),
+      cite: salesCite(m?.platform ?? null, m?.comment_date ?? null),
       href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
     }
   })
