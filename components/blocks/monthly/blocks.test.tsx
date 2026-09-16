@@ -173,7 +173,8 @@ describe('MR3 · what moved', () => {
     const text = renderText(block.render(monthlyFixture(), 'app', ctx))
     expect(text).toContain('First heard this month')
     expect(text).toContain('Second-hand resale value')
-    expect(text).toContain('first heard this month')
+    // THE FLAG IS THE HEADING, SAID ONCE. Every row used to repeat it.
+    expect(text.match(/first heard this month/gi) ?? []).toHaveLength(1)
   })
 
   it('marks "gone quiet" as the verdict it is', () => {

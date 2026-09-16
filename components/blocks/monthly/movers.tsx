@@ -206,7 +206,15 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
   )
 }
 
-/** First heard this month: a level and the flag, never a change. */
+/**
+ * First heard this month: a level, never a change.
+ *
+ * AND THE FLAG IS THE HEADING. Every row used to end ", first heard this month"
+ * under a heading that already reads "First heard this month", so the reader
+ * got "Second-hand resale value — 1.9% · 26 of 1,388, first heard this month"
+ * directly beneath those four words. One of the two is enough and the heading
+ * is the one that scales.
+ */
 function Flags({ heading, rows, mode }: { heading: string; rows: readonly Mover[]; mode: RenderMode }) {
   const email = mode === 'email'
   const line = (r: Mover) => (
@@ -215,7 +223,6 @@ function Flags({ heading, rows, mode }: { heading: string; rows: readonly Mover[
       <span data-copy="level">
         {r.pct == null ? `${fmtInt(r.k)} videos` : `${fmtPct(r.pct)} · ${fmtInt(r.k)} of ${fmtInt(r.n)}`}
       </span>
-      {', first heard this month'}
     </>
   )
   return (

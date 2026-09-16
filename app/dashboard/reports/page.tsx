@@ -447,7 +447,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
                 <p className="mt-2 text-[11px] text-muted-foreground">{SENT_FIGURES_NOTE}</p>
               </>
             ) : (
-              <p className="mt-1 text-[11px] text-muted-foreground">This report stored no figure table.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground">This report did not store its figures.</p>
             )}
           </DetailSection>
         )}
