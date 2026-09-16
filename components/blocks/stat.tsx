@@ -33,8 +33,14 @@ export function BlockStat({
 }: {
   value: ReactNode
   unit?: string
-  /** A calibrated word and the evidence under it. Both, or neither. */
-  level?: { word: string; of: string }
+  /** A calibrated word and the evidence under it. Both, or neither.
+   *
+   *  `word` is a node and not a string because the word is not always code's:
+   *  This week's risers put the THEME'S OWN NAME in this slot, and a theme's
+   *  label is the model's words (`pass_b_theme` policy 'none'), so that caller
+   *  passes `<span data-copy="subject">`. Rule (b) reads the level node's whole
+   *  text, marked descendants included, so the "of N" is still enforced. */
+  level?: { word: ReactNode; of: string }
   /** What the figure is measured against, in words ("since last update"). */
   base?: ReactNode
   /** Something on the same line — a sparkline, a badge. Screen and paper only;

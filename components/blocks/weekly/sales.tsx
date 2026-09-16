@@ -55,7 +55,10 @@ function Rail({ mode, children }: { mode: RenderMode; children: ReactNode }) {
 function Head({ row, mode }: { row: SalesRow; mode: RenderMode }) {
   const words = (
     <>
-      {row.kindLabel} · {row.label}
+      {/* `kindLabel` is code's word for the kind; `label` is the model's own
+          name for what was raised (`pass_b_theme`, policy 'none' — never
+          direction-scrubbed at write time), so only the second is marked. */}
+      {row.kindLabel} · <span data-copy="subject">{row.label}</span>
       {row.rival ? ` · under ${row.rival}’s post` : ''}
     </>
   )

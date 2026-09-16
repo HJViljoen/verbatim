@@ -53,7 +53,14 @@ function Line({ label, mode, children }: { label: string; mode: RenderMode; chil
 function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
   const body = (
     <>
-      <span className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
+      {/* THE THEME'S OWN NAME, so `subject` and not bare markup: PROSE_POLICY
+          marks `pass_b_theme` 'none' (lib/prose/scrub.ts), so a theme's label
+          is never direction-scrubbed at write time and the product's own
+          register carries "Concerns about declining quality" and "Technology
+          should improve access". Rule (c) sweeps unmarked markup, so an
+          unmarked label fails the contract on whichever theme happens to rank
+          — the word is about the thing, not about a reading of it. */}
+      <span data-copy="subject" className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
       <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>
         {mover.pct == null ? '—' : fmtPct(mover.pct)} {fmtInt(mover.k)} of {fmtInt(mover.n)}
       </span>

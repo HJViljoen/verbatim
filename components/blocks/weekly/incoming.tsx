@@ -82,7 +82,8 @@ export const weeklyIncoming: Block<WeeklyData> = {
         {i.newThemes.length > 0 ? (
           i.newThemes.map((t) => (
             <Line key={t.label} mode={mode}>
-              <strong>{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}
+              {/* The theme's own name — `pass_b_theme`, never scrubbed. */}
+              <strong data-copy="subject">{t.label}</strong> — heard for the first time in this update, in <span data-copy="figure">{fmtInt(t.videos)}</span> {t.videos === 1 ? 'video' : 'videos'}
             </Line>
           ))
         ) : (

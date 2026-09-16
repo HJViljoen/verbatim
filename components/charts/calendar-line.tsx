@@ -163,7 +163,7 @@ export function CalendarLine({
           {series.map((s) => (
             <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-              {s.label}
+              {s.labelKind === 'subject' ? <span data-copy="subject">{s.label}</span> : s.label}
               {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
             </span>
           ))}
@@ -284,7 +284,13 @@ export function CalendarLine({
             height={g.baseline - g.top + 12}
             fill="transparent"
           >
-            <title>{columnTitle(c, format)}</title>
+            {/* A HOVER CARRYING A MODEL-WRITTEN SERIES NAME IS MARKED. An SVG
+                `<title>` holds text and nothing else, so the label cannot be
+                wrapped inside it the way it is in the legend and at the line's
+                end — the node is marked as a whole, and only where one of its
+                series says its name is the model's (`labelKind`). Every other
+                chart's hover stays under rule (c) like any other markup. */}
+            <title data-copy={c.entries.some((e) => e.series.labelKind === 'subject') ? 'subject' : undefined}>{columnTitle(c, format)}</title>
           </rect>
         ))}
       </svg>
@@ -368,7 +374,7 @@ function SeriesMarks({
 
       {end && endX != null && end.value != null && (
         <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
-          {series.label}{' '}
+          {series.labelKind === 'subject' ? <tspan data-copy="subject">{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>
           {series.endNote ? <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={400} fontSize={9.5} fill="var(--muted-foreground)"> {series.endNote}</tspan> : null}
         </text>

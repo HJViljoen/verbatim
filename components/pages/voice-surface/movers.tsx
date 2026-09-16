@@ -48,9 +48,12 @@ function MoverRow({ mover, mode, ctx, level }: {
   level?: boolean
 }) {
   const href = `${ctx.appUrl}${voiceSurfaceHref((ctx.params ?? {}) as Record<string, string>, { theme: mover.id })}`
+  // THE THEME'S OWN NAME IS THE MODEL'S WORDS (`pass_b_theme` policy 'none',
+  // lib/prose/scrub.ts) — never direction-scrubbed at write time, so it is
+  // marked here for the same reason a theme's description is.
   const name = mode === 'email'
-    ? <span style={{ fontWeight: 600 }}>{mover.label}</span>
-    : <Link href={href} className="min-w-0 flex-1 truncate underline-offset-2 hover:underline">{mover.label}</Link>
+    ? <span data-copy="subject" style={{ fontWeight: 600 }}>{mover.label}</span>
+    : <Link data-copy="subject" href={href} className="min-w-0 flex-1 truncate underline-offset-2 hover:underline">{mover.label}</Link>
   const body = (
     <>
       {name}
@@ -144,7 +147,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                 </span>
                 {m.goneQuiet.map((g) => (
                   <span key={g.id} className={email ? undefined : 'text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-                    {g.label}{' '}
+                    <span data-copy="subject">{g.label}</span>{' '}
                     {/* THE FLAG IS A READING AND IS MARKED AS ONE. "Gone
                         quiet" is a direction word (lib/calibration.ts) and
                         rule (c) lets it appear only inside a verdict node —

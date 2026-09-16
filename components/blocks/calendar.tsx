@@ -105,7 +105,7 @@ export function BlockCalendar({
             <tr key={s.label}>
               <td style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '3px 8px 3px 0', whiteSpace: 'nowrap', borderTop: `1px solid ${EMAIL.hairline}` }}>
                 <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 9999, background: tokenHex(s.color), marginRight: 6 }} />
-                {s.label}
+                {s.labelKind === 'subject' ? <span data-copy="subject">{s.label}</span> : s.label}
               </td>
               {months.map((m) => {
                 const point = byMonth.get(m)

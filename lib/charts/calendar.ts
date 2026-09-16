@@ -59,6 +59,18 @@ export interface CalendarPoint {
 
 export interface CalendarSeries {
   label: string
+  /**
+   * Whose words the label is.
+   *
+   * Most series are named by code — a rival, a kind, an audience — and the
+   * label is code's sentence like any other. A THEME'S label is not: it is the
+   * `pass_b_theme` slot, which `PROSE_POLICY` marks 'none', so it is never
+   * direction-scrubbed at write time and the register carries "Concerns about
+   * declining quality". Rule (c) sweeps unmarked markup, so a series drawing a
+   * theme says so here and the chart marks the end label and the legend
+   * `data-copy="subject"`. Omitted means code's words.
+   */
+  labelKind?: 'subject'
   /** CSS colour or literal hex — the entity's, never the rank's. */
   color: string
   /** One entry per axis month, in axis order. A caller that hands a shorter
