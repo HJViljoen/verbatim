@@ -254,6 +254,34 @@ describe('the masthead', () => {
     expect(weeklySubject('Sealand', weekCheck({ state: 'nothing_unusual', flags: [] }))).toContain('nothing unusual')
     expect(weeklySubject('Sealand', weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }))).toContain('still forming')
   })
+
+  // The subject IS the artefact's h1, so a state that fell through to "nothing
+  // unusual this week" printed a reassurance over a body saying the check never
+  // ran — which is what Össur's live artefact did. The six states differ on the
+  // check's line; they must differ here too.
+  it('gives each of the six states its own subject, and only one of them says nothing was unusual', () => {
+    const subjects = (['flagged', 'nothing_unusual', 'baseline_forming', 'suppressed', 'no_window', 'not_recorded'] as const).map(
+      (state) =>
+        weeklySubject(
+          'Össur',
+          weekCheck({
+            state,
+            flags: state === 'flagged' ? [flag()] : [],
+            monthsClearing: 1,
+            suppression: { reason: 'thin', note: 'This update read well under its usual number of videos, so this week is not compared with the months behind it.' },
+          }),
+        ),
+    )
+    expect(new Set(subjects).size).toBe(subjects.length)
+    expect(subjects.filter((s) => /nothing unusual/i.test(s))).toHaveLength(1)
+    for (const s of subjects) expect(s.startsWith('Össur')).toBe(true)
+  })
+
+  it('does not claim a quiet week when the check flagged but nothing survived the read', () => {
+    const s = weeklySubject('Össur', { state: 'flagged', line: 'x', baseline: null, reason: null, flags: [], moreFlags: 0 })
+    expect(s).not.toMatch(/nothing unusual/i)
+    expect(s).toContain('something this week is unusual')
+  })
 })
 
 describe('levelOf', () => {

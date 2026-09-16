@@ -366,16 +366,43 @@ export function weeklyPeriod(window: { from: string; to: string } | null, month:
  * flagged OBJECT when the check fired and otherwise says what the artefact is.
  * The month's own share is not put in it: a level with no denominator beside
  * it is exactly the number the calibration rule forbids.
+ *
+ * SIX STATES, SIX SUBJECTS — and that is the whole point of the six. This
+ * string is the email's subject AND the artefact's `h1` (the email masthead,
+ * the share page's heading, the deck's title), so a state that falls through to
+ * "nothing unusual this week" prints a reassurance over a body that says the
+ * check never ran. It did exactly that on Össur: `not_recorded` three lines
+ * under a headline claiming nothing was unusual. `weekCheck` already refuses to
+ * let "we did not look" and "nothing was unusual" share a line
+ * (`WeekCheckState`); the subject may not undo it by sharing a sentence.
+ *
+ * EXHAUSTIVE BY CONSTRUCTION. The switch returns on every member of the union,
+ * so adding a seventh state is a type error here rather than a seventh
+ * workspace being told its week was quiet.
  */
 export function weeklySubject(company: string, check: WeekCheck): string {
-  if (check.state === 'flagged' && check.flags.length > 0) {
-    const first = check.flags[0].label
-    return check.flags.length === 1
-      ? `${company}: ${first} is unusual this week`
-      : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual this week`
+  const head = `${company}: your update`
+  switch (check.state) {
+    case 'flagged': {
+      // A flagged check with nothing printable is not "nothing unusual": the
+      // check fired and the detail did not survive the read. Say that much.
+      if (check.flags.length === 0) return `${head} — something this week is unusual`
+      const first = check.flags[0].label
+      return check.flags.length === 1
+        ? `${company}: ${first} is unusual this week`
+        : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual this week`
+    }
+    case 'nothing_unusual':
+      return `${head} — nothing unusual this week`
+    case 'baseline_forming':
+      return `${head} — the weekly check is still forming`
+    case 'suppressed':
+      return `${head} — this week was not compared`
+    case 'no_window':
+      return `${head} — no week could be cut from it`
+    case 'not_recorded':
+      return `${head} — the weekly check is not recorded yet`
   }
-  if (check.state === 'baseline_forming') return `${company}: your update — the weekly check is still forming`
-  return `${company}: your update — nothing unusual this week`
 }
 
 /** "24.1% · 65 of 271" — a level and the count it rests on, never one alone. */
