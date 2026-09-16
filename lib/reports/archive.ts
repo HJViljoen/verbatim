@@ -50,6 +50,39 @@ export function withinDates(iso: string | null | undefined, filter: DateFilter):
   return true
 }
 
+/** One pool a group's list is drawn from: what the table holds for this
+ *  workspace (the exact head count) and the cap the query asked for. */
+export interface ListPool {
+  total: number | null | undefined
+  cap: number
+}
+
+/**
+ * How many rows the date filter actually searched, where the group holds more
+ * than that — and null where it searched everything.
+ *
+ * THE POOL IS THE QUERY'S, NOT THE RAIL'S. A group's list is loaded first and
+ * narrowed afterwards (the Built list drops what a send has taken), so the
+ * number on the rail is not the number the cap applies to. Every caller passes
+ * the head counts of the tables the LIST was read from, and the arithmetic is
+ * one line: a group holding more than it could search is a group with rows
+ * behind its cap.
+ *
+ * A group read from two tables (Sent: the sends and the updates emailed before
+ * schedules existed) passes both, so the clause names what was searched across
+ * the group rather than one table's cap.
+ */
+export function listCap(pools: readonly ListPool[]): number | null {
+  let searched = 0
+  let total = 0
+  for (const p of pools) {
+    const held = Math.max(p.total ?? 0, 0)
+    searched += Math.min(held, p.cap)
+    total += held
+  }
+  return total > searched ? searched : null
+}
+
 /**
  * The line under the filter, in the reader's words.
  *

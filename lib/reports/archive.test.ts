@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dateFilterLine,
   hasDateFilter,
+  listCap,
   parseDateFilter,
   readingLine,
   readingStampOf,
@@ -41,6 +42,37 @@ describe('withinDates', () => {
   it('an undated row survives no filter and is excluded by one', () => {
     expect(withinDates(null, parseDateFilter(undefined, undefined))).toBe(true)
     expect(withinDates(null, f)).toBe(false)
+  })
+})
+
+describe('listCap', () => {
+  it('is null where the group holds no more than it searched', () => {
+    expect(listCap([{ total: 47, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: 100, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: 0, cap: 50 }])).toBeNull()
+  })
+
+  it('names what was searched where the table holds more', () => {
+    expect(listCap([{ total: 340, cap: 100 }])).toBe(100)
+  })
+
+  it('weighs the head count of the pool the list came from, not the rail', () => {
+    // 130 kind='report' rows, 40 of them taken by the Sent group. The rail
+    // reads 90 and the cap still hides 30: the test is the head count.
+    expect(listCap([{ total: 130, cap: 100 }])).toBe(100)
+  })
+
+  it('counts a group read from two tables across both', () => {
+    // 200 sends exactly (a complete list) plus 47 rows of the legacy table:
+    // everything was searched, so there is nothing to caveat.
+    expect(listCap([{ total: 200, cap: 200 }, { total: 47, cap: 1000 }])).toBeNull()
+    // The same group with more sends than the cap searched 200 + 47.
+    expect(listCap([{ total: 260, cap: 200 }, { total: 47, cap: 1000 }])).toBe(247)
+  })
+
+  it('reads a head count that could not be taken as nothing, never as negative', () => {
+    expect(listCap([{ total: null, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: undefined, cap: 100 }, { total: 340, cap: 100 }])).toBe(100)
   })
 })
 

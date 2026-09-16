@@ -16,7 +16,7 @@ import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/r
 import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
-import { SENT_FIGURES_NOTE, dateFilterLine, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
+import { SENT_FIGURES_NOTE, dateFilterLine, listCap, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
 import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
@@ -77,6 +77,10 @@ interface BuildRow {
 
 type Group = 'sent' | 'built' | 'exported'
 const BASE = '/dashboard/reports'
+/** What each list asks for, in one place: the `.limit()` the query carries and
+ *  the number `listCap` weighs the table's head count against. Two copies of a
+ *  cap is how a list and its caveat come to disagree. */
+const LIST_CAP = { sent: 200, built: 100, exported: 50 } as const
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
@@ -105,7 +109,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   const [sendRes, legacyRes, buildRes, exportRes, sendTotal, legacyTotal, builtTotal, exportTotal, reportRows, schedules] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
-      .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
+      .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(LIST_CAP.sent),
     supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
     supabase.from('report_snapshots')
       // `readingAt:data->>readingAt` IS THE WEEKLY'S AND THE MONTHLY'S CARRIER.
@@ -117,10 +121,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // read below already aliased it; this list did not, and the monthly
       // report merged in beside it (WP18) is the artefact that made it visible.
       .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
-      .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(100),
+      .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(LIST_CAP.built),
     supabase.from('report_snapshots')
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
-      .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(50),
+      .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(LIST_CAP.exported),
     // THE COUNTS ARE THE REAL TOTALS (RP4, cut #106). They were `.length` of
     // queries capped at 200 / 100 / 50, so a busy workspace's rail read "200"
     // for ever and a reader could not tell a cap from a count. A head count is
@@ -174,13 +178,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // pools: 130 built, 40 of them sent, and a rail reading 90 against a cap of
   // 100 said "nothing is hidden" while 30 rows were never loaded — the exact
   // claim about the workspace this caveat exists to prevent.
-  const LIST_CAP = { sent: 200, built: 100, exported: 50 } as const
-  const capOf = (total: number | null | undefined, cap: number) => ((total ?? 0) > cap ? cap : null)
   const cappedAt = group === 'sent'
-    ? capOf(sendTotal.count, LIST_CAP.sent)
+    ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }])
     : group === 'built'
-      ? capOf(builtTotal.count, LIST_CAP.built)
-      : capOf(exportTotal.count, LIST_CAP.exported)
+      ? listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
+      : listCap([{ total: exportTotal.count, cap: LIST_CAP.exported }])
 
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a
