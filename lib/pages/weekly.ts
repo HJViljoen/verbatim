@@ -205,8 +205,25 @@ export function checkStateOf(input: {
   /** The thin-update verdict computed over this update and the eight behind it. */
   suppression: ThinUpdateVerdict | null
 }): WeekCheckState {
-  // THE ORDER IS THE ARGUMENT, and it runs from what we did, to what we have,
-  // to what was written down.
+  // THE RECORD FIRST, WHERE THERE IS ONE. `anomaly_checks` is one row per
+  // update whatever the outcome — the thing WP8 added so that "we did not
+  // compare this week" and "nothing was unusual" stop being the same silence.
+  // The loader's own `thinUpdate` is a RECOMPUTATION of one of the gates, made
+  // later, from a different read; putting it first meant the artefact could say
+  // "suppressed — thin" over a check that ran and flagged, or stay silent about
+  // a suppression the step itself recorded. Two sources of truth for one
+  // verdict, and the wrong one winning.
+  //
+  // So the record's refusals and its flag are taken as written, and the
+  // recomputation speaks only where no record does.
+  if (input.recorded) {
+    if (input.outcome === 'suppressed') return 'suppressed'
+    if (input.outcome === 'no_window') return 'no_window'
+    if (input.outcome === 'flagged') return 'flagged'
+  }
+
+  // NO RECORD: the loader's own reading, in the order it already had, which
+  // runs from what we did, to what we have, to what was written down.
   //
   //   suppressed        we did not look, and here is why — the strongest claim,
   //                     and the one a reader is owed before any other.
@@ -219,12 +236,14 @@ export function checkStateOf(input: {
   // Putting `not_recorded` first read as a fault on a new workspace, where the
   // honest answer is "this takes three months and you have one".
   if (input.suppression?.suppressed) return 'suppressed'
-  if (input.outcome === 'suppressed') return 'suppressed'
+  // AND IT STILL GUARDS A BARE "nothing unusual". A recorded `nothing_unusual`
+  // is the check's answer, but a workspace with fewer than three months has
+  // nothing for the week to have been unusual AGAINST — so the reading the
+  // record beats here is the one this state exists to refuse.
   if (input.monthsClearing < BASELINE_MONTHS) return 'baseline_forming'
   if (!input.recorded) return 'not_recorded'
-  if (input.outcome === 'no_window') return 'no_window'
   if (input.outcome === 'missing_migration' || input.outcome == null) return 'not_recorded'
-  return input.outcome === 'flagged' ? 'flagged' : 'nothing_unusual'
+  return 'nothing_unusual'
 }
 
 /** The headline the week's sentence is about: the month's largest banded
@@ -342,6 +361,14 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     : null
 
   // ── section 1 ───────────────────────────────────────────────────────────
+  // THE SAME QUANTITY THE STEP ITSELF PASSES, and it is deliberately
+  // `videos_scraped`. `UpdateSize.analysedVideos` is misleadingly NAMED — the
+  // pipeline hands `runAnomalyCheck` its `totalVideos`, which is the number
+  // `close-run` writes into `pipeline_runs.videos_scraped` for exactly this
+  // comparison ("`pipeline_runs.videos_scraped` is the same measure on the
+  // trailing runs", inngest/functions/pipeline.ts) — so this read and the
+  // step's agree. Substituting a count of analysed videos here would be the
+  // recomputation disagreeing with the record, which is the bug above.
   const suppression = run
     ? thinUpdate(
         { analysedVideos: run.videos_scraped, stalled: run.stalled ?? null, status: run.status },

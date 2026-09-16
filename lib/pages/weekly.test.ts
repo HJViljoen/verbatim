@@ -44,13 +44,23 @@ describe('checkStateOf', () => {
     expect(checkStateOf({ ...base, outcome: null })).toBe('not_recorded')
   })
 
-  it('suppresses on a thin update before it reads the outcome', () => {
-    const suppression = thinUpdate({ analysedVideos: 40, status: 'completed' }, [
-      { analysedVideos: 400 },
-      { analysedVideos: 420 },
-    ])
-    expect(suppression.suppressed).toBe(true)
-    expect(checkStateOf({ ...base, outcome: 'flagged', suppression })).toBe('suppressed')
+  // TWO SOURCES OF TRUTH, AND THE RECORD IS THE ONE. The loader's thinUpdate is
+  // a recomputation of one gate, made later, from a different read; it used to
+  // sit ahead of `anomaly_checks.outcome`, so the artefact could say
+  // "suppressed — thin" over a check that ran and flagged.
+  const thin = thinUpdate({ analysedVideos: 40, status: 'completed' }, [
+    { analysedVideos: 400 },
+    { analysedVideos: 420 },
+  ])
+
+  it('suppresses on a thin update where nothing was recorded', () => {
+    expect(thin.suppressed).toBe(true)
+    expect(checkStateOf({ ...base, recorded: false, outcome: null, suppression: thin })).toBe('suppressed')
+  })
+
+  it('prefers the check’s own record to a fresh recomputation of one gate', () => {
+    expect(checkStateOf({ ...base, outcome: 'flagged', suppression: thin })).toBe('flagged')
+    expect(checkStateOf({ ...base, outcome: 'nothing_unusual', suppression: thin })).toBe('suppressed')
   })
 
   it('carries the step’s own suppression and no-window outcomes through', () => {
@@ -59,9 +69,15 @@ describe('checkStateOf', () => {
     expect(checkStateOf({ ...base, outcome: 'missing_migration' })).toBe('not_recorded')
   })
 
-  it('is baseline_forming until three months clear the floor, whatever the outcome says', () => {
+  it('is baseline_forming until three months clear the floor, rather than say nothing was unusual', () => {
     expect(checkStateOf({ ...base, monthsClearing: 2 })).toBe('baseline_forming')
-    expect(checkStateOf({ ...base, outcome: 'flagged', monthsClearing: 0 })).toBe('baseline_forming')
+    expect(checkStateOf({ ...base, recorded: false, outcome: null, monthsClearing: 0 })).toBe('baseline_forming')
+  })
+
+  it('lets a recorded flag stand over the loader’s own baseline estimate', () => {
+    // The check computes its own baseline before it flags anything; a pooled
+    // read off month_denominators is the rougher of the two answers.
+    expect(checkStateOf({ ...base, outcome: 'flagged', monthsClearing: 0 })).toBe('flagged')
   })
 
   it('reads a clean, compared week as each of its two answers', () => {
