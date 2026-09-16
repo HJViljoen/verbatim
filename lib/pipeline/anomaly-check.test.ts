@@ -22,6 +22,7 @@ import {
 import { thinUpdate, weekVsBaseline, type AnomalyReading, type DenominatorSeries, type PreRegisteredObject } from '../reading/anomaly'
 import { composeInterpretation, verdictBlock, type QuoteRef } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
+import { parseRef } from '../renderables/quotes-freeze'
 import { anomalyVerdict } from '../reading/anomaly'
 
 // The step's pure halves: what a flag row IS, how a pooled baseline is folded
@@ -288,9 +289,14 @@ describe('the figures the explainer may cite', () => {
 
 // ---- The explainer path, with a fake model ----------------------------------
 
+// `c:<comments.id>`, exactly as `candidateQuotes` now builds them. A bare uuid
+// here is what the writer emitted until 2026-09-16 and it is unresolvable:
+// every reader of a stored ref matches on the PREFIX (lib/quotes.ts
+// `fetchQuoteTextsByRefs`), so a ref with none resolves to nothing and the flag
+// prints without the two quotes the design requires.
 const QUOTES: QuoteRef[] = [
-  { ref: 'comment-1', context: 'youtube' },
-  { ref: 'comment-2', context: 'reddit' },
+  { ref: 'c:comment-1', context: 'youtube' },
+  { ref: 'c:comment-2', context: 'reddit' },
 ]
 
 /** Everything the step does between the model's answer and the stored row. */
@@ -367,10 +373,18 @@ describe('the explanation, driven by a fake model', () => {
   it('stores the quotes as refs and never as words', () => {
     const { rows } = explain('The socket seal is what people kept coming back to.')
     expect(rows[0].quote_refs).toEqual([
-      { ref: 'comment-1', context: 'youtube' },
-      { ref: 'comment-2', context: 'reddit' },
+      { ref: 'c:comment-1', context: 'youtube' },
+      { ref: 'c:comment-2', context: 'reddit' },
     ])
     expect(JSON.stringify(rows[0])).not.toMatch(/socket seal.*"text"/)
+  })
+
+  it('stores them in a vocabulary a reader can resolve, never a bare id', () => {
+    const { rows } = explain('The socket seal is what people kept coming back to.')
+    for (const q of rows[0].quote_refs as { ref: string }[]) {
+      expect(parseRef(q.ref)).not.toBeNull()
+      expect(parseRef(q.ref)).toMatchObject({ kind: 'c' })
+    }
   })
 
   it('shows at most the two quotes the slot allows', () => {

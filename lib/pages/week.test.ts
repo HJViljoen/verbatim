@@ -13,6 +13,7 @@ import {
   NEW_THEME_FLOOR,
   pooledBaseline,
   refsOf,
+  refTargets,
   typicalTag,
   windowDays,
   type UnusualFlag,
@@ -229,12 +230,12 @@ describe('the anomaly record’s absence', () => {
 })
 
 describe('a flag’s quote refs', () => {
-  it('reads the shape the column actually holds', () => {
-    // Written and read back on a local PG 17 cluster with M7 applied:
-    // `[{"ref": "e:abc", "context": "tiktok"}]`. A reader that kept only
-    // strings here would print every flag with no evidence under it, silently,
-    // the day the migration lands.
-    expect(refsOf([{ ref: 'e:abc', context: 'tiktok' }, { ref: 'e:def' }])).toEqual(['e:abc', 'e:def'])
+  it('reads the shape the column actually holds, in the writer’s own vocabulary', () => {
+    // `[{ref, context}]`, and the ref is `c:<comments.id>` — what
+    // `lib/pipeline/anomaly-check.ts candidateQuotes` writes. A reader that
+    // kept only strings here would print every flag with no evidence under it,
+    // silently, the day the migration lands.
+    expect(refsOf([{ ref: 'c:abc', context: 'tiktok' }, { ref: 'c:def' }])).toEqual(['c:abc', 'c:def'])
   })
 
   it('also reads a bare string list, and drops anything else', () => {
@@ -242,5 +243,23 @@ describe('a flag’s quote refs', () => {
     expect(refsOf([{ context: 'tiktok' }, 42, null, undefined])).toEqual([])
     expect(refsOf(null)).toEqual([])
     expect(refsOf('e:abc')).toEqual([])
+  })
+
+  it('sends each ref through the door that can resolve it', () => {
+    // The check writes comment ids; `insight_evidence.comment_id` is how a
+    // comment reaches an evidence row and `.id` is how an evidence ref does.
+    // Reading both off `.id` — which a filter on `e:` alone did — matches
+    // nothing the writer has ever written.
+    expect(refTargets(['c:c1', 'e:e1', 'c:c2'])).toEqual({ evidenceIds: ['e1'], commentIds: ['c1', 'c2'] })
+  })
+
+  it('takes a bare id as a comment id rather than dropping it', () => {
+    // The column was written bare until 2026-09-16 and a reader of a stored
+    // row should not have to care which deploy wrote it.
+    expect(refTargets(['9f1c0e64-0000-4000-8000-000000000001'])).toEqual({
+      evidenceIds: [],
+      commentIds: ['9f1c0e64-0000-4000-8000-000000000001'],
+    })
+    expect(refTargets([])).toEqual({ evidenceIds: [], commentIds: [] })
   })
 })

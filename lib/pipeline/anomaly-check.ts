@@ -28,6 +28,7 @@ import {
 } from '../reading/anomaly'
 import { SLICE } from '../reading/coverage'
 import { preRegisteredKind } from '../reading/kinds'
+import { quoteRef } from '../renderables/quotes-freeze'
 import {
   isMissingMonthTable,
   monthStartOf,
@@ -709,6 +710,17 @@ const poolWindow = (rows: readonly WindowRow[], idOf: (r: WindowRow) => string |
  * through `insight_evidence` rather than `comments` on purpose — that is where
  * the `redacted = false` rule lives and what an erasure deletes, so an erased
  * comment stops being quotable everywhere at once (lib/quotes.ts).
+ *
+ * A REF IS `c:<comments.id>`, NOT A BARE UUID. Every reader of a stored quote
+ * ref in this product resolves it through the one vocabulary
+ * (lib/renderables/quotes-freeze.ts `quoteRef`, lib/quotes.ts
+ * `fetchQuoteTextsByRefs`), and that vocabulary is a PREFIX: `e:` an evidence
+ * row, `c:` the comment an evidence row cites, `h:`/`b:`/`m:`/`p:` the rest. A
+ * bare id matches none of them, so a reader hands it to a resolver that ignores
+ * it and prints the flag with no evidence under it — silently, and against the
+ * design's explicit requirement of an explanation WITH TWO QUOTES. It was bare
+ * until 2026-09-16 and nothing had yet written a row (M7 is unapplied), so the
+ * writer moved rather than both readers.
  */
 async function candidateQuotes(
   admin: Admin,
@@ -826,7 +838,7 @@ async function candidateQuotes(
         best.set(q.commentId, {
           text: q.quote.replace(/\s+/g, ' ').trim(),
           context: platformOf.get(q.commentId) ?? 'unknown',
-          ref: q.commentId,
+          ref: quoteRef.comment(q.commentId),
           objectKey: belongsTo,
           order,
         })

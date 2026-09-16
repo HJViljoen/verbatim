@@ -21,7 +21,7 @@ import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../readi
 import { platformMixLine } from '../reading/record'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts'
-import { quoteRef } from '../renderables/quotes-freeze'
+import { parseRef, quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, rivalNameOf } from '../rivals'
 import { isMissingSubjects, TABLE_SUBJECTS, type Subject } from '../subjects/types'
@@ -780,7 +780,8 @@ async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow)
  * THE COLUMN IS `[{ref, context}]`, NOT A STRING LIST. M7's own comment says
  * so — "comment ids and their context, never the text" — and a row written and
  * read back on a local PostgreSQL 17 cluster comes out
- * `[{"ref": "e:abc", "context": "tiktok"}]`. A reader that filtered for
+ * `[{"ref": "c:<comments.id>", "context": "tiktok"}]`, which is what
+ * `lib/pipeline/anomaly-check.ts` writes. A reader that filtered for
  * `typeof r === 'string'` would therefore drop every ref there is and print a
  * flag with no evidence under it, silently, the day M7 lands. Both shapes are
  * accepted here because nothing has written the column in production yet and
@@ -1516,6 +1517,30 @@ async function citeQuotes(
   })
 }
 
+/**
+ * What a stored ref points AT, split by the door it has to be resolved through.
+ *
+ * THE WRITER SAYS `c:<comments.id>` AND THIS READER HAS TO SAY SO TOO. The
+ * check builds a flag's refs out of the comments its explainer was shown
+ * (lib/pipeline/anomaly-check.ts `candidateQuotes`), and a comment reaches an
+ * evidence row through `insight_evidence.comment_id`, not through its id — so a
+ * reader that only knew `e:` dropped every ref the shipped check writes and
+ * printed the flag with nothing under it. Both prefixes are taken, and a BARE
+ * uuid is taken as a comment id: the column was written bare until 2026-09-16
+ * and nothing that reads it should care which deploy wrote the row.
+ */
+export function refTargets(refs: readonly string[]): { evidenceIds: string[]; commentIds: string[] } {
+  const evidenceIds = new Set<string>()
+  const commentIds = new Set<string>()
+  for (const ref of refs) {
+    const parsed = parseRef(ref)
+    if (parsed && 'id' in parsed && parsed.kind === 'e') evidenceIds.add(parsed.id)
+    else if (parsed && 'id' in parsed && (parsed.kind === 'c' || parsed.kind === 'm')) commentIds.add(parsed.id)
+    else if (!parsed && ref.trim()) commentIds.add(ref.trim())
+  }
+  return { evidenceIds: [...evidenceIds], commentIds: [...commentIds] }
+}
+
 /** Resolve stored refs into quotes — the flags' own evidence. */
 async function resolveRefs(
   supabase: SupabaseClient,
@@ -1523,22 +1548,30 @@ async function resolveRefs(
   refs: readonly string[],
 ): Promise<{ quote: Quote; cite: string; href: string | null }[]> {
   if (refs.length === 0) return []
-  const evidenceIds = refs
-    .filter((r) => r.startsWith('e:'))
-    .map((r) => r.slice(2))
-  if (evidenceIds.length === 0) return []
-  const res = await supabase
-    .from('insight_evidence')
-    .select('id, audience_insight_id')
-    .in('id', evidenceIds)
-  const parents = [...new Set(rows<{ audience_insight_id: string }>(res, 'week.flagEvidence').map((e) => e.audience_insight_id))]
+  const { evidenceIds, commentIds } = refTargets(refs)
+  if (evidenceIds.length === 0 && commentIds.length === 0) return []
+  const [byId, byComment] = await Promise.all([
+    evidenceIds.length > 0
+      ? supabase.from('insight_evidence').select('id, comment_id, audience_insight_id').in('id', evidenceIds)
+      : null,
+    commentIds.length > 0
+      ? supabase.from('insight_evidence').select('id, comment_id, audience_insight_id').in('comment_id', commentIds)
+      : null,
+  ])
+  type EvidenceRow = { id: string; comment_id: string | null; audience_insight_id: string }
+  const found = [
+    ...(byId ? rows<EvidenceRow>(byId, 'week.flagEvidence') : []),
+    ...(byComment ? rows<EvidenceRow>(byComment, 'week.flagEvidenceByComment') : []),
+  ]
+  const parents = [...new Set(found.map((e) => e.audience_insight_id))]
   if (parents.length === 0) return []
   const citations = await fetchQuoteCitationsByAudience(supabase, parents)
-  const wanted = new Set(evidenceIds)
+  const wantedEvidence = new Set([...evidenceIds, ...found.filter((e) => e.comment_id && commentIds.includes(e.comment_id)).map((e) => e.id)])
+  const wantedComments = new Set(commentIds)
   const pool: QuoteCitation[] = []
   for (const list of citations.values()) {
     for (const c of list) {
-      if (!wanted.has(c.evidenceId)) continue
+      if (!wantedEvidence.has(c.evidenceId) && !(c.commentId && wantedComments.has(c.commentId))) continue
       const text = cleanQuote(c.quote)
       if (text) pool.push({ ...c, quote: text })
     }
