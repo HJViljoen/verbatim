@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { gateTier, type GateTier } from '../curation'
 import { fmtInt, monthName, shortDate } from '../format'
-import { distinctVideos, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
+import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
@@ -655,21 +655,28 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const chipLabels = labelsBySlug(bucketRows)
 
   const tierById = insightTiers(insights)
-  const counts = tierCounts(tierById)
   const conclusionRows: ConclusionRow[] = insights.map((mi) => {
     const ids = mi.evidence?.supporting_theme_ids ?? []
     const slugs = new Set<string>()
     for (const id of ids) { const s = themeSlugById.get(id); if (s) slugs.add(s) }
+    const videos = distinctVideos(ids, videoByInsight)
     return {
       id: mi.id,
       title: mi.title,
       description: mi.description,
       kind: mi.insight_type,
-      tier: tierById.get(mi.id) ?? gateTier(mi.confidence_score, 0),
-      videos: distinctVideos(ids, videoByInsight),
+      // THE COUNT DECIDES THE TIER WHEN THE COUNT IS ZERO. `gateTier` reads the
+      // model's confidence and a source count, and falls through to
+      // 'early_signal' on confidence alone — so a conclusion citing nothing was
+      // badged as evidence beside the very number that says it has none.
+      tier: groundedTier(tierById.get(mi.id) ?? gateTier(mi.confidence_score, 0), videos),
+      videos,
       themes: themeChips(slugs, chipLabels),
     }
   })
+  // COUNTED OFF THE ROWS, NOT OFF THE RAW TIERS, so the header's "N below the
+  // evidence bar" is a count of the rows the page actually badges that way.
+  const counts = tierCounts(new Map(conclusionRows.map((r) => [r.id, r.tier])))
   // TIER FIRST, THEN THE SIZE OF THE EVIDENCE. The design asks for "tier, then
   // the size of the movement behind them", and the movement behind a conclusion
   // is not computable: a conclusion cites `audience_insights` ids, the monthly
