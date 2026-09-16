@@ -83,9 +83,16 @@ export const UNANSWERED_SHOWN = 3
  *  and the block says so rather than ranking noise. */
 export const UNANSWERED_GATE = 10
 
-/** What SU3's counts are counted in, said once. */
+/** What SU3's counts are counted in, said once.
+ *
+ *  TWO STATEMENTS, NOT ONE. The counts cover the period the reader chose, and
+ *  a video is placed in it by the day it was posted — which is not the date
+ *  the rest of this page is read by (a month here is dated by the COMMENT).
+ *  Saying only "not in a calendar month" left the first half unsaid, and a
+ *  count whose period nobody states is a count a reader will assume is the
+ *  one on the control. */
 export const UNANSWERED_BASIS =
-  'Counted in the videos we have read for this subject, not in a calendar month — so these are counts, not shares, and carry no change.'
+  'Counted in the videos we have read on this subject over the period shown, each placed by the day it was posted — not by the calendar month the rest of this page reads. So these are counts, not shares, and carry no change.'
 
 /**
  * What SU3 says about the half of your posts it cannot read.
@@ -1025,6 +1032,8 @@ async function loadVoices(
 // ---- SU3 -----------------------------------------------------------------------
 
 interface UnansweredInput {
+  /** The period the reader chose, as half-open instants. Both halves of SU3
+   *  are read inside it: the question videos AND your own posts. */
   window: { from: string; to: string }
   population: number | null
   monthLabel: string
@@ -1040,7 +1049,8 @@ interface UnansweredInput {
  * COUNTS, NOT SHARES, and the reason is on the module header: the k here is
  * taken from the current analysis and every other n on this page is
  * comment-dated. The gate is the design's — fewer than ten question videos on
- * the subject and the block says so rather than ranking noise.
+ * the subject IN THE PERIOD SHOWN and the block says so rather than ranking
+ * noise.
  *
  * THE QUESTION IS NAMED BY THE CLUSTERING, NOT BY THE INSIGHT. The obvious key
  * is `audience_insights.theme`, and it is wrong twice over: it is a snake_case
@@ -1086,12 +1096,21 @@ async function loadUnanswered(
     return { ...empty, refusal: 'Nobody has asked a question about this subject in the videos we have read.' }
   }
 
+  // THE QUESTION VIDEOS ARE THE ONES IN THE PERIOD SHOWN. The design gates on
+  // "≥ 10 question videos on the subject IN THE WINDOW" and its example says
+  // "this quarter"; both the gate and every row's count were whole-corpus, so
+  // the horizon control moved the post count and nothing else. A video is
+  // placed by the day it was posted — the one date this read has — and both
+  // tenants' videos carry one (0 undated of 4,450 and 3,927, measured
+  // read-only 2026-09-16).
   const videos = await selectAll<VideoRow>(() =>
     supabase
       .from('videos')
       .select('id, platform, is_client, is_competitor, competitor_name, topics, upload_date')
       .eq('client_id', clientId)
       .in('id', videoIds)
+      .gte('upload_date', input.window.from.slice(0, 10))
+      .lt('upload_date', input.window.to.slice(0, 10))
       .order('id', { ascending: true }),
   )
   const byId = new Map(videos.map((v) => [v.id, v]))
@@ -1131,6 +1150,13 @@ async function loadUnanswered(
   }
 
   const questionVideos = nonOwned.size
+  if (questionVideos === 0) {
+    return {
+      ...empty,
+      yourPosts: ownVideos.length,
+      refusal: 'Nobody has asked a question about this subject in the videos we have read over this period.',
+    }
+  }
   if (questionVideos < UNANSWERED_GATE) {
     return {
       ...empty,
