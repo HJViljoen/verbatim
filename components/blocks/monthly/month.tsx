@@ -65,11 +65,11 @@ export const monthlyMonth: Block<MonthlyData> = {
     const unusual = s.anomaly ? (
       email ? (
         <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 8 }}>
-          <strong style={{ color: EMAIL.ink }}>Unusual this month:</strong> {anomalySentence(s.anomaly)}
+          <strong style={{ color: EMAIL.ink }}>One unusual week:</strong> {anomalySentence(s.anomaly)}
         </div>
       ) : (
         <p className="m-0 rounded-md bg-inner px-2.5 py-1.5 text-[12.5px] text-secondary-foreground">
-          <span className="font-medium text-foreground">Unusual this month:</span> {anomalySentence(s.anomaly)}{' '}
+          <span className="font-medium text-foreground">One unusual week:</span> {anomalySentence(s.anomaly)}{' '}
           <Link href={`${ctx.appUrl}/dashboard/week`} className="underline underline-offset-2">This week →</Link>
         </p>
       )
@@ -165,7 +165,14 @@ export const monthlyMonth: Block<MonthlyData> = {
 }
 
 /** The unusual week, in the reader's words. The same sentence OV1 composes —
- *  one week, its band, its n and where it sat. */
+ *  one week, its band, its n and where it sat.
+ *
+ *  HEADED "ONE UNUSUAL WEEK", not "Unusual this month". The line names a week
+ *  ("in the week of 13 Sep") and is read on an artefact whose every other
+ *  number is a whole calendar month; "Unusual this month" over it reads as a
+ *  claim about the month rather than about one week inside it. OV1 says "this
+ *  week" for the same sentence on a weekly surface, where the period is
+ *  unambiguous. */
 function anomalySentence(a: AnomalyLine): string {
   return `${a.label} — ${fmtInt(a.k)} of ${fmtInt(a.n)} ${a.denominator} in the week of ${shortDate(a.weekStart)}, against the three months behind it (band ±${Math.abs(a.bandPts)} points).`
 }

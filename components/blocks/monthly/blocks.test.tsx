@@ -112,6 +112,14 @@ describe('MR1 · the month', () => {
     expect(text).toContain('Three winters on the bike')
   })
 
+  // The sentence names a week ("in the week of 13 Sep") on an artefact whose
+  // every other number is a whole calendar month.
+  it('heads the unusual line by the period the line is about', () => {
+    const text = renderText(block.render(monthlyFixture(), 'app', ctx))
+    expect(text).toContain('One unusual week:')
+    expect(text).not.toContain('Unusual this month')
+  })
+
   it('declares the month’s own size, which is what a sent figure is usually about', () => {
     const figures = blockAnswers(block, monthlyFixture()).figures
     expect(figures.month_videos).toMatchObject({ value: 2359, unit: 'videos' })
