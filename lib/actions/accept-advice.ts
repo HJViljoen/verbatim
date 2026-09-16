@@ -8,6 +8,7 @@ import { createAdminClient } from '@/lib/supabase-admin'
 import { declareMove } from '@/lib/subjects/moves'
 import { isMissingSubjects } from '@/lib/subjects/types'
 import { setRecommendationStatus } from '@/lib/actions/rec-status'
+import { planAfterMove } from '@/lib/actions/accept-plan'
 
 // "Accept this advice" — MK5's second live way of making a move (Phase 1 WP14,
 // design §3 MK5).
@@ -70,28 +71,19 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
     createAdminClient(),
     { kind: 'advice', lineageId: parsed.data.lineageId, title: parsed.data.title },
   )
-  if (!declared.ok) {
-    // The one failure worth its own sentence: a deploy that reached here before
-    // M4. The ledger's status is still worth writing — it is what the client
-    // pressed — so the status write below runs either way and the message says
-    // what did not happen.
-    const missing = declared.message.includes('not switched on')
-    await setRecommendationStatus(rec.id as string, 'acted_on')
-    return {
-      ok: false,
-      message: missing
-        ? 'Marked as Done. Tracking what happens afterwards is not switched on for this workspace yet.'
-        : declared.message,
-    }
-  }
+  const plan = planAfterMove(declared)
+  if (plan.do === 'refuse') return { ok: false, message: plan.message }
 
   const status = await setRecommendationStatus(rec.id as string, 'acted_on')
   revalidatePath('/dashboard/market')
   revalidatePath('/dashboard')
-  if (!status.ok) return { ok: false, message: `Tracking it from today. ${status.message}` }
-  return { ok: true, message: 'Tracking it from today.' }
+  if (!status.ok) return { ok: false, message: `${plan.message} ${status.message}`.trim() }
+  return { ok: true, message: plan.message }
 }
 
 /** Is this the "M4 is not applied here" shape? Exported so a caller can tell a
- *  missing table apart from a refused write without matching on prose. */
+ *  missing table apart from a refused write without matching on prose.
+ *
+ *  `declareMove` now returns `missing: true` itself, which is what this action
+ *  reads; this stays for a caller holding a raw PostgREST error. */
 export const isMovesMissing = isMissingSubjects
