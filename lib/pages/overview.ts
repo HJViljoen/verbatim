@@ -920,15 +920,15 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   // nothing else was in flight. The themed run still waits on the running-run
   // ids, because that is what it filters by; it just waits on them here,
   // beside the other three reads, instead of two waves later.
-  const [clientRes, runsRaw, [runningIds, themedRunId], rivals, ledger] = await Promise.all([
+  const [clientRes, runsRaw, themedRunId, rivals, ledger] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'overview').then(
-      async (ids) => [ids, await fetchThemedRunId(supabase, clientId, ids, 'overview')] as const,
+    fetchRunningRunIds(supabase, clientId, 'overview').then((ids) =>
+      fetchThemedRunId(supabase, clientId, ids, 'overview'),
     ),
     loadTrackedRivals(supabase, clientId),
     loadLedger(supabase, clientId),
