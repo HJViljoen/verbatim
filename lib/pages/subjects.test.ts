@@ -136,6 +136,15 @@ describe('matchWords / answeredBy', () => {
     expect(answeredBy('zips failing after a year', [])).toBe(false)
   })
 
+  it('never calls a one-word label answered — two words means two, not "as many as there are"', () => {
+    // The old rule was hits >= min(2, want.length), so "Durability" was
+    // answered by any post sharing that one word. A one-word label is where a
+    // single shared word is the weakest evidence there is; the row stays in
+    // the list, where a reader can see it and disagree.
+    expect(answeredBy('Durability', ['durability of our bags'])).toBe(false)
+    expect(answeredBy('Durability and repairs', ['durability of our repairs'])).toBe(true)
+  })
+
   it('matches a claim as readily as a topic — both are your posts’ words', () => {
     expect(answeredBy('Zips failing after a year', ['Our zips are guaranteed for ten years'])).toBe(true)
   })

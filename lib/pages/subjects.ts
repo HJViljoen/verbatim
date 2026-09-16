@@ -409,16 +409,24 @@ export function matchWords(text: string): string[] {
 /**
  * Did any of your own posts touch this question?
  *
- * Two content words in common, not one: one shared word is "bag" and calls
- * every question about a bag answered. `haystack` is your posts' topics and
- * claims, already folded.
+ * TWO CONTENT WORDS IN COMMON, ALWAYS. One shared word is "bag", and one
+ * shared word calls every question about a bag answered — which hides the gap
+ * this block exists to show. `hits >= Math.min(2, want.length)` made the rule
+ * one word for a one-word label ("Durability"), which is the case where a
+ * single shared word is weakest evidence and the block is likeliest to be
+ * wrong in the direction that matters. A label with one content word is
+ * therefore never called answered: the row stays in the list, where a reader
+ * can see it and disagree, rather than disappearing silently.
+ *
+ * `haystack` is what your own posts are about (`videos.topics`); what they
+ * CLAIM is unreadable until M8 — see UNANSWERED_CLAIMS_UNREADABLE.
  */
 export function answeredBy(label: string, haystack: readonly string[]): boolean {
   const want = matchWords(label)
-  if (want.length === 0) return false
+  if (want.length < 2) return false
   const pool = new Set(haystack.flatMap(matchWords))
   const hits = want.filter((w) => pool.has(w)).length
-  return hits >= Math.min(2, want.length)
+  return hits >= 2
 }
 
 /**
