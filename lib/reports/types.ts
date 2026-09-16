@@ -183,6 +183,19 @@ export interface Figure {
 }
 export type FigureTable = Record<string, Figure>
 
+/**
+ * A figure keyed by a record's UUID — `o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share`,
+ * which is how a page block names a per-theme figure.
+ *
+ * WHY IT IS SINGLED OUT. `substituteFigures` (lib/reports/cover.ts) drops the
+ * WHOLE SENTENCE whose figure key is missing, so a token is only safe to offer
+ * a model if the model can retype it. Every token ever offered before was a
+ * short human word; a 36-character hex string is one wrong character away from
+ * silently deleting a sentence from a paid document, and nothing in the prompt
+ * or in checkDocument guards a figure key.
+ */
+export const isOpaqueFigureKey = (key: string): boolean => /^[a-z]_[0-9a-f]{8}_[0-9a-f]{4}_/.test(key)
+
 /** The cover as stored: prose with `[[figure_key]]` placeholders. The
  *  numbers are substituted at render from `figures` (lib/reports/cover.ts). */
 export interface CoverText {

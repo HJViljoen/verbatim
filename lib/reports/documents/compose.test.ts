@@ -99,6 +99,22 @@ describe('buildWriterPrompts', () => {
     expect(user).toContain('do not cite a number about them')
   })
 
+  // substituteFigures deletes the whole sentence whose key is missing, so a
+  // 36-character hex token is one wrong character away from removing a
+  // paragraph of a paid document.
+  it('offers no figure token the model cannot retype', () => {
+    const { user } = buildWriterPrompts({
+      template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null,
+      figures: {
+        videos: { label: 'videos analysed', value: '388', kind: 'count' },
+        o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share: { label: 'a theme this month', value: '8.8%', kind: 'pct' },
+      },
+      signals, answers: [], previous: null, thin: false,
+    })
+    expect(user).toContain('[[videos]]')
+    expect(user).not.toContain('2418f4d7')
+  })
+
   it('says the update was thin and asks for fewer findings', () => {
     const { system, user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: { ...signals, runStatus: 'partial' }, answers: [], previous: null, thin: true })
     expect(system).toContain('at most 3 findings')

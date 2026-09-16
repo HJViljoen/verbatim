@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { DOCUMENT_BLOCK_MAX } from '../../config'
 import { CALIBRATED_PROSE_RULE } from '../../pipeline/prose-rules'
-import type { FigureTable } from '../types'
+import { isOpaqueFigureKey, type FigureTable } from '../types'
 import type { DocumentTemplate } from './templates'
 import { pageKindsOf } from './sections'
 import type { DocPageKind, DocumentSettings } from './types'
@@ -216,7 +216,12 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   ].filter(Boolean).join('\n')
 
   const s = a.signals
-  const figureLines = Object.entries(a.figures).map(([k, f]) =>
+  // A TOKEN THE MODEL CANNOT RETYPE IS NOT OFFERED. The blocks' merged table
+  // carries per-theme figures keyed by the theme's UUID, and substituteFigures
+  // deletes the whole sentence whose key is missing — so one wrong hex
+  // character silently removes a paragraph from a paid document. The theme is
+  // still nameable in prose; it is the 36-character token that is withheld.
+  const figureLines = Object.entries(a.figures).filter(([k]) => !isOpaqueFigureKey(k)).map(([k, f]) =>
     f.kind === 'count' ? `- [[${k}]]: a count of ${f.label}; write it as "[[${k}]] ${f.label}"`
     : f.kind === 'pct' ? `- [[${k}]]: a share, written with its % sign: ${f.label}; put it after a verb ("stood at [[${k}]]")`
     : `- [[${k}]]: a name: ${f.label}`)
