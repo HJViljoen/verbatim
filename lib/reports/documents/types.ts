@@ -1,5 +1,4 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
-import { HORIZONS, type Horizon } from '../../reading/horizon'
 import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
@@ -71,18 +70,6 @@ export interface DocumentSettings {
   blocks?: DocumentBlockKey[]
   /** Custom briefs: whose voice writes it. */
   role?: DocumentRole
-  /**
-   * The build's window control (Phase 1 WP19, RP2).
-   *
-   * IT IS THE HORIZON CONTROL, not a second vocabulary. The Studio had no time
-   * choice at all — a build was pinned to `latestRunId` and that was the only
-   * window a report had — and the design asks for one. The four horizons are
-   * the ones every reading surface already offers, so a brief built on "Last 3
-   * months" is the same window the reader was looking at when they asked for
-   * it, and an export of the page and a brief of the page cannot answer
-   * differently. Absent = `DEFAULT_HORIZON`.
-   */
-  horizon?: Horizon
 }
 
 export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettings = { sellsTo: 'consumers', competitors: null, language: 'en', findings: 4 }
@@ -102,11 +89,8 @@ export function documentSettings(raw: Partial<DocumentSettings> | null | undefin
     ...(brief ? { brief } : {}),
     ...(blocks.length ? { blocks } : {}),
     ...(isDocumentRole(s.role) ? { role: s.role } : {}),
-    ...(isHorizon(s.horizon) ? { horizon: s.horizon } : {}),
   }
 }
-
-export const isHorizon = (v: unknown): v is Horizon => HORIZONS.includes(v as Horizon)
 
 // ── the document ──────────────────────────────────────────────────────────
 
@@ -205,8 +189,6 @@ export interface DocumentReading {
   monthStatus: MonthStatus
   /** The instant the brief read, printed — never `created_at`. */
   readingAt: string
-  /** The build's window control (RP2), as a horizon key. */
-  horizon: string
   /** The one line every page of the brief carries. */
   stamp: string
   denominators: { audience: string; label: string; videos: number; comments: number }[]

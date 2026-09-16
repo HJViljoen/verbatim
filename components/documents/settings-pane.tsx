@@ -9,7 +9,6 @@ import { DOCUMENT_BLOCKS, DOCUMENT_BLOCKS_MAX, documentTemplate } from '@/lib/re
 import { REPORT_TITLE_MAX } from '@/lib/reports/types'
 import { DOCUMENT_BRIEF_MAX } from '@/lib/config'
 import type { DocumentSettingsPatch } from '@/lib/reports/validate'
-import { DEFAULT_HORIZON, HORIZONS, HORIZON_LABEL, type Horizon } from '@/lib/reading/horizon'
 
 // A written report's settings (S8, 2026-08-31): the few choices it has.
 // Blur-save through the server action, one at a time, in order; the built
@@ -174,21 +173,18 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
           <span className="text-[11.5px] text-muted-foreground">This brief is short by design.</span>
         </div>
       )}
-      {/* RP2's window control, and it IS the horizon control (WP19). The
-          Studio had no time choice at all — a build was pinned to the latest
-          update — so a brief could only ever be about the last Sunday. These
-          are the four windows every reading surface already offers, which is
-          what makes a brief built on "Last 3 months" the same window the
-          reader was looking at when they asked for it. A build never crosses a
-          clustering boundary without saying so: the caveat travels on the
-          brief's own method page, from the series that drew it. */}
-      <label className="flex flex-col gap-1">
+      {/* NO WINDOW CONTROL, and the pane says what the window is instead.
+          The control offered four horizons and changed only the blocks that
+          are windowed — the stamp, the denominators and the method page stayed
+          the single current month, so "Last 12 months" printed twelve months
+          of figures under a September label. A brief is a reading of one
+          month; when the stamp can carry a window the control comes back with
+          it. */}
+      <div className="flex flex-col gap-1">
         <span className={labelCls}>Window</span>
-        <select defaultValue={settings.horizon ?? DEFAULT_HORIZON} className={inputCls} onChange={(e) => save({ horizon: e.target.value as Horizon })}>
-          {HORIZONS.map((h) => <option key={h} value={h}>{HORIZON_LABEL[h]}</option>)}
-        </select>
-        <span className="text-[11.5px] text-muted-foreground">Every number in this brief is read over this window, and it is printed on the brief.</span>
-      </label>
+        <span>The month in hand</span>
+        <span className="text-[11.5px] text-muted-foreground">A brief reads the month it is built in, and the month is printed on every page of it.</span>
+      </div>
       <div className="flex flex-col gap-1">
         <span className={labelCls}>Language</span>
         <span>English</span>

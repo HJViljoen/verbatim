@@ -31,7 +31,7 @@ const base = (over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData =>
   promptVersion: 'market_brief_v1',
   reading: {
     month: '2026-09-01', monthLabel: 'September 2026', monthStatus: 'filling',
-    readingAt: '2026-09-16T05:00:00.000Z', horizon: 'this_month',
+    readingAt: '2026-09-16T05:00:00.000Z',
     stamp: 'September 2026 · reading as at 16 Sep 2026 · still filling until 31 Oct 2026',
     denominators: [], platformMix: {}, crossesClustering: false,
   },

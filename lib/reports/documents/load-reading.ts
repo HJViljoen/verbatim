@@ -14,7 +14,7 @@ import { computeReadiness } from '../../readiness/compute'
 import { loadReadiness } from '../../readiness/load'
 import { OWNER_LABEL } from '../../readiness/types'
 import { loadRecordInputs, monthRecordWindow, totalPlatformMix } from '../../reading/record'
-import { DEFAULT_HORIZON, parseHorizon, type Horizon } from '../../reading/horizon'
+import { DEFAULT_HORIZON } from '../../reading/horizon'
 import type { Scope } from '../../renderables/types'
 import type { Block } from '../../blocks/types'
 import { blockReading, denominatorsOf, mergeReadings, monthAndYear, type BriefReading } from './reading'
@@ -64,9 +64,8 @@ const LOADERS: Record<BriefSurface, SurfaceLoader> = {
 
 export interface BriefReadingOptions {
   role: DocumentRole
-  /** The build's window control — RP2's, which IS the horizon control. */
-  horizon?: Horizon
-  /** Overridable for a rebuild that re-reads as at its own stamp. */
+  /** The instant this brief reads at. Frozen once per build and passed in;
+   *  see `researchStep`. */
   now?: string
 }
 
@@ -84,13 +83,21 @@ export interface BriefReadingResult {
 
 export async function loadBriefReading(scope: Scope, options: BriefReadingOptions): Promise<BriefReadingResult> {
   const map = briefMap(options.role)
-  const horizon = options.horizon ?? parseHorizon(scope.params.horizon) ?? DEFAULT_HORIZON
   const wanted = surfacesOf(map)
   const readingAt = options.now ?? new Date().toISOString()
-  // The horizon travels in the params, exactly as it does on a page: a loader
-  // reads `params.horizon` and nothing else decides its window, so the brief
-  // and the page a reader opened resolve the same selection.
-  const surfaceScope: Scope = { ...scope, params: { ...scope.params, horizon } }
+  // A BRIEF IS A READING OF ONE MONTH, AND THE SURFACES ARE READ ON THAT
+  // MONTH. The reading's stamp, its denominators and the method page's basis
+  // are all the single current month (`overview.month`, and
+  // `monthRecordWindow` around it) — there is no second vocabulary for them.
+  // Handing the loaders any other horizon therefore produced window-scoped
+  // figures under a month label: measured on production, the sales brief's
+  // "videos carrying a question in this window" read 10 at `this_month` and 47
+  // at `last_12`, under an identical "September 2026" stamp and an identical
+  // denominator line. The window control is withdrawn until the stamp, the
+  // denominators and the basis paragraph can all carry a window; a number over
+  // the wrong period under a month label is the failure item 43 exists to
+  // remove.
+  const surfaceScope: Scope = { ...scope, params: { ...scope.params, horizon: DEFAULT_HORIZON } }
 
   // Overview is always loaded: it is where the month, its status and the
   // reading's own caveats come from, and three of the four maps borrow from it
@@ -135,7 +142,6 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     monthLabel: monthAndYear(overview.month),
     monthStatus: overview.monthStatus,
     readingAt,
-    horizon,
     window: overview.window,
     measured: merged.measured,
     figures: merged.figures,

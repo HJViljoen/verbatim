@@ -15,7 +15,6 @@ import { loadBriefReading } from './load-reading'
 import type { BriefReading } from './reading'
 import type { BriefEntry, BriefSurface, MissingInput } from './sections'
 import { readingHandle } from '../../reading/read'
-import { parseHorizon } from '../../reading/horizon'
 
 /**
  * The researcher's reading of an update, in code, before a single question is
@@ -237,12 +236,13 @@ export async function loadSignals(
   // themes of one run, the shares of one run's tracked videos, a delta between
   // two runs. Below it is the month, read off the same blocks the reader sees
   // on the page, with the band, the n, the denominator and the reading date
-  // the update-scoped figures never had. The build's window control is the
-  // horizon control and travels in the settings; nothing here recomputes a
-  // window from the clock (AGENTS.md's own rule, applied to a document).
+  // the update-scoped figures never had. A brief has no window control: it is
+  // a reading of ONE MONTH, and every surface is read on that month, because
+  // the stamp, the denominators and the method page's basis are the month's
+  // and nothing else.
   const brief = await loadBriefReading(
-    { supabase: admin, clientId, reading: readingHandle(clientId), params: { horizon: args.settings.horizon } },
-    { role, horizon: parseHorizon(args.settings.horizon) },
+    { supabase: admin, clientId, reading: readingHandle(clientId), params: {} },
+    { role },
   ).catch((e) => {
     console.error(`[documents] brief reading: ${(e as { message?: string })?.message ?? String(e)}`)
     return null

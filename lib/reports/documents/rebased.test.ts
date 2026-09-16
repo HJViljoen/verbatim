@@ -16,7 +16,6 @@ const reading = (over: Partial<BriefReading> = {}): BriefReading => ({
   monthLabel: 'September 2026',
   monthStatus: 'filling',
   readingAt: '2026-09-16T05:00:00.000Z',
-  horizon: 'this_month',
   window: { horizon: 'this_month', kind: 'month', months: ['2026-09-01'], from: '2026-09-01T00:00:00.000Z', to: '2026-10-01T00:00:00.000Z', basis: null },
   measured: { category_videos: { value: 388, unit: 'videos', label: 'videos read for the category this month' } },
   figures: { category_videos: { label: 'videos read for the category this month', value: '388', kind: 'count' } },
@@ -138,7 +137,7 @@ describe('documentReading', () => {
     expect(d.denominators).toHaveLength(3)
     expect(JSON.stringify(d)).not.toContain('verdict')
     expect(Object.keys(d).sort()).toEqual(
-      ['crossesClustering', 'denominators', 'horizon', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
+      ['crossesClustering', 'denominators', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
     )
   })
 })

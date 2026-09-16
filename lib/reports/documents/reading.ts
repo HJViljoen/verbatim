@@ -2,7 +2,7 @@ import { fmtInt, fullDate, longMonth, platformLabel } from '../../format'
 import { blockAnswers, mergeFigures } from '../../blocks/types'
 import type { Block } from '../../blocks/types'
 import { freezeBoundary } from '../../reading/monthly'
-import { HORIZON_LABEL, type Horizon, type HorizonWindow } from '../../reading/horizon'
+import type { HorizonWindow } from '../../reading/horizon'
 import type { MonthStatus, PlatformMix } from '../../reading/types'
 import type { FigureTable as ReadingFigures, Verdict } from '../../reading/verdicts'
 import { proseFigures } from '../../prose/figures'
@@ -52,7 +52,8 @@ export interface BriefReading {
   monthStatus: MonthStatus
   /** ISO instant the brief was read at — printed, not inferred from created_at. */
   readingAt: string
-  horizon: Horizon
+  /** The month's own window, as the surfaces resolved it. A brief has no
+   *  window control: see `load-reading.ts`. */
   window: HorizonWindow
   /** Figures as measured — what a verdict argues from. */
   measured: ReadingFigures
@@ -64,8 +65,8 @@ export interface BriefReading {
   platformMix: PlatformMix
   /** The reading layer's own caveats, said once (collapsed upstream). */
   notes: string[]
-  /** True when the window crosses a recorded clustering boundary. A build may
-   *  target a past month; it may not cross a boundary without saying so. */
+  /** True when the window crosses a recorded clustering boundary. A reading
+   *  may not cross a boundary without saying so. */
   crossesClustering: boolean
 }
 
@@ -121,9 +122,6 @@ export function platformLine(mix: PlatformMix): string {
  *  and no direction word is earned across it. */
 export const CLUSTERING_CAVEAT =
   'Themes were grouped differently inside this window, so a comparison across it is not like for like.'
-
-/** What a brief is allowed to say its horizon is, in the reader's words. */
-export const horizonLine = (h: Horizon): string => HORIZON_LABEL[h]
 
 /** Every figure and verdict a set of blocks prints, gathered without rendering
  *  any of them. The one crossing to printed figures happens here, once. */

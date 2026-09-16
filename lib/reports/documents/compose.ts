@@ -510,7 +510,6 @@ export function documentReading(r: BriefReading): DocumentReading {
     monthLabel: r.monthLabel,
     monthStatus: r.monthStatus,
     readingAt: r.readingAt,
-    horizon: r.horizon,
     stamp: briefStamp(r),
     denominators: r.denominators.map((d) => ({ ...d })),
     platformMix: { ...r.platformMix },
