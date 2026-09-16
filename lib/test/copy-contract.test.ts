@@ -218,3 +218,36 @@ describe('assertCopyContract', () => {
     expect(message).toContain('direction-word')
   })
 })
+
+describe('copyViolations — the `subject` node the prose policy table exempts', () => {
+  // PROSE_POLICY (lib/prose/scrub.ts) marks `pass_b_theme` 'none' and
+  // `pass_e_persona` 'digits' — never 'direction' — because in those two slots
+  // a direction word is about the SUBJECT rather than about a reading. Rule
+  // (c) was failing three correct sentences of Össur's and Sealand's stored
+  // casts on every render; `subject` is the marker that brings the contract
+  // into line with the policy the product already applies at write time.
+
+  it('lets a direction word stand where the words are the model’s about the thing itself', () => {
+    expect(
+      copyViolations('<p data-copy="subject">Grief collides with pain, falls, slow progress.</p>'),
+    ).toEqual([])
+  })
+
+  it('lets a number stand too — "a 16-inch laptop sleeve" is a legitimate label', () => {
+    expect(copyViolations('<p data-copy="subject">Will a 16-inch laptop fit?</p>')).toEqual([])
+  })
+
+  it('still catches an unsubstituted figure token, which is a defect in every slot', () => {
+    const bad = copyViolations('<p data-copy="subject">Heard in [[n]] videos.</p>')
+    expect(bad.map((v) => v.rule)).toEqual(['prose-figure-token'])
+  })
+
+  it('does not widen `prose`: a direction word in prose about a READING still fails', () => {
+    const bad = copyViolations('<p data-copy="prose">Comfort is fading this month.</p>')
+    expect(bad.map((v) => v.rule)).toEqual(['direction-word'])
+  })
+
+  it('is one of the kinds the marker check accepts', () => {
+    expect(copyViolations('<span data-copy="subject">a group</span>').filter((v) => v.rule === 'unknown-kind')).toEqual([])
+  })
+})

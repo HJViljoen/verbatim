@@ -49,9 +49,47 @@ import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibr
 /** The attribute a block marks a node with. */
 export const COPY_ATTR = 'data-copy'
 
-export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict'
+/**
+ * `subject` is the fourth, and it is the copy contract catching up with the
+ * PROSE POLICY TABLE (Phase 1 WP13).
+ *
+ * `lib/prose/scrub.ts` PROSE_POLICY already decides, per model slot, which
+ * rules that slot's words get — and two slots are deliberately NOT
+ * direction-scrubbed: `pass_b_theme` ('none': a theme's label and its
+ * description) and `pass_e_persona` ('digits', never 'direction'). The reason
+ * is written there and it is false-positive class 2 in lib/calibration.ts: in
+ * those slots a direction word is almost always about the SUBJECT rather than
+ * about a reading. Production says so out loud — Össur's cast is described as
+ * helping people "keep dignity and momentum" and stopped by "pain, falls, slow
+ * progress", and Sealand's by an "emotional pull [that] fades fast". Not one
+ * of those is a claim that anything moved, and no word list can tell them
+ * apart from one that is.
+ *
+ * So rule (c) was failing three correct sentences on every render, and the
+ * only ways out were to scrub words the product's own policy says not to
+ * scrub, or to stop printing the model's description of the group. `subject`
+ * is the third way: a node whose words are the model's about the thing itself,
+ * exempt from the direction rule and — matching `pass_b_theme`'s 'none' — from
+ * the digit rule too, because "a 16-inch laptop sleeve" is a legitimate theme
+ * label. What it is NOT exempt from is an unsubstituted `[[n]]` token, which is
+ * a defect in every slot there is.
+ *
+ * It is narrow on purpose. `prose` stays the default for everything a model
+ * writes ABOUT a reading — a brief, a cover, an interpretation — and those are
+ * exactly the slots PROSE_POLICY marks 'both'.
+ *
+ * AND A `subject` NODE CARRIES THE MODEL'S WORDS AND NOTHING ELSE. The
+ * exemption cuts the node's whole range out of rule (c)'s block-wide scan, so
+ * a node that also wraps a heading, a label or a sentence CODE wrote is a
+ * place a real direction word can sit unmarked. A block marks the model's
+ * value, not the row it sits in: `<span>Drives</span> <span
+ * data-copy="subject">{persona.wants}</span>`, never one marked node around
+ * both. VO4's cast was written the wrong way round and is the reason this
+ * paragraph exists.
+ */
+export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict' | 'subject'
 
-const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict']
+const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict', 'subject']
 
 export interface CopyNode {
   kind: CopyKind
@@ -251,6 +289,9 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   }
 
   for (const n of nodes) {
+    if (n.kind === 'subject' && n.ownText.includes('[[n]]')) {
+      bad.push({ rule: 'prose-figure-token', text: n.ownText, detail: 'an unsubstituted [[n]] figure token reached the page' })
+    }
     if (n.kind === 'prose') {
       // (a) The model wrote this. Numbers are code's; a figure node carries them.
       if (n.ownText.includes('[[n]]')) {
@@ -266,9 +307,10 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
     }
   }
 
-  // (c) The whole block, minus the verdict nodes that are allowed the word.
+  // (c) The whole block, minus the verdict nodes that are allowed the word and
+  // the subject nodes the prose policy table exempts (see `CopyKind`).
   let rest = markup
-  const verdicts = scan(markup).filter((n) => n.kind === 'verdict')
+  const verdicts = scan(markup).filter((n) => n.kind === 'verdict' || n.kind === 'subject')
   const outermost = verdicts.filter((n) => !verdicts.some((p) => p !== n && n.start >= p.start && n.end <= p.end))
   for (const n of [...outermost].sort((x, y) => y.start - x.start)) rest = rest.slice(0, n.start) + ' ' + rest.slice(n.end)
   const restText = markupText(rest)

@@ -1,48 +1,70 @@
-import { SkeletonPage, SkeletonTile, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
-import { directionWordsFor } from '@/lib/config'
+import { PageFrame } from '@/components/shell/page-grid'
+import { SkeletonPageBar, Bone, BoneLines, BoneBars } from '@/components/shell/skeleton'
+import { GrowingTile } from '@/components/pages/voice-surface'
 
-// Mirrors app/dashboard/voice/page.tsx (2026-08-28): the conversation by theme
-// (8×4 — filter row, category tabs, the map) · the theme pane (4×4) · gaining
-// and fading (4×2, gated off by D1) · how your customers talk · audience mood
-// (4×2 each beside it, 6×2 each without it) · hear these voices (12×2, five
-// quote cards across). The skeleton follows the grid the page actually draws,
-// or the page jumps when it lands.
+// Mirrors app/dashboard/voice/page.tsx (Phase 1 WP13): the audience and where
+// it was said · what moved · a theme in full · who is talking.
+//
+// FOUR GROWING SECTIONS AND NO ROW SPANS, because that is what the page draws.
+// The first cut of this file was four SkeletonTiles at spans 2/4/6/4 under the
+// comment "the skeleton follows the grid the page actually draws" — true when
+// it was written and false by the end of the same commit, because the page
+// abandoned the fixed grid the moment a bounded tile was found CUTTING VO3's
+// evidence, and VO3 alone renders taller than a six-row tile's 696px. A
+// skeleton drawing a grid the page no longer draws is the layout shift it
+// exists to prevent, wearing a comment that says it isn't.
+//
+// It reads NO gate. The old skeleton branched on `directionWordsFor('voice.
+// movers')` because the tile it stood in for was registered behind that
+// constant; VO2 is not — it earns its direction words from three consecutive
+// months of the comment-dated series, and it is always drawn.
 export default function VoiceLoading() {
-  const blocks = ['col-span-3 row-span-2', 'col-span-2 row-span-2', 'col-span-2', 'col-span-2', 'col-span-3', 'col-span-2', 'col-span-2', 'col-span-2']
-  const half = directionWordsFor('voice.movers') ? 4 : 6
   return (
-    <SkeletonPage title="Voice of Customer" pills={1}>
-      <SkeletonTile col={8} row={4} meta>
-        <div className="flex gap-2">
-          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-7 w-28 rounded-full" />)}
-        </div>
+    <PageFrame>
+      <span role="status" className="sr-only">Loading Voice…</span>
+      <SkeletonPageBar title="Voice" pills={1} />
+
+      {/* VO1 · the audience switch, then the platform mix */}
+      <GrowingTile>
+        <Bone className="h-2.5 w-28" />
         <div className="flex flex-wrap gap-2">
-          {Array.from({ length: 6 }, (_, i) => <Bone key={i} className="h-5 w-20 rounded-md" />)}
+          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-6 w-32 rounded-full" />)}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-3 gap-1.5">
-          {blocks.map((c, i) => <Bone key={i} className={`h-full w-full rounded-[6px] ${c}`} />)}
+        <div className="flex flex-wrap gap-4">
+          {Array.from({ length: 4 }, (_, i) => <Bone key={i} className="h-4 w-24" />)}
         </div>
-      </SkeletonTile>
-      <SkeletonTile col={4} row={4} meta>
-        <Bone className="h-5 w-3/4" />
-        <div className="flex gap-1.5"><Bone className="h-4 w-20 rounded-full" /><Bone className="h-4 w-16 rounded-full" /></div>
-        <BoneLines lines={3} />
-        <Bone className="h-6 w-24" />
+        <BoneLines lines={2} />
+      </GrowingTile>
+
+      {/* VO2 · the arms of the one axis */}
+      <GrowingTile>
+        <Bone className="h-2.5 w-24" />
+        <BoneBars rows={6} />
+      </GrowingTile>
+
+      {/* VO3 · the theme, its month line, its voices */}
+      <GrowingTile>
+        <Bone className="h-2.5 w-24" />
+        <Bone className="h-5 w-2/5" />
+        <BoneLines lines={2} />
+        <Bone className="h-8 w-28" />
+        <Bone className="h-[150px] w-full rounded-[6px]" />
         <Bone className="h-1.5 w-full rounded-full" />
-        <BoneLines lines={5} />
-      </SkeletonTile>
-      {directionWordsFor('voice.movers') && <SkeletonTile col={4} row={2} meta><BoneBars rows={6} /></SkeletonTile>}
-      <SkeletonTile col={half} row={2} meta>
-        <div className="flex flex-wrap gap-1">{Array.from({ length: 8 }, (_, i) => <Bone key={i} className="h-5 w-24 rounded-[4px]" />)}</div>
-      </SkeletonTile>
-      <SkeletonTile col={half} row={2} meta><BoneBars rows={3} /></SkeletonTile>
-      <SkeletonTile col={12} row={2} meta>
-        <div className="grid flex-1 grid-cols-5 gap-4">
-          {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="flex flex-col gap-2"><Bone className="h-4 w-24 rounded-full" /><BoneLines lines={3} /></div>
+        <BoneLines lines={6} />
+      </GrowingTile>
+
+      {/* VO4 · the cast */}
+      <GrowingTile>
+        <Bone className="h-2.5 w-24" />
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="flex gap-3">
+              <Bone className="h-16 w-10 flex-none rounded-[6px]" />
+              <div className="flex flex-1 flex-col gap-1.5"><Bone className="h-4 w-1/3" /><BoneLines lines={3} /></div>
+            </div>
           ))}
         </div>
-      </SkeletonTile>
-    </SkeletonPage>
+      </GrowingTile>
+    </PageFrame>
   )
 }
