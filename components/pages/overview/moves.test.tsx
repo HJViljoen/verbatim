@@ -28,10 +28,10 @@ describe('OV5 · your moves', () => {
 
   it('names the unlock on the block rather than leaving it to be wondered about', () => {
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.')
+    expect(text).toContain('Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.')
     // AND NAMES NO MONTH. A delivery date computed from the calendar is a
     // promise to a paying client that is recomputed every month.
-    expect(text).not.toMatch(/bottom section in \w+/)
+    expect(text).not.toMatch(/bottom section/)
   })
 
   it('carries the masthead that stops every line reading as a causal claim', () => {

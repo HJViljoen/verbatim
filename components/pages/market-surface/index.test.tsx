@@ -189,8 +189,8 @@ describe('MK4 · declared moves', () => {
 
   it('names the unlock without naming a month for it', () => {
     const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.')
-    expect(text).not.toMatch(/bottom section in \w+ 20\d\d/)
+    expect(text).toContain('Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.')
+    expect(text).not.toMatch(/bottom section/)
   })
 })
 

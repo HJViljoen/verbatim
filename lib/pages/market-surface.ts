@@ -489,7 +489,7 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
       how: 'Everything you published this month, with the claims you made in it, confirmed in one press as a move dated to the first of the month.',
       href: null,
       live: false,
-      unlock: 'This month’s card arrives with Market’s bottom section.',
+      unlock: 'This month’s card is not built yet.',
     },
     {
       key: 'track',
@@ -515,7 +515,7 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
       how: 'Your own-voice claims, each with its verdict per month: echoed · pushed back · not taken up.',
       href: null,
       live: false,
-      unlock: 'Registering a claim, and a claim’s identity across updates, arrive with Market’s bottom section.',
+      unlock: 'Registering a claim, and a claim’s identity across updates, are not built yet.',
     },
     {
       key: 'plan',
@@ -523,7 +523,7 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
       how: 'A campaign brief, re-checked against the conversation each month.',
       href: null,
       live: false,
-      unlock: 'Plans re-checked arrive with Market’s bottom section.',
+      unlock: 'Plans re-checked are not built yet.',
     },
   ]
 }
@@ -539,7 +539,7 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
  * verdict-per-month it cannot hold.
  */
 export const CLAIMS_CAVEAT =
-  'This is how each claim reads in the latest update. A claim’s verdict per month, held across two updates before it is printed, arrives with Market’s bottom section.'
+  'This is how each claim reads in the latest update. A claim’s verdict per month, held across two updates before it is printed, is not built yet.'
 
 /** MK3 and MK6: the two sections of this surface that are not built, each
  *  naming what it waits for and who owns it. Neither invents a date — a

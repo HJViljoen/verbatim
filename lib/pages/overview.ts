@@ -730,8 +730,14 @@ export const MOVES_EMPTY =
  * the unlock names what it waits for and not when — and gains a month here the
  * day there is one to name, beside OLD_PAGES_RETIRE_ON.
  */
+// AND IT NAMES A PLACE A READER CAN FIND. "Market's bottom section" is a
+// plan-internal noun: on Overview it at least names another page, and on Market
+// itself it was printed four more times at a reader who was looking at Market's
+// bottom section, which says "Not on this page yet". Those four now say plainly
+// that the thing is not built; this one keeps the page name, which is the part
+// a reader can act on.
 export const MOVES_UNLOCK =
-  'Scoring, and the pre-filled monthly card, arrive with Market’s bottom section.'
+  'Scoring, and the pre-filled monthly card, are not built yet. They will land on Market.'
 
 /** The masthead OV5 and Market both carry, code-written — and the same
  *  sentence Track this carries where a move is DECLARED, so it is stated once,
