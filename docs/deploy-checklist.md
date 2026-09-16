@@ -641,7 +641,8 @@ node --env-file=.env.local --import tsx scripts/clear-report-emails.ts --client 
 builds a recipients form. The product deliberately does not clear it. **Those
 addresses are the only surviving record of who was on the list before
 recipients moved to `report_schedules`** — copy them somewhere before you clear
-them, because step 6 is going to ask you for them.
+them, because **step 5.6** is going to ask you for them. (Step 6 is the
+rehearsal; it wants no addresses at all.)
 
 ### 5.6 · Recipients — LAST, and by hand
 
