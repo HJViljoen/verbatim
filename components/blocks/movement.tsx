@@ -44,13 +44,19 @@ export function BlockMovement({
   if (mode !== 'email') return <span data-copy="verdict"><MovementBadge verdict={verdict} unit={unit} /></span>
 
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
+  const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state !== 'moved' || change == null) {
     const word = verdict.state === 'moved' ? MOVEMENT_WORDS.too_little_data : MOVEMENT_WORDS[verdict.state]
     return <span data-copy="verdict" style={chip('neutral')}>{word}</span>
   }
+  // AND THE BAND IN THE EMAIL TOO. The screen arm put it in a `title`, which an
+  // email has no way to show and paper has none either; this arm dropped it
+  // altogether. A change without the band it cleared is a number a reader
+  // cannot weigh.
   return (
     <span data-copy="verdict" style={chip(change > 0 ? 'up' : 'down')}>
       {change > 0 ? '+' : '−'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
+      {band != null ? ` · band ${Math.abs(band).toLocaleString('en-US')}` : ''}
     </span>
   )
 }

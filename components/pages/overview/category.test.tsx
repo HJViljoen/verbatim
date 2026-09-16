@@ -33,6 +33,19 @@ describe('OV3 · what the category is saying', () => {
     expect(text).toContain('a video carrying both is counted in each')
   })
 
+  // A CHANGE WITHOUT ITS BAND OR ITS BASIS IS A NUMBER A READER CANNOT WEIGH.
+  // The band lived in a `title` attribute — invisible in print and in email,
+  // where the email arm dropped it entirely — and nothing on OV3 said what the
+  // two sides of "▲ 5.3 pts" were, while This week prints a different figure for
+  // the same theme in the same month.
+  it('prints the band and the basis, not a tooltip', () => {
+    for (const mode of MODES) {
+      const text = renderText(overviewCategory.render(overviewFixture(), mode, ctx))
+      expect(text).toContain('band')
+      expect(text).toContain('What moved most · Sep 2026 against Aug 2026')
+    }
+  })
+
   it('keeps every direction word inside a verdict node', () => {
     const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
     expect(markup).toContain('growing, 3 months')

@@ -77,11 +77,16 @@ function NonAnswer({ word, title }: { word: string; title: string }) {
  *  the movement in muted ink: it moved, and we are not saying whether that is
  *  good. The default stays `up`, which is what every call site meant before
  *  the axis existed. */
-function Moved({ change, unit, title, good = 'up' }: { change: number; unit?: string; title: string; good?: Good }) {
+function Moved({ change, unit, band, title, good = 'up' }: { change: number; unit?: string; band?: number | null; title: string; good?: Good }) {
   const fav = favourability(change, good)
   return (
     <span title={title} className={`${MOVED} ${fav === null ? 'text-muted-foreground' : fav ? 'text-positive' : 'text-negative'}`}>
       {change > 0 ? '▲' : '▼'} {Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
+      {/* THE BAND IS TEXT, NOT A TOOLTIP. lib/reports/weekly.ts's budget
+          comment says "this product never prints a change without the band it
+          cleared" — and on a printed page, in an email, and for anyone not
+          using a mouse, a `title` attribute is not printed at all. */}
+      {band != null ? <span className="font-normal text-muted-foreground"> · band {Math.abs(band).toLocaleString('en-US')}</span> : null}
     </span>
   )
 }
@@ -105,7 +110,7 @@ export function MovementBadge({ verdict, unit, good = 'up' }: { verdict: Verdict
   const change = 'changePts' in verdict ? verdict.changePts : verdict.change
   const band = 'bandPts' in verdict ? verdict.bandPts : verdict.band
   if (verdict.state === 'moved' && change != null) {
-    return <Moved change={change} unit={unit} good={good} title={band != null ? `moved beyond the ${band} pt margin of this measurement` : 'moved'} />
+    return <Moved change={change} unit={unit} band={band} good={good} title={band != null ? `moved beyond the ${band} pt margin of this measurement` : 'moved'} />
   }
   const why = 'refusedReason' in verdict && verdict.refusedReason ? REFUSED_WHY[verdict.refusedReason] : null
   const inside = change != null && band != null

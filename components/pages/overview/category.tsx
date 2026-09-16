@@ -6,7 +6,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarSeries } from '@/lib/charts/calendar'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -48,6 +48,15 @@ function Line({ label, mode, children }: { label: string; mode: RenderMode; chil
       {children}
     </div>
   )
+}
+
+/** "Sep 2026 against Aug 2026", from the verdict of a row that is printed. */
+function moversBasis(c: OverviewData['category']): string | null {
+  for (const m of [...c.growing, ...c.fading]) {
+    const v = m.verdict
+    if (v?.window?.from && v.basis?.from) return `${monthName(v.window.from)} against ${monthName(v.basis.from)}`
+  }
+  return null
 }
 
 function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
@@ -205,7 +214,15 @@ export const overviewCategory: Block<OverviewData> = {
               band, and it is right to — a heading that says "growing" makes the
               claim before any row has earned it. The rows say it, each inside
               its own verdict node, where the reading is. */}
-          <Line label="What moved most" mode={mode}>{movers}</Line>
+          {/* AND WHAT IT MOVED AGAINST. Voice states its basis in the block
+              meta ("Sep 2026 against Aug 2026") and This week's §3 prints its
+              own; OV3 printed "▲ 5.3 pts" with nothing saying what the two
+              sides were, so a reader who opens Overview and This week in one
+              session sees one theme move by two different amounts with only
+              one page saying why. Taken off a printed row's own verdict, so
+              the heading can never describe a comparison the block did not
+              draw. */}
+          <Line label={`What moved most${moversBasis(c) ? ` · ${moversBasis(c)}` : ''}`} mode={mode}>{movers}</Line>
           <Line label="Mood" mode={mode}>{mood}</Line>
           <Line label="Attention" mode={mode}>{attention}</Line>
         </div>

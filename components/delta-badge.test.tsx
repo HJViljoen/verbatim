@@ -63,7 +63,10 @@ describe('MovementBadge', () => {
   })
 
   it("still takes the band's own three-state DeltaVerdict", () => {
-    expect(renderText(<MovementBadge verdict={{ state: 'moved', change: 4.1, band: 2 }} unit="pts" />)).toBe('▲ 4.1 pts')
+    // THE BAND IS PRINTED, NOT HOVERED: a `title` is invisible in print and in
+    // email, and this product never prints a change without the band it cleared.
+    expect(renderText(<MovementBadge verdict={{ state: 'moved', change: 4.1, band: 2 }} unit="pts" />)).toBe('▲ 4.1 pts · band 2')
+    expect(renderText(<MovementBadge verdict={{ state: 'moved', changePts: 4.1, bandPts: null } as never} unit="pts" />)).toBe('▲ 4.1 pts')
     expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: 0.4, band: 2 }} />)).toBe('no clear change')
     expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe('too little data')
   })
