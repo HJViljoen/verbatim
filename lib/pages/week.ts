@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
-import { chunk } from '../chunk'
+import { chunk, UUID_IN_CHUNK } from '../chunk'
 import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
@@ -1709,6 +1709,9 @@ async function loadNewThemes(
       supabase.from('month_theme_readings').select('theme_id, videos')
         .eq('client_id', clientId).eq('month', month).in('theme_id', part)
         .order('theme_id', { ascending: true }),
+      // One month, one audience-less read: at most one row per theme, so the
+      // default chunk is right here too.
+      UUID_IN_CHUNK,
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
@@ -1995,8 +1998,9 @@ async function loadSalesCitations(
 async function inChunks<T>(
   ids: readonly string[],
   build: (part: string[]) => Parameters<typeof selectAll<T>>[0],
+  size: number = UUID_IN_CHUNK,
 ): Promise<T[]> {
-  const parts = chunk([...new Set(ids)], 100)
+  const parts = chunk([...new Set(ids)], size)
   const pages = await Promise.all(parts.map((part) => selectAll<T>(build(part))))
   return pages.flat()
 }

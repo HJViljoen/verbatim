@@ -5,7 +5,8 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
-import { chunk } from './chunk'
+import { chunk, HASH_IN_CHUNK, UUID_IN_CHUNK } from './chunk'
+import { memoRead } from './reading/memo'
 import { audienceOf } from './rivals'
 import { selectAll } from './supabase-admin'
 import { VIDEO_QUOTE_BONUS } from './config'
@@ -297,11 +298,17 @@ interface EvidenceClient {
  *  and page each chunk past the 1000-row cap.
  *
  *  `size` IS IN IDS AND THE LIMIT IS IN BYTES, so a caller whose ids are not
- *  uuids has to say so. 120 was sized for 36-character uuids (~4.4 KB of
- *  request line, half the usual 8 KiB); 120 sha-256 hex hashes are ~7.9 KB,
- *  within 4% of it, and the failure is a rejected chunk that fails the whole
- *  Promise.all and takes every reading on the page with it. readTranslations
- *  passes HASH_CHUNK for that reason.
+ *  uuids has to say so — readTranslations passes HASH_IN_CHUNK because a
+ *  sha-256 hex hash is nearly twice a uuid. The failure is a rejected chunk
+ *  that fails the whole Promise.all and takes every reading on the page with
+ *  it, so both sizes keep a wide margin under the measured cap (lib/chunk.ts:
+ *  500 uuids succeed, 700 do not).
+ *
+ *  The size was 120, chosen against an assumed 8 KiB cap. The real cap is at
+ *  least twice that, and the cost on this instance is per REQUEST — so the
+ *  chunk is now UUID_IN_CHUNK (250), which halves the requests a page makes
+ *  here. The rows a chunk brings back are unbounded either way (one Sealand
+ *  insight carries 104 evidence rows), which is what `selectAll` is for.
  *
  *  Two different caps, and chunking only answers the first. 120 ids keeps the
  *  request URL short (PostgREST's other limit); it does nothing about the
@@ -317,16 +324,14 @@ interface EvidenceClient {
  *  each one, after an idle spell, at the DB's wake-up price. Chunks are
  *  disjoint by id, so processing the results in chunk order gives the same
  *  per-id ordering the serial loop did. */
-async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
+async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = UUID_IN_CHUNK): Promise<R[]> {
   const pages = await Promise.all(
     chunk(ids, size).map((part) => selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> })),
   )
   return pages.flat()
 }
 
-/** Ids per chunk for a sha-256 hex hash: 60 × 65 bytes ≈ 3.9 KB of request
- *  line, half of what 120 would cost and well clear of the 8 KiB limit. */
-const HASH_CHUNK = 60
+
 
 /**
  * Attach the cache's reading to a set of texts.
@@ -384,10 +389,53 @@ const HASH_CHUNK = 60
  */
 export const TRANSLATION_COLUMNS = 'text_hash, language, english'
 
+/**
+ * Is the translation cache reachable at all, asked ONCE per request.
+ *
+ * WHY A PROBE. The chunked read degrades on failure, which is right, but it
+ * degrades ONE CHUNK AT A TIME: with `20260918095000` unapplied, a page asking
+ * about 3,600 quote texts sent 60 requests that each took roughly a second to
+ * come back "Could not find the table 'public.comment_translations' in the
+ * schema cache", and This week sent 71 of them across its two quote loads.
+ * Measured against production on 16 September, that was 99 s of Össur's
+ * summed read time and 570 s of Sealand's — for an answer that was settled by
+ * the first one. A page cannot be under three seconds while it is asking a
+ * missing table seventy questions.
+ *
+ * One cheap row, memoised on the client, so the answer is reached once per
+ * request whichever loader asks first. The cost when the table IS there is one
+ * small extra round trip per request and one extra hop before the chunks go
+ * out; the cost when it is not is one request instead of seventy.
+ *
+ * ANY failure is "not reachable", not only a missing table. A cache that
+ * cannot be read is a page of quotes without their English, which is exactly
+ * what the catch below already produced — this only reaches that answer
+ * sooner, and says the same thing in the same place.
+ */
+function translationsReachable(client: unknown): Promise<{ ok: boolean; why: string }> {
+  return memoRead(client, 'quotes:translations-reachable', async () => {
+    try {
+      const c = client as unknown as {
+        from(table: string): { select(cols: string): { limit(n: number): PromiseLike<{ error: unknown }> } }
+      }
+      const { error } = await c.from('comment_translations').select('text_hash').limit(1)
+      if (error) return { ok: false, why: (error as { message?: string }).message ?? String(error) }
+      return { ok: true, why: '' }
+    } catch (e) {
+      return { ok: false, why: e instanceof Error ? e.message : String(e) }
+    }
+  })
+}
+
 export async function readTranslations(client: unknown, texts: readonly string[]): Promise<Map<string, { lang: string; english: string | null }>> {
   const out = new Map<string, { lang: string; english: string | null }>()
   const hashes = [...new Set(texts.map((t) => cleanQuote(t)).filter(Boolean).map(quoteTextHash))]
   if (!hashes.length) return out
+  const reachable = await translationsReachable(client)
+  if (!reachable.ok) {
+    console.warn(`[quotes] translation read degraded — ${hashes.length} texts on this page show with no English: ${reachable.why}`)
+    return out
+  }
   try {
     const c = client as EvidenceClient
     const rows = await fetchChunks<{ text_hash: string; language: string | null; english: string | null }>(
@@ -398,7 +446,7 @@ export async function readTranslations(client: unknown, texts: readonly string[]
       // (comment_id, text_hash), so comment_id is the tiebreaker that makes it
       // total — and it need not be selected to be ordered on.
       (part) => c.from('comment_translations').select(TRANSLATION_COLUMNS).in('text_hash', part).order('text_hash').order('comment_id') as unknown as Rows,
-      HASH_CHUNK,
+      HASH_IN_CHUNK,
     )
     for (const r of rows) if (r.language) out.set(r.text_hash, { lang: r.language, english: r.english })
   } catch (e) {
