@@ -924,6 +924,13 @@ async function buildSubjects(input: {
 const RISING_UNREAD =
   'The month’s themes have not been read for this workspace yet, so nothing can be said to be rising.'
 
+/** No denominator row for the month means there is nothing for a theme to be a
+ *  share OF — and the block used to print "of 0 category videos" beside
+ *  "Nothing moved clearly", which reads as a measurement of an empty month
+ *  rather than as an absent reading. */
+const RISING_NO_DENOMINATOR =
+  'This month’s category conversation has not been counted for this workspace yet, so there is nothing for a theme to be a share of.'
+
 /**
  * §3 · the themes that moved in this month's reading.
  *
@@ -955,6 +962,12 @@ async function buildRising(input: {
   const { reading, clientId, month, monthOf } = input
   const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, moved: 0, pooled: 0, unread: null }
   const nothing = (unread: string | null) => ({ block: { ...base, unread }, series: [] as MonthSeries[] })
+
+  // NO DENOMINATOR, NO SHARE. `monthOf` is 0 when the month has no
+  // `month_denominators` row for the category, and every figure this block
+  // prints is a share of it — including the block's own meta, which read "of 0
+  // category videos".
+  if (monthOf <= 0) return nothing(RISING_NO_DENOMINATOR)
 
   const baselineMonths = trailingMonths(month, BASELINE_MONTHS)
   const baselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)

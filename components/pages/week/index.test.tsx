@@ -131,6 +131,23 @@ describe('WK §3 · moving now', () => {
       .toContain('7 themes cleared their band in this month’s reading; the 1 largest are printed.')
   })
 
+  it('says the pooled baseline counts a video once per month', () => {
+    // One month against three summed: the baseline is video-months, not
+    // distinct videos, and this is the shape anomaly.ts's own note says moves
+    // the balance. Sealand's category reads 449 video-months against 446
+    // distinct videos on production today.
+    const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('added together, so a video that was talked about in two of them is counted in both')
+  })
+
+  it('refuses rather than printing "of 0 category videos"', () => {
+    const d = weekFixture()
+    const data = { ...d, rising: { ...d.rising, rows: [], monthOf: 0, moved: 0, pooled: 0, unread: 'This month’s category conversation has not been counted for this workspace yet, so there is nothing for a theme to be a share of.' } }
+    const text = renderText(weekRising.render(data, 'app', ctx))
+    expect(text).toContain('has not been counted for this workspace yet')
+    expect(text).not.toContain('Nothing moved clearly')
+  })
+
   it('says "nothing moved clearly", which is a reading and not a refusal', () => {
     const text = renderText(weekRising.render(thinFixture(), 'app', ctx))
     expect(text).toContain('Nothing moved clearly in September’s reading so far')

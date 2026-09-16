@@ -81,6 +81,22 @@ export const weekRising: Block<WeekData> = {
               : `Nothing else of the ${fmtInt(r.pooled)} themes read against their band this month moved clearly.`}
           </Note>
         ) : null}
+        {r.rows.length > 0 ? (
+          <Note mode={mode}>
+            {/* THE BASELINE IS VIDEO-MONTHS, NOT DISTINCT VIDEOS, and a reader
+                comparing one month with three has to be told. The three months
+                are summed on both sides, so a video that carried conversation
+                in two of them counts in both — which lib/reading/anomaly.ts
+                carries twenty lines about, and it is anti-conservative exactly
+                where the week side does NOT dominate the variance, which is
+                this block's shape. Measured read-only on production: Sealand's
+                category Jun–Aug is 449 video-months against 446 distinct
+                videos, so the numbers are fine today and the exposure is the
+                rule. */}
+            The three months behind it are added together, so a video that was
+            talked about in two of them is counted in both.
+          </Note>
+        ) : null}
       </BlockFrame>
     )
   },
