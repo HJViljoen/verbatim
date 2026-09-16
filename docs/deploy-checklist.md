@@ -967,7 +967,7 @@ The first Sunday after the deploy, in this order:
    A month that was `frozen` before the deploy is still frozen and still
    carries the same numbers. A month newly frozen should be the one whose
    30-day line just passed, and no other.
-4. **The weekly send.** Össur's list — `select * from public.report_sends order by created_at desc limit 5;` — subject, recipients and ids, never a body. If you set recipients in 5.6, this is the first email Phase 1 sends and somebody should read it before the client does.
+4. **The weekly send.** Össur's list — `select subject, recipients, status, claimed_at, sent_at from public.report_sends order by claimed_at desc limit 5;` — subject, recipients and ids, never a body. **`report_sends` has no `created_at`** (5.6 says so too, and commit b6a8c10 fixed the 5.6 occurrence and missed this one): the row is written when the dispatcher claims the send, and `report_sends_client_sent_idx` is `(client_id, claimed_at desc)`. If you set recipients in 5.6, this is the first email Phase 1 sends and somebody should read it before the client does.
 5. **`sent_figures` holds the send.**
    ```sql
    select snapshot_id, month, audience, object_kind, count(*)
