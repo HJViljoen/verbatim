@@ -36,6 +36,13 @@ export const BRIEF_SURFACES: readonly BriefSurface[] = ['overview', 'subjects', 
  * What a section needs before it can say anything, named by its readiness row
  * id (`lib/readiness/compute.ts`).
  *
+ * WHAT BELONGS IN `needs` AND WHAT DOES NOT: only an input WITHOUT WHICH THE
+ * BLOCK HAS NOTHING AT ALL. `rival-accounts` is about whether we read each
+ * rival's OWN accounts, and the standings block reads the category corpus
+ * either way — declaring it there refused a section the block could draw,
+ * measured against production on both tenants. A block that merely has less to
+ * say still draws; that is what its own empty state is for.
+ *
  * THIS IS THE HALF THE COMPOSE WALK WAS MISSING. Today a page whose material is
  * absent DROPS OUT of the skeleton silently (`compose.ts`: "a page whose only
  * material is missing … drops out rather than printing an empty sheet"), so a
@@ -99,7 +106,7 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
   block({
     id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
     title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
-    needs: ['rival-accounts', 'months-of-history'],
+    needs: ['months-of-history'],
   }),
   page('finding'),
   block({
@@ -125,7 +132,7 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
   block({
     id: 'ld.standing', block: 'competitive.rivals', surface: 'competitive',
     title: 'Where you stand', framing: 'Your own share of the month beside every tracked rival.',
-    needs: ['rival-accounts', 'months-of-history'],
+    needs: ['months-of-history'],
   }),
   block({
     id: 'ld.subjects', block: 'overview.subjects', surface: 'overview',
@@ -158,12 +165,12 @@ export const SALES_MAP: readonly BriefEntry[] = [
   block({
     id: 'sl.rivals', block: 'competitive.rivals', surface: 'competitive',
     title: 'By rival', framing: 'What is said about each rival, in the same month, with its denominator.',
-    needs: ['rival-accounts', 'months-of-history'],
+    needs: ['months-of-history'],
   }),
   block({
     id: 'sl.questions', block: 'competitive.questions', surface: 'competitive',
     title: 'What buyers compare', framing: 'The comparisons buyers make out loud, and who they name.',
-    needs: ['rival-accounts'],
+    needs: [],
   }),
   page('language'),
   page('method'),
@@ -177,7 +184,7 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
   block({
     id: 'ct.advice', block: 'market.advice', surface: 'market',
     title: 'What to make next', framing: 'What the conversation asked for, and what was decided about each one.',
-    needs: ['decisions'],
+    needs: [],
   }),
   block({
     id: 'ct.ways', block: 'market.ways', surface: 'market',
@@ -237,6 +244,8 @@ export interface MissingInput {
   input: string
   /** Who can close it — `OWNER_LABEL[row.owner]`. */
   owner: string
+  /** Which of the three, so a brief can tell an instruction from a promise. */
+  ownerRole: 'client' | 'ops' | 'engineering'
   /** The act that changes it — `ReadinessRow.unlocks`. */
   unlocks: string
   /** The sections that went without it, by title. */
@@ -250,6 +259,7 @@ export interface ReadinessLike {
   input: string
   status: 'exists' | 'partial' | 'missing'
   owner: string
+  ownerRole: 'client' | 'ops' | 'engineering'
   unlocks: string
 }
 
@@ -274,7 +284,7 @@ export function missingInputs(
       if (!row || row.status !== 'missing') continue
       const held = out.get(need)
       if (held) held.sections.push(section.title)
-      else out.set(need, { id: need, input: row.input, owner: row.owner, unlocks: row.unlocks, sections: [section.title] })
+      else out.set(need, { id: need, input: row.input, owner: row.owner, ownerRole: row.ownerRole, unlocks: row.unlocks, sections: [section.title] })
     }
   }
   return [...out.values()]
@@ -292,7 +302,17 @@ export function missingSentence(m: MissingInput): string {
   // already opens with its own article ("the rival accounts we read"), so the
   // obvious wording reads "we have no the rival accounts we read". The verb
   // carries the sentence instead, and the input is quoted as the row it is.
-  return `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}. ${m.owner} closes this — ${trimStop(m.unlocks)}. It is on Settings › Readiness.`
+  const head = `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}.`
+  // AN ENGINEERING ROW'S `unlocks` IS NOT CLIENT COPY and must not be printed
+  // as one. `subject-set` reads "Phase 1 builds the subject set and the form
+  // that names them" — a project phase, in a document a customer reads, telling
+  // them to do something they cannot do. The owner is still named, because RP1
+  // asks for it; what changes is that a gap only we can close is a promise and
+  // not an instruction.
+  const act = m.ownerRole === 'engineering'
+    ? 'We are building it, and it appears here the moment it is there.'
+    : `${m.owner} closes this — ${trimStop(m.unlocks)}.`
+  return `${head} ${act} It is on Settings › Readiness.`
 }
 
 /** The line that opens the brief's own account of what it left out. */

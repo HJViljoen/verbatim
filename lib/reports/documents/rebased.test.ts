@@ -120,7 +120,7 @@ describe('the method page', () => {
 
   it('names every missing input and who closes it', () => {
     const items = methodItems(
-      signals({ reading: reading(), missing: [{ id: 'subject-set', input: 'the subjects', owner: 'Client', unlocks: 'Name them in Settings › Subjects.', sections: ['Your subjects'] }] }),
+      signals({ reading: reading(), missing: [{ id: 'subject-set', input: 'the subjects', owner: 'Client', ownerRole: 'client', unlocks: 'Name them in Settings › Subjects.', sections: ['Your subjects'] }] }),
       'x', false, 5, kinds,
     )
     const joined = items.join(' ')

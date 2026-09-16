@@ -195,6 +195,7 @@ async function missingFor(scope: Scope, map: readonly BriefEntry[], now: string)
       input: r.input,
       status: r.status,
       owner: OWNER_LABEL[r.owner],
+      ownerRole: r.owner,
       unlocks: r.unlocks,
     }))
     return missingInputs(map, rows)
