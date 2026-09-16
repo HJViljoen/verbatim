@@ -201,15 +201,22 @@ export default async function SettingsTrackingPage() {
               <ConnectionRow
                 key={p}
                 name={platformLabel(p)}
+                // No `@` on YouTube here either: it is read by CHANNEL ID, and
+                // an @name reads nothing at all, so printing one as a handle
+                // teaches a client the wrong shape to paste (the rivals block
+                // above, lib/provisioning.ts YOUTUBE_CHANNEL_ID).
                 what={p === 'reddit'
                   ? 'Read by community, not by account.'
-                  : ownHandles[p] ? `Your account: @${ownHandles[p]}` : 'No account of yours is configured — the search still finds you.'}
+                  : !ownHandles[p] ? 'No account of yours is configured — the search still finds you.'
+                    : p === 'youtube' ? `Your channel: ${ownHandles[p]}`
+                      : `Your account: @${ownHandles[p]}`}
                 status={platforms.includes(p) ? 'connected' : 'not-connected'}
               />
             ))}
             <FactRow label="Your accounts">
               {Object.entries(ownHandles).filter(([, v]) => v).length > 0
-                ? Object.entries(ownHandles).filter(([, v]) => v).map(([p, h]) => `${platformLabel(p)}${p !== 'youtube' ? ` @${h}` : ''}`).join(' · ')
+                ? Object.entries(ownHandles).filter(([, v]) => v)
+                  .map(([p, h]) => `${platformLabel(p)} ${p === 'youtube' ? h : `@${h}`}`).join(' · ')
                 : <span className="text-muted-foreground">none yet</span>}
             </FactRow>
           </SettingsCard>
