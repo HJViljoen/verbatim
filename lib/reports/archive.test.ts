@@ -125,12 +125,29 @@ describe('sentFigures', () => {
     expect(sentFigures(undefined)).toEqual([])
   })
 
-  it('drops a per-finding count and an empty value, and leads with the shares', () => {
+  it('drops a per-finding count and an empty value, and leads with the headline slots', () => {
     const rows = sentFigures(figures)
-    expect(rows.map((r) => r.key)).toEqual(['client_share_pct', 'videos', 'top_theme'])
+    expect(rows.map((r) => r.key)).toEqual(['videos', 'client_share_pct', 'top_theme'])
   })
 
   it('caps what it prints', () => {
-    expect(sentFigures(figures, 1).map((r) => r.key)).toEqual(['client_share_pct'])
+    expect(sentFigures(figures, 1).map((r) => r.key)).toEqual(['videos'])
+  })
+
+  // A WP19 brief freezes the blocks' whole merged table — 7 to 20 keys beside
+  // the curated cover slots — and kind-then-alphabetical handed a reader the
+  // alphabetically first six of those instead of the figures the report is
+  // recognised by. A theme's UUID key is a real figure nobody can read.
+  it('is not crowded out by a brief\'s block keys, and never prints a UUID key', () => {
+    const rows = sentFigures({
+      ...figures,
+      reading_month: { label: 'the month this reading is of', value: 'September 2026', kind: 'name' },
+      conversations: { label: 'comments read in September 2026', value: '11,330', kind: 'count' },
+      o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share: { label: 'a theme', value: '8.8%', kind: 'pct' },
+      standing_competitor_ottobock_content: { label: 'a standing', value: '4', kind: 'count' },
+      kind_question_share: { label: 'a kind', value: '3.1%', kind: 'pct' },
+    })
+    expect(rows.map((r) => r.key).slice(0, 4)).toEqual(['reading_month', 'conversations', 'videos', 'client_share_pct'])
+    expect(rows.map((r) => r.key)).not.toContain('o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share')
   })
 })

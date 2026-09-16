@@ -143,15 +143,36 @@ export interface SentFigure {
   value: string
 }
 
+/**
+ * The figures a reader recognises a report by, in the order they are asked
+ * for. Kind-then-alphabetical was written for the ~19 curated cover keys; a
+ * WP19 brief's table holds 7 to 20 more block keys beside them
+ * (`standing_competitor_ottobock_content`, `kind_…_share`), so the six a
+ * reader got were the alphabetically first six of those. These come first,
+ * whatever they sort as, and everything else keeps the old order behind them.
+ */
+export const HEADLINE_FIGURE_KEYS: readonly string[] = [
+  'reading_month', 'conversations', 'videos', 'client_videos', 'positive_pct', 'client_share_pct',
+]
+
+/** A figure keyed by a theme's UUID (`o_2418f4d7_54a2_…_share`). It is a real
+ *  figure and a reader cannot tell what it is about, so it never stands in for
+ *  one of six headline rows. */
+const isOpaqueKey = (key: string): boolean => /^o_[0-9a-f]{8}_[0-9a-f]{4}_/.test(key)
+
 export function sentFigures(figures: FigureTable | null | undefined, max = 6): SentFigure[] {
   if (!figures) return []
+  const headline = (key: string) => {
+    const i = HEADLINE_FIGURE_KEYS.indexOf(key)
+    return i === -1 ? HEADLINE_FIGURE_KEYS.length : i
+  }
   const rank = (f: Figure) => (f.kind === 'pct' ? 0 : f.kind === 'count' ? 1 : 2)
   return Object.entries(figures)
     .filter(([, f]) => f && typeof f.value === 'string' && f.value.length > 0)
     // A per-finding count is evidence for one sentence, not a headline; the
     // slots a cover may cite are what a reader recognises a report by.
-    .filter(([key]) => !/_conversations$/.test(key))
-    .sort((a, b) => rank(a[1]) - rank(b[1]) || a[0].localeCompare(b[0]))
+    .filter(([key]) => !/_conversations$/.test(key) && !isOpaqueKey(key))
+    .sort((a, b) => headline(a[0]) - headline(b[0]) || rank(a[1]) - rank(b[1]) || a[0].localeCompare(b[0]))
     .slice(0, max)
     .map(([key, f]) => ({ key, label: f.label, value: f.value }))
 }
