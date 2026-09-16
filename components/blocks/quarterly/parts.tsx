@@ -52,6 +52,31 @@ export function Level({ word, of, mode = 'app' }: { word: ReactNode; of: string;
   return <span data-copy="level" className="text-[12px] text-secondary-foreground">{word} · {of}</span>
 }
 
+/**
+ * A STATE and its reason — the same shape as a `Level`, and deliberately not
+ * one.
+ *
+ * "not settled · comparison refused" was marked `data-copy="level"`, which
+ * rule (b) requires an "of N" inside. None of `unsettledItems`' four reasons
+ * carries one ('comparison refused', 'not enough months behind it', 'band
+ * ±3.4', 'too few to compare'), so page 8 broke the contract on every item it
+ * printed — invisibly, because all four fixtures return zero items.
+ *
+ * "Not settled" is not a calibrated level at all: it is the product declining
+ * to give a reading, and the number it would rest on is the one that is
+ * missing. So the marker comes off rather than a denominator being
+ * manufactured for it. The node is still swept by rule (c) like every other
+ * piece of unmarked copy — nothing here buys an exemption — and the row's own
+ * body beside it carries the evidence ("Fit read 1 of 9 videos in this window,
+ * against 2 of 12 before it").
+ */
+export function State({ word, why, mode = 'app' }: { word: ReactNode; why: string; mode?: RenderMode }) {
+  if (mode === 'email') {
+    return <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 }}>{word} · {why}</span>
+  }
+  return <span className="text-[12px] text-secondary-foreground">{word} · {why}</span>
+}
+
 /** One row of a page's list. A row is a label, a body and an optional aside;
  *  an email stacks them, because two things side by side in Outlook is another
  *  table and is never worth one. */

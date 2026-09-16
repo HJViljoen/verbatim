@@ -3,7 +3,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Level, Note, Row } from './parts'
+import { Note, Row, State } from './parts'
 
 // QR8 · What we could not settle (mock page 8).
 //
@@ -59,7 +59,7 @@ export const quarterlyUnsettled: Block<QuarterlyData> = {
               key={`${item.title}-${n}`}
               mode={mode}
               label={item.title}
-              aside={<Level mode={mode} word="not settled" of={item.why} />}
+              aside={<State mode={mode} word="not settled" why={item.why} />}
             >
               {item.body}
             </Row>

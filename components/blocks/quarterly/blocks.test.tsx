@@ -4,7 +4,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
-import { CLIENT_AUDIENCE } from '@/lib/rivals'
+import { unsettledItems } from '@/lib/pages/quarterly'
+import type { Verdict } from '@/lib/reading/verdicts'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
 import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
@@ -215,6 +217,31 @@ describe('the last page tells a silence from a settled question', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(quarterlyFixture(), 'app', ctx))
     expect(text).toContain('Every comparison this quarter asked for was drawn')
     expect(text).not.toContain('was attempted')
+  })
+
+  // THE PAGE WHOSE WHOLE PURPOSE IS TO LIST UNSETTLED ITEMS HAD NEVER BEEN
+  // RENDERED WITH ONE. All four fixtures return `unsettled.items = []`, so the
+  // copy-contract loop above passed over a page that broke rule (b) on every
+  // row it drew: "not settled · comparison refused" was a data-copy="level"
+  // with no "of N" in it, and none of the four reasons carries one. The items
+  // here come from the real `unsettledItems` over real verdicts.
+  it('keeps the copy contract with real unsettled rows on it', () => {
+    const window = { kind: 'quarter' as const, from: '2026-07-01', to: '2026-09-30' }
+    const verdicts: Verdict[] = [
+      { objectKind: 'theme', objectId: 't9', objectLabel: 'Fit', audience: INDUSTRY_AUDIENCE, window, state: 'refused',
+        value: { k: 1, n: 9 }, baseline: { k: 2, n: 12 }, changePts: null, bandPts: null, flags: [] },
+      { objectKind: 'theme', objectId: 't8', objectLabel: 'Warranty', audience: INDUSTRY_AUDIENCE, window, state: 'too_little_data',
+        value: { k: 2, n: 14 }, baseline: { k: 3, n: 19 }, changePts: null, bandPts: 3.4, flags: [] },
+      { objectKind: 'theme', objectId: 't7', objectLabel: 'Price', audience: INDUSTRY_AUDIENCE, window, state: 'baseline_forming',
+        value: { k: 4, n: 30 }, changePts: null, bandPts: null, flags: [] },
+    ]
+    const items = unsettledItems(verdicts)
+    expect(items.length).toBe(3)
+    const data = quarterlyFixture()
+    data.unsettled = { ...data.unsettled, items, notAsked: null }
+    for (const mode of MODES) assertCopyContract(render(QUARTERLY_BLOCKS['quarterly.unsettled'].render(data, mode, ctx)))
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(data, 'email', ctx)))
+      .toContain('not settled · comparison refused')
   })
 })
 
