@@ -15,7 +15,7 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // and none at all on the trial one, and the design's answer is to print
 // "Nothing unusual this week" in full rather than hide the section — a check
 // that only ever appears when it fires is a check nobody can calibrate. So this
-// block has FIVE states and each of them is a different sentence:
+// block has SIX states and each of them is a different sentence:
 //
 //   flagged           the check ran and these cleared. Printed in full.
 //   nothing_unusual   the check ran, nothing cleared. The commonest answer.
@@ -24,8 +24,10 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 //   baseline_forming  the check cannot speak yet, and the page says WHEN it
 //                     will: "the check starts with the November reading".
 //   not_checked       nothing has ever looked at this update.
+//   unreadable        the check's own row says flags were raised and the flags
+//                     could not be read. A failed read, never a quiet week.
 //
-// THE LAST TWO ARE NOT THE SAME AS THE SECOND, and keeping them apart is what
+// THE LAST THREE ARE NOT THE SAME AS THE SECOND, and keeping them apart is what
 // `anomaly_checks` exists for (WP8's migration says so at length). "Nothing was
 // unusual" is a reading; "nobody has looked" is not, and a surface that prints
 // the first for the second is telling a paying client their week was quiet on
@@ -126,6 +128,14 @@ export const weekUnusual: Block<WeekData> = {
         return u.note ?? 'This week was not compared with the months behind it.'
       case 'baseline_forming':
         return 'This check compares a week with the three complete months behind it, and this workspace does not have three yet.'
+      case 'unreadable':
+        // THE RECORD SAYS SOMETHING FIRED AND WE CANNOT SHOW IT. Every word
+        // here is chosen against the sentence it replaces: "Nothing unusual
+        // this week" would be a reading, and what happened is that the reading
+        // could not be fetched.
+        return u.flaggedCount > 0
+          ? `This update’s check raised ${fmtInt(u.flaggedCount)} ${u.flaggedCount === 1 ? 'flag' : 'flags'} and they could not be read just now — which is not the same as nothing being unusual.`
+          : 'This update’s check raised flags and they could not be read just now — which is not the same as nothing being unusual.'
       case 'not_checked':
       default:
         return 'No update has run this check for this workspace yet — which is not the same as nothing being unusual.'

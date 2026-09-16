@@ -24,6 +24,7 @@ describe('WK1 · unusual this week', () => {
       withState('nothing_unusual'),
       withState('refused', { note: 'This update read well under its usual number of videos, so this week is not compared with the months behind it.' }),
       withState('not_checked', { setSize: null, tested: null }),
+      withState('unreadable', { flaggedCount: 2 }),
     ]
     for (const data of states) {
       for (const mode of MODES) {
@@ -109,6 +110,14 @@ describe('WK1 · unusual this week', () => {
     const text = renderText(weekUnusual.render(data, 'app', ctx))
     expect(text).toContain('read well under its usual number of videos')
     expect(text).toContain('This update analysed 96 videos against a usual 476.')
+    expect(text).not.toContain('Nothing unusual this week')
+  })
+
+  it('tells "we could not read them" apart from "nothing was unusual"', () => {
+    // The check's own row said two flags fired; the flags read failed. Calling
+    // that a quiet week is the conflation `anomaly_checks` exists to prevent.
+    const text = renderText(weekUnusual.render(withState('unreadable', { flaggedCount: 2 }), 'app', ctx))
+    expect(text).toContain('raised 2 flags and they could not be read just now')
     expect(text).not.toContain('Nothing unusual this week')
   })
 

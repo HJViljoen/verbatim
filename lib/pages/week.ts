@@ -180,6 +180,12 @@ export type UnusualState =
   /** No check has ever run for this update — the table is not installed, or
    *  the step has not reached this tenant. */
   | 'not_checked'
+  /** The check's own row says flags were raised and the flags themselves could
+   *  not be read. NOT `nothing_unusual`: "nothing fired" and "we could not
+   *  look" are the two answers this whole table exists to keep apart, and a
+   *  failed read that renders as a reading puts the second in the first's
+   *  words. */
+  | 'unreadable'
 
 export interface UnusualBlock {
   state: UnusualState
@@ -756,11 +762,21 @@ async function buildUnusual(input: {
     return { ...common, state: baseline.ready ? 'nothing_unusual' : 'baseline_forming' }
   }
 
-  const rowsIn = [...(flags ?? [])].sort((a, b) => a.rank - b.rank)
+  // THE CHECK'S ROW SAYS SOMETHING FIRED. If the flags cannot be read — an RLS
+  // refusal, a network blip, a renamed column, a missing table — the honest
+  // answer is that we could not look, and `nothing_unusual` would tell a paying
+  // client their week was quiet on the strength of a failed read. That is the
+  // exact conflation `anomaly_checks` exists to prevent, and one ternary is all
+  // it takes to reintroduce it.
+  if (flags == null || flags.length === 0) {
+    return { ...common, state: 'unreadable', flaggedCount: check.flagged_count ?? 0 }
+  }
+
+  const rowsIn = [...flags].sort((a, b) => a.rank - b.rank)
   const built = await Promise.all(rowsIn.map((f) => buildFlag(input.supabase, input.clientId, f)))
   return {
     ...common,
-    state: built.length > 0 ? 'flagged' : 'nothing_unusual',
+    state: 'flagged',
     flags: built,
     flaggedCount: rowsIn[0]?.flagged_count ?? built.length,
   }
@@ -1311,6 +1327,10 @@ async function loadCheck(supabase: SupabaseClient, clientId: string, runId: stri
   }
 }
 
+/** The flags this update raised. `null` means the read FAILED — the table is
+ *  not installed, or the read was refused — and never "there were none": a
+ *  check row that says `flagged` beside an empty list is a record disagreeing
+ *  with itself, and §1 says so rather than reading it as silence. */
 async function loadFlags(supabase: SupabaseClient, clientId: string, runId: string): Promise<FlagRow[] | null> {
   try {
     return await selectAll<FlagRow>(() =>
