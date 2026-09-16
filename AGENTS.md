@@ -24,9 +24,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
   (after the Pass A wave, before `embed-insights`), `plan-subject-membership`
   and `subject-membership:${i}-of-${n}` (after `embed-insights`, before
   `cross-reference`), and `anomaly-check` (after `freeze-months`, before
-  `owned-events`). `main` carries 49 ids; the branch carries 54, and the
-  ordered diff is five pure insertions with zero removals and zero reorderings
-  — that is the number to check before a deploy, not the count alone. All five
+  `owned-events`). **Count them one way and say which**, because two documents
+  disagreed by exactly one until this line was written:
+  `grep -c '\.run(' inngest/functions/pipeline.ts` gives **48 on `main` and 53
+  on the branch**, and the one `step.sendEvent('request-report')` — which
+  Inngest memoises by id like any other step — makes it 49 and 54. Either pair
+  is honest; mixing them reads as a missing step. **The check before a deploy
+  is the ordered DIFF of the ids, not the count**: five pure insertions, zero
+  removals, zero reorderings. All five
   follow the same non-fatal, no-op-without-its-migration rule. Re-register
   after ANY function change: `curl -X PUT https://app.verbatimintel.com/api/inngest`.
 - **A run's window is frozen once, at `open-run`** (`pipeline_runs.window_start`
