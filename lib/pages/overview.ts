@@ -998,6 +998,21 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   )
   recordAhead.catch(() => {})
 
+  // WHAT WE LAST SENT ABOUT THIS MONTH, on the same terms. Read through the
+  // reading client, which is the service role: `sent_figures` has a tenant
+  // SELECT policy, but this loader already holds the reading handle and a
+  // second client for one small read would be a second answer to "whose month
+  // is this". Null where M9 is not applied, which is every workspace until the
+  // R2 window.
+  //
+  // WP18 wrote this as one more await at the very bottom; WP23 had just spent a
+  // package taking the page's serial hops out, and the two landed in the same
+  // merge. It depends on `clientId` and `month` and on nothing below, so it
+  // goes now and is taken at the end — `recordAhead`'s own shape, for the same
+  // reason.
+  const sentAhead = loadSentFigures(reading.client, { clientId, month })
+  sentAhead.catch(() => {})
+
   // ── wave 3: the readings ───────────────────────────────────────────────
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
   const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
@@ -1222,12 +1237,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     freezesOn: freezesOn(month),
   }
 
-  // WHAT WE LAST SENT ABOUT THIS MONTH. Read through the reading client, which
-  // is the service role: `sent_figures` has a tenant SELECT policy, but this
-  // loader already holds the reading handle and a second client for one small
-  // read would be a second answer to "whose month is this". Null where M9 is
-  // not applied, which is every workspace until the R2 window.
-  const sent = sentMonthOf(await loadSentFigures(reading.client, { clientId, month }))
+  const sent = sentMonthOf(await sentAhead)
 
   return {
     brand,
