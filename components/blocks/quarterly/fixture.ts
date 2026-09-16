@@ -3,9 +3,10 @@ import type { QuarterChecks, QuarterlyData } from '@/lib/pages/quarterly'
 import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
+import type { SubjectWindowReading } from '@/lib/subjects/types'
 import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
-import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import { marketFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, unreadMonthsFixture } from '@/components/pages/competitive-surface/fixture'
@@ -34,14 +35,26 @@ const QUARTER = quarterFor(2026, 3)
 const PRIOR = previousQuarter(QUARTER)
 const NOW = '2026-09-18T09:00:00.000Z'
 
+/** Both sides of one window: the category's videos and the tenant's own. The
+ *  tenant's side is what page 3's "you" column divides by, and it is a
+ *  DIFFERENT denominator from the category's — never a share of it. */
 const windowRead = (videos: number, comments: number): WindowReading => ({
   denominators: [
     { audience: INDUSTRY_AUDIENCE, videos, comments, platform_mix: {}, dual_mention: 0, excluded_undated: 0 },
+    { audience: CLIENT_AUDIENCE, videos: Math.round(videos * 0.06), comments: Math.round(comments * 0.06), platform_mix: {}, dual_mention: 0, excluded_undated: 0 },
   ],
   themes: [
     { audience: INDUSTRY_AUDIENCE, theme_id: 't1', videos: Math.round(videos * 0.21), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
   ],
 })
+
+/** The tenant's own subjects over the same window, on both sides — the mock's
+ *  page 3, and the half of the artefact no test exercised. */
+const subjectWindow = (videos: number, share: number): SubjectWindowReading[] => [
+  { audience: INDUSTRY_AUDIENCE, subject_id: 's1', videos: Math.round(videos * share), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
+  { audience: CLIENT_AUDIENCE, subject_id: 's1', videos: Math.round(videos * 0.06 * (share + 0.08)), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
+  { audience: INDUSTRY_AUDIENCE, subject_id: 's2', videos: Math.round(videos * 0.27), comments: 0, platform_mix: {}, excluded_on_camera: 0, excluded_undated: 0 },
+]
 
 /** M3 unapplied: told apart from an empty read, exactly as the month series
  *  tells its silences apart. */
@@ -100,6 +113,8 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
       readingAt: NOW,
       thisQuarter: windowRead(4147, 33000),
       lastQuarter: windowRead(3810, 29000),
+      subjectsNow: subjectWindow(4147, 0.22),
+      subjectsBefore: subjectWindow(3810, 0.18),
       checks: checksRan,
       record: record(13),
     }),
@@ -119,6 +134,8 @@ export function formingFixture(): QuarterlyData {
     readingAt: NOW,
     thisQuarter: notApplied,
     lastQuarter: notApplied,
+    subjectsNow: null,
+    subjectsBefore: null,
     checks: checksNotRecorded,
     record: null,
   })
@@ -136,6 +153,8 @@ export function closedFixture(): QuarterlyData {
     readingAt: '2026-11-02T09:00:00.000Z',
     thisQuarter: windowRead(4147, 33000),
     lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
     record: record(13),
   })

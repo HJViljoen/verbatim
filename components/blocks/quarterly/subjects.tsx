@@ -31,6 +31,13 @@ function Side({ side, mode }: { side: SubjectQuarterRow['you']; mode: RenderMode
   return <Figure mode={mode} value={side.pct == null ? '—' : fmtPct(side.pct)} of={`${fmtInt(side.k)} of ${fmtInt(side.n)}`} />
 }
 
+/** Which side a quarter badge belongs to. Code's word, so it is not marked. */
+function Side2({ children, mode }: { children: ReactNode; mode: RenderMode }): ReactNode {
+  return mode === 'email'
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{children}</span>
+    : <span className="text-[11.5px] text-muted-foreground">{children}</span>
+}
+
 export const quarterlySubjects: Block<QuarterlyData> = {
   key: 'quarterly.subjects',
   title: QUARTER_PAGE_TITLE.subjects,
@@ -61,17 +68,25 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             key={row.id}
             mode={mode}
             label={row.label}
+            // EACH BADGE SAYS WHOSE IT IS, IN THE ROW'S OWN ORDER. Two
+            // unlabelled badges in the opposite order to the body ("you … the
+            // category …") leave the reader to guess which side moved.
             aside={
-              <>
-                <BlockMovement verdict={row.categoryQuarter} unit="pts" mode={mode} />{' '}
-                <BlockMovement verdict={row.youQuarter} unit="pts" mode={mode} />
-              </>
+              row.youQuarter || row.categoryQuarter ? (
+                <>
+                  <Side2 mode={mode}>you</Side2>{' '}
+                  {row.youQuarter ? <BlockMovement verdict={row.youQuarter} unit="pts" mode={mode} /> : <Side2 mode={mode}>— not read</Side2>}{' '}
+                  <Side2 mode={mode}>the category</Side2>{' '}
+                  {row.categoryQuarter ? <BlockMovement verdict={row.categoryQuarter} unit="pts" mode={mode} /> : <Side2 mode={mode}>— not read</Side2>}
+                </>
+              ) : undefined
             }
           >
             you <Side side={row.you} mode={mode} /> · the category <Side side={row.category} mode={mode} />
           </Row>
         ))}
         {s.note ? <Note mode={mode}>{s.note}</Note> : null}
+        {s.quarterNote ? <Note mode={mode}>{s.quarterNote}</Note> : null}
         {s.gate ? <Note mode={mode}>{s.gate} Until then the quarter columns say so rather than printing a change.</Note> : null}
       </div>,
     )

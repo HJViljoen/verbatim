@@ -4,6 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
+import { CLIENT_AUDIENCE } from '@/lib/rivals'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
 import { closedFixture, formingFixture, quarterlyFixture } from './fixture'
 
@@ -187,6 +188,26 @@ describe('what each page owes the reader', () => {
       rivals: { ...data.rivals, recorded: true, rows: data.rivals.rows.map((r) => ({ ...r, attention: null, content: null })) },
     }
     expect(renderText(QUARTERLY_BLOCKS['quarterly.rivals'].render(recorded, 'app', ctx))).toContain('not observed')
+  })
+
+  it('draws the quarter columns on page 3, under the tenant’s OWN audience', () => {
+    // Both faults at once: the verdicts were looked up under `subject:…` keys
+    // nothing built, and the "you" key was the first RIVAL's audience where the
+    // tenant's own is CLIENT_AUDIENCE. The best case that existed printed two
+    // empty badges on every row and no sentence saying why.
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'app', ctx))
+    expect(data.subjects.rows[0].youQuarter).not.toBeNull()
+    expect(data.subjects.rows[0].youQuarter?.audience).toBe(CLIENT_AUDIENCE)
+    expect(data.subjects.rows[0].categoryQuarter).not.toBeNull()
+    // Each badge says whose side it is, in the row body's own order.
+    expect(text).toMatch(/Durability you .* the category /)
+    expect(data.subjects.quarterNote).toBeNull()
+  })
+
+  it('says why the quarter columns are empty rather than drawing two blanks', () => {
+    const blank = { ...data, subjects: { ...data.subjects, rows: data.subjects.rows.map((r) => ({ ...r, youQuarter: null, categoryQuarter: null })), quarterNote: 'Your subjects are not counted as one window for this workspace yet, so the quarter columns cannot be drawn.' } }
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(blank, 'app', ctx))
+    expect(text).toContain('not counted as one window')
   })
 
   it('never prints a zero share for a side nobody read', () => {

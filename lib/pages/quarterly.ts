@@ -44,6 +44,9 @@ import {
 import { isMissingAnomalyChecks } from './weekly'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { readSubjectWindow } from '../subjects/read'
+import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
+import { CLIENT_AUDIENCE } from '../rivals'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
@@ -152,6 +155,9 @@ export interface SubjectsPage {
   notRecorded: string | null
   /** The gate, when the quarter columns cannot be drawn yet. */
   gate: string | null
+  /** Why the two quarter columns are empty, when they are. Null once a row
+   *  carries one. */
+  quarterNote: string | null
   setLine: string | null
 }
 
@@ -474,9 +480,11 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   // month rows added together.
   const reading = scope.reading?.client ?? readingClient()
   const themeOptions = { runId: themedRunId, objectIds: themeIds.length ? themeIds : undefined }
-  const [thisQuarter, lastQuarter, checks, record] = await Promise.all([
+  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, record] = await Promise.all([
     quarterWindowFor(reading, clientId, quarter, themeOptions),
     quarterWindowFor(reading, clientId, prior, themeOptions),
+    subjectWindowFor(reading, clientId, quarter),
+    subjectWindowFor(reading, clientId, prior),
     loadQuarterChecks(supabase, clientId, quarter),
     loadRecordInputs(reading, clientId, { kind: 'quarter', from: quarter.from, to: quarter.to }, {
       now: readingAt,
@@ -493,10 +501,36 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     readingAt,
     thisQuarter,
     lastQuarter,
+    subjectsNow,
+    subjectsBefore,
     checks,
     record,
     draft: options.draft ?? null,
   })
+}
+
+/**
+ * One windowed read of the tenant's own subjects, or null where M4 is not
+ * applied here.
+ *
+ * ITS OWN READ, because `window_subject_readings` is its own function and the
+ * subjects table is its own migration. Guarded by name — the `isMissing*`
+ * precedent — so a workspace without M4 reads "not recorded" and never a zero.
+ */
+export async function subjectWindowFor(
+  client: SupabaseClient,
+  clientId: string,
+  quarter: Quarter,
+): Promise<SubjectWindowReading[] | null> {
+  const { from, to } = halfOpenInstants({ kind: 'quarter', from: quarter.from, to: quarter.to })
+  try {
+    return await readSubjectWindow(client, clientId, { from, to })
+  } catch (error) {
+    if (!isMissingSubjects(error)) {
+      console.error(`[pages] quarterly.subjectWindow: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
+    return null
+  }
 }
 
 export interface ComposeQuarterlyInput {
@@ -508,6 +542,10 @@ export interface ComposeQuarterlyInput {
   readingAt: string
   thisQuarter: WindowReading
   lastQuarter: WindowReading
+  /** The tenant's own subjects over the same two windows. Null — never [] —
+   *  where M4 is not applied for this workspace. */
+  subjectsNow: SubjectWindowReading[] | null
+  subjectsBefore: SubjectWindowReading[] | null
   checks: QuarterChecks
   record: RecordInputs | null
   draft?: string | null
@@ -533,6 +571,8 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     prior,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
+    subjectsNow: a.subjectsNow,
+    subjectsBefore: a.subjectsBefore,
     readings,
     overview,
   })
@@ -540,9 +580,10 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // The theme half is its own read and its own silence: a window pair can
   // carry denominators and no clustering to count numerators under.
   const themesRead = a.thisQuarter.themes != null && a.lastQuarter.themes != null
+  const subjectsRead = windowApplied && a.subjectsNow != null && a.subjectsBefore != null
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel })
+  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, subjectsRead })
   const category = buildCategory({
     overview,
     quarterVerdicts,
@@ -606,12 +647,15 @@ export async function quarterWindowFor(
   return loadWindowReading(client, clientId, { from, to, runId: themes.runId, objectIds: themes.objectIds })
 }
 
-/** The quarter-on-quarter verdicts, one per audience read on both sides. */
+/** The quarter-on-quarter verdicts: one per theme and per subject read on both
+ *  sides of the pair, against that audience's own windowed denominator. */
 function buildQuarterVerdicts(a: {
   quarter: Quarter
   prior: Quarter
   thisQuarter: WindowReading
   lastQuarter: WindowReading
+  subjectsNow: SubjectWindowReading[] | null
+  subjectsBefore: SubjectWindowReading[] | null
   readings: number
   overview: OverviewData
 }): Verdict[] {
@@ -652,6 +696,35 @@ function buildQuarterVerdicts(a: {
         window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
         basis: { from: a.prior.from, to: a.prior.to },
         value: { k: t.videos, n },
+        baseline: { k: was.videos, n: priorN },
+        readings: a.readings,
+      }),
+    )
+  }
+
+  // THE SUBJECT SIDE — the mock's page 3, and the half of the artefact the
+  // reader paid for. The tenant's OWN audience is `CLIENT_AUDIENCE`; the first
+  // cut looked its verdicts up under the first RIVAL's audience key, against
+  // verdicts that were never built for a subject at all, so no quarter column
+  // could ever be drawn.
+  const subjectsBefore = new Map((a.subjectsBefore ?? []).map((s) => [`${s.audience}:${s.subject_id}`, s]))
+  const subjectLabels = new Map(a.overview.subjects.rows.map((r) => [r.id, r.label]))
+  for (const s of a.subjectsNow ?? []) {
+    // The two columns the page draws, and no others: a subject's reading under
+    // a single rival's videos is a different question and has its own page.
+    if (s.audience !== CLIENT_AUDIENCE && s.audience !== a.overview.category.audience) continue
+    const was = subjectsBefore.get(`${s.audience}:${s.subject_id}`)
+    const n = denomNow.get(s.audience)
+    const priorN = denomBefore.get(s.audience)
+    const label = subjectLabels.get(s.subject_id)
+    if (!was || !n || !priorN || !label) continue
+    out.push(
+      quarterChange({
+        object: { kind: 'subject', id: s.subject_id, label },
+        audience: s.audience,
+        window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
+        basis: { from: a.prior.from, to: a.prior.to },
+        value: { k: s.videos, n },
         baseline: { k: was.videos, n: priorN },
         readings: a.readings,
       }),
@@ -833,6 +906,7 @@ function buildSubjects(a: {
   unlocked: boolean
   gate: string
   monthLabel: string
+  subjectsRead: boolean
 }): SubjectsPage {
   const block = a.overview.subjects
   const byObject = new Map(a.quarterVerdicts.map((v) => [`${v.objectKind}:${v.objectId}:${v.audience}`, v]))
@@ -847,15 +921,29 @@ function buildSubjects(a: {
       row.category && row.category.k != null && row.category.n != null
         ? { k: row.category.k, n: row.category.n, pct: row.category.pct }
         : null,
-    youQuarter: byObject.get(`subject:${row.id}:${a.overview.rivals.rows[0]?.audience ?? ''}`) ?? null,
+    // YOUR OWN SIDE IS `CLIENT_AUDIENCE` (lib/rivals.ts). The first cut keyed
+    // it on `overview.rivals.rows[0].audience` — the first COMPETITOR — so the
+    // "you" column could not have been drawn even had a subject verdict
+    // existed, which none did.
+    youQuarter: byObject.get(`subject:${row.id}:${CLIENT_AUDIENCE}`) ?? null,
     categoryQuarter: byObject.get(`subject:${row.id}:${a.overview.category.audience}`) ?? null,
   }))
+  const drawn = rows.some((r) => r.youQuarter || r.categoryQuarter)
   return {
     rows,
     monthLabel: a.monthLabel,
     note: block.note,
     notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet, so there is no quarter-on-quarter table to draw.' : null,
     gate: a.unlocked ? null : a.gate,
+    // WHY THE LAST TWO COLUMNS ARE EMPTY, SAID ONCE UNDER THE TABLE. A page
+    // that heads two columns "this quarter against the one before it" and then
+    // draws nothing in them, with no sentence, is the artefact refusing to
+    // account for itself — which is the one thing this product does not do.
+    quarterNote: drawn
+      ? null
+      : !a.subjectsRead
+        ? 'Your subjects are not counted as one window for this workspace yet, so the quarter columns cannot be drawn.'
+        : 'No subject carried a reading on both sides of this quarter, so the quarter columns are empty.',
     setLine: null,
   }
 }
