@@ -357,18 +357,32 @@ function howMuchWasRead(i: ReadinessInputs): ReadinessRow {
   const r = i.reads
   const firstUpdate = [...i.updates].reverse().find((u) => u.status === 'completed' || u.status === 'partial')
   const recordCoversHistory = Boolean(r.gateFirstAt && firstUpdate && r.gateFirstAt <= firstUpdate.startedAt)
+  // WHAT WAS NOT READ IS NOT THE SAME AS WHAT WAS NOT MEASURED. On a tenant
+  // session before M8 the discard half of this row is unreadable rather than
+  // empty (lib/gate-record.ts), and calling that `missing` did two things at
+  // once: it printed "not recorded at all" about 1,700 verdicts, and — missing,
+  // owned by engineering — it dropped the row out of Settings › Readiness under
+  // a sentence saying this is part of the product we have not finished, about a
+  // row that reads 798 of 1,596 videos today. Where the record cannot be read,
+  // the row is what the READ DEPTH says it is and the discard note is withheld.
+  // PARTIAL, never `exists`, where the record cannot be read: half of what this
+  // row measures was not measured, and a greener badge on less information is
+  // the wrong direction to round in.
   const status: ReadinessStatus =
     r.analysed === 0 ? 'missing'
-      : r.gateFirstAt === null ? 'missing'
-        : recordCoversHistory && r.unflagged === 0 ? 'exists'
-          : 'partial'
+      : !r.gateReadable ? 'partial'
+        : r.gateFirstAt === null ? 'missing'
+          : recordCoversHistory && r.unflagged === 0 ? 'exists'
+            : 'partial'
 
   const detail = r.analysed === 0
     ? 'No video has been read for this workspace yet.'
     : `Speech read on ${fmtInt(r.speech)} of ${fmtInt(r.analysed)} videos (${pct(r.speech, r.analysed)}), translated ${fmtInt(r.translated)} (${pct(r.translated, r.analysed)}), on-screen text ${fmtInt(r.onScreenText)} (${pct(r.onScreenText, r.analysed)}) · Reddit excluded.`
 
   const notes: string[] = []
-  if (r.gateFirstAt === null) {
+  if (!r.gateReadable) {
+    notes.push('What we looked at and set aside is recorded, and we do not yet show it to you, so the share left out is not drawn here.')
+  } else if (r.gateFirstAt === null) {
     notes.push('What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.')
   } else {
     notes.push(`${pct(r.gateRows - r.gateKept, r.gateRows)} of what was looked at was set aside — recorded only from ${fullDate(r.gateFirstAt)}, so no month before that can show it.`)

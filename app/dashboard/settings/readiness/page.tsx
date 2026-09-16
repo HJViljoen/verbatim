@@ -4,6 +4,7 @@ import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SettingsFrame } from '@/components/settings-frame'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate } from '@/lib/format'
+import { gateAccessFor } from '@/lib/gate-record'
 import { computeReadiness } from '@/lib/readiness/compute'
 import { loadReadiness } from '@/lib/readiness/load'
 import { clientReadiness, withheldLine } from '@/lib/settings/readiness-view'
@@ -26,14 +27,20 @@ import { clientReadiness, withheldLine } from '@/lib/settings/readiness-view'
 // through the switcher it is already the service-role client (lib/auth.ts
 // applyOperatorView). One code path, two regimes — which is only honest
 // because M8 gave `gate_verdicts` a tenant policy: without it row 8's read
-// would come back empty rather than forbidden, and the row would confidently
-// print "what was looked at and set aside is not recorded at all".
+// comes back empty rather than forbidden, and the row would confidently print
+// "what was looked at and set aside is not recorded at all" — so until M8 is
+// applied the load is told which client it is on and row 8 withholds its
+// discard half instead of measuring a silence.
 export default async function SettingsReadinessPage() {
-  const { supabase, clientId, role } = await getSessionContext()
+  const { supabase, clientId, role, operator } = await getSessionContext()
   if (!canManageTenant(role)) notFound()
 
   const now = new Date()
-  const inputs = await loadReadiness(supabase, clientId, now)
+  // Which client `supabase` is. Row 8 reads the gate's record, and a tenant
+  // session's read of it is emptied by RLS rather than refused until M8 lands
+  // (lib/gate-record.ts) — the one row on this page whose answer depends on who
+  // is asking.
+  const inputs = await loadReadiness(supabase, clientId, now, { gate: gateAccessFor(operator) })
   const all = computeReadiness(inputs)
 
   // The one row with a date anybody can name: the next batch of comments falls

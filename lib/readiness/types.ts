@@ -147,6 +147,13 @@ export interface ReadInput {
   gateKept: number
   /** When the discard record starts. Null = nothing recorded. */
   gateFirstAt: string | null
+  /** Whether the client this was loaded on can read that record AT ALL. False
+   *  on a tenant session until M8 is applied: RLS empties the read instead of
+   *  refusing it (lib/gate-record.ts), so the three figures above come back as
+   *  zeros that mean nothing. The row prints what it measured and says the rest
+   *  is not open yet, rather than reporting the product's own gap as this
+   *  workspace's. */
+  gateReadable: boolean
 }
 
 /** One update, as the delivery record holds it. `scheduledFor` and `stalled`

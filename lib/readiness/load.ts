@@ -1,6 +1,7 @@
 import { embeddingCoverage } from '../agent/retrieve'
 import { YOUTUBE_REFRESH_NIGHTLY_CAP } from '../config'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog } from '../config-log'
+import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { parseSubreddits, subredditKey } from '../gather/subreddits'
 import { ANOMALY_CHECKS_TABLE, ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
@@ -277,8 +278,28 @@ async function loadRetentionCohort(admin: Admin, clientId: string): Promise<{ co
 }
 
 /** Everything the thirteen rows are computed from, for one workspace. */
-export async function loadReadiness(admin: Admin, clientId: string, now: Date = new Date()): Promise<ReadinessInputs> {
+export async function loadReadiness(
+  admin: Admin,
+  clientId: string,
+  now: Date = new Date(),
+  options: { gate?: GateAccess } = {},
+): Promise<ReadinessInputs> {
   const nowIso = now.toISOString()
+
+  // Row 8 reads gate_verdicts, and that table answers differently to the two
+  // clients this module now takes (lib/gate-record.ts). A tenant session before
+  // M8 is EMPTIED by RLS rather than refused, so three zeros come back and the
+  // row would read "not recorded at all" about a workspace with 1,700 verdicts
+  // — and, being `missing` and owned by engineering, would then be withheld
+  // from Settings › Readiness with a sentence saying we have not built it.
+  // Probed here once, on M8's own object, rather than guessed at from a count.
+  const gateAccess = options.gate ?? 'service'
+  let gateReadable = true
+  if (gateAccess === 'tenant') {
+    const appeals = await admin.from(GATE_APPEALS_TABLE).select('id').limit(1)
+    if (isMissingGateAppeals(appeals.error)) gateReadable = false
+    else if (appeals.error) throw appeals.error
+  }
 
   const [clientRead, tcRead] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -364,6 +385,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
       gateRows,
       gateKept,
       gateFirstAt: (gateFirst?.created_at as string | undefined) ?? null,
+      gateReadable,
     },
     updates,
     slotsRecorded,
