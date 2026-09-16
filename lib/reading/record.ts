@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
-import { fmtInt, fmtPct } from '../format'
+import { fmtInt, fmtPct, fullDate } from '../format'
 import { selectAll } from '../supabase-admin'
 
 import { isMissingMonthlyReading, monthStartOf, nextMonth } from './monthly'
@@ -721,7 +721,7 @@ async function loadChanges(client: SupabaseClient, clientId: string, w: RecordWi
   const logged = all.filter((c) => c.source !== 'reconstructed')
   return {
     inWindow: all.filter((c) => c.changed_at >= from && c.changed_at <= to).length,
-    loggedFrom: logged[0] ? logged[0].changed_at.slice(0, 10) : null,
+    loggedFrom: logged[0] ? fullDate(logged[0].changed_at) : null,
     reconstructed: all.length - logged.length,
   }
 }
@@ -937,7 +937,7 @@ export function recordLines(input: RecordInputs): string[] {
 
   if (input.comparisonsRefused != null) lines.push(refusedSentence(input.refusals))
 
-  lines.push(`Reading as at ${input.readingAt.slice(0, 10)}.`)
-  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${input.frozenAt.slice(0, 10)}.`)
+  lines.push(`Reading as at ${fullDate(input.readingAt)}.`)
+  lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
   return lines
 }

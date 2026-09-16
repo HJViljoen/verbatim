@@ -1,3 +1,4 @@
+import { fullDate } from '../format'
 import { subredditKey, subredditLabel } from '../gather/subreddits'
 
 /**
@@ -157,8 +158,8 @@ export function gateTotals(rows: readonly GateVerdict[]): GateTotals {
  *  history and is one about a few weeks. */
 export function gateSummary(t: GateTotals, tenantFirstUpdate: string | null): string {
   if (t.found === 0) return 'Nothing has been judged for this workspace yet.'
-  const from = t.firstAt ? t.firstAt.slice(0, 10) : null
-  const before = from && tenantFirstUpdate && tenantFirstUpdate.slice(0, 10) < from
+  const from = t.firstAt ? fullDate(t.firstAt) : null
+  const before = t.firstAt && tenantFirstUpdate && tenantFirstUpdate.slice(0, 10) < t.firstAt.slice(0, 10)
   return [
     `${t.dropped.toLocaleString('en-GB')} of ${t.found.toLocaleString('en-GB')} candidates were set aside (${(100 - t.keptPct).toFixed(1)}%)`,
     from ? `recorded from ${from}` : null,

@@ -292,7 +292,7 @@ describe('the reject log', () => {
     const totals = gateTotals(rows)
     expect(totals).toMatchObject({ found: 6, kept: 4, dropped: 2, unjudged: 1, firstAt: '2026-09-09T00:00:00Z' })
     expect(gateSummary(totals, '2026-06-28T00:00:00Z'))
-      .toBe('2 of 6 candidates were set aside (33.3%) · recorded from 2026-09-09 · so updates before that date show no share at all.')
+      .toBe('2 of 6 candidates were set aside (33.3%) · recorded from 9 Sep 2026 · so updates before that date show no share at all.')
   })
 
   it('does not claim a gap that is not there', () => {

@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-head-element, @next/next/no-page-custom-font -- an email document, not a page */
 import type { BlockContext } from '@/lib/blocks/types'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { fullDate } from '@/lib/format'
 import { WEEKLY_EMAIL_WIDTH, periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
@@ -41,7 +42,11 @@ const presentation = { role: 'presentation', cellPadding: 0, cellSpacing: 0, bor
 
 export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: WeeklyEmailProps) {
   const blocks = weeklyBlocksFor(data.keys)
-  const readAt = data.readingAt.slice(0, 10)
+  // ONE DATE FORMAT PER LINE. The masthead read "6 Sep - 13 Sep · reading as
+  // at 2026-09-16": the window in the product's own form and the reading date
+  // in raw ISO, three words apart. WP9's page bar gets this right with
+  // `fullDate`.
+  const readAt = fullDate(data.readingAt)
   return (
     <html lang="en">
       <head>

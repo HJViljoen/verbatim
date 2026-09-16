@@ -1,5 +1,6 @@
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
+import { fullDate } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
 import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
@@ -23,7 +24,11 @@ import { Slide } from './slide'
 // clipped, by the same rule as every other deck's; what is fixed here is a
 // report that dropped two thirds of itself by construction.
 
-const fmtDate = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+// NOT toLocaleDateString. lib/format.ts's own header forbids it — Intl draws
+// on ICU data that differs between the Node server and the browser — and it
+// printed "16 Sept 2026" in this footer against "Sep" everywhere else. It is
+// the same rule the WP15 x WP17 longMonth merge conflict was decided on.
+const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklySnapshotData; date?: string }) {
   const ctx = blockContext(appBaseUrl(), EMAIL)
@@ -31,7 +36,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   // THE RULE ON EVERY SHEET. A reader of a PDF has no masthead to scroll back
   // to, which is the same reason the method note is on every slide of a report.
   const chrome = {
-    context: `${data.company} · ${data.period} · reading as at ${data.readingAt.slice(0, 10)}`,
+    context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>

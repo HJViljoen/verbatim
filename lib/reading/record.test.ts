@@ -214,7 +214,7 @@ describe('recordLines — every fact with its basis', () => {
 
   it('says a month is still filling rather than inventing a freeze date', () => {
     expect(has('No month in this window has been frozen yet')).toBe(true)
-    expect(recordLines(inputs({ frozenAt: '2026-08-31T00:00:00.000Z' })).some((l) => l.includes('frozen 2026-08-31'))).toBe(true)
+    expect(recordLines(inputs({ frozenAt: '2026-08-31T00:00:00.000Z' })).some((l) => l.includes('frozen 31 Aug 2026'))).toBe(true)
   })
 
   it('says "not recorded" for the instrument figure nothing has ever computed', () => {
@@ -234,7 +234,7 @@ describe('recordLines — every fact with its basis', () => {
   })
 
   it('prints the reading date on every record', () => {
-    expect(has('Reading as at 2026-09-15')).toBe(true)
+    expect(has('Reading as at 15 Sep 2026')).toBe(true)
   })
 
   it('agrees its verbs with its subjects on both plural paths', () => {

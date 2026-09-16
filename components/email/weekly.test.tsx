@@ -61,7 +61,8 @@ describe('the weekly email', () => {
   })
 
   it('stamps the reading date, which M9 will read back out of `data`', () => {
-    expect(words(snapshot())).toContain('reading as at 2026-09-18')
+    // In the product's own date form, never raw ISO beside "6 Sep - 13 Sep".
+    expect(words(snapshot())).toContain('reading as at 18 Sep 2026')
   })
 
   it('leads with the frozen subject, so the inbox line and the artefact agree', () => {
