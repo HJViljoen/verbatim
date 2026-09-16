@@ -161,6 +161,37 @@ export function closedFixture(): QuarterlyData {
 }
 
 /**
+ * THE NORMAL SEND, and the state the artefact spends most of its life in: a
+ * quarterly schedule fires on the first update of the NEXT quarter, so a Q3
+ * review is built in October and the month-level pages — movers, the kind mix,
+ * the mood, the rival rows, every level on page 3 — are of a month OUTSIDE the
+ * quarter the masthead names. Nothing can rewind those loaders, so every page
+ * that prints a month figure says which month it is and that it falls outside.
+ */
+export function afterQuarterFixture(): QuarterlyData {
+  const overview = overviewFixture()
+  return composeQuarterly({
+    overview: {
+      ...overview,
+      month: '2026-10-01',
+      monthStatus: 'filling',
+      bar: { ...overview.bar, readings: 9 },
+    },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: '2026-10-06T09:00:00.000Z',
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13),
+  })
+}
+
+/**
  * A frozen quarterly artefact, over one of the readings above.
  *
  * Built the way `snapshotQuarterly` builds one — the same title, period,

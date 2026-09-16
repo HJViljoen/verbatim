@@ -169,11 +169,13 @@ describe('unsettledItems', () => {
 
 describe('methodNumbers', () => {
   const overview = { monthStatus: 'filling', month: '2026-09-01', bar: { videos: 449 } } as never
+  // Inside Q3: the quarter itself is still filling.
+  const INSIDE = '2026-09-16T00:00:00Z'
 
   it('tells a record that could not be read apart from a window that is not counted', () => {
     const q = quarterFor(2026, 3)
     // No record at all: nothing to say, and it says that.
-    const none = methodNumbers(null, q, overview)
+    const none = methodNumbers(null, q, overview, INSIDE)
     expect(none.at(-1)?.value).toBe('not recorded')
 
     // The record read, but the WINDOWED count (M3) is unapplied. The month
@@ -184,6 +186,7 @@ describe('methodNumbers', () => {
       { coverage: null, delivery: { delivered: 10, dates: [], longestGapDays: 37, failed: 0, basis: 'run_clock' } } as never,
       q,
       overview,
+      INSIDE,
     )
     expect(unwindowed.find((r) => r.label === 'Videos in September')?.value).toBe('449')
     expect(unwindowed.find((r) => r.label === 'Videos in September')?.note).toContain('not counted as one window')
@@ -202,6 +205,7 @@ describe('methodNumbers', () => {
       } as never,
       q,
       overview,
+      INSIDE,
     )
     expect(rows.find((r) => r.label === 'Videos')?.value).toBe('1,084')
     // COMMENTS, not "Conversations": lib/calibration.ts fixes a conversation
@@ -211,6 +215,14 @@ describe('methodNumbers', () => {
     expect(rows.map((r) => r.label)).not.toContain('Conversations')
     expect(rows.find((r) => r.label === 'Updates')?.note).toBe('longest gap 35 days')
     expect(rows[0]).toMatchObject({ label: 'Period', value: '2026-07-01 – 2026-09-30', note: 'still filling' })
+  })
+
+  it('says a CLOSED quarter is closed, whatever the month the product is in', () => {
+    // The defect: the note keyed off `overview.monthStatus`, so a Q3 review
+    // built in November printed "still filling" over a quarter that had closed
+    // weeks earlier — because November was filling.
+    const rows = methodNumbers(null, quarterFor(2026, 3), overview, '2026-11-02T00:00:00Z')
+    expect(rows[0].note).toBeUndefined()
   })
 })
 

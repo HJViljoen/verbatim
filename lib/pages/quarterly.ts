@@ -24,6 +24,7 @@ import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import {
   previousQuarter,
+  quarterFilling,
   quarterGateSentence,
   quarterLabel,
   quarterToReview,
@@ -381,6 +382,29 @@ export function coverBody(input: {
   return parts.join(' ')
 }
 
+/**
+ * Where the month-level pages stand relative to the quarter under review.
+ *
+ * FOUR OF THE EIGHT PAGES ARE A MONTH. The movers, the kind mix, the mood, the
+ * attention line, the rival rows and every level on page 3 come from Overview,
+ * Market and Competitive on the `last_3` horizon, whose month is whatever month
+ * the PRODUCT is currently in — there is no as-at date to hand those loaders,
+ * and the reading layer has no way to rewind them. That is a real limit, and
+ * the honest thing is to name it: a Q3 review built in November prints
+ * November's movers, and the reader has to be told so on the sheet rather than
+ * left to assume a document headed Q3 is Q3 throughout.
+ *
+ * `null` when the month is inside the quarter, which is the only case in which
+ * a document headed Q3 can let a month figure speak for itself. Whether the
+ * QUARTER is still filling is the quarter's own clause and not this one's —
+ * keying both off `overview.monthStatus` is how "November still filling" came
+ * to be stamped on a quarter that closed weeks earlier.
+ */
+export function monthBasisClause(month: string, quarter: Quarter): string | null {
+  if (month >= quarter.from && month <= quarter.to) return null
+  return `the month-level pages read ${longMonth(month)}, outside this quarter`
+}
+
 /** What a flag turned out to be, said in one clause. */
 export function flagOutcome(flag: { label: string }, later: readonly Verdict[]): string {
   const match = later.find((v) => v.objectLabel.toLowerCase() === flag.label.toLowerCase())
@@ -583,6 +607,11 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // carry denominators and no clustering to count numerators under.
   const themesRead = a.thisQuarter.themes != null && a.lastQuarter.themes != null
   const subjectsRead = windowApplied && a.subjectsNow != null && a.subjectsBefore != null
+  // The month the month-level pages are of is the month the PRODUCT is in, and
+  // on a review of a closed quarter that is a month outside it. Every page that
+  // prints a month figure says so rather than letting a Q3 masthead speak for
+  // a November reading.
+  const monthOutside = overview.month < quarter.from || overview.month > quarter.to
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
   const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, subjectsRead })
@@ -592,6 +621,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     monthLabel,
     windowApplied,
     themesRead,
+    monthOutside,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
   })
@@ -602,7 +632,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // argues from it, the last page lists what it could not settle, and the
   // method page counts what it refused. One source, three readers.
   const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
-  const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks })
+  const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt })
   const read = buildRead({ overview, market: a.market, verdicts, unlocked, cover, draft: a.draft ?? null })
   const unsettled = buildUnsettled({ verdicts, readings, overview, method })
 
@@ -831,9 +861,15 @@ function buildCover(a: {
     // month the reading is OF; the stamp is the day the reading was TAKEN, and
     // on a still-filling quarter those are different facts about one artefact.
     // The mock's own masthead says "as at 28 Sep 2026".
+    // THE QUARTER'S OWN STATE, THEN THE MONTH'S. "September still filling" was
+    // keyed off `overview.monthStatus` alone, so a Q3 review built in November
+    // stamped "November still filling" on a quarter that closed weeks earlier.
+    // The quarter says whether IT is filling; the month clause says which month
+    // the month-level pages are of, and whether it is even inside the quarter.
     stamp: [
       `as at ${fullDate(a.readingAt)}`,
-      overview.monthStatus === 'filling' ? `${longMonth(overview.month)} still filling` : null,
+      quarterFilling(a.quarter, a.readingAt) ? `${quarterLabel(a.quarter, false)} still filling` : null,
+      monthBasisClause(overview.month, a.quarter),
       readingCounter(a.readings),
     ]
       .filter(Boolean)
@@ -958,6 +994,7 @@ function buildCategory(a: {
   monthLabel: string
   windowApplied: boolean
   themesRead: boolean
+  monthOutside: boolean
   thisQuarter: WindowReading
   lastQuarter: WindowReading
 }): CategoryPage {
@@ -971,10 +1008,15 @@ function buildCategory(a: {
     label: c.label,
     denominator: c.denominator,
     monthLabel: a.monthLabel,
-    // THE MOCK'S OWN SENTENCE. Movers and the kind mix are a MONTH against the
-    // month before it, and a quarterly review that let a reader think they were
-    // quarter figures would be the whole point of this package missed.
-    basis: `Movers and the mix are ${a.monthLabel} against ${prevMonthLabel}.`,
+    // THE MOCK'S OWN SENTENCE, PLUS WHERE THAT MONTH SITS. Movers and the kind
+    // mix are a MONTH against the month before it, and a quarterly review that
+    // let a reader think they were quarter figures would be the whole point of
+    // this package missed. On a review built after its quarter closed the month
+    // is not even inside it, and the sentence has to say so — see
+    // `monthBasisClause`.
+    basis: `Movers and the mix are ${a.monthLabel} against ${prevMonthLabel}.${
+      a.monthOutside ? ` ${a.monthLabel} is outside this quarter — it is the month the product is in now.` : ''
+    }`,
     growing: c.growing,
     fading: c.fading,
     moversNote: c.moversNote,
@@ -1086,6 +1128,7 @@ function buildMethod(a: {
   overview: OverviewData
   record: RecordInputs | null
   checks: QuarterChecks
+  readingAt: string
 }): MethodPage {
   const window: RecordWindow = { kind: 'quarter', from: a.quarter.from, to: a.quarter.to }
   const refused: Refusal[] = refusals(a.verdicts)
@@ -1135,7 +1178,7 @@ function buildMethod(a: {
         ? 'No unusual-week check has run inside this quarter.'
         : null
       : 'The unusual-week check is not recorded for this workspace yet, so this quarter has no check record to print.',
-    numbers: methodNumbers(inputs, a.quarter, a.overview),
+    numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
     href: '/dashboard/settings/record',
     refusedLine: refused.length ? refusedSentence(refused) : null,
@@ -1144,9 +1187,18 @@ function buildMethod(a: {
 
 /** The corpus in numbers, as the mock's own table. Every row carries what it
  *  is out of, or says it was not recorded. */
-export function methodNumbers(inputs: RecordInputs | null, quarter: Quarter, overview: OverviewData): { label: string; value: string; note?: string }[] {
+export function methodNumbers(
+  inputs: RecordInputs | null,
+  quarter: Quarter,
+  overview: OverviewData,
+  readingAt: string,
+): { label: string; value: string; note?: string }[] {
   const out: { label: string; value: string; note?: string }[] = [
-    { label: 'Period', value: `${quarter.from} – ${quarter.to}`, note: overview.monthStatus === 'filling' ? 'still filling' : undefined },
+    // THE PERIOD IS THE QUARTER'S, SO ITS STATE IS THE QUARTER'S. Keyed off
+    // `overview.monthStatus` this row said "still filling" about a quarter that
+    // had closed weeks earlier, because the MONTH the product is in was
+    // filling.
+    { label: 'Period', value: `${quarter.from} – ${quarter.to}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
     out.push({ label: 'The corpus', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })

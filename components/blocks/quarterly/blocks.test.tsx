@@ -7,11 +7,11 @@ import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib
 import { CLIENT_AUDIENCE } from '@/lib/rivals'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { closedFixture, formingFixture, quarterlyFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [quarterlyFixture(), formingFixture(), closedFixture()]
+const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture()]
 
 describe('the eight pages', () => {
   it('render in all three modes on every state and keep the copy contract', () => {
@@ -170,6 +170,21 @@ describe('what each page owes the reader', () => {
     expect(text).toContain('every piece of advice this product has ever given you')
     expect(text).not.toMatch(/acted on \d+ of \d+ this quarter/)
     expect(data.moves.actedLine).toBe(marketFixture().advice.actedLine)
+  })
+
+  it('never lets a month outside the quarter speak for the quarter', () => {
+    // The normal send: a Q3 review built on 6 October, whose month-level pages
+    // are October's because nothing can rewind Overview, Market or Competitive
+    // to a month that has passed. "November still filling" used to be stamped
+    // on a closed quarter because both clauses keyed off overview.monthStatus.
+    const after = afterQuarterFixture()
+    expect(after.cover.stamp).toContain('the month-level pages read October, outside this quarter')
+    expect(after.cover.stamp).not.toContain('still filling')
+    expect(after.method.numbers[0].note).toBeUndefined()
+    expect(after.category.basis).toContain('October is outside this quarter')
+    // And a review of the quarter it is standing in still says so.
+    expect(quarterlyFixture().cover.stamp).toContain('Q3 2026 still filling')
+    expect(quarterlyFixture().cover.stamp).not.toContain('outside this quarter')
   })
 
   it('states the rule of the moves page on the moves page', () => {
