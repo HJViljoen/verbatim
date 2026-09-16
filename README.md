@@ -363,6 +363,21 @@ changes, artifacts go stale) and shows the workings beside the page
 
 All run as `node --env-file=.env.local --import tsx scripts/<name>.ts`.
 
+**Reading production, before you run any of them.** These scripts point at the
+live database, and on 2026-09-16 a morning of unserialised agent reads — one of
+them counting `audience_insights.embedding`, a 1536-float vector column — spent
+the instance's disk-IO burst budget and the app answered 504 to paying
+customers for about two hours. So: probe with a trivial query first and back
+off for fifteen minutes if it is slow or errors; one reader at a time; no
+timing loops and no `EXPLAIN ANALYZE` against the window functions; count
+`embedding is not null` as a predicate and never `count(embedding)` (and note
+that `embedded_at` is never backfilled, so it is not the same measure). SQL and
+PostgREST are separate paths — every script here goes through PostgREST
+(`createAdminClient`), which can refuse its schema cache while `select 1`
+answers fine, so a green SQL query proves nothing about whether a script will
+run. The full rules are in AGENTS.md; `loader-dump.ts` and `reading-timing.ts`
+carry them in their own flags.
+
 | Script | Purpose |
 | --- | --- |
 | `run-gather.ts` | CLI gather stage (Apify spend!) |
