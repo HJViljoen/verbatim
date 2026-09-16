@@ -545,7 +545,15 @@ function loadLabels(
     )
     for (const { data, error } of answers) {
       if (error) {
-        if (objectKind === 'subject' && isMissingSubjects(error)) return new Map<string, string>()
+        // The names collected so far are still names. The serial loop this
+        // replaced returned what it had when M3 turned out to be unapplied, and
+        // a caller that gets a partial map falls back to "an unnamed subject"
+        // for the rest — so handing back an empty one would lose labels that
+        // were read successfully. (Reachable only if one chunk answers and
+        // another says the table is missing, which the database does not
+        // really do; kept because the answer to "what did we learn" is not
+        // "nothing" either way.)
+        if (objectKind === 'subject' && isMissingSubjects(error)) return out
         throw new Error(`${table} labels: ${error.message}`)
       }
       for (const row of (data ?? []) as unknown as Record<string, string | null>[]) {
