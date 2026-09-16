@@ -413,7 +413,14 @@ and TRUNCATE by name on the table it has just opened to a tenant session
 the claim set and never edits a stored claim in place.
 
 `cadence_check` must contain `quarterly`. Expect `appeals = 1`,
-`artefact_col = 1`, `policies = 3`, `uniq = 1`.
+`artefact_col = 1`, `policies = 4`, `uniq = 1`.
+
+**Four, not three**, and this is the one the page tells you to stop on.
+`gate_verdicts` carries TWO policies after M8: its own "Members read their gate
+verdicts", plus the pre-existing "Superadmins read gate_verdicts" from
+`20260821130000_gate_verdicts.sql`, which is dated well before the Phase 1
+files and is applied on production already. So `gate_appeals` 1 +
+`gate_verdicts` 2 + `video_claims` 1 = 4, on production as on a fresh cluster.
 
 **M9 · `20260918098000_sent_figures.sql`**
 ```sql
