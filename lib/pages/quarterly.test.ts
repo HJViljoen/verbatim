@@ -130,16 +130,31 @@ describe('countedLines', () => {
 })
 
 describe('flagOutcome', () => {
+  const flag = { objectKind: 'theme', objectId: 't1' }
+
   it('says what the later reading of the same object turned out to be', () => {
-    expect(flagOutcome({ label: 'Durability' }, [verdict()])).toContain('cleared its band')
-    expect(flagOutcome({ label: 'durability' }, [verdict({ state: 'no_clear_change' })])).toContain('inside the band')
-    expect(flagOutcome({ label: 'Durability' }, [verdict({ state: 'too_little_data' })])).toContain('too little')
-    expect(flagOutcome({ label: 'Durability' }, [verdict({ state: 'refused' })])).toContain('could not be compared')
-    expect(flagOutcome({ label: 'Durability' }, [verdict({ state: 'baseline_forming' })])).toContain('no baseline')
+    expect(flagOutcome(flag, [verdict()])).toContain('cleared its band')
+    expect(flagOutcome(flag, [verdict({ state: 'no_clear_change' })])).toContain('inside the band')
+    expect(flagOutcome(flag, [verdict({ state: 'too_little_data' })])).toContain('too little')
+    expect(flagOutcome(flag, [verdict({ state: 'refused' })])).toContain('could not be compared')
+    expect(flagOutcome(flag, [verdict({ state: 'baseline_forming' })])).toContain('no baseline')
   })
 
   it('never claims an outcome nobody read', () => {
-    expect(flagOutcome({ label: 'Something else' }, [verdict()])).toBe('no later reading of the same object has been taken')
+    expect(flagOutcome({ objectKind: 'theme', objectId: 'other' }, [verdict()]))
+      .toBe('no later reading of the same object has been taken')
+  })
+
+  // THE JOIN IS KIND AND ID, NOT THE LABEL. A flag is written weeks earlier by
+  // a different run and `anomaly_flags.label` is decoration by its own column
+  // comment; theme labels churn about 88% run to run.
+  it('finds the object again after its label has been rewritten', () => {
+    expect(flagOutcome(flag, [verdict({ objectLabel: 'How long it lasts' })])).toContain('cleared its band')
+  })
+
+  it('does not take another kind of object’s reading because the labels match', () => {
+    expect(flagOutcome({ objectKind: 'rival', objectId: 'competitor:Ottobock' }, [verdict({ objectLabel: 'Durability' })]))
+      .toBe('no later reading of the same object has been taken')
   })
 })
 

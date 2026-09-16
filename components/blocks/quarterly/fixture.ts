@@ -72,6 +72,7 @@ const checksRan: QuarterChecks = {
   flags: [
     {
       object_kind: 'kind',
+      object_id: 'objection',
       label: 'Objections',
       denominator: 'every audience together',
       week_start: '2026-09-06',

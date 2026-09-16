@@ -230,6 +230,9 @@ export interface MovesPage {
 export interface QuarterFlag {
   label: string
   objectKind: string
+  /** The flag's own object key, kept beside the label because the label is
+   *  decoration: `flagOutcome` joins on this and on the kind. */
+  objectId: string
   weekStart: string
   weekEnd: string
   k: number
@@ -426,9 +429,23 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
   return `the month-level pages read ${longMonth(month)}, outside this quarter`
 }
 
-/** What a flag turned out to be, said in one clause. */
-export function flagOutcome(flag: { label: string }, later: readonly Verdict[]): string {
-  const match = later.find((v) => v.objectLabel.toLowerCase() === flag.label.toLowerCase())
+/**
+ * What a flag turned out to be, said in one clause.
+ *
+ * JOINED ON KIND AND ID, NEVER ON LABEL. A flag is written weeks earlier by a
+ * different run, and `anomaly_flags`' own column comment says it: "label — What
+ * the reader was shown. Decoration, never a key — theme labels churn about 88%
+ * run to run" (AGENTS.md: do not join themes by label). The first cut matched
+ * `objectLabel.toLowerCase() === label.toLowerCase()` and compared neither kind
+ * nor id, so a re-labelled theme printed "no later reading of the same object
+ * has been taken" when one had been, and a flag of another KIND whose label
+ * happened to match a theme's printed that theme's outcome as its own — a rival
+ * flagged "fit and comfort" reading the theme's verdict. The table keys on
+ * (client_id, run_id, object_kind, object_id) and indexes on
+ * (client_id, object_kind, object_id, week_start); this is that key.
+ */
+export function flagOutcome(flag: { objectKind: string; objectId: string }, later: readonly Verdict[]): string {
+  const match = later.find((v) => v.objectKind === flag.objectKind && v.objectId === flag.objectId)
   if (!match) return 'no later reading of the same object has been taken'
   if (match.state === 'moved') return `the month's own reading agreed — it cleared its band`
   if (match.state === 'no_clear_change') return `the month's own reading did not agree — inside the band`
@@ -1190,6 +1207,9 @@ interface CheckRow {
 
 export interface FlagRow {
   object_kind: string
+  /** The key `flagOutcome` joins on — a subjects.id, an insight category slug,
+   *  a `competitor:<name>` string or a theme_registry.id. */
+  object_id: string
   label: string
   denominator: string
   week_start: string
@@ -1221,6 +1241,7 @@ function buildMethod(a: {
   const flags: QuarterFlag[] = checks.flags.map((f) => ({
     label: f.label,
     objectKind: f.object_kind,
+    objectId: f.object_id,
     weekStart: f.week_start,
     weekEnd: f.week_end,
     k: f.week_k,
@@ -1228,7 +1249,7 @@ function buildMethod(a: {
     changePts: Number(f.change_pts),
     bandPts: Number(f.band_pts),
     denominator: f.denominator,
-    outcome: flagOutcome(f, a.verdicts),
+    outcome: flagOutcome({ objectKind: f.object_kind, objectId: f.object_id }, a.verdicts),
     sentences: f.explanation?.sentences ?? [],
   }))
 
@@ -1350,7 +1371,7 @@ export async function loadQuarterChecks(
     const flags = await selectAll<FlagRow>(() =>
       supabase
         .from('anomaly_flags')
-        .select('object_kind, label, denominator, week_start, week_end, week_k, week_n, change_pts, band_pts, explanation')
+        .select('object_kind, object_id, label, denominator, week_start, week_end, week_k, week_n, change_pts, band_pts, explanation')
         .eq('client_id', clientId)
         .in('run_id', flaggedRuns)
         .order('week_start', { ascending: true })
