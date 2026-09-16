@@ -5,10 +5,10 @@ import { ALL_SECTION_PAGES } from './types'
 
 describe('starter templates', () => {
   it('name only static keys of their own page, and every audience is real', () => {
-    // Six: four arrangements, the retiring digest, and the weekly REPORT, which
-    // is an artefact composed from block keys and carries no sections at all
-    // (Phase 1 WP17).
-    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_report', 'weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
+    // Seven: four arrangements, the retiring digest, and the two ARTEFACTS —
+    // the weekly report (WP17) and the monthly one (WP18) — each composed from
+    // block keys and carrying no sections at all.
+    expect(STARTER_TEMPLATES.map((t) => t.key)).toEqual(['weekly_report', 'monthly_report', 'weekly_digest', 'monthly_marketing_review', 'leadership_one_pager', 'sales_objections_competitors', 'content_what_to_make_next'])
     for (const t of STARTER_TEMPLATES) {
       for (const s of t.sections) {
         // ALL_, not SECTION_: the weekly digest and the leadership one-pager

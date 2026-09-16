@@ -5,6 +5,7 @@ import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
 import type { OverviewData } from '@/lib/pages/overview'
+import { sentLineForToken } from '@/lib/pages/overview'
 import { overviewBar } from './bar'
 import { overviewSentence } from './sentence'
 import { overviewSubjects } from './subjects'
@@ -82,7 +83,17 @@ export function OverviewPage({
       <SurfacePageBar
         nav="overview"
         params={params}
-        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
+        context={{
+          brand: data.brand,
+          month: data.month,
+          status: data.monthStatus,
+          readingAt: data.readingAt,
+          // WHAT THE LAST REPORT READ (WP18, item 13). The month's own size is
+          // the figure the bar is about, so it is the one the bar quotes; null
+          // — and printed as nothing — where nothing was sent, where it has not
+          // moved, or where the month had already closed when it went out.
+          sent: sentLineForToken(data.sent, 'month_videos', data.bar.videos),
+        }}
         record={{ line: data.record.line, lines: data.record.lines }}
       />
       <PageGrid>

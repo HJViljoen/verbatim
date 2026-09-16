@@ -6,7 +6,7 @@ import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
-import { longMonth } from '@/lib/pages/overview'
+import { longMonth, sentLineForToken } from '@/lib/pages/overview'
 
 /**
  * OV0 · the month so far (design §3 OV0).
@@ -36,6 +36,12 @@ export const overviewBar: Block<OverviewData> = {
     void ctx
     const b = data.bar
     const meta = horizonDates(data.window)
+    // WHAT THE LAST REPORT READ, where the month has moved since (WP18, item
+    // 13). The month's own size is the figure a reader notices moving, and this
+    // is the one place on the page it is stated as a headline. Absent — and
+    // printing nothing — where nothing was sent, where the figure has not
+    // moved, or where the month was already closed when the artefact went out.
+    const sentLine = sentLineForToken(data.sent, 'month_videos', b.videos)
     if (mode === 'email') {
       return (
         <BlockFrame title={overviewBar.title} mode={mode} meta={meta}>
@@ -44,6 +50,7 @@ export const overviewBar: Block<OverviewData> = {
           {b.updateDates.length > 0 ? (
             <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{b.updateDates.join(' · ')}</div>
           ) : null}
+          {sentLine ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{sentLine}</div> : null}
         </BlockFrame>
       )
     }
@@ -76,6 +83,7 @@ export const overviewBar: Block<OverviewData> = {
             and the only place the page says it: not the delivery record, which
             is OV6's, and not a second month label. */}
         <p className="m-0 text-[11.5px] text-muted-foreground">{b.counter}</p>
+        {sentLine ? <p className="m-0 text-[11.5px] text-muted-foreground">{sentLine}</p> : null}
       </BlockFrame>
     )
   },

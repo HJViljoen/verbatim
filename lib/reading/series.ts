@@ -529,6 +529,19 @@ export function buildSeries(input: BuildSeriesInput): MonthSeries {
  * line. Identical text is one note, and the first occurrence keeps its place.
  */
 export function mergeSeriesNotes(series: readonly MonthSeries[]): MonthLabel[] {
+  return mergeNotes(series.map((s) => s.notes))
+}
+
+/**
+ * The same merge over lists of notes rather than over series.
+ *
+ * A surface that reads TWO sets — a page's themes and, beside them, an
+ * artefact's own movers — holds two already-merged lists and must still say one
+ * caveat. Merging merged lists is the same operation: concatenating them by
+ * hand is how a reader ends up with two unrecorded-grouping sentences naming
+ * overlapping spans, which is exactly what the merge exists to prevent.
+ */
+export function mergeNotes(lists: readonly (readonly MonthLabel[])[]): MonthLabel[] {
   const seen = new Set<string>()
   const out: MonthLabel[] = []
   // THE ONE CAVEAT SENTENCE, not one per series. An unrecorded-grouping note
@@ -540,8 +553,8 @@ export function mergeSeriesNotes(series: readonly MonthSeries[]): MonthLabel[] {
   // re-worded from it, keeping the first one's place.
   const unknownMonths: string[] = []
   let unknownSlot = -1
-  for (const s of series) {
-    for (const note of s.notes) {
+  for (const notes of lists) {
+    for (const note of notes) {
       if (note.months && note.months.length > 0) {
         unknownMonths.push(...note.months)
         if (unknownSlot < 0) { unknownSlot = out.length; out.push(note) }

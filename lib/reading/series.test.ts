@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildSeries,
+  mergeNotes,
   mergeSeriesNotes,
   rankObjects,
   isReadable,
@@ -586,6 +587,23 @@ describe('mergeSeriesNotes — a set of series says its caveats once', () => {
 
   it('answers an empty set with no notes', () => {
     expect(mergeSeriesNotes([])).toEqual([])
+  })
+
+  // The monthly artefact holds two already-merged lists — the page's themes
+  // and its own movers' series — and must still say one caveat across them.
+  it('merges lists that have already been merged once', () => {
+    const wide = monthAxis('2026-06-01', '2026-09-01')
+    const early = buildSeries({
+      axis: wide, audience: 'industry-other', objectId: 't1',
+      denominators: [den('2026-06-01', 400, { clustering_key: null }), den('2026-07-01', 400, { clustering_key: null })],
+    })
+    const late = buildSeries({
+      axis: wide, audience: 'industry-other', objectId: 't2',
+      denominators: [den('2026-08-01', 400, { clustering_key: null }), den('2026-09-01', 400, { clustering_key: null })],
+    })
+    const merged = mergeNotes([mergeSeriesNotes([early]), mergeSeriesNotes([late])])
+    expect(merged.filter((n) => n.kind === 'clustering_changed')).toHaveLength(1)
+    expect(merged).toEqual(mergeSeriesNotes([early, late]))
   })
 })
 

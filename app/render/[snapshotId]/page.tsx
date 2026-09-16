@@ -11,8 +11,11 @@ import { ReportDeck } from '@/components/print/report-deck'
 import { DocumentDeck } from '@/components/print/document-deck'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData } from '@/lib/reports/monthly-build'
 import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { MonthlyDeck } from '@/components/print/monthly-deck'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
+import { monthlyBlocksFor } from '@/components/blocks/monthly'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
@@ -65,6 +68,24 @@ export default async function RenderPage({
       return (
         <PrintRoot style={style}>
           <WeeklyDeck data={data} />
+        </PrintRoot>
+      )
+    }
+    // A monthly report (Phase 1 WP18): eight blocks over one reading, the same
+    // shape and the same rule as the weekly one.
+    if (isMonthlyData(data)) {
+      if (token.tileKey) {
+        const block = monthlyBlocksFor([token.tileKey])[0]
+        if (!block) notFound()
+        return (
+          <PrintRoot style={style}>
+            <PrintTile>{block.render(data.reading, 'print', blockContext(appBaseUrl(), EMAIL))}</PrintTile>
+          </PrintRoot>
+        )
+      }
+      return (
+        <PrintRoot style={style}>
+          <MonthlyDeck data={data} />
         </PrintRoot>
       )
     }

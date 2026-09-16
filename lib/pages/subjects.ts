@@ -644,8 +644,13 @@ async function readStoredMonths<T>(
   }
 }
 
-/** The tenant's subjects, or null where M4 is not applied here. */
-async function loadSubjectRows(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
+/** The tenant's subjects, or null where M4 is not applied here.
+ *
+ *  EXPORTED FOR WP18 (one line, additive): the monthly report prints one voice
+ *  per subject and needs the same set this page draws its rail from. A second
+ *  read of `subjects` would be a second answer to "which subjects does this
+ *  workspace have". */
+export async function loadSubjectRows(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
   try {
     return await selectAll<Subject>(() =>
       supabase
@@ -683,7 +688,7 @@ async function loadSubjectMoves(supabase: SupabaseClient, clientId: string): Pro
 /** The member insight ids of one subject, at any judge version. Id-set lookups
  *  stay on the base tables (AGENTS.md): a membership row cascades with its
  *  insight, so an id that resolves is an insight that is still live. */
-async function loadMemberInsightIds(
+export async function loadMemberInsightIds(
   supabase: SupabaseClient,
   clientId: string,
   subjectId: string,
@@ -1168,6 +1173,24 @@ async function loadVoices(
     }
   })
   return { voices, from: considered.length, sampled }
+}
+
+/**
+ * SU2's voices, by their outside name (Phase 1 WP18, one wrapper, additive).
+ *
+ * The monthly report prints ONE voice per subject where this page prints six on
+ * one, and it must draw them through the same gate — `readsAsHeroQuote`, the
+ * round-robin across audiences, the cite and the link — or the two surfaces
+ * would quote the same subject differently. A wrapper rather than a rename:
+ * `loadVoices` is a private name two loaders in this directory happen to share,
+ * and renaming it would touch a WP12 call site for nothing.
+ */
+export function loadSubjectVoices(
+  supabase: SupabaseClient,
+  clientId: string,
+  insightIds: readonly string[],
+): Promise<{ voices: SubjectVoice[]; from: number; sampled: boolean }> {
+  return loadVoices(supabase, clientId, insightIds)
 }
 
 // ---- SU3 -----------------------------------------------------------------------

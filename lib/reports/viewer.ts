@@ -3,7 +3,9 @@ import { hydrateSnapshot, SNAPSHOT_COLS, type SnapshotRow } from '../snapshots'
 import { applyEdits, loadEdits } from './documents/edits'
 import { isDocumentData, type DocumentSnapshotData } from './documents/types'
 import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
+import { isMonthlyData, type MonthlySnapshotData } from './monthly-build'
 import { WEEKLY_BLOCK_KEYS } from './weekly'
+import { MONTHLY_BLOCK_KEYS } from './monthly'
 import { deckSlides } from './compose'
 import type { ReportSnapshotData } from './types'
 
@@ -18,10 +20,10 @@ export interface ViewerSnapshot {
   id: string
   /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
    *  and are told apart inside `data` — the `isDocumentData` precedent. */
-  kind: 'document' | 'report' | 'weekly'
+  kind: 'document' | 'report' | 'weekly' | 'monthly'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData
   title: string
   builtAt: string
   pageCount: number
@@ -82,6 +84,16 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
     return { ...common, kind: 'weekly', data: raw, pageCount: weeklyViewerPages(raw.keys) }
   }
 
+  // A MONTHLY REPORT (Phase 1 WP18), for the same reason and by the same route:
+  // /dashboard/reports lists every kind='report' snapshot that no report_sends
+  // row carries under "Builds", which is what a monthly send that stored its
+  // PDF and then failed at the email leaves behind. Without this branch the
+  // cast below hands `deckSlides` a snapshot with no sections and
+  // `d.sections.forEach` throws inside a server component.
+  if (isMonthlyData(raw)) {
+    return { ...common, kind: 'monthly', data: raw, pageCount: monthlyViewerPages(raw.keys) }
+  }
+
   // An arranged report: the cover plus every section's slides. The page
   // modules are loaded here rather than at the top of the file so this
   // module stays cheap for callers that only want the href helper.
@@ -97,6 +109,12 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
  */
 export function weeklyViewerPages(keys: readonly string[]): number {
   return Math.max(1, keys.filter((k) => (WEEKLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
+}
+
+/** The same count for a monthly report — one sheet per block key this build
+ *  still knows, and never zero. */
+export function monthlyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (MONTHLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
 
 /**

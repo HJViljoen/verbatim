@@ -236,6 +236,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       dualMention: 41,
       caveat: RIVALS_CAVEAT,
     },
+    // NOTHING HAS BEEN SENT ABOUT THIS MONTH, which is the state of every
+    // workspace until M9 is applied and a schedule has actually delivered. The
+    // fixtures that exercise "the report of {date} read X" set it themselves.
+    sent: null,
     moves: {
       rows: [
         { id: 'm1', title: 'Advanced technology', kind: 'subject', declaredAt: '2026-09-14', line: 'Advanced technology · tracked 14 Sep · first scoring lands with the October reading.' },

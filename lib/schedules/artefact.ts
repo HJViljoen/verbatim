@@ -27,21 +27,43 @@ export type Artefact = 'weekly' | 'monthly' | 'quarterly' | (string & {})
 /** The starter key the weekly report is sent under. */
 export const WEEKLY_STARTER_KEY = 'weekly_report'
 
+/** And the monthly one's (Phase 1 WP18). A schedule names its artefact through
+ *  `report_schedules.artefact` the moment M8 lands; until then a starter key is
+ *  the only stored thing that has ever said what a schedule sends, and the
+ *  monthly report needs one of its own so an operator can migrate a schedule
+ *  before either migration is applied. */
+export const MONTHLY_STARTER_KEY = 'monthly_report'
+
 /** The starter key it replaces. Still resolvable — stored rows name it. */
 export const RETIRED_DIGEST_KEY = 'weekly_digest'
 
 export const isWeeklyArtefact = (a: Artefact | null): boolean => a === 'weekly'
+export const isMonthlyArtefact = (a: Artefact | null): boolean => a === 'monthly'
 
 /** What this schedule sends, or null where nothing has said. */
 export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): Artefact | null {
   const stored = typeof schedule.artefact === 'string' ? schedule.artefact.trim() : ''
   if (stored) return stored
-  return schedule.starter_key === WEEKLY_STARTER_KEY ? 'weekly' : null
+  if (schedule.starter_key === WEEKLY_STARTER_KEY) return 'weekly'
+  if (schedule.starter_key === MONTHLY_STARTER_KEY) return 'monthly'
+  return null
 }
 
 /** Does this schedule send the weekly report? */
 export function sendsWeekly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
   return isWeeklyArtefact(scheduleArtefact(schedule))
+}
+
+/** The monthly one (Phase 1 WP18). */
+export function sendsMonthly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
+  return isMonthlyArtefact(scheduleArtefact(schedule))
+}
+
+/** Either of the two block-arranged artefacts. Both take the same transport and
+ *  differ only in the reading they freeze and the body they render, so the send
+ *  path asks this once rather than asking two questions in six places. */
+export function sendsBlockArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
+  return sendsWeekly(schedule) || sendsMonthly(schedule)
 }
 
 /**

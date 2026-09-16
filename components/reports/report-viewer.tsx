@@ -5,7 +5,9 @@ import { FitWidth } from '@/components/reports/fit-width'
 import { ViewerEscape } from '@/components/reports/report-viewer-close'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { isMonthlyData } from '@/lib/reports/monthly-build'
 import { WeeklyDeck } from '@/components/print/weekly-deck'
+import { MonthlyDeck } from '@/components/print/monthly-deck'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 
@@ -30,7 +32,9 @@ export function ReportViewer({ snapshot, closeHref }: { snapshot: ViewerSnapshot
     ? <DocumentDeck data={data} date={date} />
     : isWeeklyData(data)
       ? <WeeklyDeck data={data} date={date} />
-      : <ReportDeck data={data as ReportSnapshotData} date={date} />
+      : isMonthlyData(data)
+        ? <MonthlyDeck data={data} date={date} />
+        : <ReportDeck data={data as ReportSnapshotData} date={date} />
 
   return (
     <>
