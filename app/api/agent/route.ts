@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/auth'
-import { createAdminClient, selectAll } from '@/lib/supabase-admin'
+import { createAdminClient, isMissingColumnError, selectAll } from '@/lib/supabase-admin'
 import { answerQuestion } from '@/lib/agent/answer'
 import { runAsk, clipInput } from '@/lib/ask/engine'
 import { extractPdfText, pageWarning, PdfTooLargeError, PdfUnreadableError } from '@/lib/ask/pdf'
 import { latestRunId } from '@/lib/agent/retrieve'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk, ASK_NOT_YOURS } from '@/lib/agent/access'
 import { outcomeOf } from '@/lib/agent/types'
-import { agentEnabled, AGENT_DAILY_LIMIT, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
-import { dayStartIso, evaluateQuota } from '@/lib/ask/quota'
+import { ASK_MONTHLY_CAP, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
+import { monthStartIso, evaluateMonthlyCap } from '@/lib/ask/quota'
 
 // POST /api/agent — ask the Verbatim Agent a question.
 //
@@ -27,42 +27,40 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  if (!agentEnabled()) {
-    return NextResponse.json({ error: 'Not available yet.' }, { status: 404 })
-  }
   const session = await getRouteSession()
   if (!session) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
-  const { clientId, userId } = session
+  const { clientId, userId, role } = session
 
-  // Send is operator-only for now (2026-08-22). Everyone in the tenant can read
-  // the threads; only a platform admin may spend a model call.
-  if (!(await isPlatformAdmin(userId))) {
-    return NextResponse.json(
-      { error: 'The agent is read-only on this workspace for now. You can read every answer here, but asking is switched off while we are still testing it.' },
-      { status: 403 },
-    )
+  // Decision B (2026-09-16): an owner or an admin may ask; a member reads.
+  // AGENT_ENABLED is gone with it — an env var that hid the sidebar item while
+  // the pages themselves rendered was never the gate it looked like, and the
+  // gate that matters is this one, on the request that spends the money.
+  if (!(await canAsk(role, userId))) {
+    return NextResponse.json({ error: ASK_NOT_YOURS }, { status: 403 })
   }
 
   const admin0 = createAdminClient()
 
-  // Daily cap covers BOTH faces — one tenant, one budget. Counted on questions
-  // asked, which a document check also is.
-  const { count: usedToday, error: quotaErr } = await admin0
+  // The monthly cap covers BOTH faces — one tenant, one budget. Counted on
+  // questions asked, which a document check also is. The index this rides is
+  // agent_messages_client_role_created_idx (client_id, role, created_at desc),
+  // which is exactly this query.
+  const { count: usedThisMonth, error: quotaErr } = await admin0
     .from('agent_messages')
     .select('id', { count: 'exact', head: true })
     .eq('client_id', clientId)
     .eq('role', 'user')
-    .gte('created_at', dayStartIso(new Date()))
-  // Fail CLOSED. An unchecked error here made `count` undefined, which
-  // evaluateQuota read as 0 — so the only spend limit in the product
-  // disappeared exactly when the database was unhealthy.
+    .gte('created_at', monthStartIso(new Date()))
+  // Fail CLOSED. An unchecked error here made `count` undefined, which the cap
+  // read as 0 — so the only spend limit in the product disappeared exactly when
+  // the database was unhealthy.
   if (quotaErr) {
-    console.error('[agent] quota read failed:', quotaErr)
+    console.error('[agent] cap read failed:', quotaErr)
     return NextResponse.json({ error: 'Could not start that just now. Try again shortly.' }, { status: 503 })
   }
-  const cap = evaluateQuota(usedToday ?? 0, AGENT_DAILY_LIMIT)
+  const cap = evaluateMonthlyCap(usedThisMonth ?? 0, ASK_MONTHLY_CAP)
   if (!cap.ok) return NextResponse.json({ error: cap.message }, { status: 429 })
 
   // ── Document mode ────────────────────────────────────────────────────────
@@ -138,9 +136,20 @@ export async function POST(request: Request) {
   // The question is stored BEFORE the answer is attempted, on purpose. It is a
   // demand signal in its own right, and a question that made the agent fall
   // over is one of the more interesting rows in the table.
-  await admin.from('agent_messages').insert({
+  //
+  // CHECKED for the same reason as the document path's: since the monthly cap
+  // counts these rows, this insert is the cap slot, and a fire-and-forget slot
+  // is an uncapped spend whenever the write fails. The hole predates this
+  // package — it was invisible while the only limit was fifty a day, which
+  // could never fire — and it is closed here because the cap introduced by
+  // this package is the thing that made it matter.
+  const { error: slotErr } = await admin.from('agent_messages').insert({
     thread_id: thread.id, client_id: clientId, role: 'user', content: question,
   })
+  if (slotErr) {
+    console.error('[agent] could not record the question:', slotErr.message)
+    return NextResponse.json({ error: 'Could not start that conversation.' }, { status: 500 })
+  }
 
   try {
     const answer = await answerQuestion(admin, {
@@ -230,6 +239,18 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
       }
       sourceFilename = file.name
       const out = await extractPdfText(Buffer.from(await file.arrayBuffer()))
+      // A SCANNED DECK IS REFUSED, not read. /api/ask refused these from the
+      // day it shipped and this route never did: `imageOnly` was computed and
+      // ignored, so a deck of images reached runAsk, spent the extract call and
+      // came back "I could not find any claims about customers or the market",
+      // which blames the document for a limit that is ours. There is no OCR
+      // here; saying so costs nothing and the client can paste the text.
+      if (out.imageOnly) {
+        return NextResponse.json(
+          { error: 'This PDF has no readable text — it looks like scans or images. Paste the text instead.' },
+          { status: 422 },
+        )
+      }
       text = out.text
       notice = pageWarning(out.pages)
     } else {
@@ -262,6 +283,48 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
   const { data: client } = await admin
     .from('clients').select('company_name').eq('id', clientId).maybeSingle()
 
+  // THE SLOT IS TAKEN BEFORE THE SPEND, as it is on the question path. It used
+  // to be taken after the whole check had run and been stored, so a check that
+  // failed late — the 502 below, or "no claims" — spent three model calls and
+  // counted nothing, which under a monthly cap is an unbounded hole. The thread
+  // and the submission row go in here, and the check attaches to them
+  // afterwards; a failure leaves a thread saying a document was brought and not
+  // answered, which is exactly what the question path leaves and exactly what
+  // happened.
+  const { data: thread, error: threadErr } = await admin
+    .from('agent_threads')
+    .insert({
+      client_id: clientId, kind: 'document',
+      title: sourceFilename || 'Document',
+      created_by: userId,
+    })
+    .select('id')
+    .single()
+  if (threadErr || !thread) {
+    return NextResponse.json({ error: 'Could not start that check.' }, { status: 500 })
+  }
+  const threadId = (thread as { id: string }).id
+  // The submission counts as a question for the cap and for the demand log —
+  // what a client brings to be checked is a demand signal like any other.
+  //
+  // CHECKED, because this insert IS the cap slot. Left fire-and-forget it was
+  // the very hole moving it up here was meant to close: the row fails, the
+  // three model calls below run regardless, and the workspace spends without
+  // being counted — repeatably, since nothing about a failing insert gets
+  // better on the next attempt. Refusing costs a client one check on a
+  // transient write failure; not refusing costs an uncapped spend.
+  const { error: slotErr } = await admin.from('agent_messages').insert({
+    thread_id: threadId,
+    client_id: clientId,
+    run_id: runId,
+    role: 'user',
+    content: sourceFilename ? `Checked: ${sourceFilename}` : 'Checked a pasted document',
+  })
+  if (slotErr) {
+    console.error('[agent:document] could not record the submission:', slotErr.message)
+    return NextResponse.json({ error: 'Could not start that check.' }, { status: 500 })
+  }
+
   let result
   try {
     result = await runAsk(admin, {
@@ -283,49 +346,58 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
     )
   }
 
-  const { data: check, error: checkErr } = await admin
-    .from('plan_checks')
-    .insert({
-      client_id: clientId, run_id: runId, kind: 'plan',
-      title: result.title || sourceFilename || null,
-      input_text: text, source_filename: sourceFilename,
-      claims: result.claims, summary: result.summary, judgement: result.judgement,
-      created_by: userId,
-    })
-    .select('id')
-    .single()
+  // What the reader must be told about the READING of this document, stored
+  // with it (C11). It used to be computed, returned in the JSON body and thrown
+  // away — the composer only navigates, and the thread page hard-coded
+  // `notice={null}` — so a 90-page deck read to its first 60,000 characters was
+  // shown verdicts over the whole thing with nothing saying where the reading
+  // stopped.
+  const readingNotice = clip.clipped || result.clipped
+    ? 'That document was longer than I can read in one go — only the earlier part was checked.'
+    : notice
+
+  const checkRow = {
+    client_id: clientId, run_id: runId, kind: 'plan',
+    title: result.title || sourceFilename || null,
+    input_text: text, source_filename: sourceFilename,
+    claims: result.claims, summary: result.summary, judgement: result.judgement,
+    created_by: userId,
+  }
+  let { data: check, error: checkErr } = await admin
+    .from('plan_checks').insert({ ...checkRow, notice: readingNotice }).select('id').single()
+  // The column arrives with its own migration and this deploy may land first.
+  // A check that ran and cannot be saved over a notice would lose the whole
+  // thing — three model calls and the client's document — so the retry drops
+  // the notice and keeps the check, the recordConfigChanges precedent
+  // (lib/config-log.ts). Once the migration is applied the retry never runs.
+  if (isMissingColumnError(checkErr, 'notice')) {
+    ;({ data: check, error: checkErr } = await admin
+      .from('plan_checks').insert(checkRow).select('id').single())
+  }
   if (checkErr || !check) {
     return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
   }
 
-  const { data: thread, error: threadErr } = await admin
+  // CHECKED: this update is the only link between the thread the client lands
+  // on and the check they just paid for. Unchecked, a failure here puts them on
+  // a thread that says nothing was saved against their document while a stored
+  // plan_checks row sits unreachable — the check is on the table and nobody can
+  // read it. Reported as the save failure it is, and logged with the id so the
+  // row can be re-attached by hand.
+  const { error: linkErr } = await admin
     .from('agent_threads')
-    .insert({
-      client_id: clientId, kind: 'document',
-      title: result.title || sourceFilename || 'Document',
-      plan_check_id: (check as { id: string }).id,
-      created_by: userId,
-    })
-    .select('id')
-    .single()
-  if (threadErr || !thread) {
+    .update({ title: result.title || sourceFilename || 'Document', plan_check_id: (check as { id: string }).id })
+    .eq('id', threadId)
+    .eq('client_id', clientId)
+  if (linkErr) {
+    console.error(
+      `[agent:document] check ${(check as { id: string }).id} could not be attached to thread ${threadId}:`,
+      linkErr.message,
+    )
     return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
   }
 
-  // The submission counts as a question for the daily cap and for the demand
-  // log — what a client brings to be checked is a demand signal like any other.
-  await admin.from('agent_messages').insert({
-    thread_id: (thread as { id: string }).id,
-    client_id: clientId,
-    run_id: runId,
-    role: 'user',
-    content: sourceFilename ? `Checked: ${sourceFilename}` : 'Checked a pasted document',
-  })
-
-  return NextResponse.json({
-    threadId: (thread as { id: string }).id,
-    notice: clip.clipped || result.clipped
-      ? 'That document was longer than I can read in one go — only the earlier part was checked.'
-      : notice,
-  })
+  // The notice travels with the thread now; the body keeps it so a caller that
+  // does not navigate still has it.
+  return NextResponse.json({ threadId, notice: readingNotice })
 }

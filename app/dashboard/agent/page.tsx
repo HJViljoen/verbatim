@@ -2,7 +2,8 @@ import { getSessionContext } from '@/lib/auth'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentCrowdRing } from '@/components/agent-stage'
 import { AgentHistory, type ThreadRow } from '@/components/agent-history'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk } from '@/lib/agent/access'
+import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 
 // The Verbatim Agent — arrive with a question from your own work, get an answer
 // built from what your customers actually said.
@@ -19,22 +20,32 @@ import { isPlatformAdmin } from '@/lib/agent/access'
  *  "Ask about this" is the first. It fills the box and nothing else: the
  *  reader reads it, edits it, and presses send. */
 export default async function AgentPage({ searchParams }: { searchParams?: Promise<{ ask?: string }> }) {
-  const { supabase, clientId, userId } = await getSessionContext()
+  const { supabase, clientId, userId, role } = await getSessionContext()
   const ask = (await searchParams)?.ask?.slice(0, 300)
   // The admin check and the thread list are independent — one wave (round
   // trips, not rows, are the cost: the DB pays a ~0.5s wake-up on the first
   // requests after idle, and every sequential wave pays it again).
-  const [canSend, { data: rows }] = await Promise.all([
+  const [canSend, { data: rows }, basis] = await Promise.all([
     // Computed server-side and passed down — never a client-side check.
-    isPlatformAdmin(userId),
+    canAsk(role, userId),
     supabase
       .from('agent_threads')
       .select('id, title, created_at')
       .eq('client_id', clientId)
       .order('created_at', { ascending: false })
       .limit(50),
+    // What a question asked from this box will be answered against (AS3).
+    loadAskBasis(supabase, clientId),
   ])
   const threads = (rows ?? []) as ThreadRow[]
+  // THE ONE STATE WHERE ASKING CANNOT WORK. `match_insights` filters
+  // `embedding is not null`, so a corpus with nothing embedded returns zero
+  // rows for every question and `answerQuestion` throws — after the question
+  // has been stored, which means after it has taken one of the month's forty
+  // slots. The basis line below already says "none of N findings searchable";
+  // this is the same fact reaching the control, so the reader is told before
+  // they spend the turn rather than after.
+  const blocked = nothingSearchable(basis)
 
   return (
     // .agent-fixed is the hook a CSS rule uses to stop <main> scrolling and
@@ -49,7 +60,20 @@ export default async function AgentPage({ searchParams }: { searchParams?: Promi
       <AgentCrowdRing />
       <div className="agent-centre-in relative z-10 grid h-full place-items-center">
         <div className="w-full pb-24">  {/* clears the taller peek below */}
-          <AgentComposer canSend={canSend} showFigure ask={ask} />
+          <AgentComposer
+            canSend={canSend && !blocked}
+            disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+            showFigure
+            ask={ask}
+          />
+          {/* AS3, under the box rather than over it: the reader came here to
+              ask, and what the answer will be drawn from is the second thing
+              they need, not the first. Said before a question is spent, because
+              "none of 2,872 findings searchable" is the difference between a
+              silent answer and a broken index. */}
+          <p className="mx-auto mt-4 max-w-2xl text-center text-[11.5px] text-muted-foreground">
+            {askBasisLine(basis)}
+          </p>
         </div>
       </div>
       <AgentHistory threads={threads} />

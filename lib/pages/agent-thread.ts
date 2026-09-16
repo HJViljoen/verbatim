@@ -7,8 +7,10 @@ import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { ASK_THEMES_PER_CLAIM } from '../config'
 import { weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
+import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
-import type { AgentAnswer } from '../agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
+import { loadIndexFacts, type AskBasis } from '../agent/basis'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -41,6 +43,9 @@ export interface Turn {
   /** The agent's prose when a turn has no structured result. */
   prose: string | null
   outcome: string | null
+  /** When the update THIS answer was answered against started (AS3). Null for a
+   *  turn with no answer, and for one whose run has since been deleted. */
+  updateAt: string | null
 }
 
 /** A Quote itself (ref + text at the top level), so the freeze/resolve walk
@@ -51,6 +56,10 @@ export interface Citation extends Quote, CitationMeta {
 
 export interface DocumentCheck {
   sourceFilename: string | null
+  /** What the reader is told about the READING — clipped, or past the page
+   *  limit. Null when the whole document was read, and null where the column
+   *  that stores it has not been applied yet. */
+  notice: string | null
   claims: ClaimResult[]
   summary: AskSummary
   judgement: Judgement[]
@@ -70,6 +79,11 @@ export interface AgentThreadData {
   /** Questions the corpus did not speak to (silent answers), verbatim. */
   silentQuestions: string[]
   document: DocumentCheck | null
+  /** What this thread was answered against — the index as it is NOW, with
+   *  `updateAt` set to the newest answered turn's own update (AS3). A turn
+   *  answered against an older update carries its own date in `Turn.updateAt`;
+   *  the index facts are shared, because there is one index. */
+  basis: AskBasis
   method: MethodNoteData
 }
 
@@ -83,12 +97,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     // RLS already scopes to the tenant; the explicit client_id filter makes a
     // cross-tenant id a miss rather than an empty page.
     supabase.from('agent_threads').select('id, kind, title, plan_check_id, created_at').eq('id', id).eq('client_id', clientId).maybeSingle(),
-    supabase.from('agent_messages').select('id, role, content, result, outcome, created_at').eq('thread_id', id).order('created_at', { ascending: true }),
+    supabase.from('agent_messages').select('id, role, content, result, outcome, created_at, run_id').eq('thread_id', id).order('created_at', { ascending: true }),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
   const thread = row<{ id: string; kind: string; title: string; plan_check_id: string | null; created_at: string }>(threadRes, 'agentThread.thread')
   if (!thread) return null
-  type MessageRow = { id: string; role: string; content: string; result: AgentAnswer | null; outcome: string | null; created_at: string }
+  type MessageRow = { id: string; role: string; content: string; result: AgentAnswer | null; outcome: string | null; created_at: string; run_id: string | null }
   const messages = readRows<MessageRow>(messagesRes, 'agentThread.messages')
   const client = row<{ company_name: string | null }>(clientRes, 'agentThread.client')
   const brand = client?.company_name ?? 'Your brand'
@@ -104,6 +118,16 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const metaP = citeRefs.length ? resolveCitations(supabase, citeRefs) : Promise.resolve(new Map<string, CitationMeta>())
   metaP.catch(() => {})
 
+  // AS3's index facts and the dates of the updates these answers were given
+  // against. Both go out with the wave above rather than after it: round trips
+  // are the cost on this database, not rows.
+  const factsP = loadIndexFacts(supabase, clientId)
+  factsP.catch(() => {})
+  const runIds = [...new Set(messages.map((m) => m.run_id).filter((r): r is string => Boolean(r)))]
+  const runsP = runIds.length
+    ? supabase.from('pipeline_runs').select('id, started_at').eq('client_id', clientId).in('id', runIds)
+    : Promise.resolve({ data: [], error: null })
+
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
   let document: DocumentCheck | null = null
@@ -114,12 +138,22 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       judgement: Judgement[] | null
       input_text: string | null
       source_filename: string | null
-    }>(await supabase
-      .from('plan_checks')
-      .select('claims, summary, judgement, input_text, source_filename')
-      .eq('id', thread.plan_check_id as string)
-      .eq('client_id', clientId)
-      .maybeSingle(), 'agentThread.planCheck')
+      notice: string | null
+    }>(await (async () => {
+      const columns = 'claims, summary, judgement, input_text, source_filename'
+      const read = (cols: string) => supabase
+        .from('plan_checks')
+        .select(cols)
+        .eq('id', thread.plan_check_id as string)
+        .eq('client_id', clientId)
+        .maybeSingle()
+      const withNotice = await read(`${columns}, notice`)
+      // `notice` arrives with its own migration and a deploy can land first.
+      // Narrow by name, the embeddingCoverage precedent: any other failure of
+      // this read is still a failure, and the whole document check must not
+      // disappear because one column is not there yet.
+      return isMissingColumnError(withNotice.error, 'notice') ? await read(columns) : withNotice
+    })(), 'agentThread.planCheck')
     if (check) {
       const claims = (check.claims ?? []) as ClaimResult[]
       const allIds = [...new Set(claims.flatMap((c) => (c.insightIds ?? []).slice(0, ASK_THEMES_PER_CLAIM)))]
@@ -136,6 +170,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       const { segments, anchored } = anchorClaims((check.input_text as string) ?? '', ordered)
       document = {
         sourceFilename: (check.source_filename as string | null) ?? null,
+        notice: (check.notice as string | null) ?? null,
         claims,
         summary: (check.summary ?? { supported: 0, contradicted: 0, untested: 0 }) as AskSummary,
         judgement: (check.judgement ?? []) as Judgement[],
@@ -147,6 +182,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   }
 
   const quoteText = await quoteTextP
+  const runStartedAt = new Map(
+    readRows<{ id: string; started_at: string | null }>(await runsP, 'agentThread.runs')
+      .map((r) => [r.id, r.started_at]),
+  )
 
   // Turns: each user message with the agent message that answered it.
   const turns: Turn[] = []
@@ -172,7 +211,21 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       }))
       answer = { ...reply.result, grounded }
     }
-    turns.push({ question: m.content, askedAt: m.created_at, answer, prose: reply && !reply.result ? reply.content : null, outcome: reply?.outcome ?? null })
+    turns.push({
+      question: m.content,
+      askedAt: m.created_at,
+      answer,
+      prose: reply && !reply.result ? reply.content : null,
+      outcome: reply?.outcome ?? null,
+      // The REPLY's run where there is one, and the submission's own where
+      // there is not: a document check writes its run on the user row and never
+      // replies with an agent message, so keying on the reply alone told a
+      // reader that nothing had been read for their workspace.
+      updateAt: (() => {
+        const rid = reply?.run_id ?? m.run_id
+        return rid ? runStartedAt.get(rid) ?? null : null
+      })(),
+    })
   }
 
   const meta = await metaP
@@ -180,6 +233,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     const m = meta.get(c.ref)
     return { n: c.n, ref: c.ref, text: c.text, platform: m?.platform ?? null, date: m?.date ?? null, href: m?.href ?? null, commentLevel: m?.commentLevel ?? false }
   })
+
+  const facts = await factsP
+  // The newest answered turn's update leads the thread. An unanswered thread
+  // has no update to name and the line says nothing has been read yet, which is
+  // the honest reading of a thread with no answer in it.
+  const newestUpdateAt = [...turns].reverse().find((t) => t.updateAt)?.updateAt ?? null
 
   const silentQuestions = turns.filter((t) => t.answer?.silent).map((t) => t.question)
   const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
@@ -195,6 +254,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     citations,
     silentQuestions,
     document,
+    basis: { updateAt: newestUpdateAt, ...facts },
     method: {
       company: brand,
       period: `Asked ${weekdayDate(thread.created_at as string)}`,
@@ -240,14 +300,14 @@ export function agentThreadSlides(d: AgentThreadData): Slide[] {
     const pages = documentPages(d.document.segments)
     pages.forEach((_, p) => slides.push({ title: p === 0 ? `The brief, checked${d.document?.sourceFilename ? ` · ${d.document.sourceFilename}` : ''}` : 'The brief, checked (continued)', keys: [`agent.doc:${p}`], layout: 'single' }))
     for (let c = 0; c < Math.ceil(d.document.claims.length / GROUNDED_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Claim by claim' : 'Claim by claim (continued)', keys: [`agent.claims:${c}`], layout: 'single' })
-    if (d.document.judgement.length) slides.push({ title: 'What the agent would take from that', keys: ['agent.judgement'], layout: 'single' })
+    if (d.document.judgement.length) slides.push({ title: JUDGEMENT_HEADING, keys: ['agent.judgement'], layout: 'single' })
     return slides
   }
   d.turns.forEach((t, i) => {
     const grounded = t.answer?.grounded.length ?? 0
     const parts = Math.max(1, Math.ceil(grounded / GROUNDED_PER_SLIDE))
     for (let p = 0; p < parts; p++) slides.push({ title: i === 0 ? d.title : `Follow-up ${i}`, keys: [`agent.turn:${i}:${p}`], layout: 'single' })
-    if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: 'Close to it, and what the agent would take from that', keys: [`agent.turn:${i}:more`], layout: 'single' })
+    if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: `${NEAREST_HEADING}, and ${JUDGEMENT_HEADING.charAt(0).toLowerCase()}${JUDGEMENT_HEADING.slice(1)}`, keys: [`agent.turn:${i}:more`], layout: 'single' })
   })
   for (let c = 0; c < Math.ceil(d.citations.length / CITATIONS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Evidence — every quoted voice' : 'Evidence (continued)', keys: [`agent.citations:${c}`], layout: 'single' })
   if (d.silentQuestions.length) slides.push({ title: 'Nothing in the data speaks to this', keys: ['agent.silent'], layout: 'single' })

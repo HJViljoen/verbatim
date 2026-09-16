@@ -1070,25 +1070,11 @@ export const ASK_PDF_MAX_PAGES = 60
  *  than return "no claims found" for a document full of claims. */
 export const ASK_PDF_MIN_CHARS_PER_PAGE = 200
 
-/** Ask submissions per tenant per UTC day. Three model calls each, up to
- *  ~$0.50 for a large plan — uncapped, one signed-in account is ~$40/hour.
- *  Crude on purpose: no new infrastructure, and the failure mode is a message
- *  rather than a bill. A real rate limiter belongs with the self-serve motion. */
-export const ASK_DAILY_LIMIT = 25
-
 /** Search-term suggestion calls per USER per rolling hour (WP5). One
  *  gpt-4.1-mini call each, ~$0.001 — small, but the onboarding one is reachable
  *  by any signed-in account before it has a tenant, so it needs a ceiling that
  *  is per person rather than per tenant. Counted in `suggestion_calls`. */
 export const SUGGEST_HOURLY_LIMIT = 5
-
-/** Master switch for the Ask surface. OFF unless set, so merging changes
- *  nothing: the route refuses, the nav item is hidden. Shares the flag with the
- *  consumer profile — one feature, and its weekly re-read runs in that step. */
-export function askEnabled(): boolean {
-  const v = process.env.CONSUMER_PROFILE
-  return v === '1' || v === 'true'
-}
 
 /** Stored checks re-tested per run. Each is one synthesis call, so a tenant
  *  with fifty saved plans must not quietly add fifty calls to every run.
@@ -1123,10 +1109,28 @@ export const AGENT_INSIGHTS_PER_QUERY = 40
  *  fits a prompt alongside their quotes, not by what retrieval can find. */
 export const AGENT_INSIGHTS_TOTAL = 60
 
-/** Agent turns per tenant per UTC day, separate from ASK_DAILY_LIMIT because a
- *  conversation burns turns far faster than a plan check burns submissions.
- *  Starting value — revisit on real use rather than on a guess. */
-export const AGENT_DAILY_LIMIT = 50
+/**
+ * Questions per TENANT per calendar month (Phase 1 WP21, decision B).
+ *
+ * It replaced AGENT_DAILY_LIMIT = 50, which could not fire underneath it: a
+ * workspace hits forty in a month long before it hits fifty in a day, and a cap
+ * that can never refuse anything teaches a reader that the other one will not
+ * either.
+ *
+ * Priced from the question path, not from the pooled ledger. The $0.058 that
+ * has been quoted for a question is a figure about the document builder — 141
+ * of production's 151 `agent_answer` rows are its research calls. On the ten
+ * rows that are a real question the mean is $0.0469 + $0.0003 interpret =
+ * $0.047, spread $0.019-$0.068. Forty questions is therefore ~$1.90 a month,
+ * and up to ~$20 if every one of them is a large document check
+ * (lib/ask/quota.ts prices a big plan at $0.35-0.50).
+ *
+ * Counted on `agent_messages`, in lib/ask/quota.ts — which says why that table
+ * and not the ledger. Raising it for one workspace is a code change today, not
+ * a column; a per-tenant override is worth having the first time a client asks
+ * for one, and not before.
+ */
+export const ASK_MONTHLY_CAP = 40
 
 /** Reasoning effort for the agent's synthesis call, SEPARATE from the
  *  pipeline's SYNTHESIS_REASONING_EFFORT. A weekly report can afford to think
@@ -1153,27 +1157,30 @@ export const AGENT_MAX_QUERIES = 5
  *  an answer. A point that cannot muster one is not grounded. */
 export const AGENT_QUOTES_PER_POINT = 3
 
-/** Runs of history shown to the agent. Twelve weekly readings is a quarter —
- *  enough to see a movement, short enough that the model is not handed a year
- *  of numbers to find a pattern in. */
-export const AGENT_TREND_MAX_RUNS = 12
+/** Calendar months of history the agent reads for a "has this changed?"
+ *  question (Phase 1 WP21). Twelve is a year — long enough that a direction
+ *  word has room to be earned three times over and a seasonal tenant is
+ *  compared with its own year, short enough that the model is not handed a
+ *  decade of numbers to find a pattern in. The THREE constants this replaced
+ *  (AGENT_TREND_MAX_RUNS / MIN_POINTS / MIN_EVIDENCE) were floors on a
+ *  run-indexed series and have no meaning on the monthly one: the floors are
+ *  SHARE_BAND's, applied by the same band every other reading uses. */
+export const AGENT_MOVEMENT_MONTHS = 12
 
-/** Readings needed before a direction is claimed at all. Three to six weekly
- *  points is noise; a product that calls noise a trend is the one that gets
- *  caught. Below this the honest answer is "too few readings yet". */
-export const AGENT_TREND_MIN_POINTS = 3
+/** Themes whose movement one answer's prompt carries. A question retrieves up
+ *  to AGENT_INSIGHTS_TOTAL insights across many themes; every one of them with
+ *  a year of months would be most of the prompt, and a specific question would
+ *  get a general answer. Ranked by whether the line SAYS anything
+ *  (lib/agent/movement.ts rankMovement), never by chance. */
+export const AGENT_MOVEMENT_TOPICS = 8
 
-/** Evidence rows a theme needs before its movement means anything. 2 → 4 is a
- *  doubling and it is also nothing. */
-export const AGENT_TREND_MIN_EVIDENCE = 5
-
-/** Master switch for the Verbatim Agent. Deliberately NOT the CONSUMER_PROFILE
- *  flag: lighting up the agent must not also light up Pass E and the weekly
- *  re-evaluation inside a pipeline run, and vice versa. OFF unless set. */
-export function agentEnabled(): boolean {
-  const v = process.env.AGENT_ENABLED
-  return v === '1' || v === 'true'
-}
+// AGENT_ENABLED IS RETIRED (Phase 1 WP21, decision B). It was the master switch
+// for the Verbatim Agent and it never switched the surface off: the pages
+// rendered with the flag unset, and only the sidebar item and the send route
+// read it. Ask is one of the nine surfaces now and the gate that decides who
+// may spend is `canAsk` (lib/agent/access.ts) plus the monthly cap below. A
+// flag whose only remaining job is to hide a menu entry is a flag that tells a
+// reader the wrong thing about what is switched on.
 
 /** How much evidence two personas must share for the newer one to BE the older
  *  one. A profile is not a weekly report — "Caregiver" should still be
@@ -1305,7 +1312,24 @@ export type DirectionReader =
   | 'dashboard.themes'
   /** Reports & briefs · a theme's trajectory word in a document block. */
   | 'documents.trajectory'
-  /** Ask · the movement paragraph a "trend" question is answered from. */
+  /**
+   * Ask · the movement paragraph a "trend" question is answered from.
+   *
+   * TRUE SINCE PHASE 1 WP21, and the first key in this map to flip. The block
+   * it gates no longer reads `theme_observations` — one row per theme per RUN,
+   * dated by the wall clock at persist, with a ±25% ratio against the mean of
+   * the prior readings and no denominator anywhere. It reads
+   * `month_theme_readings` against `month_denominators`: calendar months dated
+   * by the comment, each with its own n, compared by the product's own band,
+   * and a direction word only where `directionWord` earns one over three
+   * consecutive months in one clustering regime under one name.
+   *
+   * That is the re-basing this map exists for, and it is why this key flips
+   * while the other six do not: the others still name a surface reading the
+   * run-indexed series. The gated branch is KEPT and tested — turning this off
+   * returns the agent to saying a topic's history is not readable, not to the
+   * old series, which is deleted.
+   */
   | 'agent.movement'
   /** Initiatives · whether the conversation went the way the client said they wanted. */
   | 'initiatives'
@@ -1350,7 +1374,10 @@ export const DIRECTION_WORDS_BY_READER: Record<DirectionReader, boolean> = {
   'voice.movers': false,
   'dashboard.themes': false,
   'documents.trajectory': false,
-  'agent.movement': false,
+  // The one true key: Ask's movement block re-based on the comment-dated
+  // monthly reading in WP21. See the type above for why this one and not the
+  // other six.
+  'agent.movement': true,
   'initiatives': false,
   'competitive.deltas': false,
   'profile.mix': false,

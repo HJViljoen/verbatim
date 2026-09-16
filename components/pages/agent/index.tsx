@@ -6,6 +6,8 @@ import {
   type AgentThreadData, type ThreadAnswer, type Turn,
 } from '@/lib/pages/agent-thread'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, saidHeading } from '@/lib/agent/types'
+import { askBasisLine } from '@/lib/agent/basis'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
 // mode: the question, the answer, "what your customers said" with a
@@ -36,6 +38,10 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
       {!first && <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Follow-up</p>}
       <p className="font-serif text-[19px] font-medium leading-snug [text-wrap:pretty]">{t.question}</p>
       <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{d.brand} · {weekdayDate(t.askedAt)}</p>
+      {/* AS3 on the artefact. A deck that leaves the building carries what it
+          was answered against, or a reader six weeks later has no way to know
+          which update — or how much of the corpus — is behind it. */}
+      <p className="mt-1 font-mono text-[9.5px] text-muted-foreground">{askBasisLine({ ...d.basis, updateAt: t.updateAt }, { asked: true })}</p>
     </div>
   )
 }
@@ -48,7 +54,14 @@ function AnswerBody({ a, from, to }: { a: ThreadAnswer; from: number; to: number
       {from === 0 && <p className="text-[15px] leading-relaxed text-foreground">{a.answer}</p>}
       {points.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">What your customers said{from > 0 ? ' (continued)' : ''}</h3>
+          {/* The heading FOLLOWS THE EVIDENCE, as it does on screen. It was
+              hard-coded here while the field that decides it travelled through
+              the loader untouched — so the one renderer that leaves the
+              building was the one that could print "your customers" over
+              another brand's audience. Judged over the whole answer, not over
+              this slide's two points, or a spill onto page two could disagree
+              with page one about whose customers spoke. */}
+          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{saidHeading(a.grounded)}{from > 0 ? ' (continued)' : ''}</h3>
           <div className="grid grid-cols-2 gap-3">
             {points.map((p, i) => (
               <div key={p.id} className="space-y-2 rounded-lg bg-inner p-3">
@@ -75,7 +88,7 @@ function MoreBody({ a }: { a: ThreadAnswer }) {
     <div className="grid h-full min-h-0 grid-cols-2 gap-8">
       {a.nearest.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Not what you asked, but close</h3>
+          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{NEAREST_HEADING}</h3>
           {a.nearest.map((n, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3 rounded-lg border border-dashed border-border/60 p-3">
               <p className="min-w-0 flex-1 text-[13px] leading-snug text-foreground/90">{n.text}</p>
@@ -86,7 +99,7 @@ function MoreBody({ a }: { a: ThreadAnswer }) {
       )}
       {a.judgement.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">What the agent would take from that</h3>
+          <h3 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{JUDGEMENT_HEADING}</h3>
           <div className="space-y-3 rounded-lg bg-muted p-3">
             {a.judgement.map((j, i) => {
               const cites = j.basedOn.map((r) => numberOf.get(r)).filter((n): n is number => !!n).sort((x, y) => x - y)
@@ -150,6 +163,23 @@ function DocumentPage({ d, page }: { d: D; page: number }) {
           <p className="mb-3 font-mono text-[10.5px] text-muted-foreground">
             {doc.summary.supported} supported · {doc.summary.contradicted} contradicted · {doc.summary.untested} untested
           </p>
+        )}
+        {/* AS3 on the document deck. The clipped-reading notice below says how
+            much of the document was read; this says what it was read AGAINST,
+            which a reader six weeks from now has no other way to recover. The
+            question deck has carried it since AS3 landed and this one did not —
+            agentThreadSlides returns early for a document, so none of its
+            slides passed through the Question component that renders it. */}
+        {page === 0 && (
+          <p className="mb-3 font-mono text-[9.5px] text-muted-foreground">
+            {askBasisLine(d.basis, { asked: true, verb: 'Checked' })}
+          </p>
+        )}
+        {/* Where the reading stopped, on the page that leaves the building. A
+            deck showing verdicts over a document it only half read, without
+            saying so, is the one thing a PDF must not do. */}
+        {page === 0 && doc.notice && (
+          <p className="mb-3 text-[11px] text-muted-foreground">{doc.notice}</p>
         )}
         <p className="whitespace-pre-wrap font-serif text-[12.5px] leading-[1.6] text-foreground">
           {segs.map((s, i) => {
@@ -262,7 +292,7 @@ function resolve(key: string): Renderable<D> | undefined {
   if (key === 'agent.silent') return mk('Nothing in the data speaks to this', (d) => <Silent d={d} />)
   if ((m = /^agent\.doc:(\d+)$/.exec(key))) { const p = Number(m[1]); return mk('The brief, checked', (d) => (d.document ? <DocumentPage d={d} page={p} /> : null)) }
   if ((m = /^agent\.claims:(\d+)$/.exec(key))) { const p = Number(m[1]); return mk('Claim by claim', (d) => (d.document ? <ClaimsPage d={d} page={p} /> : null)) }
-  if (key === 'agent.judgement') return mk('What the agent would take from that', (d) => (d.document ? <DocJudgement d={d} /> : null))
+  if (key === 'agent.judgement') return mk(JUDGEMENT_HEADING, (d) => (d.document ? <DocJudgement d={d} /> : null))
   if ((m = /^agent\.answer:(\d+)$/.exec(key))) { const i = Number(m[1]); return mk(`Answer ${i + 1}`, (d) => <AnswerCard d={d} turn={i} />) }
   return undefined
 }

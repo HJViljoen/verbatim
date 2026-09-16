@@ -120,3 +120,32 @@ export interface QuestionPlan {
    *  that historical insight TEXT can be retrieved — it cannot. */
   timeframe: 'current' | 'trend'
 }
+
+// ── The three registers' headings, said once (Phase 1 WP21, AS4/B3) ─────────
+//
+// They were written out in three places and two of them had drifted. The deck
+// HARD-CODED "What your customers said" over every answer, ignoring the
+// `voices` field it carries — the field added on 2026-09-10 precisely because
+// the page had printed that sentence over a Patagonia comment under a Sealand
+// question. A PDF is the artefact that leaves the building, so the copy that
+// could not be checked was the copy in the riskiest place. The third register
+// said "What I'd take from that" on screen and "What the agent would take from
+// that" on paper, which is the same voice speaking as two different people.
+//
+// One first person, everywhere. The answer prose is already written in it
+// ("I could not find any claims about customers or the market in that
+// document"), and a reader who has just been answered by something that says
+// "I" should not be handed a deck about "the agent".
+
+/** "What your customers said" only when every point rests on the client's own
+ *  audience. `voices` is computed off the LIVE video tag, not the frozen theme
+ *  bucket (lib/agent/retrieve.ts), which is what makes the claim checkable. */
+export function saidHeading(points: readonly { voices: 'client' | 'category' }[]): string {
+  return points.length > 0 && points.every((p) => p.voices === 'client')
+    ? 'What your customers said'
+    : 'What people said'
+}
+
+export const NEAREST_HEADING = 'Not what you asked, but close'
+
+export const JUDGEMENT_HEADING = 'What I’d take from that'

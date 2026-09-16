@@ -16,13 +16,16 @@ import { CrowdFigure } from '@/components/crowd-figure'
 // `canSend` is computed on the SERVER and passed in. When it is false the box
 // is visible and disabled rather than hidden: a reader should be able to see
 // what this page is and that answers live here. That one line stays, because
-// it explains a STATE rather than teaching a mechanism.
+// it explains a STATE rather than teaching a mechanism — and since decision B
+// the state is "not yours", not "not built": every answer on this page is
+// readable by the member looking at the disabled box.
 
 export function AgentComposer({
   canSend,
   threadId,
   showFigure = false,
   placeholder = 'Ask about your customers',
+  disabledNote = 'Only an owner or admin can ask here',
   ask,
 }: {
   canSend: boolean
@@ -31,6 +34,11 @@ export function AgentComposer({
    *  thread the conversation is the subject and the art would be in the way. */
   showFigure?: boolean
   placeholder?: string
+  /** What the box says while it is disabled. The default is the role gate,
+   *  which is the usual reason; a page that disables it for a different reason
+   *  passes its own, because "only an owner or admin can ask here" shown to an
+   *  owner is a wrong answer to a question they did not ask. */
+  disabledNote?: string
   /** A question the box opens with, so a page that sends a reader here can
    *  send WHAT they were reading with them. The reader owns it from the first
    *  keystroke: it is the initial value of the box, never a controlled one. */
@@ -127,7 +135,7 @@ export function AgentComposer({
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           disabled={busy || !canSend}
-          placeholder={canSend ? placeholder : 'Asking is switched off on this workspace'}
+          placeholder={canSend ? placeholder : disabledNote}
           aria-label="Ask about your customers"
           className={`h-14 w-full rounded-full border border-border bg-card ${threadId ? 'pl-6' : 'pl-14'} pr-16 text-[15px] text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-60`}
         />

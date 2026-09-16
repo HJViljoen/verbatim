@@ -6,9 +6,10 @@ import { readingHandle } from '@/lib/reading/read'
 import { Card, CardContent } from '@/components/ui/card'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentAnswerView } from '@/components/agent-answer'
+import { askBasisLine } from '@/lib/agent/basis'
 import { AgentDocumentSplit } from '@/components/agent-document-split'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk } from '@/lib/agent/access'
 import { loadAgentThread } from '@/lib/pages/agent-thread'
 
 // One thread, at its own URL. The whole exchange, oldest first, so it reads as
@@ -19,9 +20,9 @@ import { loadAgentThread } from '@/lib/pages/agent-thread'
 
 export default async function AgentThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { supabase, clientId, userId } = await getSessionContext()
+  const { supabase, clientId, userId, role } = await getSessionContext()
   const [canSend, data] = await Promise.all([
-    isPlatformAdmin(userId),
+    canAsk(role, userId),
     loadAgentThread({ supabase, clientId, reading: readingHandle(clientId), params: { thread: id } }),
   ])
   if (!data) notFound()
@@ -60,6 +61,13 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
       <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
         <div className="agent-fixed relative flex min-h-0 flex-1 flex-col gap-4">
           {head}
+          {/* AS3, as the exported deck carries it: what this document was
+              CHECKED against. A document thread has no answer to hang it
+              under, which is how the screen and the deck both came to leave
+              it off. */}
+          <p className="-mt-2 text-[11.5px] text-muted-foreground">
+            {askBasisLine(data.basis, { asked: true, verb: 'Checked' })}
+          </p>
           <AgentDocumentSplit
             claims={doc.claims}
             summary={doc.summary}
@@ -67,8 +75,46 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
             quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => q.text)]))}
             segments={doc.segments}
             anchored={doc.anchored}
-            notice={null}
+            notice={doc.notice}
           />
+        </div>
+      </ExportScope>
+    )
+  }
+
+  // A DOCUMENT THREAD WITH NO CHECK ON IT. The cap slot is taken before the
+  // spend (app/api/agent/route.ts), so a check that fails after the thread is
+  // written leaves this behind: the model call failed, the document held no
+  // claim about customers or the market, or the check ran and could not be
+  // saved. Before this it fell through to the question branch and read "that
+  // QUESTION did not get an answer — something went wrong on our side rather
+  // than in your data", which for the middle case is false twice over: it was
+  // not a question, and the route had just told the reader the fault was a fact
+  // about their document. WHICH of the three it was is not recorded — the
+  // outcome column is checked to ('answered','partial','silent') and widening
+  // it is a migration — so the sentence names both possibilities instead of
+  // picking one, and says the thing the reader cannot see: it still counted.
+  //
+  // No composer either. "Push back, or narrow it down" belongs under an answer;
+  // there is nothing here to push back on, and the way to retry a document is
+  // to bring it again from the box on the Ask page.
+  if (data.kind === 'document') {
+    return (
+      <ExportScope page="agent" params={{ thread: id }} tiles={[]}>
+        <div className="space-y-6">
+          {head}
+          <Card className="bg-popover">
+            <CardContent className="py-5">
+              <p className="text-[15px] leading-relaxed text-foreground">
+                Nothing was saved against this document. Either nothing in it read as a claim about
+                customers or the market, or the check failed on our side before it finished.
+              </p>
+              <p className="mt-3 text-[13px] text-muted-foreground">
+                It still counted as one of this month&rsquo;s questions. You can bring the document
+                again from the box on the Ask page.
+              </p>
+            </CardContent>
+          </Card>
         </div>
       </ExportScope>
     )
@@ -90,7 +136,15 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
               {(t.answer || t.prose) && (
                 <Card className="bg-popover">
                   <CardContent className="py-5">
-                    {t.answer ? <AgentAnswerView answer={t.answer} /> : <p className="text-[15px] leading-relaxed text-foreground">{t.prose}</p>}
+                    {t.answer ? <AgentAnswerView answer={t.answer} citations={data.citations} /> : <p className="text-[15px] leading-relaxed text-foreground">{t.prose}</p>}
+                    {/* AS3 under the answer it is about: which update it was
+                        answered against, and how much of the corpus could be
+                        searched when it was. The index facts are today's — a
+                        thread read today is searched today — and the update is
+                        this answer's own. */}
+                    <p className="mt-5 border-t border-border/60 pt-3 text-[11.5px] text-muted-foreground">
+                      {askBasisLine({ ...data.basis, updateAt: t.updateAt }, { asked: true })}
+                    </p>
                   </CardContent>
                 </Card>
               )}
