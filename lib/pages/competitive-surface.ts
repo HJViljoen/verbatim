@@ -191,6 +191,10 @@ export interface CompetitiveUnlockRow {
   title: string
   line: string
   owner: string
+  /** Which silence this is. ST1's "— not tracked" is for a section whose
+   *  INPUTS are not configured; "— not built yet" is Market's word for a
+   *  section whose inputs are here and whose code is not. */
+  state: 'not tracked' | 'not built yet'
 }
 
 export interface CompetitiveSurfaceData {
@@ -429,29 +433,45 @@ export const QUESTIONS_GROUPING_NOTE =
 export const QUESTIONS_SUBJECTS_NOTE =
   'Matching these against your own subjects arrives once subjects are named and confirmed for this workspace.'
 
-/** CO3, CO4, CO6 and CO7: what each waits for and who owns it. */
+/**
+ * CO3, CO4, CO6 and CO7: what each waits for, who owns it, and WHICH silence
+ * it is.
+ *
+ * All four printed "— not tracked", which is ST1's state for a section whose
+ * inputs are not configured. That is true of CO4 alone: a rival's own-post
+ * claims may only be read from videos they posted, and their accounts are the
+ * client's to name. Head-to-head, findings and category content have their
+ * inputs — they are the same ones CO2 and CO5 have just drawn on the page
+ * above — and what they are missing is the code. Market's own unlocks say
+ * "— not built yet" for that, and two surfaces of one product should not
+ * disagree about what a missing section is.
+ */
 export function competitiveUnlockRows(): CompetitiveUnlockRow[] {
   return [
     {
       section: 'CO3',
+      state: 'not built yet' as const,
       title: 'Head to head, then and now',
       line: 'You against the selected rival, one row per measure — videos about, comments per video, engagement per video, positive share, own posts published — now, last month and the change, with an n on every row.',
       owner: 'Verbatim engineering',
     },
     {
       section: 'CO4',
+      state: 'not tracked' as const,
       title: 'What they say about themselves',
       line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
       owner: 'Your digital director',
     },
     {
       section: 'CO6',
+      state: 'not built yet' as const,
       title: 'Findings, with recurrence',
       line: 'Cross-brand findings with “seen in 4 of the last 6 months”, which needs a finding identity that survives an update.',
       owner: 'Verbatim engineering',
     },
     {
       section: 'CO7',
+      state: 'not built yet' as const,
       title: 'How the category makes content',
       line: 'Formats and hooks side by side for the category, for you and for each rival, with “read from n of m videos” on every row and Reddit named as absent from all of them.',
       owner: 'Verbatim engineering',

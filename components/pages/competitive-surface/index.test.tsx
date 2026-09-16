@@ -225,6 +225,18 @@ describe('the sections that are not built', () => {
     expect(text).toContain('Findings, with recurrence')
     expect(text).toContain('How the category makes content')
     expect(text).toContain('Your digital director')
-    expect(text).toContain('— not tracked')
+  })
+
+  it('says "not tracked" only where the inputs really are not tracked', () => {
+    // ST1's "— not tracked" is for a section whose INPUTS are not configured.
+    // That is CO4 alone: head-to-head, findings and category content read the
+    // same inputs CO2 and CO5 have just drawn on the page above, so telling a
+    // client their rivals are not tracked there contradicts the page itself.
+    const rows = competitiveFixture().unlocks.rows
+    expect(rows.filter((r) => r.state === 'not tracked').map((r) => r.section)).toEqual(['CO4'])
+    expect(rows.filter((r) => r.state === 'not built yet').map((r) => r.section)).toEqual(['CO3', 'CO6', 'CO7'])
+    const text = renderText(competitiveUnlocks.render(competitiveFixture(), 'app', ctx))
+    expect(text).toContain('— not tracked · Your digital director')
+    expect(text).toContain('— not built yet')
   })
 })
