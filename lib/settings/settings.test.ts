@@ -84,7 +84,10 @@ describe('artefacts', () => {
     expect(rows[1].artefact).toBe('monthly')
     expect(rows[1].buildable).toBe(false)
     expect(rows[1].sending).toBe(false)
-    expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 artefacts is being sent, to 1 address.')
+    // "reports", not "artefacts": this module's docblock bans the dialect and
+    // then reached for the one word in it that is in neither GLOSSARY nor the
+    // thirteen.
+    expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 reports is being sent, to 1 address.')
     expect(isBuildable('weekly')).toBe(true)
     expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly'])
     expect(notBuiltYet('monthly')).toContain('the monthly reading')
@@ -103,7 +106,7 @@ describe('artefacts', () => {
     // The dedup itself, over two sending rows, without waiting for a second
     // builder to exist.
     const second = { ...rows[0], artefact: 'monthly' as const, recipients: ['B@x.test'], sending: true }
-    expect(sendingSummary([rows[0], second], 'weekly')).toBe('2 of 2 artefacts are being sent, to 2 addresses.')
+    expect(sendingSummary([rows[0], second], 'weekly')).toBe('2 of 2 reports are being sent, to 2 addresses.')
   })
 
   it('keeps a schedule that names no artefact rather than dropping it', () => {
@@ -182,8 +185,12 @@ describe('breakClause', () => {
       affects_audiences: ['competitor:Freitag', 'competitor:FREITAG'],
       affects_months: '[2026-06-01,2026-09-01)',
       source: 'logged',
-    })).toBe('2 audiences · 2026-06 to 2026-08')
-    expect(breakClause({ affects_audiences: ['client'], affects_months: null, source: 'logged' })).toBe('client')
+    // In the reader's words: `audienceLabel` for the audience and `monthName`
+    // for the months, as every other surface prints them.
+    })).toBe('2 audiences · Jun 2026 to Aug 2026')
+    expect(breakClause({ affects_audiences: ['client'], affects_months: null, source: 'logged' })).toBe('Your own brand')
+    expect(breakClause({ affects_audiences: ['competitor:Ottobock'], affects_months: '[2026-09-01,2026-10-01)', source: 'logged' }))
+      .toBe('Ottobock · Sep 2026')
   })
 })
 

@@ -1,4 +1,5 @@
-import { fullDate } from '../format'
+import { fullDate, monthName } from '../format'
+import { audienceLabel } from '../readiness/types'
 import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
 
 /**
@@ -131,11 +132,21 @@ export function breakClause(change: Pick<ConfigChange, 'affects_audiences' | 'af
       ? 'Not known — this change was worked out afterwards, not written down at the time.'
       : 'Not recorded.'
   }
+  // IN THE READER'S WORDS, like every other audience in the product. This
+  // printed `affects_audiences[0]` RAW ("competitor:Ottobock", "industry-other")
+  // and its months as "2026-09", in a file that already imports `fullDate` and
+  // beside a codebase that routes every audience through `audienceLabel`.
+  // Latent until M1 lands — the two columns do not exist on production yet, so
+  // every row reads "Not recorded." — which is why it is worth closing now.
   const parts: string[] = []
   if (audiences.length > 0) {
-    parts.push(audiences.length === 1 ? audiences[0] : `${audiences.length} audiences`)
+    parts.push(audiences.length === 1 ? audienceLabel(audiences[0]) : `${audiences.length} audiences`)
   }
-  if (months) parts.push(months.from === months.to ? months.from : `${months.from} to ${months.to}`)
+  if (months) {
+    const from = monthName(`${months.from}-01`)
+    const to = monthName(`${months.to}-01`)
+    parts.push(from === to ? from : `${from} to ${to}`)
+  }
   return parts.join(' · ')
 }
 

@@ -192,7 +192,10 @@ export function sendingSummary(
   const sending = rows.filter((r) => r.sending)
   if (sending.length === 0) return `None of these has a recipient yet.${older}`
   const people = new Set(sending.flatMap((r) => r.recipients.map((e) => e.toLowerCase())))
-  // "1 of 7 artefacts are being sent" was reachable before and is the ordinary
-  // sentence now that six of the seven have no builder.
-  return `${sending.length} of ${rows.length} artefacts ${sending.length === 1 ? 'is' : 'are'} being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.${older}`
+  // "REPORTS", NOT "ARTEFACTS". This module's own docblock says "Client
+  // wording: no template keys, no 'starter', no cadence jargon", and then
+  // reached for the one word in the file that is in neither GLOSSARY nor the
+  // thirteen. Unreachable while both tenants send none; reachable the moment a
+  // weekly recipient is added.
+  return `${sending.length} of ${rows.length} reports ${sending.length === 1 ? 'is' : 'are'} being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.${older}`
 }
