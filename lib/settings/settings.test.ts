@@ -70,33 +70,42 @@ describe('artefacts', () => {
       .toBe('None of these has a recipient yet.')
   })
 
-  // Nothing in the send path reads `artefact`: a due schedule is resolved by
-  // its starter, so an active row for the monthly reading would email the
-  // weekly digest under that name and then stamp last_sent_at. A row for an
-  // artefact nothing builds is recorded and inert.
+  // A row for an artefact nothing builds is recorded and inert: it would have
+  // to be resolved by its starter, which names a different artefact, so an
+  // active row would email that one under this one's name and stamp
+  // last_sent_at as if the right thing had gone out.
   it('does not call an artefact nothing builds "being sent", however its row is set', () => {
     const rows = recipientRows([
       schedule({ id: 'a', artefact: 'weekly' }),
-      schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' }),
+      schedule({ id: 'q', artefact: 'quarterly', cadence: 'quarterly' }),
     ], 'weekly')
     expect(rows[0].buildable).toBe(true)
     expect(rows[0].sending).toBe(true)
-    expect(rows[1].artefact).toBe('monthly')
-    expect(rows[1].buildable).toBe(false)
-    expect(rows[1].sending).toBe(false)
+    expect(rows[2].artefact).toBe('quarterly')
+    expect(rows[2].buildable).toBe(false)
+    expect(rows[2].sending).toBe(false)
     // "reports", not "artefacts": this module's docblock bans the dialect and
     // then reached for the one word in it that is in neither GLOSSARY nor the
     // thirteen.
     expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 reports is being sent, to 1 address.')
-    expect(isBuildable('weekly')).toBe(true)
-    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly'])
-    expect(notBuiltYet('monthly')).toContain('the monthly reading')
+    expect(notBuiltYet('quarterly')).toContain('the quarterly review')
     // ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT. Össur has a built report
     // titled "Sales brief" and two Block B surfaces link to it in the same
     // week, so "we do not produce the sales brief yet" was false on screen.
     expect(notBuiltYet('brief:sales')).toBe(
       'Nothing sends the sales brief on a schedule yet. We will keep this list and start sending the day something does.',
     )
+  })
+
+  // WP18 is the monthly report's builder — sendsMonthly names the schedule,
+  // snapshotMonthly builds it, renderMonthlyEmail is the body — and it shipped
+  // without this entry, so Settings called the monthly reading "not yet", hid
+  // the Active checkbox and switched off whatever an operator ticked.
+  it('calls the two artefacts that have a builder buildable, and no others', () => {
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'monthly'])
+    const rows = recipientRows([schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' })], 'monthly')
+    expect(rows[1].buildable).toBe(true)
+    expect(rows[1].sending).toBe(true)
   })
 
   it('counts addresses once across artefacts', () => {

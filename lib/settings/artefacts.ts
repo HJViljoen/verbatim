@@ -84,8 +84,16 @@ export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
  * and the row stays switched off until its builder lands. WP17 gives `weekly`
  * its own document, WP19 the briefs and WP20 the quarterly review, and each
  * joins this list with the builder that serves it.
+ *
+ * `monthly` JOINED IT WITH WP18, which is the monthly report's builder:
+ * `sendsMonthly` names the schedule, `snapshotMonthly` builds it in the runner
+ * and `renderMonthlyEmail` is the body the delivery path sends. WP18 shipped
+ * all three and did not add the entry, so this form printed "not yet" and
+ * "nothing sends this on a schedule yet", hid the Active checkbox, and wrote
+ * `active = false` over whatever the operator ticked — an inert schedule for
+ * the one other artefact the product can in fact send.
  */
-export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly']
+export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly', 'monthly']
 
 export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
 
