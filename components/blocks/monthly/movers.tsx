@@ -136,7 +136,12 @@ function Side({ heading, rows, mode, audience, arm }: {
 }) {
   const email = mode === 'email'
   if (rows.length === 0) {
-    const line = `Nothing took a ${arm} share of ${audience} this month than it did last month.`
+    // THE AUDIENCE LEADS THE SENTENCE. Its label is "The category" or
+    // "Ottobock" — a capital that is right at the start of a clause and wrong in
+    // the middle of one, and lower-casing it would be wrong for every rival. So
+    // the sentence is built round it rather than round the verb, which is also
+    // how VO2 words its own audience meta.
+    const line = `${audience}: nothing took a ${arm} share this month than it did last month.`
     return email
       ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 10 }}>{line}</div>
       : <p className="m-0 text-[12px] text-muted-foreground">{line}</p>

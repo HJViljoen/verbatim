@@ -39,12 +39,20 @@ export const monthlyMonth: Block<MonthlyData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard`
 
+    // TWO LINES, NOT ONE. OV0 prints the filling line and the reading counter
+    // as separate paragraphs; joined by a space they read as one sentence
+    // running off the end of itself — "last month at this point: not recorded
+    // yet your 4th monthly reading" — which is what the live render showed.
     const stamp = email ? (
-      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>
-        {b.line} {b.counter}
-      </div>
+      <>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{b.line}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{b.counter}</div>
+      </>
     ) : (
-      <p className="m-0 text-[12px] text-muted-foreground">{b.line} {b.counter}</p>
+      <div className="flex flex-col gap-0.5">
+        <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
+        <p className="m-0 text-[11.5px] text-muted-foreground">{b.counter}</p>
+      </div>
     )
 
     const head = (
