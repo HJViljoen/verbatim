@@ -1383,7 +1383,10 @@ export function methodNumbers(
     { label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
-    out.push({ label: 'The corpus', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
+    // NOT "The corpus", WHICH IS OURS, and this is the row a young workspace
+    // is most likely to be shown. Every other label in this table is already in
+    // the reader's words — Videos, Comments, Updates, "Videos in September".
+    out.push({ label: 'Videos', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
     return out
   }
   // `coverage` is NULL when the month tables are not applied and EMPTY when
