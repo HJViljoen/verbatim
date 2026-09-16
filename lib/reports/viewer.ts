@@ -4,8 +4,10 @@ import { applyEdits, loadEdits } from './documents/edits'
 import { isDocumentData, type DocumentSnapshotData } from './documents/types'
 import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
 import { isMonthlyData, type MonthlySnapshotData } from './monthly-build'
+import { isQuarterlyData, type QuarterlySnapshotData } from './quarterly-build'
 import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { MONTHLY_BLOCK_KEYS } from './monthly'
+import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
 import type { ReportSnapshotData } from './types'
 
@@ -20,10 +22,10 @@ export interface ViewerSnapshot {
   id: string
   /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
    *  and are told apart inside `data` — the `isDocumentData` precedent. */
-  kind: 'document' | 'report' | 'weekly' | 'monthly'
+  kind: 'document' | 'report' | 'weekly' | 'monthly' | 'quarterly'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData | MonthlySnapshotData | QuarterlySnapshotData
   title: string
   builtAt: string
   pageCount: number
@@ -94,6 +96,16 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
     return { ...common, kind: 'monthly', data: raw, pageCount: monthlyViewerPages(raw.keys) }
   }
 
+  // A QUARTERLY REVIEW (Phase 1 WP20), for the same reason and by the same
+  // route: /dashboard/reports lists every kind='report' snapshot that no
+  // report_sends row carries under "Builds", which is what a quarterly send
+  // that stored its PDF and then failed at the email leaves behind. Without
+  // this branch the cast below hands `deckSlides` a snapshot with no sections
+  // and `d.sections.forEach` throws inside a server component.
+  if (isQuarterlyData(raw)) {
+    return { ...common, kind: 'quarterly', data: raw, pageCount: quarterlyViewerPages(raw.keys) }
+  }
+
   // An arranged report: the cover plus every section's slides. The page
   // modules are loaded here rather than at the top of the file so this
   // module stays cheap for callers that only want the href helper.
@@ -115,6 +127,13 @@ export function weeklyViewerPages(keys: readonly string[]): number {
  *  still knows, and never zero. */
 export function monthlyViewerPages(keys: readonly string[]): number {
   return Math.max(1, keys.filter((k) => (MONTHLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
+}
+
+/** The same count for a quarterly review — one sheet per block key this build
+ *  still knows, and never zero: `QuarterlyDeck` draws a sheet saying it knows
+ *  none of them, so the header must not say "0 pages" over it. */
+export function quarterlyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (QUARTERLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
 
 /**
