@@ -254,6 +254,32 @@ describe('buildSeries · labels', () => {
     expect(collapsed[0].text).toContain('Sep 2026')
   })
 
+  // A SUBJECT'S MONTHS HAVE NO CLUSTERING TO BE UNRECORDED ABOUT.
+  // `month_subject_readings` carries no `clustering_key` column, so every row
+  // arrives with null and `clusteringBoundaries` marked every month but the
+  // first `unknown` — and the series came back with "We did not record how
+  // themes were grouped for Jun 2026 to Sep 2026", which is off-topic for a
+  // subject and false, since a subject's months ARE comparable across a
+  // re-clustering. `loadMonthSeries` now passes `regimes: []` for any numerator
+  // kind whose table has no clustering; this is that state.
+  it('says nothing about grouping for a series that has no clustering', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 's',
+      regimes: [],
+      denominators: [den('2026-06-01', 182), den('2026-07-01', 118), den('2026-08-01', 628), den('2026-09-01', 388)],
+      readings: [
+        num('2026-06-01', 28, { clustering_key: null }),
+        num('2026-07-01', 9, { clustering_key: null }),
+        num('2026-08-01', 102, { clustering_key: null }),
+        num('2026-09-01', 44, { clustering_key: null }),
+      ],
+    })
+    expect(s.notes.filter((n) => n.kind === 'clustering_changed')).toEqual([])
+    expect(s.points.every((p) => !kinds(p.labels).includes('clustering_changed'))).toBe(true)
+  })
+
   it('draws a faint band over the months a tracking change MOVED, not the month it was made in', () => {
     const s = buildSeries({
       axis,

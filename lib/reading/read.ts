@@ -175,6 +175,36 @@ const NUMERATOR_ID_COLUMN: Partial<Record<ObjectKind, string>> = {
   subject: 'subject_id',
 }
 
+/**
+ * Which numerator kinds have a clustering to be like-for-like about.
+ *
+ * ONLY A THEME DOES. `month_subject_readings` carries no `clustering_key`
+ * column at all — `subjectMonthSide` sets `clustering: false` deliberately,
+ * because a subject's membership is not a clustering artefact and its months
+ * ARE comparable across a re-grouping — and `buildSeries` did not know that: it
+ * read `r.clustering_key ?? null` off the numerator rows, got null everywhere,
+ * and `clusteringBoundaries` marked every month but the first `unknown` (two
+ * nulls are never equal, by design). Exercised directly on subject-shaped rows,
+ * the series came back carrying "We did not record how themes were grouped for
+ * Jun 2026 to Sep 2026, so those months are not strictly comparable with the
+ * ones after them" — off-topic for a subject, and false.
+ *
+ * It does not reach a screen today: `subjectNotes` filters `clustering_changed`
+ * out on the Subjects page, and the numerator table is unapplied on production
+ * so no boundary is computed at all. It appears the moment M4 lands, for any
+ * OTHER reader of a subject series — WP18's monthly report, WP19's briefs — and
+ * the page-level filter would not catch it, being a blanket
+ * `kind !== 'clustering_changed'` that would swallow a genuine `changed` note
+ * too.
+ *
+ * So the fact is stated here, where the numerator table is chosen, rather than
+ * left for each reader to remember.
+ */
+const NUMERATOR_HAS_CLUSTERING: Partial<Record<ObjectKind, boolean>> = {
+  theme: true,
+  subject: false,
+}
+
 /** Every key one rival has worn, including the one asked for. A key nothing was
  *  renamed to or from answers with itself. */
 function namesFor(chains: RenameChains, audience: string): string[] {
@@ -349,6 +379,8 @@ export async function loadMonthSeries(
           changeLogFrom,
           updatesByMonth: updates.byMonth,
           firstRunMonth: updates.firstRunMonth,
+          // No clustering, no boundaries — never "we did not record it".
+          ...(objectKind && NUMERATOR_HAS_CLUSTERING[objectKind] === false ? { regimes: [] } : {}),
           objectId,
           objectLabel: labels.get(objectId) ?? null,
         }),

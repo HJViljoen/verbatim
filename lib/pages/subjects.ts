@@ -523,6 +523,13 @@ export function axisNote(sides: readonly SubjectSide[], floorN: number): string 
  * And the notes come from the SUBJECT'S series or from nowhere. They used to
  * fall back to `history`, which spans 2019-01-01 to now for the axis
  * arithmetic, so a page drawing one month named sixty.
+ *
+ * THE SOURCE IS FIXED TOO (Block B fix pass): `loadMonthSeries` passes
+ * `regimes: []` for any numerator kind whose table carries no clustering, so a
+ * subject series no longer PRODUCES the note — which matters because this
+ * filter is a page-level blanket and every other reader of a subject series
+ * (WP18's monthly report, WP19's briefs) had none. This stays as the belt: the
+ * notes can also arrive from a caller that built its own series.
  */
 export function subjectNotes(notes: readonly MonthLabel[] | null | undefined): MonthLabel[] {
   return (notes ?? []).filter((n) => n.kind !== 'clustering_changed')
