@@ -64,6 +64,32 @@ export const HASH_IN_CHUNK = 150
  */
 export const MULTI_ROW_IN_CHUNK = 100
 
+/*
+ * THE CHUNKED READERS, AND WHY THEY DO NOT ALL TAKE THE SAME SIZE. Four of them
+ * now, and the next person to meet them will want to unify them. Two must not
+ * be:
+ *
+ *   lib/pages/week.ts   inChunks      UUID_IN_CHUNK (250)  a key column, one
+ *                                     row per id — but its OUTPUT ORDER is
+ *                                     chunk order, and that order reaches a
+ *                                     quote picker. See its docstring.
+ *   lib/quotes.ts       fetchChunks   120, PINNED          same chain, and
+ *                                     there it is not theoretical: raising it
+ *                                     to 250 changed four of one tenant's "For
+ *                                     sales" quotes. It moves when the quote
+ *                                     Map's order is settled by something
+ *                                     other than the boundary, and not before.
+ *   lib/reading/read.ts loadLabels    UUID_IN_CHUNK (250)  a key column, one
+ *                                     label per id, and nothing downstream
+ *                                     reads the order (it builds a Map by id).
+ *   lib/reading/read.ts numerators,   MULTI_ROW_IN_CHUNK   a NON-key column:
+ *   lib/pages/week.ts   new themes    (100)                months × audiences
+ *                                     rows per id, so the row cap binds first.
+ *
+ * The rule the four follow: size by rows per id, and where the caller's output
+ * order is part of what a page prints, freeze the size and say so.
+ */
+
 /**
  * How many chunked reads a loader may have in flight at once.
  *
