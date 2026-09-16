@@ -50,7 +50,15 @@ export const subjectsVoices: Block<SubjectsData> = {
       >
         <BlockQuotes
           mode={mode}
-          quotes={pane.voices.map((v) => ({ quote: v.quote, cite: v.cite }))}
+          quotes={pane.voices.map((v) => ({
+            quote: v.quote,
+            // original · English · platform · date · LINK (design §3 SU2). The
+            // link was computed and thrown away; the words stay the words when
+            // there is nowhere to send the reader (the OV1 precedent).
+            cite: v.href
+              ? <a href={v.href} rel="noreferrer" target="_blank" style={mode === 'email' ? { color: EMAIL.muted } : undefined}>{v.cite}</a>
+              : v.cite,
+          }))}
         />
       </BlockFrame>
     )

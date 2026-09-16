@@ -228,6 +228,12 @@ describe('SU2 · the voices', () => {
     expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('2 of 41')
   })
 
+  it('sends the reader to the comment where there is a link, and prints the words where there is not', () => {
+    const markup = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(markup).toContain('https://www.tiktok.com/@maker/video/7312345678901234567')
+    expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('youtube · 22 Sep · under a Freitag video')
+  })
+
   it('declares its refs so a snapshot can freeze ids and resolve words at render', () => {
     expect(blockAnswers(subjectsVoices, subjectsFixture()).quotes).toEqual(['e:1', 'e:2'])
   })

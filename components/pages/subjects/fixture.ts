@@ -157,7 +157,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
         {
           quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
           cite: 'tiktok · 14 Sep · under a category video',
-          href: null,
+          href: 'https://www.tiktok.com/@maker/video/7312345678901234567',
           from: 'under a category video',
         },
         {
