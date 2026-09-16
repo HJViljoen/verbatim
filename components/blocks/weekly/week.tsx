@@ -9,7 +9,7 @@ import { fmtDelta, fmtInt } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { WeeklyData } from '@/lib/pages/weekly'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
-import { flagFigures, levelOf, weeklyPeriod, type WeekFlag } from '@/lib/reports/weekly'
+import { flagFigures, inPeriod, levelOf, weeklyPeriod, type PeriodNoun, type WeekFlag } from '@/lib/reports/weekly'
 
 // WR1 · The week in one sentence, and anything unusual (design §3 WR section 1).
 //
@@ -54,7 +54,7 @@ function FlagQuotes({
 
 /** One flag: what it is on, this week against the three months behind it, and
  *  the movement with the band it had to clear. */
-function Flag({ flag, index, mode, appUrl }: { flag: WeekFlag; index: number; mode: RenderMode; appUrl: string }) {
+function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: number; mode: RenderMode; appUrl: string; noun: PeriodNoun }) {
   const href = `${appUrl}${flag.href}`
   const week = levelOf(flag.weekK, flag.weekN)
   const baseline = levelOf(flag.baselineK, flag.baselineN)
@@ -64,7 +64,7 @@ function Flag({ flag, index, mode, appUrl }: { flag: WeekFlag; index: number; mo
   const movement = `${fmtDelta(flag.changePts, 'pts', 1)} on a band of ${(Math.round(flag.bandPts * 10) / 10).toFixed(1)}`
   const body = (
     <>
-      <span data-copy="figure">{week}</span> this week, against <span data-copy="figure">{baseline}</span> across the three months behind it — <span data-copy="verdict">{movement}</span>.
+      <span data-copy="figure">{week}</span> {inPeriod(noun)}, against <span data-copy="figure">{baseline}</span> across the three months behind it — <span data-copy="verdict">{movement}</span>.
       {' '}Counted against {flag.denominator}.
     </>
   )
@@ -109,8 +109,12 @@ export const weeklyWeek: Block<WeeklyData> = {
     const s = data.section1
     return (
       <BlockFrame
-        title={weeklyWeek.title}
-        question={weeklyWeek.question}
+        // THE HEADING TAKES ITS WORD FROM THE WINDOW. `Block.title` stays the
+        // artefact's own generic name for registries and decks; what a reader
+        // sees names the window this update actually covered, because Sealand's
+        // is thirty days long and "the week" is not true of it.
+        title={s.check.noun === 'week' ? weeklyWeek.title : 'The update in one sentence'}
+        question={s.check.noun === 'week' ? weeklyWeek.question : 'What is the state of this update, and does anything need me?'}
         mode={mode}
         meta={weeklyPeriod(s.window, s.month)}
       >
@@ -119,7 +123,7 @@ export const weeklyWeek: Block<WeeklyData> = {
           {s.check.state === 'flagged' ? (
             <>
               <Muted mode={mode}>{s.check.line}</Muted>
-              {s.check.flags.map((f, i) => <Flag key={`${f.objectKind}:${f.label}`} flag={f} index={i} mode={mode} appUrl={ctx.appUrl} />)}
+              {s.check.flags.map((f, i) => <Flag key={`${f.objectKind}:${f.label}`} flag={f} index={i} mode={mode} appUrl={ctx.appUrl} noun={s.check.noun} />)}
               {s.check.moreFlags > 0 ? (
                 <Muted mode={mode}>{fmtInt(s.check.moreFlags)} more cleared the band and are on This week.</Muted>
               ) : null}

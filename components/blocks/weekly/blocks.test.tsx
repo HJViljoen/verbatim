@@ -130,6 +130,19 @@ describe('WR1 · the week in one sentence', () => {
     }
   })
 
+  // Sealand's frozen window is thirty days long, and the headings said "this
+  // week" over it while the masthead beside them printed the real dates.
+  it('names the window in the word the window supports', () => {
+    const week = weeklyFixture()
+    const update = weeklyFixture({ section1: { ...week.section1, check: { ...week.section1.check, noun: 'update' } } })
+    expect(renderText(block.render(week, 'app', ctx))).toContain('The week in one sentence')
+    const text = renderText(block.render(update, 'app', ctx))
+    expect(text).toContain('The update in one sentence')
+    expect(text).not.toContain('The week in one sentence')
+    expect(text).toContain('14.1% · 29 of 205 in this update')
+    expect(renderText(WEEKLY_BLOCKS['weekly.incoming'].render(update, 'app', ctx))).toContain('What came in this update')
+  })
+
   it('declares the flag’s quotes as refs so a snapshot freezes them', () => {
     expect(blockAnswers(block, weeklyFixture()).quotes).toEqual(['e:1'])
   })

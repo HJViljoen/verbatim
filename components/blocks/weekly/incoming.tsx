@@ -50,7 +50,9 @@ export const weeklyIncoming: Block<WeeklyData> = {
     const weekHref = `${ctx.appUrl}/dashboard/week`
     const frame = (children: ReactNode) => (
       <BlockFrame
-        title={weeklyIncoming.title}
+        // The window's own word: Sealand's "week" is thirty days long, and the
+        // masthead beside this heading prints the real dates.
+        title={data.section1.check.noun === 'week' ? weeklyIncoming.title : 'What came in this update'}
         question={weeklyIncoming.question}
         mode={mode}
         meta={weeklyPeriod(data.window, data.month)}

@@ -54,6 +54,35 @@ export type WeeklyBlockKey = (typeof WEEKLY_BLOCK_KEYS)[number]
  *  shipped 600. The digest keeps its own width; this is the weekly report's. */
 export const WEEKLY_EMAIL_WIDTH = 640
 
+/**
+ * What to call the window this report covers.
+ *
+ * "THIS WEEK" IS NOT ALWAYS TRUE. Sealand's frozen window is 2026-08-11 →
+ * 2026-09-10 — thirty days — because that is its cadence, and the artefact said
+ * "this week" in five of its six headings and in its subject line over it. The
+ * masthead already prints the real dates, which is what the design asks for;
+ * the words around them should not contradict them.
+ *
+ * So the word comes off the window. A window this long or shorter is a week; a
+ * longer one is called what it certainly is, an update. An update with no
+ * recorded window keeps "week": the span is unknown, the artefact's own name is
+ * the weekly report, and every line about a missing window says so in full
+ * rather than leaning on this word.
+ */
+export const WEEKLY_WINDOW_DAYS = 10
+
+export type PeriodNoun = 'week' | 'update'
+
+export function periodNounFor(window: { from: string; to: string } | null): PeriodNoun {
+  if (!window) return 'week'
+  const days = (Date.parse(`${window.to}T00:00:00.000Z`) - Date.parse(`${window.from}T00:00:00.000Z`)) / 86_400_000
+  return Number.isFinite(days) && days > WEEKLY_WINDOW_DAYS ? 'update' : 'week'
+}
+
+/** "this week" / "in this update" — the phrase, because the two nouns do not
+ *  take the same preposition and half-substituted English is worse than either. */
+export const inPeriod = (noun: PeriodNoun): string => (noun === 'week' ? 'this week' : 'in this update')
+
 /** Printed under the masthead, every week, in the design's own words. */
 export const WEEKLY_RULE =
   'Every number below is this month so far, against the three months before it. ' +
@@ -147,6 +176,10 @@ export interface WeekFlag {
 /** The check, as the artefact prints it. */
 export interface WeekCheck {
   state: WeekCheckState
+  /** What this update's window may be called — carried here so the check's
+   *  line, the subject that repeats it and the blocks that frame it cannot
+   *  disagree about the word. */
+  noun: PeriodNoun
   /** The one line for this state, in the reader's words. */
   line: string
   /** "baseline forming — 2 of 3 months", on the forming state only. */
@@ -247,6 +280,10 @@ export function weekSentence(input: WeekSentenceInput): WeekSentence {
  *  weekly reassurance would train the reader to skip the block. */
 export const NOTHING_UNUSUAL = 'Nothing unusual this week.'
 
+/** The same line, in the word this update's window supports. */
+export const nothingUnusualLine = (noun: PeriodNoun): string =>
+  noun === 'week' ? NOTHING_UNUSUAL : 'Nothing unusual in this update.'
+
 export const CHECK_NOT_RECORDED =
   'The weekly check is not recorded for this workspace yet.'
 
@@ -256,8 +293,10 @@ export const CHECK_NO_WINDOW =
 /** Printed when `anomaly_checks` says the check flagged and no flag row could
  *  be read beside it. Not "nothing unusual" — the check fired — and not a count
  *  of zero things, which `flaggedLine(0)` would have said. */
-export const CHECK_FLAGGED_NO_DETAIL =
-  'Something this week cleared the band, and what it was is not recorded.'
+export const checkFlaggedNoDetail = (noun: PeriodNoun): string =>
+  `Something ${inPeriod(noun)} cleared the band, and what it was is not recorded.`
+
+export const CHECK_FLAGGED_NO_DETAIL = checkFlaggedNoDetail('week')
 
 export interface WeekCheckInput {
   state: WeekCheckState
@@ -268,6 +307,9 @@ export interface WeekCheckInput {
   monthsClearing?: number
   /** The suppression's own calibrated sentence and reason (`thinUpdate`). */
   suppression?: { reason: ThinUpdateReason | null; note: string | null } | null
+  /** What this update's window may be called (`periodNounFor`). Defaults to
+   *  the artefact's own word. */
+  noun?: PeriodNoun
 }
 
 /**
@@ -281,6 +323,7 @@ export interface WeekCheckInput {
  */
 export function weekCheck(input: WeekCheckInput): WeekCheck {
   const cleared = input.flaggedCount ?? input.flags.length
+  const noun = input.noun ?? 'week'
   if (input.state === 'flagged') {
     const room = Math.max(0, Math.floor((FIRST_SCREEN_BUDGET - SENTENCE_FIGURES) / FLAG_FIGURES))
     const shown = input.flags.slice(0, Math.min(room, MAX_FLAGS))
@@ -290,7 +333,8 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
     // honest line says that and not the quiet one.
     return {
       state: 'flagged',
-      line: shown.length > 0 ? flaggedLine(shown.length) : CHECK_FLAGGED_NO_DETAIL,
+      noun,
+      line: shown.length > 0 ? flaggedLine(shown.length, noun) : checkFlaggedNoDetail(noun),
       baseline: null,
       reason: null,
       flags: shown,
@@ -300,7 +344,8 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
   if (input.state === 'suppressed') {
     return {
       state: 'suppressed',
-      line: input.suppression?.note ?? 'This week was not compared with the months behind it.',
+      noun,
+      line: input.suppression?.note ?? `The months behind this one were not compared with ${inPeriod(noun)}.`,
       baseline: null,
       reason: input.suppression?.reason ?? null,
       flags: [],
@@ -311,6 +356,7 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
     const months = input.monthsClearing ?? 0
     return {
       state: 'baseline_forming',
+      noun,
       line: `${baselineLabel(months)}. The check starts flagging once three months carry enough conversation to compare against.`,
       baseline: baselineLabel(months),
       reason: null,
@@ -319,18 +365,18 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
     }
   }
   if (input.state === 'no_window') {
-    return { state: 'no_window', line: CHECK_NO_WINDOW, baseline: null, reason: null, flags: [], moreFlags: 0 }
+    return { state: 'no_window', noun, line: CHECK_NO_WINDOW, baseline: null, reason: null, flags: [], moreFlags: 0 }
   }
   if (input.state === 'not_recorded') {
-    return { state: 'not_recorded', line: CHECK_NOT_RECORDED, baseline: null, reason: null, flags: [], moreFlags: 0 }
+    return { state: 'not_recorded', noun, line: CHECK_NOT_RECORDED, baseline: null, reason: null, flags: [], moreFlags: 0 }
   }
-  return { state: 'nothing_unusual', line: NOTHING_UNUSUAL, baseline: null, reason: null, flags: [], moreFlags: 0 }
+  return { state: 'nothing_unusual', noun, line: nothingUnusualLine(noun), baseline: null, reason: null, flags: [], moreFlags: 0 }
 }
 
-function flaggedLine(n: number): string {
+function flaggedLine(n: number, noun: PeriodNoun): string {
   return n === 1
-    ? 'One thing this week is unusual against the three months behind it.'
-    : `${fmtInt(n)} things this week are unusual against the three months behind them.`
+    ? `One thing ${inPeriod(noun)} is unusual against the three months behind it.`
+    : `${fmtInt(n)} things ${inPeriod(noun)} are unusual against the three months behind them.`
 }
 
 // ---- The budget ---------------------------------------------------------------
@@ -396,20 +442,20 @@ export function weeklySubject(company: string, check: WeekCheck): string {
     case 'flagged': {
       // A flagged check with nothing printable is not "nothing unusual": the
       // check fired and the detail did not survive the read. Say that much.
-      if (check.flags.length === 0) return `${head} — something this week is unusual`
+      if (check.flags.length === 0) return `${head} — something ${inPeriod(check.noun)} is unusual`
       const first = check.flags[0].label
       return check.flags.length === 1
-        ? `${company}: ${first} is unusual this week`
-        : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual this week`
+        ? `${company}: ${first} is unusual ${inPeriod(check.noun)}`
+        : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
     }
     case 'nothing_unusual':
-      return `${head} — nothing unusual this week`
+      return `${head} — nothing unusual ${inPeriod(check.noun)}`
     case 'baseline_forming':
       return `${head} — the weekly check is still forming`
     case 'suppressed':
-      return `${head} — this week was not compared`
+      return `${head} — ${check.noun === 'week' ? 'this week' : 'this update'} was not compared`
     case 'no_window':
-      return `${head} — no week could be cut from it`
+      return `${head} — no window was recorded for it`
     case 'not_recorded':
       return `${head} — the weekly check is not recorded yet`
   }

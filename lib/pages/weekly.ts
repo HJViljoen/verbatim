@@ -16,6 +16,7 @@ import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
 import {
+  periodNounFor,
   weekCheck,
   weekSentence,
   type Section1,
@@ -398,6 +399,10 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
       flaggedCount: check.flaggedCount,
       monthsClearing: clearing ?? 0,
       suppression,
+      // The word the artefact may use for this update's window: Sealand's is
+      // thirty days long, so five of six headings said "this week" over a
+      // month (`periodNounFor`).
+      noun: periodNounFor(window),
     }),
   }
 

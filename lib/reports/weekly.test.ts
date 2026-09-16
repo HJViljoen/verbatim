@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MAX_FLAGS } from '../reading/anomaly'
 import {
   CHECK_FLAGGED_NO_DETAIL,
+  periodNounFor,
   FIRST_SCREEN_BUDGET,
   FLAG_FIGURES,
   NOTHING_UNUSUAL,
@@ -289,7 +290,7 @@ describe('the masthead', () => {
   })
 
   it('does not claim a quiet week when the check flagged but nothing survived the read', () => {
-    const s = weeklySubject('Össur', { state: 'flagged', line: 'x', baseline: null, reason: null, flags: [], moreFlags: 0 })
+    const s = weeklySubject('Össur', { state: 'flagged', noun: 'week', line: 'x', baseline: null, reason: null, flags: [], moreFlags: 0 })
     expect(s).not.toMatch(/nothing unusual/i)
     expect(s).toContain('something this week is unusual')
   })
@@ -299,5 +300,31 @@ describe('levelOf', () => {
   it('never prints a share without the count under it', () => {
     expect(levelOf(65, 271)).toBe('24% · 65 of 271')
     expect(levelOf(3, 0)).toBe('3 videos')
+  })
+})
+
+// Sealand's frozen window is 2026-08-11 → 2026-09-10 — thirty days — and five
+// of six headings, the check's line and the subject all said "this week" over
+// it. The masthead already printed the real dates.
+describe('what to call the window', () => {
+  it('calls a week a week, and a month-long update an update', () => {
+    expect(periodNounFor({ from: '2026-09-06', to: '2026-09-13' })).toBe('week')
+    expect(periodNounFor({ from: '2026-08-11', to: '2026-09-10' })).toBe('update')
+  })
+
+  it('keeps the artefact’s own word where no window was recorded', () => {
+    expect(periodNounFor(null)).toBe('week')
+  })
+
+  it('says the check’s lines in that word', () => {
+    expect(weekCheck({ state: 'nothing_unusual', flags: [], noun: 'update' }).line).toBe('Nothing unusual in this update.')
+    expect(weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' }).line).toContain('One thing in this update is unusual')
+  })
+
+  it('says the subject line in that word too', () => {
+    const quiet = weekCheck({ state: 'nothing_unusual', flags: [], noun: 'update' })
+    expect(weeklySubject('Sealand', quiet)).toBe('Sealand: your update — nothing unusual in this update')
+    const fired = weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' })
+    expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update')
   })
 })
