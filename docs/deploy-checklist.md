@@ -47,8 +47,8 @@ any more: **nothing emails anybody until an operator sets recipients**, and
 both weekly schedules have none. So the code, all eleven migrations and every
 backfill go out in one window, the recipients go on last and on purpose, and
 the first email is a decision rather than a consequence of a deploy. The two
--window version is kept at the bottom, unchanged, in case something in step 2
-makes you want to stop halfway.
+-window version is kept at the bottom, unchanged, in case something in step 1
+or step 2 makes you want to stop halfway.
 
 **The one thing that cannot be re-run:** `scripts/monthly-reading.ts --write`,
 per tenant. Everything else on this page is idempotent or repeatable. That one
@@ -78,7 +78,61 @@ Every one of these is a gate, not a nicety. Do not start until all nine hold.
 
 ---
 
-## 1 · Apply the migrations
+## 1 · Ship the code
+
+**The code goes first and the migrations follow it.** This is a recorded rule,
+not a preference (plan §3, Block B known-and-open item 2: "the apply must NOT
+precede the code deploy"), and the mechanism is live on `main` today. M3's
+insert guard forgives a new key in a closed audience-month only where no row of
+that audience-month was written by another transaction
+(`month_reading_written_here(t.xmin)`, `20260918092000_reading_windows.sql`).
+`main`'s freeze writer upserts in flat chunks of 500 through PostgREST —
+`chunk(rows, 500)` in `lib/reading/monthly.ts`, one transaction per chunk — so
+the moment a freeze spills one audience-month across two chunks, the second
+chunk is a new key arriving after a committed sibling and the guard raises.
+That is the Block A critical. The branch fixes it (`chunkByAudienceMonth`, plus
+a merge that drops a fresh key in a closed audience-month and names it in
+`refusedLate`); `main` does not. Apply M3 over `main` and the next freeze — a
+Sunday run, a manual trigger, a retry — meets a guard the code it is running
+does not know about.
+
+The reverse gap is the one the `isMissing*` guards exist for: new code over
+un-applied migrations degrades honestly, printing "not recorded" and 200s
+rather than 500s. That is a page that reads thin for an hour. The other way
+round is a failed step in a freeze.
+
+So: ship, confirm READY, then apply — and keep the gap short.
+
+1. `git checkout main && git merge --no-ff feat/phase1` — no fast-forward, so
+   the Phase 1 line is one readable merge on `main`.
+2. `git push origin main`. Vercel builds it. **Vercel builds its own bundle** —
+   never promote a CI or local artifact, which carries dummy `NEXT_PUBLIC_*`
+   values Next inlines into the client JS.
+3. Wait for the deployment to read **READY** in Vercel. Not "building", not
+   "queued".
+4. **Re-register Inngest:**
+   `curl -X PUT https://app.verbatimintel.com/api/inngest`
+   Then confirm the function list shows **54** step ids for `pipeline` and that
+   none of the 49 pre-existing ones changed name. An in-flight run across an
+   unregistered deploy is the failure this exists to stop, and step 0.1 is why
+   there is no in-flight run.
+5. Load two pages signed in — `/dashboard` and `/dashboard/reports` — before
+   you apply anything. The code is new and the migrations are NOT yet applied,
+   which is the state the `isMissing*` guards were written for: expect "not
+   recorded" where a Phase 1 table would be read, and expect a 200. A 500 here
+   is a guard that does not cover what it claims to, and it is cheaper to find
+   it now — nothing is spent and the schema has not moved.
+
+---
+
+## 2 · Apply the migrations
+
+**Only once §1 reads READY.** See §1's first paragraph for why the apply
+follows the deploy rather than leading it. Do not leave the gap open longer
+than it takes to read eleven verification queries: between §1 and §2 every
+Phase 1 surface says "not recorded", and a Sunday dispatcher or a manual
+trigger in that gap runs the new pipeline against a Phase 0 schema — which its
+steps no-op against by design, but it is a run that does less than it should.
 
 Eleven files, **in filename order**, one at a time through the Supabase MCP
 (project `mkwjlckescdveosvrvaq`). Read the verification query's answer before
@@ -322,26 +376,14 @@ month table is exactly the kind of cleverness this record exists to refuse.
 **Recommended: skip. Count the triggers, read their `pg_get_triggerdef`, move
 on.**
 
----
+### Then load the two pages again
 
-## 2 · Ship the code
-
-1. `git checkout main && git merge --no-ff feat/phase1` — no fast-forward, so
-   the Phase 1 line is one readable merge on `main`.
-2. `git push origin main`. Vercel builds it. **Vercel builds its own bundle** —
-   never promote a CI or local artifact, which carries dummy `NEXT_PUBLIC_*`
-   values Next inlines into the client JS.
-3. Wait for the deployment to read **READY** in Vercel. Not "building", not
-   "queued".
-4. **Re-register Inngest:**
-   `curl -X PUT https://app.verbatimintel.com/api/inngest`
-   Then confirm the function list shows **54** step ids for `pipeline` and that
-   none of the 49 pre-existing ones changed name. An in-flight run across an
-   unregistered deploy is the failure this exists to stop, and step 0.1 is why
-   there is no in-flight run.
-5. Load two pages signed in — `/dashboard` and `/dashboard/reports` — before
-   touching a backfill. The migrations are applied and the code is new; if
-   something is going to 500, find it now, with nothing spent.
+`/dashboard` and `/dashboard/reports`, signed in, the same two you loaded at
+the end of §1. Now the migrations are applied and the code is new: where the
+first pass said "not recorded" this one should read a number or an honest empty
+state (the tables exist and hold nothing until step 5). Anything that 500s here
+and did not in §1 is a migration this code disagrees with, and it is the last
+moment to find that out with nothing spent.
 
 ---
 
@@ -562,7 +604,7 @@ willing to keep them before you start.
 | Step | Log line to find | What a bad one looks like |
 |---|---|---|
 | `plan-translate-quotes` / `translate-quotes:N-of-M` | `[translate-quotes] N texts needed across M comments · X translated · Y already English · Z already cached · … · ~$0.000` | `RATE LIMITED`, or `deferred by the cap` on every batch. `plan out of retries` is logged, not fatal. After 5.2 the cache should make `already cached` the large number and the cost near zero. |
-| `plan-subject-membership` / `subject-membership:N-of-M` | `[subject-membership] <summary>` then `[subject-membership] pass spent $X of its $Y ceiling` | `skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet` — means step 1 did not take. `<name> out of retries` is per-subject and non-fatal. |
+| `plan-subject-membership` / `subject-membership:N-of-M` | `[subject-membership] <summary>` then `[subject-membership] pass spent $X of its $Y ceiling` | `skipped: supabase/migrations/20260918093000_subjects.sql has not been applied yet` — means step 2 did not take. `<name> out of retries` is per-subject and non-fatal. |
 | `anomaly-check` | `[anomaly-check] <status> — <note>`, and on a registration `set: N kinds · M rivals · …` | `baseline_forming` is CORRECT for Sealand — it is the honest answer, not a failure. `out of retries` is logged, not `noteError`'d. |
 | `embed-insights` | existing | unchanged by Phase 1 |
 | `freeze-months` | existing, now extended | a `filling` month that does not advance |
@@ -635,7 +677,7 @@ The first Sunday after the deploy, in this order:
 
 ## 9 · Rollback
 
-**Read this before step 1, not during it.**
+**Read this before you start step 1, not during it.**
 
 | What went wrong | What you do |
 |---|---|
@@ -658,10 +700,13 @@ contents (everything). Everything else on this page is reversible.
 Kept because step 5.4 is irreversible and you may want to see the pages with
 real numbers before you spend it.
 
-**R1** — preconditions 0.1–0.9 · migrations M1–M8 (stop before
-`20260918098000_sent_figures.sql`) · step 2 · step 3 · step 4 ·
+**R1** — preconditions 0.1–0.9 · **step 1, the code** · then migrations M1–M8
+(stop before `20260918098000_sent_figures.sql`) · step 3 · step 4 ·
 backfills 5.1, 5.2, 5.3 · **5.4 the one-shot** · 5.5 · rehearsal · screenshots ·
-**recipients NOT set** · the Sunday watch minus items 4 and 5.
+**recipients NOT set** · the Sunday watch minus items 4 and 5. The code-then-
+migrations order is the same here and for the same reason (§1's first
+paragraph): R1's window is where `main`'s flat-chunk freeze writer would meet
+M3's insert guard.
 
 **R2** — M9, M9.1, M10 · merge, push, READY, re-register · build each of the
 four briefs and the quarterly review once for Össur · the first monthly report
@@ -698,7 +743,7 @@ safety margin and the only reason to take the split at all.
   Block B. I started it while the instance was intermittently answering and it
   did not finish. **Run it on a healthy instance before the deploy.**
 - **The instance's health is itself a precondition.** If a `select count(*)`
-  through the MCP does not return first time, do not start step 1. Applying
+  through the MCP does not return first time, do not start step 2. Applying
   eleven migrations through a transport that drops one connection in four is
   how you end up not knowing which of them landed.
 - **The For-sales duplication is still open.** Two blocks say the same thing to
