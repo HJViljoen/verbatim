@@ -7,7 +7,7 @@ import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { DEFAULT_SCHEDULE_STARTER } from '@/lib/schedules/default'
-import { normaliseRecipients, splitRecipients } from '@/lib/schedules/validate'
+import { CADENCE_NOT_STORED, isUnsupportedCadence, normaliseRecipients, splitRecipients } from '@/lib/schedules/validate'
 import { ARTEFACTS, ARTEFACT_COPY, isArtefact, isBuildable, notBuiltYet } from '@/lib/settings/artefacts'
 import { isMissingArtefact } from '@/lib/settings/reports-load'
 import { createAdminClient } from '@/lib/supabase-admin'
@@ -155,6 +155,11 @@ export async function updateArtefactRecipients(
   const { error } = await write
   if (error) {
     console.error(`[settings] recipients not saved for ${clientId}/${parsed.data.artefact}: ${error.code ?? '?'} ${error.message}`)
+    // The quarterly row this form inserts carries `cadence: 'quarterly'`,
+    // which `report_schedules_cadence_check` refuses until M8 is applied. The
+    // read above already degrades honestly for the missing `artefact` column;
+    // a refused VALUE gets the same sentence rather than "try again".
+    if (isUnsupportedCadence(error)) return { ok: false, message: CADENCE_NOT_STORED }
     return { ok: false, message: 'Could not save just now. Try again, and tell us if it keeps happening.' }
   }
 

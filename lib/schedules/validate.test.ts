@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { starterTemplate } from '../reports/templates'
 import { QUARTERLY_STARTER_KEY } from './artefact'
 import { CADENCES } from './types'
-import { normaliseRecipients, recipientsSchema, scheduleInputSchema, splitRecipients } from './validate'
+import { CADENCE_NOT_STORED, isUnsupportedCadence, normaliseRecipients, recipientsSchema, scheduleInputSchema, splitRecipients } from './validate'
 
 describe('recipients', () => {
   it('splits a pasted list on commas, semicolons, newlines and spaces', () => {
@@ -63,5 +63,35 @@ describe('the quarterly cadence', () => {
     // template."; lib/reports/templates.ts says the weekly entry exists to
     // prevent exactly that, and QUARTERLY_STARTER_KEY had no entry.
     expect(starterTemplate(QUARTERLY_STARTER_KEY)?.artefact).toBe(true)
+  })
+})
+
+// M8 widens `report_schedules_cadence_check` to accept 'quarterly' and is
+// authored, not applied — so the Studio's picker offers a cadence the schema
+// still refuses, and "Could not save that. Try again." asks for a retry that
+// cannot succeed. This is the predicate that tells that failure apart.
+describe('isUnsupportedCadence', () => {
+  const check = (over: Record<string, unknown> = {}) => ({
+    code: '23514',
+    message: 'new row for relation "report_schedules" violates check constraint "report_schedules_cadence_check"',
+    details: null,
+    ...over,
+  })
+
+  it('recognises the cadence CHECK refusing the value', () => {
+    expect(isUnsupportedCadence(check())).toBe(true)
+    expect(isUnsupportedCadence(check({ message: 'violates check constraint', details: 'report_schedules_cadence_check' }))).toBe(true)
+  })
+
+  it('is not every check violation, and not every error', () => {
+    expect(isUnsupportedCadence(check({ message: 'violates check constraint "report_schedules_one_source"' }))).toBe(false)
+    expect(isUnsupportedCadence({ code: '23505', message: 'report_schedules_cadence_check' })).toBe(false)
+    expect(isUnsupportedCadence(null)).toBe(false)
+    expect(isUnsupportedCadence('nope')).toBe(false)
+  })
+
+  it('says what has not shipped rather than asking for a retry', () => {
+    expect(CADENCE_NOT_STORED).toContain('has not shipped')
+    expect(CADENCE_NOT_STORED).not.toContain('Try again')
   })
 })

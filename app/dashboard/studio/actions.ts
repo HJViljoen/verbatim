@@ -10,7 +10,7 @@ import { CUSTOM_KEY, documentTemplate } from '@/lib/reports/documents/templates'
 import { DEFAULT_DOCUMENT_ROLE, DEFAULT_DOCUMENT_SETTINGS } from '@/lib/reports/documents/types'
 import { applyDocumentSettingsPatch, documentSettingsPatch, IGNORED_FIELDS_MESSAGE, reportPatchSchema, tidySections } from '@/lib/reports/validate'
 import { AUDIENCES, isAudience, type CoverSpec, type ReportRow, type ReportSection } from '@/lib/reports/types'
-import { scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
+import { CADENCE_NOT_STORED, isUnsupportedCadence, scheduleInputSchema, type ScheduleInput } from '@/lib/schedules/validate'
 import { markSnapshotsStale } from '@/lib/artifacts'
 import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { DOCUMENT_EDIT_MAX } from '@/lib/config'
@@ -217,6 +217,11 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
       .select('name, starter_key, report_id, cadence, recipients, attach_pdf, share_days, active, review')
       .eq('id', id).eq('client_id', clientId).maybeSingle()
     const { error } = await admin.from('report_schedules').update(row).eq('id', id).eq('client_id', clientId)
+    // THE PICKER OFFERS A CADENCE THE SCHEMA MAY STILL REFUSE. M8 widens
+    // `report_schedules_cadence_check` to accept 'quarterly' and is not
+    // applied; "Try again." over a CHECK violation asks for a retry that
+    // cannot succeed and names no cause.
+    if (isUnsupportedCadence(error)) return { ok: false, message: CADENCE_NOT_STORED }
     if (error) return { ok: false, message: 'Could not save that. Try again.' }
     await recordConfigChange(admin, {
       clientId,
@@ -231,6 +236,7 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
     return { ok: true, message: 'Saved', id }
   }
   const { data, error } = await admin.from('report_schedules').insert({ ...row, client_id: clientId, created_by: userId, is_default: false }).select('id').single()
+  if (isUnsupportedCadence(error)) return { ok: false, message: CADENCE_NOT_STORED }
   if (error || !data) return { ok: false, message: 'Could not create the schedule. Try again.' }
   await recordConfigChange(admin, {
     clientId,
