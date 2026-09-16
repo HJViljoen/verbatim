@@ -1,0 +1,68 @@
+import { describe, it, expect } from 'vitest'
+import { askBasisLine, nothingSearchable, type AskBasis } from './basis'
+
+const base: AskBasis = {
+  updateAt: '2026-09-13T04:06:38.483Z',
+  monthlyReadings: 63,
+  embedded: 3129,
+  total: 3129,
+  lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
+}
+
+describe('askBasisLine', () => {
+  it('states the four facts, in the design’s order', () => {
+    expect(askBasisLine(base, { asked: true })).toBe(
+      'Answered against the update of 13 Sep · 63 monthly readings · 3,129 of 3,129 findings searchable · embedded as at 15 Sep',
+    )
+  })
+
+  it('says the box will answer against it, before a question is asked', () => {
+    expect(askBasisLine(base)).toMatch(/^Answers are given against the update of 13 Sep · /)
+  })
+
+  it('says nothing has been read rather than printing four empty facts', () => {
+    expect(askBasisLine({ ...base, updateAt: null })).toBe(
+      'Nothing has been read for this workspace yet, so there is nothing to answer from.',
+    )
+  })
+
+  it('tells a failed month read apart from a workspace with no months', () => {
+    expect(askBasisLine({ ...base, monthlyReadings: null })).toContain('monthly readings not recorded here yet')
+    expect(askBasisLine({ ...base, monthlyReadings: 0 })).toContain('no monthly readings yet')
+  })
+
+  it('says one reading in the singular', () => {
+    expect(askBasisLine({ ...base, monthlyReadings: 1 })).toContain('1 monthly reading ·')
+  })
+
+  it('states an unsearchable corpus as none, not as a rounding error', () => {
+    // Sealand answered at 27% coverage on 2026-09-15 with nothing saying so.
+    // Zero is the state that makes every answer a lie about the corpus, and
+    // "0 of 2,872" reads like a small number rather than like all of it.
+    expect(askBasisLine({ ...base, embedded: 0, total: 2872 })).toContain('none of 2,872 findings searchable')
+    expect(askBasisLine({ ...base, embedded: 785, total: 2872 })).toContain('785 of 2,872 findings searchable')
+  })
+
+  it('says there is nothing to search when there is nothing at all', () => {
+    expect(askBasisLine({ ...base, embedded: 0, total: 0 })).toContain('nothing to search yet')
+  })
+
+  it('says not recorded, never never, for a vector written before the column', () => {
+    const line = askBasisLine({ ...base, lastEmbeddedAt: null })
+    expect(line).toContain('when they were indexed is not recorded')
+    expect(line).not.toContain('never')
+  })
+
+  it('prints no pipeline jargon and no score', () => {
+    const line = askBasisLine(base, { asked: true })
+    expect(line).not.toMatch(/\brun\b|Pass [A-E]|\bT\d|embedding|vector|cosine|similarity/i)
+  })
+})
+
+describe('nothingSearchable', () => {
+  it('is true only when there is a corpus and none of it is reachable', () => {
+    expect(nothingSearchable({ ...base, embedded: 0, total: 2872 })).toBe(true)
+    expect(nothingSearchable({ ...base, embedded: 0, total: 0 })).toBe(false)
+    expect(nothingSearchable(base)).toBe(false)
+  })
+})

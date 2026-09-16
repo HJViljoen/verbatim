@@ -10,6 +10,7 @@ import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import type { AgentAnswer } from '../agent/types'
+import { loadIndexFacts, type AskBasis } from '../agent/basis'
 import type { MethodNoteData } from '../../components/print/method-note'
 
 // The agent thread as a page module (Reports & Exports T11, 2026-08-29) —
@@ -42,6 +43,9 @@ export interface Turn {
   /** The agent's prose when a turn has no structured result. */
   prose: string | null
   outcome: string | null
+  /** When the update THIS answer was answered against started (AS3). Null for a
+   *  turn with no answer, and for one whose run has since been deleted. */
+  updateAt: string | null
 }
 
 /** A Quote itself (ref + text at the top level), so the freeze/resolve walk
@@ -75,6 +79,11 @@ export interface AgentThreadData {
   /** Questions the corpus did not speak to (silent answers), verbatim. */
   silentQuestions: string[]
   document: DocumentCheck | null
+  /** What this thread was answered against — the index as it is NOW, with
+   *  `updateAt` set to the newest answered turn's own update (AS3). A turn
+   *  answered against an older update carries its own date in `Turn.updateAt`;
+   *  the index facts are shared, because there is one index. */
+  basis: AskBasis
   method: MethodNoteData
 }
 
@@ -88,12 +97,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     // RLS already scopes to the tenant; the explicit client_id filter makes a
     // cross-tenant id a miss rather than an empty page.
     supabase.from('agent_threads').select('id, kind, title, plan_check_id, created_at').eq('id', id).eq('client_id', clientId).maybeSingle(),
-    supabase.from('agent_messages').select('id, role, content, result, outcome, created_at').eq('thread_id', id).order('created_at', { ascending: true }),
+    supabase.from('agent_messages').select('id, role, content, result, outcome, created_at, run_id').eq('thread_id', id).order('created_at', { ascending: true }),
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
   ])
   const thread = row<{ id: string; kind: string; title: string; plan_check_id: string | null; created_at: string }>(threadRes, 'agentThread.thread')
   if (!thread) return null
-  type MessageRow = { id: string; role: string; content: string; result: AgentAnswer | null; outcome: string | null; created_at: string }
+  type MessageRow = { id: string; role: string; content: string; result: AgentAnswer | null; outcome: string | null; created_at: string; run_id: string | null }
   const messages = readRows<MessageRow>(messagesRes, 'agentThread.messages')
   const client = row<{ company_name: string | null }>(clientRes, 'agentThread.client')
   const brand = client?.company_name ?? 'Your brand'
@@ -108,6 +117,16 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   const citeRefs = messages.flatMap((m) => (m.result?.grounded ?? []).flatMap((g) => g.quotes.map((q) => ({ commentId: q.commentId, videoId: q.videoId }))))
   const metaP = citeRefs.length ? resolveCitations(supabase, citeRefs) : Promise.resolve(new Map<string, CitationMeta>())
   metaP.catch(() => {})
+
+  // AS3's index facts and the dates of the updates these answers were given
+  // against. Both go out with the wave above rather than after it: round trips
+  // are the cost on this database, not rows.
+  const factsP = loadIndexFacts(supabase, clientId)
+  factsP.catch(() => {})
+  const runIds = [...new Set(messages.map((m) => m.run_id).filter((r): r is string => Boolean(r)))]
+  const runsP = runIds.length
+    ? supabase.from('pipeline_runs').select('id, started_at').eq('client_id', clientId).in('id', runIds)
+    : Promise.resolve({ data: [], error: null })
 
   // A document thread wraps a plan_check; its quotes resolve from stored
   // insight ids — no quote text is kept in either table.
@@ -163,6 +182,10 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   }
 
   const quoteText = await quoteTextP
+  const runStartedAt = new Map(
+    readRows<{ id: string; started_at: string | null }>(await runsP, 'agentThread.runs')
+      .map((r) => [r.id, r.started_at]),
+  )
 
   // Turns: each user message with the agent message that answered it.
   const turns: Turn[] = []
@@ -188,7 +211,14 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       }))
       answer = { ...reply.result, grounded }
     }
-    turns.push({ question: m.content, askedAt: m.created_at, answer, prose: reply && !reply.result ? reply.content : null, outcome: reply?.outcome ?? null })
+    turns.push({
+      question: m.content,
+      askedAt: m.created_at,
+      answer,
+      prose: reply && !reply.result ? reply.content : null,
+      outcome: reply?.outcome ?? null,
+      updateAt: reply?.run_id ? runStartedAt.get(reply.run_id) ?? null : null,
+    })
   }
 
   const meta = await metaP
@@ -196,6 +226,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     const m = meta.get(c.ref)
     return { n: c.n, ref: c.ref, text: c.text, platform: m?.platform ?? null, date: m?.date ?? null, href: m?.href ?? null, commentLevel: m?.commentLevel ?? false }
   })
+
+  const facts = await factsP
+  // The newest answered turn's update leads the thread. An unanswered thread
+  // has no update to name and the line says nothing has been read yet, which is
+  // the honest reading of a thread with no answer in it.
+  const newestUpdateAt = [...turns].reverse().find((t) => t.updateAt)?.updateAt ?? null
 
   const silentQuestions = turns.filter((t) => t.answer?.silent).map((t) => t.question)
   const platforms = [...new Set(citations.map((c) => c.platform).filter((p): p is string => !!p))]
@@ -211,6 +247,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     citations,
     silentQuestions,
     document,
+    basis: { updateAt: newestUpdateAt, ...facts },
     method: {
       company: brand,
       period: `Asked ${weekdayDate(thread.created_at as string)}`,

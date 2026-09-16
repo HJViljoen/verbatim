@@ -6,6 +6,7 @@ import { readingHandle } from '@/lib/reading/read'
 import { Card, CardContent } from '@/components/ui/card'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentAnswerView } from '@/components/agent-answer'
+import { askBasisLine } from '@/lib/agent/basis'
 import { AgentDocumentSplit } from '@/components/agent-document-split'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { canAsk } from '@/lib/agent/access'
@@ -91,6 +92,14 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
                 <Card className="bg-popover">
                   <CardContent className="py-5">
                     {t.answer ? <AgentAnswerView answer={t.answer} /> : <p className="text-[15px] leading-relaxed text-foreground">{t.prose}</p>}
+                    {/* AS3 under the answer it is about: which update it was
+                        answered against, and how much of the corpus could be
+                        searched when it was. The index facts are today's — a
+                        thread read today is searched today — and the update is
+                        this answer's own. */}
+                    <p className="mt-5 border-t border-border/60 pt-3 text-[11.5px] text-muted-foreground">
+                      {askBasisLine({ ...data.basis, updateAt: t.updateAt }, { asked: true })}
+                    </p>
                   </CardContent>
                 </Card>
               )}

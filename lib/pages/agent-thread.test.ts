@@ -5,7 +5,7 @@ import { agentThreadSlides, documentPages, type AgentThreadData } from './agent-
 const base: AgentThreadData = {
   threadId: 't1', kind: 'question', title: 'Why do people hesitate before buying a liner?', brand: 'Sealand', createdAt: '2026-08-22T10:00:00Z',
   turns: [{
-    question: 'Why do people hesitate before buying a liner?', askedAt: '2026-08-22T10:00:00Z', prose: null, outcome: 'answered',
+    question: 'Why do people hesitate before buying a liner?', askedAt: '2026-08-22T10:00:00Z', prose: null, outcome: 'answered', updateAt: '2026-08-21T04:00:00Z',
     answer: {
       answer: 'Comfort and fit come up before price.', silent: false, nearest: [], judgement: [{ text: 'Lead with fit.', basedOn: ['G1'] }], runId: 'r', costUsd: 0.02,
       grounded: [{ id: 'G1', text: 'People worry about skin irritation.', insightIds: ['i1', 'i2'], themeRefs: [], conversationCount: 2, voices: 'client',
@@ -17,6 +17,7 @@ const base: AgentThreadData = {
     { n: 2, ref: 'v:v1', text: 'fit was the deciding thing', platform: 'tiktok', date: null, href: null, commentLevel: false },
   ],
   silentQuestions: [], document: null,
+  basis: { updateAt: '2026-08-21T04:00:00Z', monthlyReadings: 66, embedded: 2872, total: 2872, lastEmbeddedAt: '2026-09-15T07:31:49.323Z' },
   method: { company: 'Sealand', period: 'Asked Sat 22 Aug', platforms: ['youtube', 'tiktok'], videos: null, comments: 2, note: 'x' },
 }
 

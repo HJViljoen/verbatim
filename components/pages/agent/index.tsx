@@ -6,6 +6,7 @@ import {
   type AgentThreadData, type ThreadAnswer, type Turn,
 } from '@/lib/pages/agent-thread'
 import type { PageModule, Renderable } from '@/lib/renderables/types'
+import { askBasisLine } from '@/lib/agent/basis'
 
 // The agent thread on paper (Reports & Exports T11, 2026-08-29). Question
 // mode: the question, the answer, "what your customers said" with a
@@ -36,6 +37,10 @@ function Question({ t, first, d }: { t: Turn; first: boolean; d: D }) {
       {!first && <p className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Follow-up</p>}
       <p className="font-serif text-[19px] font-medium leading-snug [text-wrap:pretty]">{t.question}</p>
       <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{d.brand} · {weekdayDate(t.askedAt)}</p>
+      {/* AS3 on the artefact. A deck that leaves the building carries what it
+          was answered against, or a reader six weeks later has no way to know
+          which update — or how much of the corpus — is behind it. */}
+      <p className="mt-1 font-mono text-[9.5px] text-muted-foreground">{askBasisLine({ ...d.basis, updateAt: t.updateAt }, { asked: true })}</p>
     </div>
   )
 }
