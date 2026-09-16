@@ -70,6 +70,10 @@ describe('clipInput', () => {
 })
 
 describe('dayStartIso', () => {
+  // NOT dead with /api/ask. Three export routes count EXPORT_DAILY_LIMIT from
+  // this boundary (/api/export, /api/artifacts/[id], /api/reports/[id]/build),
+  // so the day it drifts off UTC a tenant's render cap moves with the server's
+  // timezone.
   it('anchors to the start of the UTC day', () => {
     expect(dayStartIso(new Date('2026-08-19T23:59:59Z'))).toBe('2026-08-19T00:00:00.000Z')
     expect(dayStartIso(new Date('2026-08-19T00:00:00Z'))).toBe('2026-08-19T00:00:00.000Z')

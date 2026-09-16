@@ -6,7 +6,7 @@ import { readingHandle } from '@/lib/reading/read'
 import { Card, CardContent } from '@/components/ui/card'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentAnswerView } from '@/components/agent-answer'
-import { askBasisLine } from '@/lib/agent/basis'
+import { askBasisLine, nothingSearchable } from '@/lib/agent/basis'
 import { AgentDocumentSplit } from '@/components/agent-document-split'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { canAsk } from '@/lib/agent/access'
@@ -26,6 +26,9 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
     loadAgentThread({ supabase, clientId, reading: readingHandle(clientId), params: { thread: id } }),
   ])
   if (!data) notFound()
+  // The one state where a follow-up cannot work, read off the basis this page
+  // already loads (the landing page's own predicate, same sentence).
+  const blocked = nothingSearchable(data.basis)
 
   // The index is the TURN's index, not the answered-turns' — `agent.answer:<i>`
   // renders turn i, so filtering before mapping would point at the wrong one.
@@ -161,7 +164,18 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
           )}
         </div>
 
-        <AgentComposer canSend={canSend} threadId={id} placeholder="Push back, or narrow it down" />
+        {/* THE SAME GUARD THE LANDING PAGE APPLIES, and for the same reason: a
+            follow-up is stored before the answer is attempted, so asking into a
+            corpus with nothing searchable spends one of the month's forty slots
+            on its way to throwing. The basis line under each answer already
+            says "none of N findings searchable"; this is that fact reaching the
+            control. The thread page held the basis and never read it. */}
+        <AgentComposer
+          canSend={canSend && !blocked}
+          disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+          threadId={id}
+          placeholder="Push back, or narrow it down"
+        />
       </div>
     </ExportScope>
   )

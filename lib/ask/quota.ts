@@ -17,12 +17,23 @@ import { ASK_MONTHLY_CAP } from '../config'
  * `suggestion_calls` shape — belongs with the self-serve motion, next to the
  * signup gate's Turnstile.
  *
- * The daily variant retired with /api/ask (Phase 1 WP21): the monthly cap below
- * is the whole ceiling now, on both faces of the one surface.
+ * ASK's daily variant retired with /api/ask (Phase 1 WP21): the monthly cap
+ * below is the whole ceiling on both faces of that one surface. `dayStartIso`
+ * did NOT retire with it — it is the day boundary three export routes count
+ * against, and it lives here because this is where the product's spend
+ * boundaries are written.
  */
 export type QuotaCheck = { ok: true; used: number } | { ok: false; message: string }
 
-/** Start of the current UTC day, as an ISO timestamp for the count query. */
+/** Start of the current UTC day, as an ISO timestamp for a count query.
+ *
+ *  KEPT, AND NOT ASK'S ANY MORE. `EXPORT_DAILY_LIMIT` is counted on
+ *  `export_events` from this boundary by /api/export, /api/artifacts/[id] (a
+ *  re-render is a render) and /api/reports/[id]/build — a Chromium render is
+ *  seconds of a 2 GB function and a Storage object, and that cap is daily
+ *  because the cost is. Said here because the header two lines above says the
+ *  daily variant retired, and a reader who takes that as covering this helper
+ *  deletes three live limits. */
 export function dayStartIso(now: Date): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString()
 }

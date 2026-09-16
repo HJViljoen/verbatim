@@ -2,9 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { AGENT_MOVEMENT_MONTHS, AGENT_MOVEMENT_TOPICS } from '../config'
 import { monthName } from '../format'
 import { audienceLabel } from '../readiness/types'
-import { directionWord, monthChange, type Direction } from '../reading/bands'
+import { directionWord, monthChange, type Direction, type SeriesPoint } from '../reading/bands'
 import { loadMonthSeries } from '../reading/read'
-import { isReadable, pointsByMonth, type MonthPoint } from '../reading/series'
+import { isReadable, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import { monthStartOf, prevMonth } from '../reading/month-key'
 import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 
@@ -23,9 +23,10 @@ import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 // by the month a comment was WRITTEN in, each month carrying its own
 // denominator, frozen 30 days after it ends and never rewritten. The
 // comparison is `monthChange` — the product's band since 2026-08-18, unpooled
-// 2×SE floored at 2 points — and the direction word is `directionWord`, which
-// needs three consecutive months, both floors cleared on each, one clustering
-// regime and one audience name. This is why `agent.movement` can be true while
+// 2×SE floored at 2 points — and the direction word is `movementDirection`,
+// which needs three consecutive months, both floors cleared on each, one
+// clustering regime, one audience name and a current month the reading layer
+// has not marked thin. This is why `agent.movement` can be true while
 // the run-indexed readers stay false: it is a different series, not a
 // re-wording of the same one.
 //
@@ -41,6 +42,41 @@ import { isAnswer, type Verdict, type VerdictFlag } from '../reading/verdicts'
 // went 6.4% → 17.0% of Össur's category denominator in two months. Saying
 // nothing about it is the honest gap; saying something pooled would not be.
 
+/**
+ * The direction word this line may carry — the ONE place the block decides it.
+ *
+ * THE THIN GUARD IS PART OF THE WORD, not a decoration on it. Every other
+ * direction-word reader in the product writes `thin ? null : directionWord(…)`
+ * (lib/pages/voice-surface.ts, lib/pages/overview.ts twice,
+ * lib/pages/subjects.ts); this block called `directionWord` bare, and it is the
+ * only reader whose key is on. The failure that allows is three days into a
+ * month: one update has landed, the axis still clears both floors on all three
+ * months, the steps are monotone and the span clears the band — so the word is
+ * `growing`, every other surface prints nothing for that theme, and
+ * `renderMovement`'s closing instruction licenses the model to say it. A month
+ * is thin when fewer than two updates were delivered into it, or when it
+ * carries under 60% of the trailing median video count (THIN_MONTH_UPDATES /
+ * THIN_MONTH_SHARE, decision M); `loadMonthSeries` has already run that test
+ * per month and attached it as the `thin` label, so the fact is on the point
+ * and needs no second read.
+ *
+ * The VERDICT is not suppressed with it — a banded month-on-month change with
+ * both n stated survives a thin month, and says so beside itself through the
+ * `thin` flag's own sentence. What a thin month cannot support is a word about
+ * three months' travel.
+ */
+export function movementDirection(
+  curr: { labels: readonly MonthLabel[] },
+  points: readonly SeriesPoint[],
+): Direction | null {
+  return isThin(curr) ? null : directionWord(points)
+}
+
+/** Did the reading layer mark this month thin? The label is `thinMonth`'s own
+ *  answer (lib/reading/series.ts), taken with the tenant's update counts. */
+export const isThin = (point: { labels: readonly MonthLabel[] }): boolean =>
+  point.labels.some((l) => l.kind === 'thin')
+
 /** One theme's month-over-month reading, as the block prints it. */
 export interface MovementReading {
   /** The theme's current label. Identity is the registry id; this is display. */
@@ -50,7 +86,8 @@ export interface MovementReading {
   curr: { month: string; k: number | null; n: number | null }
   prev: { month: string; k: number | null; n: number | null }
   verdict: Verdict
-  /** Earned over three consecutive readings, or null. Never computed here. */
+  /** Earned over three consecutive readings and withheld where the current
+   *  month is thin, or null. Never computed here — `movementDirection`. */
   direction: Direction | null
   /** Months on this axis that carried a readable reading — what "how much
    *  history is behind this" means for one line. */
@@ -72,14 +109,22 @@ const side = (s: { month: string; k: number | null; n: number | null }): string 
 
 /** What the reader (and the model) is told BESIDE the verdict. Each flag is a
  *  fact about our own bookkeeping, not about the conversation, and each gets
- *  its own sentence rather than a code. */
+ *  its own sentence rather than a code.
+ *
+ *  FOUR, BECAUSE FOUR IS WHAT CAN ARRIVE. `monthChange` computes
+ *  `clustering_changed`, `clustering_unknown` and `renamed`; `thin` is the one
+ *  flag this file supplies, off the month's own label. The two that used to sit
+ *  here — `re_read` and `measurement_changed` — are produced nowhere this block
+ *  reads (`measurement_changed` belongs to `moodChange`, and nothing writes
+ *  `re_read` at all), so they were sentences a maintainer could read as a
+ *  warning the block already gives. A flag with no note is skipped in
+ *  `movementLine`, so the day one of them does arrive it is silent, not a
+ *  code. */
 const FLAG_NOTE: Partial<Record<VerdictFlag, string>> = {
   clustering_changed: 'themes were re-grouped between these two months, so the two sides may not be like for like',
   clustering_unknown: 'we did not record how themes were grouped for these months, so the two sides may not be like for like',
   renamed: 'these two months are filed under two names for the same rival',
   thin: 'that month is thin against this audience’s own year',
-  re_read: 'part of the corpus was re-read between them',
-  measurement_changed: 'what this measures changed between them',
 }
 
 const STATE_NOTE: Record<string, string> = {
@@ -232,9 +277,13 @@ export async function loadMovement(
     const prevKey = prevMonth(to)
     const prev: MonthPoint | undefined = byMonth.get(prevKey)
     const label = s.objectLabel ?? s.objectId
+    // The month's own thinness, read once: it stops the direction word below
+    // and it is told to the reader beside the verdict.
+    const thin = isThin(curr)
     const verdict = monthChange({
       object: { kind: 'theme', id: s.objectId, label },
       audience: s.audience,
+      ...(thin ? { flags: ['thin' as VerdictFlag] } : {}),
       curr,
       // A month with no row on the other side is not skipped: monthChange
       // answers `too_little_data`, which is the honest verdict for a theme's
@@ -247,7 +296,7 @@ export async function loadMovement(
       curr: { month: curr.month, k: curr.k, n: curr.videos },
       prev: { month: prevKey, k: prev?.k ?? null, n: prev?.videos ?? null },
       verdict,
-      direction: directionWord(s.points),
+      direction: movementDirection(curr, s.points),
       readableMonths: s.points.filter(isReadable).length,
       filling: curr.state === 'filling',
     })

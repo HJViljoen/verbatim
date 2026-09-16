@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { movementLine, renderMovement, rankMovement, NO_MOVEMENT_BLOCK, type MovementReading } from './movement'
+import { movementLine, movementDirection, renderMovement, rankMovement, NO_MOVEMENT_BLOCK, type MovementReading } from './movement'
+import type { SeriesPoint } from '../reading/bands'
+import type { MonthLabel } from '../reading/series'
 import type { Verdict, VerdictFlag, VerdictState } from '../reading/verdicts'
 
 // The MOVEMENT block, re-based on the comment-dated monthly reading (WP21,
@@ -88,13 +90,25 @@ describe('movementLine', () => {
   })
 
   it('names every flag it prints in words, never as a code', () => {
-    const flags: VerdictFlag[] = ['renamed', 'thin', 're_read', 'measurement_changed']
+    // The four that can arrive: three from monthChange, and `thin` from the
+    // month's own label.
+    const flags: VerdictFlag[] = ['renamed', 'thin', 'clustering_unknown']
     const line = movementLine(reading({ verdict: verdict({ flags }) }))
     // The snake_case tokens are the codes; `thin` and `renamed` are also
     // ordinary words and appear inside the sentences that explain them.
     for (const f of flags.filter((x) => x.includes('_'))) expect(line).not.toContain(f)
     expect(line).toContain('two names for the same rival')
-    expect(line).toContain('what this measures changed between them')
+    expect(line).toContain('thin against this audience’s own year')
+  })
+
+  it('stays silent about a flag it has no sentence for, rather than printing a code', () => {
+    // `measurement_changed` is moodChange's, and nothing writes `re_read` at
+    // all; both carried reader-facing sentences here that no path could reach.
+    const line = movementLine(reading({ verdict: verdict({ flags: ['re_read', 'measurement_changed'] }) }))
+    expect(line).not.toContain('re_read')
+    expect(line).not.toContain('measurement_changed')
+    // Two lines and no caveat bullet: the reading and its history, nothing else.
+    expect(line.split('\n')).toHaveLength(2)
   })
 
   it('counts the history behind a line, in the singular where there is one', () => {
@@ -169,5 +183,42 @@ describe('rankMovement', () => {
 
   it('does not reorder what it does not have to', () => {
     expect(rankMovement([], 8)).toEqual([])
+  })
+})
+
+describe('movementDirection', () => {
+  // The exact shape the review reproduced: three consecutive months, both
+  // floors cleared on each, one clustering key, one audience, monotone steps
+  // and a span that clears the band — so `directionWord` says "growing".
+  const growing: SeriesPoint[] = [
+    { month: '2026-07-01', videos: 600, k: 24, audience: 'industry-other', clusteringKey: 'ck-1' },
+    { month: '2026-08-01', videos: 628, k: 60, audience: 'industry-other', clusteringKey: 'ck-1' },
+    { month: '2026-09-01', videos: 120, k: 30, audience: 'industry-other', clusteringKey: 'ck-1' },
+  ]
+  const thinLabel: MonthLabel = { kind: 'thin', text: 'Thin month — far fewer videos than usual.' }
+
+  it('takes the word the series earned when the month is not thin', () => {
+    expect(movementDirection({ labels: [] }, growing)).toBe('growing')
+  })
+
+  it('withholds it where the reading layer marked the month thin', () => {
+    // 3 October, one update landed: the arithmetic still says growing and every
+    // other reader in the product prints nothing. Ask used to print the word
+    // and license the model to repeat it.
+    expect(movementDirection({ labels: [thinLabel] }, growing)).toBeNull()
+    expect(movementDirection({ labels: [{ kind: 'still_filling', text: 'Still filling.' }, thinLabel] }, growing)).toBeNull()
+  })
+
+  it('is not confused by another month’s caveat', () => {
+    expect(movementDirection({ labels: [{ kind: 'read_back_at_setup', text: 'Read back at setup.' }] }, growing)).toBe('growing')
+  })
+
+  it('leaves the banded verdict to monthChange — a thin month still compares', () => {
+    // The guard is about the WORD. The month-on-month line keeps its band and
+    // carries the thin sentence beside it.
+    const line = movementLine(reading({ direction: null, verdict: verdict({ flags: ['thin'] }) }))
+    expect(line).toContain('moved (+7.5 pts, band 6.6 pts)')
+    expect(line).toContain('thin against this audience’s own year')
+    expect(line).toContain('no direction word has been earned here')
   })
 })

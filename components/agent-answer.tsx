@@ -1,6 +1,5 @@
 import { QuoteBlock } from '@/components/quote-block'
-import { platformLabel, shortDate } from '@/lib/format'
-import { JUDGEMENT_HEADING, NEAREST_HEADING, saidHeading } from '@/lib/agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, citationWhere, saidHeading } from '@/lib/agent/types'
 import type { Citation, ThreadAnswer } from '@/lib/pages/agent-thread'
 
 // Rendering the three registers.
@@ -39,9 +38,9 @@ function ConversationCount({ n }: { n: number }) {
  *  the comment itself, TikTok and Instagram can only reach the post, and the
  *  link says which. */
 function Provenance({ q, meta }: { q: ThreadAnswer['grounded'][number]['quotes'][number]; meta?: Citation }) {
-  const where = [meta?.platform ? platformLabel(meta.platform) : null, meta?.date ? shortDate(meta.date) : null]
-    .filter(Boolean)
-    .join(' · ')
+  // `citationWhere` is shared with the deck's evidence appendix, so the same
+  // numbered quote cannot be dated two ways in two places (lib/agent/types.ts).
+  const where = citationWhere(meta)
   return (
     <span className="tabular-nums">
       {q.n}

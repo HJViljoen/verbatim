@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { AgentAnswerView } from './agent-answer'
 import { render, renderText } from '@/lib/test/render'
-import { saidHeading, JUDGEMENT_HEADING } from '@/lib/agent/types'
+import { saidHeading, citationWhere, JUDGEMENT_HEADING } from '@/lib/agent/types'
 import type { Citation, ThreadAnswer } from '@/lib/pages/agent-thread'
 
 // AS4 on screen (Phase 1 WP21): a quoted voice carries its number, where it was
@@ -39,7 +39,10 @@ const citations: Citation[] = [
 describe('provenance on screen', () => {
   it('prints the number, the platform, the date and a link to the comment', () => {
     const text = renderText(<AgentAnswerView answer={answer()} citations={citations} />)
-    expect(text).toContain('1 · YouTube · 1 Jul · the comment')
+    // The YEAR is part of it, and it is the deck's appendix rendering too
+    // (citationWhere): an answer retrieves across a corpus that runs back to
+    // 2020, and "1 Jul" beside "1 Jul" is two different Julys.
+    expect(text).toContain('1 · YouTube · 1 Jul 2026 · the comment')
     expect(render(<AgentAnswerView answer={answer()} citations={citations} />)).toContain('https://youtu.be/x?lc=1')
   })
 
@@ -107,5 +110,21 @@ describe('what the answer still does', () => {
     // The `quote` marker is what keeps copy-contract rule (c) off a commenter's
     // own sentence (WP0, lib/test/copy-contract.ts).
     expect(render(<AgentAnswerView answer={answer()} citations={citations} />)).toContain('data-copy="quote"')
+  })
+})
+
+describe('citationWhere', () => {
+  // ONE rendering for both renderers: the screen's Provenance and the deck's
+  // evidence appendix. They printed the same quote's date as "30 Aug" and as
+  // "2026-08-30".
+  it('dates a quote with its year, so two Augusts are two Augusts', () => {
+    expect(citationWhere({ platform: 'youtube', date: '2026-08-30' })).toBe('YouTube · 30 Aug 2026')
+  })
+
+  it('prints whichever half is recorded, and nothing when neither is', () => {
+    expect(citationWhere({ platform: 'tiktok', date: null })).toBe('TikTok')
+    expect(citationWhere({ platform: null, date: '2026-08-30' })).toBe('30 Aug 2026')
+    expect(citationWhere({ platform: null, date: null })).toBe('')
+    expect(citationWhere(undefined)).toBe('')
   })
 })
