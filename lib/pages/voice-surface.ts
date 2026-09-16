@@ -1011,11 +1011,23 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   }
 
   // ── the theme in full ───────────────────────────────────────────────────
-  const openable = pool.length > 0 ? pool : []
-  const askedTheme = params.theme && seriesById.has(params.theme) ? params.theme : null
-  const openId = askedTheme
-    ?? [...growing, ...fading, ...flat, ...openable].map((m) => m.id).find((id) => seriesById.has(id))
-    ?? null
+  //
+  // A LINK THAT ASKS FOR A THEME EITHER OPENS IT OR SAYS WHY NOT. The first
+  // cut honoured `?theme=` only for the forty themes ranked for this
+  // audience-month and fell through to the first mover for everything else —
+  // and every row of this block's own search box links a register id, of which
+  // Össur has 1,046 and Sealand 1,927. Asked for "Filip's storytelling stands
+  // out" the page drew "Beautiful design that works", state 'ready', with
+  // nothing saying a different theme was on screen. A saved or shared link did
+  // the same thing.
+  const askedId = params.theme ?? null
+  const askedRow = askedId ? pool.find((m) => m.id === askedId) ?? null : null
+  const asked = askedId
+    ? { id: askedId, label: registryById.get(askedId)?.canonical_label ?? null, found: askedRow != null }
+    : null
+  const openId = asked
+    ? (asked.found ? askedId : null)
+    : [...growing, ...fading, ...flat, ...pool].map((m) => m.id).find((id) => seriesById.has(id)) ?? null
 
   const themeBlock = await buildTheme({
     supabase,
@@ -1024,6 +1036,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     axis,
     month,
     openId,
+    asked,
     mover: pool.find((m) => m.id === openId) ?? null,
     series: openId ? seriesById.get(openId) ?? null : null,
     registry: openId ? registryById.get(openId) ?? null : null,
@@ -1094,6 +1107,26 @@ function denominatorFor(
 }
 
 /**
+ * Why no theme is open — and it is never "the month was empty" when the answer
+ * is "the link narrowed it to nothing".
+ *
+ * A reader who arrives on a link and is told the month carried nothing will
+ * believe it about the month. Three different facts wore that one sentence:
+ * a register id this workspace has never named, a theme the register knows
+ * that this audience-month did not carry, and a month that genuinely opened
+ * nothing.
+ */
+export function openRefusal(
+  input: { asked: { id: string; label: string | null; found: boolean } | null },
+  audienceLabel: string,
+): string {
+  const asked = input.asked
+  if (!asked) return 'No theme in this audience carried enough of this month to be opened.'
+  if (!asked.label) return 'The theme this link asks for is not in this workspace’s register — clear it from the link to see what this month did carry.'
+  return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open — clear it from the link to see what was.`
+}
+
+/**
  * The month each of these themes was first read in, in one audience.
  *
  * ONE INSTRUMENT FOR EVERY "FIRST HEARD" ON THE PAGE. The open theme reads its
@@ -1130,6 +1163,9 @@ interface ThemeInput {
   month: string
   prevMonth: string
   openId: string | null
+  /** The theme the URL asked for, whether or not this month could open it —
+   *  so the refusal can name it instead of blaming the month. */
+  asked: { id: string; label: string | null; found: boolean } | null
   mover: Mover | null
   series: MonthSeries | null
   registry: RegistryRow | null
@@ -1194,7 +1230,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     notes: [],
   }
   if (!input.openId || !input.series) {
-    return { ...empty, notes: ['No theme in this audience carried enough of this month to be opened.'] }
+    return { ...empty, notes: [openRefusal(input, audienceLabel(audience))] }
   }
 
   const label = input.registry?.canonical_label ?? input.series.objectLabel ?? input.openId

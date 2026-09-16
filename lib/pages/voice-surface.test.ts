@@ -16,6 +16,7 @@ import {
   moversNote,
   newMovers,
   onCameraReach,
+  openRefusal,
   pickAudience,
   platformShares,
   repliesNote,
@@ -191,6 +192,26 @@ describe('moversNote', () => {
 
   it('is silent when the page has rows', () => {
     expect(moversNote({ read: true, thin: false, any: true })).toBeNull()
+  })
+})
+
+describe('openRefusal', () => {
+  it('names the theme a link asked for rather than blaming the month', () => {
+    // Production: ?theme= honoured only the forty themes ranked for this
+    // audience-month, and every other register id — 1,046 of them on Össur —
+    // silently opened the first mover instead.
+    expect(openRefusal({ asked: { id: 'r1', label: 'Filip’s storytelling stands out', found: false } }, 'The category'))
+      .toBe('“Filip’s storytelling stands out” was not said in the category this month, so there is nothing to open — clear it from the link to see what was.')
+  })
+
+  it('tells a register id nobody has named apart from a theme nobody said', () => {
+    expect(openRefusal({ asked: { id: 'nope', label: null, found: false } }, 'The category'))
+      .toContain('not in this workspace’s register')
+  })
+
+  it('keeps the plain sentence where no link asked for anything', () => {
+    expect(openRefusal({ asked: null }, 'The category'))
+      .toBe('No theme in this audience carried enough of this month to be opened.')
   })
 })
 
