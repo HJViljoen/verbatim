@@ -7,7 +7,7 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import { mixLine, type CompetitiveSurfaceData, type StandingsSeries } from '@/lib/pages/competitive-surface'
+import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries } from '@/lib/pages/competitive-surface'
 
 // CO2 · Standings over the months (design §3 CO2).
 //
@@ -25,11 +25,33 @@ import { mixLine, type CompetitiveSurfaceData, type StandingsSeries } from '@/li
 // THE RULE AT EVERY TRACKING CHANGE is drawn once per month, not once per
 // change — Össur logged ten changes in September, and ten rules on one bar is
 // a chart nobody can read.
+//
+// BOTH CHANGES ARE PRINTED, AND NEITHER CELL IS EVER BLANK. There was one
+// change column, unlabelled as to which of the two shares it was (the content
+// one), while `attentionVerdict` was computed, declared in `verdicts()` and
+// never shown. And a null verdict rendered nothing — so on Sealand the
+// CLIENT'S OWN row printed three figures and then an empty cell, while
+// Cotopaxi said "no clear change" and Freitag "too little data". A verdict is
+// null for three different reasons and `changeNote` says which.
 
 const COLOR: Record<StandingRow['role'], string> = {
   client: 'var(--you)',
   rival: 'var(--comp)',
   category: 'var(--cat)',
+}
+
+/** One change cell: the banded verdict, or the reason there is none. */
+function Change({ verdict, observed, prevMonthLabel, mode }: {
+  verdict: Verdict | null
+  observed: boolean
+  prevMonthLabel: string | null
+  mode: RenderMode
+}) {
+  if (verdict) return <BlockMovement verdict={verdict} unit="pts" mode={mode} />
+  const text = changeNote(observed, prevMonthLabel)
+  return mode === 'email'
+    ? <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>{text}</span>
+    : <span className="text-[11.5px] text-muted-foreground">{text}</span>
 }
 
 function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode }) {
@@ -175,7 +197,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong>{row.label}</strong>
                   <div style={{ marginTop: 2 }}>
-                    videos <Share share={row.content} mode={mode} /> · comments <Share share={row.attention} mode={mode} /> <BlockMovement verdict={row.contentVerdict} unit="pts" mode={mode} />
+                    videos <Share share={row.content} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    {' · '}comments <Share share={row.attention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
                   </div>
                 </div>
               ))}
@@ -189,7 +212,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                     <th className="py-1 pr-3 font-semibold">Share of videos</th>
                     <th className="py-1 pr-3 font-semibold">Share of comments</th>
                     <th className="py-1 pr-3 font-semibold">Months in the set</th>
-                    <th className="py-1 font-semibold">Change on last month</th>
+                    <th className="py-1 pr-3 font-semibold">Videos, on last month</th>
+                    <th className="py-1 font-semibold">Comments, on last month</th>
                   </tr>
                 </thead>
                 <tbody className="align-top">
@@ -201,7 +225,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                         <td className="py-1.5 pr-3"><Share share={row.content} mode={mode} /></td>
                         <td className="py-1.5 pr-3"><Share share={row.attention} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>
-                        <td className="py-1.5"><BlockMovement verdict={row.contentVerdict} unit="pts" mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
+                        <td className="py-1.5"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
                       </tr>
                     )
                   })}

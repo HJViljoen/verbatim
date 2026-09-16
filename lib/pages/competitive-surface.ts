@@ -129,6 +129,10 @@ export interface StandingsBlock {
   /** Said when the month in hand has not been read and this table is an
    *  earlier one; null when they are the same month. */
   behind: string | null
+  /** The month every "change on last month" cell is a change against, or null
+   *  when there is no read month before this one. A cell with no verdict says
+   *  WHICH of those it is rather than going blank. */
+  prevMonthLabel: string | null
   /** The newest read month's table. */
   rows: StandingRow[]
   series: StandingsSeries[]
@@ -231,6 +235,23 @@ export const STANDINGS_UNREAD =
  *  last month's numbers under this month's name is the defect this replaces. */
 export const standingsUnreadMonth = (month: string): string =>
   `${monthName(month)} has not been read yet. A month’s row is written by the first update that lands in it, and none has landed in this one.`
+
+/**
+ * What a "change on last month" cell says when there is no verdict to draw.
+ *
+ * MK2's own header argues that "a ledger whose subject is what you did about
+ * each row cannot have a blank column", and the same argument applies here on
+ * the client's OWN brand: rendered live for Sealand, their row printed 0.6%
+ * (3 of 475), 0.3% (27 of 9,704), "1 of 1" and then nothing at all under
+ * "Change on last month", while Cotopaxi said "no clear change" and Freitag
+ * "too little data". The blank is `contentVerdict === null`, which happens for
+ * three different reasons, and a reader cannot tell which from an empty cell.
+ */
+export function changeNote(observed: boolean, prevMonthLabel: string | null): string {
+  if (!observed) return 'nothing to compare'
+  if (prevMonthLabel == null) return 'no month before this one'
+  return `no row in ${prevMonthLabel}`
+}
 
 /** Said above a table that is an earlier month than the one in hand. */
 export const standingsBehindLine = (month: string, table: string): string =>
@@ -762,6 +783,7 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     month,
     monthLabel: monthName(month),
     behind: null,
+    prevMonthLabel: null,
     rows: [],
     series: [],
     denominators: [],
@@ -867,6 +889,7 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     month,
     monthLabel: monthName(month),
     behind,
+    prevMonthLabel: byMonth.has(prevMonth) ? monthName(prevMonth) : null,
     rows,
     series,
     denominators,

@@ -4,7 +4,7 @@ import { horizonWindow } from '../reading/horizon'
 import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
-  buildStandingsBlock, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
+  buildStandingsBlock, changeNote, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
   competitiveUnlockRows, mixLine, questionsEmpty, rivalState, storedDenominators, trackingRules,
   type StandingsMonthRow,
 } from './competitive-surface'
@@ -147,6 +147,25 @@ describe('CO2 · the standings', () => {
   it('keeps a retired rival’s row rather than dropping its months', () => {
     const block = build(OSSUR, [{ name: 'Ottobock', retiredAt: null }, { name: 'Patagonia', retiredAt: '2026-09-09' }])
     expect(block.rows.map((r) => r.label)).toContain('Patagonia')
+  })
+
+  it('names the month every change cell is a change against', () => {
+    expect(build().prevMonthLabel).toBe('Aug 2026')
+    const oneMonth = buildStandingsBlock({
+      brand: 'Össur', rivals: [{ name: 'Ottobock', retiredAt: null }],
+      denominators: OSSUR.filter((d) => d.month === '2026-09-01'),
+      axis: ['2026-09-01'], readAxis: ['2026-08-01', '2026-09-01'], month: '2026-09-01', changes: [],
+    })
+    expect(oneMonth.prevMonthLabel).toBeNull()
+  })
+
+  it('has a word for every reason a change cell has no verdict', () => {
+    // The client's OWN row on Sealand printed three figures and then nothing
+    // at all, while Cotopaxi said "no clear change" and Freitag "too little
+    // data". Null means three different things and a blank says none of them.
+    expect(changeNote(false, 'Aug 2026')).toBe('nothing to compare')
+    expect(changeNote(true, null)).toBe('no month before this one')
+    expect(changeNote(true, 'Aug 2026')).toBe('no row in Aug 2026')
   })
 
   it('carries the dual-mention count for the client’s own row', () => {

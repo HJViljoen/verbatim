@@ -91,6 +91,27 @@ describe('CO2 · the standings', () => {
     expect(text).toContain('6 did this month')
   })
 
+  it('prints both changes, and never a blank cell on anybody’s row', () => {
+    // Rendered live for Sealand, the CLIENT'S OWN row printed 0.6% (3 of 475),
+    // 0.3% (27 of 9,704), "1 of 1" and then nothing under "Change on last
+    // month" — while Cotopaxi said "no clear change". And the column did not
+    // say which of the two shares it was, while attentionVerdict was computed,
+    // declared in verdicts() and never shown.
+    const data = competitiveFixture()
+    const text = renderText(competitiveStandings.render(data, 'app', ctx))
+    expect(text).toContain('Videos, on last month')
+    expect(text).toContain('Comments, on last month')
+    const quiet = {
+      ...data,
+      standings: {
+        ...data.standings,
+        rows: data.standings.rows.map((r) =>
+          r.role === 'client' ? { ...r, contentVerdict: null, attentionVerdict: null } : r),
+      },
+    }
+    expect(renderText(competitiveStandings.render(quiet, 'app', ctx))).toContain('no row in Aug 2026')
+  })
+
   it('draws a rule at the month a tracking change landed in', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     expect(text).toContain('One change to what we track landed in Sep 2026')
