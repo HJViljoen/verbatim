@@ -139,6 +139,24 @@ describe('SU2 · the subject in full', () => {
     expect(renderText(subjectsSubject.render(subjectsFixture(), 'print', ctx))).not.toContain('Ask about this')
   })
 
+  it('lets a client declare a new move after dropping one, and not while one is running', () => {
+    const data = subjectsFixture()
+    const withMove = (status: 'active' | 'dropped') => ({
+      ...data,
+      selected: { ...data.selected!, move: { id: 'm1', title: 'Answer the zip question', declaredAt: '2026-08-20', status } },
+    })
+    const running = renderText(subjectsSubject.render(withMove('active'), 'app', ctx))
+    expect(running).toContain('Tracking')
+    expect(running).not.toContain('Track this')
+
+    // Dropped: the old line can be picked up again OR a differently worded one
+    // declared. Before, "Track it again" with the old title was the only
+    // affordance on the subject, for ever.
+    const dropped = renderText(subjectsSubject.render(withMove('dropped'), 'app', ctx))
+    expect(dropped).toContain('Track it again')
+    expect(dropped).toContain('Track this')
+  })
+
   it('sends the subject to Ask, as a question the page can answer', () => {
     // /dashboard/agent?subject=<id> was read by nothing: the Agent page took
     // no search params, so the client landed on a blank composer.

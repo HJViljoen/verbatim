@@ -56,10 +56,18 @@ export function TrackThisSubject({
     if (open) setOpen(false)
   }
 
-  if (move) return <DeclaredMove move={move} />
+  // A DROPPED MOVE DOES NOT BLOCK THE NEXT ONE. While one is running or done,
+  // the lifecycle is the only thing to change and the button would be a second
+  // line on the same subject. Once it is dropped the client has said they are
+  // no longer trying that — and "Track it again" with the old title was then
+  // the ONLY affordance, so a differently-worded move on the same subject
+  // could not be declared at all. Both are offered: pick the old line up, or
+  // draw a new one.
+  if (move && move.status !== 'dropped') return <DeclaredMove move={move} />
 
   return (
     <>
+      {move ? <DeclaredMove move={move} /> : null}
       <Button type="button" size="sm" data-print-hide onClick={() => setOpen(true)}>
         Track this
       </Button>
