@@ -54,6 +54,20 @@ describe('the eight pages', () => {
     }
   })
 
+  it('prints no NaN, no undefined and no [object Object]', () => {
+    // A fixture cast past the type checker (`as unknown as RecordInputs`) put
+    // "NaN changes to what we track were made inside this window" on the
+    // method page of two of three states, in all three modes, under 34 passing
+    // tests. The cast is gone; this is the net under it.
+    for (const data of STATES) {
+      for (const block of quarterlyBlocksFor()) {
+        for (const mode of MODES) {
+          expect(renderText(block.render(data, mode, ctx))).not.toMatch(/\bNaN\b|\bundefined\b|\[object Object\]/)
+        }
+      }
+    }
+  })
+
   it('says one number one way across the eight pages', () => {
     for (const data of STATES) {
       const tables = quarterlyBlocksFor().map((b) => blockAnswers(b, data).figures)

@@ -82,23 +82,34 @@ const checksRan: QuarterChecks = {
 
 const checksNotRecorded: QuarterChecks = { recorded: false, ran: 0, flaggedRuns: 0, flags: [] }
 
-const record = (delivered: number): RecordInputs =>
-  ({
-    window: { kind: 'quarter', from: QUARTER.from, to: QUARTER.to },
-    delivery: { delivered, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
-    coverage: [
-      { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: {}, dualMention: 41, excludedUndated: 0 },
-    ],
-    readDepth: { speech: null, translated: null, onScreen: null, videos: null },
-    language: { notEnglish: null, basis: 'speech', languages: [] },
-    discard: { discarded: null, of: null, access: 'tenant' },
-    instrument: { themesPerVideo: null, previous: null },
-    changes: { recorded: [], reconstructedBefore: null },
-    comparisonsRefused: null,
-    refusals: [],
-    readingAt: NOW,
-    frozenAt: null,
-  }) as unknown as RecordInputs
+/**
+ * The quarter's record — NO CAST.
+ *
+ * The first cut wrote five of these eight blocks in shapes `RecordInputs` does
+ * not have and reached them through `as unknown as RecordInputs`. The type
+ * checker was silenced, and `recordLines` then read `input.changes.inWindow`
+ * off an object carrying `recorded` and `reconstructedBefore`: two of the three
+ * fixtures rendered "NaN changes to what we track were made inside this
+ * window" on the method page, in all three modes, under thirty-four passing
+ * block tests and the deck's own copy contract. A render tier exists to catch
+ * exactly that, and a cast is what stopped it.
+ */
+const record = (delivered: number): RecordInputs => ({
+  window: { kind: 'quarter', from: QUARTER.from, to: QUARTER.to },
+  delivery: { delivered, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
+  coverage: [
+    { audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: {}, dualMention: 41, excludedUndated: 0 },
+  ],
+  readDepth: { analysed: 1388, speech: 694, translated: 180, onScreenText: 233, unflagged: 0, basis: 'all_time_non_reddit' },
+  language: { analysed: 1388, unknown: 420, english: 640, notEnglish: 328, basis: 'video_speech' },
+  discard: { readable: true, judged: 1480, kept: 1388, setAside: 92, clearedByHeuristic: 12, gateOff: 0, failedOpen: 0, recordedFrom: '2026-06-28', basis: 'run_clock' },
+  instrument: { themesPerVideo: 2.4, themeAttachments: 3331, analysedVideos: 1388, runId: 'run-q3' },
+  changes: { inWindow: 1, loggedFrom: '2026-07-04', reconstructed: 3 },
+  comparisonsRefused: null,
+  refusals: [],
+  readingAt: NOW,
+  frozenAt: null,
+})
 
 /** A quarter that reads on both sides. */
 export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyData {
