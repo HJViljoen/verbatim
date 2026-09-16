@@ -991,13 +991,14 @@ safety margin and the only reason to take the split at all.
 
 ## Owed, and not done in WP22
 
-**Second pass, 2026-09-16 15:10–15:20 SAST (the Block C merge head).** Four
+**Second pass, 2026-09-16 15:10–15:30 SAST (the Block C merge head).** Five
 production calls in total, and they are the whole budget this pass spent:
 `select 1` through the MCP returned in about two seconds; the next catalog
 query (`pg_stat_activity`, one row, no user table) died with `Connection
-terminated due to connection timeout`; and `stored-artefacts-smoke` failed on
-its first read, twice, five minutes apart, with `Could not query the database
-for the schema cache. Retrying.` **So the instance is still where it was this
+terminated due to connection timeout`; a five-row read of `report_sends` died
+the same way twenty minutes later; and `stored-artefacts-smoke` failed on its
+first read, twice, five minutes apart, with `Could not query the database for
+the schema cache. Retrying.` **So the instance is still where it was this
 morning** — SQL answering about one call in two, PostgREST not answering at
 all — and this was not the hour to scan `audience_insights`. Nothing was
 re-read that had already been read today; the table at the top of this file
