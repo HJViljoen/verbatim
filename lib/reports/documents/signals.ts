@@ -112,7 +112,16 @@ export class SignalsError extends Error {}
 
 export async function loadSignals(
   admin: SupabaseClient,
-  args: { clientId: string; runId?: string | null; settings: DocumentSettings; role?: DocumentRole },
+  args: {
+    clientId: string
+    runId?: string | null
+    settings: DocumentSettings
+    role?: DocumentRole
+    /** The instant this build reads at, frozen once by `researchStep` and
+     *  passed down. Absent only for a caller with no build behind it (a
+     *  script, a fixture), which then takes the clock. */
+    now?: string
+  },
 ): Promise<Signals> {
   const { clientId } = args
   const role = args.role ?? (isDocumentRole(args.settings.role) ? args.settings.role : DEFAULT_DOCUMENT_ROLE)
@@ -242,7 +251,7 @@ export async function loadSignals(
   // and nothing else.
   const brief = await loadBriefReading(
     { supabase: admin, clientId, reading: readingHandle(clientId), params: {} },
-    { role },
+    { role, now: args.now },
   ).catch((e) => {
     console.error(`[documents] brief reading: ${(e as { message?: string })?.message ?? String(e)}`)
     return null
