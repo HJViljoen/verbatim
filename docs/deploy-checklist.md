@@ -778,8 +778,9 @@ monthly send is the artefact nobody has seen against a frozen month.
     --base https://app.verbatimintel.com --out scratch/shots-sealand
   ```
 
-  It shoots nineteen URLs — the nine surfaces plus the parked pages and the
-  deep-link follows — and `--only <prefix>` narrows it. **Open the first PNG of
+  Its list is nineteen entries — the nine surfaces, their detail variants and
+  the parked pages — plus up to five deep-link follows, so a full run writes
+  around two dozen PNGs. `--only <prefix>` narrows it. **Open the first PNG of
   each directory and check the workspace name before you trust the set**: the
   credentials come from the environment, and a run that silently signed in as
   the demo tenant looks exactly like a run that worked.
