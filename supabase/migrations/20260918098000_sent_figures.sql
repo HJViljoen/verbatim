@@ -398,8 +398,9 @@ comment on column public.plan_checks.notice is
 --
 -- Nothing in the product loses anything: every write to `plan_checks` goes
 -- through the service role behind an authenticated route
--- (app/api/ask/route.ts, app/api/agent/route.ts), and the one tenant-client
--- read (lib/pages/agent-thread.ts) is a SELECT, which is exactly what is kept.
+-- (app/api/agent/route.ts — WP21 retired app/api/ask/route.ts in this same
+-- block, so /api/agent is now the one writer), and the one tenant-client read
+-- (lib/pages/agent-thread.ts) is a SELECT, which is exactly what is kept.
 -- The evaluations table beside it holds the same shape for the same reason.
 revoke all on public.plan_checks            from authenticated, anon;
 revoke all on public.plan_check_evaluations from authenticated, anon;
