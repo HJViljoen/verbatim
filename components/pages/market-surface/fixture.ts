@@ -1,6 +1,6 @@
 import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 import {
-  ADVICE_EMPTY, ADVICE_UNLOCK, CLAIMS_CAVEAT, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
+  ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
@@ -96,6 +96,8 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
     },
     advice: {
       rows: adviceRows,
+      highlight: null,
+      requestedLine: null,
       total: 64,
       acted: 1,
       actedLine: actedLine(1, 64),
@@ -153,6 +155,17 @@ export function unrecordedFixture(): MarketSurfaceData {
   }
 }
 
+/** A reader who followed `?rec=<id>` from a sent digest onto a row that is not
+ *  one of the twelve oldest. The row is drawn, in its place by age, and marked. */
+export function deepLinkFixture(): MarketSurfaceData {
+  const base = marketFixture()
+  const named = base.advice.rows[base.advice.rows.length - 1]
+  return {
+    ...base,
+    advice: { ...base.advice, highlight: named.lineageId, requestedLine: ADVICE_REQUESTED_LINE },
+  }
+}
+
 /** The state where the ledger itself is empty and nothing has been dated: a
  *  tenant one update old, and the only state in which MK2 and MK4 both print
  *  their empty sentence. */
@@ -160,7 +173,7 @@ export function firstUpdateFixture(): MarketSurfaceData {
   const base = marketFixture()
   return {
     ...base,
-    advice: { rows: [], total: 0, acted: 0, actedLine: actedLine(0, 0), repeatLine: repeatLine([]), recorded: true, unlock: ADVICE_UNLOCK, empty: ADVICE_EMPTY },
+    advice: { rows: [], highlight: null, requestedLine: null, total: 0, acted: 0, actedLine: actedLine(0, 0), repeatLine: repeatLine([]), recorded: true, unlock: ADVICE_UNLOCK, empty: ADVICE_EMPTY },
     moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: true, empty: MOVES_EMPTY_MK4 },
     ways: { ...base.ways, ways: waysOfMoving(null), acceptable: null },
   }

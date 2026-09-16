@@ -4,17 +4,18 @@ import { blockAnswers, blockContext, figureCount, type RenderMode } from '@/lib/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MARKET_BLOCKS } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
 import { marketMoves } from './moves'
 import { marketWays } from './ways'
 import { marketUnlocks } from './unlocks'
-import { firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
+import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [marketFixture(), unrecordedFixture(), firstUpdateFixture()]
+const STATES = [marketFixture(), unrecordedFixture(), firstUpdateFixture(), deepLinkFixture()]
 
 describe('Market · every block, every mode, every state', () => {
   it('keeps the copy contract', () => {
@@ -132,6 +133,24 @@ describe('MK2 · the ledger', () => {
 
   it('says advice lands with the next update when the ledger is empty', () => {
     expect(marketAdvice.emptyState(firstUpdateFixture())).toBe('Advice lands with your next update.')
+  })
+
+  it('gives every row an address, and lands a deep link on the row it names', () => {
+    // `?rec=<id>` is in four sent emails and every digest until WP17. It used
+    // to resolve to a lineage that reached only MK5's accept button, so a
+    // reader following one landed on a ledger of the oldest twelve that did
+    // not contain the row they clicked.
+    const data = deepLinkFixture()
+    const markup = render(marketAdvice.render(data, 'app', ctx))
+    expect(markup).toContain(`id="advice-${data.advice.highlight}"`)
+    expect(markup).toContain(`/dashboard/market?item=${data.advice.highlight}`)
+    expect(renderText(marketAdvice.render(data, 'app', ctx))).toContain('This is the piece of advice your link named.')
+  })
+
+  it('says so when the link names advice the ledger no longer holds', () => {
+    const base = marketFixture()
+    const data = { ...base, advice: { ...base.advice, highlight: null, requestedLine: ADVICE_REQUESTED_GONE } }
+    expect(renderText(marketAdvice.render(data, 'app', ctx))).toContain('no longer holds')
   })
 
   it('counts the rows it did not draw', () => {

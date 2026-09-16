@@ -112,6 +112,12 @@ export interface AdviceRow {
 
 export interface AdviceBlock {
   rows: AdviceRow[]
+  /** The lineage the URL named, when the ledger holds it. The row is drawn
+   *  whether or not it is among the oldest, and it is marked. */
+  highlight: string | null
+  /** One sentence about the link the reader followed, or null when they
+   *  followed none. */
+  requestedLine: string | null
   /** Every identity, drawn or not. */
   total: number
   /** Identities the client has moved off New. */
@@ -354,6 +360,58 @@ export const ADVICE_UNRECORDED =
   'Your decisions are not being written down for this workspace yet — a status set here survives only as long as the next update re-finds the row it is on.'
 
 export const ADVICE_EMPTY = 'Advice lands with your next update.'
+
+export const ADVICE_REQUESTED_LINE = 'This is the piece of advice your link named.'
+
+export const ADVICE_REQUESTED_GONE =
+  'The link you followed names a piece of advice this ledger no longer holds.'
+
+/**
+ * The rows the ledger draws: the oldest, plus the one a link named.
+ *
+ * THE DEEP LINK USED TO RESOLVE AND THEN VANISH. `?rec=<id>` is carried by four
+ * sent emails and every digest until WP17; the loader resolved it to a lineage
+ * and the only thing that lineage reached was MK5's accept button. MK2 drew the
+ * twelve oldest of 56 or 64 with no anchor and no highlight, so a reader
+ * following a link from a digest landed on a ledger that did not contain the
+ * row they had clicked.
+ *
+ * The named row is ADDED rather than promoted, and the list stays sorted by
+ * age: the block's own meta line says "oldest first", and a newer row at the
+ * top would make that sentence false to save a reader one glance.
+ */
+export function ledgerRowsShown(
+  rows: readonly AdviceRow[],
+  requestedLineage: string | null,
+  shown = LEDGER_SHOWN,
+): AdviceRow[] {
+  const oldest = rows.slice(0, shown)
+  if (!requestedLineage) return oldest
+  const named = rows.find((r) => r.lineageId === requestedLineage)
+  if (!named || oldest.some((r) => r.lineageId === named.lineageId)) return oldest
+  return [...oldest, named].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+}
+
+/** A ledger row's anchor, so a link can land on the row it names. */
+export const adviceAnchor = (lineageId: string): string => `advice-${lineageId}`
+
+/**
+ * The row "Accept this advice" acts on.
+ *
+ * MK5's sentence is "the oldest piece of advice you have not decided on", and
+ * the row a link named was taken with no status check at all — so a digest
+ * link to a row already marked Done or Dismissed printed that sentence over it
+ * and offered to accept it a second time. A named row is taken only while it
+ * is still undecided; otherwise the sentence and the button agree with each
+ * other again, on the oldest row nobody has decided.
+ */
+export function acceptableRow(
+  rows: readonly AdviceRow[],
+  requested: AdviceRow | null,
+): AdviceRow | null {
+  if (requested && requested.status === 'new') return requested
+  return rows.find((r) => r.status === 'new') ?? null
+}
 
 /**
  * What a move is on, in the reader's words.
@@ -614,8 +672,18 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   // ── MK2 · the advice, and what you decided ─────────────────────────────
   const adviceRows = buildAdviceRows(recRows, decisions)
   const acted = adviceRows.filter((r) => r.status !== 'new').length
+  // The legacy deep link, resolved once and read by both blocks below. `?rec=`
+  // names a recommendation ROW id, which is deleted and reinserted every
+  // update; the lineage it belongs to is what survives, and is what the ledger
+  // and the accept button are both keyed on.
+  const requested = params.rec ?? params.item
+  const requestedRow = requested
+    ? adviceRows.find((r) => r.recommendationId === requested || r.lineageId === requested) ?? null
+    : null
   const advice: AdviceBlock = {
-    rows: adviceRows.slice(0, LEDGER_SHOWN),
+    rows: ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null),
+    highlight: requestedRow?.lineageId ?? null,
+    requestedLine: !requested ? null : requestedRow ? ADVICE_REQUESTED_LINE : ADVICE_REQUESTED_GONE,
     total: adviceRows.length,
     acted,
     actedLine: actedLine(acted, adviceRows.length),
@@ -649,13 +717,8 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     audience: e.audience,
     verdictLabel: e.audience === 'echoes' ? 'Echoed' : e.audience === 'contradicts' ? 'Pushed back' : 'Not taken up',
   }))
-  // The oldest row nobody has acted on: the one "accept this advice" would
-  // sensibly act on, and the one the deep link lands on when it names nothing.
-  const requested = params.rec ?? params.item
-  const requestedRow = requested
-    ? adviceRows.find((r) => r.recommendationId === requested || r.lineageId === requested) ?? null
-    : null
-  const acceptable = requestedRow ?? adviceRows.find((r) => r.status === 'new') ?? null
+  // What the button acts on — see `acceptableRow`.
+  const acceptable = acceptableRow(adviceRows, requestedRow)
   const ways: WaysBlock = {
     ways: waysOfMoving(acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null),
     claims,

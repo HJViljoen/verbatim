@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 
 import type { RecDecision } from '../rec-decisions'
 import {
-  actedLine, buildAdviceRows, lineageKey, madeInMonth, marketSurfaceHref, monthsMadeIn,
-  moveLedgerLine, moveTargetLabel, repeatLine, unlockRows, waysOfMoving, type RecCopy,
+  acceptableRow, actedLine, adviceAnchor, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
+  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, repeatLine, unlockRows,
+  waysOfMoving, type AdviceRow, type RecCopy,
 } from './market-surface'
 
 const copy = (over: Partial<RecCopy> = {}): RecCopy => ({
@@ -197,5 +198,64 @@ describe('the surface’s own links', () => {
 
   it('names the month a piece of advice was first made in', () => {
     expect(madeInMonth('2026-06-13')).toBe('Jun 2026')
+  })
+})
+
+
+describe('ledgerRowsShown — the row a deep link named', () => {
+  const rowAt = (n: number): AdviceRow => ({
+    lineageId: `L${n}`,
+    recommendationId: `r${n}`,
+    title: `advice ${n}`,
+    reasoning: '',
+    kind: 'positioning_messaging',
+    firstMade: `2026-0${(n % 9) + 1}-01`,
+    timesMade: 1,
+    monthsRepeated: 1,
+    repeatedWithinMonth: false,
+    status: 'new',
+    statusLabel: 'New',
+    decidedAt: null,
+  })
+  const rows = Array.from({ length: 20 }, (_, i) => rowAt(i)).sort((a, b) => a.firstMade.localeCompare(b.firstMade))
+
+  it('draws the oldest and nothing else when no link was followed', () => {
+    expect(ledgerRowsShown(rows, null, 12)).toHaveLength(12)
+    expect(ledgerRowsShown(rows, null, 12)).toEqual(rows.slice(0, 12))
+  })
+
+  it('adds the named row when it is not among the oldest', () => {
+    const named = rows[rows.length - 1]
+    const shown = ledgerRowsShown(rows, named.lineageId, 12)
+    expect(shown).toHaveLength(13)
+    expect(shown.map((r) => r.lineageId)).toContain(named.lineageId)
+  })
+
+  it('keeps the list oldest-first, because the block says it is', () => {
+    const shown = ledgerRowsShown(rows, rows[rows.length - 1].lineageId, 12)
+    expect([...shown].sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId)))
+      .toEqual(shown)
+  })
+
+  it('adds nothing when the named row is already drawn, or names nothing at all', () => {
+    expect(ledgerRowsShown(rows, rows[0].lineageId, 12)).toHaveLength(12)
+    expect(ledgerRowsShown(rows, 'L-not-here', 12)).toHaveLength(12)
+  })
+
+  it('offers to accept the named row only while nobody has decided it', () => {
+    // MK5 prints "The oldest piece of advice you have not decided on: {title}"
+    // over whatever the URL named; without a status check it printed it over a
+    // row already marked Done and offered to accept it again.
+    const done: AdviceRow = { ...rows[5], status: 'acted_on', statusLabel: 'Done' }
+    const list = rows.map((r) => (r.lineageId === done.lineageId ? done : r))
+    expect(acceptableRow(list, done)!.lineageId).toBe(list.find((r) => r.status === 'new')!.lineageId)
+    expect(acceptableRow(list, list[3])!.lineageId).toBe(list[3].lineageId)
+    expect(acceptableRow(list, null)!.lineageId).toBe(list.find((r) => r.status === 'new')!.lineageId)
+    expect(acceptableRow(list.map((r) => ({ ...r, status: 'dismissed' as const })), null)).toBeNull()
+  })
+
+  it('gives every row an anchor a link can land on', () => {
+    expect(adviceAnchor('L3')).toBe('advice-L3')
+    expect(marketSurfaceHref('L3', { horizon: 'last_3', rec: 'r3' })).toBe('/dashboard/market?horizon=last_3&item=L3')
   })
 })
