@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { copyViolations } from '@/lib/test/copy-contract'
+import { copyNodes, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { voiceCast } from './cast'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
@@ -27,6 +27,19 @@ describe('voiceCast', () => {
     const text = draw()
     expect(text).toContain('The one-bag commuter 527 videos')
     expect(text).not.toMatch(/527 of /)
+  })
+
+  it('marks the model’s words as `subject` and leaves code’s labels outside the exemption', () => {
+    // `subject` cuts its whole range out of rule (c), so a node wrapping a
+    // label code wrote is a place a real direction word could hide. Every
+    // subject node here is one stored sentence and nothing else.
+    const markup = render(voiceCast.render(voiceFixture(), 'app', ctx))
+    const subjects = copyNodes(markup).filter((n) => n.kind === 'subject')
+    expect(subjects.length).toBeGreaterThan(0)
+    for (const label of ['Drives', 'Stops', 'What made them look']) {
+      expect(subjects.some((n) => n.text.includes(label)), label).toBe(false)
+    }
+    expect(draw()).toContain('Drives')
   })
 
   it('never calls its population "comments" — it is not a comment count', () => {

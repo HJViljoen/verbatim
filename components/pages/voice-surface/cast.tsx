@@ -69,18 +69,25 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
         </p>
       ) : null}
       {persona.wants ? (
-        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>Drives</span> {persona.wants}
+        // THE LABEL IS CODE'S AND SITS OUTSIDE THE EXEMPT NODE. `subject`
+        // takes the direction rule off everything inside it, so a node that
+        // wraps a word code wrote is a place a real direction word could hide.
+        // Only the model's own sentence is marked.
+        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+          <span className={email ? undefined : 'text-muted-foreground'}>Drives</span>{' '}
+          <span data-copy="subject">{persona.wants}</span>
         </p>
       ) : null}
       {persona.blockers ? (
-        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>Stops</span> {persona.blockers}
+        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+          <span className={email ? undefined : 'text-muted-foreground'}>Stops</span>{' '}
+          <span data-copy="subject">{persona.blockers}</span>
         </p>
       ) : null}
       {persona.triggers ? (
-        <p data-copy="subject" className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>What made them look</span> {persona.triggers}
+        <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
+          <span className={email ? undefined : 'text-muted-foreground'}>What made them look</span>{' '}
+          <span data-copy="subject">{persona.triggers}</span>
         </p>
       ) : null}
       {persona.platformMix.length > 0 ? (

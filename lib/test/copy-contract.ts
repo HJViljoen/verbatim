@@ -77,6 +77,15 @@ export const COPY_ATTR = 'data-copy'
  * It is narrow on purpose. `prose` stays the default for everything a model
  * writes ABOUT a reading — a brief, a cover, an interpretation — and those are
  * exactly the slots PROSE_POLICY marks 'both'.
+ *
+ * AND A `subject` NODE CARRIES THE MODEL'S WORDS AND NOTHING ELSE. The
+ * exemption cuts the node's whole range out of rule (c)'s block-wide scan, so
+ * a node that also wraps a heading, a label or a sentence CODE wrote is a
+ * place a real direction word can sit unmarked. A block marks the model's
+ * value, not the row it sits in: `<span>Drives</span> <span
+ * data-copy="subject">{persona.wants}</span>`, never one marked node around
+ * both. VO4's cast was written the wrong way round and is the reason this
+ * paragraph exists.
  */
 export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict' | 'subject'
 
