@@ -1,6 +1,5 @@
 import Link from 'next/link'
 
-import { HORIZONS, HORIZON_LABEL, type Horizon } from '@/lib/reading/horizon'
 import { LEADERSHIP_LINE, NOT_BUILT_YET, deliveryLine, type BriefCard } from '@/lib/reports/briefs'
 
 // RP1 — the three brief cards (Phase 1 WP19, decision R).
@@ -10,40 +9,18 @@ import { LEADERSHIP_LINE, NOT_BUILT_YET, deliveryLine, type BriefCard } from '@/
 // (Settings › Reports and recipients) and the build has one (the Studio), and
 // a second control for either is a second thing to keep in step.
 //
-// THE WINDOW CONTROL IS THE HORIZON CONTROL (RP2). The four horizons are the
-// ones every reading surface already offers, so a brief built on "Last 3
-// months" is the window the reader was looking at when they asked for it. It
-// travels to the Studio as `?horizon=`, which is the same parameter the page
-// bar puts in the URL.
+// NO WINDOW CONTROL. RP2's window control sat here and did nothing: no Studio
+// route read `?horizon=`, nothing wrote it into a report's settings, and the
+// build itself is now pinned to the month it stamps. A control that highlights
+// a choice and changes nothing is worse than none, so the header says what the
+// window is instead.
 
-export function BriefCards({
-  cards,
-  horizon,
-  studioHref,
-}: {
-  cards: readonly BriefCard[]
-  horizon: Horizon
-  /** Where the horizon picker points — this page, with `?horizon=` set. */
-  studioHref: (h: Horizon) => string
-}) {
+export function BriefCards({ cards }: { cards: readonly BriefCard[] }) {
   return (
     <section className="flex shrink-0 flex-col gap-2.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Your briefs</h2>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-mono text-[10.5px] text-muted-foreground">Window</span>
-          {HORIZONS.map((h) => (
-            <Link
-              key={h}
-              href={studioHref(h)}
-              scroll={false}
-              aria-current={h === horizon ? 'true' : undefined}
-              className={`rounded-[4px] px-2 py-0.5 font-mono text-[10.5px] ring-1 ${h === horizon ? 'bg-tile text-foreground ring-border' : 'text-muted-foreground ring-transparent hover:ring-border'}`}
-            >
-              {HORIZON_LABEL[h]}
-            </Link>
-          ))}
-        </div>
+        <span className="font-mono text-[10.5px] text-muted-foreground">Each one reads the month in hand</span>
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -67,7 +44,7 @@ export function BriefCards({
                 </Link>
               )}
               <Link
-                href={c.reportId ? `/dashboard/studio?item=${c.reportId}&${new URLSearchParams({ horizon }).toString()}` : `/dashboard/studio/new?role=${c.role}&${new URLSearchParams({ horizon }).toString()}`}
+                href={c.reportId ? `/dashboard/studio?item=${c.reportId}` : '/dashboard/studio/new'}
                 className="text-[12px] font-medium underline underline-offset-2"
               >
                 {c.reportId ? 'Build it in the Studio' : 'Set it up in the Studio'}

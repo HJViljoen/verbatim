@@ -24,7 +24,7 @@ describe('the three cards', () => {
   })
 
   it('say where the fourth is rather than leaving it withdrawn', () => {
-    const html = render(<BriefCards cards={[card()]} horizon="this_month" studioHref={(h) => `/dashboard/reports?horizon=${h}`} />)
+    const html = render(<BriefCards cards={[card()]} />)
     expect(html).toContain('leadership brief')
     expect(LEADERSHIP_LINE).toContain('Studio')
   })
@@ -59,26 +59,26 @@ describe('cadenceWord', () => {
 
 describe('the card', () => {
   it('prints the day the last one read, not the day it was built', () => {
-    const html = render(<BriefCards cards={[card()]} horizon="this_month" studioHref={(h) => `/x?horizon=${h}`} />)
+    const html = render(<BriefCards cards={[card()]} />)
     expect(html).toContain('read as at 16 Sep 2026')
   })
 
   it('says it has never been built where it has not', () => {
-    const html = render(<BriefCards cards={[card({ latest: null, reportId: null })]} horizon="this_month" studioHref={() => '/x'} />)
+    const html = render(<BriefCards cards={[card({ latest: null, reportId: null })]} />)
     expect(html).toContain('Never built for this workspace')
     expect(html).toContain('Set it up in the Studio')
   })
 
-  it('carries the window into the Studio', () => {
-    const html = render(<BriefCards cards={[card()]} horizon="last_3" studioHref={(h) => `/x?horizon=${h}`} />)
-    expect(html).toContain('horizon=last_3')
-    expect(html).toContain('Last 3 months')
-  })
-
-  it('offers every horizon as the window control', () => {
-    const html = render(<BriefCards cards={[card()]} horizon="this_month" studioHref={(h) => `/x?horizon=${h}`} />)
-    for (const label of ['This month', 'Last 3 months', 'Last 12 months', 'Since we started']) {
-      expect(html).toContain(label)
+  // The horizon control that stood here highlighted a choice no route read:
+  // no Studio page takes a horizon searchParam and nothing writes one into a
+  // report's settings. Asserting an href substring proved the link, not the
+  // behaviour.
+  it('offers no window control, and says what the window is', () => {
+    const html = render(<BriefCards cards={[card()]} />)
+    expect(html).not.toContain('horizon=')
+    for (const label of ['Last 3 months', 'Last 12 months', 'Since we started']) {
+      expect(html).not.toContain(label)
     }
+    expect(html).toContain('reads the month in hand')
   })
 })

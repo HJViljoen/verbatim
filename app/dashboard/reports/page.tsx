@@ -19,7 +19,6 @@ import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { SENT_FIGURES_NOTE, dateFilterLine, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
 import { BRIEF_CARDS, cadenceWord, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
-import { parseHorizon } from '@/lib/reading/horizon'
 import { isArtefact } from '@/lib/settings/artefacts'
 
 // Reports — the three briefs, and the archive of what went out (Phase 1 WP19,
@@ -81,9 +80,8 @@ const BASE = '/dashboard/reports'
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
-/** Every link on this page carries the reader's filter and their window — a
- *  rail link that dropped the date filter would silently widen the archive
- *  under them, and the horizon is what a build is about to be built on. */
+/** Every link on this page carries the reader's filter — a rail link that
+ *  dropped the date filter would silently widen the archive under them. */
 const hrefWith = (extra: Record<string, string | undefined>) => (group: Group, item?: string | null) => {
   const q = new URLSearchParams()
   if (group !== 'sent') q.set('group', group)
@@ -99,12 +97,11 @@ const sendLine = (s: SendRow) =>
   : sendDidNotFinish(s.status, s.claimed_at) ? `did not finish · ${fmtWhen(s.claimed_at)}`
   : `sending · ${fmtWhen(s.claimed_at)}`
 
-export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string; from?: string; to?: string; horizon?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string; from?: string; to?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
   const group: Group = sp.group === 'built' ? 'built' : sp.group === 'exported' ? 'exported' : 'sent'
   const dates = parseDateFilter(sp.from, sp.to)
-  const horizon = parseHorizon(sp.horizon)
 
   const [sendRes, legacyRes, buildRes, exportRes, sendTotal, legacyTotal, builtTotal, exportTotal, reportRows, schedules] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
@@ -228,7 +225,6 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const carry: Record<string, string | undefined> = {
     ...(dates.from ? { from: dates.from } : {}),
     ...(dates.to ? { to: dates.to } : {}),
-    ...(horizon !== 'this_month' ? { horizon } : {}),
   }
   const href = hrefWith(carry)
 
@@ -250,7 +246,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const filter = (
     <ArchiveDateFilter
       filter={dates}
-      hidden={{ ...(group !== 'sent' ? { group } : {}), ...(horizon !== 'this_month' ? { horizon } : {}) }}
+      hidden={{ ...(group !== 'sent' ? { group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
       line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported)}
     />
   )
@@ -446,7 +442,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <PageBar title="Reports" context="your briefs, and what went out">
         <Link href="/dashboard/studio"><BarPill primary>Open the Studio</BarPill></Link>
       </PageBar>
-      <BriefCards cards={cards} horizon={horizon} studioHref={(h) => hrefWith({ ...carry, horizon: h === 'this_month' ? undefined : h })(group, sp.item)} />
+      <BriefCards cards={cards} />
       <MasterDetail id="reports" rail={rail} list={list} detail={detail} />
       {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
     </PageFrame>
