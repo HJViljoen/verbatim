@@ -59,6 +59,18 @@ describe('SU1 · the subjects list', () => {
     expect(text).toContain('named 19 Aug 2026')
   })
 
+  it('groups a four-digit count like every other number on the page', () => {
+    const data = subjectsFixture()
+    const [first, ...rest] = data.list.rows
+    const big = {
+      ...data,
+      list: { ...data.list, rows: [{ ...first, level: { k: 1042, n: 3877, pct: 26.9 } }, ...rest] },
+    }
+    const text = renderText(subjectsList.render(big, 'app', ctx))
+    expect(text).toContain('1,042 of 3,877 videos')
+    expect(text).toContain('26.9%')
+  })
+
   it('prints the supersede rule wherever the editing happens', () => {
     for (const mode of MODES) {
       expect(renderText(subjectsList.render(subjectsFixture(), mode, ctx)), mode)

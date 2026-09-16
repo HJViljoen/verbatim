@@ -13,7 +13,7 @@ import {
   retireSubjectAction,
   type SubjectFormState,
 } from '@/lib/actions/subjects'
-import { fullDate } from '@/lib/format'
+import { fmtInt, fmtPct, fullDate } from '@/lib/format'
 import { SUPERSEDE_RULE } from '@/lib/pages/subjects'
 import { SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
 
@@ -116,14 +116,14 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                 )}
                 {r.level && r.level.pct != null ? (
                   <span data-copy="figure" className="font-mono text-[12px] tabular-nums text-foreground">
-                    {r.level.pct}%
+                    {fmtPct(r.level.pct)}
                   </span>
                 ) : null}
               </span>
 
               {r.level && r.level.pct != null ? (
                 <span data-copy="level" className={cls.meta}>
-                  of your videos · {r.level.k} of {r.level.n} videos
+                  of your videos · {fmtInt(r.level.k)} of {fmtInt(r.level.n)} videos
                 </span>
               ) : (
                 // A PROPOSED ROW SAYS WHERE IT CAME FROM, not that it is not
