@@ -19,7 +19,7 @@ import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
 import { monthScopedFigures } from '../reports/weekly'
 import { MonthlyEmptyError, recordSend, snapshotMonthly } from '../reports/monthly-build'
 import type { SentFigureRow } from '../reports/sent-figures'
-import { sentFigureRows } from '../reports/sent-figures'
+import { FIGURE_AUDIENCE, sentFigureRows } from '../reports/sent-figures'
 import { renderQuarterlyEmail } from '../email/quarterly'
 import { snapshotQuarterly, QuarterlyEmptyError, type QuarterlySnapshotData } from '../reports/quarterly-build'
 import { blockAnswers } from '../blocks/types'
@@ -345,7 +345,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
           // `sent_figures.month` is NOT NULL because a figure filed under the
           // wrong period is worse than one with none.
           figures: monthScopedFigures(built.data.figures),
-          figureAudience: 'artefact',
+          figureAudience: FIGURE_AUDIENCE,
         }),
         readingAt: built.data.readingAt,
         month: built.data.month,

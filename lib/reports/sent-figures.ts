@@ -109,6 +109,22 @@ export const objectKey = (
 ): string => [audience, kind, id, measure].join(KEY_SEP)
 
 /**
+ * The audience an artefact-level token is filed under.
+ *
+ * NOT A BUCKET STRING, AND SAID SO. Every other value in this column is the
+ * literal audience a reading was taken in — 'client', 'industry',
+ * 'competitor:<name>' — which is the rule `month_denominators.audience` carries
+ * and what WP19's archive joins on. A token is the month's own size or the
+ * count of videos behind it: it belongs to no audience at all, and filing it
+ * under one would say a reading was taken in a slice it was not. The sentinel
+ * is spelled once, here; it is not a legal bucket string (a rival's is prefixed
+ * `competitor:`, and the three pooled ones are named constants), so it can
+ * never collide with one, and `object_kind = 'figure'` marks the same rows a
+ * second time for a reader who joins on the kind instead.
+ */
+export const FIGURE_AUDIENCE = 'artefact'
+
+/**
  * Every figure an artefact printed, from the blocks' own answers.
  *
  * TWO SOURCES, AND THEY ARE NOT THE SAME THING.
@@ -163,7 +179,8 @@ export function sentFigureRows(input: {
   artefact: string
   verdicts: readonly Verdict[]
   figures: FigureTable
-  /** The audience a token belongs to when it names none of its own. */
+  /** The audience a token belongs to when it names none of its own.
+   *  `FIGURE_AUDIENCE` unless a caller has a real bucket for it. */
   figureAudience?: string
 }): SentFigureRow[] {
   const out: SentFigureRow[] = []
@@ -210,7 +227,7 @@ export function sentFigureRows(input: {
   const stated = out.map((r) => ({ label: r.label.toLowerCase(), pct: r.value, k: r.k }))
   const said = new Set<string>()
 
-  const audience = input.figureAudience ?? 'artefact'
+  const audience = input.figureAudience ?? FIGURE_AUDIENCE
   for (const [token, figure] of Object.entries(input.figures)) {
     // A TOKEN'S MEASURE IS ITS OWN UNIT where that is a population, and the
     // product's default where it is not: a share or a movement in this product
