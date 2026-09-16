@@ -5,7 +5,7 @@
 // read every comment); this heuristic picker is the fallback that fills the rest
 // and covers rows/runs that predate hero_quote.
 
-import { chunk, HASH_IN_CHUNK, UUID_IN_CHUNK } from './chunk'
+import { chunk, HASH_IN_CHUNK } from './chunk'
 import { memoRead } from './reading/memo'
 import { audienceOf } from './rivals'
 import { selectAll } from './supabase-admin'
@@ -304,11 +304,18 @@ interface EvidenceClient {
  *  it, so both sizes keep a wide margin under the measured cap (lib/chunk.ts:
  *  500 uuids succeed, 700 do not).
  *
- *  The size was 120, chosen against an assumed 8 KiB cap. The real cap is at
- *  least twice that, and the cost on this instance is per REQUEST — so the
- *  chunk is now UUID_IN_CHUNK (250), which halves the requests a page makes
- *  here. The rows a chunk brings back are unbounded either way (one Sealand
- *  insight carries 104 evidence rows), which is what `selectAll` is for.
+ *  AND THE SIZE IS PART OF WHAT THE PAGE PRINTS, which is why it is still 120
+ *  and not `UUID_IN_CHUNK` (lib/chunk.ts, 250 — measured, and what the other
+ *  chunked readers now use). The callers below key their result Map by
+ *  `audience_insight_id` in the order the EVIDENCE ROWS arrive, and the rows
+ *  arrive ordered by evidence id WITHIN each chunk — so the order the insights
+ *  land in the Map, and therefore the order a picker meets them, depends on
+ *  where the chunk boundaries fall. Raising the size to 250 changed four of
+ *  Sealand's "For sales" quotes (verified by diffing the loader's whole output
+ *  against the same read before the change; every other page on both tenants
+ *  was byte-identical). A performance constant must not choose which sentence
+ *  a client reads, so this one stays where it is until the order is settled by
+ *  something other than the chunk boundary.
  *
  *  Two different caps, and chunking only answers the first. 120 ids keeps the
  *  request URL short (PostgREST's other limit); it does nothing about the
@@ -324,7 +331,7 @@ interface EvidenceClient {
  *  each one, after an idle spell, at the DB's wake-up price. Chunks are
  *  disjoint by id, so processing the results in chunk order gives the same
  *  per-id ordering the serial loop did. */
-async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = UUID_IN_CHUNK): Promise<R[]> {
+async function fetchChunks<R>(ids: string[], fetch: (ids: string[]) => Rows, size = 120): Promise<R[]> {
   const pages = await Promise.all(
     chunk(ids, size).map((part) => selectAll<R>(() => fetch(part) as { range: (from: number, to: number) => PromiseLike<{ data: R[] | null; error: unknown }> })),
   )

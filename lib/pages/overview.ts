@@ -31,7 +31,7 @@ import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonth
 import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -914,15 +914,24 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const horizon = parseHorizon(params.horizon)
 
   // ── wave 1: who this is, and what has been delivered ───────────────────
-  const [clientRes, runsRaw, runningIds, rivals] = await Promise.all([
+  // THE THEMED RUN AND THE LEDGER JOIN THIS WAVE (WP23). Neither depends on
+  // the month axis, and both used to be awaited on the critical path after it
+  // — the themed-run read alone was a second of Össur's Overview, spent while
+  // nothing else was in flight. The themed run still waits on the running-run
+  // ids, because that is what it filters by; it just waits on them here,
+  // beside the other three reads, instead of two waves later.
+  const [clientRes, runsRaw, [runningIds, themedRunId], rivals, ledger] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'overview'),
+    fetchRunningRunIds(supabase, clientId, 'overview').then(
+      async (ids) => [ids, await fetchThemedRunId(supabase, clientId, ids, 'overview')] as const,
+    ),
     loadTrackedRivals(supabase, clientId),
+    loadLedger(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'
@@ -958,7 +967,19 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
   const monthStatus = freezeStateFor(month, readingAt)
-  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'overview')
+
+  // THE RECORD'S READS DEPEND ON THE MONTH AND ON NOTHING ELSE. What the page
+  // refused to compare is a pure count over verdicts the page has not made
+  // yet, so the eight reads behind the record can go now and take the
+  // refusals afterwards, rather than waiting at the very bottom for a window
+  // that was settled here. It was the last serial read on the page.
+  const recordAhead = loadRecordInputs(
+    reading.client,
+    clientId,
+    recordWindow(month, readingAt),
+    { now: readingAt },
+  )
+  recordAhead.catch(() => {})
 
   // ── wave 3: the readings ───────────────────────────────────────────────
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
@@ -1141,9 +1162,10 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...category.fading.map((m) => m.verdict),
   ]
   const head = headline({ verdicts: suppress ? [] : sentenceVerdicts })
-  const ledger = await loadLedger(supabase, clientId)
-  const voices = await loadVoices(supabase, clientId, head.lead, top, themedRunId)
-  const anomaly = flags.length > 0 ? await buildAnomaly(supabase, flags[0]) : null
+  const [voices, anomaly] = await Promise.all([
+    loadVoices(supabase, clientId, head.lead, top, themedRunId),
+    flags.length > 0 ? buildAnomaly(supabase, flags[0]) : Promise.resolve(null),
+  ])
   const interpretation = composeInterpretation(
     'interpretation_monthly',
     sentenceVerdicts,
@@ -1169,12 +1191,13 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     ...(category.mood?.verdict ? [category.mood.verdict] : []),
     ...Object.values(category.kindVerdicts).filter((v): v is Verdict => v != null),
   ]
-  const recordInputs = await loadRecordInputs(
-    reading.client,
-    clientId,
-    recordWindow(month, readingAt),
-    { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
-  )
+  // The reads were issued above; only the page's own refusals are added here,
+  // and those are arithmetic over verdicts, not a read.
+  const recordInputs: RecordInputs = {
+    ...(await recordAhead),
+    comparisonsRefused: countRefused(pageVerdicts),
+    refusals: refusals(pageVerdicts),
+  }
   const record: RecordBlock = {
     line: howSoundLine(recordInputs),
     lines: recordLines(recordInputs),
