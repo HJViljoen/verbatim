@@ -318,6 +318,14 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
           ) : search.q ? (
             <BlockEmpty mode={mode}>Nothing in the register matches “{search.q}”.</BlockEmpty>
           ) : null}
+          {/* The matches, not the rows — `total` counts what was found, so it
+              is printed where it changes what a reader concludes from a list
+              of twelve. */}
+          {search.total > search.rows.length ? (
+            <p className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
+              Showing <span data-copy="figure">{fmtInt(search.rows.length)} of {fmtInt(search.total)}</span> matches — type more of the phrase to narrow it.
+            </p>
+          ) : null}
         </div>
       </BlockFrame>
     )

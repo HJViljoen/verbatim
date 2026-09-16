@@ -358,9 +358,29 @@ describe('searchRegistry', () => {
     expect(searchRegistry(rows, '')).toEqual([])
   })
 
-  it('caps what it returns', () => {
-    const many = Array.from({ length: 40 }, (_, i) => ({ id: `${i}`, canonical_label: 'zip thing', member_slugs: null }))
-    expect(searchRegistry(many, 'zip', 5)).toHaveLength(5)
+  it('returns every match, so the caller can say how many there were', () => {
+    // "prosthetic" matches 56 of Össur's first 400 register rows alone. The
+    // first cut sliced twelve in uuid order and reported the slice as the
+    // total.
+    const many = Array.from({ length: 40 }, (_, i) => ({ id: `${i}`, canonical_label: `zip thing ${i}`, member_slugs: null }))
+    expect(searchRegistry(many, 'zip')).toHaveLength(40)
+  })
+
+  it('ranks a label that starts with the query above one that merely contains it', () => {
+    const ranked = searchRegistry([
+      { id: 'a', canonical_label: 'Worry about zips in winter', member_slugs: null },
+      { id: 'b', canonical_label: 'Zips failing after a year', member_slugs: null },
+      { id: 'c', canonical_label: null, member_slugs: ['zip_failure'] },
+    ], 'zip')
+    expect(ranked.map((r) => r.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('puts the shorter label first inside a tier, so the plain theme beats the qualified one', () => {
+    const ranked = searchRegistry([
+      { id: 'long', canonical_label: 'Zips failing after a year of daily commuting', member_slugs: null },
+      { id: 'short', canonical_label: 'Zips failing', member_slugs: null },
+    ], 'zip')
+    expect(ranked.map((r) => r.id)).toEqual(['short', 'long'])
   })
 })
 

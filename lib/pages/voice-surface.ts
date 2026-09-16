@@ -607,22 +607,41 @@ export function onCameraReach(input: { videos: number; reddit: number | null }):
   return `read from ${fmtInt(readable)} of ${fmtInt(input.videos)} videos — Reddit carries no speech and no on-screen text`
 }
 
-/** The search over the whole registry — "have we seen this before?" Matching is
- *  a plain case-folded substring over the canonical label and its member
- *  slugs; a query of fewer than two characters matches nothing rather than
- *  everything. */
+/**
+ * The search over the whole register — "have we seen this before?"
+ *
+ * EVERY MATCH, RANKED, AND THE CALLER TAKES THE TOP OF IT. The first cut
+ * filtered and sliced twelve in `id` order — uuid order, which is nothing —
+ * and reported the slice as the total, so "prosthetic" (56 matches in Össur's
+ * first 400 register rows alone) answered "12" and answered it with whichever
+ * twelve the uuids happened to sort first. A register search whose rows are
+ * arbitrary is a search a reader cannot trust to say "no, we have not heard
+ * this before".
+ *
+ * The rank is the plainest one that is defensible: a label that STARTS with
+ * what was typed, then a label that contains it, then a slug-only match, and
+ * the shorter label first inside each group so the plain theme beats the long
+ * qualified one. Matching stays a case-folded substring over the canonical
+ * label and the member slugs, and a query of fewer than two characters matches
+ * nothing rather than everything.
+ */
 export function searchRegistry<T extends { id: string; canonical_label: string | null; member_slugs: string[] | null }>(
   rows: readonly T[],
   q: string,
-  limit: number = SEARCH_ROWS,
 ): T[] {
   const needle = q.trim().toLowerCase()
   if (needle.length < 2) return []
-  return rows
-    .filter((r) =>
-      (r.canonical_label ?? '').toLowerCase().includes(needle) ||
-      (r.member_slugs ?? []).some((s) => s.toLowerCase().includes(needle)))
-    .slice(0, limit)
+  const ranked: { row: T; tier: number; label: string }[] = []
+  for (const r of rows) {
+    const label = (r.canonical_label ?? '').toLowerCase()
+    const at = label.indexOf(needle)
+    const tier = at === 0 ? 0 : at > 0 ? 1 : (r.member_slugs ?? []).some((sl) => sl.toLowerCase().includes(needle)) ? 2 : -1
+    if (tier < 0) continue
+    ranked.push({ row: r, tier, label })
+  }
+  return ranked
+    .sort((a, b) => a.tier - b.tier || a.label.length - b.label.length || a.label.localeCompare(b.label))
+    .map((r) => r.row)
 }
 
 // `unnamedShare`, `fillingLine` and `daysInto` were HERE and are gone.
@@ -837,6 +856,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const selected = pickAudience(params.audience, audiences)
 
   const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'voice-surface')
+  const searching = (params.q ?? '').trim().length >= 2
 
   // ── wave 3: the themes worth drawing, and the registry behind them ──────
   const top = themedRunId
@@ -851,11 +871,21 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       from: readAxis[0], to: month, audiences: [selected], objectKind: 'theme', objectIds: topIds,
       updatesByMonth, firstRunMonth, changeLogFrom: history.changeLogFrom,
     }),
-    selectAll<RegistryRow>(() =>
-      supabase.from('theme_registry')
+    // THE WHOLE REGISTER ONLY WHEN SOMEONE IS SEARCHING IT. Össur carries
+    // 1,046 entries and Sealand 1,927, each with a description and a slug
+    // array, and every page load pulled all of them to use forty labels. The
+    // search is the one thing that needs the rest, so the read is the pool's
+    // own ids — plus whatever `?theme=` asked for, or the refusal could not
+    // tell "not in the register" from "not read this month" — until a reader
+    // types something.
+    selectAll<RegistryRow>(() => {
+      const base = supabase.from('theme_registry')
         .select('id, canonical_label, description, member_slugs, status, observation_count')
-        .eq('client_id', clientId).order('id', { ascending: true }),
-    ),
+        .eq('client_id', clientId)
+      const wanted = searching ? null : [...new Set([...topIds, ...(params.theme ? [params.theme] : [])])]
+      return (wanted ? base.in('id', wanted.length > 0 ? wanted : ['00000000-0000-0000-0000-000000000000']) : base)
+        .order('id', { ascending: true })
+    }),
     readStoredMonths<StoredKindRow>(reading.client, 'month_kind_readings', clientId, readAxis, ['month', 'audience', 'kind'], isMissingKindMoodAttention),
     readStoredMonths<StoredStatsRow>(reading.client, 'month_audience_stats', clientId, readAxis, ['month', 'audience'], isMissingKindMoodAttention),
     readReplies(supabase, clientId, month),
@@ -1243,7 +1273,8 @@ interface ThemeInput {
 async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   const { params, registryAll, audience, month, axis } = input
   const q = (params.q ?? '').trim()
-  const searchHits = searchRegistry(registryAll, q)
+  const matches = searchRegistry(registryAll, q)
+  const searchHits = matches.slice(0, SEARCH_ROWS)
   // The month each hit was first read in, off the record and never off the
   // register's own `first_seen_at`. One query, and only when a reader has
   // actually typed something.
@@ -1252,7 +1283,11 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   )
   const search = {
     q,
-    total: searchHits.length,
+    // THE MATCHES, NOT THE ROWS SHOWN. `total` was the length of the slice, so
+    // it could only ever equal the number of rows beside it — a field waiting
+    // to tell a later block that "prosthetic" matches twelve themes when it
+    // matches dozens.
+    total: matches.length,
     rows: searchHits.map((r) => ({
       id: r.id,
       label: r.canonical_label ?? r.id,

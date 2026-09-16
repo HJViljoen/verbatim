@@ -124,6 +124,19 @@ describe('voiceTheme', () => {
     expect(text).not.toContain('2022-07')
   })
 
+  it('says how many the register matched, not how many rows it drew', () => {
+    // "prosthetic" matches 272 Össur register entries; the list shows twelve.
+    const base = voiceFixture()
+    const text = draw({
+      ...base,
+      theme: {
+        ...base.theme,
+        search: { q: 'zip', total: 272, rows: [{ id: 'z', label: 'Zips failing after a year', firstHeard: '2022-07-01', updates: 4, active: false, href: '/dashboard/voice?theme=z' }] },
+      },
+    })
+    expect(text).toContain('Showing 1 of 272 matches')
+  })
+
   it('says a theme is not read in this audience rather than leaving the date blank', () => {
     const base = voiceFixture()
     const text = draw({
