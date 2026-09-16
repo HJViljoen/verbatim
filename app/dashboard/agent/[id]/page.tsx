@@ -8,7 +8,7 @@ import { AgentComposer } from '@/components/agent-composer'
 import { AgentAnswerView } from '@/components/agent-answer'
 import { AgentDocumentSplit } from '@/components/agent-document-split'
 import { ExportMenu, ExportScope } from '@/components/export-menu'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk } from '@/lib/agent/access'
 import { loadAgentThread } from '@/lib/pages/agent-thread'
 
 // One thread, at its own URL. The whole exchange, oldest first, so it reads as
@@ -19,9 +19,9 @@ import { loadAgentThread } from '@/lib/pages/agent-thread'
 
 export default async function AgentThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { supabase, clientId, userId } = await getSessionContext()
+  const { supabase, clientId, userId, role } = await getSessionContext()
   const [canSend, data] = await Promise.all([
-    isPlatformAdmin(userId),
+    canAsk(role, userId),
     loadAgentThread({ supabase, clientId, reading: readingHandle(clientId), params: { thread: id } }),
   ])
   if (!data) notFound()

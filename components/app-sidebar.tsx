@@ -52,18 +52,17 @@ const ITEM_CLASS =
   "data-[active=true]:before:absolute data-[active=true]:before:-left-2 data-[active=true]:before:top-2 data-[active=true]:before:bottom-2 " +
   "data-[active=true]:before:w-0.5 data-[active=true]:before:rounded-full data-[active=true]:before:bg-primary data-[active=true]:before:content-['']"
 
-export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boolean; header?: React.ReactNode; ops?: React.ReactNode }) {
+export function AppSidebar({ header, ops }: { header?: React.ReactNode; ops?: React.ReactNode }) {
   const pathname = usePathname()
-  // Ask is one of the nine and still rides AGENT_ENABLED: decision B opens it
-  // to client owners and admins in WP21, and until that lands SENDING is
-  // platform-admin only (app/dashboard/agent/page.tsx). Showing a client an
-  // item they cannot use is worse than showing them eight. One env var flips
-  // it; WP21 removes the gate.
+  // Ask is one of the nine, unconditionally (Phase 1 WP21, decision B). It
+  // rode AGENT_ENABLED while sending was platform-admin only, on the argument
+  // that showing a client an item they cannot use is worse than showing them
+  // eight. Owners and admins can use it now, and a member's Ask page is a
+  // readable archive of every answer the workspace has — which is a page worth
+  // a sidebar item, not a dead end.
   const active = surfaceForPath(pathname)
   const item = (key: NavKey, href: string, label: string): NavItem => ({ href, label, icon: ICON[key] })
-  const intelligence = surfacesIn("Intelligence")
-    .filter((s) => s.key !== "ask" || showAgent)
-    .map((s) => item(s.key, s.href, s.label))
+  const intelligence = surfacesIn("Intelligence").map((s) => item(s.key, s.href, s.label))
   const account = surfacesIn("Account").map((s) => item(s.key, s.href, s.label))
   const oldPages: NavItem[] = OLD_PAGES.map((p) => ({ href: p.href, label: p.label, icon: OLD_ICON[p.href] ?? Play }))
   const parked = oldPageFor(pathname)

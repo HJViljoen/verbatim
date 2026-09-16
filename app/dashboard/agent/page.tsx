@@ -2,7 +2,7 @@ import { getSessionContext } from '@/lib/auth'
 import { AgentComposer } from '@/components/agent-composer'
 import { AgentCrowdRing } from '@/components/agent-stage'
 import { AgentHistory, type ThreadRow } from '@/components/agent-history'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk } from '@/lib/agent/access'
 
 // The Verbatim Agent — arrive with a question from your own work, get an answer
 // built from what your customers actually said.
@@ -19,14 +19,14 @@ import { isPlatformAdmin } from '@/lib/agent/access'
  *  "Ask about this" is the first. It fills the box and nothing else: the
  *  reader reads it, edits it, and presses send. */
 export default async function AgentPage({ searchParams }: { searchParams?: Promise<{ ask?: string }> }) {
-  const { supabase, clientId, userId } = await getSessionContext()
+  const { supabase, clientId, userId, role } = await getSessionContext()
   const ask = (await searchParams)?.ask?.slice(0, 300)
   // The admin check and the thread list are independent — one wave (round
   // trips, not rows, are the cost: the DB pays a ~0.5s wake-up on the first
   // requests after idle, and every sequential wave pays it again).
   const [canSend, { data: rows }] = await Promise.all([
     // Computed server-side and passed down — never a client-side check.
-    isPlatformAdmin(userId),
+    canAsk(role, userId),
     supabase
       .from('agent_threads')
       .select('id, title, created_at')

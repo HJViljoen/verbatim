@@ -1167,13 +1167,13 @@ export const AGENT_TREND_MIN_POINTS = 3
  *  doubling and it is also nothing. */
 export const AGENT_TREND_MIN_EVIDENCE = 5
 
-/** Master switch for the Verbatim Agent. Deliberately NOT the CONSUMER_PROFILE
- *  flag: lighting up the agent must not also light up Pass E and the weekly
- *  re-evaluation inside a pipeline run, and vice versa. OFF unless set. */
-export function agentEnabled(): boolean {
-  const v = process.env.AGENT_ENABLED
-  return v === '1' || v === 'true'
-}
+// AGENT_ENABLED IS RETIRED (Phase 1 WP21, decision B). It was the master switch
+// for the Verbatim Agent and it never switched the surface off: the pages
+// rendered with the flag unset, and only the sidebar item and the send route
+// read it. Ask is one of the nine surfaces now and the gate that decides who
+// may spend is `canAsk` (lib/agent/access.ts) plus the monthly cap below. A
+// flag whose only remaining job is to hide a menu entry is a flag that tells a
+// reader the wrong thing about what is switched on.
 
 /** How much evidence two personas must share for the newer one to BE the older
  *  one. A profile is not a weekly report — "Caregiver" should still be

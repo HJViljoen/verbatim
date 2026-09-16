@@ -4,7 +4,6 @@ import { AppSidebar } from "@/components/app-sidebar"
 import { AccessBannerLoader } from "@/components/access-banner-loader"
 import { OpsNavLoader } from "@/components/ops/ops-nav-loader"
 import { SidebarWordmark, WorkspaceSwitcherLoader } from "@/components/workspace-switcher-loader"
-import { agentEnabled } from "@/lib/config"
 
 // Deliberately synchronous: no session, no DB. This layout wraps every
 // dashboard route, and an async layout sits ABOVE each route's loading.tsx
@@ -22,7 +21,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           the session resolves. Same reason as the banner below — this layout
           must not await anything. */}
       <AppSidebar
-        showAgent={agentEnabled()}
         header={
           <Suspense fallback={<SidebarWordmark />}>
             <WorkspaceSwitcherLoader />

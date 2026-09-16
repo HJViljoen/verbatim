@@ -5,9 +5,9 @@ import { answerQuestion } from '@/lib/agent/answer'
 import { runAsk, clipInput } from '@/lib/ask/engine'
 import { extractPdfText, pageWarning, PdfTooLargeError, PdfUnreadableError } from '@/lib/ask/pdf'
 import { latestRunId } from '@/lib/agent/retrieve'
-import { isPlatformAdmin } from '@/lib/agent/access'
+import { canAsk, ASK_NOT_YOURS } from '@/lib/agent/access'
 import { outcomeOf } from '@/lib/agent/types'
-import { agentEnabled, AGENT_DAILY_LIMIT, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
+import { AGENT_DAILY_LIMIT, AGENT_QUESTION_CHARS, ASK_PDF_MAX_BYTES } from '@/lib/config'
 import { dayStartIso, evaluateQuota } from '@/lib/ask/quota'
 
 // POST /api/agent — ask the Verbatim Agent a question.
@@ -27,22 +27,18 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 export async function POST(request: Request) {
-  if (!agentEnabled()) {
-    return NextResponse.json({ error: 'Not available yet.' }, { status: 404 })
-  }
   const session = await getRouteSession()
   if (!session) {
     return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
   }
-  const { clientId, userId } = session
+  const { clientId, userId, role } = session
 
-  // Send is operator-only for now (2026-08-22). Everyone in the tenant can read
-  // the threads; only a platform admin may spend a model call.
-  if (!(await isPlatformAdmin(userId))) {
-    return NextResponse.json(
-      { error: 'The agent is read-only on this workspace for now. You can read every answer here, but asking is switched off while we are still testing it.' },
-      { status: 403 },
-    )
+  // Decision B (2026-09-16): an owner or an admin may ask; a member reads.
+  // AGENT_ENABLED is gone with it — an env var that hid the sidebar item while
+  // the pages themselves rendered was never the gate it looked like, and the
+  // gate that matters is this one, on the request that spends the money.
+  if (!(await canAsk(role, userId))) {
+    return NextResponse.json({ error: ASK_NOT_YOURS }, { status: 403 })
   }
 
   const admin0 = createAdminClient()

@@ -16,7 +16,9 @@ import { CrowdFigure } from '@/components/crowd-figure'
 // `canSend` is computed on the SERVER and passed in. When it is false the box
 // is visible and disabled rather than hidden: a reader should be able to see
 // what this page is and that answers live here. That one line stays, because
-// it explains a STATE rather than teaching a mechanism.
+// it explains a STATE rather than teaching a mechanism — and since decision B
+// the state is "not yours", not "not built": every answer on this page is
+// readable by the member looking at the disabled box.
 
 export function AgentComposer({
   canSend,
@@ -127,7 +129,7 @@ export function AgentComposer({
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           disabled={busy || !canSend}
-          placeholder={canSend ? placeholder : 'Asking is switched off on this workspace'}
+          placeholder={canSend ? placeholder : 'Only an owner or admin can ask here'}
           aria-label="Ask about your customers"
           className={`h-14 w-full rounded-full border border-border bg-card ${threadId ? 'pl-6' : 'pl-14'} pr-16 text-[15px] text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-60`}
         />
