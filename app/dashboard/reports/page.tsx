@@ -80,7 +80,7 @@ const BASE = '/dashboard/reports'
 /** What each list asks for, in one place: the `.limit()` the query carries and
  *  the number `listCap` weighs the table's head count against. Two copies of a
  *  cap is how a list and its caveat come to disagree. */
-const LIST_CAP = { sent: 200, built: 100, exported: 50 } as const
+const LIST_CAP = { sent: 200, legacy: 1000, built: 100, exported: 50 } as const
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
@@ -110,7 +110,14 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   const [sendRes, legacyRes, buildRes, exportRes, sendTotal, legacyTotal, builtTotal, exportTotal, reportRows, schedules] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
       .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(LIST_CAP.sent),
-    supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
+    // `.limit()` EXPLICITLY, BECAUSE A BARE SELECT IS NOT UNCAPPED. PostgREST
+    // stops at 1,000 rows and says nothing (AGENTS.md), so this read was capped
+    // all along while the caveat's arithmetic treated it as complete — the same
+    // two-pools defect one table over. `selectAll` is the other answer and is
+    // the wrong one here: nobody reads a list of ten thousand legacy updates,
+    // and the cap is now a number the caveat can name.
+    supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at')
+      .eq('client_id', clientId).order('week_end', { ascending: false }).limit(LIST_CAP.legacy),
     supabase.from('report_snapshots')
       // `readingAt:data->>readingAt` IS THE WEEKLY'S AND THE MONTHLY'S CARRIER.
       // A brief puts its reading instant in `data.reading.readingAt`; WP17's
