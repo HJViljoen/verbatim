@@ -1,4 +1,6 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import { HORIZONS, type Horizon } from '../../reading/horizon'
+import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -69,6 +71,18 @@ export interface DocumentSettings {
   blocks?: DocumentBlockKey[]
   /** Custom briefs: whose voice writes it. */
   role?: DocumentRole
+  /**
+   * The build's window control (Phase 1 WP19, RP2).
+   *
+   * IT IS THE HORIZON CONTROL, not a second vocabulary. The Studio had no time
+   * choice at all — a build was pinned to `latestRunId` and that was the only
+   * window a report had — and the design asks for one. The four horizons are
+   * the ones every reading surface already offers, so a brief built on "Last 3
+   * months" is the same window the reader was looking at when they asked for
+   * it, and an export of the page and a brief of the page cannot answer
+   * differently. Absent = `DEFAULT_HORIZON`.
+   */
+  horizon?: Horizon
 }
 
 export const DEFAULT_DOCUMENT_SETTINGS: DocumentSettings = { sellsTo: 'consumers', competitors: null, language: 'en', findings: 4 }
@@ -88,8 +102,11 @@ export function documentSettings(raw: Partial<DocumentSettings> | null | undefin
     ...(brief ? { brief } : {}),
     ...(blocks.length ? { blocks } : {}),
     ...(isDocumentRole(s.role) ? { role: s.role } : {}),
+    ...(isHorizon(s.horizon) ? { horizon: s.horizon } : {}),
   }
 }
+
+export const isHorizon = (v: unknown): v is Horizon => HORIZONS.includes(v as Horizon)
 
 // ── the document ──────────────────────────────────────────────────────────
 
@@ -170,6 +187,45 @@ export interface DocLens {
   short: string
 }
 
+/**
+ * The month a brief is a reading of, frozen onto its snapshot (Phase 1 WP19).
+ *
+ * "Exports and reports freeze numbers, never words" — so the stamp, the
+ * denominators and the platform mix are stored, and the quoted voices still
+ * resolve at render. Absent on every brief built before this landed and on a
+ * workspace whose month tables have never been seeded, which is why every
+ * reader of it is optional-chained rather than defaulted: a missing reading is
+ * a fact about the brief, not a zero.
+ */
+export interface DocumentReading {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** "September 2026". */
+  monthLabel: string
+  monthStatus: MonthStatus
+  /** The instant the brief read, printed — never `created_at`. */
+  readingAt: string
+  /** The build's window control (RP2), as a horizon key. */
+  horizon: string
+  /** The one line every page of the brief carries. */
+  stamp: string
+  denominators: { audience: string; label: string; videos: number; comments: number }[]
+  platformMix: Record<string, number>
+  /** True where the window crosses a recorded clustering boundary — the label
+   *  decision L requires travels with it. */
+  crossesClustering: boolean
+}
+
+/** One input a brief needed and the workspace has not recorded, frozen so the
+ *  artefact says the same thing a year later. */
+export interface DocumentMissingInput {
+  id: string
+  input: string
+  owner: string
+  unlocks: string
+  sections: string[]
+}
+
 export interface DocumentMethod {
   conversations: number
   videos: number
@@ -196,6 +252,11 @@ export interface DocumentSnapshotData {
   runId: string | null
   figures: FigureTable
   delta: RunDelta | null
+  /** The month this brief is a reading of (WP19). Absent on a brief built
+   *  before item 43 and on a workspace with no monthly reading. */
+  reading?: DocumentReading | null
+  /** What it could not fill, and who closes each one (WP19). */
+  missing?: DocumentMissingInput[]
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

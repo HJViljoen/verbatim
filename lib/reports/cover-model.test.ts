@@ -3,7 +3,7 @@ import { buildCoverPrompts } from './cover-model'
 import type { FigureTable } from './types'
 
 const figures: FigureTable = {
-  videos: { label: 'conversations analysed', value: '374', kind: 'count' },
+  videos: { label: 'videos analysed', value: '374', kind: 'count' },
   sentiment_positive_pct: { label: 'positive sentiment', value: '92.7%', kind: 'pct' },
   top_competitor: { label: 'most-talked-about competitor', value: 'Ottobock', kind: 'name' },
 }
@@ -28,7 +28,7 @@ describe('buildCoverPrompts', () => {
     expect(line).toContain('"positive sentiment stood at [[sentiment_positive_pct]]"')
     expect(line).toContain('Never "is [[sentiment_positive_pct]]"')
     // the count template is unchanged
-    expect(user).toContain('write it as "[[videos]] conversations analysed"')
+    expect(user).toContain(`write it as "[[videos]] videos analysed"`)
   })
 
   it('never asks the model for a digit', () => {

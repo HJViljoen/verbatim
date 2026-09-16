@@ -3,6 +3,10 @@ import { chunk } from '../../chunk'
 import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
+import { briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
+import type { DocumentReading } from './types'
+import { missingSentence, missingSummary } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -44,22 +48,58 @@ export function thinWeek(s: Pick<Signals, 'runStatus' | 'run'>): boolean {
   return s.runStatus === 'partial' || s.run.conversations < DOCUMENT_THIN_CONVERSATIONS
 }
 
-/** Every figure the writer may cite, computed in code from the signals and
- *  the research: the update's numbers, each competitor's share, the count
- *  behind every grounded point and every concern. */
+/**
+ * Every figure the writer may cite (Phase 1 WP19 re-based it onto the month).
+ *
+ * WHEN THERE IS A MONTHLY READING, IT IS THE MONTH'S. The table opens with the
+ * blocks' own merged figures — the shares, the levels and the banded changes a
+ * reader saw on the page — and its headline counts are the month's
+ * denominators, each labelled with the month it is of. The run-scoped figures
+ * that used to be here are deliberately NOT offered beside them:
+ * `prev_positive_pct`, `prev_conversations` and `new_themes` are one update
+ * against the previous update, which is the run-indexed series item 43 exists
+ * to take out of the artefacts, and a model handed both would write a sentence
+ * that is half a month and half a Sunday.
+ *
+ * VIDEOS ARE NOT SUMMED ACROSS AUDIENCES. A video naming two rivals sits in
+ * both buckets (`CoverageRecord.dualMention` counts exactly that), so
+ * `competitor_videos` — which summed them — has no month-scoped successor and
+ * each rival gets its own figure instead. Comments DO sum exactly, which is
+ * why `conversations` still has one.
+ *
+ * WHEN THERE IS NO READING the update figures stand, unchanged, and the method
+ * page says which basis this brief used. That is the isMissing* precedent: a
+ * brief on a workspace whose month tables are not applied prints what it has
+ * and names what it could not read.
+ */
 export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTable {
-  const f: FigureTable = {
-    conversations: { label: 'conversations', value: fmtCount(s.run.conversations), kind: 'count' },
-    videos: { label: 'videos', value: fmtCount(s.run.videos), kind: 'count' },
-    client_videos: { label: `${s.company} videos`, value: fmtCount(s.run.clientVideos), kind: 'count' },
-    competitor_videos: { label: 'competitor videos', value: fmtCount(s.run.competitorVideos), kind: 'count' },
+  const f: FigureTable = s.reading ? { ...s.reading.figures } : {}
+  if (s.reading) {
+    const r = s.reading
+    const of = (audience: string) => r.denominators.find((d) => d.audience === audience) ?? null
+    const category = of(INDUSTRY_AUDIENCE)
+    const client = of(CLIENT_AUDIENCE)
+    const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
+    f.reading_month = { label: 'the month this reading is of', value: r.monthLabel, kind: 'name' }
+    f.conversations = { label: `comments read in ${r.monthLabel}`, value: fmtCount(comments), kind: 'count' }
+    if (category) f.videos = { label: `videos read for the category in ${r.monthLabel}`, value: fmtCount(category.videos), kind: 'count' }
+    if (client) f.client_videos = { label: `${s.company} videos in ${r.monthLabel}`, value: fmtCount(client.videos), kind: 'count' }
+    for (const c of s.competitors) {
+      const d = of(`competitor:${c.name}`)
+      if (d) f[`${slug(c.name)}_videos`] = { label: `${c.name} videos in ${r.monthLabel}`, value: fmtCount(d.videos), kind: 'count' }
+    }
+  } else {
+    f.conversations = { label: 'conversations', value: fmtCount(s.run.conversations), kind: 'count' }
+    f.videos = { label: 'videos', value: fmtCount(s.run.videos), kind: 'count' }
+    f.client_videos = { label: `${s.company} videos`, value: fmtCount(s.run.clientVideos), kind: 'count' }
+    f.competitor_videos = { label: 'competitor videos', value: fmtCount(s.run.competitorVideos), kind: 'count' }
+    if (s.run.positivePct != null) f.positive_pct = { label: 'positive share of judged conversations', value: fmtPct(s.run.positivePct), kind: 'pct' }
+    if (s.run.clientSharePct != null) f.client_share_pct = { label: `${s.company} share of tracked conversation`, value: fmtPct(s.run.clientSharePct), kind: 'pct' }
+    for (const c of s.competitors) if (c.shareNow != null) f[`${slug(c.name)}_share_pct`] = { label: `${c.name} share of tracked conversation`, value: fmtPct(c.shareNow), kind: 'pct' }
+    if (s.delta?.sentiment) f.prev_positive_pct = { label: 'positive share in the previous update', value: fmtPct(s.delta.sentiment.prev), kind: 'pct' }
+    if (s.delta?.conversations) f.prev_conversations = { label: 'conversations in the previous update', value: fmtCount(s.delta.conversations.prev), kind: 'count' }
+    if (s.delta?.newThemes) f.new_themes = { label: 'themes new this update', value: fmtCount(s.delta.newThemes.count), kind: 'count' }
   }
-  if (s.run.positivePct != null) f.positive_pct = { label: 'positive share of judged conversations', value: fmtPct(s.run.positivePct), kind: 'pct' }
-  if (s.run.clientSharePct != null) f.client_share_pct = { label: `${s.company} share of tracked conversation`, value: fmtPct(s.run.clientSharePct), kind: 'pct' }
-  for (const c of s.competitors) if (c.shareNow != null) f[`${slug(c.name)}_share_pct`] = { label: `${c.name} share of tracked conversation`, value: fmtPct(c.shareNow), kind: 'pct' }
-  if (s.delta?.sentiment) f.prev_positive_pct = { label: 'positive share in the previous update', value: fmtPct(s.delta.sentiment.prev), kind: 'pct' }
-  if (s.delta?.conversations) f.prev_conversations = { label: 'conversations in the previous update', value: fmtCount(s.delta.conversations.prev), kind: 'count' }
-  if (s.delta?.newThemes) f.new_themes = { label: 'themes new this update', value: fmtCount(s.delta.newThemes.count), kind: 'count' }
   // A count under three is not worth a number on paper ("one conversation
   // praise…" reads as thin as it is); the point still grounds, the writer
   // names the pattern instead of counting it.
@@ -405,6 +445,8 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     runId: s.runId,
     figures,
     delta: s.delta,
+    ...(s.reading ? { reading: documentReading(s.reading) } : {}),
+    ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -442,6 +484,23 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
   return { data, workings }
 }
 
+/** The reading, as the snapshot carries it: the stamp and the denominators
+ *  frozen, the figures already on `data.figures`, and neither the verdicts nor
+ *  the surfaces' own data duplicated here. */
+export function documentReading(r: BriefReading): DocumentReading {
+  return {
+    month: r.month,
+    monthLabel: r.monthLabel,
+    monthStatus: r.monthStatus,
+    readingAt: r.readingAt,
+    horizon: r.horizon,
+    stamp: briefStamp(r),
+    denominators: r.denominators.map((d) => ({ ...d })),
+    platformMix: { ...r.platformMix },
+    crossesClustering: r.crossesClustering,
+  }
+}
+
 /** The platforms the update's phrases came from: the honest list of what was read. */
 function sourcesOf(s: Signals): string[] {
   const platforms = new Set<string>()
@@ -472,9 +531,28 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
   // reader of the snapshot later) can otherwise not tell what this document
   // was written to answer. Operator prose, printed as written.
   const asked = brief?.replace(/\s+/g, ' ').trim()
+  // WHAT THE BRIEF IS A READING OF. Two bases, and the page says which. With a
+  // monthly reading the basis is the month, dated by the comment, with its
+  // denominator per audience and the platform mix behind it — the three things
+  // no brief has ever printed. Without one it is the update, exactly as before,
+  // and the page says the month-by-month reading was not available rather than
+  // letting a reader take an update for a month.
+  // DEFENSIVE, and not from timidity: a `Signals` is constructed by the build
+  // path, by scripts/build-document.ts and by fixtures, and a brief that
+  // throws because one of them predates item 43 is worse than a brief that
+  // prints the update basis.
+  const r = s.reading ?? null
+  const missing = s.missing ?? []
+  const basis = r
+    ? `This brief is a reading of ${r.monthLabel}, written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category. ${denominatorLine(r.denominators)}${platformLine(r.platformMix) ? ` Across ${platformLine(r.platformMix)}.` : ''} A month is dated by when the comment was written, not by when we looked${r.monthStatus === 'filling' ? ', and this month is still filling' : ''}. ${briefStamp(r)}.`
+    : `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. The month-by-month reading is not recorded for this workspace yet, so these are the update's own numbers. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`
+
   return [
     asked ? `This brief was written to answer an instruction from ${s.company}: "${/[.!?]$/.test(asked) ? asked : `${asked}.`}"` : '',
-    `This brief is written from public conversation around ${s.company}, ${competitors.length ? `${competitors.join(', ')} ` : ''}and the wider category: ${fmtCount(s.run.conversations)} conversations on ${fmtCount(s.run.videos)} videos in the ${period.replace(/^Update/, 'update')}${sources.length ? `, on ${sources.join(', ')}` : ''}. A conversation is one comment or spoken line the analysis cited; the analysis reads what people said in public, not sales calls or surveys.`,
+    basis,
+    r && sources.length ? `The words quoted in it were read on ${sources.join(', ')}.` : '',
+    r?.crossesClustering ? 'Themes were grouped differently inside part of this window, so a comparison across it is not like for like and no direction word is claimed over it.' : '',
+    ...(missing.length ? [missingSummary(missing) ?? '', ...missing.map(missingSentence)] : []),
     `Findings are the researcher's readings of that conversation, ordered by the evidence behind them. Each rests on grounded points the analysis extracted and verified; confidence is judged from how many conversations and how many independent strands support the reading (solid, reasonable or thin), never by the writer.${thin ? ' This update was thin, so fewer findings were written rather than stretch the evidence.' : ''}`,
     `${wherePagesComeFrom}${wherePagesComeFrom && s.heldBackPhrases ? ' ' : ''}${s.heldBackPhrases ? `${fmtCount(s.heldBackPhrases)} phrases in other languages were read for the counts but not quoted.` : ''}`,
     updatesCount > 1

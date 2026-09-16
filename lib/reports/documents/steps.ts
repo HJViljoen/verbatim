@@ -6,11 +6,12 @@ import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
 import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
-import { documentSettings, isDocumentData, type DocumentSettings } from './types'
-import { loadSignals } from './signals'
+import { DEFAULT_DOCUMENT_ROLE, documentSettings, isDocumentData, isDocumentRole, type DocumentRole, type DocumentSettings } from './types'
+import { loadSignals, type Signals } from './signals'
 import { composeQuestions, type ResearchQuestion } from './questions'
 import { BuildBlockedError, runResearch, type ResearchAnswer } from './research'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from './compose'
+import { briefStamp } from './reading'
 import { generateDocument, DOCUMENT_WRITER_MODEL, WriteFailedError } from './write-model'
 import { type PreviousBrief, type WriterOutput } from './write'
 import { checkDocument, type FindingVerdict } from './check'
@@ -98,7 +99,14 @@ const mark = async (admin: SupabaseClient, ctx: BuildContext, status: 'researchi
 const spend = async (admin: SupabaseClient, ctx: BuildContext, totalUsd: number) => {
   if (ctx.buildId) await setBuildCost(admin, ctx.buildId, totalUsd)
 }
-const signalsOf = (admin: SupabaseClient, ctx: BuildContext) => loadSignals(admin, { clientId: ctx.clientId, runId: ctx.runId, settings: ctx.settings })
+/** Which of the four voices writes this brief — and, since WP19, which
+ *  section map it is composed from. The four fixed templates ARE their role;
+ *  a custom brief names one in its settings. */
+export const roleOf = (template: Pick<DocumentTemplate, 'key'>, settings: DocumentSettings): DocumentRole =>
+  isDocumentRole(template.key) ? template.key : (settings.role ?? DEFAULT_DOCUMENT_ROLE)
+
+const signalsOf = (admin: SupabaseClient, ctx: BuildContext) =>
+  loadSignals(admin, { clientId: ctx.clientId, runId: ctx.runId, settings: ctx.settings, role: roleOf(ctx.template, ctx.settings) })
 
 export async function researchStep(admin: SupabaseClient, ctx: BuildContext): Promise<ResearchOut> {
   await mark(admin, ctx, 'researching')
@@ -122,7 +130,7 @@ export async function writeStep(admin: SupabaseClient, ctx: BuildContext, r: Pic
   await mark(admin, ctx, 'writing')
   const signals = await signalsOf(admin, ctx)
   const figures = documentFigures(signals, r.answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const previous = await previousBrief(admin, ctx.report)
   const t0 = Date.now()
   const written = await generateDocument(admin, {
@@ -178,7 +186,7 @@ export async function freezeStep(
   const answers = resolveQuotes(args.answers, texts) as ResearchAnswer[]
   const signals = await signalsOf(admin, ctx)
   const figures = documentFigures(signals, answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const title = ctx.report.cover?.title?.trim() || ctx.report.title || ctx.template.name
   const check = args.check
     ? {
@@ -280,7 +288,22 @@ export async function previousBrief(admin: SupabaseClient, report: Pick<ReportRo
   return { summary, headlines }
 }
 
-/** "Update of 30 Aug 2026". */
+/**
+ * The period a brief prints (Phase 1 WP19, item 43).
+ *
+ * "Update of 30 Aug 2026" was the period on every brief, on its method page and
+ * in its email — a run's own bookkeeping, printed as the thing the numbers are
+ * about. A brief whose numbers are a month's cannot keep it. Where there is a
+ * monthly reading the period is the month, the instant it was read and, while
+ * the month is still filling, the day it stops moving; where there is none the
+ * old string stands, because a brief that says "September 2026" over update
+ * figures would be the same lie the other way round.
+ */
+export function briefPeriod(signals: Pick<Signals, 'reading' | 'runDate'>): string {
+  return signals.reading ? briefStamp(signals.reading) : periodOf(signals.runDate)
+}
+
+/** "Update of 30 Aug 2026" — the basis a brief with no monthly reading has. */
 export function periodOf(runDate: string): string {
   const d = new Date(runDate)
   if (Number.isNaN(d.getTime())) return 'This update'

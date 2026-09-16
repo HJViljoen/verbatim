@@ -30,8 +30,8 @@ import { composeQuestions } from '../lib/reports/documents/questions'
 import { runResearch } from '../lib/reports/documents/research'
 import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from '../lib/reports/documents/compose'
+import { briefPeriod } from '../lib/reports/documents/steps'
 import { generateDocument, DOCUMENT_WRITER_MODEL } from '../lib/reports/documents/write-model'
-import { periodOf } from '../lib/reports/documents/build'
 import { buildContext, runBuildInProcess } from '../lib/reports/documents/steps'
 import { insertBuild, latestRunId, loadBuild } from '../lib/reports/documents/builds'
 import type { ReportRow } from '../lib/reports/types'
@@ -128,7 +128,7 @@ async function main() {
   // Write, compose, freeze, print. The script has no reports row: the
   // snapshot's report_id stays null and there is no previous brief.
   const figures = documentFigures(signals, research.answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const t2 = Date.now()
   const written = reuse && has('reuse-write') && existsSync(`${out}/written.json`)
     ? { written: JSON.parse(readFileSync(`${out}/written.json`, 'utf8')) as Awaited<ReturnType<typeof generateDocument>>['written'], costUsd: 0, ms: 0, promptTokens: 0, completionTokens: 0 }

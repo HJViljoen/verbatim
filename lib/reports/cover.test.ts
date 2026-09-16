@@ -3,7 +3,7 @@ import { composeFallbackCover, coverPlainText, dedupeTitles, scrubCover, splitSe
 import type { FigureTable } from './types'
 
 const figures: FigureTable = {
-  videos: { label: 'conversations analysed', value: '374', kind: 'count' },
+  videos: { label: 'videos analysed', value: '374', kind: 'count' },
   comments: { label: 'comments read', value: '4,626', kind: 'count' },
   sentiment_positive_pct: { label: 'positive sentiment', value: '92.7%', kind: 'pct' },
 }

@@ -10,7 +10,12 @@ import { englishHits, keywordsOf } from '../../quotes'
 import { quoteRef } from '../../renderables/quotes-freeze'
 import type { Quote } from '../../renderables/types'
 import { competitorThemes, mergeAcrossBuckets, trajectoryWord, type MergeThemeRow, type MergedConcern } from './merge'
-import type { DocumentSettings } from './types'
+import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocumentRole, type DocumentSettings } from './types'
+import { loadBriefReading } from './load-reading'
+import type { BriefReading } from './reading'
+import type { BriefEntry, BriefSurface, MissingInput } from './sections'
+import { readingHandle } from '../../reading/read'
+import { parseHorizon } from '../../reading/horizon'
 
 /**
  * The researcher's reading of an update, in code, before a single question is
@@ -83,6 +88,22 @@ export interface Signals {
   /** Customer phrases as refs, English-reading only. */
   phrases: { quote: Quote; platform: string | null }[]
   heldBackPhrases: number
+  /**
+   * The month this brief is about (Phase 1 WP19, item 43).
+   *
+   * Null where the workspace has no monthly reading at all — a first update, or
+   * a tenant whose month tables have never been seeded. Every number the brief
+   * prints comes from here when it is present; `run` below is what a brief
+   * falls back to, and the method page says which it used.
+   */
+  reading: BriefReading | null
+  /** Each borrowed surface's loader output, so the deck can render its blocks
+   *  in print mode from the same data the page drew. */
+  surfaces: Partial<Record<BriefSurface, unknown>>
+  /** The sections and written pages this brief is, in order. */
+  map: readonly BriefEntry[]
+  /** What this brief needed and the workspace has not recorded. */
+  missing: MissingInput[]
   competitiveInsights: { id: string; category: string; competitor_name: string | null; title: string; finding: string; impact_level: string }[]
 }
 
@@ -90,9 +111,10 @@ export class SignalsError extends Error {}
 
 export async function loadSignals(
   admin: SupabaseClient,
-  args: { clientId: string; runId?: string | null; settings: DocumentSettings },
+  args: { clientId: string; runId?: string | null; settings: DocumentSettings; role?: DocumentRole },
 ): Promise<Signals> {
   const { clientId } = args
+  const role = args.role ?? (isDocumentRole(args.settings.role) ? args.settings.role : DEFAULT_DOCUMENT_ROLE)
 
   const [{ data: client }, { data: config }, { data: latestRun }, runningRes, historyRows, summaryRows] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -208,6 +230,22 @@ export async function loadSignals(
 
   const delta = await computeRunDelta(admin, clientId, summary)
 
+  // ── the month ───────────────────────────────────────────────────────────
+  // ITEM 43's WHOLE POINT. Everything above this line is the update: the
+  // themes of one run, the shares of one run's tracked videos, a delta between
+  // two runs. Below it is the month, read off the same blocks the reader sees
+  // on the page, with the band, the n, the denominator and the reading date
+  // the update-scoped figures never had. The build's window control is the
+  // horizon control and travels in the settings; nothing here recomputes a
+  // window from the clock (AGENTS.md's own rule, applied to a document).
+  const brief = await loadBriefReading(
+    { supabase: admin, clientId, reading: readingHandle(clientId), params: { horizon: args.settings.horizon } },
+    { role, horizon: parseHorizon(args.settings.horizon) },
+  ).catch((e) => {
+    console.error(`[documents] brief reading: ${(e as { message?: string })?.message ?? String(e)}`)
+    return null
+  })
+
   const rawPersonas = ((profileRes.data?.personas ?? []) as Partial<Persona & { bucketMix: Record<string, number>; themeIds: string[] }>[])
   const personas: PersonaSignal[] = rawPersonas
     .map((p) => {
@@ -263,6 +301,10 @@ export async function loadSignals(
     phrases,
     heldBackPhrases: samples.length - english.length,
     competitiveInsights: (ciRes.data ?? []) as Signals['competitiveInsights'],
+    reading: brief?.reading ?? null,
+    surfaces: brief?.surfaces ?? {},
+    map: brief?.map ?? [],
+    missing: brief?.missing ?? [],
   }
 }
 

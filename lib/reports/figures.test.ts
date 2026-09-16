@@ -10,7 +10,7 @@ describe('figuresFor', () => {
       themes: { rows: [{ label: 'Walking strain', conversations: 41 }] },
       hero: { oneThing: { title: 'Launch the Access Navigator' }, headline: 'x' },
     })
-    expect(f.videos).toEqual({ label: 'conversations analysed', value: '374', kind: 'count' })
+    expect(f.videos).toEqual({ label: 'videos analysed', value: '374', kind: 'count' })
     expect(f.sentiment_positive_pct.kind).toBe('pct')
     expect(f.top_theme.kind).toBe('name')
     expect(f.comments.value).toBe('4,626')

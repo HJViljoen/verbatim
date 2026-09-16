@@ -24,7 +24,7 @@ export function figuresFor(page: PageKey, data: unknown): FigureTable {
   switch (page) {
     case 'dashboard': {
       const strip = d.strip as { videos?: { now: number | null }; comments?: { now: number | null }; tiers?: { confirmed: number }; platformsTracked?: string[] } | undefined
-      put('videos', 'conversations analysed', strip?.videos?.now)
+      put('videos', 'videos analysed', strip?.videos?.now)
       put('comments', 'comments read', strip?.comments?.now)
       put('themes_confirmed', 'confirmed themes', strip?.tiers?.confirmed)
       if (strip?.platformsTracked?.length) put('platforms', 'platforms tracked', listNames(strip.platformsTracked))
