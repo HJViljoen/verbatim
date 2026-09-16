@@ -32,12 +32,13 @@ export const scheduleInputSchema = z
     name: z.string().trim().min(1, 'A schedule needs a name.').max(SCHEDULE_NAME_MAX),
     starterKey: z.string().trim().max(60).nullable().default(null),
     reportId: z.uuid().nullable().default(null),
-    // The Studio's own form, so the two the picker offers and not the three
-    // the column now permits: 'quarterly' exists in the database (Phase 1 M8)
-    // so the recipient table can name a quarterly review, and nothing builds
-    // one until WP20. Accepting it here would let a crafted POST create a
-    // schedule the builder cannot serve.
-    cadence: z.enum(['every_update', 'monthly']),
+    // The Studio's own form, and it accepts what the product can serve. It was
+    // the two the picker offered while nothing built a quarterly artefact —
+    // accepting 'quarterly' then would have let a crafted POST create a
+    // schedule the builder could not serve. WP20 builds it, and refusing it
+    // here meant a quarterly schedule created through Settings › Reports and
+    // recipients could never afterwards be edited in the Studio.
+    cadence: z.enum(['every_update', 'monthly', 'quarterly']),
     recipients: recipientsSchema,
     attachPdf: z.boolean(),
     shareDays: shareDaysSchema,

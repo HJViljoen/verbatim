@@ -21,12 +21,12 @@ export const CADENCE_COPY: { key: ScheduleCadence; label: string; help: string }
   { key: 'quarterly', label: 'Quarterly', help: 'Goes out after the first update of each quarter.' },
 ]
 
-/** What the Studio's schedule form OFFERS, which is not the same list. Nothing
- *  builds a quarterly artefact until WP20, and an option that produces a
- *  schedule the builder cannot serve is a form that lies. The value exists in
- *  the database (M8) so the recipient table can name it; the picker gains it
- *  with the review that fills it. */
-export const CADENCES = CADENCE_COPY.filter((c) => c.key !== 'quarterly')
+/** What the Studio's schedule form OFFERS. It was the two the product could
+ *  serve while nothing built a quarterly artefact — an option that produces a
+ *  schedule the builder cannot serve is a form that lies. WP20 is the review
+ *  that fills it (`snapshotQuarterly`, and the quarterly branch in
+ *  `lib/schedules/run.ts`), so the picker is now all three. */
+export const CADENCES = CADENCE_COPY
 
 export interface ScheduleRow {
   id: string
