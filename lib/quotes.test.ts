@@ -5,6 +5,7 @@ import {
   bucketByAudienceId,
   fetchLiveBucketsByAudience,
   fetchQuoteTextsByRefs,
+  readTranslations,
   scopeToClientVoices,
   scopeToCompetitor,
   readsAsHeroQuote,
@@ -419,5 +420,70 @@ describe('TRANSLATION_COLUMNS — the unscoped read selects nothing a tenant own
     // must not." This is the enforcement the argument did not have.
     expect(TRANSLATION_COLUMNS.split(',').map((c) => c.trim()).sort())
       .toEqual(['english', 'language', 'text_hash'])
+  })
+})
+
+describe('readTranslations — a flaky probe is not remembered, a missing table still costs one read', () => {
+  // The probe exists so a page asking about 3,600 texts does not send sixty
+  // requests to learn one thing. What it must NOT do is turn one bad round trip
+  // into a request-wide loss of English: `memoRead` evicts a rejection, so the
+  // probe fails by THROWING rather than by returning a "no". The saving it was
+  // written for is inside one load (one probe, not one per chunk); what it must
+  // not buy is a sticky "no" across the four loads a page makes.
+  const cache = (probeErrors: (string | null)[]) => {
+    let probes = 0
+    let chunks = 0
+    const rows = [{ text_hash: 'h', language: 'es', english: 'the socket rubs' }]
+    return {
+      from: () => ({
+        select: () => {
+          const b: Record<string, unknown> = {
+            // the probe's end
+            limit: () => {
+              const message = probeErrors[probes++]
+              return Promise.resolve({ error: message ? { message } : null })
+            },
+            // the chunked read's end, closed by selectAll
+            range: () => {
+              chunks++
+              return Promise.resolve({ data: rows, error: null })
+            },
+          }
+          b.order = () => b
+          b.in = () => b
+          return b
+        },
+      }),
+      counts: () => ({ probes, chunks }),
+    }
+  }
+
+  it('asks again after a timed-out probe, so the next load still gets its English', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const client = cache(['canceling statement due to statement timeout', null])
+    expect((await readTranslations(client, ['Me encanta esta pierna'])).size).toBe(0)
+    const second = await readTranslations(client, ['Me encanta esta pierna'])
+    expect(second.get('h')).toEqual({ lang: 'es', english: 'the socket rubs' })
+    expect(client.counts()).toEqual({ probes: 2, chunks: 1 })
+    warn.mockRestore()
+  })
+
+  it('remembers a yes: the second load reads the table without probing again', async () => {
+    const client = cache([null])
+    await readTranslations(client, ['uno'])
+    await readTranslations(client, ['dos'])
+    expect(client.counts()).toEqual({ probes: 1, chunks: 2 })
+  })
+
+  it('costs one probe a load when the table is missing, and issues no chunk at all', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const missing = "Could not find the table 'public.comment_translations' in the schema cache"
+    const client = cache([missing, missing, missing])
+    expect((await readTranslations(client, ['uno'])).size).toBe(0)
+    expect((await readTranslations(client, ['dos'])).size).toBe(0)
+    expect((await readTranslations(client, ['tres'])).size).toBe(0)
+    expect(client.counts()).toEqual({ probes: 3, chunks: 0 })
+    expect(warn.mock.calls[0]?.[0]).toContain(missing)
+    warn.mockRestore()
   })
 })
