@@ -720,6 +720,14 @@ recipients moved to `report_schedules`** — copy them somewhere before you clea
 them, because **step 5.6** is going to ask you for them. (Step 6 is the
 rehearsal; it wants no addresses at all.)
 
+**This clear is visible to the tenant.** Settings › Reports shows the column's
+contents in the "An old list we no longer use" card
+(`lib/settings/reports-load.ts` → `deadRecipients`, rendered in
+`app/dashboard/settings/reports/page.tsx`), whose copy promises "We will clear
+this list once you say so". So read the four addresses OFF THAT PAGE before you
+run the script — that is the cheapest copy there is — and expect the card to
+disappear afterwards. Heinrich's word is the thing that authorises it.
+
 ### 5.6 · Recipients — LAST, and by hand
 
 **Settings › Reports and recipients, per tenant.** Until this step nothing
@@ -739,8 +747,15 @@ you to copy them out BEFORE you clear that column. Put the same four back, read
 them one by one against the send that went out, and treat a fifth address as a
 decision somebody has to have made rather than a typo to be kept. If
 `report_sends` shows a different set, believe `report_sends`: it is the record
-of what was delivered, and `report_emails` is a column nothing has read since
-T0-10.
+of what was delivered, and nothing has SENT to `report_emails` since T0-10.
+
+**You may not need a production query at all here.** Settings › Reports reads
+`tracking_configs.report_emails` on every load (`lib/settings/reports-load.ts`
+→ `deadRecipients`) and prints the addresses in the "An old list we no longer
+use" card (`app/dashboard/settings/reports/page.tsx`). The four are on the page
+you are already standing on in 5.6 — read them there, not out of the database,
+on an instance in the state 0.0c describes. That card is also why 5.5 comes
+first and why 5.5 is a visible change: clearing the column empties the card.
 ```
 select subject, recipients, status, sent_at
 from public.report_sends
