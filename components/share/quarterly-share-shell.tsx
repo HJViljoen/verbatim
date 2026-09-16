@@ -20,7 +20,7 @@ import { LinkGuard } from './link-guard'
 export function QuarterlyShareShell({ data, appUrl }: { data: QuarterlySnapshotData; appUrl: string }) {
   const ctx = blockContext(appUrl, EMAIL)
   return (
-    <LinkGuard>
+    <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[880px] flex-col gap-8 px-4 py-8 md:px-6">
         <header className="flex flex-col gap-3 rounded-lg bg-tile px-6 py-7 shadow-tile md:px-10 md:py-10">
           <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">

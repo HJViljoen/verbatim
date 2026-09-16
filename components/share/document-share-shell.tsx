@@ -15,7 +15,7 @@ export function DocumentShareShell({ data, appUrl }: { data: DocumentSnapshotDat
   const built = new Date(data.generatedAt)
   const date = Number.isNaN(built.getTime()) ? undefined : built.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   return (
-    <LinkGuard>
+    <LinkGuard appUrl={appUrl}>
       <div className="mx-auto flex w-full max-w-[1216px] flex-col gap-6 px-4 py-8 md:px-6">
         <header className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-1">
           <p className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Prepared by {data.company} · for {audienceLabel(data.audience)}</p>
