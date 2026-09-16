@@ -78,10 +78,26 @@
 -- — a thirtieth of the pages, and on production the heap side is worse still:
 -- 1,267 buffers for 1,596 rows.
 --
--- The cost is on the write side: `videos` is upserted by every gather, and this
--- index adds ~500 KB and one more index to maintain per row written. Measured
--- against what it saves on the one page every client opens first, that is the
--- right trade; if a gather ever slows for it, this is the index to question.
+-- HEAP FETCHES: 0 IS THE BEST CASE, NOT THE CASE. An index-only scan skips the
+-- heap only for pages the visibility map marks all-visible, and `videos` is
+-- written constantly: by every gather, and — per video, all run long — by Pass
+-- A's `updateBookkeeping`, which rewrites `analyzed_run_id` and all four
+-- `analyzed_with_*` columns of this index in one statement. On the same cluster,
+-- 200 videos re-stamped the way Pass A stamps them and no autovacuum since:
+--
+--   Heap Fetches: 736   788 buffers        (and back to 0 / 52 after a VACUUM)
+--
+-- So a production run leaves this scan partly reading the heap until autovacuum
+-- catches up. It still wins — 788 buffers against the 1,520 of the scan with no
+-- index at all, and 49 once the table settles — but the number to plan on is
+-- the range, not the zero.
+--
+-- The cost is on the write side, and the heavier half is not the gather: it is
+-- that same Pass A bookkeeping, one index tuple per video analysed, on an index
+-- whose key AND payload it writes. Plus ~500 KB of storage. Measured against
+-- what it saves on the one page every client opens first, that is the right
+-- trade; if a gather or a Pass A run ever slows for it, this is the index to
+-- question.
 create index if not exists videos_analysed_record_idx
   on public.videos (client_id, analyzed_run_id, id)
   include (platform, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr);
