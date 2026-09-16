@@ -516,13 +516,49 @@ Every tenant you intend to seed must show 5–8 rows at `status = 'active'`.
 unembedded insight is invisible to `subject_band()`, so a subject scored
 against a half-embedded corpus does not read low, it reads wrong, silently.
 
+**Ask the script, not the database.** Its dry run prints the same two numbers
+the refusal reads, through the same path, and it is 5.1's dry run anyway — so
+this is one command rather than two:
+
+```
+node --env-file=.env.local --import tsx scripts/subject-membership.ts --client <uuid>
+# [subject-membership] <uuid>: 1680/3129 insights embedded (53.7%)
+```
+
+If you want it in SQL, **count the PREDICATE, never the column**:
+
 ```sql
 select client_id,
-       count(*) as insights,
-       count(embedding) as embedded,
-       round(100.0*count(embedding)/nullif(count(*),0), 1) as pct
-from public.audience_insights group by 1 order by 1;
+       count(*)                                        as insights,
+       count(*) filter (where embedding is not null)   as embedded,
+       round(100.0 * count(*) filter (where embedding is not null)
+             / nullif(count(*), 0), 1)                 as pct
+from public.audience_insights_current group by 1 order by 1;
 ```
+
+Three things about that query, and this file printed the wrong one until
+2026-09-16:
+
+- **`count(embedding)` is banned.** It asks a question about null-ness and pays
+  for every 1536-float vector to answer it. It is the query that took
+  production down on 16 September — 56 s at 08:40 UTC, 94 s at 09:10, the
+  instance's disk-IO burst budget gone, PostgREST unable to load its schema
+  cache and 504s to paying customers for about two hours. The rule is in
+  AGENTS.md; the version above reads the null bitmap and not the vectors.
+- **`embedded_at is not null` is not the substitute either.** The column
+  arrived with `20260915094000_insight_embedding.sql` and is never backfilled,
+  so every vector written before that date reads as unembedded: it would tell
+  you a fully embedded tenant is at 0% and walk you into a backfill you do not
+  need. It answers "when was the last vector written", nothing else.
+- **`audience_insights_current`, not the base table** — that is the population
+  `match_insights` searches, so it is the only honest denominator, and it is
+  the one `embeddingCoverage` (`lib/agent/retrieve.ts`) uses.
+
+**Last measured: Össur 1,680 of 3,129, Sealand 785 of 2,872** (2026-09-15,
+recorded in `lib/agent/retrieve.ts`, before the pipeline's own `embed-insights`
+step began keeping it current). Both were far below the floor then, and every
+Sunday since has been pulling them up — so read the number, do not assume
+either answer.
 
 Below 95% on either tenant:
 `node --env-file=.env.local --import tsx scripts/embed-insights.ts --client <uuid> --apply`
