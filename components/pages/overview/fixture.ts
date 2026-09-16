@@ -262,7 +262,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     record: {
       line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
       lines: [
-        '3 updates delivered, 2026-09-06 to 2026-09-13, longest gap 7 days.',
+        // AS `recordLines` COMPOSES IT. The fixture held the raw ISO form this
+        // line used to produce, so the one artefact render that would have
+        // shown the defect showed the fixture's copy of it instead.
+        '3 updates delivered, 6 Sep to 13 Sep 2026, longest gap 7 days.',
         '2,359 videos carried conversation in this window — TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%.',
         '41 videos of your own named a tracked rival as well as you.',
         'Nothing about what we track changed in this window.',
