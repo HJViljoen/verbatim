@@ -384,9 +384,27 @@ export function newestByObject(rows: readonly StoredSentFigure[]): Map<string, S
   for (const r of rows) {
     const key = objectKey(r.audience, r.objectKind, r.objectId, r.measure)
     const held = out.get(key)
-    if (!held || r.readingAt > held.readingAt) out.set(key, r)
+    if (!held || readingMs(r) > readingMs(held)) out.set(key, r)
   }
   return out
+}
+
+/**
+ * When a reading was taken, as an instant.
+ *
+ * NOT A STRING COMPARE. `reading_at` reaches here as whatever PostgREST
+ * rendered a `timestamptz` as, and two rows rendered with different offsets —
+ * '2026-10-01T08:00:00+02:00' beside '2026-10-01T07:00:00+00:00' — sort the
+ * wrong way round as text while naming the later and the earlier instant. "The
+ * report of {date} read X" would then quote the older artefact. The ordering
+ * this file is built on is an ordering of instants, so it compares instants.
+ *
+ * An unreadable value sorts OLDEST, so a row nobody can date never displaces
+ * one that can be.
+ */
+function readingMs(row: { readingAt: string }): number {
+  const t = Date.parse(row.readingAt)
+  return Number.isNaN(t) ? -Infinity : t
 }
 
 export interface StoredSentFigure extends SentFigureRow {
@@ -582,7 +600,7 @@ export function sentMonthOf(rows: readonly StoredSentFigure[] | null): SentMonth
   // THE NEWEST ARTEFACT, not the newest row: four weekly readings and a monthly
   // one can all carry September, and "the report of {date}" means the last
   // thing we told this client about it.
-  const lead = [...rows].sort((a, b) => (a.readingAt < b.readingAt ? 1 : -1))[0]
+  const lead = [...rows].sort((a, b) => readingMs(b) - readingMs(a))[0]
   return {
     readingAt: lead.readingAt,
     artefact: lead.artefact,

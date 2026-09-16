@@ -7,6 +7,7 @@ import {
   newestByObject,
   objectKey,
   sentFigureRows,
+  sentMonthOf,
   sentReadingOf,
   type StoredSentFigure,
 } from './sent-figures'
@@ -302,6 +303,34 @@ describe('reading the record back', () => {
       n: 1388,
       monthStatus: 'filling',
     })
+  })
+})
+
+describe('ordering two readings of one object', () => {
+  // Two rows rendered with different offsets name the later and the earlier
+  // instant and sort the wrong way round as text.
+  it('is by instant, not by the text PostgREST happened to render', () => {
+    const newest = newestByObject([
+      stored({ readingAt: '2026-10-01T08:00:00+02:00', value: 19 }),
+      stored({ readingAt: '2026-10-01T07:00:00+00:00', value: 22 }),
+    ])
+    expect([...newest.values()][0].value).toBe(22)
+  })
+
+  it('never lets a row nobody can date displace one that can be', () => {
+    const newest = newestByObject([
+      stored({ readingAt: '2026-10-01T06:00:00.000Z', value: 19 }),
+      stored({ readingAt: 'Sun 13 Sep', value: 99 }),
+    ])
+    expect([...newest.values()][0].value).toBe(19)
+  })
+
+  it('names the newest artefact as the month’s lead by the same rule', () => {
+    const month = sentMonthOf([
+      stored({ readingAt: '2026-10-01T08:00:00+02:00', artefact: 'weekly' }),
+      stored({ readingAt: '2026-10-01T07:00:00+00:00', artefact: 'monthly' }),
+    ])
+    expect(month?.artefact).toBe('monthly')
   })
 })
 
