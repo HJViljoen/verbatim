@@ -289,8 +289,18 @@ export function movedSince(sent: SentReading, live: number): boolean {
   // — which is worth finding, and is not worth telling a client about in the
   // masthead of their report.
   if (sent.monthStatus === 'frozen') return false
-  return Math.abs(round1(live) - round1(sent.value)) >= MOVED_SINCE_PTS
+  // COMPARED IN TENTHS, NOT IN FLOATS. `Math.abs(0.3 - 0.2) >= 0.1` is false —
+  // the subtraction is 0.09999999999999998 — and so is 1.3 − 1.2, and 158 of
+  // the first 300 adjacent-tenth pairs. Half the smallest visible moves
+  // therefore printed no "the report of {date} read X", and confirmingLine took
+  // its "which is what the report read" arm for a month that had moved a tenth
+  // the reader could see. The unit the product prints in is a tenth of a point,
+  // so that is the integer to compare.
+  return Math.abs(tenths(live) - tenths(sent.value)) >= tenths(MOVED_SINCE_PTS)
 }
+
+/** A value in tenths of a point — the precision this product prints at. */
+const tenths = (n: number): number => Math.round(n * 10)
 
 /**
  * The line itself. Null where the figure has not moved, so a caller writes no

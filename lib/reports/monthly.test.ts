@@ -209,6 +209,16 @@ describe('the report of {date} read X', () => {
     expect(movedSince(sent({ value: 22 }), 22 + MOVED_SINCE_PTS)).toBe(true)
   })
 
+  // 0.3 − 0.2 is 0.09999999999999998, and so is 1.3 − 1.2: comparing the
+  // difference of two floats against 0.1 missed 158 of the first 300
+  // adjacent-tenth pairs, which is half the smallest moves a reader can see.
+  it('sees every move of one printed tenth, floats notwithstanding', () => {
+    for (let i = 0; i < 300; i += 1) {
+      const from = i / 10
+      expect(movedSince(sent({ value: from }), from + 0.1)).toBe(true)
+    }
+  })
+
   it('says nothing about a month that was already closed when it went out', () => {
     // A frozen month cannot have moved; a difference here is a bug somewhere
     // else, and not something to tell a client in a masthead.
