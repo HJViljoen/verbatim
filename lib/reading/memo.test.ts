@@ -73,15 +73,30 @@ describe('idsKey', () => {
 
   it('tells different sets apart, short and long', () => {
     expect(idsKey(['a', 'b'])).not.toBe(idsKey(['a', 'c']))
-    const long = Array.from({ length: 200 }, (_, i) => `id-${i}`)
-    const other = [...long.slice(0, 199), 'id-999']
+    const long = Array.from({ length: 2000 }, (_, i) => `id-${i}`)
+    const other = [...long.slice(0, 1999), 'id-99999']
     expect(idsKey(long)).not.toBe(idsKey(other))
     expect(idsKey(long)).toBe(idsKey([...long].reverse()))
+  })
+
+  it('is the set itself at the sizes these pages actually ask for', () => {
+    // A collision on this key prints one set's labels on another set's block,
+    // so the realistic range is exact rather than digested. 256 ids is the line.
+    const many = Array.from({ length: 256 }, (_, i) => `id-${i}`)
+    expect(idsKey(many)).toBe([...many].sort().join(','))
+    expect(idsKey(many).length).toBeGreaterThan(1000)
   })
 
   it('does not carry a whole long list in the key', () => {
     const long = Array.from({ length: 3000 }, (_, i) => `id-${i}`)
     expect(idsKey(long).length).toBeLessThan(120)
+  })
+
+  it('needs two independent hashes to agree, not one', () => {
+    // Nothing here can prove the absence of a collision; what it can hold is
+    // that the digest carries both hashes, so an agreement on one is not enough.
+    const long = Array.from({ length: 300 }, (_, i) => `id-${i}`)
+    expect(idsKey(long).split(':')).toHaveLength(5)
   })
 
   it('names an empty set', () => {

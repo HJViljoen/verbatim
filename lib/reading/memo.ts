@@ -85,26 +85,44 @@ export function memoRead<T>(client: unknown, key: string, read: () => Promise<T>
  * A stable key fragment for a set of ids: order and duplicates must not make
  * two identical asks look different.
  *
- * UP TO EIGHT IDS THIS IS AN IDENTITY. ABOVE THAT IT IS A DIGEST, and the rule
- * stated two functions up — a key names every argument that changes the answer
- * — holds only in the first case. A longer list is named by its size, its
- * lowest and highest id and a 32-bit djb2 hash of all of them, because a key is
- * a Map key and a three-thousand-id string is copied on every lookup. Two
- * different sets that agree on all four would share an answer.
+ * WHAT A COLLISION HERE WOULD LOOK LIKE, WHICH IS WHY THE EXACT CASE IS WIDE.
+ * This keys `loadLabels`, so two sets that shared a key would put ONE SET'S
+ * OBJECT LABELS ON THE OTHER'S BLOCK — a theme printed under another theme's
+ * name, invisible on the page and exactly the class of mix-up the
+ * `theme_registry` discipline exists to prevent. Not a slow page: a wrong one.
+ * So up to 256 ids the key IS the set, joined and sorted, and the rule stated
+ * two functions up — a key names every argument that changes the answer —
+ * holds outright. 256 uuids is a ~9.5 KB string, a handful of Map lookups a
+ * request, and it covers every set these pages actually ask for: the top
+ * objects are capped in the dozens and a tenant's whole subject list is tens.
  *
- * A deliberate trade, said out loud rather than implied: the sets inside one
- * request are a handful, they are one tenant's own objects, and a collision
- * needs the size, both bounds and the hash to agree. A caller whose id sets are
- * many, or not of its own making, should key on something it controls instead.
+ * ABOVE 256 IT IS A DIGEST and the rule holds only probabilistically: the size,
+ * the lowest and highest id, and TWO independent 32-bit hashes of the whole
+ * sorted set (djb2 and FNV-1a, which disagree on where the bits go). Two
+ * different sets would have to agree on all five. The second hash is there
+ * because one 32-bit digest over a few thousand ids is a birthday bound a
+ * careful reader can feel, and a second one is four lines.
+ *
+ * A caller whose id sets are many, or not of its own making, should still key
+ * on something it controls instead.
  */
+const IDS_KEY_EXACT = 256
+
 export function idsKey(ids: readonly string[]): string {
   const sorted = [...new Set(ids)].sort()
-  if (sorted.length <= 8) return sorted.join(',')
-  let h = 5381
-  for (const id of sorted) {
-    for (let i = 0; i < id.length; i++) h = (((h << 5) + h) ^ id.charCodeAt(i)) >>> 0
+  if (sorted.length <= IDS_KEY_EXACT) return sorted.join(',')
+  let djb2 = 5381
+  let fnv = 2166136261
+  const fold = (code: number): void => {
+    djb2 = (((djb2 << 5) + djb2) ^ code) >>> 0
+    fnv = Math.imul(fnv ^ code, 16777619) >>> 0
   }
-  return `${sorted.length}:${sorted[0]}:${sorted[sorted.length - 1]}:${h.toString(36)}`
+  for (const id of sorted) {
+    for (let i = 0; i < id.length; i++) fold(id.charCodeAt(i))
+    // A separator, so ['ab','c'] and ['a','bc'] are not one stream of bytes.
+    fold(0)
+  }
+  return `${sorted.length}:${sorted[0]}:${sorted[sorted.length - 1]}:${djb2.toString(36)}:${fnv.toString(36)}`
 }
 
 /** How many answers this client is holding — for tests and for a status note,
