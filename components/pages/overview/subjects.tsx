@@ -66,11 +66,16 @@ function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth
     : <span className="block text-[11px] text-muted-foreground">{body}</span>
 }
 
-function Row({ row, mode }: { row: SubjectRow; mode: RenderMode }) {
+function Row({ row, mode, appUrl = '' }: { row: SubjectRow; mode: RenderMode; appUrl?: string }) {
   return (
     <tr>
       <td className="py-1.5 pr-3 align-top text-[12.5px] font-medium">
-        <Link href={row.href} className="underline-offset-2 hover:underline">{row.label}</Link>
+        {/* THROUGH `ctx.appUrl`, like every other link this block draws. The
+            row's own href was the one that was not: relative is right in the
+            app (where appUrl is the empty string) and dead everywhere else,
+            and this block is rendered into a PDF and an email by the monthly
+            report (WP18). The same defect WP17 fixed on the weekly blocks. */}
+        <Link href={`${appUrl}${row.href}`} className="underline-offset-2 hover:underline">{row.label}</Link>
       </td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.you} mode={mode} /></td>
       <td className="py-1.5 pr-3 align-top"><Side side={row.rival} mode={mode} /></td>
@@ -184,7 +189,7 @@ export const overviewSubjects: Block<OverviewData> = {
               </tr>
             </thead>
             <tbody className="align-top">
-              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} />)}
+              {s.rows.map((r) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} />)}
             </tbody>
           </table>
         </div>
