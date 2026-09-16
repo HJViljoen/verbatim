@@ -1574,16 +1574,35 @@ export const runPipeline = inngest.createFunction(
           // months, and `refusedLate` is the number that says the record
           // declined to take a point.
           const refs = r.evidenceRefs
+          // A FAILURE IS NOT A ZERO, AND THIS BRANCH READ IT AS ONE. `freezeMonths`
+          // returns `{...emptyEvidenceRefSummary(), failed: why}` when the refs
+          // freeze throws — so `missing` is false and every counter is 0, and
+          // the Sunday run that closes real months printed "evidence ids 0
+          // written (0 now frozen, … )", indistinguishable from "there was
+          // nothing to write". scripts/monthly-reading.ts shouts about exactly
+          // this (Block A's fix 67d8f67); this visit was never taught to.
+          //
+          // It is the one shot: a month that closes without its ids can never
+          // be given them later. `stillFilling` is the script's other warning
+          // and is said here for the same reason — nothing revisits those rows.
           console.log(
             refs === undefined
               ? '[freeze-months] evidence ids: not attempted — this visit has no run to attribute a clustering to'
-              : refs.missing
-                ? '[freeze-months] evidence ids: skipped — 20260918095000_quote_translations.sql has not been applied yet'
-                : `[freeze-months] evidence ids ${refs.written} written (${refs.frozen} now frozen, ` +
-                  `${refs.keptFrozen} already frozen and left alone, ${refs.deleted} dropped, ` +
-                  `${refs.refusedLate} refused because their months have closed) · ` +
-                  `${refs.videoIds} videos and ${refs.commentIds} comments named`,
+              : refs.failed
+                ? `[freeze-months] evidence ids: THE FREEZE FAILED — ${refs.failed} · the months are frozen and their ids are not, and a month that closes without its ids cannot be given them later. Fix the cause and re-run scripts/monthly-reading.ts --write BEFORE any further month freezes.`
+                : refs.missing
+                  ? '[freeze-months] evidence ids: skipped — 20260918095000_quote_translations.sql has not been applied yet'
+                  : `[freeze-months] evidence ids ${refs.written} written (${refs.frozen} now frozen, ` +
+                    `${refs.keptFrozen} already frozen and left alone, ${refs.deleted} dropped, ` +
+                    `${refs.refusedLate} refused because their months have closed) · ` +
+                    `${refs.videoIds} videos and ${refs.commentIds} comments named`,
           )
+          if (refs && !refs.failed && refs.stillFilling > 0) {
+            console.log(
+              `[freeze-months] WARNING: ${refs.stillFilling} evidence-id rows are still 'filling' in audience-months that have already closed. ` +
+              'Nothing revisits them — month_evidence_refs is not in MONTH_TABLES. Re-run scripts/monthly-reading.ts over those months to repair them.',
+            )
+          }
           return {
             months: r.months.length,
             denominators: r.denominators.written,
@@ -1595,10 +1614,15 @@ export const runPipeline = inngest.createFunction(
             keptFrozen: all.reduce((n, s) => n + s.keptFrozen, 0),
             heldStale: all.reduce((n, s) => n + s.heldStale, 0),
             refusedLate: all.reduce((n, s) => n + s.refusedLate, 0),
+            // `failed` and `stillFilling` ride on the RETURN as well as in the
+            // log, because the return object is what an operator sees in the
+            // Inngest UI — and without them the step read green while the log
+            // two lines up said the record was lost.
             evidenceRefs: refs
               ? {
                   written: refs.written, frozen: refs.frozen, refusedLate: refs.refusedLate,
                   videoIds: refs.videoIds, commentIds: refs.commentIds, missing: refs.missing,
+                  stillFilling: refs.stillFilling, failed: refs.failed ?? null,
                 }
               : null,
           }
