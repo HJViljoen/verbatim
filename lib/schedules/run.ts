@@ -239,7 +239,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
           clientId: schedule.client_id,
           userId: null,
           company: resolved.company,
-          figuresOf: (reading) => weeklyBlocksFor().map((b) => blockAnswers(b, reading).figures),
+          figuresOf: (reading, keys) => weeklyBlocksFor(keys).map((b) => blockAnswers(b, reading).figures),
         })
       } catch (e) {
         if (e instanceof WeeklyEmptyError) {

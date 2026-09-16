@@ -71,9 +71,13 @@ export async function snapshotWeekly(args: {
   company: string
   /** Which blocks, in which order. The stored arrangement, or all six. */
   keys?: readonly string[]
-  /** The blocks' figure tables, computed by the caller so this module stays
-   *  free of React. */
-  figuresOf: (data: WeeklyData) => FigureTable[]
+  /**
+   * The blocks' figure tables, computed by the caller so this module stays free
+   * of React — over THE KEYS THIS SNAPSHOT RENDERS, which is why they are
+   * handed back. Computing them over all six regardless of the stored
+   * arrangement froze figures for sections the artefact does not draw.
+   */
+  figuresOf: (data: WeeklyData, keys: WeeklyBlockKey[]) => FigureTable[]
 }): Promise<{ snapshotId: string; data: WeeklySnapshotData; evidenceIds: string[] }> {
   const reading = await loadWeekly({
     supabase: args.supabase,
@@ -85,9 +89,10 @@ export async function snapshotWeekly(args: {
     throw new WeeklyEmptyError('Nothing to report yet — your first update has not landed.')
   }
 
-  const keys = (args.keys ?? WEEKLY_BLOCK_KEYS).filter((k): k is WeeklyBlockKey =>
+  const known = (args.keys ?? WEEKLY_BLOCK_KEYS).filter((k): k is WeeklyBlockKey =>
     (WEEKLY_BLOCK_KEYS as readonly string[]).includes(k),
   )
+  const keys: WeeklyBlockKey[] = known.length > 0 ? known : [...WEEKLY_BLOCK_KEYS]
   const company = args.company || reading.brand
   const data: WeeklySnapshotData = {
     version: 1,
@@ -97,9 +102,9 @@ export async function snapshotWeekly(args: {
     period: weeklyPeriod(reading.window, reading.month),
     readingAt: reading.readingAt,
     month: reading.month,
-    keys: keys.length > 0 ? keys : [...WEEKLY_BLOCK_KEYS],
+    keys,
     reading,
-    figures: mergeFigures(args.figuresOf(reading)),
+    figures: mergeFigures(args.figuresOf(reading, keys)),
     subject: weeklySubject(company, reading.section1.check),
   }
 
