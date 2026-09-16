@@ -288,6 +288,22 @@ export function firstQuarterVerdictMonth(readings: number, latestMonth: string |
 export const QUARTERLY_RULE =
   'Every figure on these pages is a share of videos we read, printed with what it is out of. A quarter is compared with the quarter before it only where six monthly readings stand behind both sides.'
 
+/**
+ * MK5's claim caveat, said the way an artefact has to say it.
+ *
+ * The Market page's own `CLAIMS_CAVEAT` carries a second sentence — "A claim's
+ * verdict per month, held across two updates before it is printed, is not built
+ * yet." — which is build status about an unshipped feature. Mailed to a
+ * client's staff and forwarded behind a share link, that is pipeline jargon by
+ * the calibration rule, in the artefact most likely to be read by somebody who
+ * has never seen the product. WP18 identified exactly this class and solved it
+ * for the monthly report with a projection (`artefactMoves`); WP20's moves page
+ * forwarded the page's sentence unchanged.
+ *
+ * The first sentence is the one a client needs and it stands alone.
+ */
+export const QUARTERLY_CLAIMS_CAVEAT = 'This is how each claim reads in the latest update.'
+
 export function quarterlyTitle(company: string, quarter: Quarter): string {
   return `${company} · quarterly review · ${quarterLabel(quarter, false)}`
 }

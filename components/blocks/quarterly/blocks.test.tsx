@@ -3,7 +3,8 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
+import { QUARTERLY_BLOCK_KEYS, QUARTERLY_CLAIMS_CAVEAT, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
+import { CLAIMS_CAVEAT } from '@/lib/pages/market-surface'
 import { unsettledItems } from '@/lib/pages/quarterly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -203,6 +204,18 @@ describe('the read page counts over the same window it argues over', () => {
       // Every counted line names an object the QUARTER read, not a month one.
       expect(quarter.some((v) => line.startsWith(`${v.objectLabel}:`))).toBe(true)
     }
+  })
+})
+
+// BUILD STATUS ABOUT AN UNSHIPPED FEATURE MUST NOT REACH A SENT ARTEFACT. The
+// moves page forwarded the Market page's CLAIMS_CAVEAT unchanged, second
+// sentence and all — the exact class WP18 removed from the monthly report.
+describe('QR6 · what the claims caveat says on the artefact', () => {
+  it('keeps the first sentence and drops the build status', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(quarterlyFixture(), 'email', ctx))
+    expect(text).toContain(QUARTERLY_CLAIMS_CAVEAT)
+    expect(text).not.toContain('is not built yet')
+    expect(CLAIMS_CAVEAT).toContain('is not built yet')
   })
 })
 

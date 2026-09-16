@@ -23,6 +23,7 @@ import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import {
   firstQuarterVerdictMonth,
   previousQuarter,
+  QUARTERLY_CLAIMS_CAVEAT,
   quarterFilling,
   quarterGateSentence,
   quarterLabel,
@@ -1278,7 +1279,10 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
     adviceNote: m?.advice.empty ?? null,
     claims: m?.ways.claims ?? [],
     claimsLine: m?.ways.claimsLine ?? 'What you say and what they say back could not be read for this workspace.',
-    claimsCaveat: m?.ways.claimsCaveat ?? '',
+    // THE ARTEFACT'S OWN CAVEAT, NOT THE PAGE'S. See QUARTERLY_CLAIMS_CAVEAT:
+    // the page's second sentence is build status about an unshipped feature and
+    // this artefact goes to people outside the workspace.
+    claimsCaveat: m ? QUARTERLY_CLAIMS_CAVEAT : '',
     // THE RULE OF THIS PAGE, printed on it. It is the one page that puts a
     // move and a reading side by side, and a reader will draw the arrow if we
     // do not say we are not drawing it.
