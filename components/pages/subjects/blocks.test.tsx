@@ -385,3 +385,27 @@ describe('the page’s own layout', () => {
     }
   })
 })
+
+// A brief borrows SU3 and SU-voices (SALES_MAP, CONTENT_MAP), and a brief is
+// read as a PDF and on a public share page. "Verbatim engineering" is a
+// readiness owner: right where a reader can open Settings › Readiness, an
+// internal label where they cannot. "Open the content brief →" resolves, for
+// such a reader, to a login wall.
+describe('the Subjects blocks, read from outside the workspace', () => {
+  it('name the half they could not read without naming our own owner', () => {
+    const data = subjectsFixture()
+    const print = renderText(subjectsUnanswered.render(data, 'print', ctx))
+    const app = renderText(subjectsUnanswered.render(data, 'app', ctx))
+    expect(app).toContain('What your posts claim is not readable yet')
+    expect(app).toContain('Verbatim engineering')
+    expect(print).toContain('What your posts claim is not readable yet')
+    expect(print).not.toContain('Verbatim engineering')
+  })
+
+  it('draw no in-app affordance on paper', () => {
+    const data = subjectsFixture()
+    expect(render(subjectsUnanswered.render(data, 'print', ctx))).not.toContain('Open the content brief')
+    expect(render(subjectsVoices.render(data, 'print', ctx))).not.toContain('Hear these voices in Voice')
+    expect(render(subjectsVoices.render(data, 'app', ctx))).toContain('Hear these voices in Voice')
+  })
+})

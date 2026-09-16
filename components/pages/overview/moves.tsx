@@ -1,5 +1,5 @@
-import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -35,7 +35,7 @@ export const overviewMoves: Block<OverviewData> = {
         question={overviewMoves.question}
         mode={mode}
         meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} dated` : undefined}
-        footer={email ? <a href={href} style={{ color: EMAIL.ink }}>Open Market →</a> : <Link href={href} className="hover:underline">Open Market →</Link>}
+        footer={openLink(mode, href, 'Open Market →')}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         {m.rows.length > 0 ? (

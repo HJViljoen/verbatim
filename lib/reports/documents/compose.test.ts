@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
-import { buildWriterPrompts, deltaInWords, writerSchema, type WriterOutput } from './write'
+import { buildWriterPrompts, deltaInWords, figureKeyFor, writerPageKinds, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
+import { MARKETING_MAP } from './sections'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
@@ -90,6 +91,30 @@ describe('buildWriterPrompts', () => {
     expect(system).not.toMatch(/[—–]/)
     expect(user).toContain('Arrange a trial fitting.')
   })
+  // The month path withdraws <slug>_share_pct on purpose; the prompt used to
+  // advertise it anyway, per rival, on every brief.
+  it('advertises no rival figure key the table has withdrawn', () => {
+    const { user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals, answers: [], previous: null, thin: false })
+    expect(user).not.toContain('_share_pct]]')
+    expect(user).toContain('do not cite a number about them')
+  })
+
+  // substituteFigures deletes the whole sentence whose key is missing, so a
+  // 36-character hex token is one wrong character away from removing a
+  // paragraph of a paid document.
+  it('offers no figure token the model cannot retype', () => {
+    const { user } = buildWriterPrompts({
+      template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null,
+      figures: {
+        videos: { label: 'videos analysed', value: '388', kind: 'count' },
+        o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share: { label: 'a theme this month', value: '8.8%', kind: 'pct' },
+      },
+      signals, answers: [], previous: null, thin: false,
+    })
+    expect(user).toContain('[[videos]]')
+    expect(user).not.toContain('2418f4d7')
+  })
+
   it('says the update was thin and asks for fewer findings', () => {
     const { system, user } = buildWriterPrompts({ template: SALES_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: { ...signals, runStatus: 'partial' }, answers: [], previous: null, thin: true })
     expect(system).toContain('at most 3 findings')
@@ -128,11 +153,32 @@ describe('buildWriterPrompts', () => {
 
 describe('deltaInWords', () => {
   it('speaks in verdicts and keys, never numbers', () => {
-    const words = deltaInWords(signals)
+    const words = deltaInWords(signals, documentFigures(signals, answers))
     expect(words.join(' ')).toContain('about where it was (key [[positive_pct]])')
     expect(words.join(' ')).toContain('[[new_themes]]')
     expect(words.join(' ')).not.toMatch(/\d/)
     expect(deltaInWords({ delta: null, updatesCount: 1, trackedCompetitors: [] })[0]).toContain('first update')
+  })
+
+  // substituteFigures deletes whole sentences whose key is missing, so a key
+  // the table does not carry must never reach the prompt.
+  it('cites no key the figure table does not carry', () => {
+    const words = deltaInWords(signals, {}).join(' ')
+    expect(words).not.toContain('[[positive_pct]]')
+    expect(words).not.toContain('[[prev_conversations]]')
+    expect(words).not.toContain('[[new_themes]]')
+    expect(words).toContain('Do not cite a count of them')
+  })
+})
+
+describe('figureKeyFor', () => {
+  it('offers the share key on the update path and the month\'s own video count on the month path', () => {
+    expect(figureKeyFor({ ottobock_share_pct: { label: 'x', value: '9%', kind: 'pct' } }, 'Ottobock')).toBe('share key [[ottobock_share_pct]]')
+    expect(figureKeyFor({ ottobock_videos: { label: 'x', value: '42', kind: 'count' } }, 'Ottobock')).toBe('video count key [[ottobock_videos]]')
+  })
+
+  it('tells the writer not to cite a number rather than naming a withdrawn key', () => {
+    expect(figureKeyFor({}, 'Ottobock')).toBe('no figure key for them: do not cite a number about them')
   })
 })
 
@@ -204,6 +250,52 @@ describe('composeDocument', () => {
 // trajectory. The shape is not new — a concern whose members carried no word has
 // always produced it — and these pin what a document says in it. The fixture
 // above keeps the worded shape, which is what Phase 1 restores once the words
+// THE METHOD PAGE DESCRIBES THE PAGES THIS BRIEF HAS. Under a section map the
+// marketing brief prints no claims page, no competitor pages and no personas;
+// the method page was built from the TEMPLATE's kinds and went on describing
+// all three.
+describe('a document composed from a section map', () => {
+  const mapped = { ...signals, map: MARKETING_MAP } as unknown as Signals
+  const method = () => composeDocument({
+    template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+    signals: mapped, answers, written, figures: documentFigures(mapped, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+  }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+
+  it('describes only the pages the map prints', () => {
+    const items = method()
+    expect(items).not.toContain('Competitor pages read')
+    expect(items).not.toContain('Personas come from the consumer profile')
+    expect(items).not.toContain('The claims page sets what the company says')
+  })
+
+  // The model was still generating say_hear, competitor blocks and personas
+  // for a brief that prints none of them.
+  it('asks the model only for the pages the map prints', () => {
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(mapped, MARKET_BRIEF)).shape))
+      .toEqual(['in_short', 'findings', 'not_sure_yet'])
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(undefined, MARKET_BRIEF)).shape))
+      .toContain('say_hear')
+  })
+
+  // Deviation 3 withdrew the run-against-run figures; the prose that produces
+  // the same sentence stayed in the prompt.
+  it('hands a month-based brief no update-against-update comparison', () => {
+    const withReading = { ...mapped, reading: { monthLabel: 'September 2026' } } as unknown as Signals
+    const { user, system } = buildWriterPrompts({ template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: withReading, answers: [], previous: { summary: 's', headlines: ['h'] }, thin: false })
+    expect(user).not.toContain('What moved since the previous update')
+    expect(user).toContain('reading of September 2026')
+    expect(system).toContain('Do not claim movement between the two briefs')
+  })
+
+  it('still describes the pages the template alone would print', () => {
+    const items = composeDocument({
+      template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+      signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+    expect(items).toContain('Competitor pages read')
+  })
+})
+
 // come off the monthly reading rather than off the update index.
 describe('a document composed with no history word', () => {
   const gated = { ...signals, concerns: [{ ...signals.concerns[0], trajectory: '' }] } as unknown as Signals

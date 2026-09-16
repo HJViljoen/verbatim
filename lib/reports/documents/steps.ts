@@ -6,11 +6,12 @@ import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
 import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
-import { documentSettings, isDocumentData, type DocumentSettings } from './types'
-import { loadSignals } from './signals'
+import { DEFAULT_DOCUMENT_ROLE, documentSettings, isDocumentData, isDocumentRole, type DocumentRole, type DocumentSettings } from './types'
+import { loadSignals, type Signals } from './signals'
 import { composeQuestions, type ResearchQuestion } from './questions'
 import { BuildBlockedError, runResearch, type ResearchAnswer } from './research'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from './compose'
+import { briefStamp } from './reading'
 import { generateDocument, DOCUMENT_WRITER_MODEL, WriteFailedError } from './write-model'
 import { type PreviousBrief, type WriterOutput } from './write'
 import { checkDocument, type FindingVerdict } from './check'
@@ -42,7 +43,32 @@ export interface BuildContext {
   company: string
 }
 
-export interface ResearchOut { questions: ResearchQuestion[]; answers: ResearchAnswer[]; costUsd: number; stoppedForBudget: boolean; timings: Record<string, number> }
+export interface ResearchOut {
+  questions: ResearchQuestion[]
+  answers: ResearchAnswer[]
+  costUsd: number
+  stoppedForBudget: boolean
+  timings: Record<string, number>
+  /**
+   * THE INSTANT THIS BUILD READS AT, frozen once.
+   *
+   * `loadBriefReading` took `new Date().toISOString()` and every step reloads
+   * the signals, so the period string the writer was given, the denominators
+   * the method page printed and the stamp frozen onto the snapshot were three
+   * reads 20-60 s apart, plus whatever an Inngest retry added. A build
+   * straddling midnight on the 1st wrote to "September 2026" and froze
+   * "October 2026"; a still-filling month re-read after a concurrent pipeline
+   * run gave write and freeze different denominators. This is AGENTS.md's own
+   * rule for a run — a window is frozen once, at open-run — applied to a
+   * document, and the research step is the document's open-run: its output is
+   * memoised by Inngest, so a retry of a later step re-reads the same instant.
+   *
+   * Optional because a build already in flight when this landed has a memoised
+   * research output without it; such a build falls back to the clock, exactly
+   * as it did before.
+   */
+  readingAt?: string
+}
 export interface WriteOut { written: WriterOutput; previous: PreviousBrief | null; costUsd: number; timings: Record<string, number> }
 export interface CheckOut { written: WriterOutput; verdicts: FindingVerdict[]; dropped: { headline: string; reason: string }[]; flagged: boolean; brief: { answered: boolean; subjects: string[]; missed: string[] } | null; costUsd: number; timings: Record<string, number> }
 export interface FreezeOut { snapshotId: string; title: string; evidenceIds: string[]; costUsd: number }
@@ -98,13 +124,22 @@ const mark = async (admin: SupabaseClient, ctx: BuildContext, status: 'researchi
 const spend = async (admin: SupabaseClient, ctx: BuildContext, totalUsd: number) => {
   if (ctx.buildId) await setBuildCost(admin, ctx.buildId, totalUsd)
 }
-const signalsOf = (admin: SupabaseClient, ctx: BuildContext) => loadSignals(admin, { clientId: ctx.clientId, runId: ctx.runId, settings: ctx.settings })
+/** Which of the four voices writes this brief — and, since WP19, which
+ *  section map it is composed from. The four fixed templates ARE their role;
+ *  a custom brief names one in its settings. */
+export const roleOf = (template: Pick<DocumentTemplate, 'key'>, settings: DocumentSettings): DocumentRole =>
+  isDocumentRole(template.key) ? template.key : (settings.role ?? DEFAULT_DOCUMENT_ROLE)
+
+const signalsOf = (admin: SupabaseClient, ctx: BuildContext, now?: string) =>
+  loadSignals(admin, { clientId: ctx.clientId, runId: ctx.runId, settings: ctx.settings, role: roleOf(ctx.template, ctx.settings), now })
 
 export async function researchStep(admin: SupabaseClient, ctx: BuildContext): Promise<ResearchOut> {
   await mark(admin, ctx, 'researching')
   const timings: Record<string, number> = {}
+  // Frozen here and carried, never re-read: see ResearchOut.readingAt.
+  const readingAt = new Date().toISOString()
   let t0 = Date.now()
-  const signals = await signalsOf(admin, ctx)
+  const signals = await signalsOf(admin, ctx, readingAt)
   timings.signals = Date.now() - t0
   const questions = composeQuestions(ctx.template, signals, ctx.settings, DOCUMENT_QUESTIONS_MAX)
   t0 = Date.now()
@@ -115,14 +150,14 @@ export async function researchStep(admin: SupabaseClient, ctx: BuildContext): Pr
   // it (AGENTS.md): quotes leave as refs with empty text; freezeStep resolves
   // them again for the picker.
   const answers = freezeQuotes(research.answers).data as ResearchAnswer[]
-  return { questions, answers, costUsd: research.costUsd, stoppedForBudget: research.stoppedForBudget, timings }
+  return { questions, answers, costUsd: research.costUsd, stoppedForBudget: research.stoppedForBudget, timings, readingAt }
 }
 
-export async function writeStep(admin: SupabaseClient, ctx: BuildContext, r: Pick<ResearchOut, 'answers' | 'costUsd'>): Promise<WriteOut> {
+export async function writeStep(admin: SupabaseClient, ctx: BuildContext, r: Pick<ResearchOut, 'answers' | 'costUsd' | 'readingAt'>): Promise<WriteOut> {
   await mark(admin, ctx, 'writing')
-  const signals = await signalsOf(admin, ctx)
+  const signals = await signalsOf(admin, ctx, r.readingAt)
   const figures = documentFigures(signals, r.answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const previous = await previousBrief(admin, ctx.report)
   const t0 = Date.now()
   const written = await generateDocument(admin, {
@@ -153,7 +188,7 @@ export async function checkStep(admin: SupabaseClient, ctx: BuildContext, w: Pic
 export async function freezeStep(
   admin: SupabaseClient,
   ctx: BuildContext,
-  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped' | 'brief'> | null; costUsd: number; timings: Record<string, number> },
+  args: { answers: ResearchAnswer[]; written: WriterOutput; check: Pick<CheckOut, 'verdicts' | 'dropped' | 'brief'> | null; costUsd: number; timings: Record<string, number>; readingAt?: string },
 ): Promise<FreezeOut> {
   // A retried step must not freeze twice: the row already names its snapshot.
   if (ctx.buildId) {
@@ -176,9 +211,9 @@ export async function freezeStep(
   const refs = collectQuoteRefs(args.answers)
   const texts = refs.length ? await fetchQuoteResolutionsByRefs(admin, refs, { onReadError: 'throw' }) : new Map<string, QuoteResolution>()
   const answers = resolveQuotes(args.answers, texts) as ResearchAnswer[]
-  const signals = await signalsOf(admin, ctx)
+  const signals = await signalsOf(admin, ctx, args.readingAt)
   const figures = documentFigures(signals, answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const title = ctx.report.cover?.title?.trim() || ctx.report.title || ctx.template.name
   const check = args.check
     ? {
@@ -241,7 +276,7 @@ export async function runBuildInProcess(
     if (check) log(`check: ${check.verdicts.map((v) => v.verdict).join(', ') || 'nothing to check'} · dropped ${check.dropped.length}${check.brief ? ` · brief ${check.brief.answered ? 'answered' : `UNANSWERED (nothing on ${check.brief.missed.join(', ')})`}` : ''} · $${check.costUsd.toFixed(3)} · ${check.timings.check} ms`)
     const costUsd = research.costUsd + write.costUsd + (check?.costUsd ?? 0)
     const timings = { ...research.timings, ...write.timings, ...(check?.timings ?? {}) }
-    const freeze = await freezeStep(admin, ctx, { answers: research.answers, written: check?.written ?? write.written, check, costUsd, timings })
+    const freeze = await freezeStep(admin, ctx, { answers: research.answers, written: check?.written ?? write.written, check, costUsd, timings, readingAt: research.readingAt })
     log(`freeze: snapshot ${freeze.snapshotId.slice(0, 8)} · ${freeze.evidenceIds.length} evidence refs`)
     const render = await renderStep(admin, ctx, freeze, opts.baseUrl)
     log(`render: ${render.bytes} bytes · ${render.ms} ms`)
@@ -280,7 +315,22 @@ export async function previousBrief(admin: SupabaseClient, report: Pick<ReportRo
   return { summary, headlines }
 }
 
-/** "Update of 30 Aug 2026". */
+/**
+ * The period a brief prints (Phase 1 WP19, item 43).
+ *
+ * "Update of 30 Aug 2026" was the period on every brief, on its method page and
+ * in its email — a run's own bookkeeping, printed as the thing the numbers are
+ * about. A brief whose numbers are a month's cannot keep it. Where there is a
+ * monthly reading the period is the month, the instant it was read and, while
+ * the month is still filling, the day it stops moving; where there is none the
+ * old string stands, because a brief that says "September 2026" over update
+ * figures would be the same lie the other way round.
+ */
+export function briefPeriod(signals: Pick<Signals, 'reading' | 'runDate'>): string {
+  return signals.reading ? briefStamp(signals.reading) : periodOf(signals.runDate)
+}
+
+/** "Update of 30 Aug 2026" — the basis a brief with no monthly reading has. */
 export function periodOf(runDate: string): string {
   const d = new Date(runDate)
   if (Number.isNaN(d.getTime())) return 'This update'

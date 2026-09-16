@@ -173,6 +173,18 @@ export function SettingsPane({ reportId, title, reader, settings, tracked, reade
           <span className="text-[11.5px] text-muted-foreground">This brief is short by design.</span>
         </div>
       )}
+      {/* NO WINDOW CONTROL, and the pane says what the window is instead.
+          The control offered four horizons and changed only the blocks that
+          are windowed — the stamp, the denominators and the method page stayed
+          the single current month, so "Last 12 months" printed twelve months
+          of figures under a September label. A brief is a reading of one
+          month; when the stamp can carry a window the control comes back with
+          it. */}
+      <div className="flex flex-col gap-1">
+        <span className={labelCls}>Window</span>
+        <span>The month in hand</span>
+        <span className="text-[11.5px] text-muted-foreground">A brief reads the month it is built in, and the month is printed on every page of it.</span>
+      </div>
       <div className="flex flex-col gap-1">
         <span className={labelCls}>Language</span>
         <span>English</span>

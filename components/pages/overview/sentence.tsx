@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { Block, QuoteRef } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockQuotes } from '@/components/blocks/quote'
@@ -129,7 +130,7 @@ export const overviewSentence: Block<OverviewData> = {
         title={overviewSentence.title}
         question={overviewSentence.question}
         mode={mode}
-        footer={email ? <a href={market} style={{ color: EMAIL.ink }}>Open Market →</a> : <Link href={market} className="hover:underline">Open Market →</Link>}
+        footer={openLink(mode, market, 'Open Market →')}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
         <div className={email ? undefined : 'flex flex-col gap-3'}>

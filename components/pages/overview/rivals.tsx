@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { fmtInt, shortDate } from '@/lib/format'
@@ -8,7 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import { isRivalAudience } from '@/lib/rivals'
-import { OWN_POSTS_UNREADABLE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
+import { OWN_POSTS_UNREADABLE, OWN_POSTS_UNREADABLE_OUTSIDE, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow } from '@/lib/pages/overview'
 
 // OV4 · Rivals (design §3 OV4).
 //
@@ -58,7 +58,10 @@ function OwnPosts({ row, mode }: { row: RivalRow; mode: RenderMode }): ReactNode
   // row and the category's, and "on their own posts: — not tracked" against
   // either of them is an absence of nothing.
   if (!isRivalAudience(row.audience)) return null
-  const text = row.ownPosts ?? OWN_POSTS_UNREADABLE
+  // Print mode is a PDF and a public share page (WP19's briefs), where a
+  // readiness owner is our internal label rather than a screen the reader can
+  // open. The absence is still named.
+  const text = row.ownPosts ?? (mode === 'print' ? OWN_POSTS_UNREADABLE_OUTSIDE : OWN_POSTS_UNREADABLE)
   return mode === 'email'
     ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{text}</span>
     : <span className="text-[12px] text-muted-foreground">{text}</span>
@@ -93,8 +96,8 @@ export const overviewRivals: Block<OverviewData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/competitive`
     const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>
-      : <Link href={href} className="hover:underline">Open Competitive →</Link>
+      ? null
+      : openLink(mode, href, 'Open Competitive →')
 
     const empty = overviewRivals.emptyState(data)
     const caveat = (

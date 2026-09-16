@@ -67,7 +67,7 @@ export function buildCoverPrompts(a: Omit<CoverArgs, 'admin' | 'clientId' | 'run
     '- Three to five sentences, one paragraph, plain English, no headings, no bullet points, no exclamation marks, no greeting.',
     '- You have NO numbers. Where a number belongs, write the figure\'s placeholder exactly as given, e.g. "[[videos]] conversations". The product substitutes the real value. Never type a digit. Never invent a figure that is not in the list.',
     '- Cite at most four figures; at least one. A placeholder is read aloud as its value: a count is followed by what it counts ("[[comments]] comments read"), never used as a noun ("the findings in [[competitive_findings]]" is wrong).',
-    '- A figure means exactly what its label says. Do not attach it to a narrower claim: "[[videos]] conversations analysed" is true; "the theme appears in [[videos]] conversations" is not.',
+    '- A figure means exactly what its label says. Do not attach it to a narrower claim: "[[videos]] videos analysed" is true; "the theme appears in [[videos]] videos" is not.',
     CALIBRATED_PROSE_RULE,
     '- Do not name the tool, the model or "AI". Do not say "this report"; say what was found.',
     '- No dashes between clauses (no em dash, no en dash, no spaced hyphen); use a comma, a colon or a full stop.',

@@ -51,7 +51,11 @@ export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = 
   },
   'brief:marketing': {
     label: 'The marketing brief',
-    what: 'What the audience already believes, which claims land, and which come back.',
+    // WHAT THE MARKETING BRIEF ACTUALLY PRINTS (MARKETING_MAP): the month,
+    // your subjects, the category, the rivals, the findings and your moves.
+    // "Which claims land, and which come back" was the say_hear page, which
+    // the section map does not print.
+    what: 'The month as your audience wrote it: each subject, the wider category, every rival, and what you said you would do about it.',
   },
   'brief:content': {
     label: 'The content brief',

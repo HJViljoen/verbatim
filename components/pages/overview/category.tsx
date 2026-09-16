@@ -1,7 +1,7 @@
-import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockProportion } from '@/components/blocks/bars'
@@ -204,7 +204,7 @@ export const overviewCategory: Block<OverviewData> = {
         question={overviewCategory.question}
         mode={mode}
         meta={c.denominator != null ? `${fmtInt(c.denominator)} category videos this month` : undefined}
-        footer={email ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a> : <Link href={href} className="hover:underline">Open Voice →</Link>}
+        footer={openLink(mode, href, 'Open Voice →')}
       >
         <div className={email ? undefined : 'flex flex-col gap-3'}>
           <Line label="Kind of thing said" mode={mode}>{kinds}</Line>

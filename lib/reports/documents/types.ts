@@ -1,4 +1,5 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -170,6 +171,78 @@ export interface DocLens {
   short: string
 }
 
+/**
+ * The month a brief is a reading of, frozen onto its snapshot (Phase 1 WP19).
+ *
+ * "Exports and reports freeze numbers, never words" — so the stamp, the
+ * denominators and the platform mix are stored, and the quoted voices still
+ * resolve at render. Absent on every brief built before this landed and on a
+ * workspace whose month tables have never been seeded, which is why every
+ * reader of it is optional-chained rather than defaulted: a missing reading is
+ * a fact about the brief, not a zero.
+ */
+export interface DocumentReading {
+  /** `YYYY-MM-01`. */
+  month: string
+  /** "September 2026". */
+  monthLabel: string
+  monthStatus: MonthStatus
+  /** The instant the brief read, printed — never `created_at`. */
+  readingAt: string
+  /** The one line every page of the brief carries. */
+  stamp: string
+  denominators: { audience: string; label: string; videos: number; comments: number }[]
+  platformMix: Record<string, number>
+  /** True where the window crosses a recorded clustering boundary — the label
+   *  decision L requires travels with it. */
+  crossesClustering: boolean
+}
+
+/** One input a brief needed and the workspace has not recorded, frozen so the
+ *  artefact says the same thing a year later. */
+export interface DocumentMissingInput {
+  id: string
+  input: string
+  owner: string
+  /** Which of the three owns it — so a later reader of the snapshot can tell a
+   *  promise ("we are building it") from an instruction ("name them in
+   *  Settings"). compose stores it; the type omitted it. */
+  ownerRole?: 'client' | 'ops' | 'engineering'
+  unlocks: string
+  sections: string[]
+}
+
+/**
+ * One borrowed page block, as the brief's deck prints it (Phase 1 WP19).
+ *
+ * "Deck pages that duplicate a block render the block in print mode" — so the
+ * section stores what to draw and where its data is, and the block draws
+ * itself. `empty` is the ONE line to print in its place: the block's own empty
+ * state where the block simply has nothing, and the missing-input sentence
+ * (naming the input and its ST1 owner) where the workspace has not recorded
+ * what the section needs. A section that could not be filled prints that
+ * sentence rather than dropping out of the brief in silence, which is what the
+ * compose walk did before.
+ */
+export interface DocBriefSection {
+  /** Stable, from the section map. Names a slide and an edit. */
+  id: string
+  /** `<surface>.<block>` — the block key, a stored contract. */
+  block: string
+  /** Which of `data.surfaces` holds this block's data. */
+  surface: string
+  title: string
+  framing: string
+  empty: string | null
+}
+
+/** The brief's order: written pages and borrowed blocks, interleaved. */
+export type DocLayoutEntry = { kind: 'page'; id: string } | { kind: 'section'; id: string }
+
+/** What a slide key looks like when it names a borrowed block rather than a
+ *  written page. Prefixed because both live in one `Slide.keys` vocabulary. */
+export const SECTION_SLIDE_PREFIX = 'section:'
+
 export interface DocumentMethod {
   conversations: number
   videos: number
@@ -196,6 +269,20 @@ export interface DocumentSnapshotData {
   runId: string | null
   figures: FigureTable
   delta: RunDelta | null
+  /** The month this brief is a reading of (WP19). Absent on a brief built
+   *  before item 43 and on a workspace with no monthly reading. */
+  reading?: DocumentReading | null
+  /** What it could not fill, and who closes each one (WP19). */
+  missing?: DocumentMissingInput[]
+  /** The borrowed page blocks, in the section map's order (WP19). */
+  sections?: DocBriefSection[]
+  /** Each borrowed surface's loader output, frozen — the same data the page
+   *  drew, so the brief and the page cannot come to say different things
+   *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */
+  surfaces?: Record<string, unknown>
+  /** Written pages and borrowed blocks in one order (WP19). Absent on a brief
+   *  built before the section maps, which paginates off `pages` as it did. */
+  layout?: DocLayoutEntry[]
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

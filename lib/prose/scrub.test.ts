@@ -16,7 +16,7 @@ import {
 } from './scrub'
 
 const figures: FigureTable = {
-  videos: { label: 'conversations analysed', value: '374', kind: 'count' },
+  videos: { label: 'videos analysed', value: '374', kind: 'count' },
   share_pct: { label: 'share of the tracked conversation', value: '11%', kind: 'pct' },
 }
 

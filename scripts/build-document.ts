@@ -30,8 +30,8 @@ import { composeQuestions } from '../lib/reports/documents/questions'
 import { runResearch } from '../lib/reports/documents/research'
 import { DOCUMENT_BUILD_BUDGET_USD, DOCUMENT_QUESTIONS_MAX, OSSUR_CLIENT_ID as OSSUR } from '../lib/config'
 import { allowedTokens, composeDocument, documentFigures, thinWeek } from '../lib/reports/documents/compose'
+import { briefPeriod, roleOf } from '../lib/reports/documents/steps'
 import { generateDocument, DOCUMENT_WRITER_MODEL } from '../lib/reports/documents/write-model'
-import { periodOf } from '../lib/reports/documents/build'
 import { buildContext, runBuildInProcess } from '../lib/reports/documents/steps'
 import { insertBuild, latestRunId, loadBuild } from '../lib/reports/documents/builds'
 import type { ReportRow } from '../lib/reports/types'
@@ -95,7 +95,10 @@ async function main() {
   const admin = createAdminClient()
 
   const t0 = Date.now()
-  const signals = await loadSignals(admin, { clientId, runId: flag('run') ?? null, settings })
+  // The role decides the SECTION MAP as well as the voice (WP19), so the
+  // operator script has to name it for the same reason the build path does —
+  // without it every brief built here would be composed as a leadership one.
+  const signals = await loadSignals(admin, { clientId, runId: flag('run') ?? null, settings, role: roleOf(template, settings) })
   console.log(`signals: ${Date.now() - t0} ms · run ${signals.runId.slice(0, 8)} (${signals.runStatus}, ${signals.runDate}) · ${signals.company}`)
   console.log(`  ${signals.run.conversations} conversations on ${signals.run.videos} videos · ${signals.run.clientVideos} yours · ${signals.run.competitorVideos} competitors · ${signals.run.positivePct ?? '?'}% positive of ${signals.run.judged}`)
   console.log(`  themes ${signals.themes.length} · concerns ${signals.concerns.length} · competitors ${signals.competitors.map((c) => `${c.name} (${c.claims.length} claims, praise ${c.praise.length}, hurt ${c.hurt.length}${c.thin ? ', thin' : ''})`).join(', ') || 'none'}`)
@@ -128,7 +131,7 @@ async function main() {
   // Write, compose, freeze, print. The script has no reports row: the
   // snapshot's report_id stays null and there is no previous brief.
   const figures = documentFigures(signals, research.answers)
-  const period = periodOf(signals.runDate)
+  const period = briefPeriod(signals)
   const t2 = Date.now()
   const written = reuse && has('reuse-write') && existsSync(`${out}/written.json`)
     ? { written: JSON.parse(readFileSync(`${out}/written.json`, 'utf8')) as Awaited<ReturnType<typeof generateDocument>>['written'], costUsd: 0, ms: 0, promptTokens: 0, completionTokens: 0 }

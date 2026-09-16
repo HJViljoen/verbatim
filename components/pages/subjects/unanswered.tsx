@@ -1,11 +1,11 @@
-import Link from 'next/link'
 
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import { unansweredMeta, type SubjectsData, type UnansweredRow } from '@/lib/pages/subjects'
+import { UNANSWERED_CLAIMS_UNREADABLE, UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE, unansweredMeta, type SubjectsData, type UnansweredRow } from '@/lib/pages/subjects'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
@@ -48,8 +48,8 @@ export const subjectsUnanswered: Block<SubjectsData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/reports`
     const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open the content brief →</a>
-      : <Link href={href} className="hover:underline">Open the content brief →</Link>
+      ? null
+      : openLink(mode, href, 'Open the content brief →')
 
     if (!u || empty) {
       return (
@@ -86,7 +86,7 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         ) : null}
         <div>{u.rows.map((r) => <Row key={r.id} row={r} mode={mode} />)}</div>
         {small(u.basis)}
-        {u.claims ? small(u.claims) : null}
+        {u.claims ? small(u.claims === UNANSWERED_CLAIMS_UNREADABLE && mode === 'print' ? UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE : u.claims) : null}
         {u.reddit ? small(u.reddit) : null}
       </BlockFrame>
     )
