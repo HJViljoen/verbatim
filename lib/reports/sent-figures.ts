@@ -289,6 +289,16 @@ interface StatedReading {
  * month`, `${label}, share of the month`, `videos that raised ${label}` — so
  * containment is the join, case-folded because one surface lower-cases its
  * label on the way in. A verdict with an empty label matches nothing.
+ *
+ * AND THE NAME HAS TO BE THE WHOLE NAME. A bare `includes` matches a label that
+ * merely STARTS one: a theme called "Zip" would cover "Zips failing after a
+ * year's share of the month" on a value coincidence, and the record would lose
+ * a statement about a different theme it can never be told about again (the
+ * table has no UPDATE). Labels are a model's words, so two of them being
+ * prefixes of each other is ordinary. The match therefore has to sit on a
+ * boundary at both ends — the start of the label or a non-letter before it, the
+ * end or a non-letter after it — which is what "'s share of the month" and
+ * "videos that raised X" both do.
  */
 function coveredByVerdict(
   label: string,
@@ -301,9 +311,23 @@ function coveredByVerdict(
   return stated.some(
     (s) =>
       s.label.length > 0 &&
-      l.includes(s.label) &&
+      namesObject(l, s.label) &&
       ((unit === 'pct' && s.pct === value) || (unit === 'videos' && s.k != null && s.k === value)),
   )
+}
+
+/** Does this token's label name that object — the whole name, and not the start
+ *  of a longer one? Both already lower-cased. */
+function namesObject(label: string, object: string): boolean {
+  const edge = /[\p{L}\p{N}]/u
+  let at = label.indexOf(object)
+  while (at !== -1) {
+    const before = at === 0 ? null : label[at - 1]
+    const after = at + object.length >= label.length ? null : label[at + object.length]
+    if ((before == null || !edge.test(before)) && (after == null || !edge.test(after))) return true
+    at = label.indexOf(object, at + 1)
+  }
+  return false
 }
 
 /**

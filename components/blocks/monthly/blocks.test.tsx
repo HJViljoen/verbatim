@@ -411,6 +411,30 @@ describe('what the artefact printed and what the record keeps', () => {
     expect(checked).toBeGreaterThan(0)
   })
 
+  // The covering rule joins a token to a verdict by the object's NAME, and the
+  // fixture's OV1 tokens used to read "share of the month" where the loader
+  // writes "<label>'s share of the month" — so the rule the record is built on
+  // fired on no fixture anywhere, and one reading of one theme was filed as
+  // three statements.
+  it('file one reading of one object once, however many blocks printed it', () => {
+    const data = monthlyFixture()
+    const rows = recorded(data)
+    const lead = data.overview.sentence.lead!
+    expect(rows.some((r) => r.objectKind === 'theme' && r.objectId === lead.objectId)).toBe(true)
+    for (const token of ['t1_share', 't1_videos']) {
+      expect(rows.some((r) => r.objectId === token)).toBe(false)
+    }
+  })
+
+  // A rival is read on two populations in one section: the object and the
+  // audience are the same on both and only the measure differs.
+  it('keep a rival’s two readings apart, each under its own population', () => {
+    const rival = recorded(monthlyFixture()).filter((r) => r.objectKind === 'rival')
+    expect(rival.map((r) => r.measure).sort()).toEqual(['comments', 'videos'])
+    expect(rival.find((r) => r.measure === 'comments')?.denominator).toBe('the panel’s comments this month')
+    expect(rival.find((r) => r.measure === 'videos')?.denominator).toBe('the panel’s videos this month')
+  })
+
   it('never file two rows under one object and one measure', () => {
     for (const data of STATES) {
       const keys = recorded(data).map((r) => `${r.audience}/${r.objectKind}/${r.objectId}/${r.measure}`)

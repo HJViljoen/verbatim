@@ -146,6 +146,21 @@ describe('what a delivered artefact writes down', () => {
     expect(rows.map((r) => r.objectId)).toEqual(['t1', 't1_last'])
   })
 
+  // Labels are a model's words, and two of them being prefixes of each other is
+  // ordinary. A bare containment test let "Zip" swallow a statement about
+  // "Zips failing after a year" on a coincidence of value — into a record that
+  // can never be corrected.
+  it('keeps a token whose object merely starts with a recorded one’s name', () => {
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [verdict({ objectLabel: 'Zip' })],
+      figures: {
+        t2_share: { value: 22, unit: 'pct', label: "Zips failing after a year's share of the month" },
+      },
+    })
+    expect(rows.map((r) => r.objectId)).toEqual(['t1', 't2_share'])
+  })
+
   it('keeps a token that reads the same number about something else', () => {
     // A coincidence of value is not a reading of the same thing, and the
     // month's own denominator names no object at all.

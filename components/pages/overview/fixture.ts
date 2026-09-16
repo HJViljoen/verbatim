@@ -68,8 +68,14 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       lead,
       body: 'Will it survive a wet commute came up in [[t1_share]] of the category’s videos this month — [[t1_videos]] of [[t1_of]] videos.',
       figures: {
-        t1_share: { value: 9.4, unit: 'pct', label: 'share of the month' },
-        t1_videos: { value: 130, unit: 'videos', label: 'videos that raised it' },
+        // THE LOADER'S OWN LABELS, built from the lead's objectLabel
+        // (lib/pages/overview.ts `leadSentence`). The shortened forms that were
+        // here read fine in a sentence and exercised nothing: the record's
+        // covering rule joins a token to a verdict by the object's name, and
+        // with "share of the month" it never fired, so the fixture filed one
+        // reading of one theme as three statements.
+        t1_share: { value: 9.4, unit: 'pct', label: "Will it survive a wet commute's share of the month" },
+        t1_videos: { value: 130, unit: 'videos', label: 'videos that raised Will it survive a wet commute' },
         t1_of: { value: 1388, unit: 'videos', label: 'videos read for the category' },
       },
       anomaly: {
@@ -211,8 +217,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           observed: true,
           attention: { k: 6200, n: 41200, pct: 15 },
           content: { k: 150, n: 1000, pct: 15 },
-          attentionVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 3, bandPts: 1.8, value: { k: 6200, n: 41200 } }),
-          contentVerdict: null,
+          // BOTH VERDICTS, as `buildStandings` returns them: one object, one
+          // audience, two populations. Anything keyed by the object alone
+          // keeps one of them and files it under the other's denominator, and
+          // a fixture carrying only one cannot show that.
+          attentionVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 3, bandPts: 1.8, value: { k: 6200, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
+          contentVerdict: verdict({ objectKind: 'rival', objectId: rivalKey('Freitag'), objectLabel: 'Freitag', changePts: 0.6, bandPts: 1.8, state: 'no_clear_change', value: { k: 150, n: 1000 }, countedOver: { measure: 'videos', population: 'the panel’s videos this month' } }),
           ownPosts: null,
           raisedMost: { label: 'Does the tarp smell', k: 41, n: 142, pct: 28.9 },
           retiredAt: null,
@@ -224,7 +234,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           observed: true,
           attention: { k: 2400, n: 41200, pct: 6 },
           content: { k: 70, n: 1000, pct: 7 },
-          attentionVerdict: verdict({ objectKind: 'audience', objectId: CLIENT_AUDIENCE, objectLabel: 'Sealand', state: 'no_clear_change', changePts: 1, bandPts: 1.8, value: { k: 2400, n: 41200 } }),
+          attentionVerdict: verdict({ objectKind: 'audience', objectId: CLIENT_AUDIENCE, objectLabel: 'Sealand', state: 'no_clear_change', changePts: 1, bandPts: 1.8, value: { k: 2400, n: 41200 }, countedOver: { measure: 'comments', population: 'the panel’s comments this month' } }),
           contentVerdict: null,
           ownPosts: null,
           raisedMost: null,
