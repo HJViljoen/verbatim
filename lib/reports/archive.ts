@@ -186,14 +186,26 @@ export function emptyGroupLine(args: {
  *
  * FOUR CARRIERS, AND THE ORDER MATTERS. Each is read whether the query
  * selected the whole `data` column or aliased the key flat, which is what
- * every caller on the Reports page does. `report_snapshots.reading_at` is M9's
- * column and is preferred the moment it exists. Until then a brief carries
+ * every caller on the Reports page does. A brief carries
  * `data.reading.readingAt` (WP19) and the weekly report carries
  * `data.readingAt` (WP17) — both are the instant the artefact read, written by
  * the builder. `created_at` is LAST and is labelled differently, because it is
  * when the file was made and not when the conversation was read; printing it
  * under the same words would be the archive asserting a reading date it does
  * not have.
+ *
+ * M9'S COLUMN IS READ AND IS NOT YET SELECTED, AND THAT SEAM IS OPEN. This
+ * function prefers `reading_at` / `month` / `month_status` over every data
+ * carrier, but no query on the Reports page asks for them: naming a column
+ * PostgREST does not have fails the WHOLE select, so a page that selected them
+ * today would show a client an empty archive until the migration landed. The
+ * page is therefore correct with and without M9 and gains nothing from it
+ * until someone edits the two selects in `app/dashboard/reports/page.tsx` (the
+ * Built list and the sent snapshot) to add the three columns — which is the
+ * whole of the work, and is what makes `isMissingSentFigures` unnecessary
+ * here. WP18's `lib/reports/sent-figures.ts` already selects them on its own
+ * table and catches the failure; these two reads carry the rest of the page
+ * and cannot.
  */
 export interface ReadingStamp {
   /** ISO instant. */
