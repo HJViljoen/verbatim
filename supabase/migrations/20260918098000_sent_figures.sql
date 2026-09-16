@@ -160,9 +160,23 @@ update public.report_snapshots
 -- lib/schedules/deliver.ts reaches it, and `WeeklySnapshotData` has no
 -- top-level field for it at all. Reading only the top level matched no weekly
 -- row, which is to say none of the rows this column was added for.
+--
+-- AND ONLY WHERE THE MONTH ITSELF LANDED, WHICH IS THE GATE THE STATEMENT
+-- BELOW ALREADY ARGUES FOR. Ungated, the coalesce reaches down into
+-- `data.reading.monthStatus`, which a WP19 BRIEF also has — so a brief landed
+-- `month_status = 'filling'` with `reading_at`, `month` and `window_basis` all
+-- null, and a QUARTERLY REVIEW landed a month status with no month at all. A
+-- quarterly review is a reading of a QUARTER; recording that its month was
+-- still filling, and refusing to say which month, is the same wrong statement
+-- the next gate exists to prevent. Nothing prints it today (readingLine returns
+-- early with no month), so this is record quality — but it is written into the
+-- provenance columns of every brief and every quarterly from the apply onward,
+-- in a column whose whole point is to be queryable.
 update public.report_snapshots
    set month_status = coalesce(data->>'monthStatus', data->'reading'->>'monthStatus')
  where month_status is null
+   and month is not null
+   and data->>'kind' in ('weekly', 'monthly')
    and coalesce(data->>'monthStatus', data->'reading'->>'monthStatus') in ('filling', 'frozen');
 
 -- Only the two artefacts whose every number is a reading of a calendar month
