@@ -80,7 +80,8 @@ export async function snapshotQuarterly(args: {
   clientId: string
   userId?: string | null
   company: string
-  /** Which quarter. Defaults to the one the reading date falls in. */
+  /** Which quarter. Defaults to the one that has CLOSED, never the one the
+   *  reading date falls in — `quarterToReview` (lib/reports/quarterly.ts). */
   quarter?: Quarter
   /** Overridable so a rebuild reads as at its own date. */
   now?: string

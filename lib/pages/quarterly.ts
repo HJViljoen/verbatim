@@ -26,7 +26,7 @@ import {
   previousQuarter,
   quarterGateSentence,
   quarterLabel,
-  quarterOf,
+  quarterToReview,
   quarterUnlocked,
   quarterlyPeriod,
   type Quarter,
@@ -411,7 +411,9 @@ export function unsettledItems(verdicts: readonly Verdict[], limit = 4): Unsettl
 // ---- the loader ---------------------------------------------------------------
 
 export interface QuarterlyOptions {
-  /** Which quarter. Defaults to the quarter the reading date falls in. */
+  /** Which quarter. Defaults to the quarter that has CLOSED — never the one
+   *  the reading date falls in; see `quarterToReview`. A caller that wants the
+   *  quarter in progress (an operator previewing mid-quarter) names it. */
   quarter?: Quarter
   /** Overridable for tests and for a rebuild that re-reads as at its own date. */
   now?: string
@@ -424,7 +426,10 @@ export interface QuarterlyOptions {
 export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}): Promise<QuarterlyData | null> {
   const supabase = scope.supabase as SupabaseClient
   const readingAt = options.now ?? new Date().toISOString()
-  const quarter = options.quarter ?? quarterOf(readingAt)
+  // THE QUARTER THAT CLOSED. A quarterly send fires on the first update of a
+  // new quarter, so the artefact it carries reviews the one behind it — four
+  // days of October is not a quarter (lib/reports/quarterly.ts).
+  const quarter = options.quarter ?? quarterToReview(readingAt)
   const prior = previousQuarter(quarter)
 
   // THE THREE PAGE LOADERS, unchanged, on the horizon whose axis is this

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { DIRECTION_WORDS } from '../test/copy-contract'
+import { quarterKey } from '../schedules/due'
 import {
+  REVIEW_TZ,
   QUARTERLY_BLOCK_KEYS,
   QUARTERLY_RULE,
   QUARTER_PAGE_KINDS,
@@ -18,7 +20,9 @@ import {
   quarterGateSentence,
   quarterLabel,
   quarterOf,
+  quarterOfIn,
   quarterReadingMonth,
+  quarterToReview,
   quarterUnlocked,
   quarterlyPeriod,
   quarterlySubject,
@@ -103,6 +107,31 @@ describe('the quarter', () => {
     const q = quarterFor(2026, 3)
     expect(quarterReadingMonth(q, '2026-09-16T00:00:00Z')).toBe('2026-09-01')
     expect(quarterReadingMonth(q, '2027-02-01T00:00:00Z')).toBe('2026-09-01')
+  })
+
+  it('reviews the quarter that CLOSED, never the one that has just begun', () => {
+    // The defect this replaces: a first quarterly send on 5 October built
+    // "Q4 2026 (Oct–Dec) against Q3 2026 · October still filling" over four
+    // days of comment.
+    expect(quarterToReview('2026-10-05T09:00:00Z')).toMatchObject({ year: 2026, q: 3, from: '2026-07-01', to: '2026-09-30' })
+    expect(quarterToReview('2026-09-16T09:00:00Z')).toMatchObject({ year: 2026, q: 2 })
+    expect(quarterToReview('2027-01-04T09:00:00Z')).toMatchObject({ year: 2026, q: 4 })
+    // A reviewed quarter is never still filling, whatever the reading date.
+    for (const day of ['2026-10-01T00:30:00Z', '2026-11-20T09:00:00Z', '2026-12-31T21:00:00Z']) {
+      expect(quarterFilling(quarterToReview(day), day)).toBe(false)
+    }
+  })
+
+  it('keeps one clock with the schedule that fires it', () => {
+    // 2026-09-30T22:30Z is 1 October in SAST: the schedule calls it Q4 and
+    // fires, so the artefact must call it Q4 too and review Q3. Read in UTC
+    // it is still September, and the review would have been of Q2.
+    expect(quarterOfIn('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 4 })
+    expect(quarterOf('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 3 })
+    expect(quarterToReview('2026-09-30T22:30:00Z')).toMatchObject({ year: 2026, q: 3 })
+    expect(quarterKey('2026-09-30T22:30:00Z', REVIEW_TZ)).toBe('2026-Q4')
+    // A timezone the caller names is honoured, so the pair cannot drift.
+    expect(quarterOfIn('2026-09-30T22:30:00Z', 'UTC')).toMatchObject({ year: 2026, q: 3 })
   })
 })
 

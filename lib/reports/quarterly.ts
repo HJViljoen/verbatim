@@ -139,6 +139,45 @@ export function quarterOf(iso: string): Quarter {
   return quarterFor(year, (Math.floor((m - 1) / 3) + 1) as 1 | 2 | 3 | 4)
 }
 
+/**
+ * THE CLOCK A SCHEDULE KEEPS, and therefore the clock this artefact keeps.
+ *
+ * `scheduleDue` decides "the first update of a new quarter" in SAST, the
+ * scheduler's own timezone; `quarterOf` above reads a day in UTC. Those two
+ * disagree for two hours at every quarter boundary, and with `quarterToReview`
+ * below the disagreement is no longer cosmetic — a send claimed at
+ * 2026-09-30T22:30Z is Q4 to the schedule and Q3 to UTC, so the artefact would
+ * review Q2 while the schedule believed it had sent the Q3 review. One clock.
+ */
+export const REVIEW_TZ = 'Africa/Johannesburg'
+
+/** The quarter an instant falls in, on a named wall clock. */
+export function quarterOfIn(iso: string, tz: string = REVIEW_TZ): Quarter {
+  const month = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit' }).format(new Date(iso))
+  const year = Number(month.slice(0, 4))
+  const m = Number(month.slice(5, 7))
+  return quarterFor(year, (Math.floor((m - 1) / 3) + 1) as 1 | 2 | 3 | 4)
+}
+
+/**
+ * The quarter a review is OF, as at the moment it is built.
+ *
+ * THE QUARTER THAT CLOSED, NEVER THE ONE THAT HAS JUST BEGUN. A quarterly
+ * schedule fires on the first update of a NEW calendar quarter
+ * (lib/schedules/due.ts), which is the only moment a quarter's numbers are
+ * complete — so the artefact that send carries is a review of the quarter
+ * behind it. Defaulting to `quarterOf(now)` produced the opposite: a first
+ * send on 5 October headed "Q4 2026 (Oct–Dec) against Q3 2026 · October still
+ * filling", over four days of comment, while every month-level page on the
+ * same sheet still showed September.
+ *
+ * A caller that genuinely wants the quarter in progress — a preview an
+ * operator asked for mid-quarter — names it, through `QuarterlyOptions.quarter`.
+ */
+export function quarterToReview(iso: string, tz: string = REVIEW_TZ): Quarter {
+  return previousQuarter(quarterOfIn(iso, tz))
+}
+
 export function previousQuarter(quarter: Quarter): Quarter {
   return quarter.q === 1 ? quarterFor(quarter.year - 1, 4) : quarterFor(quarter.year, (quarter.q - 1) as 1 | 2 | 3)
 }
