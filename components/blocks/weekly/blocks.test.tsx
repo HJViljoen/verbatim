@@ -4,7 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { FIRST_SCREEN_BUDGET, NOTHING_UNUSUAL, WEEKLY_BLOCK_KEYS, WEEKLY_RULE, firstScreenCount } from '@/lib/reports/weekly'
-import { WEEKLY_BLOCKS, weeklyBlocksFor } from './index'
+import { WEEKLY_BLOCKS, forSales, weeklyBlocksFor } from './index'
 import { formingFixture, quietFixture, thinFixture, weeklyFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -20,6 +20,18 @@ describe('the six blocks', () => {
         }
       }
     }
+  })
+
+  // The status note pins `forSales` as `Block<{ sales: ForSalesBlock }>` for
+  // WP15 to import without building a whole weekly reading. It declared
+  // `Block<WeeklyData>`, so This week could not have handed it `{ sales }` at
+  // all. This is the pinned shape, exercised.
+  it('lets For sales be handed the loader’s rows alone', () => {
+    const { sales } = weeklyFixture()
+    const markup = render(forSales.render({ sales }, 'app', ctx))
+    expect(markup).toContain('More in their own words')
+    expect(forSales.emptyState({ sales })).toBeNull()
+    expect(blockAnswers(forSales, { sales }).quotes).toEqual(sales.rows.map((r) => r.quote.ref))
   })
 
   it('is one block per stored key, in the design’s order', () => {

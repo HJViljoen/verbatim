@@ -4,17 +4,23 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { SalesRow } from '@/lib/pages/weekly'
-import type { WeeklyData } from '@/lib/pages/weekly'
+import type { ForSalesBlock, SalesRow } from '@/lib/pages/weekly'
 
 // WR4 · For sales — the customers' own words (design §3 WR section 4).
 //
 // BUILT HERE RATHER THAN IMPORTED. The plan hands this block to WP15 (This
 // week) and says to build it here if that package has not landed — it has not,
 // so this is the one, and This week is expected to import `forSales` rather
-// than write a second one. The data shape it takes is deliberately the loader's
-// `SalesRow`, not the weekly report's own type, so the block can be pointed at
-// another surface's rows without a translation layer.
+// than write a second one.
+//
+// SO IT TAKES `{ sales }`, NOT `WeeklyData`. The status note pinned the shape
+// as `Block<{ sales: ForSalesBlock }>` and said WP15 should hand it the
+// loader's own rows without a translation layer — and the code declared
+// `Block<WeeklyData>`, which This week could not satisfy without building the
+// whole weekly reading. The render only ever touches `data.sales` and
+// `ctx.appUrl`, so the narrower type is the true one, and `WeeklyData`
+// structurally satisfies it: the weekly report keeps passing its own reading
+// in unchanged.
 //
 // NO FIGURES AND NO VERDICT ON THIS BLOCK, on purpose. It is quotation, not
 // measurement: four things a customer actually said, original first and the
@@ -41,7 +47,7 @@ function Head({ row, mode }: { row: SalesRow; mode: RenderMode }) {
     : <div className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-muted-foreground">{words}</div>
 }
 
-export const forSales: Block<WeeklyData> = {
+export const forSales: Block<{ sales: ForSalesBlock }> = {
   key: 'weekly.sales',
   title: 'For sales',
   question: 'What are customers pushing back on, and what are they buying on?',
