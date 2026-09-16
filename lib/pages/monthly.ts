@@ -216,6 +216,29 @@ export function voiceNote(input: { citations: number; readable: number; inMonth:
   return 'the voices from this month are already quoted above'
 }
 
+/**
+ * What the subject line leads with — over everything the ARTEFACT printed.
+ *
+ * `overview.sentence.verdicts` is the page's pool: its subjects, and its movers
+ * THREE A SIDE (lib/pages/overview.ts). This artefact prints ten a side, so a
+ * mover at rank eight with the month's largest banded change was printed on
+ * page two and could never reach the subject line the WP says is "from the
+ * largest banded change". Both pools are joined here; `leadVerdict` still
+ * refuses anything that did not clear its band, and a verdict named twice by
+ * two sections is the same reading either way it is picked.
+ */
+export function leadOf(
+  sentenceVerdicts: readonly Verdict[],
+  movers: Pick<MoversSection, 'growing' | 'fading'>,
+): Verdict | null {
+  const printed = [
+    ...sentenceVerdicts,
+    ...movers.growing.map((r) => r.verdict),
+    ...movers.fading.map((r) => r.verdict),
+  ]
+  return leadVerdict(printed.filter((v) => isAnswer(v.state)))
+}
+
 /** When the next monthly reading lands: the first of the month after this one.
  *  A decision with no date on it is a note, not a decision. */
 export function nextReadingOf(month: string): string {
@@ -282,7 +305,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     href: '/dashboard/market',
   }
 
-  const lead = leadVerdict(verdicts.filter((v) => isAnswer(v.state)))
+  const lead = leadOf(verdicts, moversSection)
   return {
     brand: overview.brand,
     month,

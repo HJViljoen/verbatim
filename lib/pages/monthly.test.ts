@@ -3,14 +3,45 @@ import {
   MONTHLY_SPARK_MONTHS,
   briefStaleLine,
   monthlyStatusOf,
+  leadOf,
   nextReadingOf,
   pickLed,
   spanOf,
   sparkMonths,
   voiceNote,
   type BriefLink,
+  type MoverRow,
   type ReadableSent,
 } from './monthly'
+import type { Verdict } from '../reading/verdicts'
+
+const themeVerdict = (over: Partial<Verdict> = {}): Verdict => ({
+  objectKind: 'theme',
+  objectId: 't1',
+  objectLabel: 'Durability',
+  audience: 'industry',
+  window: { from: '2026-09-01', to: '2026-10-01', kind: 'month' },
+  value: { k: 130, n: 1388 },
+  changePts: 2.6,
+  bandPts: 1.8,
+  state: 'moved',
+  flags: [],
+  ...over,
+})
+
+const moverRow = (verdict: Verdict): MoverRow => ({
+  id: verdict.objectId,
+  label: verdict.objectLabel,
+  k: verdict.value.k,
+  n: verdict.value.n,
+  pct: 9.4,
+  verdict,
+  direction: null,
+  isNew: false,
+  spark: [],
+  sparkMonths: [],
+  trail: '',
+})
 
 const sent = (over: Partial<ReadableSent> = {}): ReadableSent => ({
   snapshotId: 's1',
@@ -139,5 +170,26 @@ describe("the object last month's report led with", () => {
 
   it('does not count a refusal as a movement', () => {
     expect(pickLed([sent({ verdict: 'refused', changePts: 9 })])).toBeNull()
+  })
+})
+
+describe('what the subject line leads with', () => {
+  // The page's own pool is its subjects plus its movers THREE a side; this
+  // artefact prints ten a side, so the largest banded change on it can be a row
+  // the page never named.
+  it('is the largest banded change on the artefact, not on the page', () => {
+    const lead = leadOf([themeVerdict({ objectId: 't1', changePts: 2.6 })], {
+      growing: [moverRow(themeVerdict({ objectId: 't8', objectLabel: 'Rank eight', changePts: 5.3 }))],
+      fading: [],
+    })
+    expect(lead?.objectId).toBe('t8')
+  })
+
+  it('still refuses a row that did not clear its band', () => {
+    const lead = leadOf([], {
+      growing: [moverRow(themeVerdict({ objectId: 't8', changePts: 9, state: 'no_clear_change' }))],
+      fading: [],
+    })
+    expect(lead).toBeNull()
   })
 })
