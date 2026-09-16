@@ -75,6 +75,19 @@ import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceDat
  * reading, not every stored month. A workspace with 119 back-read denominator
  * months and six delivered updates has six readings, and the artefact says so.
  *
+ * AND THAT COUNT IS NOT ASK'S, WHICH IS AN OPEN DISAGREEMENT. `bar.readings`
+ * sums `history.denominators` over EVERY audience, so a month counts if the
+ * client, the category or any tracked rival had a row in it, at any volume.
+ * WP21's `readableMonthCount` (lib/agent/basis.ts) answers a narrower question
+ * for the same sentence — it drops rival audiences and months under
+ * `SHARE_BAND.minN`, "because one page said five years of comparable history
+ * and four months of it, a paragraph apart". The two live tenants happen to
+ * agree today; a thin month or a rival-heavy month splits them, and the gate
+ * then unlocks earlier than Ask's sentence implies it should. The cover no
+ * longer labels this count "behind your own side", which was the half of the
+ * disagreement that was plainly wrong; WHICH count should gate the quarter view
+ * is a product decision and is recorded rather than quietly taken here.
+ *
  * WHAT DEGRADES, AND HOW. M1–M8 are unapplied in production. Every read that
  * needs one is guarded by name and answers in words — the `isMissing*`
  * precedent — so the eight pages have the SAME SHAPE every quarter. A page
@@ -976,10 +989,23 @@ function buildCover(a: {
       caption: overview.bar.line,
     })
   }
+  // NOT "behind your own side", WHICH THIS NUMBER IS NOT ABOUT. `bar.readings`
+  // counts the months of the gathered era that carry a DENOMINATOR ROW, summed
+  // over every audience — so a month counts if the client, the category or any
+  // tracked rival was read in it, at any volume. That is Overview's own
+  // counter, printed on OV0 in the same words, and it is the number
+  // `quarterChange` gates on; what it is not is a count of this workspace's own
+  // side, nor a count of months a comparison may be drawn on. Ask's
+  // `readableMonthCount` (lib/agent/basis.ts) answers that second question with
+  // two reductions this one does not make — it drops rival audiences and months
+  // under SHARE_BAND.minN — and the two print under the same word on the same
+  // day for the same tenant. Reconciling them is a decision about when the
+  // quarter view unlocks, not a label; the label at least stops claiming the
+  // narrower of the two.
   stats.push({
     token: 'readings',
     value: String(a.readings),
-    label: 'monthly readings behind your own side',
+    label: 'monthly readings so far',
     caption: readingCounter(a.readings),
   })
 
