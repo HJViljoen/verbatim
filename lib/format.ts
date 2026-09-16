@@ -7,6 +7,10 @@
 // Pure functions only — tested in lib/format.test.ts.
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+const LONG_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 /** 6163 → "6,163". Rounds first; negative numbers keep their sign. */
@@ -68,7 +72,33 @@ export function fullDate(iso: string): string {
  *  does not have. */
 export function monthName(month: string): string {
   const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+  // Same guard as `longMonth` below, for the same reason and against the same
+  // `MONTHS[NaN]`.
+  const name = MONTHS[d.getUTCMonth()]
+  return name ? `${name} ${d.getUTCFullYear()}` : month.slice(0, 10)
+}
+
+/**
+ * "2026-09-01" → "September" (UTC). The month's own name and no year, for a
+ * sentence whose year is already settled — "this update's contribution to
+ * September so far".
+ *
+ * WRITTEN IN WP11 BESIDE OVERVIEW'S BAR AND MOVED HERE IN WP15, when a second
+ * page needed it: two copies of one date formatter is two ways to write one
+ * month. It also loses its `toLocaleString` on the way, which is the rule this
+ * file's own header sets — ICU data differs between the Node server and the
+ * browser, so a locale-formatted month in hydrated output is an SSR mismatch
+ * waiting for a reader whose browser disagrees.
+ */
+export function longMonth(month: string): string {
+  const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
+  // AN UNPARSEABLE MONTH GIVES BACK ITS OWN STRING, never `undefined`.
+  // `LONG_MONTHS[NaN]` is undefined, React renders undefined as nothing, and
+  // the sentence this feeds reads "this update's contribution to  so far" — a
+  // gap a reader cannot see and nobody can debug. The `toLocaleString` this
+  // replaced threw instead, which was at least loud; handing the caller the
+  // string it passed in is quieter and just as findable.
+  return LONG_MONTHS[d.getUTCMonth()] ?? month.slice(0, 10)
 }
 
 /** "2026-08-16T07:07:51Z" → "Sun 16 Aug" (UTC). */

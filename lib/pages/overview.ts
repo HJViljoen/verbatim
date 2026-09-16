@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { recStatus, REC_STATUS_LABEL, type RecStatus } from '../calibration'
 import { topRecommendation } from '../dashboard-tiles'
-import { fmtInt, monthName, shortDate } from '../format'
+import { fmtInt, longMonth, monthName, shortDate } from '../format'
 import { inheritedStatus, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
 import { proseFigures } from '../prose/figures'
@@ -48,6 +48,7 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { refsOf } from './week'
 
 // Overview — the front page, and the first surface built on the comment-dated
 // monthly reading (Phase 1 WP11, design §3 OV0–OV6).
@@ -384,12 +385,13 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * `monthName` (lib/format.ts) is the product's short form and is what the chart
  * axis and every caption use; this one line is the mock's own wording and reads
  * as a sentence, so it takes the long form (WP10: "a surface that wants the
- * long form writes it in its own caption"). Written here rather than widened in
- * lib/format, because one caption is not a vocabulary change.
+ * long form writes it in its own caption").
+ *
+ * IT MOVED TO lib/format.ts IN WP15 and is re-exported here so this module's
+ * callers are untouched. One caption was not a vocabulary change; two pages
+ * writing the same month two ways would have been.
  */
-export function longMonth(month: string): string {
-  return new Date(`${monthStartOf(month)}T00:00:00.000Z`).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })
-}
+export { longMonth }
 
 const pctOf = (k: number | null, n: number | null): number | null =>
   k == null || n == null || n <= 0 ? null : round1((k / n) * 100)
@@ -804,7 +806,9 @@ interface AnomalyFlagRow {
   band_pts: number
   rank: number
   explanation: { sentences?: string[] } | null
-  quote_refs: string[] | null
+  /** `[{ref, context}]` as M7 stores it — `unknown` because a jsonb column is
+   *  whatever was written into it, and `refsOf` is what decides. */
+  quote_refs: unknown
 }
 
 /** A stored month table, read straight (not recomputed). Null — never [] —
@@ -1411,7 +1415,13 @@ export function isMissingAnomalyFlags(error: unknown): boolean {
 }
 
 async function buildAnomaly(supabase: SupabaseClient, flag: AnomalyFlagRow): Promise<AnomalyLine> {
-  const refs = (flag.quote_refs ?? []).filter((r): r is string => typeof r === 'string').slice(0, 1)
+  // `quote_refs` HOLDS `[{ref, context}]`, NOT STRINGS. M7's column comment
+  // says "comment ids and their context"; the filter this replaced kept only
+  // `typeof r === 'string'` and so dropped every ref there is — OV1's anomaly
+  // quote would have been null on every flag, silently, the day M7 landed.
+  // `refsOf` is This week's reader, shared rather than copied so the two pages
+  // cannot disagree about the shape of one column.
+  const refs = refsOf(flag.quote_refs).slice(0, 1)
   let quote: Quote | null = null
   if (refs.length > 0) {
     const resolved = await fetchQuoteResolutionsByRefs(supabase, refs, { onReadError: 'degrade' })

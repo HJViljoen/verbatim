@@ -95,7 +95,13 @@ export function Bar({ segments, height = 8 }: { segments: { pct: number; color: 
 }
 
 /** A ranked row: label · a single bar · the count. */
-export function RankedRow({ label, pct, color, count, badge, dot }: { label: ReactNode; pct: number; color: string; count: string; badge?: ReactNode; dot?: boolean }) {
+// `count` is a ReactNode, not a string, and that matters: a block marks its
+// level node with `data-copy` and the marker has to survive into the inbox.
+// Stringifying it dropped the node whole — What worked and This week's subjects
+// rendered every email row with no n at all, which is rule (b)'s failure in the
+// one artefact a client reads first. A bare marked span carries no class and no
+// token, so it is email-safe as it stands.
+export function RankedRow({ label, pct, color, count, badge, dot }: { label: ReactNode; pct: number; color: string; count: ReactNode; badge?: ReactNode; dot?: boolean }) {
   const w = Math.max(1, Math.min(100, Math.round(pct)))
   return (
     <table width="100%" {...presentation} style={T}>
