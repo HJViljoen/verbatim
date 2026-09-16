@@ -114,6 +114,34 @@ export interface Counted {
   n: number
 }
 
+/**
+ * What a verdict's two sides actually count, where that is NOT the default the
+ * line above states — distinct videos, over the audience the verdict names.
+ *
+ * TWO READINGS OF ONE OBJECT ARE TWO STATEMENTS. A rival is read twice in one
+ * block: its cut of the panel's videos, and its cut of the panel's comments
+ * (lib/reading/standings.ts — the attention verdict's proportion and its band
+ * take their n from two different counts). Both carry the same objectKind, the
+ * same objectId and the same audience and differ only in what they measure, so
+ * anything keyed by the object alone keeps one of them and files it under the
+ * other's denominator. `measure` is what makes them two rows.
+ *
+ * AND THE AUDIENCE IS NOT ALWAYS THE POPULATION. On a theme's verdict the
+ * audience IS what n counts — the category's videos this month. On a standings
+ * row the audience NAMES THE OBJECT (`competitor:Freitag`) while n is the whole
+ * panel's, so a denominator derived from the audience string says "Freitag's
+ * videos" about a share of everybody's. A verdict that knows better says so, in
+ * the reader's own words, and a record stores what it says rather than deriving
+ * it a second time.
+ */
+export interface CountedOver {
+  /** The noun `value.k` and `value.n` are counted in. */
+  measure: 'videos' | 'comments'
+  /** What `value.n` is, in the reader's words — 'the panel’s comments this
+   *  month'. */
+  population: string
+}
+
 export interface Verdict {
   objectKind: ObjectKind
   /** Stable identity: `theme_registry.id`, a subject id, the kind's enum value,
@@ -131,6 +159,9 @@ export interface Verdict {
   basis?: { from: string; to: string }
   value: Counted
   baseline?: Counted
+  /** What the two sides count, where it is not distinct videos over `audience`.
+   *  Absent is the default and means exactly that. */
+  countedOver?: CountedOver
   /** Percentage points, one decimal; null when no comparison was drawn. */
   changePts: number | null
   /** Half-width of the no-change band, same units; null when none was drawn. */
@@ -176,6 +207,9 @@ export interface BandVerdictInput {
   basis?: { from: string; to: string }
   value: Counted
   baseline?: Counted
+  /** What the two sides count, where it is not distinct videos over `audience`
+   *  — forwarded to the verdict unchanged. */
+  countedOver?: CountedOver
   flags?: VerdictFlag[]
   /** The floor and band. `SHARE_BAND` — 100 videos a side, 10 of the object's
    *  own a side, never narrower than 2 points — unless a caller has a measured
@@ -209,6 +243,7 @@ export function bandVerdict(input: BandVerdictInput): Verdict {
     ...(input.basis ? { basis: input.basis } : {}),
     value: input.value,
     ...(input.baseline ? { baseline: input.baseline } : {}),
+    ...(input.countedOver ? { countedOver: input.countedOver } : {}),
     changePts: null,
     bandPts: null,
     state: 'too_little_data',

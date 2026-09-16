@@ -5,6 +5,7 @@ import {
   isMissingSentFigures,
   monthDate,
   newestByObject,
+  objectKey,
   sentFigureRows,
   sentReadingOf,
   type StoredSentFigure,
@@ -34,6 +35,7 @@ const stored = (over: Partial<StoredSentFigure> = {}): StoredSentFigure => ({
   label: 'Durability',
   value: 19,
   unit: 'pct',
+  measure: 'videos',
   k: 264,
   n: 1388,
   denominator: 'the category’s videos this month',
@@ -186,7 +188,85 @@ describe('what a delivered artefact writes down', () => {
   })
 })
 
+describe('one object read on two populations', () => {
+  // The rivals block returns [attentionVerdict, contentVerdict] for every row:
+  // one objectId, one audience, two measures. Keyed by the object alone they
+  // are one row, and the survivor carries the other's denominator.
+  const attention = verdict({
+    objectKind: 'rival',
+    objectId: 'competitor:Freitag',
+    objectLabel: 'Freitag',
+    audience: 'competitor:Freitag',
+    value: { k: 6200, n: 41200 },
+    countedOver: { measure: 'comments', population: 'the panel’s comments this month' },
+  })
+  const content = verdict({
+    objectKind: 'rival',
+    objectId: 'competitor:Freitag',
+    objectLabel: 'Freitag',
+    audience: 'competitor:Freitag',
+    value: { k: 11, n: 77 },
+    countedOver: { measure: 'videos', population: 'the panel’s videos this month' },
+  })
+
+  it('writes both readings, not one of them', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, content],
+      figures: {},
+    })
+    expect(rows).toHaveLength(2)
+    expect(rows.map((r) => r.measure).sort()).toEqual(['comments', 'videos'])
+  })
+
+  it('gives each of them the population it was actually read over', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, content],
+      figures: {},
+    })
+    const said = new Map(rows.map((r) => [r.measure, r]))
+    expect(said.get('comments')!.denominator).toBe('the panel’s comments this month')
+    expect(said.get('comments')!.n).toBe(41200)
+    expect(said.get('videos')!.denominator).toBe('the panel’s videos this month')
+    expect(said.get('videos')!.n).toBe(77)
+  })
+
+  it('still files one object read twice by two blocks as one row', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, attention],
+      figures: {},
+    })
+    expect(rows).toHaveLength(1)
+  })
+
+  it('keys the two apart, so a live surface asking for one cannot get the other', () => {
+    expect(objectKey('competitor:Freitag', 'rival', 'competitor:Freitag', 'comments')).not.toBe(
+      objectKey('competitor:Freitag', 'rival', 'competitor:Freitag', 'videos'),
+    )
+    // The default is the population every other verdict in the product is read
+    // over, so a caller that names no measure asks the question it means.
+    expect(objectKey('industry', 'theme', 't1')).toBe(objectKey('industry', 'theme', 't1', 'videos'))
+  })
+})
+
 describe('the denominator is named, never assumed', () => {
+  it('takes the verdict’s own population where it has one', () => {
+    expect(
+      denominatorOf({
+        audience: 'competitor:Freitag',
+        countedOver: { measure: 'comments', population: 'the panel’s comments this month' },
+      }),
+    ).toBe('the panel’s comments this month')
+  })
+
   it('names each of the three audiences in the reader’s words', () => {
     expect(denominatorOf({ audience: 'client' })).toBe('your own videos this month')
     expect(denominatorOf({ audience: 'industry' })).toBe('the category’s videos this month')

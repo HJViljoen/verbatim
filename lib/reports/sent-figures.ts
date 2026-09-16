@@ -44,6 +44,21 @@ export type SentObjectKind = 'subject' | 'theme' | 'rival' | 'kind' | 'figure'
 
 export type SentUnit = 'pct' | 'videos' | 'comments' | 'pts'
 
+/**
+ * What the row's two sides count — and part of the grain, not decoration.
+ *
+ * ONE OBJECT, TWO READINGS, TWO ROWS. A rival's block prints its cut of the
+ * panel's videos AND its cut of the panel's comments; both verdicts carry the
+ * same objectKind, the same objectId and the same audience (`Verdict.countedOver`
+ * says why). Keyed by the object alone they collide: the record kept the first
+ * and dropped the second, and `sent_figures`' primary key would have refused it
+ * anyway. The measure is therefore in the key here and in the primary key there.
+ *
+ * 'videos' is the product's default population and what a row carries when its
+ * verdict says nothing else — the same default `Counted` documents.
+ */
+export type SentMeasure = 'videos' | 'comments'
+
 /** One row, as it is written. Every field here is a column; nothing is derived
  *  at read time, because a record that has to be recomputed to be read is not a
  *  record. */
@@ -55,6 +70,8 @@ export interface SentFigureRow {
   label: string
   value: number
   unit: SentUnit
+  /** What k and n count. Part of the grain — see `SentMeasure`. */
+  measure: SentMeasure
   k: number | null
   n: number | null
   denominator: string
@@ -80,9 +97,16 @@ export interface SentFigureRow {
 const KEY_SEP = String.fromCharCode(31)
 
 /** The key a live surface and the record look an object up by. ONE shape, here,
- *  so a page and the record cannot spell it two ways. */
-export const objectKey = (audience: string, kind: string, id: string): string =>
-  [audience, kind, id].join(KEY_SEP)
+ *  so a page and the record cannot spell it two ways. The measure is the fourth
+ *  part because an object read on two populations is two readings; it defaults
+ *  to the product's own default population, so a caller that has never heard of
+ *  the second one asks the question it means. */
+export const objectKey = (
+  audience: string,
+  kind: string,
+  id: string,
+  measure: SentMeasure = 'videos',
+): string => [audience, kind, id, measure].join(KEY_SEP)
 
 /**
  * Every figure an artefact printed, from the blocks' own answers.
@@ -149,11 +173,15 @@ export function sentFigureRows(input: {
   for (const v of verdictsWorthRecording(input.verdicts)) {
     const kind = objectKindOf(v.objectKind)
     if (!kind) continue
-    const k = key(v.audience, kind, v.objectId)
+    const measure = v.countedOver?.measure ?? 'videos'
+    const k = key(v.audience, kind, v.objectId, measure)
     // A VERDICT NAMED TWICE BY TWO BLOCKS IS ONE READING. Both the subjects
     // table and the movers list can carry the same theme in the same audience;
     // the primary key would refuse the second insert anyway, and a row dropped
     // here is a row a batch insert does not have to survive a conflict over.
+    // TWO MEASURES OF ONE OBJECT ARE NOT THAT, which is why the measure is in
+    // the key: a rival's two verdicts are one object read on two populations
+    // and both are statements the artefact made.
     if (seen.has(k)) continue
     seen.add(k)
     out.push({
@@ -164,6 +192,7 @@ export function sentFigureRows(input: {
       label: v.objectLabel,
       value: share(v.value.k, v.value.n),
       unit: 'pct',
+      measure,
       k: v.value.k,
       n: v.value.n,
       denominator: denominatorOf(v),
@@ -183,7 +212,11 @@ export function sentFigureRows(input: {
 
   const audience = input.figureAudience ?? 'artefact'
   for (const [token, figure] of Object.entries(input.figures)) {
-    const k = key(audience, 'figure', token)
+    // A TOKEN'S MEASURE IS ITS OWN UNIT where that is a population, and the
+    // product's default where it is not: a share or a movement in this product
+    // is a share of videos, bar the one the standings draw.
+    const measure: SentMeasure = figure.unit === 'comments' ? 'comments' : 'videos'
+    const k = key(audience, 'figure', token, measure)
     if (seen.has(k)) continue
     const value = round1(figure.value)
     if (coveredByVerdict(figure.label, figure.unit, value, stated)) continue
@@ -199,6 +232,7 @@ export function sentFigureRows(input: {
       label: figure.label,
       value,
       unit: figure.unit,
+      measure,
       // A TOKEN HAS NO SIDES. `FigureTable` holds a value, a unit and a label
       // and nothing else — which is exactly why the object-keyed half exists —
       // so k and n are null here rather than guessed from the label.
@@ -285,10 +319,19 @@ function objectKindOf(kind: Verdict['objectKind']): SentObjectKind | null {
  * STORED RATHER THAN ASSUMED. The same subject is read against three
  * denominators on one page — your videos, your lead rival's, the category's —
  * and a share quoted without its population cannot be checked against next
- * month's. The audience string is the population, so the words are derived from
- * it once, here, and travel with the row.
+ * month's.
+ *
+ * THE VERDICT'S OWN ANSWER FIRST, AND THE AUDIENCE ONLY AFTER IT. Deriving the
+ * words from the audience string alone is right for every verdict whose
+ * audience IS its population and wrong for the two the standings draw, where
+ * the audience names the OBJECT and n is the panel's: `competitor:Freitag` read
+ * that way stored "15 pct · k 6,200 · n 41,200 · Freitag's videos this month"
+ * about a share of the panel's COMMENTS. `Verdict.countedOver` is the verdict
+ * saying what it counted; this falls back to the audience only where it says
+ * nothing.
  */
-export function denominatorOf(v: Pick<Verdict, 'audience'>): string {
+export function denominatorOf(v: Pick<Verdict, 'audience' | 'countedOver'>): string {
+  if (v.countedOver) return v.countedOver.population
   if (v.audience === 'client') return 'your own videos this month'
   if (v.audience.startsWith('competitor:')) return `${v.audience.slice('competitor:'.length)}’s videos this month`
   if (v.audience === 'industry' || v.audience === 'industry-other') return 'the category’s videos this month'
@@ -322,7 +365,7 @@ export function sentReadingOf(row: SentFigureRow & { readingAt: string }): SentR
 export function newestByObject(rows: readonly StoredSentFigure[]): Map<string, StoredSentFigure> {
   const out = new Map<string, StoredSentFigure>()
   for (const r of rows) {
-    const key = objectKey(r.audience, r.objectKind, r.objectId)
+    const key = objectKey(r.audience, r.objectKind, r.objectId, r.measure)
     const held = out.get(key)
     if (!held || r.readingAt > held.readingAt) out.set(key, r)
   }
@@ -354,7 +397,7 @@ export function isMissingSentFigures(error: unknown): boolean {
 }
 
 /** The grain, named where the write happens: `sent_figures`' primary key. */
-const SENT_FIGURES_CONFLICT = 'client_id,snapshot_id,audience,object_kind,object_id'
+const SENT_FIGURES_CONFLICT = 'client_id,snapshot_id,audience,object_kind,object_id,measure'
 
 /**
  * Write what this artefact printed. Returns how many rows were written, or null
@@ -396,6 +439,7 @@ export async function writeSentFigures(
     label: r.label,
     value: r.value,
     unit: r.unit,
+    measure: r.measure,
     k: r.k,
     n: r.n,
     denominator: r.denominator,
@@ -438,7 +482,7 @@ export async function loadSentFigures(
     const rows = await selectAll<Record<string, unknown>>(() =>
       admin
         .from(SENT_FIGURES_TABLE)
-        .select('snapshot_id, month, audience, object_kind, object_id, label, value, unit, k, n, denominator, change_pts, band_pts, verdict, direction, month_status, artefact, reading_at, sent_at')
+        .select('snapshot_id, month, audience, object_kind, object_id, label, value, unit, measure, k, n, denominator, change_pts, band_pts, verdict, direction, month_status, artefact, reading_at, sent_at')
         .eq('client_id', args.clientId)
         .eq('month', monthDate(args.month))
         .order('reading_at', { ascending: true }),
@@ -463,6 +507,7 @@ function hydrate(row: Record<string, unknown>): StoredSentFigure {
     label: String(row.label ?? ''),
     value: Number(row.value ?? 0),
     unit: row.unit as SentUnit,
+    measure: (row.measure as SentMeasure | null) ?? 'videos',
     k: num(row.k),
     n: num(row.n),
     denominator: String(row.denominator ?? ''),
@@ -515,7 +560,7 @@ export function sentMonthOf(rows: readonly StoredSentFigure[] | null): SentMonth
   const byToken: Record<string, SentReading> = {}
   for (const r of newest) {
     if (r.objectKind === 'figure') byToken[r.objectId] = sentReadingOf(r)
-    else byObject[objectKey(r.audience, r.objectKind, r.objectId)] = sentReadingOf(r)
+    else byObject[objectKey(r.audience, r.objectKind, r.objectId, r.measure)] = sentReadingOf(r)
   }
   // THE NEWEST ARTEFACT, not the newest row: four weekly readings and a monthly
   // one can all carry September, and "the report of {date}" means the last

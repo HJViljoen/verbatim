@@ -22,6 +22,7 @@ const stored = (over: Partial<StoredSentFigure> = {}): StoredSentFigure => ({
   label: 'Durability',
   value: 19,
   unit: 'pct',
+  measure: 'videos',
   k: 264,
   n: 1290,
   denominator: 'the category’s videos this month',

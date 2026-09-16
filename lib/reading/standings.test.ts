@@ -43,6 +43,26 @@ describe('buildStandings', () => {
     }
   })
 
+  // A rival's two verdicts carry one objectId and one audience and differ only
+  // in what they count. Anything keyed by the object alone — the sent-figures
+  // record is one, and its table has no UPDATE — keeps one and files it under
+  // the other's denominator, so each says what it was read over.
+  it('says what each of a row’s two verdicts counted, and over what', () => {
+    const otto = buildStandings(base).find((r) => r.role === 'rival')!
+    expect(otto.attentionVerdict!.countedOver).toEqual({
+      measure: 'comments',
+      population: 'the panel’s comments this month',
+    })
+    expect(otto.contentVerdict!.countedOver).toEqual({
+      measure: 'videos',
+      population: 'the panel’s videos this month',
+    })
+    // And the audience is the object on both, which is why neither may be read
+    // as "Ottobock's videos".
+    expect(otto.attentionVerdict!.audience).toBe(otto.contentVerdict!.audience)
+    expect(otto.attentionVerdict!.objectId).toBe(otto.contentVerdict!.objectId)
+  })
+
   it('draws a row per brand, client first, category last', () => {
     const rows = buildStandings(base)
     expect(rows.map((r) => r.role)).toEqual(['client', 'rival', 'category'])
