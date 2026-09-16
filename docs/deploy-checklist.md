@@ -155,8 +155,12 @@ lesson, proven harmless once and not worth proving twice).
 tables that rely on the same function; M6's delete guard installs triggers on
 all six month tables and therefore needs M4 and M5 to have created theirs.
 
-**There is no separate index step, and that is deliberate.** Twenty-odd
-indexes are created across the eleven files and **not one is `CONCURRENTLY`**
+**There is no separate index step, and that is deliberate.** **Thirty**
+indexes are created across the eleven files — competitors 3, subjects 7,
+kind_mood_attention 5, quote_translations 3, anomaly_flags 3, settings 4,
+sent_figures 3, reading_indexes 2, three of them `unique`; theme_key,
+reading_windows and plan_check_notice create none — and **not one is
+`CONCURRENTLY`**
 — a concurrent build cannot run inside the transaction a migration is applied
 in, and every table being indexed is small (M10's own note: `videos` 8,377 rows
 / 27 MB, `gate_verdicts` smaller). So each index is built by the file that
