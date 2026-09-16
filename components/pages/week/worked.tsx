@@ -23,6 +23,13 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 // AND NO DIRECTION WORD. "Talking-head review, 1.8× the update's median over
 // 128 videos" is a level. Whether that format is doing better than last month
 // is a question about two periods, and this block reads one update.
+//
+// AND IT IS NOT A READING OF THE CLIENT'S OWN CONTENT. The population is every
+// video this update touched, the Content playbook's own: Össur's 609 rated
+// videos are 52 of the client's and 557 of everybody else's. That is the right
+// population — a format works or it does not, whoever filmed it — but the block
+// sits four inches under "Your own brand — 52 analysed", so the meta says whose
+// videos these are rather than leaving a reader to assume they are theirs.
 
 export const weekWorked: Block<WeekData> = {
   key: 'week.worked',
@@ -40,7 +47,14 @@ export const weekWorked: Block<WeekData> = {
         title={weekWorked.title}
         question={weekWorked.question}
         mode={mode}
-        meta={`${fmtInt(w.rated)} videos with an engagement figure`}
+        // WHOSE VIDEOS, SAID OUT LOUD. The population is every video this
+        // update touched — Össur's 609 rated videos are 52 of the client's own
+        // and 557 of everybody else's — and the block sits four inches below
+        // "Your own brand — 52 analysed". It is the Content playbook's own
+        // population and it is the right one (a format works or does not,
+        // whoever filmed it), but a reader who is not told will read these
+        // rows as a verdict on their own content.
+        meta={`${fmtInt(w.rated)} videos with an engagement figure · yours, your rivals’ and the category’s together`}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open the content brief →</a>
           : <Link href={href} className="hover:underline">Open the content brief →</Link>}

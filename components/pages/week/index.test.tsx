@@ -300,6 +300,14 @@ describe('WK §6 · what worked', () => {
     expect(text).toContain('1.8× the median · 128 of 331 videos')
   })
 
+  it('says whose videos it read', () => {
+    // Össur's 609 rated videos are 52 of the client's and 557 of everybody
+    // else's, and the block sits four inches under "Your own brand — 52
+    // analysed" asking which formats earned attention.
+    const text = renderText(weekWorked.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('yours, your rivals’ and the category’s together')
+  })
+
   it('names a hook without claiming a direction', () => {
     // `hook_style = 'trend-riding'` is a real value a live tenant carries, and
     // "Trend riding" put a direction word outside a verdict node on Sealand's
