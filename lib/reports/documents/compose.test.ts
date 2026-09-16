@@ -3,6 +3,7 @@ import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote,
 import { buildWriterPrompts, deltaInWords, figureKeyFor, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
+import { MARKETING_MAP } from './sections'
 import { DEFAULT_DOCUMENT_SETTINGS } from './types'
 import { freezeQuotes } from '../../renderables/quotes-freeze'
 import type { Signals } from './signals'
@@ -233,6 +234,33 @@ describe('composeDocument', () => {
 // trajectory. The shape is not new — a concern whose members carried no word has
 // always produced it — and these pin what a document says in it. The fixture
 // above keeps the worded shape, which is what Phase 1 restores once the words
+// THE METHOD PAGE DESCRIBES THE PAGES THIS BRIEF HAS. Under a section map the
+// marketing brief prints no claims page, no competitor pages and no personas;
+// the method page was built from the TEMPLATE's kinds and went on describing
+// all three.
+describe('a document composed from a section map', () => {
+  const mapped = { ...signals, map: MARKETING_MAP } as unknown as Signals
+  const method = () => composeDocument({
+    template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+    signals: mapped, answers, written, figures: documentFigures(mapped, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+  }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+
+  it('describes only the pages the map prints', () => {
+    const items = method()
+    expect(items).not.toContain('Competitor pages read')
+    expect(items).not.toContain('Personas come from the consumer profile')
+    expect(items).not.toContain('The claims page sets what the company says')
+  })
+
+  it('still describes the pages the template alone would print', () => {
+    const items = composeDocument({
+      template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, reportId: 'rep', title: 'Marketing brief', period: 'p',
+      signals, answers, written, figures: documentFigures(signals, answers), model: 'm', promptVersion: 'v', costUsd: 0, timings: {},
+    }).data.pages.find((p) => p.kind === 'method')!.blocks[0].items!.join(' ')
+    expect(items).toContain('Competitor pages read')
+  })
+})
+
 // come off the monthly reading rather than off the update index.
 describe('a document composed with no history word', () => {
   const gated = { ...signals, concerns: [{ ...signals.concerns[0], trajectory: '' }] } as unknown as Signals

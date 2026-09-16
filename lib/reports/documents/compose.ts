@@ -7,7 +7,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import { briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
-import { missingSentence, missingSummary } from './sections'
+import { missingSentence, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -195,6 +195,15 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
   const concernById = new Map(s.concerns.map((c) => [c.id, c]))
   const known = new Set([...points.keys(), ...concernById.keys()])
   const thin = thinWeek(s)
+  // THE PAGES THIS BRIEF ACTUALLY PRINTS, which is the section map's list
+  // where it has one and the template's skeleton otherwise — the same choice
+  // the walk below makes, made once. The method page used to describe the
+  // TEMPLATE's kinds: under MARKETING_MAP a marketing brief prints no claims
+  // page, no competitor pages and no personas, and its method page went on
+  // saying "Competitor pages read each competitor's own videos…" and
+  // "Personas come from the consumer profile…". A method note for a document
+  // the reader does not have is the rule the comment above methodItems states.
+  const printedKinds: DocPageKind[] = (s.map?.length ?? 0) > 0 ? pageKindsOf(s.map) : a.template.skeleton.map((p) => p.kind)
   const pages: DocPage[] = []
   const blocksW: BlockWorkings[] = []
   const dropped: DocumentWorkings['dropped'] = [...(a.check?.dropped ?? [])]
@@ -421,7 +430,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
 
     method: () => {
       blocksW.push({ blockId: 'method.method', basedOn: [] })
-      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, a.template.skeleton.map((p) => p.kind), a.settings.brief) }] }]
+      return [{ id: 'method', kind: 'method' as const, title: PAGE_TITLE.method, blocks: [{ id: 'method.method', field: 'method' as const, text: '', items: methodItems(s, a.period, thin, s.updatesCount, printedKinds, a.settings.brief) }] }]
     },
   }
 
@@ -436,7 +445,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
   const layout: DocLayoutEntry[] = []
   const done = new Set<DocPageKind>()
   const walk: { kind: 'page'; page: DocPageKind }[] | readonly BriefEntry[] =
-    (s.map?.length ?? 0) > 0 ? s.map : a.template.skeleton.map((p) => ({ kind: 'page' as const, page: p.kind }))
+    (s.map?.length ?? 0) > 0 ? s.map : printedKinds.map((page) => ({ kind: 'page' as const, page }))
   for (const entry of walk) {
     if (entry.kind === 'block') {
       layout.push({ kind: 'section', id: entry.section.id })
