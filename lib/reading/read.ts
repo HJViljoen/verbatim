@@ -266,6 +266,36 @@ export async function loadMonthSeries(
     ? [...new Set(asked.flatMap((a) => namesFor(askedChains, a)))]
     : null
 
+  // THE NUMERATORS GO OUT WITH THE DENOMINATORS. They were read after, because
+  // the numerator read is skipped when the denominator table turns out not to
+  // exist — but `month_denominators` is applied and the skip is for a case that
+  // is not the live one, so the page paid a whole round trip to learn something
+  // it almost always already knows. Started here and judged below: where the
+  // substrate is not `seeded` the answer is dropped unread, exactly as if it
+  // had never been asked for.
+  const numeratorsAhead =
+    table && idColumn && objectIds && objectIds.length > 0
+      ? Promise.all(
+          chunk(objectIds, UUID_IN_CHUNK).map((ids) =>
+            selectAll<StoredNumerator>(() => {
+              let q = client
+                .from(table)
+                .select('*')
+                .eq('client_id', clientId)
+                .gte('month', from)
+                .lte('month', to)
+                .in(idColumn, ids)
+              if (audiences) q = q.in('audience', audiences)
+              return q
+                .order('month', { ascending: true })
+                .order('audience', { ascending: true })
+                .order(idColumn, { ascending: true })
+            }),
+          ),
+        )
+      : null
+  numeratorsAhead?.catch(() => {})
+
   let substrate: Substrate = 'seeded'
   let denominators: StoredDenominator[] = []
   try {
@@ -305,30 +335,12 @@ export async function loadMonthSeries(
   // layer is built to prevent. It is the denominator read's own `isMissing`
   // shape, narrow by name, applied one table down.
   let numeratorSubstrate: Substrate = substrate
-  if (substrate === 'seeded' && table && idColumn && objectIds && objectIds.length > 0) {
+  if (substrate === 'seeded' && numeratorsAhead) {
     try {
-      // Concurrent, not one chunk at a time: the chunks are disjoint by object
-      // id and a page that draws forty themes over twelve months paid four
-      // serial round trips for what is one wait.
-      const parts = await Promise.all(
-        chunk(objectIds, UUID_IN_CHUNK).map((ids) =>
-          selectAll<StoredNumerator>(() => {
-            let q = client
-              .from(table)
-              .select('*')
-              .eq('client_id', clientId)
-              .gte('month', from)
-              .lte('month', to)
-              .in(idColumn, ids)
-            if (audiences) q = q.in('audience', audiences)
-            return q
-              .order('month', { ascending: true })
-              .order('audience', { ascending: true })
-              .order(idColumn, { ascending: true })
-          }),
-        ),
-      )
-      for (const part of parts) numerators.push(...part)
+      // The chunks are disjoint by object id, so they were sent at once and are
+      // concatenated in chunk order — the same per-id ordering a serial loop
+      // gave.
+      for (const part of await numeratorsAhead) numerators.push(...part)
     } catch (error) {
       if (!isMissingMonthTable(error) && !isMissingSubjects(error)) throw error
       numeratorSubstrate = 'missing'
