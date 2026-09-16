@@ -551,7 +551,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   })
 
   // ── CO1 · the rival selection ──────────────────────────────────────────
-  const analysedByRival = await countAnalysedByRival(supabase, clientId)
+  const analysedByRival = await countAnalysedByRival(supabase, clientId, rivals.rivals)
   const observed = new Set(
     (denominators ?? [])
       .filter((d) => axis.includes(monthStartOf(d.month)) && d.videos > 0)
@@ -745,25 +745,44 @@ async function loadConfigChanges(client: SupabaseClient, clientId: string): Prom
   }
 }
 
-/** Analysed videos per rival, over the whole corpus — the fact that tells
- *  "configured and never read" apart from "read, and quiet this window". */
-async function countAnalysedByRival(supabase: SupabaseClient, clientId: string): Promise<Map<string, number> | null> {
-  try {
-    const rows = await selectAll<{ competitor_name: string | null }>(() =>
-      supabase.from('videos').select('competitor_name')
-        .eq('client_id', clientId).eq('is_competitor', true).not('analyzed_run_id', 'is', null)
-        .order('id', { ascending: true }),
-    )
-    const out = new Map<string, number>()
-    for (const r of rows) {
-      if (!r.competitor_name) continue
-      out.set(r.competitor_name, (out.get(r.competitor_name) ?? 0) + 1)
-    }
-    return out
-  } catch (error) {
+/**
+ * Analysed videos per rival, over the whole corpus — the fact that tells
+ * "configured and never read" apart from "read, and quiet this window".
+ *
+ * A HEAD COUNT PER RIVAL, NOT A PAGE OF THE TABLE. This used to `selectAll`
+ * every competitor video row on every page load and count them in memory, to
+ * produce one small integer per rival. It is fine at Össur's 319 rows and it is
+ * the shape that stops being fine — a tenant with a year of four rivals is
+ * tens of thousands of rows transferred for four numbers. The rival list is
+ * one to five names, so one head count each is a handful of indexed COUNTs
+ * that transfer no rows at all.
+ *
+ * Null — never an empty map — when the counts cannot be read, so CO1 says
+ * "tracked" rather than "nothing of theirs has been read yet", which would be
+ * a claim about the corpus made from a failed query.
+ */
+async function countAnalysedByRival(
+  supabase: SupabaseClient,
+  clientId: string,
+  rivals: readonly { name: string }[],
+): Promise<Map<string, number> | null> {
+  if (rivals.length === 0) return new Map()
+  const names = [...new Set(rivals.map((r) => r.name))]
+  const counts = await Promise.all(
+    names.map(async (name) => {
+      const { count, error } = await supabase
+        .from('videos')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId).eq('is_competitor', true).eq('competitor_name', name)
+        .not('analyzed_run_id', 'is', null)
+      if (error) throw new Error(error.message)
+      return [name, count ?? 0] as const
+    }),
+  ).catch((error: unknown) => {
     console.error(`[pages] competitive-surface.analysed: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
-  }
+  })
+  return counts ? new Map(counts) : null
 }
 
 /** Does this tenant have subjects at all? M4 unapplied and "none named" are

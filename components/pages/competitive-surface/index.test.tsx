@@ -212,6 +212,19 @@ describe('CO5 · what the category asks', () => {
     expect(quotes).toEqual(['e:1', 'e:2'])
   })
 
+  it('declares the comments as comments, and declares the questions as nothing', () => {
+    // A figure table is what a model may name. `question_insights` declared a
+    // count of question INSIGHTS with unit 'comments', which licensed a model
+    // to write "37 comments" about 37 questions. The unit vocabulary is closed
+    // and a question is not in it, so the block prints the count and declares
+    // only what it can name honestly.
+    const { figures } = blockAnswers(competitiveQuestions, competitiveFixture())
+    expect(Object.keys(figures).sort()).toEqual(['question_comments', 'question_videos'])
+    expect(figures.question_comments).toEqual({
+      value: 71, unit: 'comments', label: 'comments behind those questions, in this window',
+    })
+  })
+
   it('declares no figures when nothing was asked', () => {
     expect(blockAnswers(competitiveQuestions, unreadRivalFixture()).figures).toEqual({})
   })

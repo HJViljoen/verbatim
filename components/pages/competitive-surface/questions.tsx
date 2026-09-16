@@ -135,10 +135,15 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
     if (q.videos === 0) return {}
     return {
       question_videos: { value: q.videos, unit: 'videos', label: `${q.rival ?? 'the rival'}’s videos carrying a question in this window` },
-      // The unit vocabulary is closed (lib/reading/verdicts.ts) and a question
-      // is counted in comments, which is what an insight of this kind is drawn
-      // from — one question insight per cluster of comments asking it.
-      question_insights: { value: q.insights, unit: 'comments', label: 'questions asked under them' },
+      // THE COMMENTS, NOT THE QUESTIONS. This declared `q.insights` — a count
+      // of question INSIGHTS — with unit 'comments', and a figure table is
+      // what a model may name (design item 9), so it licensed a model to write
+      // "37 comments" about 37 questions. The unit vocabulary is closed
+      // (videos · comments · pts · pct) and a question is none of them, so the
+      // count of questions is printed by the block and declared by nobody,
+      // while the comments behind them — now scoped to the window, see
+      // `citationsInWindow` — are declared as what they are.
+      question_comments: { value: q.quotes, unit: 'comments', label: 'comments behind those questions, in this window' },
     }
   },
 

@@ -110,7 +110,6 @@ export interface AdviceRow {
   /** The row the status control writes to: the newest copy of this identity. */
   recommendationId: string
   title: string
-  reasoning: string
   kind: string
   /** The day this advice was first made, `YYYY-MM-DD`. */
   firstMade: string
@@ -249,7 +248,6 @@ export interface RecCopy {
   id: string
   lineage_id: string | null
   title: string
-  reasoning: string
   type: string
   status: string | null
   created_at: string | null
@@ -305,7 +303,6 @@ export function buildAdviceRows(
       lineageId,
       recommendationId: newest.id,
       title: newest.title,
-      reasoning: newest.reasoning,
       kind: newest.type,
       firstMade: (oldest.created_at ?? '').slice(0, 10),
       timesMade: runs,
@@ -618,8 +615,13 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     // silently (AGENTS.md) and 121 rows today is not the reason to obey that
     // rule, the read is.
     selectAll<RecCopy>(() =>
+      // NO `reasoning`. It was selected, typed onto `AdviceRow` and rendered by
+      // nothing: the mock's expanded ledger row with its "why" is not in this
+      // package's plan, and a column carried into a page bundle for a field
+      // nobody draws is weight with no reader. It comes back with the row that
+      // draws it.
       supabase.from('recommendations')
-        .select('id, lineage_id, title, reasoning, type, status, created_at, run_id')
+        .select('id, lineage_id, title, type, status, created_at, run_id')
         .eq('client_id', clientId)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true }),
