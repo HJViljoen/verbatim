@@ -72,7 +72,10 @@ export function fullDate(iso: string): string {
  *  does not have. */
 export function monthName(month: string): string {
   const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
-  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+  // Same guard as `longMonth` below, for the same reason and against the same
+  // `MONTHS[NaN]`.
+  const name = MONTHS[d.getUTCMonth()]
+  return name ? `${name} ${d.getUTCFullYear()}` : month.slice(0, 10)
 }
 
 /**
@@ -89,7 +92,13 @@ export function monthName(month: string): string {
  */
 export function longMonth(month: string): string {
   const d = new Date(`${month.slice(0, 10)}T00:00:00.000Z`)
-  return LONG_MONTHS[d.getUTCMonth()]
+  // AN UNPARSEABLE MONTH GIVES BACK ITS OWN STRING, never `undefined`.
+  // `LONG_MONTHS[NaN]` is undefined, React renders undefined as nothing, and
+  // the sentence this feeds reads "this update's contribution to  so far" — a
+  // gap a reader cannot see and nobody can debug. The `toLocaleString` this
+  // replaced threw instead, which was at least loud; handing the caller the
+  // string it passed in is quieter and just as findable.
+  return LONG_MONTHS[d.getUTCMonth()] ?? month.slice(0, 10)
 }
 
 /** "2026-08-16T07:07:51Z" → "Sun 16 Aug" (UTC). */
