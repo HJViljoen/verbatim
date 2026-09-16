@@ -30,8 +30,14 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
   const blocks = quarterlyBlocksFor(data.keys)
   const chrome = {
     context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
+    // TWO LINES, NOT ONE, BECAUSE THE SECOND SENTENCE IS THE GATE. The weekly
+    // deck's one-line `truncate` footer carries a 134-character rule; this one
+    // is 195, and the clause ellipsed on every sheet was "A quarter is
+    // compared with the quarter before it only where six monthly readings
+    // stand behind both sides" — the artefact's central fact, and the reason
+    // half its columns are empty.
     footer: (
-      <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+      <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">{QUARTERLY_RULE}</span>
         <span aria-hidden> · </span>
         <span>{date}</span>

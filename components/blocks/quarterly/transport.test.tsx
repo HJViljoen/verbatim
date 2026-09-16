@@ -26,6 +26,11 @@ describe('the deck', () => {
   it('prints the rule on every sheet, because a PDF has no masthead to scroll back to', () => {
     const markup = render(<QuarterlyDeck data={snapshot} date="16 Sep 2026" />)
     expect((markup.split(QUARTERLY_RULE).length - 1)).toBeGreaterThanOrEqual(QUARTERLY_BLOCK_KEYS.length)
+    // AND IT PRINTS THE WHOLE RULE. On one `truncate` line the clause ellipsed
+    // on every sheet was the second sentence — the six-month gate, which is
+    // why half the artefact's columns are empty.
+    expect(markup).not.toContain('truncate font-mono')
+    expect(QUARTERLY_RULE).toContain('six monthly readings stand behind both sides')
   })
 
   it('says so rather than throwing when it knows none of the stored keys', () => {
