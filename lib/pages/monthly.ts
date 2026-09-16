@@ -17,6 +17,7 @@ import {
   type TrailPoint,
 } from '../reports/monthly'
 import { confirmingLine } from '../reports/monthly'
+import { MARKETING_BRIEF } from '../reports/briefs'
 import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure } from '../reports/sent-figures'
 import { loadOverview, type LedgerRow, type Mover, type OverviewData } from './overview'
 import { loadVoiceSurface, type GoneQuiet, type VoiceSurfaceData } from './voice-surface'
@@ -567,7 +568,17 @@ async function loadBriefLink(
     .from('reports')
     .select('id, title, latest_snapshot_id, updated_at')
     .eq('client_id', clientId)
-    .eq('audience', 'marketing')
+    // BY TEMPLATE KEY ON A DOCUMENT ROW, WHICH IS WHAT A BRIEF IS.
+    // `audience = 'marketing'` is not unique to the brief: the starter template
+    // `monthly_marketing_review` is an arranged SLIDE report carrying the same
+    // audience, inserted with no `kind` and set `status: 'built'` by both the
+    // Studio and the schedule runner. Whichever had the newer `updated_at` won,
+    // so a workspace that had built one would have had this artefact email an
+    // outside recipient "The brief opens from the link below" with a live
+    // /r/<token> behind a slide deck. The Reports page has always identified
+    // the brief by template key (BRIEF_CARDS); this now agrees with it.
+    .eq('kind', 'document')
+    .eq('template_key', MARKETING_BRIEF.role)
     .eq('status', 'built')
     .not('latest_snapshot_id', 'is', null)
     .order('updated_at', { ascending: false })

@@ -47,10 +47,24 @@ export interface BriefCard {
   poolCappedAt: number | null
 }
 
+/**
+ * The Marketing brief, named once.
+ *
+ * A BRIEF IS ITS TEMPLATE KEY, NOT ITS AUDIENCE. `reports.audience =
+ * 'marketing'` is not unique to it: the starter template
+ * `monthly_marketing_review` is an arranged SLIDE report carrying the same
+ * audience, and both are set `status: 'built'`. Whichever had the newer
+ * `updated_at` won, so the monthly report could introduce a slide deck as "the
+ * brief" — with a live share link behind it — while the Reports page, which
+ * identifies the same artefact by `template_key` on a `kind = 'document'` row,
+ * meant something else. One constant, so the two surfaces cannot disagree.
+ */
+export const MARKETING_BRIEF = { role: 'market_brief' as DocumentRole, artefact: 'brief:marketing' as Artefact }
+
 /** The three the page draws, in the design's order. */
 export const BRIEF_CARDS: readonly { role: DocumentRole; artefact: Artefact }[] = [
   { role: 'sales_brief', artefact: 'brief:sales' },
-  { role: 'market_brief', artefact: 'brief:marketing' },
+  MARKETING_BRIEF,
   { role: 'content_brief', artefact: 'brief:content' },
 ]
 
