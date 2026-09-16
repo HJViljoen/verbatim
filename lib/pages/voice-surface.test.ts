@@ -60,15 +60,19 @@ const mover = (over: Partial<Mover> & { id: string; label: string }): Mover => (
 })
 
 describe('voiceSurfaceHref', () => {
-  it('keeps ?themes= through a filter click — the deep link fourteen stored links carry', () => {
-    const href = voiceSurfaceHref({ themes: 'wet_commute,zips', audience: 'client' }, { platform: 'reddit' })
+  it('keeps ?themes= through an audience click — the deep link fourteen stored links carry', () => {
+    const href = voiceSurfaceHref({ themes: 'wet_commute,zips', audience: 'client' }, { audience: 'industry-other' })
     expect(href).toContain('themes=wet_commute%2Czips')
-    expect(href).toContain('audience=client')
-    expect(href).toContain('platform=reddit')
+    expect(href).toContain('audience=industry-other')
   })
 
   it('drops a key set to null — which is how "clear this filter" is written', () => {
-    expect(voiceSurfaceHref({ kind: 'question', theme: 't1' }, { kind: null })).toBe('/dashboard/voice?theme=t1')
+    expect(voiceSurfaceHref({ theme: 't1', q: 'zip' }, { q: null })).toBe('/dashboard/voice?theme=t1')
+  })
+
+  it('emits no ?platform= or ?kind=, because neither ever narrowed the page', () => {
+    const href = voiceSurfaceHref({ ...({ platform: 'reddit', kind: 'question' } as Record<string, string>), theme: 't1' })
+    expect(href).toBe('/dashboard/voice?theme=t1')
   })
 
   it('is the bare address when nothing is selected', () => {
@@ -426,8 +430,8 @@ describe('audienceFigures', () => {
   const block = (over: Partial<AudienceBlock>): AudienceBlock => ({
     options: [], selected: 'industry-other', label: 'The category',
     videos: 388, comments: 10534, thin: false,
-    platformMix: [], platforms: [], platform: null,
-    kinds: [], kindVerdicts: {}, kindFilters: [], kind: null, kindsNote: null,
+    platformMix: [],
+    kinds: [], kindVerdicts: {}, kindsNote: null,
     reddit: null, replies: null, repliesNote: null,
     ...over,
   })

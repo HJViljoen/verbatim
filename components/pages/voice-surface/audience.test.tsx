@@ -39,10 +39,11 @@ describe('voiceAudience', () => {
     expect(draw()).toContain('was tracked, stopped 2026-09-09')
   })
 
-  it('prints the platform mix as options, largest first, and omits what the month did not carry', () => {
+  it('prints the platform mix largest first, with its share, and omits what the month did not carry', () => {
     const text = draw()
-    expect(text).toContain('TikTok 528')
-    expect(text).toContain('Reddit 166')
+    expect(text).toContain('TikTok 38% 528')
+    expect(text).toContain('Reddit 12% 166')
+    expect(text.indexOf('TikTok')).toBeLessThan(text.indexOf('Reddit'))
   })
 
   it('prints the kind ladder with each share against the one denominator', () => {
@@ -57,8 +58,14 @@ describe('voiceAudience', () => {
     expect(text).not.toContain('Asking how it works')
   })
 
-  it('prints no kind filter where there is no ladder to narrow — a control that changes nothing is not drawn', () => {
-    expect(refusedVoiceFixture().audience.kindFilters).toEqual([])
+  it('prints the platform mix as a reading, with no control claiming to narrow the page', () => {
+    // The platform pills narrowed `audience.videos` and nothing else: Sealand
+    // ?platform=tiktok read "146 videos · 9,397 comments" above rows reading
+    // "48 of 437". A control that does not work is not printed (WP9).
+    const text = draw()
+    expect(text).toContain('TikTok')
+    expect(text).toContain('Where it was said')
+    expect(text).not.toContain('platform=')
   })
 
   it('says the replies figure with its own n and its own caveat', () => {

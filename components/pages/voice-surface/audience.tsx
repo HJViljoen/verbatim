@@ -6,7 +6,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { AudienceOption, FilterOption, VoiceSurfaceData } from '@/lib/pages/voice-surface'
+import type { AudienceOption, VoiceSurfaceData } from '@/lib/pages/voice-surface'
 import { audienceFigures } from '@/lib/pages/voice-surface'
 
 // VO1 · Audience and kind (design §3 VO1).
@@ -19,12 +19,16 @@ import { audienceFigures } from '@/lib/pages/voice-surface'
 // videos in September and Sealand 3 — and a switch that hid them would hide
 // the most important fact about them.
 //
-// A FILTER IS A LINK. The selection lives in the URL, so it can be shared,
-// opened in a second tab and frozen into an export's params; a menu's internal
-// state can do none of those (the horizon control's own rule, WP9). And a
-// filter is printed only where it narrows something that exists: the kind
-// ladder lands with M5, so until then there is no kind filter rather than a
-// row of options that change nothing.
+// THE AUDIENCE IS A FILTER; THE PLATFORM AND THE KIND ARE NOT. The audience
+// switch is a link because the selection lives in the URL, where it can be
+// shared, opened in a second tab and frozen into an export's params (the
+// horizon control's own rule, WP9). The platform pills were links too, and
+// they narrowed `audience.videos` and nothing else — Sealand ?platform=tiktok
+// printed "146 videos · 9,397 comments" above rows reading "48 of 437" — and
+// the kind pills narrowed the ladder to the row a reader had just clicked. The
+// same rule that makes the audience a link deletes those two: this product
+// does not print controls that do not work. The platform mix is printed as
+// what it is, a reading of the month.
 
 /** One pill in the audience switch. The count is on the pill, not in a
  *  tooltip: an audience is chosen by how much of the month it holds. */
@@ -59,30 +63,6 @@ function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMo
       href={option.href}
       aria-current={option.selected ? 'true' : undefined}
       className={`rounded-full border px-2.5 py-0.5 text-[12px] ${option.selected ? 'border-foreground/40 bg-secondary font-medium' : 'border-border/70 text-muted-foreground hover:border-foreground/30'}`}
-    >
-      {body}
-    </Link>
-  )
-}
-
-/** A kind or platform filter, with the videos it would leave. */
-function FilterPill({ option, mode }: { option: FilterOption; mode: RenderMode }) {
-  const body = (
-    <>
-      {option.label}
-      {option.videos != null ? (
-        <> <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{fmtInt(option.videos)}</span></>
-      ) : null}
-    </>
-  )
-  if (mode === 'email') {
-    return <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: option.active ? EMAIL.ink : EMAIL.muted, marginRight: 8 }}>{body}</span>
-  }
-  return (
-    <Link
-      href={option.href}
-      aria-current={option.active ? 'true' : undefined}
-      className={`rounded-full px-2 py-0.5 text-[11.5px] ${option.active ? 'bg-secondary font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
     >
       {body}
     </Link>
@@ -151,24 +131,26 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             </div>
           </Line>
 
-          {a.platforms.length > 0 ? (
-            <Line label="Platform" mode={mode}>
-              <div className={email ? undefined : 'flex flex-wrap items-center gap-1'}>
-                {a.platforms.map((p) => <FilterPill key={p.value} option={p} mode={mode} />)}
-              </div>
+          {a.platformMix.length > 0 ? (
+            <Line label="Where it was said" mode={mode}>
               {/* A PLATFORM THE MONTH DID NOT CARRY IS ABSENT, not a 0% row.
                   Össur's own brand read no Reddit thread at all in September,
                   and "Reddit 0" would be a reading of a platform nobody
                   posted on. */}
+              <div className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1'}>
+                {a.platformMix.map((p) => (
+                  <span key={p.platform} className={email ? undefined : 'text-[12px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginRight: 10 } : undefined}>
+                    {p.label}{' '}
+                    <span data-copy="figure" className={email ? undefined : 'font-mono tabular-nums'}>
+                      {p.pct == null ? '—' : fmtPct(p.pct)} {fmtInt(p.videos)}
+                    </span>
+                  </span>
+                ))}
+              </div>
             </Line>
           ) : null}
 
           <Line label="Kind of thing said" mode={mode}>
-            {a.kindFilters.length > 0 ? (
-              <div className={email ? undefined : 'flex flex-wrap items-center gap-1'}>
-                {a.kindFilters.map((k) => <FilterPill key={k.value} option={k} mode={mode} />)}
-              </div>
-            ) : null}
             {kinds}
             {a.reddit && a.reddit.pct != null ? (
               <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>

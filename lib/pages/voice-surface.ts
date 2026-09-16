@@ -106,8 +106,6 @@ export const PERSONA_VIDEO_FLOOR = 3
 export type VoiceSurfaceParams = {
   horizon?: string
   audience?: string
-  kind?: string
-  platform?: string
   /** The deep link Market and the old Dashboard draw: theme member slugs. Kept
    *  (the WP's own line) — 32 stored links carry it. */
   themes?: string
@@ -132,19 +130,6 @@ export interface AudienceOption {
   observed: boolean
   retiredAt: string | null
   selected: boolean
-  href: string
-}
-
-/** One filter option — a kind or a platform. A filter is a LINK, never a menu:
- *  the selection is in the URL, so it can be shared, exported and frozen into a
- *  snapshot's params (the horizon control's own rule, WP9). */
-export interface FilterOption {
-  value: string
-  label: string
-  /** The videos this option would leave, or null where the reading that would
-   *  answer it is not recorded. */
-  videos: number | null
-  active: boolean
   href: string
 }
 
@@ -174,16 +159,29 @@ export interface AudienceBlock {
   videos: number | null
   comments: number | null
   thin: boolean
-  /** The month's videos by platform, off `month_denominators.platform_mix`. */
+  /** The month's videos by platform, off `month_denominators.platform_mix` —
+   *  A READING, AND NOT A FILTER.
+   *
+   *  The first cut made each platform a link that narrowed `audience.videos`
+   *  and nothing else: comments, the thin mark, the kind ladder, every mover
+   *  and the theme all kept the full-audience denominator, so Sealand
+   *  ?platform=tiktok printed "146 videos · 9,397 comments" over rows reading
+   *  "48 of 437". The same shape was wired for `?kind=`, which narrowed the
+   *  ladder to the selected row and nothing else.
+   *
+   *  A platform filter that worked would need the platform-narrowed reading
+   *  across the whole axis — theme numerators out of
+   *  `month_theme_readings.platform_mix`, denominators out of
+   *  `month_denominators.platform_mix`, for every drawn month — and there is
+   *  no platform-scoped comment count or sentiment row at all, so two of the
+   *  page's lines could not follow. Until that reading exists the mix is
+   *  printed as what it is and no control claims to narrow the page (WP9's
+   *  rule, quoted in this file: the product does not print controls that do
+   *  not work). */
   platformMix: { platform: string; label: string; videos: number; pct: number | null }[]
-  /** The platform filter. Empty where the month carried no mix. */
-  platforms: FilterOption[]
-  platform: string | null
-  /** The kind ladder, and the filter over it. Both empty when M5 is unapplied. */
+  /** The kind ladder. Empty when M5 is unapplied. */
   kinds: KindShare[]
   kindVerdicts: Record<string, Verdict | null>
-  kindFilters: FilterOption[]
-  kind: string | null
   kindsNote: string | null
   reddit: RedditRead | null
   replies: RepliesRead | null
@@ -431,7 +429,7 @@ export function voiceSurfaceHref(
 ): string {
   const merged: Record<string, string | null | undefined> = { ...params, ...over }
   const qs = new URLSearchParams()
-  for (const key of ['horizon', 'audience', 'kind', 'platform', 'themes', 'theme', 'movers', 'q', 'persona']) {
+  for (const key of ['horizon', 'audience', 'themes', 'theme', 'movers', 'q', 'persona']) {
     const value = merged[key]
     if (value) qs.set(key, value)
   }
@@ -898,10 +896,6 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // ── the audience block ──────────────────────────────────────────────────
   const selectedDenom = denomThisMonth.get(selected) ?? null
   const platformMix = platformShares(selectedDenom?.platform_mix, selectedDenom?.videos ?? null)
-  const platformParam = params.platform && platformMix.some((p) => p.platform === params.platform) ? params.platform : null
-  const audienceVideos = platformParam
-    ? platformMix.find((p) => p.platform === platformParam)?.videos ?? null
-    : selectedDenom?.videos ?? null
 
   const options: AudienceOption[] = audiences.map((a) => {
     const d = denomThisMonth.get(a) ?? null
@@ -914,21 +908,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       observed: d != null,
       retiredAt: rivals.find((r) => rivalKey(r.name) === a)?.retiredAt ?? null,
       selected: a === selected,
-      href: voiceSurfaceHref(params, { audience: a, theme: null, kind: null, platform: null }),
+      href: voiceSurfaceHref(params, { audience: a, theme: null }),
     }
   })
 
-  const platforms: FilterOption[] = platformMix.map((p) => ({
-    value: p.platform,
-    label: p.label,
-    videos: p.videos,
-    active: p.platform === platformParam,
-    href: voiceSurfaceHref(params, { platform: p.platform === platformParam ? null : p.platform }),
-  }))
-
   let kinds: KindShare[] = []
   const kindVerdicts: Record<string, Verdict | null> = {}
-  let kindFilters: FilterOption[] = []
   let kindsNote: string | null = null
   let reddit: RedditRead | null = null
   // ONE THIN RULE FOR THE WHOLE PAGE. VO1 marks an audience under
@@ -970,34 +955,18 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
             prev: { month: prevMonth, k: prev.videos, videos: prevN },
           })
     }
-    // A FILTER THAT CHANGES NOTHING IS NOT PRINTED. The kind ladder is the only
-    // thing on this page a kind can narrow, so the filter exists exactly where
-    // the ladder does (WP9's rule: this product does not print controls that do
-    // not work).
-    kindFilters = kinds.map((k) => ({
-      value: k.kind,
-      label: k.label,
-      videos: k.videos,
-      active: k.kind === params.kind,
-      href: voiceSurfaceHref(params, { kind: k.kind === params.kind ? null : k.kind }),
-    }))
   }
-  const activeKind = kindFilters.some((k) => k.active) ? (params.kind as string) : null
 
   const audienceBlock: AudienceBlock = {
     options,
     selected,
     label: audienceLabel(selected),
-    videos: audienceVideos,
+    videos: selectedDenom?.videos ?? null,
     comments: selectedDenom?.comments ?? null,
     thin: audienceThin(selectedDenom?.videos ?? null),
     platformMix,
-    platforms,
-    platform: platformParam,
-    kinds: activeKind ? kinds.filter((k) => k.kind === activeKind) : kinds,
+    kinds,
     kindVerdicts,
-    kindFilters,
-    kind: activeKind,
     kindsNote,
     reddit,
     replies,
