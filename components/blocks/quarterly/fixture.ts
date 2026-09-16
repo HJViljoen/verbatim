@@ -19,17 +19,22 @@ import { quarterlyBlocksFor } from './index'
 // reads and gets back exactly what production gets back — one reading, not a
 // second one hand-typed beside it and free to drift.
 //
-// THREE STATES, ALL REAL.
-//   `quarterlyFixture()`  — six readings, both window reads taken, the shape
-//                           the mock draws and the one nobody has yet.
-//   `formingFixture()`    — PRODUCTION TODAY: three readings, M3 unapplied so
-//                           the window pair answers null, M4/M5/M7 unapplied so
-//                           the subjects, kinds, mood, standings and the check
-//                           record are all sentences. This is what a workspace
-//                           actually receives, and it is the state the WP's
-//                           "done when" is about.
-//   `closedFixture()`     — the quarter read after it closed: nothing still
-//                           filling, so the masthead drops that clause.
+// FOUR STATES, ALL REAL.
+//   `quarterlyFixture()`    — eight readings, both window reads taken, read
+//                             mid-quarter: the shape the mock draws.
+//   `formingFixture()`      — PRODUCTION TODAY: three readings, M3 unapplied so
+//                             the window pair answers null, M4/M5/M7 unapplied
+//                             so the subjects, kinds, mood, standings and the
+//                             check record are all sentences. This is what a
+//                             workspace actually receives.
+//   `closedFixture()`       — the quarter read after it closed, with the month
+//                             pages still inside it.
+//   `afterQuarterFixture()` — THE NORMAL SEND. A quarterly schedule fires on
+//                             the first update of the NEXT quarter, so a Q3
+//                             review is built in October and the month-level
+//                             pages are of a month OUTSIDE the quarter the
+//                             masthead names. Every page that prints a month
+//                             figure has to say so.
 
 const QUARTER = quarterFor(2026, 3)
 const PRIOR = previousQuarter(QUARTER)
@@ -94,7 +99,7 @@ const checksNotRecorded: QuarterChecks = { recorded: false, ran: 0, flaggedRuns:
  * block tests and the deck's own copy contract. A render tier exists to catch
  * exactly that, and a cast is what stopped it.
  */
-const record = (delivered: number): RecordInputs => ({
+const record = (delivered: number, readingAt = NOW): RecordInputs => ({
   window: { kind: 'quarter', from: QUARTER.from, to: QUARTER.to },
   delivery: { delivered, dates: [], longestGapDays: 35, failed: 0, basis: 'run_clock' },
   coverage: [
@@ -107,7 +112,7 @@ const record = (delivered: number): RecordInputs => ({
   changes: { inWindow: 1, loggedFrom: '2026-07-04', reconstructed: 3 },
   comparisonsRefused: null,
   refusals: [],
-  readingAt: NOW,
+  readingAt,
   frozenAt: null,
 })
 
@@ -167,7 +172,7 @@ export function closedFixture(): QuarterlyData {
     subjectsNow: subjectWindow(4147, 0.22),
     subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
-    record: record(13),
+    record: record(13, '2026-11-02T09:00:00.000Z'),
   })
 }
 
@@ -181,24 +186,36 @@ export function closedFixture(): QuarterlyData {
  */
 export function afterQuarterFixture(): QuarterlyData {
   const overview = overviewFixture()
+  const AFTER = '2026-10-06T09:00:00.000Z'
   return composeQuarterly({
     overview: {
       ...overview,
       month: '2026-10-01',
       monthStatus: 'filling',
-      bar: { ...overview.bar, readings: 9 },
+      // The month bar is October's too, so nothing on the sheet names one
+      // month in a label and another in the line under it.
+      bar: {
+        ...overview.bar,
+        month: '2026-10-01',
+        daysIn: 6,
+        updates: 1,
+        updateDates: ['3 Oct'],
+        videos: 512,
+        line: '6 days in · 1 update · 512 videos',
+        readings: 9,
+      },
     },
     market: marketFixture(),
     competitive: competitiveFixture(),
     quarter: QUARTER,
     prior: PRIOR,
-    readingAt: '2026-10-06T09:00:00.000Z',
+    readingAt: AFTER,
     thisQuarter: windowRead(4147, 33000),
     lastQuarter: windowRead(3810, 29000),
     subjectsNow: subjectWindow(4147, 0.22),
     subjectsBefore: subjectWindow(3810, 0.18),
     checks: checksRan,
-    record: record(13),
+    record: record(13, AFTER),
   })
 }
 
