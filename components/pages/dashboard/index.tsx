@@ -550,7 +550,7 @@ export function DashboardPage({ data: d, detail, params }: { data: DashboardData
       <PageBar title="Dashboard" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
         <ExportMenu />
-        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" />
+        <HowToRead items={d.legendItems} open={detail === 'legend'} basePath="/dashboard" anchor="overview" />
       </PageBar>
 
       <PageGrid>

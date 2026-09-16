@@ -4,6 +4,7 @@ import {
   oldPagesGroupLabel, retireDate, surface, surfaceForPath, surfacesIn,
 } from './nav'
 import { OLD_PAGES_RETIRE_ON } from './config'
+import { SETTINGS_ADDRESSES } from './settings/rail'
 import { PAGE_KEYS } from './renderables/types'
 
 describe('the nine surfaces', () => {
@@ -140,14 +141,16 @@ describe('the addresses that lose their page', () => {
     expect(Object.keys(RETIRED_ADDRESSES).sort()).toEqual([
       '/dashboard/guide', '/dashboard/profile', '/dashboard/settings/connections',
     ])
-    // EXACTLY one of the nine's own addresses, not a sub-path of one. The
-    // looser rule passed for `/dashboard/settings/how-to-read`, an address
-    // WP16 has not built, and a redirect to a route that does not exist is a
-    // bare Next 404 — this app has no `app/not-found.tsx`. A sub-page becomes
-    // a legal target when it becomes a route.
+    // An address something actually SERVES, not a sub-path of one that happens
+    // to prefix-match: the looser rule once passed for
+    // `/dashboard/settings/how-to-read` while no such route existed, and a
+    // redirect to a route that does not exist is a bare Next 404 — this app
+    // has no `app/not-found.tsx`. The legal targets are the nine's own
+    // addresses plus the settings area's seven, which WP16 built.
+    const served = [...SURFACES.map((s) => s.href), ...SETTINGS_ADDRESSES]
     for (const to of Object.values(RETIRED_ADDRESSES)) {
       const path = to.split('#')[0]
-      expect(SURFACES.map((s) => s.href)).toContain(path)
+      expect(served).toContain(path)
     }
   })
 

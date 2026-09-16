@@ -9,12 +9,24 @@
  * email body (words stay live in the snapshot, as everywhere on the spine).
  */
 
-export type ScheduleCadence = 'every_update' | 'monthly'
+// 'quarterly' joined the set with the quarterly review (Phase 1 WP16 M8,
+// design item 14). A schedule has never had a clock of its own — it rides the
+// scheduled update — so a quarter is expressed the way a month already is:
+// the first update of a calendar quarter, and nothing until the next one.
+export type ScheduleCadence = 'every_update' | 'monthly' | 'quarterly'
 
-export const CADENCES: { key: ScheduleCadence; label: string; help: string }[] = [
+export const CADENCE_COPY: { key: ScheduleCadence; label: string; help: string }[] = [
   { key: 'every_update', label: 'Every update', help: 'Goes out after each scheduled update.' },
   { key: 'monthly', label: 'Monthly', help: 'Goes out after the first update of each month.' },
+  { key: 'quarterly', label: 'Quarterly', help: 'Goes out after the first update of each quarter.' },
 ]
+
+/** What the Studio's schedule form OFFERS, which is not the same list. Nothing
+ *  builds a quarterly artefact until WP20, and an option that produces a
+ *  schedule the builder cannot serve is a form that lies. The value exists in
+ *  the database (M8) so the recipient table can name it; the picker gains it
+ *  with the review that fills it. */
+export const CADENCES = CADENCE_COPY.filter((c) => c.key !== 'quarterly')
 
 export interface ScheduleRow {
   id: string

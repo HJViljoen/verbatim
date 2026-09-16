@@ -453,7 +453,7 @@ export function CompetitivePage({ data: d, detail: detailParam, params }: { data
       <PageBar title="Competitive Intelligence" context={d.context}>
         {d.updatesCount > 1 && <BarPill>Last {d.updatesCount} updates</BarPill>}
         <ExportMenu />
-        <HowToRead items={d.legendItems ?? LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive-intel" />
+        <HowToRead items={d.legendItems ?? LEGEND_ITEMS} open={showLegend} basePath="/dashboard/competitive-intel" anchor="competitive" />
       </PageBar>
 
       <PageGrid>

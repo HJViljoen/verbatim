@@ -235,16 +235,17 @@ export function oldPageBanner(page: OldPage): { title: string; body: string; cta
  * pattern already exist (`app/dashboard/ask/page.tsx` and friends).
  *
  * A TARGET IS AN ADDRESS THAT EXISTS TODAY, not the address it will have when
- * the work package that owns it lands. `/dashboard/settings/how-to-read` and
- * `/dashboard/settings/tracking` are WP16's, and until WP16 builds them a
- * reader sent there got Next's bare 404 — there is no `app/not-found.tsx` in
- * this app, so the bare default is what a bookmark and a live legend link
- * reached. Both land on Settings itself for the R1 window; WP16 re-points them
- * at its sub-pages in the same commit that creates them. `lib/nav.test.ts`
- * pins the rule: a target must be one of the nine's own addresses.
+ * the work package that owns it lands. `/dashboard/settings/how-to-read` was
+ * WP16's, and until WP16 built it a reader sent there got Next's bare 404 —
+ * there is no `app/not-found.tsx` in this app, so the bare default is what a
+ * bookmark and a live legend link reached. It landed on Settings itself for
+ * that window, and the Guide now points at the sub-page that replaced it.
+ * `lib/nav.test.ts` pins the rule: a target must be an address something
+ * actually serves — one of the nine, or one of the settings area's own seven
+ * (`lib/settings/rail.ts` SETTINGS_ADDRESSES).
  */
 export const RETIRED_ADDRESSES: Readonly<Record<string, string>> = {
   '/dashboard/profile': '/dashboard/voice#cast',
-  '/dashboard/guide': '/dashboard/settings',
+  '/dashboard/guide': '/dashboard/settings/how-to-read',
   '/dashboard/settings/connections': '/dashboard/settings',
 }

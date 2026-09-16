@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
-import { getSessionContext } from '@/lib/auth'
+import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import {
   activateSubject,
@@ -13,7 +13,7 @@ import {
   setMoveStatus,
   type WriteContext,
 } from '@/lib/subjects/moves'
-import { MOVE_STATUSES, SUBJECT_ORIGINS } from '@/lib/subjects/types'
+import { MOVE_STATUSES, SUBJECT_ORIGINS, SUBJECT_WRITE_REFUSED } from '@/lib/subjects/types'
 
 // The subject and move write path (Phase 1 WP12, design §3 SU1 and SU2).
 //
@@ -23,12 +23,24 @@ import { MOVE_STATUSES, SUBJECT_ORIGINS } from '@/lib/subjects/types'
 // by module path from `app/dashboard/<page>/actions` moves house every time its
 // page does, which is exactly what happened to the rec-status action in WP9.
 //
-// NO ROLE CHECK, DELIBERATELY, and it is the same reasoning the rec-status
-// action carries. Naming a subject is not a cost knob and not an operator
-// lever: it is the client saying what it wants to be measured on. The gate is
-// the session client plus RLS plus the column grants — `name` and `description`
-// carry no UPDATE grant at all, so a rename is an insert and a retirement, and
-// `moves` grants a member `status` and nothing that says what was measured.
+// THE THREE SUBJECT WRITES CARRY A ROLE CHECK; THE TWO MOVE WRITES DO NOT, and
+// the line between them is what the write CHANGES. Naming, confirming and
+// stopping a subject change the measurement itself — every frozen month is
+// about the set that was current when it froze, and decision E says the set is
+// confirmed in Settings by the person who owns the workspace. RLS and the
+// column grants are not that gate: `grant insert (…)` and `grant update
+// (status, superseded_by, updated_at) on public.subjects to authenticated`
+// admit every member of the tenant, so without `canManageTenant` a viewer
+// could rename the thing the product measures. WP12 shipped these ungated and
+// WP16 gated the same three behind its own copy of the actions; the merge
+// keeps the gate and keeps one copy of the write path, so the Subjects page
+// and Settings › Subjects refuse in the same words.
+//
+// A move is the other kind of act: it is the client SAYING they did something,
+// scored later against readings nobody here can touch, and `moves` grants a
+// member `status` and nothing that says what was measured. That stays open to
+// anyone who can see the page.
+//
 // Every one of these writes carries an actor into `config_changes`
 // (lib/subjects/moves.ts), written with the service-role client because a log a
 // tenant can append to is not a log.
@@ -93,6 +105,16 @@ async function context(): Promise<WriteContext> {
   return { supabase, clientId, userId, email, operator }
 }
 
+/** The refusal a reader who may not change the set gets, in the same words the
+ *  editor prints where its controls would have been. */
+const REFUSED: SubjectFormState = { ok: false, message: SUBJECT_WRITE_REFUSED }
+
+/** The session, plus whether this reader may change the measurement. */
+async function manageContext(): Promise<{ ctx: WriteContext; allowed: boolean }> {
+  const { supabase, clientId, userId, email, operator, role } = await getSessionContext()
+  return { ctx: { supabase, clientId, userId, email, operator }, allowed: canManageTenant(role) }
+}
+
 /** Name a subject — or rename one, which is an insert and a retirement, never
  *  an edit (SU1: "renaming or adding a subject starts a new line"). */
 export async function nameSubjectAction(
@@ -107,7 +129,8 @@ export async function nameSubjectAction(
   })
   if (!parsed.success) return { ok: false, message: firstIssue(parsed.error) }
 
-  const ctx = await context()
+  const { ctx, allowed } = await manageContext()
+  if (!allowed) return REFUSED
   const result = await nameSubject(ctx, createAdminClient(), {
     name: parsed.data.name,
     description: parsed.data.description ?? null,
@@ -121,7 +144,8 @@ export async function nameSubjectAction(
 /** Confirm a subject: the write that starts the counting (decision E). */
 export async function confirmSubjectAction(id: string): Promise<SubjectFormState> {
   if (!uuid.safeParse(id).success) return { ok: false, message: 'Unknown subject.' }
-  const ctx = await context()
+  const { ctx, allowed } = await manageContext()
+  if (!allowed) return REFUSED
   const result = await activateSubject(ctx, createAdminClient(), { id })
   if (result.ok) revalidateSubjects()
   return { ok: result.ok, message: result.message }
@@ -131,7 +155,8 @@ export async function confirmSubjectAction(id: string): Promise<SubjectFormState
  *  the database freezes them at retirement rather than letting them decay. */
 export async function retireSubjectAction(id: string): Promise<SubjectFormState> {
   if (!uuid.safeParse(id).success) return { ok: false, message: 'Unknown subject.' }
-  const ctx = await context()
+  const { ctx, allowed } = await manageContext()
+  if (!allowed) return REFUSED
   const result = await retireSubject(ctx, createAdminClient(), { id })
   if (result.ok) revalidateSubjects()
   return { ok: result.ok, message: result.message }

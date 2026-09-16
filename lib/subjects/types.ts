@@ -329,3 +329,16 @@ export function isMissingSubjects(error: unknown): boolean {
   if (code && ['PGRST202', 'PGRST205', '42883', '42P01'].includes(code)) return true
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
+
+/**
+ * What a reader who may not change the set is told — printed by the editor
+ * where its controls would have been, and returned by the write path when one
+ * of the three subject writes is called anyway.
+ *
+ * ONE STRING BECAUSE IT IS ONE RULE. The affordance and the refusal are the
+ * same sentence; two copies are two chances to word the same rule differently,
+ * and a client who is told one thing by the page and another by the save is
+ * being told the product is broken.
+ */
+export const SUBJECT_WRITE_REFUSED =
+  'Only an owner or an admin can change what we read your market against.'

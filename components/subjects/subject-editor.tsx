@@ -15,7 +15,7 @@ import {
 } from '@/lib/actions/subjects'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
 import { SUPERSEDE_RULE } from '@/lib/pages/subjects'
-import { SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
+import { SUBJECT_WRITE_REFUSED, SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
 
 /**
  * The subjects editor (design §3 SU1, and §4's "the same editor as SU1").
@@ -67,6 +67,21 @@ export interface SubjectEditorProps {
   /** Settings shows the description and the origin under each row; the page's
    *  rail is a rail and shows the name, the date and the level. */
   variant?: 'rail' | 'settings'
+  /**
+   * Whether this reader may change the set. Default true, which is the
+   * Subjects page: naming a subject is the client saying what it wants to be
+   * measured on, and the column grants already decide what may be written
+   * (`name` and `description` carry no UPDATE at all).
+   *
+   * BUT ROLE IS NOT IN THE GRANTS. `grant insert (…)` and
+   * `grant update (status, superseded_by, …) on public.subjects to
+   * authenticated` admit every member of the tenant, so a viewer could name,
+   * confirm and stop a subject with nothing but RLS in the way. Settings
+   * passes `canManageTenant(role)` and the write path refuses the same set of
+   * calls server-side (`lib/actions/subjects.ts`); this flag is the
+   * affordance, not the gate.
+   */
+  canEdit?: boolean
 }
 
 const cls = {
@@ -75,7 +90,7 @@ const cls = {
   meta: 'font-mono text-[10.5px] text-muted-foreground',
 }
 
-export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail' }: SubjectEditorProps) {
+export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'rail', canEdit = true }: SubjectEditorProps) {
   const [adding, setAdding] = useState(false)
   const [renaming, setRenaming] = useState<SubjectEditorRow | null>(null)
   const [said, setSaid] = useState<{ ok: boolean; message: string } | null>(null)
@@ -146,34 +161,40 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
                     <span className="rounded-full bg-inner px-1.5 py-px font-medium text-secondary-foreground">
                       not counted yet
                     </span>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => run(() => confirmSubjectAction(r.id))}
+                        className="font-sans font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                      >
+                        Confirm
+                      </button>
+                    ) : null}
+                  </>
+                ) : null}
+                {canEdit ? (
+                  <>
+                    <span aria-hidden>·</span>
                     <button
                       type="button"
                       disabled={pending}
-                      onClick={() => run(() => confirmSubjectAction(r.id))}
-                      className="font-sans font-medium text-foreground underline-offset-2 hover:underline disabled:opacity-50"
+                      onClick={() => setRenaming(r)}
+                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
                     >
-                      Confirm
+                      Rename
+                    </button>
+                    <span aria-hidden>·</span>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => run(() => retireSubjectAction(r.id))}
+                      className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+                    >
+                      Stop
                     </button>
                   </>
                 ) : null}
-                <span aria-hidden>·</span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => setRenaming(r)}
-                  className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
-                >
-                  Rename
-                </button>
-                <span aria-hidden>·</span>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => run(() => retireSubjectAction(r.id))}
-                  className="font-sans text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
-                >
-                  Stop
-                </button>
               </span>
             </div>
           </li>
@@ -188,15 +209,19 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
         </p>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => setAdding(true)}
-        disabled={atCeiling}
-        title={atCeiling ? `You are already tracking ${SUBJECTS_MAX}. Stop one before you add another.` : undefined}
-        className="self-start rounded-[3px] text-[12.5px] font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
-      >
-        Add a subject →
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          disabled={atCeiling}
+          title={atCeiling ? `You are already tracking ${SUBJECTS_MAX}. Stop one before you add another.` : undefined}
+          className="self-start rounded-[3px] text-[12.5px] font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline"
+        >
+          Add a subject →
+        </button>
+      ) : (
+        <p className="m-0 text-[11px] text-muted-foreground">{SUBJECT_WRITE_REFUSED}</p>
+      )}
 
       <SubjectSheet
         open={adding}

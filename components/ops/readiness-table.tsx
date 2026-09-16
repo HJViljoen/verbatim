@@ -27,7 +27,13 @@ function StatusPill({ status }: { status: ReadinessStatus }) {
   )
 }
 
-function Row({ row }: { row: ReadinessRow }) {
+/** A row, plus what the client view adds to it (Phase 1 WP16): the owner in
+ *  the client's words, and a date where one genuinely exists. Both optional —
+ *  the operator page passes neither and reads exactly as it did. */
+export type ReadinessTableRow = ReadinessRow & { ownerWords?: string; by?: string | null }
+
+function Row({ row }: { row: ReadinessTableRow }) {
+  const owner = row.ownerWords ?? OWNER_LABEL[row.owner]
   return (
     <div className="flex flex-col gap-1.5 border-t border-border/70 py-3 first:border-t-0 first:pt-0 last:pb-0">
       <div className="flex items-baseline gap-3">
@@ -39,7 +45,7 @@ function Row({ row }: { row: ReadinessRow }) {
           <p className="mt-0.5 text-[12.5px] text-secondary-foreground">{row.detail}</p>
         </div>
         <span className="hidden shrink-0 font-mono text-[10.5px] text-muted-foreground sm:inline">
-          {OWNER_LABEL[row.owner]}
+          {owner}
         </span>
         <StatusPill status={row.status} />
       </div>
@@ -60,13 +66,14 @@ function Row({ row }: { row: ReadinessRow }) {
       <p className="text-[11.5px] text-muted-foreground">
         <span className="font-mono text-[10.5px] uppercase tracking-[0.06em]">Unlocks</span>{' '}
         {row.unlocks}
-        <span className="sm:hidden"> · {OWNER_LABEL[row.owner]}</span>
+        {row.by && <span className="text-secondary-foreground"> By {row.by}.</span>}
+        <span className="sm:hidden"> · {owner}</span>
       </p>
     </div>
   )
 }
 
-export function ReadinessTable({ rows, title, description }: { rows: ReadinessRow[]; title: string; description: string }) {
+export function ReadinessTable({ rows, title, description }: { rows: readonly ReadinessTableRow[]; title: string; description: string }) {
   return (
     <SettingsCard title={title} description={description}>
       {rows.map((row) => <Row key={row.id} row={row} />)}

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct } from '../format'
 import { selectAll } from '../supabase-admin'
@@ -133,6 +134,12 @@ export interface LanguageRecord {
  *  23 Aug on Össur against a first run of 6 Apr, 9 Sep on Sealand against
  *  28 Jun. No month before that can show a discard share at all. */
 export interface DiscardRecord {
+  /** Whether this CLIENT can read the gate's record at all. False on a tenant
+   *  session until M8 is applied: the read comes back empty rather than
+   *  forbidden (lib/gate-record.ts), and "we do not show you this yet" and
+   *  "nothing was ever judged" are different sentences. Every figure below is
+   *  a zero that means nothing when this is false. */
+  readable: boolean
   judged: number
   kept: number
   setAside: number
@@ -142,15 +149,23 @@ export interface DiscardRecord {
   /** Cleared by the cheap check and never put to the model — the heuristic
    *  found no reason to drop it (`method: 'heuristic'`). A DECISION, not a
    *  defect, and by far the commonest of the three `source: 'default'` cases:
-   *  all 295 production rows are this one. */
-  clearedByHeuristic: number
-  /** Judged while the gate was switched off for the gather. */
-  gateOff: number
+   *  all 295 production rows are this one.
+   *
+   *  NULL RATHER THAN ZERO on a tenant session. These three are counted by
+   *  `reason`, and `reason` is one of the three columns M8 withholds from
+   *  `authenticated` — a filter on it is refused, not emptied. A reader that
+   *  printed 0 there would be reporting "no video was cleared by the quick
+   *  check" about a column it is not allowed to look at. */
+  clearedByHeuristic: number | null
+  /** Judged while the gate was switched off for the gather. Null where
+   *  `reason` is not readable. */
+  gateOff: number | null
   /** Judged without a judgement — the gate ran, returned nothing for this
    *  video, and it entered unjudged. The real fail-open, and the only one of
    *  the three that is a defect. Counted by `reason`, never by `source`:
-   *  `source: 'default'` covers all three and separates none of them. */
-  failedOpen: number
+   *  `source: 'default'` covers all three and separates none of them. Null
+   *  where `reason` is not readable. */
+  failedOpen: number | null
   basis: 'run_clock'
 }
 
@@ -288,6 +303,12 @@ export interface RecordOptions {
   /** Overridable for tests and for a snapshot that re-renders as at its own
    *  reading date rather than as at now. */
   now?: string
+  /** Which client this is running on, for the one table whose answer depends on
+   *  it (lib/gate-record.ts). Defaults to 'service' because every caller before
+   *  Settings › The record was the service role; a page reading on
+   *  `session.supabase` MUST say 'tenant', or the discard line states a
+   *  falsehood to the workspace it is about. */
+  gate?: GateAccess
 }
 
 /**
@@ -313,7 +334,7 @@ export async function loadRecordInputs(
     loadCoverage(client, clientId, window),
     loadReadDepth(client, clientId),
     loadLanguage(client, clientId),
-    loadDiscard(client, clientId, window),
+    loadDiscard(client, clientId, window, options.gate ?? 'service'),
     loadInstrument(client, clientId),
     loadChanges(client, clientId, window),
     loadFrozenAt(client, clientId, window),
@@ -522,7 +543,46 @@ async function loadLanguage(client: SupabaseClient, clientId: string): Promise<L
   return { analysed: rows.length, unknown, english, notEnglish, basis: 'video_speech' }
 }
 
-async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWindow): Promise<DiscardRecord> {
+/** Nothing readable: the shape a tenant session gets until M8 is applied. Every
+ *  count is a zero that means nothing, and `readable` is what the composer
+ *  reads before any of them. */
+const noDiscard: DiscardRecord = {
+  readable: false,
+  judged: 0,
+  kept: 0,
+  setAside: 0,
+  recordedFrom: null,
+  clearedByHeuristic: null,
+  gateOff: null,
+  failedOpen: null,
+  basis: 'run_clock',
+}
+
+/**
+ * What was looked at and set aside, in whichever of the gate's two regimes this
+ * client is in (lib/gate-record.ts).
+ *
+ * On a tenant session the three `reason` counts are NOT asked for at all:
+ * PostgreSQL requires SELECT on a column named in a WHERE clause, and M8
+ * withholds `reason` from `authenticated`, so the head count would be refused
+ * and `headCount` would take the page down with it. They come back null, and
+ * the caveat they feed is simply not said.
+ */
+async function loadDiscard(
+  client: SupabaseClient,
+  clientId: string,
+  w: RecordWindow,
+  access: GateAccess,
+): Promise<DiscardRecord> {
+  if (access === 'tenant') {
+    // The appeals table is M8's own object, and its absence is the only signal
+    // that the verdict counts about to be read are RLS-emptied rather than
+    // empty.
+    const probe = await client.from(GATE_APPEALS_TABLE).select('id').limit(1)
+    if (isMissingGateAppeals(probe.error)) return noDiscard
+    if (probe.error) throw probe.error
+  }
+  const byReason = access === 'service'
   const gate = () =>
     client
       .from('gate_verdicts')
@@ -530,12 +590,14 @@ async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWi
       .eq('client_id', clientId)
       .gte('created_at', dayStart(w.from))
       .lte('created_at', dayEnd(w.to))
+  const reason = (value: string): Promise<number | null> =>
+    byReason ? headCount(gate().eq('source', 'default').eq('reason', value)) : Promise.resolve(null)
   const [judged, kept, clearedByHeuristic, gateOff, failedOpen, first] = await Promise.all([
     headCount(gate()),
     headCount(gate().eq('kept', true)),
-    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.undecided)),
-    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.off)),
-    headCount(gate().eq('source', 'default').eq('reason', GATE_DEFAULT_REASONS.failedOpen)),
+    reason(GATE_DEFAULT_REASONS.undecided),
+    reason(GATE_DEFAULT_REASONS.off),
+    reason(GATE_DEFAULT_REASONS.failedOpen),
     client
       .from('gate_verdicts')
       .select('created_at')
@@ -547,6 +609,7 @@ async function loadDiscard(client: SupabaseClient, clientId: string, w: RecordWi
   if (first.error) throw new Error(`gate_verdicts first: ${first.error.message}`)
   const recordedFrom = (first.data as { created_at?: string } | null)?.created_at ?? null
   return {
+    readable: true,
     judged,
     kept,
     setAside: judged - kept,
@@ -770,9 +833,11 @@ export function howSoundLine(input: RecordInputs): string {
  */
 export function discardCaveat(g: DiscardRecord): string {
   const parts: string[] = []
-  if (g.clearedByHeuristic > 0) parts.push(`${plural(g.clearedByHeuristic, 'video')} passed the quick check and were never looked at more closely`)
-  if (g.gateOff > 0) parts.push(`${plural(g.gateOff, 'video')} came in while the check was switched off`)
-  if (g.failedOpen > 0) parts.push(`${plural(g.failedOpen, 'video')} entered without a judgement because the check itself returned none`)
+  // Null is not zero: the three come off `reason`, which a tenant session may
+  // not read at all, and a caveat left unsaid is the honest answer there.
+  if ((g.clearedByHeuristic ?? 0) > 0) parts.push(`${plural(g.clearedByHeuristic ?? 0, 'video')} passed the quick check and were never looked at more closely`)
+  if ((g.gateOff ?? 0) > 0) parts.push(`${plural(g.gateOff ?? 0, 'video')} came in while the check was switched off`)
+  if ((g.failedOpen ?? 0) > 0) parts.push(`${plural(g.failedOpen ?? 0, 'video')} entered without a judgement because the check itself returned none`)
   return parts.length === 0 ? '' : `; ${parts.join(', and ')}`
 }
 
@@ -821,7 +886,14 @@ export function recordLines(input: RecordInputs): string[] {
 
   const g = input.discard
   lines.push(
-    g.recordedFrom == null
+    // READABILITY FIRST, and it is not the same question as recordedFrom.
+    // "Nothing was ever judged" is a fact about the workspace; "we do not show
+    // you this yet" is a fact about the product, and before M8 a tenant session
+    // reads the second as the first — the falsehood this line was printing to
+    // both live tenants, each with more than a thousand verdicts.
+    !g.readable
+      ? 'What we looked at and set aside is recorded, and we do not yet show it to you, so the share left out is not drawn here.'
+      : g.recordedFrom == null
       ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
       : g.judged === 0
         ? `Nothing was looked at and set aside in this window — the record of it begins ${g.recordedFrom}.`

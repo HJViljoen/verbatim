@@ -1,6 +1,7 @@
 import { embeddingCoverage } from '../agent/retrieve'
 import { YOUTUBE_REFRESH_NIGHTLY_CAP } from '../config'
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog } from '../config-log'
+import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
 import { parseSubreddits, subredditKey } from '../gather/subreddits'
 import { ANOMALY_CHECKS_TABLE, ANOMALY_FLAGS_TABLE, isMissingAnomalyFlags } from '../pipeline/anomaly-check'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
@@ -9,7 +10,8 @@ import { TABLE_DENOMINATORS } from '../reading/types'
 import { isMissingRecDecisions, REC_DECISIONS_TABLE } from '../rec-decisions'
 import { SHARE_BAND } from '../report-bands'
 import { YOUTUBE_REFRESH_DUE_DAYS } from '../retention/youtube-refresh'
-import { type createAdminClient, selectAll } from '../supabase-admin'
+import type { SessionContext } from '../auth'
+import { selectAll } from '../supabase-admin'
 import type {
   AnomalyInput,
   CommunityInput,
@@ -19,11 +21,25 @@ import type {
   UpdateInput,
 } from './types'
 
-// Reading the readiness inputs (Phase 0 WP10). Service role throughout: three
-// of the thirteen rows read tables a tenant session cannot see at all —
-// `gate_verdicts` is superadmin-only by policy, and the change log and the
-// decision ledger are written by the service role and read under RLS the page's
-// operator is not inside when viewing another workspace.
+// Reading the readiness inputs (Phase 0 WP10; the client re-read, Phase 1
+// WP16).
+//
+// ONE CLIENT PARAMETER, TWO ENFORCEMENT REGIMES. This module used to be
+// service-role by signature, on the grounds that three of the thirteen rows
+// read tables a tenant session cannot see. Two of those three were wrong: the
+// change log and the decision ledger each ship a tenant SELECT policy, and what
+// they are closed to is an OPERATOR VIEWING ANOTHER WORKSPACE — a different
+// problem, already solved in lib/auth.ts applyOperatorView, which hands such a
+// session the service-role client. `gate_verdicts` was the only genuinely
+// closed table, and M8 gives it a tenant policy with the scraped caption
+// withheld by column grant.
+//
+// So the parameter is now `SessionContext['supabase']`, which IS the
+// service-role client for an operator and the tenant's own client for a tenant
+// admin, and `/dashboard/ops/readiness` and Settings › Readiness run the same
+// code with no branch. The narrowing that used to live in the type — "this
+// module is service-role" — is stated here instead, because it stopped being
+// true and a type that lies is worse than a comment that does not.
 //
 // THREE MIGRATIONS ARE APPLIED BY HAND, so this module's job is as much about
 // what is NOT there as what is. Every read that touches an object those
@@ -77,7 +93,10 @@ function allRows<T>(result: { data: T[] | null; error: unknown }): T[] {
   return result.data ?? []
 }
 
-type Admin = ReturnType<typeof createAdminClient>
+/** Either client. Both are untyped Supabase clients (AGENTS.md: no `Database`
+ *  generic), so the reads below compile the same way against either; what
+ *  differs is whether RLS is applied, which is the point. */
+type Admin = SessionContext['supabase']
 
 /** Is the delivery record's bookkeeping there? One cheap probe rather than a
  *  failed wide read: `selectAll` flattens a PostgREST error into a plain Error
@@ -259,8 +278,28 @@ async function loadRetentionCohort(admin: Admin, clientId: string): Promise<{ co
 }
 
 /** Everything the thirteen rows are computed from, for one workspace. */
-export async function loadReadiness(admin: Admin, clientId: string, now: Date = new Date()): Promise<ReadinessInputs> {
+export async function loadReadiness(
+  admin: Admin,
+  clientId: string,
+  now: Date = new Date(),
+  options: { gate?: GateAccess } = {},
+): Promise<ReadinessInputs> {
   const nowIso = now.toISOString()
+
+  // Row 8 reads gate_verdicts, and that table answers differently to the two
+  // clients this module now takes (lib/gate-record.ts). A tenant session before
+  // M8 is EMPTIED by RLS rather than refused, so three zeros come back and the
+  // row would read "not recorded at all" about a workspace with 1,700 verdicts
+  // — and, being `missing` and owned by engineering, would then be withheld
+  // from Settings › Readiness with a sentence saying we have not built it.
+  // Probed here once, on M8's own object, rather than guessed at from a count.
+  const gateAccess = options.gate ?? 'service'
+  let gateReadable = true
+  if (gateAccess === 'tenant') {
+    const appeals = await admin.from(GATE_APPEALS_TABLE).select('id').limit(1)
+    if (isMissingGateAppeals(appeals.error)) gateReadable = false
+    else if (appeals.error) throw appeals.error
+  }
 
   const [clientRead, tcRead] = await Promise.all([
     admin.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -346,6 +385,7 @@ export async function loadReadiness(admin: Admin, clientId: string, now: Date = 
       gateRows,
       gateKept,
       gateFirstAt: (gateFirst?.created_at as string | undefined) ?? null,
+      gateReadable,
     },
     updates,
     slotsRecorded,

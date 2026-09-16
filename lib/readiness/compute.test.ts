@@ -92,7 +92,7 @@ function ossur(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     },
     reads: {
       analysed: 1596, speech: 798, translated: 208, onScreenText: 269, unflagged: 0,
-      gateRows: 1700, gateKept: 1051, gateFirstAt: '2026-08-23T04:20:00.000Z',
+      gateRows: 1700, gateKept: 1051, gateFirstAt: '2026-08-23T04:20:00.000Z', gateReadable: true,
     },
     updates: [
       { id: 'd346b0f7', status: 'completed', startedAt: '2026-09-13T04:06:38.483Z', completedAt: '2026-09-13T06:26:49.308Z' },
@@ -156,7 +156,7 @@ function sealand(over: Partial<ReadinessInputs> = {}): ReadinessInputs {
     },
     reads: {
       analysed: 1010, speech: 630, translated: 139, onScreenText: 333, unflagged: 0,
-      gateRows: 2777, gateKept: 1091, gateFirstAt: '2026-09-09T12:10:00.000Z',
+      gateRows: 2777, gateKept: 1091, gateFirstAt: '2026-09-09T12:10:00.000Z', gateReadable: true,
     },
     updates: [
       { id: 'cb0d97b2', status: 'partial', startedAt: '2026-09-13T10:03:04.451Z', completedAt: '2026-09-13T13:07:52.340Z' },
@@ -559,6 +559,21 @@ describe('how much was read', () => {
     const row = find(computeReadiness(inputs), 'read-depth')
     expect(row.status).toBe('missing')
     expect(row.notes[0]).toContain('is not recorded at all')
+  })
+
+  // A tenant session before M8 reads gate_verdicts as EMPTY, not as forbidden.
+  // Calling that `missing` said "not recorded at all" about 1,700 verdicts and
+  // then — missing, owned by engineering — withheld the whole row from the
+  // client's own page under a line saying we have not built this yet.
+  it('measures what it can and withholds the rest when the record is not open to the reader', () => {
+    const inputs = ossur({ reads: { ...ossur().reads, gateRows: 0, gateKept: 0, gateFirstAt: null, gateReadable: false } })
+    const row = find(computeReadiness(inputs), 'read-depth')
+    // Partly there, not in place: half of what this row measures was not
+    // measured, and it is still SHOWN, which is the point.
+    expect(row.status).toBe('partial')
+    expect(row.detail).toContain('Speech read on 798 of 1,596 videos')
+    expect(row.notes[0]).toContain('we do not yet show it to you')
+    expect(row.notes.some((n) => n.includes('is not recorded at all'))).toBe(false)
   })
 })
 
