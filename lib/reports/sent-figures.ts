@@ -283,6 +283,9 @@ export function isMissingSentFigures(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
+/** The grain, named where the write happens: `sent_figures`' primary key. */
+const SENT_FIGURES_CONFLICT = 'client_id,snapshot_id,audience,object_kind,object_id'
+
 /**
  * Write what this artefact printed. Returns how many rows were written, or null
  * where the record does not exist here yet.
@@ -293,11 +296,20 @@ export function isMissingSentFigures(error: unknown): boolean {
  * caller logs and carries on — the `keyword-discovery` precedent AGENTS.md
  * names for a record kept alongside a report.
  *
- * `ON CONFLICT DO NOTHING` rather than an upsert, and the grant is why: the
- * table gives the service role INSERT and no UPDATE, and `DO UPDATE` needs
- * UPDATE even on a row that does not conflict (the mistake `month_evidence_refs`
- * documents). A retry of the same send therefore writes nothing and succeeds,
- * which is the behaviour a retry wants.
+ * `ON CONFLICT DO NOTHING`, and the grant is why: the table gives the service
+ * role INSERT and no UPDATE, and `DO UPDATE` needs UPDATE even on a row that
+ * does not conflict (the mistake `month_evidence_refs` documents). A retry of
+ * the same send therefore writes nothing and succeeds, which is the behaviour a
+ * retry wants.
+ *
+ * AND IT TAKES `.upsert(…, { ignoreDuplicates: true })` TO GET THAT. `.insert()`
+ * sends a bare INSERT — postgrest-js 2.116's own documentation says "if any of
+ * the inserts fail, none of the rows are inserted" — so a second delivery of one
+ * snapshot raised 23505 and, being all-or-nothing, wrote none of the rows, not
+ * even the ones that were missing. `ignoreDuplicates` is the header that makes
+ * PostgREST emit DO NOTHING, and the conflict target is named rather than left
+ * to the primary key so the grain this table is keyed by is written down where
+ * the write happens.
  */
 export async function writeSentFigures(
   admin: SupabaseClient,
@@ -325,7 +337,9 @@ export async function writeSentFigures(
     artefact: r.artefact,
     reading_at: args.readingAt,
   }))
-  const { error } = await admin.from(SENT_FIGURES_TABLE).insert(payload)
+  const { error } = await admin
+    .from(SENT_FIGURES_TABLE)
+    .upsert(payload, { onConflict: SENT_FIGURES_CONFLICT, ignoreDuplicates: true })
   if (error) {
     if (isMissingSentFigures(error)) return null
     throw error
