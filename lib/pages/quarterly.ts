@@ -549,10 +549,16 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     subjectWindowFor(reading, clientId, quarter),
     subjectWindowFor(reading, clientId, prior),
     loadQuarterChecks(supabase, clientId, quarter),
+    // NAMED, NOT SWALLOWED. A record that cannot be read is printed as "could
+    // not be recovered" on the method page; an operator still needs to know
+    // why, and a bare `.catch(() => null)` left no trace anywhere.
     loadRecordInputs(reading, clientId, { kind: 'quarter', from: quarter.from, to: quarter.to }, {
       now: readingAt,
       gate: 'tenant',
-    }).catch(() => null),
+    }).catch((error: unknown) => {
+      console.error(`[pages] quarterly.record: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    }),
   ])
 
   return composeQuarterly({
