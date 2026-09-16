@@ -6,11 +6,15 @@ import { createAdminClient } from './supabase-admin'
 import { isPlatformAdmin } from './agent/access'
 import { WORKSPACE_COOKIE, parseWorkspaceCookie } from './workspaces'
 import type { User } from '@supabase/supabase-js'
+import type { Role } from './roles'
 
-export type Role = 'owner' | 'admin' | 'member'
-
-// Most-privileged first. Used for select options and validation.
-export const ROLES: readonly Role[] = ['owner', 'admin', 'member'] as const
+// The role vocabulary and the tenant gate live in lib/roles.ts, a leaf both
+// this file and lib/agent/access.ts can import — access.ts needs the gate and
+// this file needs access.ts's isPlatformAdmin, which was a cycle for as long as
+// the predicate lived here. Re-exported so every importer still reads them off
+// lib/auth.
+export { ROLES, canManageTenant } from './roles'
+export type { Role } from './roles'
 
 // What a platform admin is currently looking at. Null for every other user —
 // the field's presence is also what the UI keys the switcher off, so a normal
@@ -193,12 +197,3 @@ export async function getRouteSession(): Promise<SessionContext | null> {
   return applyOperatorView({ supabase, userId, email, profile })
 }
 
-// Tenant-level write/admin gate (settings, schedule, member management).
-// Platform superadmins used to be excluded here on the grounds that they
-// provision tenants through the service role rather than the tenant UI. The
-// workspace switcher changed that: an operator viewing another tenant arrives
-// with role 'owner' (see applyOperatorView), so they pass this gate the same
-// way a real owner does, and nothing downstream needs a second concept.
-export function canManageTenant(role: Role): boolean {
-  return role === 'owner' || role === 'admin'
-}

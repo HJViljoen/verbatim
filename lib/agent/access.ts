@@ -1,6 +1,5 @@
 import { createAdminClient } from '../supabase-admin'
-import { canManageTenant } from '../auth'
-import type { Role } from '../auth'
+import { canManageTenant, type Role } from '../roles'
 
 // Who may SEND to the Verbatim Agent.
 //
@@ -47,11 +46,15 @@ export async function isPlatformAdmin(userId: string): Promise<boolean> {
 // Team, the Studio and the schedule send route, so this is the product's
 // existing answer to "who may act for this workspace", not a new one.
 //
-// `canManageTenant` is imported from lib/auth.ts, which imports `isPlatformAdmin`
-// from here — a cycle, and a deliberate one: both bindings are function
-// declarations, so each module sees the other's before either finishes
-// evaluating, and duplicating the role test would be the worse trade (the gate
-// on Settings and this one must never disagree about what an admin is).
+// `canManageTenant` comes from lib/roles.ts, a leaf. It used to come from
+// lib/auth.ts, which imports `isPlatformAdmin` back from here — a cycle that
+// worked, because both bindings are function declarations and each module sees
+// the other's before either finishes evaluating, and one that had no reason to
+// exist: the predicate is a pure line over a role and needs none of the
+// cookies, clients and membership resolution auth.ts carries. Moving it keeps
+// the single definition (the gate on Settings and this one must never disagree
+// about what an admin is) without the cycle. lib/auth.ts re-exports it, so
+// every other caller is unchanged.
 //
 // The ROLE is checked first and the table only after, which is not only an
 // ordering: an owner or an admin never pays for the `platform_admins` read at
