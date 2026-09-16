@@ -10,13 +10,13 @@ import { loadViewerSnapshot, viewerHref, type ViewerSnapshot } from '@/lib/repor
 import { createAdminClient } from '@/lib/supabase-admin'
 import { getBaseUrl } from '@/lib/site'
 import { coverPlainText } from '@/lib/reports/cover'
-import type { CoverText, FigureTable } from '@/lib/reports/types'
+import type { CoverText } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
-import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates, type ListReach } from '@/lib/reports/archive'
+import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, printedFigures, readingLine, readingStampOf, sentFigures, withinDates, type ListReach, type StoredFigures } from '@/lib/reports/archive'
 import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
@@ -66,7 +66,10 @@ interface BuildRow {
   created_at: string
   report_id: string | null
   cover: CoverText | null
-  figures: FigureTable | null
+  /** EITHER SHAPE. A brief and a legacy arranged report freeze the PRINTED
+   *  table; WP17's weekly, WP18's monthly and WP20's quarterly freeze the
+   *  MEASURED one. `sentFigures` and `printedFigures` read both. */
+  figures: StoredFigures | null
   /** `data.reading` — the month a brief read (WP19); absent on everything
    *  built before item 43 and on every arranged report. */
   reading?: unknown
@@ -271,7 +274,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // `reading` and `readingAt` flat, under their aliases. Re-nesting it here
   // was what hid the bug: this one call site read correctly and the three on
   // the Built group and the cards did not.
-  interface SentSnapshot { id: string; created_at: string; figures: FigureTable | null; reading: unknown; readingAt: string | null }
+  interface SentSnapshot { id: string; created_at: string; figures: StoredFigures | null; reading: unknown; readingAt: string | null }
   let sentSnapshot: SentSnapshot | null = null
   if (selectedSend?.snapshot_id) {
     const { data: snap } = await supabase.from('report_snapshots')
@@ -475,7 +478,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <>
       <DetailHeader eyebrow="Built in the Studio" title={selectedBuild.title} meta={readingLine(readingStampOf(selectedBuild))} />
       <DetailSection>
-        {selectedBuild.cover && selectedBuild.figures && <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(selectedBuild.cover.body, selectedBuild.figures)}</p>}
+        {selectedBuild.cover && selectedBuild.figures && <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(selectedBuild.cover.body, printedFigures(selectedBuild.figures) ?? {})}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Link href={viewerHref(BASE, { group: 'built', item: selectedBuild.id }, selectedBuild.id)} scroll={false} className="text-[12px] font-medium underline underline-offset-2">Open the report</Link>
           {selectedBuild.artifacts.map((a) => (

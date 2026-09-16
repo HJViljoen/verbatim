@@ -1,4 +1,6 @@
 import { fullDate } from '../format'
+import { proseFigures } from '../prose/figures'
+import type { FigureTable as MeasuredFigures } from '../reading/verdicts'
 import { isOpaqueFigureKey, type Figure, type FigureTable } from './types'
 
 /**
@@ -287,14 +289,47 @@ export const HEADLINE_FIGURE_KEYS: readonly string[] = [
   'reading_month', 'conversations', 'videos', 'client_videos', 'positive_pct', 'client_share_pct',
 ]
 
-export function sentFigures(figures: FigureTable | null | undefined, max = 6): SentFigure[] {
+/**
+ * EITHER FIGURE TABLE, BECAUSE THE ARCHIVE READS ARTEFACTS OF BOTH SHAPES.
+ *
+ * `lib/reports/types.ts` holds a figure as it is PRINTED (`{label, value:
+ * '3.4%', kind}`) — a brief and a legacy arranged report carry that.
+ * `lib/reading/verdicts.ts` holds it as it is MEASURED (`{value: 3.4, unit,
+ * label}`) — and WP17's weekly, WP18's monthly and WP20's quarterly ALL carry
+ * that, because each is `mergeFigures(blocks.map(b => b.figures()))`.
+ *
+ * The filter below tests `typeof f.value === 'string'`, so a measured table
+ * yielded nothing and the Sent pane printed "This report stored no figure
+ * table." beside an artefact that stored a complete one — over every weekly,
+ * monthly and quarterly send this product makes, which is WP19's own Done-when
+ * unmet. The conversion is the one documented crossing, `proseFigures`, which
+ * WP19's brief path already uses.
+ */
+export type StoredFigures = FigureTable | MeasuredFigures
+
+/** Is this a MEASURED table? One figure whose `value` is a number settles it;
+ *  the two shapes never mix inside one artefact. */
+function isMeasured(figures: StoredFigures): figures is MeasuredFigures {
+  return Object.values(figures).some((f) => f != null && typeof (f as { value?: unknown }).value === 'number')
+}
+
+/** A stored table as the printed shape, whichever shape it was stored in.
+ *  The one conversion, in one place — every reader on the Reports page goes
+ *  through it. */
+export function printedFigures(figures: StoredFigures | null | undefined): FigureTable | null {
+  if (!figures) return null
+  return isMeasured(figures) ? proseFigures(figures) : (figures as FigureTable)
+}
+
+export function sentFigures(figures: StoredFigures | null | undefined, max = 6): SentFigure[] {
   if (!figures) return []
+  const printed = printedFigures(figures) as FigureTable
   const headline = (key: string) => {
     const i = HEADLINE_FIGURE_KEYS.indexOf(key)
     return i === -1 ? HEADLINE_FIGURE_KEYS.length : i
   }
   const rank = (f: Figure) => (f.kind === 'pct' ? 0 : f.kind === 'count' ? 1 : 2)
-  return Object.entries(figures)
+  return Object.entries(printed)
     .filter(([, f]) => f && typeof f.value === 'string' && f.value.length > 0)
     // A per-finding count is evidence for one sentence, not a headline; the
     // slots a cover may cite are what a reader recognises a report by.

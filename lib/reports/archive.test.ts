@@ -6,11 +6,13 @@ import {
   emptyGroupLine,
   listCap,
   parseDateFilter,
+  printedFigures,
   readingLine,
   readingStampOf,
   sentFigures,
   withinDates,
 } from './archive'
+import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from './types'
 
 describe('parseDateFilter', () => {
@@ -259,5 +261,30 @@ describe('sentFigures', () => {
     })
     expect(rows.map((r) => r.key).slice(0, 4)).toEqual(['reading_month', 'conversations', 'videos', 'client_share_pct'])
     expect(rows.map((r) => r.key)).not.toContain('o_2418f4d7_54a2_497e_8433_6cd89bc2322b_share')
+  })
+
+  // THERE ARE TWO FIGURE-TABLE SHAPES AND THE ARCHIVE READ ONE. WP17's weekly,
+  // WP18's monthly and WP20's quarterly all freeze the MEASURED table
+  // (`mergeFigures(blocks.map(b => b.figures()))`), whose values are numbers.
+  // The filter tested `typeof f.value === 'string'`, so every send this
+  // product makes yielded nothing and the Sent pane printed "This report
+  // stored no figure table." beside an artefact that stored a complete one.
+  it('reads a measured table as well as a printed one', () => {
+    const measured = mergeFigures([{
+      client_share_pct: { value: 8.8, unit: 'pct', label: 'share of the tracked conversation' },
+      videos: { value: 34, unit: 'videos', label: 'videos this month' },
+      month_change_pts: { value: -4.1, unit: 'pts', label: 'against last month' },
+    }])
+    const rows = sentFigures(measured)
+    expect(rows.map((r) => [r.key, r.value])).toEqual([
+      ['videos', '34'],
+      ['client_share_pct', '8.8%'],
+      ['month_change_pts', '-4.1 pts'],
+    ])
+  })
+
+  it('leaves a printed table exactly as it was frozen', () => {
+    expect(printedFigures(figures)).toBe(figures)
+    expect(printedFigures(null)).toBeNull()
   })
 })
