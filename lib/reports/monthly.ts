@@ -304,14 +304,33 @@ export function sentReadingLine(sent: SentReading, live: number): string | null 
  * NULL WHERE THERE IS NOTHING TO CONFIRM: no artefact was sent about that
  * month, or the one that was went out after the month had already closed, in
  * which case it printed the final figure and there is nothing to add.
+ *
+ * AND NULL WHERE THE MONTH HAS NOT CLOSED. The sentence says "has closed at",
+ * and the only guard it had was the SENT artefact's status — which says what
+ * was true when the mail went out and nothing about today. Nothing ties this
+ * artefact to the 1st: `sendsMonthly` is independent of cadence, an
+ * `every_update` schedule pointed at the monthly report sends it on a Sunday,
+ * and a preview or an in-app build can happen on any day of the month. On 10
+ * September that told a client "August has closed at 7.1%" while August was
+ * still filling and 7.1% was not final — which is the claim the frozen-month
+ * rules exist to make impossible. The reading's own state is what decides, so
+ * the caller passes it rather than a bare number.
  */
-export function confirmingLine(month: string, sent: SentReading | null, closed: number | null): string | null {
+export interface ClosedReading {
+  value: number
+  /** Whether the month the value was read off has actually frozen
+   *  (`MonthPoint.state === 'frozen'`, lib/reading/series.ts). */
+  frozen: boolean
+}
+
+export function confirmingLine(month: string, sent: SentReading | null, closed: ClosedReading | null): string | null {
   if (!sent || closed == null) return null
+  if (!closed.frozen) return null
   if (sent.monthStatus === 'frozen') return null
   const name = longMonth(month)
   const wasLevel = sent.unit === 'pct' ? fmtPct(sent.value) : fmtInt(sent.value)
-  const nowLevel = sent.unit === 'pct' ? fmtPct(closed) : fmtInt(closed)
-  return movedSince(sent, closed)
+  const nowLevel = sent.unit === 'pct' ? fmtPct(closed.value) : fmtInt(closed.value)
+  return movedSince(sent, closed.value)
     ? `${name} has closed at ${nowLevel}. The report of ${shortDate(sent.readingAt)} read ${wasLevel}; the rest of the month has since been counted.`
     : `${name} has closed at ${nowLevel}, which is what the report of ${shortDate(sent.readingAt)} read.`
 }

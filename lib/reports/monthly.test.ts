@@ -226,24 +226,35 @@ describe('the report of {date} read X', () => {
 })
 
 describe('next month’s confirming line', () => {
+  const closed = (value: number, frozen = true) => ({ value, frozen })
+
   it('says what the month closed at, and what we had said', () => {
-    expect(confirmingLine('2026-09', sent(), 22)).toBe(
+    expect(confirmingLine('2026-09', sent(), closed(22))).toBe(
       'September has closed at 22%. The report of 1 Oct read 19%; the rest of the month has since been counted.',
     )
   })
 
   it('confirms rather than corrects where the number held', () => {
-    expect(confirmingLine('2026-09', sent({ value: 22 }), 22)).toBe(
+    expect(confirmingLine('2026-09', sent({ value: 22 }), closed(22))).toBe(
       'September has closed at 22%, which is what the report of 1 Oct read.',
     )
   })
 
   it('has nothing to confirm where nothing was sent, or nothing has closed', () => {
-    expect(confirmingLine('2026-09', null, 22)).toBeNull()
+    expect(confirmingLine('2026-09', null, closed(22))).toBeNull()
     expect(confirmingLine('2026-09', sent(), null)).toBeNull()
   })
 
   it('adds nothing where the artefact already printed the final figure', () => {
-    expect(confirmingLine('2026-09', sent({ monthStatus: 'frozen' }), 22)).toBeNull()
+    expect(confirmingLine('2026-09', sent({ monthStatus: 'frozen' }), closed(22))).toBeNull()
+  })
+
+  // A month keeps filling for thirty days after it ends, and nothing ties this
+  // artefact to the 1st: an every_update schedule pointed at the monthly
+  // report sends it on a Sunday, and a preview can be built any day. Saying
+  // "August has closed at 7.1%" on 10 September is the claim the frozen-month
+  // rules exist to make impossible.
+  it('will not say a month has closed while it is still filling', () => {
+    expect(confirmingLine('2026-09', sent(), closed(22, false))).toBeNull()
   })
 })

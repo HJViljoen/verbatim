@@ -530,7 +530,13 @@ async function loadConfirming(
   const point = set.series
     .map((s) => pointsByMonth(s).get(last) ?? null)
     .find((p) => p != null)
-  const closed = point?.pct ?? null
+  // AND THE MONTH'S OWN STATE TRAVELS WITH THE NUMBER. A month keeps filling
+  // for thirty days after it ends, and nothing ties this artefact to the 1st:
+  // an `every_update` schedule pointed at the monthly report sends it on a
+  // Sunday, and a preview or an in-app build can happen on any day. Without
+  // the state, a build on 10 September told a reader "August has closed at
+  // 7.1%" while August was still filling.
+  const closed = point?.pct == null ? null : { value: point.pct, frozen: point.state === 'frozen' }
   const line = confirmingLine(last, sentReadingOf(led), closed)
   return line ? `${led.label} — ${line}` : null
 }
