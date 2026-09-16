@@ -628,7 +628,61 @@ select * from public.run_costs where run_id='<the run>';
 
 ---
 
-## 7 · Screenshots and the preview
+## 7 · Build each artefact once, then the screenshots
+
+**These four were stranded in the R1/R2 alternative** and belong on the single
+window too: a deploy that ships WP18–WP21's artefacts and never builds one has
+not seen any of them against real data.
+
+### 7.1 · The four briefs, once, for Össur
+
+Three are cards on `/dashboard/reports` (Sales · Marketing · Content) and the
+fourth, Leadership, is built in the Studio — `lib/reports/briefs.ts` says so on
+the page. From the command line, one at a time:
+
+```
+node --env-file=.env.local --import tsx scripts/build-document.ts --client <össur uuid> --role sales_brief
+# then --role market_brief · --role content_brief · --role leadership_brief
+```
+
+**This spends**: a real research-and-write build under a `$3` ceiling
+(`DOCUMENT_BUILD_BUDGET_USD`), so it is precondition 0.3's credits again, and
+`--questions` prints what it would ask without paying. Each build files a
+`report_builds` row and a snapshot — that is what the Reports page's **Built**
+group lists, and reading the four there is the check.
+
+### 7.2 · The quarterly review and the monthly report — through the preview
+
+`snapshotQuarterly` and `snapshotMonthly` are called by `runSchedule` and by
+nothing else: there is no operator command that files either without a send,
+and with recipients still empty (5.6 is deliberately last) an
+`/api/admin/schedules/run` returns `skipped: no recipients` rather than a
+build. So read each through **Settings › Reports and recipients → preview**
+(`GET /api/schedules/[id]/preview`, session only) — a dry build at the
+workspace's current data with "no PDF, no link, no send, no rows left behind".
+
+The quarterly needs a schedule whose cadence is `quarterly`; M8's
+`report_schedules_cadence_check` admits it and the Studio's picker offers it
+(WP20). Build it once for Össur and read it.
+
+**The first real monthly is 1 October**, not deploy day: it is a reading AS AT
+the month it names, and a monthly previewed mid-September reads a `filling`
+month and says so. Put 1 Oct in the diary with this line beside it — the first
+monthly send is the artefact nobody has seen against a frozen month.
+
+### 7.3 · The two retirements — decisions, not commands
+
+- **The old Reports route content stays for now.** 5.3 leaves the OLD report
+  standing so yesterday's artefacts still render; it is retired when nothing
+  needs to render from it, and that is a separate, dated act.
+- **`OLD_PAGES_RETIRE_ON` is `2026-11-30`** (`lib/config.ts`), read by
+  `lib/nav.ts` `retireDate()` and printed by `OldPageBanner` on
+  `/dashboard/market` and `/dashboard/competitive`. Changing it is a code
+  change with a test pinned to the date (`lib/nav.test.ts`), not a switch in
+  the product — so confirm on deploy day that the date on the banner is the
+  date you mean, and leave the Phase 2 cutover to Phase 2.
+
+### 7.4 · Screenshots and the preview
 
 - `node --env-file=.env.local --import tsx scripts/shot.ts` — the nine pages on
   both tenants, for Heinrich.
@@ -708,10 +762,12 @@ migrations order is the same here and for the same reason (§1's first
 paragraph): R1's window is where `main`'s flat-chunk freeze writer would meet
 M3's insert guard.
 
-**R2** — M9, M9.1, M10 · merge, push, READY, re-register · build each of the
-four briefs and the quarterly review once for Össur · the first monthly report
-on 1 Oct (reading as at) · retire the old Reports route content ·
-set `OLD_PAGES_RETIRE_ON` for the Phase 2 cutover · **then recipients.**
+**R2** — the code again (merge, push, READY, re-register) · then M9, M9.1,
+M10 · **§7 in full** — the four briefs and the quarterly review built once for
+Össur, the first monthly on 1 Oct, and the two retirements read rather than
+done · **then recipients.** (§7 was written only here until the WP22 fix pass;
+it is now on the single-window path, which is where an operator following
+sections 0–9 will meet it.)
 
 **What the split costs.** Three things. M9 is what gives
 `report_snapshots.reading_at` a column, and between R1 and R2 every weekly the
