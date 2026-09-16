@@ -32,6 +32,7 @@ import { PROSE_POLICY, type ProseSlot } from '../prose/scrub'
 //     <span data-copy="level">Dominant · 21 of 36 videos</span>
 //     <span data-copy="verdict">up 4 pts since August</span>
 //     <p data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</p>
+//     <p data-copy="quote">“I'm a double below knee and mine are very comf…”</p>
 //     <h3 data-copy="subject" data-slot="pass_b_theme">{theme.label}</h3>
 //
 // A `figure` nested inside a `prose` is the normal case and is how rule (a)
@@ -138,9 +139,9 @@ export const SLOT_ATTR = 'data-slot'
  * both. VO4's cast was written the wrong way round and is the reason this
  * paragraph exists.
  */
-export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict' | 'subject' | 'stored'
+export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict' | 'subject' | 'stored' | 'quote'
 
-const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict', 'subject', 'stored']
+const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict', 'subject', 'stored', 'quote']
 
 /** Does this slot's write-time policy delete an unearned direction sentence?
  *  Where it does, rule (c) still applies to its stored words. */
@@ -419,6 +420,16 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
   const exempt = marked.filter(
     (n) =>
       n.kind === 'verdict' ||
+      // A CUSTOMER'S OWN WORDS ARE NOT A CLAIM OF OURS. `directionHits` has
+      // encoded this since WP0 — it skips quoted spans, "inside quotation marks
+      // the words are the speaker's, not a claim of ours" — and rule (c) swept
+      // them anyway, because a rendered quote is markup and not a quoted span
+      // in a sentence. Reproduced on production: Össur's weekly.content fails
+      // rule (c) in app, email AND print, [direction-word] "double", from the
+      // verbatim comment "I'm a double below knee and mine are very comf…".
+      // Sealand passes only because no Sealand customer typed a movement word.
+      // The contract was not satisfiable on live data until this kind existed.
+      n.kind === 'quote' ||
       ((n.kind === 'stored' || n.kind === 'subject') &&
         n.slot != null && n.slot in PROSE_POLICY && !runsDirectionRule(n.slot)),
   )

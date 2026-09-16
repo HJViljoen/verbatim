@@ -272,6 +272,29 @@ describe('copyViolations — the `subject` node the prose policy table exempts',
   })
 })
 
+describe('copyViolations — `quote`, the customer’s own words', () => {
+  // REPRODUCED ON PRODUCTION: Össur's weekly.content fails rule (c) in app,
+  // email AND print — [direction-word] "double" — from the verbatim comment
+  // "I'm a double below knee and mine are very comf…". Sealand is clean only
+  // because no Sealand customer typed a movement word, so the contract was not
+  // satisfiable on live data until this kind existed.
+  const REAL = '“I’m a double below knee and mine are very comfortable.”'
+
+  it('lets a customer say a movement word, because it is not our claim', () => {
+    expect(copyViolations(`<p data-copy="quote">${REAL}</p>`)).toEqual([])
+  })
+
+  it('does not exempt the sentence around the quote', () => {
+    const bad = copyViolations(`<div><p>Objections are growing.</p><p data-copy="quote">${REAL}</p></div>`)
+    expect(bad.map((v) => v.rule)).toEqual(['direction-word'])
+    expect(bad[0].detail).toContain('growing')
+  })
+
+  it('is one of the kinds the marker check accepts', () => {
+    expect(copyViolations('<p data-copy="quote">a comment</p>').filter((v) => v.rule === 'unknown-kind')).toEqual([])
+  })
+})
+
 describe('copyViolations — `stored`, the model prose this page read out of a column', () => {
   // Phase 1 WP14. Both examples are production strings, not inventions: the
   // first is a recommendation title on Össur, the second a question insight

@@ -123,9 +123,9 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
           <tr>
             <td width={2} style={{ background: '#e5e2dc', fontSize: 1 }}>&nbsp;</td>
             <td style={{ padding: '2px 0 2px 10px' }}>
-              <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: '#1c1b19' }}>“{quote.text}”</div>
+              <div data-copy="quote" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 14, fontStyle: 'italic', lineHeight: '1.45', color: '#1c1b19' }}>“{quote.text}”</div>
               {english && (
-                <div style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 13, lineHeight: '1.45', color: '#55524c', marginTop: 4 }}>{english}</div>
+                <div data-copy="quote" style={{ fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 13, lineHeight: '1.45', color: '#55524c', marginTop: 4 }}>{english}</div>
               )}
               {label && (
                 <div style={{ fontFamily: 'ui-monospace, Menlo, Consolas, monospace', fontSize: 10.5, color: '#8a867e', marginTop: 3 }}>{label}</div>
@@ -141,9 +141,14 @@ export function QuoteBlock({ quote, mode = 'app', cite }: QuoteBlockProps): Reac
   const big = mode === 'print'
   return (
     <blockquote className={big ? 'max-w-[66ch] rounded-lg bg-inner px-5 py-3.5' : 'border-l-2 border-border pl-3'}>
-      <p className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[13.5px] leading-[1.45] text-foreground'}>“{quote.text}”</p>
+      {/* THE SPEAKER'S WORDS, MARKED AS THEIRS. See the `quote` kind in
+          lib/test/copy-contract.ts: rule (c) is about what the PRODUCT claims,
+          and a customer who writes "I'm a double below knee" is not claiming a
+          movement. `directionHits` has skipped quoted spans since WP0 for the
+          same reason; a rendered quote needed the marker to say so. */}
+      <p data-copy="quote" className={big ? 'font-serif text-[15px] italic leading-[1.5] text-secondary-foreground' : 'font-serif text-[13.5px] leading-[1.45] text-foreground'}>“{quote.text}”</p>
       {english && (
-        <p className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : 'mt-1.5 font-serif text-[12.5px] leading-[1.45] text-muted-foreground'}>{english}</p>
+        <p data-copy="quote" className={big ? 'mt-2 max-w-[66ch] font-serif text-[13.5px] leading-[1.5] text-muted-foreground' : 'mt-1.5 font-serif text-[12.5px] leading-[1.45] text-muted-foreground'}>{english}</p>
       )}
       {label && <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">{label}</p>}
       {cite && <footer className="mt-1 font-mono text-[10.5px] text-muted-foreground">{cite}</footer>}
