@@ -5,7 +5,7 @@ import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   buildStandingsBlock, changeNote, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
-  competitiveUnlockRows, mixLine, questionsEmpty, rivalState, storedDenominators, trackingRules,
+  competitiveUnlockRows, mixLine, questionsEmpty, rivalState, splitKeysCaveat, storedDenominators, trackingRules,
   type StandingsMonthRow,
 } from './competitive-surface'
 
@@ -116,6 +116,14 @@ describe('storedDenominators — one line per rival, under the name it wears now
     )!
     expect(out).toHaveLength(1)
     expect(out[0].videos).toBe(7)
+    // AND SAYS SO. buildSeries records `splitMonths` and prints "Part of this
+    // month is filed under another name for this one"; this copied its
+    // first-wins rule and not its second half, so CO2 would have printed a
+    // partial share as fact on a rename month while every buildSeries surface
+    // said otherwise.
+    expect(out[0].split).toBe(true)
+    expect(splitKeysCaveat(out)).toBe('Part of Aug 2026 is filed under another name for this rival, so the figure here is only part of it.')
+    expect(splitKeysCaveat([{ month: '2026-08-01' }])).toBeNull()
   })
 
   it('keeps only the months on the axis, and says nothing rather than [] when the tables are absent', () => {

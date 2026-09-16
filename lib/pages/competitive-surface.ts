@@ -490,6 +490,9 @@ interface StoredDenominatorRow {
   dual_mention: number | null
   status: MonthStatus
   run_id: string | null
+  /** This month held a SECOND frozen row under another of this rival's names,
+   *  and the figure here is only part of it. See `storedDenominators`. */
+  split?: boolean
 }
 
 interface RivalVideo {
@@ -701,17 +704,46 @@ export function storedDenominators(
   const onAxis = new Set(months.map(monthStartOf))
   const rows = (history.denominators as unknown as StoredDenominatorRow[])
     .filter((d) => onAxis.has(monthStartOf(d.month)))
+  // FIRST WINS, AND THE SECOND ROW IS RECORDED RATHER THAN DROPPED IN SILENCE.
+  // This copies `buildSeries`' rule (lib/reading/series.ts) and used to copy
+  // only its first half. That file explains why a second row for one month is
+  // neither summed nor swallowed — `videos` counts DISTINCT videos and the two
+  // keys' sets overlap, so a sum overstates — and then records `splitMonths`,
+  // which becomes a visible label: "Part of this month is filed under another
+  // name for this one, so the figure here is only part of it." Without it CO2
+  // would print a partial share as fact on a rename month while every
+  // buildSeries surface said otherwise.
+  //
+  // Not reachable today — no logged rename on production, M1 unapplied, and
+  // series.ts says it could not construct the state from the shipped writers —
+  // which is exactly the argument 2e94db6's own commit message makes about the
+  // bug it was fixing. `first` also resolves to whichever key `stitchRenames`
+  // orders first, so which of the two frozen readings survives is not a
+  // judgement; saying so is the point of the label.
   const out: StoredDenominatorRow[] = []
   for (const group of stitchRenames(rows, history.renames)) {
     const seen = new Set<string>()
+    const split = new Set<string>()
+    const kept: StoredDenominatorRow[] = []
     for (const p of group.points) {
       const month = monthStartOf(p.month)
-      if (seen.has(month)) continue
+      if (seen.has(month)) { split.add(month); continue }
       seen.add(month)
-      out.push({ ...p, month, audience: group.audience })
+      kept.push({ ...p, month, audience: group.audience })
     }
+    for (const row of kept) out.push(split.has(row.month) ? { ...row, split: true } : row)
   }
   return out.sort((a, b) => a.month.localeCompare(b.month) || a.audience.localeCompare(b.audience))
+}
+
+/** The one sentence CO2 prints for every month whose reading is only part of
+ *  itself — collapsed, never one per bar (§7's rule). */
+export function splitKeysCaveat(rows: readonly { month: string; split?: boolean }[]): string | null {
+  const months = [...new Set(rows.filter((r) => r.split).map((r) => r.month))].sort()
+  if (months.length === 0) return null
+  const labels = months.map((m) => monthName(m))
+  const which = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`
+  return `Part of ${which} is filed under another name for this rival, so the figure here is only part of it.`
 }
 
 /** The columns a rule needs, and no more: `config_changes.before` and `.after`
@@ -934,7 +966,7 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     denominators,
     rules: trackingRules(input.changes, input.axis),
     dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
-    caveat: comparabilityCaveat(denominators),
+    caveat: [comparabilityCaveat(denominators), splitKeysCaveat(denominators)].filter(Boolean).join(' ') || null,
     // NO "EVERY ROW UNOBSERVED" SENTENCE. There was one, and it read
     // `Nothing was ${NOT_OBSERVED} in ${month}.` — "Nothing was not observed in
     // Oct 2026", which states the opposite of what it means. It could only
