@@ -34,13 +34,32 @@ describe('Market · every block, every mode, every state', () => {
     }
   })
 
-  it('prints no direction word anywhere on the page', () => {
+  it('prints no direction word of its own anywhere on the page', () => {
+    // Of its OWN. A recommendation's title is Pass D-b's imperative
+    // ("Increase Content Volume…") and is rendered as `stored` under that
+    // slot's policy; what this asserts is that nothing CODE writes claims a
+    // direction. So the stored nodes are cut before the sweep, exactly as the
+    // copy contract cuts them.
     for (const block of MARKET_BLOCKS) {
       for (const data of STATES) {
-        const text = renderText(block.render(data, 'app', ctx))
-        expect(text).not.toMatch(/\b(gaining|fading|rising|climbing|slipping|growing)\b/i)
+        const markup = render(block.render(data, 'app', ctx))
+        const text = renderText(markup.replace(/<([a-z]+)[^>]*data-copy="stored"[^>]*>[\s\S]*?<\/\1>/g, ' '))
+        expect(text).not.toMatch(/\b(gaining|fading|rising|climbing|slipping|growing|increase|improve)\b/i)
       }
     }
+  })
+
+  it('renders the model\u2019s own words as stored, naming the call that wrote them', () => {
+    // The fixtures carry production strings on purpose: a recommendation title
+    // with a direction word and a conclusion with a product name that has a
+    // digit in it. Sanitised fixtures made these blocks pass a contract they
+    // broke on every real tenant.
+    const markup = render(marketAdvice.render(marketFixture(), 'app', ctx))
+    expect(markup).toContain('Increase Content Volume to Improve Share of Voice')
+    expect(markup).toContain('data-slot="pass_d_b_recommendation"')
+    const conclusions = render(marketConclusions.render(marketFixture(), 'app', ctx))
+    expect(conclusions).toContain('Showcase Innovations in 3D Printed Prosthetics')
+    expect(conclusions).toContain('data-slot="pass_d_a_insight"')
   })
 
   it('declares no figures — nothing on this surface is a reading of a month', () => {

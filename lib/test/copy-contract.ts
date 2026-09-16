@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { render, markupText } from './render'
 import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibration'
+import { PROSE_POLICY, type ProseSlot } from '../prose/scrub'
 
 // The copy-and-figures contract every block is tested against, from WP10 on
 // (Phase 1 WP0, decision X). Three rules, and they are the three the product
@@ -30,6 +31,7 @@ import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibr
 //     <p data-copy="prose">{brief.before}<span data-copy="figure">21</span>{brief.after}</p>
 //     <span data-copy="level">Dominant · 21 of 36 videos</span>
 //     <span data-copy="verdict">up 4 pts since August</span>
+//     <p data-copy="stored" data-slot="pass_d_b_recommendation">{row.title}</p>
 //
 // A `figure` nested inside a `prose` is the normal case and is how rule (a)
 // stays satisfiable: the checker takes each prose node's OWN words — the text
@@ -45,13 +47,66 @@ import { DIRECTION_WORDS as CALIBRATED_DIRECTION_WORDS, FRAMED } from '../calibr
 // Unmarked markup is not exempt from rule (c): a direction word anywhere on a
 // block that is not inside a verdict node fails, which is the point — the rule
 // is about the whole page, not about the nodes someone remembered to mark.
+//
+// ---- `stored`, and why it exists (Phase 1 WP14) -----------------------------
+//
+// `prose` means "the model wrote this HERE, for this page, and code composed
+// the sentence around it" — the interpretation, the brief, the cover. Rules (a)
+// and (c) are exactly right for that node, and the figure tokens make them
+// satisfiable.
+//
+// `stored` is the OTHER kind of model prose, and the product is full of it: a
+// recommendation's title, a market insight's description, a question insight's
+// words, a say-vs-hear claim. Those strings were written by a model call at
+// some past update, adjudicated THEN by that call's slot policy
+// (lib/prose/scrub.ts PROSE_POLICY), and read back out of a column here. Two
+// things follow, and both were live defects on Market and Competitive before
+// this kind existed:
+//
+//   · RULE (a) CANNOT BE RE-RUN AT RENDER. The digit rule's escape hatch is
+//     `allowTokens` — product names that carry a digit, mined from THAT RUN's
+//     own inputs (3R80, C-Leg 4, Allpa 32L). A renderer holds no run and no
+//     allow-list, so re-checking digits here can only produce false positives
+//     on names it has no way to recognise. Measured on production: "Viewers
+//     ask about the specific prosthetic model shown (3r85 or 3r80)" and
+//     "backpacks like the Cotopaxi Allpa 32L" both fail rule (a) and both are
+//     correct copy. So a `stored` node is exempt from (a); the slot's own
+//     scrubber is where a fabricated figure is caught, at write time.
+//   · RULE (c) APPLIES ONLY WHERE THE SLOT RUNS IT. `PROSE_POLICY` gives the
+//     recommendation, insight and question slots `digits` and NOT `direction`,
+//     on a measured trade written down beside the table: on a recommendation
+//     "Increase" is an imperative addressed to the reader ("Increase Content
+//     Volume to Improve Share of Voice"), not a claim that something is going
+//     up, and deleting one recommendation in fifteen to catch four leaks is
+//     the wrong trade. A render-time rule that deletes what the write-time
+//     policy deliberately keeps is the product enforcing two different
+//     contracts on one string. So a `stored` node is excised from the rule (c)
+//     sweep exactly when its slot's policy is `none` or `digits` — and NOT
+//     when the policy is `direction` or `both`, where the sentence should
+//     already have been deleted before storage and a direction word means the
+//     scrubber failed.
+//
+// THE EXEMPTION NAMES ITSELF. A `stored` node MUST carry `data-slot` naming a
+// slot in `PROSE_SLOTS`, so the exemption is auditable — a reader sees which
+// model call wrote the words and can look up what was adjudicated. A `stored`
+// node with no slot, or an unknown one, is a violation (`unknown-slot`) and not
+// a quiet pass: this is an escape hatch, and an escape hatch nobody can see the
+// shape of is just a hole.
 
 /** The attribute a block marks a node with. */
 export const COPY_ATTR = 'data-copy'
 
-export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict'
+/** The attribute a `stored` node names its model call with. */
+export const SLOT_ATTR = 'data-slot'
 
-const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict']
+export type CopyKind = 'prose' | 'figure' | 'level' | 'verdict' | 'stored'
+
+const KINDS: readonly CopyKind[] = ['prose', 'figure', 'level', 'verdict', 'stored']
+
+/** Does this slot's write-time policy delete an unearned direction sentence?
+ *  Where it does, rule (c) still applies to its stored words. */
+const runsDirectionRule = (slot: string): boolean =>
+  PROSE_POLICY[slot as ProseSlot] === 'direction' || PROSE_POLICY[slot as ProseSlot] === 'both'
 
 export interface CopyNode {
   kind: CopyKind
@@ -59,9 +114,14 @@ export interface CopyNode {
   text: string
   /** The node's own words — the text of every marked descendant removed. */
   ownText: string
+  /** The model call that wrote these words, on a `stored` node. Null anywhere
+   *  else, where provenance is the page's own. */
+  slot: string | null
 }
 
-export type CopyRule = 'prose-digit' | 'prose-figure-token' | 'level-denominator' | 'direction-word' | 'unknown-kind' | 'unscanned-marker'
+export type CopyRule =
+  | 'prose-digit' | 'prose-figure-token' | 'level-denominator' | 'direction-word'
+  | 'unknown-kind' | 'unscanned-marker' | 'unknown-slot'
 
 export interface CopyViolation {
   rule: CopyRule
@@ -111,6 +171,8 @@ const TAG_RE = /<(\/?)([a-zA-Z][^\s/>]*)((?:[^>"']|"[^"]*"|'[^']*')*?)(\/?)>/g
 
 interface Marked {
   kind: CopyKind
+  /** `data-slot`, verbatim, or null. */
+  slot: string | null
   /** Index of the opening tag. */
   start: number
   /** Index just past the opening tag. */
@@ -124,6 +186,7 @@ interface Marked {
 interface Open {
   name: string
   kind: CopyKind | null
+  slot: string | null
   start: number
   innerStart: number
 }
@@ -152,14 +215,14 @@ function scan(markup: string): Marked[] {
       while (stack.length > depth) {
         const open = stack.pop()!
         if (open.kind) {
-          found.push({ kind: open.kind, start: open.start, innerStart: open.innerStart, innerEnd: m.index, end: m.index + whole.length })
+          found.push({ kind: open.kind, slot: open.slot, start: open.start, innerStart: open.innerStart, innerEnd: m.index, end: m.index + whole.length })
         }
       }
       continue
     }
 
     if (selfClose || VOID.has(name)) continue
-    stack.push({ name, kind: kindOf(attrs), start: m.index, innerStart: m.index + whole.length })
+    stack.push({ name, kind: kindOf(attrs), slot: slotOf(attrs), start: m.index, innerStart: m.index + whole.length })
   }
 
   return found.sort((a, b) => a.start - b.start)
@@ -176,6 +239,7 @@ export function copyNodes(markup: string): CopyNode[] {
     const outer = children.filter((c) => !children.some((p) => p !== c && c.start >= p.start && c.end <= p.end))
     return {
       kind: n.kind,
+      slot: n.slot,
       text: markupText(clean.slice(n.innerStart, n.innerEnd)),
       ownText: markupText(cut(clean, n.innerStart, n.innerEnd, outer.map((c) => [c.start, c.end] as [number, number]))),
     }
@@ -186,8 +250,8 @@ export function copyNodes(markup: string): CopyNode[] {
  *  all `renderToStaticMarkup` ever emits, but a hand-written fixture reaches
  *  for single ones, and a marker the reader cannot SEE is a rule that silently
  *  does not apply. */
-function markerRe(flags: string): RegExp {
-  return new RegExp(`${COPY_ATTR}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, flags)
+function markerRe(flags: string, attr: string = COPY_ATTR): RegExp {
+  return new RegExp(`${attr}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, flags)
 }
 
 function markerValue(m: RegExpExecArray): string {
@@ -198,6 +262,14 @@ function kindOf(attrs: string): CopyKind | null {
   const m = markerRe('i').exec(attrs)
   const value = m ? markerValue(m) : undefined
   return value && (KINDS as readonly string[]).includes(value) ? (value as CopyKind) : null
+}
+
+/** `data-slot`, verbatim. Never validated here — an unknown slot has to reach
+ *  `copyViolations` to be REPORTED, and a slot silently dropped to null would
+ *  read as "no slot declared", which is a different sentence. */
+function slotOf(attrs: string): string | null {
+  const m = markerRe('i', SLOT_ATTR).exec(attrs)
+  return m ? markerValue(m) || null : null
 }
 
 /** The declared `data-copy` values a block used, valid or not — so an
@@ -264,12 +336,27 @@ export function copyViolations(input: ReactNode | string): CopyViolation[] {
     if (n.kind === 'level' && !DENOMINATOR_RE.test(n.text)) {
       bad.push({ rule: 'level-denominator', text: n.text, detail: 'a calibrated level with no "of N" — a word without its evidence is a score' })
     }
+    // A `stored` node buys two exemptions and pays for them by naming the
+    // model call that wrote the words. An unnamed one is an unaudited hole.
+    if (n.kind === 'stored' && !(n.slot != null && n.slot in PROSE_POLICY)) {
+      bad.push({
+        rule: 'unknown-slot',
+        text: n.text.slice(0, 80),
+        detail: n.slot == null
+          ? `${COPY_ATTR}="stored" with no ${SLOT_ATTR} — name the prose slot that wrote these words`
+          : `${SLOT_ATTR}="${n.slot}" is not a slot in PROSE_SLOTS (lib/prose/scrub.ts)`,
+      })
+    }
   }
 
-  // (c) The whole block, minus the verdict nodes that are allowed the word.
+  // (c) The whole block, minus the verdict nodes that are allowed the word and
+  // the stored nodes whose slot policy never ran the rule (see the header).
   let rest = markup
-  const verdicts = scan(markup).filter((n) => n.kind === 'verdict')
-  const outermost = verdicts.filter((n) => !verdicts.some((p) => p !== n && n.start >= p.start && n.end <= p.end))
+  const marked = scan(markup)
+  const exempt = marked.filter(
+    (n) => n.kind === 'verdict' || (n.kind === 'stored' && n.slot != null && n.slot in PROSE_POLICY && !runsDirectionRule(n.slot)),
+  )
+  const outermost = exempt.filter((n) => !exempt.some((p) => p !== n && n.start >= p.start && n.end <= p.end))
   for (const n of [...outermost].sort((x, y) => y.start - x.start)) rest = rest.slice(0, n.start) + ' ' + rest.slice(n.end)
   const restText = markupText(rest)
   const re = directionRe()

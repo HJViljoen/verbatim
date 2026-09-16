@@ -20,10 +20,15 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 // ?themes=` narrows on; the registry id is the cross-run identity (AGENTS.md)
 // and is not what this link is for — it is a filter on the update's own themes.
 //
-// NO DIGIT IN THE MODEL'S SENTENCE. The title and the description are Pass D-a's
-// words and are marked `prose`; the count beside them is code's and is marked
-// `figure`. 22 of 135 stored conclusions carry a numeral (gap-05 §2) and none of
-// today's twelve do, so this contract is a guard rather than a repair.
+// THE MODEL'S WORDS ARE MARKED `stored`, NOT `prose`. The title and the
+// description are Pass D-a's, written at some past update and read back out of
+// a column; `prose` means "composed for this page", and the difference is not
+// pedantry — 22 of 135 stored conclusions carry a numeral (gap-05 §2) and one
+// of today's says "before curiosity turns into distrust or drop-off", so
+// marking them `prose` fails rules (a) and (c) on correct copy. The marker
+// names the slot (`pass_d_a_insight`, policy `digits`), so a reader can see
+// what was adjudicated and what was not. The count beside them is code's and
+// stays `figure`.
 
 function Row({ row, mode, appUrl }: { row: ConclusionRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'
@@ -43,9 +48,9 @@ function Row({ row, mode, appUrl }: { row: ConclusionRow; mode: RenderMode; appU
   if (email) {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
+        <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
         <div style={{ marginTop: 3 }}><TierChip tier={row.tier} mode={mode} /> {count}</div>
-        <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 3 }}>{row.description}</div>
+        <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 3 }}>{row.description}</div>
         {chips.length > 0 ? <div style={{ marginTop: 3 }}>{chips}</div> : null}
       </div>
     )
@@ -53,9 +58,9 @@ function Row({ row, mode, appUrl }: { row: ConclusionRow; mode: RenderMode; appU
 
   return (
     <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">
-      <p data-copy="prose" className="m-0 text-[13px] font-medium">{row.title}</p>
+      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[13px] font-medium">{row.title}</p>
       <span className="flex flex-wrap items-center gap-2"><TierChip tier={row.tier} mode={mode} /> {count}</span>
-      <p data-copy="prose" className="m-0 text-[12.5px] text-secondary-foreground">{row.description}</p>
+      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[12.5px] text-secondary-foreground">{row.description}</p>
       {chips.length > 0 ? <span className="flex flex-wrap items-center gap-1.5">{chips}</span> : null}
     </div>
   )

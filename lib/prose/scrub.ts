@@ -358,7 +358,17 @@ function clausesOf(sentence: string): string[] {
  * step_2c_event_explanation, report_cover, document_write. `pass_b_theme` and
  * `agent_interpret` are `none` and need no wiring.
  *
- * NOT WIRED YET, and each for a stated reason: `agent_answer`, `ask_verdict`,
+ * NOT WIRED YET, and each for a stated reason: `pass_a_audience_insight` is
+ * the slot this table was missing — Pass A writes `audience_insights.title`
+ * and `.description`, which Competitive's CO5 puts in front of a client
+ * verbatim, and nothing had ever named it here. It is `digits` because that is
+ * what it should get, and it is unwired because Pass A runs once per video at
+ * corpus scale with no figure table and no run allow-list in hand at the call
+ * site; wiring it means carrying `allowTokens` into the per-video loop, which
+ * is item 9's remaining half rather than a line. Until then the breach is
+ * visible where it lands: a `data-copy="stored"` node naming this slot
+ * (lib/test/copy-contract.ts) says out loud that these words were adjudicated
+ * by nothing. Then: `agent_answer`, `ask_verdict`,
  * `ask_judge` and `ask_extract_title` wait for WP21, which is where Ask gets
  * the figure table it actually holds — its answers count things, and the digit
  * rule with an empty table would delete a truthful answer to "how many".
@@ -366,6 +376,7 @@ function clausesOf(sentence: string): string[] {
  * (WP8, WP18, WP20); `composeInterpretation` runs their policy already.
  */
 export const PROSE_SLOTS = [
+  'pass_a_audience_insight',
   'pass_b_theme',
   'pass_c_finding',
   'pass_d_a_insight',
@@ -428,6 +439,7 @@ export type ProsePolicy = 'none' | 'digits' | 'direction' | 'both'
  * slot needs, and item 40's explainer is built on tokens from the start.
  */
 export const PROSE_POLICY: Record<ProseSlot, ProsePolicy> = {
+  pass_a_audience_insight: 'digits',
   pass_b_theme: 'none',
   pass_c_finding: 'digits',
   pass_d_a_insight: 'digits',

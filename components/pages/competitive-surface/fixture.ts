@@ -97,7 +97,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       rows: [
         {
           id: 'q1',
-          text: 'Commenters ask where the socket is fitted and whether a clinic near them carries it.',
+          text: 'Viewers ask about the specific prosthetic model shown (3r85 or 3r80) and where to buy it.',
           platform: 'tiktok',
           videoHref: 'https://www.tiktok.com/@x/video/1',
           quotes: [{ ref: 'e:1', text: 'Where can I get one of these fitted in Ireland?', lang: 'en', english: null }],

@@ -24,6 +24,14 @@ describe('Competitive · every block, every mode, every state', () => {
     }
   })
 
+  it('renders a question in the analysis\u2019s own words, naming the call that wrote them', () => {
+    // A production string: the model numbers are names, not figures, and the
+    // slot they are marked under is the one Pass A never had.
+    const markup = render(competitiveQuestions.render(competitiveFixture(), 'app', ctx))
+    expect(markup).toContain('3r85 or 3r80')
+    expect(markup).toContain('data-slot="pass_a_audience_insight"')
+  })
+
   it('is email-safe: tables, no classes, no CSS variables', () => {
     for (const block of COMPETITIVE_BLOCKS) {
       const markup = render(block.render(competitiveFixture(), 'email', ctx))

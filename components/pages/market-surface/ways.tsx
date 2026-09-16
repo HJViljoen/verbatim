@@ -62,18 +62,18 @@ function Claim({ claim, mode }: { claim: ClaimRow; mode: RenderMode }) {
   if (email) {
     return (
       <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{claim.youSay}</div>
+        <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{claim.youSay}</div>
         <div style={{ marginTop: 2 }}>{verdict}</div>
-        {claim.theySay ? <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
+        {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
       </div>
     )
   }
 
   return (
     <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 pt-2">
-      <p data-copy="prose" className="m-0 text-[12.5px]">{claim.youSay}</p>
+      <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[12.5px]">{claim.youSay}</p>
       <span className="flex flex-wrap items-center gap-2">{verdict}</span>
-      {claim.theySay ? <p data-copy="prose" className="m-0 text-[12px] text-secondary-foreground">{claim.theySay}</p> : null}
+      {claim.theySay ? <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[12px] text-secondary-foreground">{claim.theySay}</p> : null}
     </div>
   )
 }
@@ -102,7 +102,7 @@ export const marketWays: Block<MarketSurfaceData> = {
             what it does; a control in an export is a control nobody can press. */}
         {mode === 'app' && w.acceptable ? (
           <div className="flex min-w-0 flex-col gap-1">
-            <p className="m-0 text-[12px] text-secondary-foreground">The oldest piece of advice you have not decided on: {w.acceptable.title}</p>
+            <p className="m-0 text-[12px] text-secondary-foreground">The oldest piece of advice you have not decided on: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span></p>
             <AcceptAdviceButton lineageId={w.acceptable.lineageId} title={w.acceptable.title} />
           </div>
         ) : null}

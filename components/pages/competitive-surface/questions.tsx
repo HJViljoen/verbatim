@@ -28,6 +28,14 @@ import { mixLine, type CompetitiveSurfaceData, type QuestionRow } from '@/lib/pa
 // A QUESTION IS DATED BY THE COMMENT BEHIND IT. See the loader's header: an
 // insight's `created_at` is a run's clock, and this product dates a period by
 // the comment.
+//
+// THE QUESTION'S WORDS ARE `stored`, NAMING `pass_a_audience_insight`. They are
+// Pass A's, and this block is what made the product notice that Pass A was
+// never in the prose-policy table at all (lib/prose/scrub.ts) — so these words
+// have been adjudicated by NOTHING, and the marker says so rather than
+// pretending a render-time regex is the adjudication. On this data the
+// difference is every question naming a model number: "3r85 or 3r80",
+// "Cotopaxi Allpa 32L", "Gregory Terros 28".
 
 function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
   const email = mode === 'email'
@@ -36,7 +44,7 @@ function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
   if (email) {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{row.text}</div>
+        <div data-copy="stored" data-slot="pass_a_audience_insight" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{row.text}</div>
         {cite ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 2 }}>{cite}</div> : null}
         {row.quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
       </div>
@@ -45,7 +53,7 @@ function Question({ row, mode }: { row: QuestionRow; mode: RenderMode }) {
 
   return (
     <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">
-      <p data-copy="prose" className="m-0 text-[12.5px]">{row.text}</p>
+      <p data-copy="stored" data-slot="pass_a_audience_insight" className="m-0 text-[12.5px]">{row.text}</p>
       {cite ? <span className="text-[11px] text-muted-foreground">{cite}</span> : null}
       {row.quotes.map((q) => <BlockQuote key={q.ref} quote={q} mode={mode} />)}
     </div>

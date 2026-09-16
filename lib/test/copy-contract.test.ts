@@ -218,3 +218,56 @@ describe('assertCopyContract', () => {
     expect(message).toContain('direction-word')
   })
 })
+
+describe('copyViolations — `stored`, the model prose this page read out of a column', () => {
+  // Phase 1 WP14. Both examples are production strings, not inventions: the
+  // first is a recommendation title on Össur, the second a question insight
+  // under Ottobock's content. Both fail rules (a) and (c) as `prose`, and both
+  // are correct copy — see the header of copy-contract.ts.
+  const TITLE = 'Increase Content Volume to Improve Share of Voice'
+  const QUESTION = 'Viewers ask about the specific prosthetic model shown (3r85 or 3r80) and where to buy it.'
+
+  it('exempts a digit inside a name — the run\'s allow-list is not in a renderer\'s hand', () => {
+    expect(copyViolations(`<p data-copy="stored" data-slot="pass_a_audience_insight">${QUESTION}</p>`)).toEqual([])
+    expect(copyViolations(`<p data-copy="prose">${QUESTION}</p>`).map((v) => v.rule)).toEqual(['prose-digit'])
+  })
+
+  it('exempts a direction word where the slot policy never deleted one', () => {
+    expect(copyViolations(`<p data-copy="stored" data-slot="pass_d_b_recommendation">${TITLE}</p>`)).toEqual([])
+  })
+
+  it('still fails a direction word on a slot whose policy DOES delete it', () => {
+    // `report_cover` is `both`: the sentence should have gone before storage,
+    // so one that reaches the page means the scrubber failed.
+    const bad = copyViolations('<p data-copy="stored" data-slot="report_cover">Durability is gaining.</p>')
+    expect(bad.map((v) => v.rule)).toEqual(['direction-word'])
+  })
+
+  it('refuses an exemption that does not name what it is exempting', () => {
+    // "Increase" and "Improve" are both on the list, so an unexempted title
+    // fails (c) twice — which is the size of what the exemption is buying.
+    expect(copyViolations(`<p data-copy="stored">${TITLE}</p>`).map((v) => v.rule))
+      .toEqual(['unknown-slot', 'direction-word', 'direction-word'])
+    const unknown = copyViolations(`<p data-copy="stored" data-slot="pass_z_invented">${TITLE}</p>`)
+    expect(unknown.map((v) => v.rule)).toEqual(['unknown-slot', 'direction-word', 'direction-word'])
+    expect(unknown[0].detail).toContain('PROSE_SLOTS')
+  })
+
+  it('carries the slot onto the node a caller reads back', () => {
+    const [node] = copyNodes(`<p data-copy="stored" data-slot="pass_d_a_insight">${TITLE}</p>`)
+    expect(node.kind).toBe('stored')
+    expect(node.slot).toBe('pass_d_a_insight')
+    expect(copyNodes('<p data-copy="prose">a</p>')[0].slot).toBeNull()
+  })
+
+  it('does not exempt code\'s own sentence around a stored one', () => {
+    const bad = copyViolations(
+      '<p>The oldest piece of advice, gaining since June: <span data-copy="stored" data-slot="pass_d_b_recommendation">' +
+        `${TITLE}</span></p>`,
+    )
+    expect(bad.map((v) => v.rule)).toEqual(['direction-word'])
+    expect(bad[0].detail).toContain('"gaining"')
+    // The stored half is cut before the sweep, so its own words do not add to
+    // the count — only code's sentence is on trial here.
+  })
+})

@@ -22,7 +22,16 @@ import { ADVICE_UNRECORDED, LEDGER_SHOWN, madeInMonth, type AdviceRow, type Mark
 // 121 rows in production — a ledger whose subject is what you did about each
 // row cannot have a blank column, so this one prints "New" itself.
 //
-// NO AGE IN MONTHS ON THE ROW, AND NO DIRECTION WORD ANYWHERE. "First made" is
+// THE TITLE IS `stored`, NAMING `pass_d_b_recommendation`. A recommendation's
+// words are Pass D-b's, adjudicated at write time by that slot's policy —
+// `digits`, with the run's allow-list, and deliberately NOT the direction rule,
+// because "Increase Content Volume to Improve Share of Voice" is an imperative
+// addressed to the reader and not a claim that something is going up (the trade
+// is measured beside PROSE_POLICY). Marking it `prose` made this block fail the
+// copy contract on every production ledger; the marker says whose words they
+// are instead of re-adjudicating them with no allow-list in hand.
+//
+// NO AGE IN MONTHS ON THE ROW. "First made" is
 // a date this table can prove: every update's recommendations are retained
 // (Pass D-b deletes only its own run's rows), so the oldest copy of a lineage
 // is genuinely when the advice was first given.
@@ -114,7 +123,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
           <div>
             {a.rows.map((row) => (
               <div key={row.lineageId} style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-                <div data-copy="prose" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{row.title}</div>
+                <div data-copy="stored" data-slot="pass_d_b_recommendation" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{row.title}</div>
                 <div style={{ marginTop: 2 }}>
                   <span style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>first made {madeInMonth(row.firstMade)} · </span>
                   <RepeatCell row={row} mode={mode} />
@@ -140,7 +149,7 @@ export const marketAdvice: Block<MarketSurfaceData> = {
                 <tbody className="align-top">
                   {a.rows.map((row) => (
                     <tr key={row.lineageId}>
-                      <td data-copy="prose" className="py-1.5 pr-3 text-[12.5px]">{row.title}</td>
+                      <td data-copy="stored" data-slot="pass_d_b_recommendation" className="py-1.5 pr-3 text-[12.5px]">{row.title}</td>
                       <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{shortDate(row.firstMade)}</td>
                       <td className="py-1.5 pr-3"><RepeatCell row={row} mode={mode} /></td>
                       <td className="py-1.5"><StatusCell row={row} mode={mode} /></td>

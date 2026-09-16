@@ -37,7 +37,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
     {
       lineageId: 'L-twice',
       recommendationId: 'r-twice',
-      title: 'Make every core bag easy to buy in one visit',
+      title: 'Increase Content Volume to Improve Share of Voice',
       reasoning: 'Buyers ask where to buy under half the posts we read.',
       kind: 'customer_experience',
       firstMade: '2026-09-10',
@@ -81,8 +81,8 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
         },
         {
           id: 'mi-3',
-          title: 'A read we are showing you and not counting',
-          description: 'Below the evidence bar, labelled rather than hidden.',
+          title: 'Showcase Innovations in 3D Printed Prosthetics',
+          description: 'Curiosity turns into distrust or drop-off where a price is never named.',
           kind: 'industry_signal',
           tier: 'archive',
           videos: 2,
