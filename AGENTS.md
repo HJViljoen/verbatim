@@ -256,8 +256,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
   customers for about two hours. A restart does not refill an IO budget — time
   does, or a larger compute tier. The measure everything actually gates on is a
   predicate count: `.select('id', { count: 'exact', head: true })
-  .not('embedding', 'is', null)` (`embeddingCoverage` / `embeddedInsightCount`,
-  `lib/agent/retrieve.ts` — the one `subject-membership` refuses below 95% on),
+  .not('embedding', 'is', null)` (both in `lib/agent/retrieve.ts`:
+  `embeddingCoverage` counts over `audience_insights_current` and is the one
+  `subject-membership` refuses below 95% on; `embeddedInsightCount` counts the
+  base table and is the is-it-zero guard in the answering path),
   or in SQL `count(*) filter (where embedding is not null)`. **`embedded_at is
   not null` is NOT that measure**: the column arrived 2026-09-15 and is never
   backfilled, so every vector written before it reads as unembedded — it
