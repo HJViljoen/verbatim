@@ -42,6 +42,8 @@ import {
   type Voice,
 } from './overview'
 import { isMissingAnomalyChecks } from './weekly'
+import { fetchRunningRunIds } from './latest-video-run'
+import { fetchThemedRunId } from './themed-run'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
@@ -436,20 +438,40 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   // quarter's three months. `last_3` is the product's own three-month window
   // and is what a reader gets when they open the page beside this artefact.
   const pageScope = { ...scope, params: { ...scope.params, horizon: 'last_3' } }
-  const [overview, market, competitive] = await Promise.all([
+  const clientId = scope.clientId
+  const [overview, market, competitive, runningIds] = await Promise.all([
     loadOverview(pageScope),
-    loadMarketSurface(pageScope).catch(() => null),
-    loadCompetitiveSurface(pageScope).catch(() => null),
+    loadMarketSurface(pageScope).catch((error: unknown) => {
+      console.error(`[pages] quarterly.market: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    }),
+    loadCompetitiveSurface(pageScope).catch((error: unknown) => {
+      console.error(`[pages] quarterly.competitive: ${(error as { message?: string })?.message ?? String(error)}`)
+      return null
+    }),
+    fetchRunningRunIds(supabase, clientId, 'quarterly'),
   ])
   if (!overview) return null
+
+  // THE CLUSTERING THE THEME HALF IS READ UNDER. `window_theme_readings` takes
+  // a run id and answers nothing without one, so a window read taken with none
+  // carries denominators and no numerators — which is what the first cut did,
+  // leaving the theme loop below unreachable on every real load. The themed
+  // update is the page loaders' own (lib/pages/themed-run.ts).
+  const themedRunId = await fetchThemedRunId(supabase, clientId, runningIds, 'quarterly')
+  // BOUNDED, AND EVERY ROW LABELLED. The window read answers in registry ids;
+  // the labels live on the month series the pages already loaded, so the
+  // quarter is read for the objects those pages name and an unlabelled id can
+  // never reach a page.
+  const themeIds = [...overview.category.growing, ...overview.category.fading].map((m) => m.id)
 
   // THE WINDOW PAIR. One read per side, over DISTINCT videos — never three
   // month rows added together.
   const reading = scope.reading?.client ?? readingClient()
-  const clientId = scope.clientId
+  const themeOptions = { runId: themedRunId, objectIds: themeIds.length ? themeIds : undefined }
   const [thisQuarter, lastQuarter, checks, record] = await Promise.all([
-    windowFor(reading, clientId, quarter),
-    windowFor(reading, clientId, prior),
+    quarterWindowFor(reading, clientId, quarter, themeOptions),
+    quarterWindowFor(reading, clientId, prior, themeOptions),
     loadQuarterChecks(supabase, clientId, quarter),
     loadRecordInputs(reading, clientId, { kind: 'quarter', from: quarter.from, to: quarter.to }, {
       now: readingAt,
@@ -510,10 +532,13 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     overview,
   })
   const windowApplied = a.thisQuarter.denominators != null
+  // The theme half is its own read and its own silence: a window pair can
+  // carry denominators and no clustering to count numerators under.
+  const themesRead = a.thisQuarter.themes != null && a.lastQuarter.themes != null
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
   const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel })
-  const category = buildCategory({ overview, quarterVerdicts, monthLabel, windowApplied })
+  const category = buildCategory({ overview, quarterVerdicts, monthLabel, windowApplied, themesRead })
   const rivals = buildRivals({ overview, competitive: a.competitive })
   const moves = buildMoves({ overview, market: a.market, quarter })
 
@@ -553,10 +578,19 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
 }
 
 /** One windowed read of one quarter. Half-open instants, because
- *  `window_denominators` is `>= from and < to` (lib/reading/record.ts). */
-async function windowFor(client: SupabaseClient, clientId: string, quarter: Quarter): Promise<WindowReading> {
+ *  `window_denominators` is `>= from and < to` (lib/reading/record.ts).
+ *
+ *  `runId` IS NOT OPTIONAL IN PRACTICE. `loadWindowReading` reads
+ *  `window_theme_readings` only when it is given one — a read without it is a
+ *  pair of denominators and nothing else. */
+export async function quarterWindowFor(
+  client: SupabaseClient,
+  clientId: string,
+  quarter: Quarter,
+  themes: { runId: string | null; objectIds?: readonly string[] },
+): Promise<WindowReading> {
   const { from, to } = halfOpenInstants({ kind: 'quarter', from: quarter.from, to: quarter.to })
-  return loadWindowReading(client, clientId, { from, to })
+  return loadWindowReading(client, clientId, { from, to, runId: themes.runId, objectIds: themes.objectIds })
 }
 
 /** The quarter-on-quarter verdicts, one per audience read on both sides. */
@@ -597,14 +631,15 @@ function buildQuarterVerdicts(a: {
     const was = themesBefore.get(`${t.audience}:${t.theme_id}`)
     const n = denomNow.get(t.audience)
     const priorN = denomBefore.get(t.audience)
-    if (!was || !n || !priorN) continue
+    // THE WINDOW READ CARRIES NO LABEL — `window_theme_readings` answers in
+    // registry ids, and a label is the registry's. The month series the pages
+    // already loaded holds the labels, and a theme those pages never named has
+    // none: dropped, rather than printed to a client as a raw id.
+    const label = themeLabel(t.theme_id, a.overview)
+    if (!was || !n || !priorN || !label) continue
     out.push(
       quarterChange({
-        // THE WINDOW READ CARRIES NO LABEL — `window_theme_readings` answers
-        // in registry ids, and a label is the registry's. The month series the
-        // pages already loaded holds the labels, so the id is looked up there
-        // and falls back to itself rather than to a blank.
-        object: { kind: 'theme', id: t.theme_id, label: themeLabel(t.theme_id, a.overview) },
+        object: { kind: 'theme', id: t.theme_id, label },
         audience: t.audience,
         window: { kind: 'quarter', from: a.quarter.from, to: a.quarter.to },
         basis: { from: a.prior.from, to: a.prior.to },
@@ -618,10 +653,11 @@ function buildQuarterVerdicts(a: {
 }
 
 /** A registry id's label, off the month series the pages already loaded. The
- *  window read answers in ids alone. */
-function themeLabel(id: string, overview: OverviewData): string {
+ *  window read answers in ids alone; null means nobody on these pages named
+ *  this object, and a page prints no row for it. */
+function themeLabel(id: string, overview: OverviewData): string | null {
   const mover = [...overview.category.growing, ...overview.category.fading].find((m) => m.id === id)
-  return mover?.label ?? id
+  return mover?.label ?? null
 }
 
 /**
@@ -821,9 +857,11 @@ function buildCategory(a: {
   quarterVerdicts: Verdict[]
   monthLabel: string
   windowApplied: boolean
+  themesRead: boolean
 }): CategoryPage {
   const c = a.overview.category
   const prevMonthLabel = longMonth(previousMonthOf(a.overview.month))
+  const quarter = a.quarterVerdicts.filter((v) => v.audience === c.audience)
   return {
     audience: c.audience,
     label: c.label,
@@ -843,8 +881,18 @@ function buildCategory(a: {
     attentionNote: c.attentionNote,
     mood: c.mood,
     moodNote: c.moodNote,
-    quarter: a.quarterVerdicts.filter((v) => v.audience === c.audience),
-    quarterNote: a.windowApplied ? null : 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.',
+    quarter,
+    // THREE SILENCES, AND THEY ARE NOT THE SAME CLAIM. No windowed reading at
+    // all is a migration that has not been applied; a windowed reading with no
+    // clustering behind it is an update that has not themed; and a pair of
+    // reads that produced no comparable row is a measurement.
+    quarterNote: !a.windowApplied
+      ? 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.'
+      : !a.themesRead
+        ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
+        : quarter.length === 0
+          ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
+          : null,
   }
 }
 

@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
+import type { SupabaseClient } from '@supabase/supabase-js'
+
 import type { Verdict } from '../reading/verdicts'
+import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/types'
 import { quarterFor } from '../reports/quarterly'
-import { confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, readingCounter, unsettledItems } from './quarterly'
+import {
+  confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, quarterWindowFor,
+  readingCounter, unsettledItems,
+} from './quarterly'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   objectKind: 'theme',
@@ -201,5 +207,48 @@ describe('methodNumbers', () => {
     expect(rows.find((r) => r.label === 'Conversations')?.value).toBe('8,900')
     expect(rows.find((r) => r.label === 'Updates')?.note).toBe('longest gap 35 days')
     expect(rows[0]).toMatchObject({ label: 'Period', value: '2026-07-01 – 2026-09-30', note: 'still filling' })
+  })
+})
+
+describe('the window pair', () => {
+  /** A client that records every RPC and answers each with no rows. */
+  const recorder = () => {
+    const calls: { fn: string; args: Record<string, unknown> }[] = []
+    const chain = {
+      order: () => chain,
+      range: () => Promise.resolve({ data: [], error: null }),
+    }
+    const client = {
+      rpc(fn: string, args: Record<string, unknown>) {
+        calls.push({ fn, args })
+        return chain
+      },
+    } as unknown as SupabaseClient
+    return { calls, client }
+  }
+
+  it('asks for BOTH halves — a read with no clustering carries no themes at all', async () => {
+    // The defect: `loadWindowReading` reads `window_theme_readings` only when
+    // it is given a run id, and the quarter asked for none — so the theme half
+    // of the pair was never read, `thisQuarter.themes` was null on every real
+    // load, and the theme loop that draws the quarter-on-quarter comparison
+    // was unreachable in production with M3 applied or not.
+    const { calls, client } = recorder()
+    const q = quarterFor(2026, 3)
+    const reading = await quarterWindowFor(client, 'c1', q, { runId: 'run-9', objectIds: ['t1'] })
+    expect(calls.map((c) => c.fn)).toEqual([RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS])
+    expect(calls[1].args).toMatchObject({ p_client: 'c1', p_run: 'run-9' })
+    // Half-open: `window_denominators` is `>= from and < to`, so the quarter's
+    // last day is inside the window and the next quarter's first is not.
+    expect(String(calls[0].args.p_from)).toContain('2026-07-01')
+    expect(String(calls[0].args.p_to)).toContain('2026-10-01')
+    expect(reading.themes).toEqual([])
+  })
+
+  it('tells "no clustering" apart from "not read": themes stay null with no run', async () => {
+    const { calls, client } = recorder()
+    const reading = await quarterWindowFor(client, 'c1', quarterFor(2026, 3), { runId: null })
+    expect(calls.map((c) => c.fn)).toEqual([RPC_WINDOW_DENOMINATORS])
+    expect(reading.themes).toBeNull()
   })
 })
