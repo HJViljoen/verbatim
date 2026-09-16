@@ -588,13 +588,10 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const reading: ReadingHandle = scope.reading
   const readingAt = new Date().toISOString()
 
-  // THE THEMED RUN AND THE RECORD JOIN WAVE 1 (WP23). The themed run waits on
-  // the running-run ids and on nothing else, and the record's window is this
-  // month whatever the page finds — both were serial waits on either side of
-  // the one Promise.all this loader had.
+  // THE THEMED RUN JOINS WAVE 1 (WP23). It waits on the running-run ids and on
+  // nothing else, and was a serial wait beside the one Promise.all this loader
+  // had. The record starts below, as soon as the empty state is ruled out.
   const month = monthStartOf(readingAt)
-  const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
-  recordAhead.catch(() => {})
   const [clientRes, latestRunRes, themedRunId] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('pipeline_runs').select('id, started_at')
@@ -608,6 +605,16 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const brand = client?.company_name ?? 'Your brand'
   const latestRun = row<{ id: string; started_at: string }>(latestRunRes, 'market-surface.latestRun')
   if (!latestRun) return null
+
+  // AFTER THE EMPTY STATE, NOT BEFORE IT. The record's window is this month
+  // whatever the page finds, so it can start as soon as the page is going to be
+  // drawn at all — but not sooner: a tenant with no delivered update returns
+  // above, and starting the record there would spend eight service-role reads
+  // on a page that draws nothing and would force `readingHandle`'s lazily built
+  // service-role client (lib/reading/read.ts) into existence to do it. Overview
+  // makes the same call in the same place, for the same reason.
+  const recordAhead = loadRecordInputs(reading.client, clientId, recordWindow(month, readingAt), { now: readingAt })
+  recordAhead.catch(() => {})
 
   const runId = latestRun.id
   const monthStatus = freezeStateFor(month, readingAt)
