@@ -523,7 +523,10 @@ export function moversNote(input: {
   read: boolean
   thin: boolean
   any: boolean
+  /** `?themes=` left nothing in a month that did carry themes. */
+  narrowed?: boolean
 }): string | null {
+  if (input.narrowed) return DEEP_LINK_EMPTY
   if (input.thin) return 'Too little conversation this month to say what moved.'
   if (!input.read) return 'No theme carried enough of this month to be compared.'
   return input.any ? null : 'Nothing moved clearly this month.'
@@ -977,13 +980,17 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   const shown = expanded ? MOVERS_EXPANDED : MOVERS_HERE
   const pool: Mover[] = []
   const seriesById = new Map<string, MonthSeries>()
+  // Counted BEFORE `?themes=` narrows anything, so an empty page can tell the
+  // reader which of the two emptied it — the month, or their own link.
+  let readableThisMonth = 0
   for (const s of themeSet.series) {
     if (!s.objectId || s.audience !== selected) continue
-    if (!inDeepLink(s.objectId)) continue
-    seriesById.set(s.objectId, s)
     const byMonth = pointsByMonth(s)
     const curr = byMonth.get(month)
     const prev = byMonth.get(prevMonth)
+    if (curr && curr.k != null && curr.videos != null) readableThisMonth++
+    if (!inDeepLink(s.objectId)) continue
+    seriesById.set(s.objectId, s)
     if (!curr || curr.k == null || curr.videos == null) continue
     const label = registryById.get(s.objectId)?.canonical_label ?? s.objectLabel ?? s.objectId
     // A month with no row on the other side is not skipped: `monthChange`
@@ -1009,6 +1016,11 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       }),
     })
   }
+  // THE LINK NARROWED IT TO NOTHING, AND THAT IS NOT THE MONTH'S FAULT. The
+  // legacy loader had a sentence for exactly this (lib/pages/voice.ts) and
+  // this page lost it: with a slug the register does not carry, both blocks
+  // said the month carried nothing, which is false twice over.
+  const narrowed = deepSlugs.size > 0 && pool.length === 0 && readableThisMonth > 0
   const { growing, fading } = thin ? { growing: [], fading: [] } : splitMovers(pool, shown)
   const flat = thin ? [] : flatMovers(pool, shown)
   const newcomers = newMovers(pool, shown)
@@ -1039,6 +1051,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
       read: pool.some((m) => isAnswer(m.verdict.state)),
       thin: thin,
       any: growing.length + fading.length + flat.length + newcomers.length > 0,
+      narrowed,
     }),
     // `theme_observations.reread_share` lands with M2. Until then the page
     // cannot tell a theme whose members were re-read this month from one whose
@@ -1083,6 +1096,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     month,
     openId,
     asked,
+    narrowed,
     mover: pool.find((m) => m.id === openId) ?? null,
     series: openId ? seriesById.get(openId) ?? null : null,
     registry: openId ? registryById.get(openId) ?? null : null,
@@ -1152,6 +1166,11 @@ function denominatorFor(
   return d?.videos ?? null
 }
 
+/** Said by VO2 and VO3 in the same words, because it is one fact about the
+ *  reader's link and not two facts about the month. */
+export const DEEP_LINK_EMPTY =
+  'None of this month’s themes sit behind that insight — clear the filter to see the whole conversation.'
+
 /**
  * Why no theme is open — and it is never "the month was empty" when the answer
  * is "the link narrowed it to nothing".
@@ -1163,11 +1182,19 @@ function denominatorFor(
  * nothing.
  */
 export function openRefusal(
-  input: { asked: { id: string; label: string | null; found: boolean } | null },
+  input: {
+    asked: { id: string; label: string | null; found: boolean } | null
+    /** `?themes=` narrowed a month that did carry themes down to none. */
+    narrowed?: boolean
+  },
   audienceLabel: string,
 ): string {
   const asked = input.asked
-  if (!asked) return 'No theme in this audience carried enough of this month to be opened.'
+  if (!asked) {
+    return input.narrowed
+      ? `${DEEP_LINK_EMPTY} Nothing is open until it is cleared.`
+      : 'No theme in this audience carried enough of this month to be opened.'
+  }
   if (!asked.label) return 'The theme this link asks for is not in this workspace’s register — clear it from the link to see what this month did carry.'
   return `“${asked.label}” was not said in ${audienceLabel.toLowerCase()} this month, so there is nothing to open — clear it from the link to see what was.`
 }
@@ -1212,6 +1239,8 @@ interface ThemeInput {
   /** The theme the URL asked for, whether or not this month could open it —
    *  so the refusal can name it instead of blaming the month. */
   asked: { id: string; label: string | null; found: boolean } | null
+  /** `?themes=` left this audience-month with no theme to rank at all. */
+  narrowed: boolean
   mover: Mover | null
   series: MonthSeries | null
   registry: RegistryRow | null
@@ -1276,7 +1305,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     notes: [],
   }
   if (!input.openId || !input.series) {
-    return { ...empty, notes: [openRefusal(input, audienceLabel(audience))] }
+    return { ...empty, notes: [openRefusal({ asked: input.asked, narrowed: input.narrowed }, audienceLabel(audience))] }
   }
 
   const label = input.registry?.canonical_label ?? input.series.objectLabel ?? input.openId

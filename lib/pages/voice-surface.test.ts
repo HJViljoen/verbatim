@@ -8,6 +8,7 @@ import {
   audienceFigures,
   audienceThin,
   castMasthead,
+  DEEP_LINK_EMPTY,
   daysInto,
   fillingLine,
   firstSentences,
@@ -216,6 +217,13 @@ describe('moversNote', () => {
     expect(moversNote({ read: true, thin: false, any: false })).toBe('Nothing moved clearly this month.')
   })
 
+  it('blames the reader’s link, not the month, when ?themes= left nothing', () => {
+    // Verified read-only with themes=no_such_slug_at_all: both blocks said the
+    // month carried nothing, of a month that carried 437 videos and six
+    // comparable themes.
+    expect(moversNote({ read: false, thin: true, any: false, narrowed: true })).toBe(DEEP_LINK_EMPTY)
+  })
+
   it('is silent when the page has rows', () => {
     expect(moversNote({ read: true, thin: false, any: true })).toBeNull()
   })
@@ -247,6 +255,10 @@ describe('openRefusal', () => {
   it('keeps the plain sentence where no link asked for anything', () => {
     expect(openRefusal({ asked: null }, 'The category'))
       .toBe('No theme in this audience carried enough of this month to be opened.')
+  })
+
+  it('says a ?themes= link narrowed the month to nothing, rather than blaming the month', () => {
+    expect(openRefusal({ asked: null, narrowed: true }, 'The category')).toContain(DEEP_LINK_EMPTY)
   })
 })
 
