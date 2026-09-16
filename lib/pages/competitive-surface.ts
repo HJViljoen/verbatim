@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
+import { rangeCoversMonth } from '../config-affects'
+import { CONFIG_CHANGES_TABLE, isMissingConfigLog, isTrackingChange, type ConfigChange } from '../config-log'
 import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
@@ -264,21 +265,38 @@ export const RIVAL_STATE_LINE: Record<RivalState, string> = {
 }
 
 /**
- * A rule at every month a tracking change landed in.
+ * A rule at every month a tracking change MOVED.
  *
  * ONE PER MONTH, NEVER ONE PER CHANGE. Össur logged ten tracking changes in
  * September; ten rules on one bar is a chart nobody can read, and the fact a
  * reader needs is "something changed in this month", which is true once.
+ *
+ * AND ONLY CHANGES TO WHAT WE TRACK. This took `surface` and never read it, so
+ * every `config_changes` row became a rule: Sealand's 39 September rows include
+ * a schedule/active, a cadence/report_day and a cadence/report_period, and the
+ * sentence said "39 changes to what we track landed in Sep 2026" over a report
+ * day. `TRACKING_SURFACES` (lib/config-log.ts) is the list, written down where
+ * the vocabulary lives so this and the reading layer cannot come to two
+ * different answers about the same months.
+ *
+ * DATED BY WHAT IT MOVED, NOT BY THE CLOCK. `affects_months` is the band of
+ * calendar months a change actually reached — the reading layer already spends
+ * it through `buildSeries` — and it is rarely the month the change was typed
+ * in: Sealand's 2026-09-09 re-tag moved 34 months from 2021-12 on. A change
+ * with no band falls back to the month it was logged in, which is the best
+ * available answer and the only one this had.
  */
 export function trackingRules(
-  changes: readonly Pick<ConfigChange, 'changed_at' | 'surface'>[],
+  changes: readonly Pick<ConfigChange, 'changed_at' | 'surface' | 'affects_months'>[],
   months: readonly string[],
 ): { month: string; label: string; text: string }[] {
   const inMonth = new Map<string, number>()
   for (const c of changes) {
-    const m = monthStartOf(c.changed_at.slice(0, 10))
-    if (!months.includes(m)) continue
-    inMonth.set(m, (inMonth.get(m) ?? 0) + 1)
+    if (!isTrackingChange(c.surface)) continue
+    const covered = c.affects_months
+      ? months.filter((m) => rangeCoversMonth(c.affects_months, m))
+      : months.filter((m) => m === monthStartOf(c.changed_at.slice(0, 10)))
+    for (const m of covered) inMonth.set(m, (inMonth.get(m) ?? 0) + 1)
   }
   return [...inMonth.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -595,16 +613,31 @@ async function readDenominators(
   }
 }
 
-/** The three columns a rule needs, and no more: `config_changes.before` and
- *  `.after` carry whatever a write site put there and none of it is drawn. */
-type ChangeMark = Pick<ConfigChange, 'changed_at' | 'surface' | 'source'>
+/** The columns a rule needs, and no more: `config_changes.before` and `.after`
+ *  carry whatever a write site put there and none of it is drawn.
+ *  `affects_months` is the band the change moved, which is what dates the rule. */
+type ChangeMark = Pick<ConfigChange, 'changed_at' | 'surface' | 'source' | 'affects_months'>
 
 async function loadConfigChanges(client: SupabaseClient, clientId: string): Promise<ChangeMark[]> {
   try {
     return await selectAll<ChangeMark>(() =>
+      client.from(CONFIG_CHANGES_TABLE).select('changed_at, surface, source, affects_months')
+        .eq('client_id', clientId).order('changed_at', { ascending: true }),
+    )
+  } catch (error) {
+    if (!isMissingConfigLog(error)) throw error
+  }
+  // `affects_months` arrives with M1 and is NOT applied in production, where
+  // `isMissingConfigLog` reads a missing column the same way it reads a missing
+  // table — so asking for it and catching once would have quietly dropped every
+  // rule both tenants draw today. Without the band a change is dated by the day
+  // it was logged, which is what this always did.
+  try {
+    const rows = await selectAll<Omit<ChangeMark, 'affects_months'>>(() =>
       client.from(CONFIG_CHANGES_TABLE).select('changed_at, surface, source')
         .eq('client_id', clientId).order('changed_at', { ascending: true }),
     )
+    return rows.map((c) => ({ ...c, affects_months: null }))
   } catch (error) {
     if (isMissingConfigLog(error)) return []
     throw error

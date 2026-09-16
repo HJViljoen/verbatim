@@ -165,16 +165,44 @@ describe('CO2 · the standings', () => {
   it('draws a rule once per month a tracking change landed in, never once per change', () => {
     const rules = trackingRules(
       [
-        { changed_at: '2026-09-02T00:00:00.000Z', surface: 'terms' as const },
-        { changed_at: '2026-09-09T00:00:00.000Z', surface: 'terms' as const },
-        { changed_at: '2026-08-04T00:00:00.000Z', surface: 'terms' as const },
-        { changed_at: '2025-01-04T00:00:00.000Z', surface: 'terms' as const },
+        { changed_at: '2026-09-02T00:00:00.000Z', surface: 'terms' as const, affects_months: null },
+        { changed_at: '2026-09-09T00:00:00.000Z', surface: 'terms' as const, affects_months: null },
+        { changed_at: '2026-08-04T00:00:00.000Z', surface: 'terms' as const, affects_months: null },
+        { changed_at: '2025-01-04T00:00:00.000Z', surface: 'terms' as const, affects_months: null },
       ],
       ['2026-08-01', '2026-09-01'],
     )
     expect(rules).toHaveLength(2)
     expect(rules[0].text).toBe('One change to what we track landed in Aug 2026.')
     expect(rules[1].text).toBe('2 changes to what we track landed in Sep 2026.')
+  })
+
+  it('counts only the surfaces that change what a month is read from', () => {
+    // Measured on production: Sealand's 39 September rows include one
+    // schedule/active, one cadence/report_day and one cadence/report_period.
+    // The sentence used to call a report-day change a break in the series.
+    const rules = trackingRules(
+      [
+        { changed_at: '2026-09-02T00:00:00.000Z', surface: 'terms' as const, affects_months: null },
+        { changed_at: '2026-09-03T00:00:00.000Z', surface: 'cadence' as const, affects_months: null },
+        { changed_at: '2026-09-04T00:00:00.000Z', surface: 'schedule' as const, affects_months: null },
+        { changed_at: '2026-09-05T00:00:00.000Z', surface: 'subjects' as const, affects_months: null },
+      ],
+      ['2026-09-01'],
+    )
+    expect(rules).toHaveLength(1)
+    expect(rules[0].text).toBe('One change to what we track landed in Sep 2026.')
+  })
+
+  it('dates a rule by the months the change MOVED, not by the day it was typed', () => {
+    // Sealand's 2026-09-09 re-tag moved 34 months from 2021-12 on; dating it
+    // by the wall clock puts the rule on September alone and leaves every
+    // month it actually reached unmarked.
+    const rules = trackingRules(
+      [{ changed_at: '2026-09-09T00:00:00.000Z', surface: 'entity_retag' as const, affects_months: '[2026-07-01,2026-09-01)' }],
+      ['2026-07-01', '2026-08-01', '2026-09-01'],
+    )
+    expect(rules.map((r) => r.month)).toEqual(['2026-07-01', '2026-08-01'])
   })
 
   it('collapses a run of months read by different updates into ONE caveat', () => {

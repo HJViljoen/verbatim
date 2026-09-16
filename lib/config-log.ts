@@ -49,6 +49,34 @@ export const CONFIG_SURFACES = [
 ] as const
 export type ConfigSurface = (typeof CONFIG_SURFACES)[number]
 
+/**
+ * The surfaces whose change moves WHAT IS IN THE CORPUS — the ones a reading
+ * of the months has to draw a line at (Phase 1 WP14).
+ *
+ * NOT EVERY LOGGED CHANGE IS ONE. `config_changes` is the log of every
+ * configuration write this product makes, and three of its surfaces change
+ * nothing a month is read from: `cadence` (which day the report goes out),
+ * `schedule` (whether a schedule is active) and `subjects` (which includes
+ * every declared move). Measured read-only on production for September 2026,
+ * Sealand logged 39 changes, of which one schedule/active, one cadence/
+ * report_day and one cadence/report_period — so a chart that drew a rule per
+ * logged row told a client that changing their report day broke the series.
+ *
+ * `prompt_version` is out for the opposite reason and it is the harder call: a
+ * Pass A prompt bump re-reads the whole corpus and IS a break, but it is a
+ * change to how we read rather than to what we track, and it deserves its own
+ * word on a chart rather than borrowing this one. `other` is in: it is the
+ * catch-all for an unwatched `tracking_configs` column, which is tracking.
+ */
+export const TRACKING_SURFACES: readonly ConfigSurface[] = [
+  'terms', 'rivals', 'handles', 'platforms', 'subreddits', 'knobs',
+  'entity_retag', 'regate', 'rival_rename', 'other',
+]
+
+/** Did this change move what a month is read from? */
+export const isTrackingChange = (surface: string): boolean =>
+  (TRACKING_SURFACES as readonly string[]).includes(surface)
+
 /** Who moved it. Mirrors the config_changes actor_kind CHECK. */
 export const ACTOR_KINDS = ['user', 'operator', 'script', 'pipeline', 'sql', 'reconstructed'] as const
 export type ActorKind = (typeof ACTOR_KINDS)[number]
