@@ -158,7 +158,10 @@ all six month tables and therefore needs M4 and M5 to have created theirs.
 **There is no separate index step, and that is deliberate.** **Thirty**
 indexes are created across the eleven files — competitors 3, subjects 7,
 kind_mood_attention 5, quote_translations 3, anomaly_flags 3, settings 4,
-sent_figures 3, reading_indexes 2, three of them `unique`; theme_key,
+sent_figures 3, reading_indexes 2, **five** of them `unique`
+(`competitors_client_slug_live_idx`, `subjects_live_name_idx`,
+`gate_appeals_one_per_verdict`, `gate_appeals_one_per_unrun_verdict`,
+`report_schedules_one_per_artefact`); theme_key,
 reading_windows and plan_check_notice create none — and **not one is
 `CONCURRENTLY`**
 — a concurrent build cannot run inside the transaction a migration is applied
