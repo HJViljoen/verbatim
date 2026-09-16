@@ -63,7 +63,7 @@ export const SURFACES: readonly Surface[] = [
   { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How are we seen on this subject?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
   { key: 'voice', href: '/dashboard/voice', label: 'Voice', question: 'Who is saying what in this category?', group: 'Intelligence', bar: 'reading', page: 'voice' },
   { key: 'market', href: '/dashboard/market', label: 'Market', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
-  { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and are they gaining?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
+  { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and how much of it do they hold?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
   { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },
   { key: 'reports', href: '/dashboard/reports', label: 'Reports', question: 'Which document do I need?', group: 'Intelligence', bar: 'title' },
