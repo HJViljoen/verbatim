@@ -122,7 +122,16 @@ export const weeklyContent: Block<WeeklyData> = {
               style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginTop: 3 } : undefined}
               className={mode === 'email' ? undefined : 'mt-0.5 text-[12.5px]'}
             >
-              {c.format.label} — <span data-copy="figure">{(Math.round(c.format.multiple * 10) / 10).toFixed(1)}×</span> the median video’s engagement, over <span data-copy="figure">{fmtInt(c.format.videos)}</span> {c.format.videos === 1 ? 'video' : 'videos'}
+              {/* "IN THIS UPDATE" IS NOT DECORATION. Unlike everything above
+                  it, this figure is run-indexed: the Content loader filters
+                  videos to the latest run (`.eq('run_id', videoRunId)`) before
+                  it measures against the median. Under a masthead reading
+                  "Every number below is this month so far, against the three
+                  months before it", an unlabelled "4.5× over 113 videos" reads
+                  as the month's. WR3 goes to trouble to label its update-scoped
+                  counts; this line owed the reader the same clause, and its own
+                  empty state was already saying it. */}
+              {c.format.label} — <span data-copy="figure">{(Math.round(c.format.multiple * 10) / 10).toFixed(1)}×</span> the median video’s engagement, over <span data-copy="figure">{fmtInt(c.format.videos)}</span> {c.format.videos === 1 ? 'video' : 'videos'} in this update
             </div>
           </Rail>
         ) : (

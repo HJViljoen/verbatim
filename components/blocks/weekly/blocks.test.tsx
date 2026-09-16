@@ -241,7 +241,9 @@ describe('WR5 · for content', () => {
     expect(text).toContain('Does the strap come off?')
     expect(text).toContain('What moved most · from this month’s reading')
     expect(text).toContain('9.4% · 130 of 1,388')
-    expect(text).toContain('2.4× the median video’s engagement, over 31 videos')
+    // Run-indexed, unlike everything above it in this block, and the line has
+    // to say so under a masthead that reads "this month so far".
+    expect(text).toContain('2.4× the median video’s engagement, over 31 videos in this update')
   })
 
   it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {
