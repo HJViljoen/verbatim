@@ -5,7 +5,7 @@ import { gateAccessFor } from '@/lib/gate-record'
 import { fullDate, monthName } from '@/lib/format'
 import { recordWindow } from '@/lib/pages/overview'
 import { recordLines } from '@/lib/reading/record'
-import { readChangeLog } from '@/lib/settings/change-log'
+import { CHANGE_LOG_ROWS, readChangeLog, showingLine } from '@/lib/settings/change-log'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
 import { loadRecordPage } from '@/lib/settings/record-load'
 import { gateSummary, keptByPlatform, keptByTerm, sampleNote } from '@/lib/settings/reject-log'
@@ -126,7 +126,7 @@ export default async function SettingsRecordPage() {
                 head={['Date', 'What changed', 'What it breaks', 'Made by']}
                 empty="No change has been recorded yet."
               >
-                {log.recorded.slice(0, 20).map((c) => (
+                {log.recorded.slice(0, CHANGE_LOG_ROWS).map((c) => (
                   <SettingsRow
                     key={c.id}
                     cells={[
@@ -146,14 +146,44 @@ export default async function SettingsRecordPage() {
                   />
                 ))}
               </SettingsTable>
+              {showingLine(CHANGE_LOG_ROWS, log.recorded.length) && (
+                <p className="mt-2 text-[11.5px] text-muted-foreground">
+                  {showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
+                </p>
+              )}
               <p className="mt-2 text-[11.5px] text-muted-foreground">{changeLogBoundary(log.firstLoggedAt)}</p>
               {log.prehistory.length > 0 && (
-                <p className="mt-1 text-[11.5px] text-muted-foreground">
-                  {log.prehistory.length} earlier entr{log.prehistory.length === 1 ? 'y was' : 'ies were'} worked
-                  out afterwards from what each update searched, the oldest dated{' '}
-                  {log.prehistory[log.prehistory.length - 1].date}. They are a label, not a record, and are not
-                  counted above.
-                </p>
+                <div className="mt-3">
+                  <p className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+                    Before the record began
+                  </p>
+                  <p className="mb-2 text-[11.5px] text-muted-foreground">
+                    {log.prehistory.length} earlier entr{log.prehistory.length === 1 ? 'y was' : 'ies were'} worked
+                    out afterwards from what each update searched, the oldest dated{' '}
+                    {log.prehistory[log.prehistory.length - 1].date}. They are a label, not a record, and are not
+                    counted above.
+                  </p>
+                  <SettingsTable head={['Date', 'What changed', 'Worked out from']}>
+                    {log.prehistory.slice(0, CHANGE_LOG_ROWS).map((c) => (
+                      <SettingsRow
+                        key={c.id}
+                        cells={[
+                          <span key="d" className="font-mono text-[11.5px] text-muted-foreground">{c.date}</span>,
+                          <span key="w" className="block text-left">
+                            <span className="font-medium">{c.what}</span>
+                            <span className="block text-[11.5px] text-muted-foreground">{c.said}</span>
+                          </span>,
+                          <span key="s" className="text-[11.5px] text-muted-foreground">what an update searched</span>,
+                        ]}
+                      />
+                    ))}
+                  </SettingsTable>
+                  {showingLine(CHANGE_LOG_ROWS, log.prehistory.length) && (
+                    <p className="mt-2 text-[11.5px] text-muted-foreground">
+                      {showingLine(CHANGE_LOG_ROWS, log.prehistory.length)}
+                    </p>
+                  )}
+                </div>
               )}
             </>
           )}

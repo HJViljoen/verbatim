@@ -191,6 +191,18 @@ function composedNote(change: ConfigChange): string {
   return `${what}${field} changed.`
 }
 
+/** How many rows of the log a card shows at once. The page names everything
+ *  else it hides (the communities remainder, the prehistory count), so this one
+ *  says so too. */
+export const CHANGE_LOG_ROWS = 20
+
+/** "Showing the 20 most recent of 33." Null when the table IS the list — a
+ *  count of what is hidden when nothing is hidden is noise. */
+export function showingLine(shown: number, total: number): string | null {
+  if (total <= shown) return null
+  return `Showing the ${shown.toLocaleString('en-GB')} most recent of ${total.toLocaleString('en-GB')}.`
+}
+
 export interface ReadChangeLogArgs {
   rows: readonly ConfigChange[]
   viewerUserId?: string | null

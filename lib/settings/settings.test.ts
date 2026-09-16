@@ -8,7 +8,7 @@ import {
   type ScheduleLike,
 } from './artefacts'
 import {
-  actorWords, breakClause, monthsOfRange, readChangeLog, renderSide,
+  actorWords, breakClause, monthsOfRange, readChangeLog, renderSide, showingLine, CHANGE_LOG_ROWS,
 } from './change-log'
 import { deliveryRecord, updatesInMonth } from './delivery'
 import {
@@ -115,6 +115,17 @@ const change = (over: Partial<ConfigChange> = {}): ConfigChange => ({
   actor_kind: 'user', actor_user_id: 'u1', actor_label: 'a@x.test · operator view · settings',
   run_id: null, source: 'logged', rows_affected: null, note: 'added a term for your brand',
   affects_audiences: null, affects_months: null, ...over,
+})
+
+describe('what a table hides', () => {
+  // The card names everything else it hides — the communities remainder, the
+  // prehistory count — and the change log's own truncation said nothing.
+  it('says how many of the log it is showing, and only when it is hiding some', () => {
+    expect(showingLine(CHANGE_LOG_ROWS, 33)).toBe('Showing the 20 most recent of 33.')
+    expect(showingLine(CHANGE_LOG_ROWS, 20)).toBeNull()
+    expect(showingLine(CHANGE_LOG_ROWS, 1)).toBeNull()
+    expect(showingLine(20, 1_200)).toBe('Showing the 20 most recent of 1,200.')
+  })
 })
 
 describe('actorWords', () => {
