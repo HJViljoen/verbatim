@@ -136,9 +136,20 @@ export async function POST(request: Request) {
   // The question is stored BEFORE the answer is attempted, on purpose. It is a
   // demand signal in its own right, and a question that made the agent fall
   // over is one of the more interesting rows in the table.
-  await admin.from('agent_messages').insert({
+  //
+  // CHECKED for the same reason as the document path's: since the monthly cap
+  // counts these rows, this insert is the cap slot, and a fire-and-forget slot
+  // is an uncapped spend whenever the write fails. The hole predates this
+  // package — it was invisible while the only limit was fifty a day, which
+  // could never fire — and it is closed here because the cap introduced by
+  // this package is the thing that made it matter.
+  const { error: slotErr } = await admin.from('agent_messages').insert({
     thread_id: thread.id, client_id: clientId, role: 'user', content: question,
   })
+  if (slotErr) {
+    console.error('[agent] could not record the question:', slotErr.message)
+    return NextResponse.json({ error: 'Could not start that conversation.' }, { status: 500 })
+  }
 
   try {
     const answer = await answerQuestion(admin, {
@@ -295,13 +306,24 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
   const threadId = (thread as { id: string }).id
   // The submission counts as a question for the cap and for the demand log —
   // what a client brings to be checked is a demand signal like any other.
-  await admin.from('agent_messages').insert({
+  //
+  // CHECKED, because this insert IS the cap slot. Left fire-and-forget it was
+  // the very hole moving it up here was meant to close: the row fails, the
+  // three model calls below run regardless, and the workspace spends without
+  // being counted — repeatably, since nothing about a failing insert gets
+  // better on the next attempt. Refusing costs a client one check on a
+  // transient write failure; not refusing costs an uncapped spend.
+  const { error: slotErr } = await admin.from('agent_messages').insert({
     thread_id: threadId,
     client_id: clientId,
     run_id: runId,
     role: 'user',
     content: sourceFilename ? `Checked: ${sourceFilename}` : 'Checked a pasted document',
   })
+  if (slotErr) {
+    console.error('[agent:document] could not record the submission:', slotErr.message)
+    return NextResponse.json({ error: 'Could not start that check.' }, { status: 500 })
+  }
 
   let result
   try {
@@ -356,11 +378,24 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
     return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
   }
 
-  await admin
+  // CHECKED: this update is the only link between the thread the client lands
+  // on and the check they just paid for. Unchecked, a failure here puts them on
+  // a thread that says nothing was saved against their document while a stored
+  // plan_checks row sits unreachable — the check is on the table and nobody can
+  // read it. Reported as the save failure it is, and logged with the id so the
+  // row can be re-attached by hand.
+  const { error: linkErr } = await admin
     .from('agent_threads')
     .update({ title: result.title || sourceFilename || 'Document', plan_check_id: (check as { id: string }).id })
     .eq('id', threadId)
     .eq('client_id', clientId)
+  if (linkErr) {
+    console.error(
+      `[agent:document] check ${(check as { id: string }).id} could not be attached to thread ${threadId}:`,
+      linkErr.message,
+    )
+    return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
+  }
 
   // The notice travels with the thread now; the body keeps it so a caller that
   // does not navigate still has it.
