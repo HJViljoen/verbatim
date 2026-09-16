@@ -92,6 +92,9 @@ export function weekFixture(): WeekData {
         baseline: { k: 38, n: 1089 },
         baselineMonths: ['2026-06-01', '2026-07-01', '2026-08-01'],
         baselineFilling: ['2026-08-01'],
+        // The three months behind it were NOT read under one clustering, which
+        // is M7's `baseline_regime` and the reason the column exists.
+        baselineRegime: 'mixed',
         changePts: 10.2,
         bandPts: 4.9,
         // WITH THE MODEL'S OWN TOKENS IN THEM, because that is what the column
@@ -223,6 +226,9 @@ export function weekFixture(): WeekData {
       }),
       privacy: PRIVACY_LINE,
     },
+    // Össur's four months carry a clustering key throughout, so the reading
+    // layer has no caveat to make about them.
+    notes: [],
     laterLine: LATER_LINE,
   }
 }
@@ -328,6 +334,14 @@ export function thinFixture(): WeekData {
       }),
       privacy: PRIVACY_LINE,
     },
+    // ONE SENTENCE FOR A RUN OF MONTHS, never one per bar — what
+    // `mergeSeriesNotes` collapses thirty themes' notes into, and what a
+    // comparison pooling three months owes its reader.
+    notes: [{
+      kind: 'clustering_changed',
+      text: 'We did not record how themes were grouped for June to August 2026, so those months are not strictly comparable with the ones after them.',
+      months: ['2026-06-01', '2026-07-01', '2026-08-01'],
+    }],
     laterLine: LATER_LINE,
   }
 }

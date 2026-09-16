@@ -56,6 +56,17 @@ describe('every block on This week', () => {
     }
   })
 
+  it('prints the reading layer’s caveats once for the page, never once per bar', () => {
+    // Sealand's three baseline months carry no recorded clustering key, and §1
+    // and §3 both pool three months. `mergeSeriesNotes` collapses the stretch
+    // into one sentence; the page prints that, at the foot, as Overview does.
+    const text = renderText(<WeekPage data={thinFixture()} />)
+    expect(text).toContain('We did not record how themes were grouped for June to August 2026')
+    expect(text.match(/We did not record how themes were grouped/g)).toHaveLength(1)
+    // And says nothing where the months carry one.
+    expect(renderText(<WeekPage data={weekFixture()} />)).not.toContain('We did not record how themes were grouped')
+  })
+
   it('keeps the first screen inside its twelve-number budget', () => {
     // The mock's first 900px is the page bar and §1. Counted over figure
     // tables, not rendered digits: the same figure named twice is one number to

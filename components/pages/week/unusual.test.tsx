@@ -51,6 +51,26 @@ describe('WK1 · unusual this week', () => {
     expect(text).toContain('August had not finished when this was read')
   })
 
+  it('marks a baseline that was not read under one grouping', () => {
+    // `baseline_regime` exists so a surface can say this; printing the
+    // filling-months caveat and not this one tells a reader the comparison
+    // will move without telling them it may not be like for like.
+    const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('not all read under one grouping, so the comparison is not strictly like for like')
+  })
+
+  it('says nothing about the grouping where the check read one', () => {
+    const d = weekFixture()
+    const data = { ...d, unusual: { ...d.unusual, flags: [{ ...d.unusual.flags[0], baselineRegime: 'one' }] } }
+    expect(renderText(weekUnusual.render(data, 'app', ctx))).not.toContain('like for like')
+    // A kind has no grouping to be like-for-like about, and an absent column is
+    // not an answer either.
+    for (const regime of ['not_grouped', null]) {
+      const other = { ...d, unusual: { ...d.unusual, flags: [{ ...d.unusual.flags[0], baselineRegime: regime }] } }
+      expect(renderText(weekUnusual.render(other, 'app', ctx)), String(regime)).not.toContain('like for like')
+    }
+  })
+
   it('labels the model’s paragraph as an interpretation and says who wrote it', () => {
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Interpretation · written by a model, from the figures above')

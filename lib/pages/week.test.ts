@@ -196,6 +196,7 @@ describe('a flag’s figures', () => {
     baseline: { k: 38, n: 1089 },
     baselineMonths: ['2026-06-01', '2026-07-01', '2026-08-01'],
     baselineFilling: ['2026-08-01'],
+    baselineRegime: 'one',
     changePts: 10.2,
     bandPts: 4.9,
     sentences: [],

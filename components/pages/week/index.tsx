@@ -116,6 +116,17 @@ export function WeekPage({
           </Tile>
         ))}
       </PageGrid>
+      {data.notes.length > 0 ? (
+        <p className="m-0 text-[11px] text-muted-foreground">
+          {/* THE READING LAYER'S OWN CAVEATS, ONCE FOR THE PAGE. §1 pools three
+              months into a baseline and §3 pools three into a comparison, and
+              neither is like-for-like across a stretch whose grouping was never
+              recorded. `mergeSeriesNotes` collapses a run of months into ONE
+              sentence rather than one per bar (the Block A convention), and
+              Overview prints its own the same way. */}
+          {data.notes.map((n) => n.text).join(' ')}
+        </p>
+      ) : null}
     </PageFrame>
   )
 }

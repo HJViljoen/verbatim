@@ -19,6 +19,7 @@ import { freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '..
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { loadMonthSeries, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { platformMixLine } from '../reading/record'
+import { mergeSeriesNotes, type MonthLabel, type MonthSeries } from '../reading/series'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import { bandVerdict, type FigureTable, type Verdict } from '../reading/verdicts'
 import { parseRef, quoteRef } from '../renderables/quotes-freeze'
@@ -157,6 +158,18 @@ export interface UnusualFlag {
    *  filling when the flag was raised. */
   baselineMonths: string[]
   baselineFilling: string[]
+  /**
+   * Whether those months were read under ONE clustering — `one`, `mixed`,
+   * `unknown`, or `not_grouped` for an object that has no grouping to be
+   * like-for-like about (a kind is a kind).
+   *
+   * M7 stores it precisely so a surface can MARK a baseline that was not read
+   * under one grouping, and its comment says so at length; a reader that never
+   * selected the column printed the filling-months caveat and not the
+   * like-for-like one. `null` where the column is absent, which is a fourth
+   * thing again and is not marked.
+   */
+  baselineRegime: string | null
   changePts: number
   bandPts: number
   /** The model's explanation, labelled as interpretation. Empty where the
@@ -365,6 +378,17 @@ export interface WeekData {
   sales: ForSalesData
   worked: WorkedBlock
   coverage: CoverageBlock
+  /**
+   * The reading layer's own caveats about the months this page compares, said
+   * ONCE for the page.
+   *
+   * `MonthSeriesSet.notes` — the change-log boundary and the stretches of
+   * months whose clustering was never recorded — merged across every series
+   * read here. The Block A convention is one collapsed sentence for a run of
+   * months and never one per bar, so these are printed at the foot of the page
+   * exactly as Overview prints its own, and not inside §3.
+   */
+  notes: MonthLabel[]
   laterLine: string
 }
 
@@ -552,6 +576,7 @@ interface FlagRow {
   baseline_n: number
   baseline_months: string[] | null
   baseline_filling_months: string[] | null
+  baseline_regime: string | null
   change_pts: number
   band_pts: number
   rank: number
@@ -666,7 +691,7 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   })
 
   // ── §3 · rising now ────────────────────────────────────────────────────
-  const rising = await buildRising({
+  const risingRead = await buildRising({
     supabase, reading, clientId, month, window, themedRunId,
     monthOf: sumAudienceMonth(denominators, month, INDUSTRY_AUDIENCE),
     denominators,
@@ -707,11 +732,17 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
     windowVideos,
     unusual,
     subjects: subjectsBlock,
-    rising,
+    rising: risingRead.block,
     cameIn,
     sales,
     worked,
     coverage,
+    // EVERY SERIES READ HERE, SAID ONCE. `monthSet` is the denominator-only
+    // set behind §1's baseline and §4's contribution; `risingRead.notes` are
+    // §3's per-theme ones. `mergeSeriesNotes` collapses a run of months into
+    // ONE sentence rather than repeating it per object, which is the whole
+    // point of merging them here rather than printing each set's own.
+    notes: mergeSeriesNotes([...monthSet.series, ...risingRead.series]),
     laterLine: LATER_LINE,
   }
 }
@@ -797,6 +828,7 @@ async function buildFlag(supabase: SupabaseClient, clientId: string, f: FlagRow)
     baseline: { k: f.baseline_k, n: f.baseline_n },
     baselineMonths: f.baseline_months ?? [],
     baselineFilling: f.baseline_filling_months ?? [],
+    baselineRegime: f.baseline_regime ?? null,
     changePts: Number(f.change_pts),
     bandPts: Number(f.band_pts),
     sentences: f.explanation?.sentences ?? [],
@@ -880,6 +912,24 @@ async function buildSubjects(input: {
 const RISING_UNREAD =
   'The month’s themes have not been read for this workspace yet, so nothing can be said to be rising.'
 
+/**
+ * §3 · the themes that moved in this month's reading.
+ *
+ * TWO READS, AND THE SECOND ONE IS THROUGH `lib/reading`. The first is a
+ * DISCOVERY scan: which themes have a stored row in these four months at all,
+ * and which thirty of them moved most. It is a raw `selectAll` because ranking
+ * by difference is the one thing `loadTopObjects` cannot do — it ranks by
+ * weight, and a small theme that moved most would never reach the pool.
+ *
+ * The second read is `loadMonthSeries` over those thirty ids, and every number
+ * printed comes off it. That is not tidiness: the set is where the reading
+ * layer puts its NOTES — the change-log boundary and the stretches of months
+ * whose grouping was never recorded — and `MonthSeriesSet.notes` says in its
+ * own contract that "a surface reading the set prints THESE". This block pools
+ * three months into one comparison, which is exactly where a reader needs to be
+ * told the three were not read under one clustering. It also brings each
+ * theme's label, so there is no third read for those.
+ */
 async function buildRising(input: {
   supabase: SupabaseClient
   reading: ReadingHandle
@@ -889,9 +939,10 @@ async function buildRising(input: {
   themedRunId: string | null
   monthOf: number
   denominators: readonly { month: string; audience: string; videos: number }[]
-}): Promise<RisingBlock> {
+}): Promise<{ block: RisingBlock; series: MonthSeries[] }> {
   const { reading, clientId, month, monthOf } = input
   const base: RisingBlock = { rows: [], audience: INDUSTRY_AUDIENCE, month, monthOf, unread: null }
+  const nothing = (unread: string | null) => ({ block: { ...base, unread }, series: [] as MonthSeries[] })
 
   const baselineMonths = trailingMonths(month, BASELINE_MONTHS)
   const baselineOf = baselineMonths.reduce((t, m) => t + sumAudienceMonth(input.denominators, m, INDUSTRY_AUDIENCE), 0)
@@ -911,9 +962,9 @@ async function buildRising(input: {
     )
   } catch (error) {
     if (!isMissingMonthTable(error)) throw error
-    return { ...base, unread: RISING_UNREAD }
+    return nothing(RISING_UNREAD)
   }
-  if (stored.length === 0) return { ...base, unread: RISING_UNREAD }
+  if (stored.length === 0) return nothing(RISING_UNREAD)
 
   const within = new Set(baselineMonths)
   const byTheme = new Map<string, { now: number; before: number }>()
@@ -924,13 +975,11 @@ async function buildRising(input: {
     byTheme.set(r.theme_id, held)
   }
 
-  const labels = await readThemeLabels(reading, clientId, [...byTheme.keys()])
   // RANKED BEFORE THE BAND IS DRAWN, so the three shown are the three largest
   // movements of the month rather than the first three that cleared a floor.
   const ranked = [...byTheme.entries()]
     .map(([id, v]) => ({
       id,
-      label: labels.get(id) ?? 'An unnamed theme',
       now: v.now,
       before: v.before,
       delta: share(v.now, monthOf) - share(v.before, baselineOf),
@@ -938,18 +987,43 @@ async function buildRising(input: {
     .sort((a, b) => b.delta - a.delta || b.now - a.now)
     .slice(0, RISER_POOL)
 
+  const themeSet = await loadMonthSeries(reading.client, clientId, {
+    from: baselineMonths[0] ?? month,
+    to: month,
+    audiences: [INDUSTRY_AUDIENCE],
+    objectKind: 'theme',
+    objectIds: ranked.map((r) => r.id),
+  })
+  const seriesOf = new Map(
+    themeSet.series.filter((s) => s.objectId).map((s) => [s.objectId as string, s]),
+  )
+
   const risers: Riser[] = []
   for (const r of ranked) {
     if (risers.length >= RISERS_SHOWN) break
+    const series = seriesOf.get(r.id)
+    const points = series?.points ?? []
+    const now = points.find((p) => p.month === month)
+    const nowK = now?.k ?? r.now
+    const nowN = now?.videos ?? monthOf
+    let beforeK = 0
+    let beforeN = 0
+    for (const p of points) {
+      if (p.month === month || !within.has(p.month)) continue
+      beforeK += p.k ?? 0
+      beforeN += p.videos ?? 0
+    }
+    if (beforeN === 0) { beforeK = r.before; beforeN = baselineOf }
+    const label = series?.objectLabel ?? 'An unnamed theme'
     const verdict = bandVerdict({
       objectKind: 'theme',
       objectId: r.id,
-      objectLabel: r.label,
+      objectLabel: label,
       audience: INDUSTRY_AUDIENCE,
       window: { kind: 'month', from: month, to: nextMonth(month) },
       basis: { from: baselineMonths[0] ?? month, to: month },
-      value: { k: r.now, n: monthOf },
-      baseline: { k: r.before, n: baselineOf },
+      value: { k: nowK, n: nowN },
+      baseline: { k: beforeK, n: beforeN },
     })
     // A RISER IS A COMPARISON THAT WAS DRAWN AND CAME BACK LARGER. `moved` is
     // the only state that says so; `no_clear_change` is an answer and not a
@@ -958,9 +1032,9 @@ async function buildRising(input: {
     if (verdict.state !== 'moved' || (verdict.changePts ?? 0) <= 0) continue
     risers.push({
       id: r.id,
-      label: r.label,
-      month: { k: r.now, n: monthOf },
-      baseline: { k: r.before, n: baselineOf },
+      label,
+      month: { k: nowK, n: nowN },
+      baseline: { k: beforeK, n: beforeN },
       verdict,
       addedVideos: null,
       quotes: [],
@@ -974,7 +1048,7 @@ async function buildRising(input: {
     risers.forEach((r, i) => { r.quotes = quoted[i] })
   }
 
-  return { ...base, rows: risers }
+  return { block: { ...base, rows: risers }, series: themeSet.series }
 }
 
 // ---- §4 ----------------------------------------------------------------------
@@ -1454,16 +1528,6 @@ async function readClientMonthVideos(reading: ReadingHandle, clientId: string, m
     if (isMissingMonthTable(error)) return 0
     throw error
   }
-}
-
-async function readThemeLabels(reading: ReadingHandle, clientId: string, ids: readonly string[]): Promise<Map<string, string>> {
-  const out = new Map<string, string>()
-  if (ids.length === 0) return out
-  const held = await inChunks<{ id: string; canonical_label: string | null }>(ids, (part) => () =>
-    reading.client.from('theme_registry').select('id, canonical_label').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
-  )
-  for (const r of held) if (r.canonical_label) out.set(r.id, r.canonical_label)
-  return out
 }
 
 /** Every video of this tenant this update touched, either as its discoverer or

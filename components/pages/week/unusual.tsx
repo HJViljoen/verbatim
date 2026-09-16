@@ -173,6 +173,23 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
         {fmtPct(weekPct, 1)} this update against {fmtPct(basePct, 1)} before it — a difference of{' '}
         {flag.changePts.toFixed(1)} points on a band of {flag.bandPts.toFixed(1)}
       </span>
+      {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`
+          says the baseline is still moving; `baseline_regime` says whether the
+          three were read under one grouping at all, and the check reports the
+          flag either way (decision L's posture, available to it because an
+          anomaly reading never speaks a direction word). Printing the first and
+          not the second told a reader the comparison would move without telling
+          them it may not be like for like. `not_grouped` is not a caveat — a
+          kind is a kind and has no grouping to be like-for-like about — and
+          `null` means the column is not there to ask. */}
+      {flag.baselineRegime === 'mixed' || flag.baselineRegime === 'unknown' ? (
+        <Line mode={mode}>
+          {flag.baselineRegime === 'mixed'
+            ? 'Those months were not all read under one grouping, so the comparison is not strictly like for like.'
+            : 'We cannot tell whether those months were read under one grouping, so the comparison may not be like for like.'}
+        </Line>
+      ) : null}
+
       {flag.baselineFilling.length > 0 ? (
         <Line mode={mode}>
           {flag.baselineFilling.length === flag.baselineMonths.length
