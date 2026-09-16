@@ -180,7 +180,10 @@ export function weekFixture(): WeekData {
         { id: 's4', label: 'Fit and refit waits', videos: 12, quotes: [] },
       ],
       praise: [quote('ev-6', 'Two winters on this socket and it still fits like day one', 'TikTok · 11 Sep · under a category video')],
+      // Two shown of seven counted — the shape the block has to print
+      // honestly, and the shape a slice-then-count made invisible.
       switching: [quote('ev-7', 'Moving off Ottobock after the last refit', 'Reddit · 12 Sep · under a Ottobock video')],
+      switchingTotal: 7,
       rivalComplaints: [
         { id: 'competitor:Ottobock', label: 'Ottobock', videos: 21, quotes: [quote('ev-8', 'Their service booking is a nightmare', 'YouTube · 10 Sep · under a Ottobock video')] },
       ],
@@ -294,6 +297,7 @@ export function thinFixture(): WeekData {
       objections: [],
       praise: [],
       switching: [],
+      switchingTotal: 0,
       rivalComplaints: [],
       brief: { href: '/dashboard/reports', label: 'Open the sales brief →' },
       unread: null,

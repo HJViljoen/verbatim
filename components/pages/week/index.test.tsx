@@ -182,6 +182,22 @@ describe('WK §5 · for sales', () => {
     expect(text).toContain('Grounded answers to these sit in the sales brief.')
   })
 
+  it('counts switching comments before it caps them', () => {
+    // The array holds the two the page shows; the stat has to say seven, or a
+    // display cap reaches a salesperson as a measurement.
+    const text = renderText(weekSales.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('7')
+    expect(text).toContain('someone said they were moving between brands — of 205 videos this update · 1 below')
+  })
+
+  it('draws no switching stat at all where the total was never counted', () => {
+    const d = weekFixture()
+    const data = { ...d, sales: { ...d.sales, switchingTotal: null } }
+    const text = renderText(weekSales.render(data, 'app', ctx))
+    expect(text).toContain('Switching signals')
+    expect(text).not.toContain('someone said they were moving between brands')
+  })
+
   it('says whose grouping the headings are', () => {
     expect(renderText(weekSales.render(weekFixture(), 'app', ctx)))
       .toContain('Grouped by the subjects you named.')

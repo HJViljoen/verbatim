@@ -64,10 +64,23 @@ export interface ForSalesData {
   grouping: SalesGrouping
   /** Largest first. */
   objections: SalesGroup[]
-  /** The strongest thing said in the client's favour — one quote, or none. */
+  /** The strongest thing said in the client's favour — one quote, or none.
+   *  A display cap of `SALES_PRAISE_SHOWN`, and no count is printed off it. */
   praise: SalesQuote[]
-  /** Comments that say someone moved, or is moving, between brands. */
+  /**
+   * Comments that say someone moved, or is moving, between brands — the few
+   * SHOWN, capped at `SALES_SWITCHING_SHOWN`.
+   *
+   * NEVER COUNT THIS ARRAY AND PRINT THE ANSWER. The block rendered
+   * `switching.length` as its stat value until 2026-09-16, which made a
+   * display cap read as a measurement: both tenants printed "2 comments ·
+   * someone said they were moving between brands" in a production render, and
+   * always would have, whether the real number was 2 or 200.
+   */
   switching: SalesQuote[]
+  /** How many comments named a switch in all — taken BEFORE the slice above.
+   *  Null where the section could not be read. */
+  switchingTotal: number | null
   /** Objections heard under a named rival's videos, by rival. */
   rivalComplaints: SalesGroup[]
   /** Where the grounded answers live. */
@@ -85,6 +98,13 @@ export const SALES_GROUPS_SHOWN = 3
 /** How many quotes hang under one group. Two: enough to show the objection is
  *  not one person, few enough that the section stays a strip. */
 export const SALES_QUOTES_PER_GROUP = 2
+
+/** How many switching comments are printed. A DISPLAY CAP, shared by the
+ *  loader and the block so neither can mistake it for a count. */
+export const SALES_SWITCHING_SHOWN = 2
+
+/** How many pieces of praise are printed. One, and no count is stated off it. */
+export const SALES_PRAISE_SHOWN = 1
 
 /** The one honest line when nothing cleared, or null when something did.
  *

@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import type { ForSalesData, SalesGroup, SalesGrouping, SalesQuote } from '../blocks/for-sales'
 import { chunk } from '../chunk'
-import { SALES_GROUPS_SHOWN, SALES_QUOTES_PER_GROUP } from '../blocks/for-sales'
+import { SALES_GROUPS_SHOWN, SALES_PRAISE_SHOWN, SALES_QUOTES_PER_GROUP, SALES_SWITCHING_SHOWN } from '../blocks/for-sales'
 import { perfVsMedian, pretty, type PerfMultiple } from '../content-tiles'
 import { citationLink } from '../evidence-cite'
 import { cap, fmtInt, longMonth, platformLabel, shortDate } from '../format'
@@ -1167,6 +1167,7 @@ async function buildSales(input: {
     objections: [],
     praise: [],
     switching: [],
+    switchingTotal: null,
     rivalComplaints: [],
     brief: { href: '/dashboard/reports', label: 'Open the sales brief →' },
     unread: null,
@@ -1181,11 +1182,16 @@ async function buildSales(input: {
     cited.filter((c) => c.category === 'objection' && c.audience.startsWith('competitor:')),
     (c) => ({ id: c.audience, label: rivalNameOf(c.audience) ?? c.audience }),
   )
+  // COUNTED BEFORE IT IS CAPPED. Slicing first and counting the slice is how
+  // "2 comments · someone said they were moving between brands" came to be
+  // printed on both tenants whatever the real number was.
+  const switching = cited.filter((c) => c.category === 'switching_signal')
   return {
     ...base,
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
-    praise: cited.filter((c) => c.category === 'praise').slice(0, 1).map(toSalesQuote),
-    switching: cited.filter((c) => c.category === 'switching_signal').slice(0, 2).map(toSalesQuote),
+    praise: cited.filter((c) => c.category === 'praise').slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
+    switching: switching.slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
+    switchingTotal: switching.length,
     rivalComplaints: rivalComplaints.slice(0, SALES_GROUPS_SHOWN),
   }
 }

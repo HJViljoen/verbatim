@@ -70,13 +70,25 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
 
           {d.switching.length > 0 ? (
             <Section title="Switching signals" mode={mode}>
-              <BlockStat
-                mode={mode}
-                size="sm"
-                value={fmtInt(d.switching.length)}
-                unit={d.switching.length === 1 ? 'comment' : 'comments'}
-                base={`someone said they were moving between brands — ${of}`}
-              />
+              {/* THE COUNT IS `switchingTotal`, NEVER `switching.length`. That
+                  array is capped at `SALES_SWITCHING_SHOWN` before it gets
+                  here, so counting it printed the CAP as a measurement: both
+                  tenants read "2 comments · someone said they were moving
+                  between brands" in a production render and always would have,
+                  whether the real number was 2 or 200. Where the total is
+                  unknown no stat is drawn at all — the quotes stand on their
+                  own, and a number nobody measured does not. */}
+              {d.switchingTotal != null ? (
+                <BlockStat
+                  mode={mode}
+                  size="sm"
+                  value={fmtInt(d.switchingTotal)}
+                  unit={d.switchingTotal === 1 ? 'comment' : 'comments'}
+                  base={`someone said they were moving between brands — ${of}${
+                    d.switchingTotal > d.switching.length ? ` · ${fmtInt(d.switching.length)} below` : ''
+                  }`}
+                />
+              ) : null}
               <Quotes quotes={d.switching} mode={mode} />
             </Section>
           ) : null}
@@ -100,8 +112,8 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
       d.objections.forEach((g, i) => {
         out[`objection_${i + 1}_videos`] = { value: g.videos, unit: 'videos', label: `${g.label} — videos carrying it` }
       })
-      if (d.switching.length > 0) {
-        out.switching_comments = { value: d.switching.length, unit: 'comments', label: 'comments naming a switch' }
+      if (d.switchingTotal != null) {
+        out.switching_comments = { value: d.switchingTotal, unit: 'comments', label: 'comments naming a switch' }
       }
       return out
     },
