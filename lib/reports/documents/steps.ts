@@ -5,6 +5,7 @@ import { collectQuoteRefs, freezeQuotes, resolveQuotes } from '../../renderables
 import { fetchQuoteResolutionsByRefs, type QuoteResolution } from '../../quotes'
 import type { ReportRow } from '../types'
 import { finishBuild } from '../build'
+import { stampSnapshotReading } from '../reading-stamp'
 import { CUSTOM_KEY, documentTemplate, promptVersion, resolveTemplate, type DocumentTemplate } from './templates'
 import { DEFAULT_DOCUMENT_ROLE, documentSettings, isDocumentData, isDocumentRole, type DocumentRole, type DocumentSettings } from './types'
 import { loadSignals, type Signals } from './signals'
@@ -239,6 +240,30 @@ export async function freezeStep(
     workings,
     reportId: ctx.report.id || null,
   })
+  // WHAT THIS BRIEF IS A READING OF, ON THE ROW (M9).
+  //
+  // M9's own comment promises it — "WP19 re-bases those on the monthly reading
+  // and they will carry a basis from then on" — and nothing stamped a brief, so
+  // all four provenance columns stayed null for ever. The backfill cannot
+  // rescue them either: WP19 puts the instant at `data.reading.readingAt` while
+  // the backfill reads the top-level `data->>readingAt`.
+  //
+  // NON-FATAL, the `stampSnapshotReading` contract: the brief is already
+  // stored, the reading is already inside `data`, and the columns are what make
+  // it queryable rather than what make it true. A build must not fail because
+  // M9 has not been applied.
+  if (signals.reading) {
+    try {
+      await stampSnapshotReading(admin, ctx.clientId, snap.id, {
+        readingAt: signals.reading.readingAt,
+        month: signals.reading.month,
+        monthStatus: signals.reading.monthStatus,
+        windowBasis: 'month',
+      })
+    } catch (error) {
+      console.warn('[documents] could not stamp the brief’s reading', error)
+    }
+  }
   if (ctx.buildId) await setBuildStatus(admin, ctx.buildId, 'checking', { snapshot_id: snap.id })
   return { snapshotId: snap.id, title: fullTitle, evidenceIds: snap.evidenceIds, costUsd: args.costUsd }
 }
