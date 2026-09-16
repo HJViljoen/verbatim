@@ -15,6 +15,7 @@ import {
   unansweredLead,
   voiceFrom,
   voicesAcross,
+  voicesMeta,
   UNANSWERED_BASIS,
   VOICES_SHOWN,
   type SubjectPane,
@@ -89,6 +90,21 @@ describe('voicesAcross', () => {
   it('never returns more than the total, whatever the pools hold', () => {
     const pools = ['p1', 'p2', 'p3', 'p4'].map((audience) => ({ audience, items: ['1', '2', '3'] }))
     expect(voicesAcross(pools).length).toBe(VOICES_SHOWN)
+  })
+})
+
+describe('voicesMeta', () => {
+  it('prints the denominator it actually counted', () => {
+    expect(voicesMeta(6, 41, false)).toContain('6 of 41')
+  })
+
+  it('says "a sample" rather than a denominator nobody counted', () => {
+    // The pool is capped (VOICES_POOL_INSIGHTS / _CITATIONS) because six
+    // quotes are not worth tens of thousands of evidence rows. Past the cap
+    // "6 of 400" would be a number about the cap, not about the subject.
+    const meta = voicesMeta(6, 400, true)
+    expect(meta).toContain('a sample')
+    expect(meta).not.toContain('of 400')
   })
 })
 

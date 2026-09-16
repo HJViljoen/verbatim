@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
-import { VOICES_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
+import { voicesMeta, VOICES_SHOWN, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
 //
@@ -45,7 +45,7 @@ export const subjectsVoices: Block<SubjectsData> = {
         title={subjectsVoices.title}
         question={subjectsVoices.question}
         mode={mode}
-        meta={`${fmtInt(pane.voices.length)} of ${fmtInt(pane.voicesFrom)} · original first, English beneath when translated`}
+        meta={voicesMeta(pane.voices.length, pane.voicesFrom, pane.voicesSampled)}
         footer={footer}
       >
         <BlockQuotes

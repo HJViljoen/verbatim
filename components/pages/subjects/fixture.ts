@@ -168,6 +168,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
         },
       ],
       voicesFrom: 41,
+      voicesSampled: false,
       unanswered: {
         rows: unansweredRows,
         questionVideos: 214,

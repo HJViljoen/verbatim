@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { chunk } from '../chunk'
 import { fmtInt, monthName, shortDate } from '../format'
 import { cleanQuote, fetchQuoteCitationsByAudience, readsAsHeroQuote, type QuoteCitation } from '../quotes'
 import { citationLink } from '../evidence-cite'
@@ -29,7 +30,6 @@ import {
   type SubjectCalibration,
 } from '../subjects/types'
 import { selectAll } from '../supabase-admin'
-import { rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
 
@@ -75,6 +75,20 @@ export const VOICES_SHOWN = 6
  *  keeps the mock's six AND the design's guarantee that no audience is
  *  silenced by another's volume. */
 export const VOICES_PER_AUDIENCE = 3
+
+/**
+ * How much of a subject's evidence the six voices are drawn from.
+ *
+ * A COST DECISION, AND THEREFORE SAID OUT LOUD. Every citation on a member
+ * insight is read to find six quotable ones, and one insight can carry a
+ * hundred; a subject that is a third of Össur's corpus would mean thousands of
+ * insights and tens of thousands of evidence rows for six quotes on one tile.
+ * So the pool is capped — and where the cap bites, the block stops printing a
+ * denominator it did not count ("6 of 41") and says it is a sample instead.
+ * SU3's counts are NOT capped: a count printed as the whole must be the whole.
+ */
+export const VOICES_POOL_INSIGHTS = 400
+export const VOICES_POOL_CITATIONS = 400
 
 /** Rows SU3 lists. The mock draws three. */
 export const UNANSWERED_SHOWN = 3
@@ -238,6 +252,9 @@ export interface SubjectPane {
   series: MonthSeries[]
   voices: SubjectVoice[]
   voicesFrom: number
+  /** True where the pool the six were drawn from was capped — then the block
+   *  says "a sample" instead of a denominator. */
+  voicesSampled: boolean
   unanswered: UnansweredBlock
   /** The move already declared on this subject, where there is one. */
   move: { id: string; title: string; declaredAt: string; status: Move['status'] } | null
@@ -345,6 +362,15 @@ export function voicesAcross<T>(
     }
   }
   return out
+}
+
+/** The voices block's meta line. Where the pool was capped it says so rather
+ *  than printing a denominator nobody counted. */
+export function voicesMeta(shown: number, from: number, sampled: boolean): string {
+  const tail = 'original first, English beneath when translated'
+  return sampled
+    ? `${fmtInt(shown)} shown, drawn from a sample of what was said on this subject · ${tail}`
+    : `${fmtInt(shown)} of ${fmtInt(from)} · ${tail}`
 }
 
 /** Where a voice was heard, in the reader's words — never an audience key. */
@@ -538,6 +564,31 @@ interface VideoRow {
   competitor_name: string | null
   topics: string[] | null
   upload_date: string | null
+}
+
+/** Ids per `.in()` chunk. 120 uuids is ~4.4 KB of request line, half of
+ *  PostgREST's usual 8 KiB cap — the size lib/quotes.ts and lib/pages/voice.ts
+ *  already use for the same shape. */
+const ID_CHUNK = 120
+
+/**
+ * An id-set read that may not be a sample.
+ *
+ * `.in('id', ids.slice(0, 1000))` was a silent truncation: the ids arrive in
+ * uuid order, which is arbitrary, so past the cap every number computed off
+ * them — the gate, the question-video count, each row's count — was computed
+ * over ~1,000 arbitrary insights and printed as the whole. Össur carries 3,129
+ * live insights today and Sealand 2,872, so a subject that is a third of the
+ * corpus is already there. Chunks are disjoint by id and read in parallel, the
+ * way the quote layer reads its own.
+ */
+async function readByIds<T>(
+  ids: readonly string[],
+  fetch: (part: string[]) => { range: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }> },
+): Promise<T[]> {
+  if (ids.length === 0) return []
+  const pages = await Promise.all(chunk([...ids], ID_CHUNK).map((part) => selectAll<T>(() => fetch(part))))
+  return pages.flat()
 }
 
 /** A stored month table, read straight. Null — never [] — when the migration
@@ -813,6 +864,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       series,
       voices: voices.voices,
       voicesFrom: voices.from,
+      voicesSampled: voices.sampled,
       unanswered,
       move: move
         ? { id: move.id, title: move.title, declaredAt: move.declared_at, status: move.status }
@@ -988,9 +1040,9 @@ async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
-): Promise<{ voices: SubjectVoice[]; from: number }> {
-  if (insightIds.length === 0) return { voices: [], from: 0 }
-  const ids = [...insightIds].slice(0, 400)
+): Promise<{ voices: SubjectVoice[]; from: number; sampled: boolean }> {
+  if (insightIds.length === 0) return { voices: [], from: 0, sampled: false }
+  const ids = [...insightIds].slice(0, VOICES_POOL_INSIGHTS)
   const citations = await fetchQuoteCitationsByAudience(supabase, ids)
 
   const pool: QuoteCitation[] = []
@@ -1005,31 +1057,42 @@ async function loadVoices(
       pool.push({ ...c, quote: text })
     }
   }
-  if (pool.length === 0) return { voices: [], from: 0 }
+  if (pool.length === 0) return { voices: [], from: 0, sampled: false }
 
-  const commentIds = pool.map((c) => c.commentId).filter((id): id is string => Boolean(id)).slice(0, 400)
+  // WHAT WAS LOOKED AT, AND WHETHER THAT WAS ALL OF IT. Both caps are the
+  // block's to say: past either one the six are drawn from a sample and the
+  // meta line stops claiming a denominator.
+  const sampled = insightIds.length > VOICES_POOL_INSIGHTS || pool.length > VOICES_POOL_CITATIONS
+  const considered = pool.slice(0, VOICES_POOL_CITATIONS)
+  const commentIds = considered.map((c) => c.commentId).filter((id): id is string => Boolean(id))
   type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
   const meta = new Map<string, CommentMeta>()
   if (commentIds.length > 0) {
-    const res = await supabase
-      .from('comments')
-      .select('id, platform, comment_date, video_id, comment_id')
-      .eq('client_id', clientId)
-      .in('id', commentIds)
-    for (const c of rows<CommentMeta & { id: string }>(res, 'subjects.voiceComments')) meta.set(c.id, c)
+    const read = await readByIds<CommentMeta & { id: string }>(commentIds, (part) =>
+      supabase
+        .from('comments')
+        .select('id, platform, comment_date, video_id, comment_id')
+        .eq('client_id', clientId)
+        .in('id', part)
+        .order('id', { ascending: true }),
+    )
+    for (const c of read) meta.set(c.id, c)
   }
 
   const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
   const urlByKey = new Map<string, string>()
   const audienceByKey = new Map<string, string>()
   if (nativeIds.length > 0) {
-    const res = await supabase
-      .from('videos')
-      .select('platform, video_id, video_url, is_client, is_competitor, competitor_name')
-      .eq('client_id', clientId)
-      .in('video_id', nativeIds)
     type V = { platform: string | null; video_id: string | null; video_url: string | null; is_client: boolean | null; is_competitor: boolean | null; competitor_name: string | null }
-    for (const v of rows<V>(res, 'subjects.voiceVideos')) {
+    const read = await readByIds<V>(nativeIds, (part) =>
+      supabase
+        .from('videos')
+        .select('platform, video_id, video_url, is_client, is_competitor, competitor_name')
+        .eq('client_id', clientId)
+        .in('video_id', part)
+        .order('video_id', { ascending: true }),
+    )
+    for (const v of read) {
       if (!v.video_id) continue
       const key = `${v.platform}::${v.video_id}`
       if (v.video_url) urlByKey.set(key, v.video_url)
@@ -1043,7 +1106,7 @@ async function loadVoices(
   // Grouped by the audience the quote was HEARD in, then drawn round-robin so
   // one loud side cannot fill the list.
   const byAudience = new Map<string, QuoteCitation[]>()
-  for (const c of pool) {
+  for (const c of considered) {
     const m = c.commentId ? meta.get(c.commentId) : undefined
     const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
     const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
@@ -1073,7 +1136,7 @@ async function loadVoices(
       from,
     }
   })
-  return { voices, from: pool.length }
+  return { voices, from: considered.length, sampled }
 }
 
 // ---- SU3 -----------------------------------------------------------------------
@@ -1129,14 +1192,16 @@ async function loadUnanswered(
   }
 
   // Id-set lookup on the base table: a membership row cascades with its
-  // insight, so every id that resolves is live (AGENTS.md).
-  const insights = await selectAll<InsightRow>(() =>
+  // insight, so every id that resolves is live (AGENTS.md). Every id, in
+  // chunks — a slice of them is a sample, and every number below is computed
+  // off this read.
+  const insights = await readByIds<InsightRow>(insightIds, (part) =>
     supabase
       .from('audience_insights')
       .select('id, category, theme, source_video_id')
       .eq('client_id', clientId)
       .eq('category', 'question')
-      .in('id', [...insightIds].slice(0, 1000))
+      .in('id', part)
       .order('id', { ascending: true }),
   )
   const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
@@ -1151,12 +1216,12 @@ async function loadUnanswered(
   // placed by the day it was posted — the one date this read has — and both
   // tenants' videos carry one (0 undated of 4,450 and 3,927, measured
   // read-only 2026-09-16).
-  const videos = await selectAll<VideoRow>(() =>
+  const videos = await readByIds<VideoRow>(videoIds, (part) =>
     supabase
       .from('videos')
       .select('id, platform, is_client, is_competitor, competitor_name, topics, upload_date')
       .eq('client_id', clientId)
-      .in('id', videoIds)
+      .in('id', part)
       .gte('upload_date', input.window.from.slice(0, 10))
       .lt('upload_date', input.window.to.slice(0, 10))
       .order('id', { ascending: true }),
@@ -1315,15 +1380,21 @@ async function nameQuestions(
   // run to run and the registry is what VO3 and the ledger name (AGENTS.md).
   const registryIds = [...new Set([...out.values()].map((v) => v.registryId))]
   const canonical = new Map<string, string>()
-  const { data, error } = await supabase
-    .from('theme_registry')
-    .select('id, canonical_label')
-    .eq('client_id', clientId)
-    .in('id', registryIds.slice(0, 1000))
-  if (!error) {
-    for (const r of (data ?? []) as { id: string; canonical_label: string | null }[]) {
+  try {
+    const registry = await readByIds<{ id: string; canonical_label: string | null }>(registryIds, (part) =>
+      supabase
+        .from('theme_registry')
+        .select('id, canonical_label')
+        .eq('client_id', clientId)
+        .in('id', part)
+        .order('id', { ascending: true }),
+    )
+    for (const r of registry) {
       if (r.canonical_label) canonical.set(r.id, r.canonical_label)
     }
+  } catch {
+    // The run's own labels stand. A registry that cannot be read costs the
+    // canonical wording, never the rows.
   }
   for (const [id, at] of out) {
     const label = canonical.get(at.registryId) ?? labelOf.get(at.registryId) ?? at.label
