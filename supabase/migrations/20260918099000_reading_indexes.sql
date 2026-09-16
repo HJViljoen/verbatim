@@ -98,6 +98,29 @@
 -- what it saves on the one page every client opens first, that is the right
 -- trade; if a gather or a Pass A run ever slows for it, this is the index to
 -- question.
+--
+-- WHAT THIS INDEX IS WORTH IS A FUNCTION OF HOW FAT A `videos` ROW IS, and that
+-- is worth writing down because the fatness is not permanent. Re-checked on a
+-- second throwaway PostgreSQL 17.11 cluster (16 September, port 5465, stopped
+-- afterwards) over schema-baseline plus every 2026 migration, 20,000 videos
+-- across two tenants, 4,571 of them the read's own population, the read issued
+-- as `loadCorpus` issues it (`order by id`, one 1,000-row page):
+--
+--   heap 78 MB / 20,000 rows — 3.9 KB a row, production's width, an
+--   incompressible transcript with storage `main`:
+--     with this index     Index Only Scan + top-N heapsort, Heap Fetches: 0,
+--                         62 buffers, 4.6 ms
+--     without it          Index Scan using videos_pkey, 4,443 buffers, 16.9 ms
+--
+--   heap 13 MB / 20,000 rows — the same rows with a COMPRESSIBLE transcript, so
+--   the text TOASTs out of line and the heap row is narrow:
+--     the planner chose `videos_pkey` BOTH ways. With this index present it did
+--     not use it, and the two plans cost 4,286 buffers either way.
+--
+-- So the saving is the heap and nothing else, exactly as the production plan
+-- above says — and the day `videos` stops carrying its transcripts inline (a
+-- transcript table, a storage change, a column moved), this index stops paying
+-- and should be dropped rather than carried.
 create index if not exists videos_analysed_record_idx
   on public.videos (client_id, analyzed_run_id, id)
   include (platform, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr);
