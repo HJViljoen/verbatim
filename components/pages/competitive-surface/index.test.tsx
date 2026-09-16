@@ -9,11 +9,11 @@ import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
 import { competitiveUnlocks } from './unlocks'
-import { competitiveFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
+import { competitiveFixture, oneMonthFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [competitiveFixture(), unreadRivalFixture(), unreadMonthsFixture()]
+const STATES = [competitiveFixture(), unreadRivalFixture(), unreadMonthsFixture(), oneMonthFixture()]
 
 describe('Competitive · every block, every mode, every state', () => {
   it('keeps the copy contract', () => {
@@ -89,6 +89,22 @@ describe('CO2 · the standings', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     expect(text).toContain('counts in your audience only')
     expect(text).toContain('6 did this month')
+  })
+
+  it('says a line needs more than one month, on the horizon that gives it one', () => {
+    // DEFAULT_HORIZON is 'this_month' and the charts are gated on months > 1,
+    // so the view every reader opens first is a one-row-per-brand table
+    // reading "1 of 1" under a title promising months. The approved artboard
+    // (mock-sealand, Competitive) is "two small line charts side by side …
+    // Jun to Sep".
+    const one = oneMonthFixture()
+    expect(one.standings.months).toHaveLength(1)
+    const markup = render(competitiveStandings.render(one, 'app', ctx))
+    expect(renderText(markup)).toContain('A line needs more than one month')
+    expect(markup).toContain('/dashboard/competitive?horizon=last_3')
+    // And it says nothing of the sort once the horizon can draw one.
+    expect(renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx)))
+      .not.toContain('A line needs more than one month')
   })
 
   it('prints both changes, and never a blank cell on anybody’s row', () => {

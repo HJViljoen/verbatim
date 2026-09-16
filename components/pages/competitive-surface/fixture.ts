@@ -156,6 +156,27 @@ export function unreadRivalFixture(): CompetitiveSurfaceData {
   }
 }
 
+/** The default horizon: one month on the axis, so a block titled "Standings
+ *  over the months" has no line to draw and says so. */
+export function oneMonthFixture(): CompetitiveSurfaceData {
+  const base = competitiveFixture()
+  const window = horizonWindow('this_month', NOW, '2026-06-01')
+  return {
+    ...base,
+    horizon: 'this_month',
+    window,
+    standings: buildStandingsBlock({
+      brand: 'Össur',
+      rivals: [{ name: 'Ottobock', retiredAt: null }],
+      denominators: OSSUR,
+      axis: window.months,
+      readAxis: ['2026-08-01', ...window.months],
+      month: MONTH,
+      changes: [],
+    }),
+  }
+}
+
 /** A workspace whose months have not been read at all: the standings refuse,
  *  and say so in their own words rather than drawing an empty table. */
 export function unreadMonthsFixture(): CompetitiveSurfaceData {

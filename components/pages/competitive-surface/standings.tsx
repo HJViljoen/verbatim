@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
@@ -7,6 +8,8 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { HORIZON_LABEL } from '@/lib/reading/horizon'
+import { horizonHref } from '@/lib/shell/bar'
 import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries } from '@/lib/pages/competitive-surface'
 
 // CO2 · Standings over the months (design §3 CO2).
@@ -25,6 +28,14 @@ import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries 
 // THE RULE AT EVERY TRACKING CHANGE is drawn once per month, not once per
 // change — Össur logged ten changes in September, and ten rules on one bar is
 // a chart nobody can read.
+//
+// THE CHARTS NEED MORE THAN ONE MONTH, AND THE DEFAULT HORIZON IS ONE. So on
+// the view every reader opens first, a block titled "Standings over the months"
+// is a one-row-per-brand table reading "1 of 1", where the approved artboard is
+// "two small line charts side by side … Jun to Sep". That is the horizon
+// default meeting this block rather than a defect in either, and until it is
+// decided the block says so and hands the reader the address that draws the
+// line, instead of a title promising months over a table of one.
 //
 // BOTH CHANGES ARE PRINTED, AND NEITHER CELL IS EVER BLANK. There was one
 // change column, unlabelled as to which of the two shares it was (the content
@@ -163,6 +174,17 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
             style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
           >
             {s.behind}
+          </p>
+        ) : null}
+        {s.rows.length > 0 && s.months.length <= 1 ? (
+          <p
+            className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
+          >
+            A line needs more than one month, and this reading is one.{' '}
+            {mode === 'app'
+              ? <Link href={`${ctx.appUrl}${horizonHref('/dashboard/competitive', ctx.params ?? {}, 'last_3')}`} className="hover:underline">Open {HORIZON_LABEL.last_3} →</Link>
+              : <>Open {HORIZON_LABEL.last_3} to draw it.</>}
           </p>
         ) : null}
         {s.series.length > 0 && s.months.length > 1 ? (
