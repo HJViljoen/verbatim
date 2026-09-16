@@ -30,6 +30,7 @@ import { sendsBlockArtefact, sendsMonthly, sendsQuarterly, sendsWeekly } from '.
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
+import { cadenceWordOf } from './types'
 import type { ScheduleRow } from './types'
 
 /**
@@ -364,7 +365,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       }
     }
     snapshotId = snap.snapshotId
-    const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
+    const cadenceWord = cadenceWordOf(schedule.cadence)
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
       monthly
         ? renderMonthlyEmail({ data: snap.data as MonthlySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })

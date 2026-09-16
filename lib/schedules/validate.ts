@@ -48,3 +48,32 @@ export const scheduleInputSchema = z
   .refine((s) => Boolean(s.starterKey) !== Boolean(s.reportId), { message: 'Pick one template.', path: ['starterKey'] })
 
 export type ScheduleInput = z.infer<typeof scheduleInputSchema>
+
+/**
+ * The database refusing a cadence this build offers.
+ *
+ * `report_schedules_cadence_check` allows `every_update` and `monthly` until
+ * M8 widens it (supabase/migrations/20260918097000_settings.sql), and M8 is
+ * authored and not applied. The Studio's picker and this schema both offer
+ * `quarterly` now that WP20 builds the artefact, so until the migration lands
+ * an owner who picks Quarterly gets a CHECK violation — and answered with the
+ * generic "Could not save that. Try again." that is a form that lies twice: it
+ * asks for a retry that cannot succeed, and it names no cause. Settings' own
+ * path already degrades honestly for the missing `artefact` COLUMN
+ * (`isMissingArtefact`); this is the same courtesy for a refused VALUE.
+ *
+ * Postgres 23514 is check_violation; the constraint's name is in the message
+ * and, on PostgREST, in `details` too.
+ */
+export function isUnsupportedCadence(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const e = error as { code?: string | null; message?: string | null; details?: string | null }
+  if ((e.code ?? '') !== '23514') return false
+  const said = `${e.message ?? ''} ${e.details ?? ''}`
+  return said.includes('report_schedules_cadence_check')
+}
+
+/** What to tell the person, in the product's own words for "not shipped yet"
+ *  — the sentence Settings › Reports and recipients already uses. */
+export const CADENCE_NOT_STORED =
+  'We cannot store that cadence yet — the part of the product that records it has not shipped.'

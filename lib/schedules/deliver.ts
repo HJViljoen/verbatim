@@ -23,6 +23,7 @@ import { renderQuarterlyEmail } from '../email/quarterly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
+import { cadenceWordOf } from './types'
 import type { ScheduleRow, SendRow } from './types'
 
 /**
@@ -90,7 +91,7 @@ export async function readyForReview(
     ? data.subject
     : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
-    : renderDigestEmail({ data, shareUrl: null, appUrl: a.baseUrl, attached: schedule?.attach_pdf ?? false, cadenceWord: schedule?.cadence === 'monthly' ? 'monthly' : 'weekly' }).subject
+    : renderDigestEmail({ data, shareUrl: null, appUrl: a.baseUrl, attached: schedule?.attach_pdf ?? false, cadenceWord: cadenceWordOf(schedule?.cadence) }).subject
 
   await admin
     .from('report_sends')
@@ -223,7 +224,7 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // A quarterly send is recorded as a send; what it PRINTED is not yet in
     // the record, and that is WP18's table to extend, not this merge's.
     const recordable = weekly ?? monthly
-    const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
+    const cadenceWord = cadenceWordOf(schedule.cadence)
     const imageTiles = document || arranged ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))

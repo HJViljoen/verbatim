@@ -4,6 +4,7 @@ import { BlockQuotes } from '@/components/blocks/quote'
 import { TokenProse } from '@/components/blocks/prose'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
+import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
 import { Level, Note, Row, Stored } from './parts'
@@ -32,6 +33,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
 
   render(data, mode = 'app') {
     const r = data.read
+    const voices = r.quotes.filter(hasQuote)
     const i = r.interpretation
     return (
       <BlockFrame
@@ -65,9 +67,14 @@ export const quarterlyRead: Block<QuarterlyData> = {
             </div>
           ) : null}
 
-          {r.quotes.length > 0 ? (
+          {/* THE QUOTES THAT SURVIVED, and a wrapper is not one. A withdrawn
+              comment leaves `{ quote: null, cite }` behind (the quote is a
+              FIELD here, not an array member, so `resolveQuotes` nulls it
+              rather than dropping it) — this list counted those and then read
+              `q.quote.ref`. */}
+          {voices.length > 0 ? (
             <div className={mode === 'email' ? undefined : 'mt-3'}>
-              <BlockQuotes mode={mode} quotes={r.quotes.map((q) => ({ quote: q.quote, cite: q.cite }))} />
+              <BlockQuotes mode={mode} quotes={voices.map((q) => ({ quote: q.quote, cite: q.cite }))} />
             </div>
           ) : null}
 
@@ -106,7 +113,7 @@ export const quarterlyRead: Block<QuarterlyData> = {
   },
 
   quotes(data) {
-    return data.read.quotes.map((q) => q.quote.ref).filter(Boolean)
+    return data.read.quotes.filter(hasQuote).map((q) => q.quote.ref).filter(Boolean)
   },
 
   emptyState(data) {

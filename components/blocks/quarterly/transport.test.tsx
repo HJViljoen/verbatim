@@ -90,6 +90,22 @@ describe('the email', () => {
     expect(three.html).toContain('the other one — what we could not settle — is in the review itself')
   })
 
+  // AND IT NAMES THE PAGES IT IS CARRYING, for the same reason. "the first 2
+  // pages" is true only of an arrangement that happens to store the cover and
+  // the read first; one that stored the cover third described itself wrongly.
+  it('names the pages it IS carrying, whatever position the arrangement gave them', () => {
+    expect(email.html).toContain('This note carries the quarter and our read')
+    expect(email.html).not.toContain('the first 2 pages')
+    const reordered = renderQuarterlyEmail({
+      data: { ...snapshot, keys: ['quarterly.subjects', 'quarterly.method', 'quarterly.cover'] },
+      shareUrl: null,
+      appUrl: APP,
+      attached: false,
+    })
+    expect(reordered.html).toContain('This note carries the quarter;')
+    expect(reordered.html).not.toContain('the first 1 pages')
+  })
+
   it('is table markup at the artefact width, with no class and no CSS variable', () => {
     expect(email.html).toContain(String(QUARTERLY_EMAIL_WIDTH))
     expect(email.html).not.toMatch(/class="/)

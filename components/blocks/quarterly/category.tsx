@@ -71,7 +71,7 @@ export const quarterlyCategory: Block<QuarterlyData> = {
 
     return frame(
       <div>
-        <Note mode={mode} tone="body">{c.basis} {data.gate}</Note>
+        <Note mode={mode} tone="body">{c.gate ? `${c.basis} ${c.gate}` : c.basis}</Note>
 
         {c.growing.length + c.fading.length > 0 ? (
           <div className={mode === 'email' ? undefined : 'mt-2'}>

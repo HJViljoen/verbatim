@@ -60,8 +60,14 @@ export const quarterlySubjects: Block<QuarterlyData> = {
 
     return frame(
       <div>
+        {/* AND WHETHER THAT MONTH IS EVEN IN THE QUARTER. Under a heading
+            reading "Q3 2026 against Q2 2026", naming October is not the same
+            as saying October falls outside Q3 — which is what a reader takes
+            two month-level columns to mean. `monthOutsideNote` is the same
+            sentence the cover and the category page print. */}
         <Note mode={mode} tone="body">
           The first two columns are {s.monthLabel} on its own. The last two are this quarter against the one before it.
+          {s.monthNote ? ` ${s.monthNote}` : ''}
         </Note>
         {s.rows.map((row) => (
           <Row

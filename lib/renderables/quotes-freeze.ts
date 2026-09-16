@@ -103,6 +103,26 @@ export function freezeQuotes<T>(data: T): { data: T; refs: string[] } {
   return { data: frozen, refs: [...refs] }
 }
 
+/**
+ * A wrapper whose quote survived resolution.
+ *
+ * `resolveQuotes` DROPS an unresolvable quote from an ARRAY, but a Quote that
+ * is a FIELD of an object is nulled where it stands and its wrapper survives —
+ * `{ quote: null, cite: 'tiktok · 14 Sep …' }`. Every `{ quote, cite }` shape
+ * in the block layer is that second case, so a page that read `q.quote.ref` or
+ * handed `q.quote` to a renderer threw on the one event the ref spine exists
+ * for: a comment withdrawn after the snapshot was frozen, on the share link
+ * whose own header promises "quoted voices read live, so a withdrawn comment
+ * never travels".
+ *
+ * Use it to filter a list (`rows.filter(hasQuote)`) or to guard one wrapper.
+ * A FROZEN quote still has `text: ''` and is a Quote — `BlockQuote` is what
+ * says "counted, not quotable" over that; this is about words that are GONE.
+ */
+export function hasQuote<T extends { quote: unknown }>(row: T | null | undefined): row is T & { quote: Quote } {
+  return Boolean(row) && isQuote((row as T).quote)
+}
+
 /** Every distinct quote ref in the data (frozen or not). */
 export function collectQuoteRefs(data: unknown): string[] {
   const refs = new Set<string>()

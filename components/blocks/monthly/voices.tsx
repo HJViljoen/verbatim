@@ -5,6 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
+import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { MonthlyData, SubjectVoiceRow } from '@/lib/pages/monthly'
 
@@ -76,7 +77,10 @@ export const monthlyVoices: Block<MonthlyData> = {
   },
 
   quotes(data): QuoteRef[] {
-    return data.voices.rows.map((r) => r.voice?.quote.ref).filter((ref): ref is string => Boolean(ref))
+    // `r.voice?.quote.ref` threw on a withdrawn comment: the voice wrapper
+    // survives resolution with `quote: null`, so the optional chain passes and
+    // the `.ref` does not.
+    return data.voices.rows.map((r) => (hasQuote(r.voice) ? r.voice.quote.ref : null)).filter((ref): ref is string => Boolean(ref))
   },
 
   emptyState(data) {
@@ -100,6 +104,13 @@ function Row({ row, mode, appUrl }: { row: SubjectVoiceRow; mode: RenderMode; ap
     </Link>
   )
 
+  // A VOICE WHOSE WORDS WERE WITHDRAWN IS STILL A VOICE ROW, and it keeps its
+  // cell: `BlockQuote` says "counted, not quotable — this comment has since
+  // been removed" over a quote with no words, which is the whole point of the
+  // ref spine. What it must NOT fall through to is `row.note`, which says why
+  // this subject was never quoted and would be a different claim. The quote
+  // reaching here as null is `resolveQuotes` nulling a FIELD rather than
+  // dropping an array member; BlockQuote takes it.
   const body = row.voice ? (
     <BlockQuote
       quote={row.voice.quote}

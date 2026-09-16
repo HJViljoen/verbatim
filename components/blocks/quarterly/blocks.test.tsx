@@ -7,11 +7,11 @@ import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib
 import { CLIENT_AUDIENCE } from '@/lib/rivals'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
-import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture } from './fixture'
+import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture()]
+const STATES = [quarterlyFixture(), formingFixture(), closedFixture(), afterQuarterFixture(), thinMonthFixture()]
 
 describe('the eight pages', () => {
   it('render in all three modes on every state and keep the copy contract', () => {
@@ -121,6 +121,101 @@ describe('the six-month gate', () => {
     expect(text).toContain('your 8th monthly reading')
     expect(text).not.toContain('the quarter view needs 6')
   })
+
+  // ON EVERY PAGE THAT PRINTS IT, not only the cover. The category page printed
+  // it unconditionally, so a workspace standing at eight readings — one that
+  // cleared the gate two readings ago — was told "Quarter against quarter needs
+  // six months — you have 8." as a live caveat under its own basis line.
+  it('is on the category page below six readings, and gone above', () => {
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx)))
+      .toContain(quarterGateSentence(3))
+    for (const read of [quarterlyFixture(), afterQuarterFixture()]) {
+      const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(read, 'app', ctx))
+      expect(text).toContain('Movers and the mix are')
+      expect(text).not.toContain('Quarter against quarter needs six months')
+    }
+  })
+})
+
+// A COMPARISON NEVER ATTEMPTED IS NOT A COMPARISON DRAWN. `unsettledItems`
+// reads the verdicts the pages BUILT, so on a workspace whose quarter half
+// cannot be read at all — production today, M3 unapplied — nothing is
+// unanswered and the page fell to "Every comparison this quarter asked for was
+// drawn.", five pages after one saying the quarter-on-quarter reading is not
+// recorded for this workspace.
+// THE READ PAGE ARGUES OVER THE QUARTER, so what it counts under that argument
+// is the quarter's. `counted` walked the full verdict list — month verdicts
+// included — under "What is counted under it", two lines below a paragraph
+// saying "this quarter".
+// EVERY DATE ON A CLIENT-FACING SHEET IS THE READER'S. The method table printed
+// the quarter's bounds raw — "Period · 2026-07-01 – 2026-09-30" — where every
+// other date on the eight pages goes through fullDate / shortDate / longMonth.
+describe('the method page dates the quarter in words', () => {
+  it('prints the period as dates a reader reads', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(quarterlyFixture(), 'app', ctx))
+    expect(text).toContain('1 Jul – 30 Sep 2026')
+    expect(text).not.toContain('2026-07-01')
+    expect(text).not.toContain('2026-09-30')
+  })
+})
+
+// THE CATEGORY PAGE'S FOUR SILENCES, AND NO TWO OF THEM THE SAME CLAIM. The
+// quarter's theme read is bounded to the movers the month named; a month that
+// moved nothing names none, and that used to fall through to the measurement
+// sentence — reporting a comparison that was never attempted as one that found
+// nothing.
+describe('the category page names which silence it is in', () => {
+  it('says nothing was named to follow when the month moved nothing', () => {
+    const thin = thinMonthFixture()
+    // No theme comparison exists, because no theme was named to compare.
+    expect(thin.category.quarter.some((v) => v.objectKind === 'theme')).toBe(false)
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(thin, 'app', ctx))
+    expect(text).toContain('no theme was named to follow across this quarter')
+    expect(text).not.toContain('carried a reading on both sides of this quarter')
+    // And the state it is NOT in: the movers of a month that moved.
+    expect(quarterlyFixture().category.quarter.some((v) => v.objectKind === 'theme')).toBe(true)
+  })
+
+  it('says the migration is missing where it is', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(formingFixture(), 'app', ctx))
+    expect(text).toContain('not recorded for this workspace yet')
+  })
+
+  it('says nothing at all where the pair was read and answered', () => {
+    expect(quarterlyFixture().category.quarterNote).toBeNull()
+  })
+})
+
+describe('the read page counts over the same window it argues over', () => {
+  it('counts nothing where no quarter comparison could be made', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(formingFixture(), 'app', ctx))
+    expect(text).not.toContain('What is counted under it')
+  })
+
+  it('counts the quarter’s own readings where they exist', () => {
+    const read = quarterlyFixture()
+    const quarter = read.read.verdicts.filter((v) => v.window.kind === 'quarter')
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(read, 'app', ctx))
+    expect(text).toContain('What is counted under it')
+    for (const line of read.read.counted) {
+      // Every counted line names an object the QUARTER read, not a month one.
+      expect(quarter.some((v) => line.startsWith(`${v.objectLabel}:`))).toBe(true)
+    }
+  })
+})
+
+describe('the last page tells a silence from a settled question', () => {
+  it('says the quarter comparison was never attempted where it could not be', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(formingFixture(), 'app', ctx))
+    expect(text).toContain('No quarter-on-quarter comparison was attempted')
+    expect(text).not.toContain('Every comparison this quarter asked for was drawn')
+  })
+
+  it('still says every comparison was drawn where every comparison was made', () => {
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.unsettled'].render(quarterlyFixture(), 'app', ctx))
+    expect(text).toContain('Every comparison this quarter asked for was drawn')
+    expect(text).not.toContain('was attempted')
+  })
 })
 
 describe('what each page owes the reader', () => {
@@ -218,9 +313,24 @@ describe('what each page owes the reader', () => {
     expect(after.cover.stamp).not.toContain('still filling')
     expect(after.method.numbers[0].note).toBeUndefined()
     expect(after.category.basis).toContain('October is outside this quarter')
+    // EVERY PAGE THAT PRINTS A MONTH FIGURE, not three of five. Page 3 named
+    // its month and never said it fell outside the quarter, under a heading
+    // reading "Q3 2026 against Q2 2026"; page 5 named no month at all and took
+    // its meta from a different surface's read, printing "Sep 2026" while the
+    // rest of the sheet said October.
+    for (const key of ['quarterly.subjects', 'quarterly.rivals'] as const) {
+      const text = renderText(QUARTERLY_BLOCKS[key].render(after, 'app', ctx))
+      expect(text).toContain('October')
+      expect(text).toContain('October is outside this quarter')
+    }
+    expect(after.rivals.monthLabel).toBe('October')
     // And a review of the quarter it is standing in still says so.
     expect(quarterlyFixture().cover.stamp).toContain('Q3 2026 still filling')
     expect(quarterlyFixture().cover.stamp).not.toContain('outside this quarter')
+    for (const key of ['quarterly.subjects', 'quarterly.rivals'] as const) {
+      expect(renderText(QUARTERLY_BLOCKS[key].render(quarterlyFixture(), 'app', ctx)))
+        .not.toContain('outside this quarter')
+    }
   })
 
   it('states the rule of the moves page on the moves page', () => {

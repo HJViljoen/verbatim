@@ -53,7 +53,10 @@ export const quarterlyRivals: Block<QuarterlyData> = {
         title={quarterlyRivals.title}
         question={quarterlyRivals.question}
         mode={mode}
-        meta={r.standings ? r.standings.monthLabel : undefined}
+        // THE MONTH THESE ROWS ARE OF. `standings.monthLabel` is the
+        // Competitive surface's own read and can be a different month: it
+        // headed this sheet "Sep 2026" while every other page said October.
+        meta={r.monthLabel}
       >
         {children}
       </BlockFrame>
@@ -79,13 +82,17 @@ export const quarterlyRivals: Block<QuarterlyData> = {
             {row.retiredAt ? ' · no longer tracked' : null}
           </Row>
         ))}
+        {/* A MONTH OUTSIDE THE QUARTER SAYS SO HERE TOO. Every row on this
+            page is the month the product is in, and on a review of a closed
+            quarter that is not a month of the quarter in the heading. */}
+        {r.monthNote ? <Note mode={mode}>{r.monthNote}</Note> : null}
         {r.standingsNote ? <Note mode={mode}>{r.standingsNote}</Note> : null}
         {r.rivalsNote ? <Note mode={mode}>{r.rivalsNote}</Note> : null}
         {r.standings ? <Note mode={mode}>{r.standings.denominatorLine} {r.standings.precedence}</Note> : null}
         {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
         {r.dualMention != null ? (
           <Note mode={mode}>
-            <Figure mode={mode} value={fmtInt(r.dualMention)} /> of your own videos also named a tracked rival this month; each is counted once, in one audience.
+            <Figure mode={mode} value={fmtInt(r.dualMention)} /> of your own videos also named a tracked rival in {r.monthLabel}; each is counted once, in one audience.
           </Note>
         ) : null}
 

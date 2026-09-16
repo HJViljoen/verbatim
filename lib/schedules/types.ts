@@ -28,6 +28,28 @@ export const CADENCE_COPY: { key: ScheduleCadence; label: string; help: string }
  *  `lib/schedules/run.ts`), so the picker is now all three. */
 export const CADENCES = CADENCE_COPY
 
+/**
+ * The word a subject line uses for a schedule's rhythm — "your {word} update"
+ * (`digestSubject`, lib/email/subject.ts).
+ *
+ * THREE CADENCES, THREE WORDS. Three call sites each wrote
+ * `cadence === 'monthly' ? 'monthly' : 'weekly'`, which called a quarterly
+ * schedule "weekly". Harmless only for as long as an arranged report is the
+ * one artefact that reaches `renderDigestEmail`, and a wrong word one branch
+ * away from a send. `every_update` is "weekly" because that is the rhythm the
+ * scheduled update actually keeps and what the product has always called it.
+ */
+export const CADENCE_WORD: Record<ScheduleCadence, string> = {
+  every_update: 'weekly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+}
+
+/** …and a cadence string off a row, which may be anything the column allows. */
+export function cadenceWordOf(cadence: string | null | undefined): string {
+  return CADENCE_WORD[cadence as ScheduleCadence] ?? CADENCE_WORD.every_update
+}
+
 export interface ScheduleRow {
   id: string
   client_id: string

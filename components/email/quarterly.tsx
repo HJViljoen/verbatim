@@ -53,19 +53,29 @@ function andList(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
 }
 
+/** The pages an arrangement names, in the reader's words, in the arrangement's
+ *  own order. */
+function pageNames(keys: readonly string[]): string[] {
+  return keys
+    .map(quarterPageKindOf)
+    .filter((k): k is NonNullable<ReturnType<typeof quarterPageKindOf>> => k != null)
+    .map((k) => QUARTER_PAGE_IN_SENTENCE[k])
+}
+
 export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }: QuarterlyEmailProps) {
   const carried = data.keys.filter((k) => QUARTERLY_EMAIL_KEYS.includes(k))
   const blocks = quarterlyBlocksFor(carried)
+  // NAMED, NOT COUNTED FROM THE FRONT. "the first {n} pages" is true only of an
+  // arrangement that happens to store the cover and the read first; one that
+  // stored the cover third would describe itself wrongly, which is the shape
+  // `heldNames` was fixed for and this half was not.
+  const carriedNames = pageNames(carried)
   // THE PAGES THIS NOTE IS NOT CARRYING, NAMED FROM THE ARRANGEMENT. The
   // sentence counted the stored keys and then named all six remaining pages in
   // fixed text, so a four-key arrangement read "the other 1 — your subjects,
   // the category, the rivals, your moves, how the quarter was read and what we
   // could not settle — are in the review itself."
-  const heldNames = data.keys
-    .filter((k) => !QUARTERLY_EMAIL_KEYS.includes(k))
-    .map(quarterPageKindOf)
-    .filter((k): k is NonNullable<typeof k> => k != null)
-    .map((k) => QUARTER_PAGE_IN_SENTENCE[k])
+  const heldNames = pageNames(data.keys.filter((k) => !QUARTERLY_EMAIL_KEYS.includes(k)))
   const held = heldNames.length
   return (
     <html lang="en">
@@ -109,7 +119,7 @@ export function QuarterlyEmail({ data, shareUrl, appUrl, attached, ctx, preheade
                         <div style={{ ...text.small, marginTop: 12 }}>
                           {attached ? 'The PDF is attached. ' : ''}
                           {held > 0
-                            ? `This note carries ${carried.length === 1 ? 'one page' : `the first ${carried.length} pages`}; ${
+                            ? `This note carries ${carriedNames.length ? andList(carriedNames) : 'none of the review’s pages'}; ${
                                 held === 1 ? 'the other one' : `the other ${held}`
                               } — ${andList(heldNames)} — ${held === 1 ? 'is' : 'are'} in the review itself.`
                             : 'The review itself carries every page.'}

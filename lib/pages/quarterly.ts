@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { fmtInt, fullDate, longMonth, monthName } from '../format'
+import { fmtInt, fullDate, longMonth, monthName, shortDate } from '../format'
 import type { Quote, Scope } from '../renderables/types'
 import { selectAll } from '../supabase-admin'
 import { quarterChange, QUARTER_UNLOCKS_AT } from '../reading/bands'
@@ -150,6 +150,10 @@ export interface SubjectQuarterRow {
 export interface SubjectsPage {
   rows: SubjectQuarterRow[]
   monthLabel: string
+  /** "October is outside this quarter …", where the month-level columns are of
+   *  a month the heading's quarter does not contain. Page 3 named its month and
+   *  never said that, under a heading reading "Q3 2026 against Q2 2026". */
+  monthNote: string | null
   /** The line under the table about which column carries what. */
   note: string | null
   /** Said instead of the table when `subjects` (M4) is not applied here. */
@@ -159,7 +163,6 @@ export interface SubjectsPage {
   /** Why the two quarter columns are empty, when they are. Null once a row
    *  carries one. */
   quarterNote: string | null
-  setLine: string | null
 }
 
 export interface CategoryPage {
@@ -169,6 +172,10 @@ export interface CategoryPage {
   monthLabel: string
   /** "Movers and mix are September against August." */
   basis: string
+  /** The six-month gate, when this workspace has not cleared it — null once it
+   *  has. Printed unconditionally, this page told a workspace standing at nine
+   *  readings that the quarter view "needs six months — you have 9". */
+  gate: string | null
   growing: Mover[]
   fading: Mover[]
   moversNote: string | null
@@ -192,6 +199,13 @@ export interface CategoryPage {
 
 export interface RivalsPage {
   rows: RivalRow[]
+  /** The month THESE ROWS are of — Overview's, which is the month the product
+   *  is in. The page headed itself off `standings.monthLabel` instead, a
+   *  different read of a different surface: it printed "Sep 2026" while the
+   *  rest of the sheet said October. */
+  monthLabel: string
+  /** And whether that month falls outside the quarter under review. */
+  monthNote: string | null
   /** Whether the panel reading behind the two shares exists at all. False means
    *  `month_audience_stats` (M5) is not applied here, so a blank cell reads
    *  "not recorded yet" and NOT "not observed", which is a measurement
@@ -223,15 +237,15 @@ export interface MovesPage {
   rule: string
 }
 
+// WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
+// `objectKind` rode along from the row and were rendered nowhere; the object
+// key `flagOutcome` joins on is read off the FlagRow where the join happens.
 export interface QuarterFlag {
   label: string
-  objectKind: string
   weekStart: string
   weekEnd: string
   k: number
   n: number
-  changePts: number
-  bandPts: number
   denominator: string
   /** What it turned out to be — the next reading's verdict on the same object,
    *  or the honest absence of one. */
@@ -245,7 +259,7 @@ export interface MethodPage {
   line: string
   lines: string[]
   /** How many checks ran this quarter, and how many fired. */
-  checks: { ran: number; flagged: number; quiet: number; recorded: boolean }
+  checks: { ran: number; flagged: number; recorded: boolean }
   flags: QuarterFlag[]
   flagsNote: string | null
   /** The corpus in numbers, row by row. */
@@ -265,6 +279,13 @@ export interface UnsettledItem {
 
 export interface UnsettledPage {
   items: UnsettledItem[]
+  /** What was never ASKED, as against what was asked and could not be
+   *  answered. `items` can only hold comparisons that were BUILT, so on a
+   *  workspace whose quarter half cannot be read at all the list is empty and
+   *  the page used to read "Every comparison this quarter asked for was drawn."
+   *  — on the same artefact whose other pages say the quarter-on-quarter
+   *  reading is not recorded. Null when both halves were attempted. */
+  notAsked: string | null
   waiting: string[]
   heldBack: string[]
   /** When the first quarter-on-quarter verdict lands, in the reader's words —
@@ -422,9 +443,31 @@ export function monthBasisClause(month: string, quarter: Quarter): string | null
   return `the month-level pages read ${longMonth(month)}, outside this quarter`
 }
 
-/** What a flag turned out to be, said in one clause. */
-export function flagOutcome(flag: { label: string }, later: readonly Verdict[]): string {
-  const match = later.find((v) => v.objectLabel.toLowerCase() === flag.label.toLowerCase())
+/** The same fact as a sentence a page can print under its own rows. Null while
+ *  the month is inside the quarter, which is the only case in which a document
+ *  headed Q3 can let a month figure speak for itself. */
+export function monthOutsideNote(month: string, quarter: Quarter): string | null {
+  if (month >= quarter.from && month <= quarter.to) return null
+  return `${longMonth(month)} is outside this quarter — it is the month the product is in now.`
+}
+
+/**
+ * What a flag turned out to be, said in one clause.
+ *
+ * JOINED ON KIND AND ID, NEVER ON LABEL. A flag is written weeks earlier by a
+ * different run, and `anomaly_flags`' own column comment says it: "label — What
+ * the reader was shown. Decoration, never a key — theme labels churn about 88%
+ * run to run" (AGENTS.md: do not join themes by label). The first cut matched
+ * `objectLabel.toLowerCase() === label.toLowerCase()` and compared neither kind
+ * nor id, so a re-labelled theme printed "no later reading of the same object
+ * has been taken" when one had been, and a flag of another KIND whose label
+ * happened to match a theme's printed that theme's outcome as its own — a rival
+ * flagged "fit and comfort" reading the theme's verdict. The table keys on
+ * (client_id, run_id, object_kind, object_id) and indexes on
+ * (client_id, object_kind, object_id, week_start); this is that key.
+ */
+export function flagOutcome(flag: { objectKind: string; objectId: string }, later: readonly Verdict[]): string {
+  const match = later.find((v) => v.objectKind === flag.objectKind && v.objectId === flag.objectId)
   if (!match) return 'no later reading of the same object has been taken'
   if (match.state === 'moved') return `the month's own reading agreed — it cleared its band`
   if (match.state === 'no_clear_change') return `the month's own reading did not agree — inside the band`
@@ -537,12 +580,19 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   // the labels live on the month series the pages already loaded, so the
   // quarter is read for the objects those pages name and an unlabelled id can
   // never reach a page.
-  const themeIds = [...overview.category.growing, ...overview.category.fading].map((m) => m.id)
+  const themeIds = quarterThemeIds(overview)
 
   // THE WINDOW PAIR. One read per side, over DISTINCT videos — never three
   // month rows added together.
   const reading = scope.reading?.client ?? readingClient()
-  const themeOptions = { runId: themedRunId, objectIds: themeIds.length ? themeIds : undefined }
+  // AN EMPTY SET IS NOT "NO BOUND". A thin month names no mover, and
+  // `objectIds: undefined` turned that into an UNBOUNDED read whose every row
+  // was then dropped for want of a label — a read of the whole quarter, paid
+  // for, thrown away, and reported as though the pair had been compared and
+  // found nothing. Nothing was asked; `buildCategory` says so in its own words.
+  const themeOptions = themeIds.length
+    ? { runId: themedRunId, objectIds: themeIds }
+    : { runId: null }
   const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, record] = await Promise.all([
     quarterWindowFor(reading, clientId, quarter, themeOptions),
     quarterWindowFor(reading, clientId, prior, themeOptions),
@@ -602,6 +652,19 @@ export async function subjectWindowFor(
   }
 }
 
+/**
+ * The themes this artefact follows across the quarter: the movers its own
+ * category page drew, and no others.
+ *
+ * One definition, read by the LOAD (to bound the window read) and by the
+ * COMPOSE (to tell "nothing was asked" from "nothing was found"). Empty is a
+ * real answer — a thin month moves nothing clearly — and it means the quarter's
+ * theme half is not read at all rather than read and discarded.
+ */
+export function quarterThemeIds(overview: OverviewData): string[] {
+  return [...overview.category.growing, ...overview.category.fading].map((m) => m.id)
+}
+
 export interface ComposeQuarterlyInput {
   overview: OverviewData
   market: MarketSurfaceData | null
@@ -649,26 +712,35 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // The theme half is its own read and its own silence: a window pair can
   // carry denominators and no clustering to count numerators under.
   const themesRead = a.thisQuarter.themes != null && a.lastQuarter.themes != null
+  // …and whether any theme was NAMED to follow. The set is the current month's
+  // movers; a month that moved nothing clearly names none, and a quarter read
+  // for no object has not been compared and found nothing — it has not been
+  // asked. Four silences on that page now, and no two of them are the same
+  // claim.
+  const themesAsked = quarterThemeIds(overview).length > 0
   const subjectsRead = windowApplied && a.subjectsNow != null && a.subjectsBefore != null
   // The month the month-level pages are of is the month the PRODUCT is in, and
   // on a review of a closed quarter that is a month outside it. Every page that
   // prints a month figure says so rather than letting a Q3 masthead speak for
   // a November reading.
-  const monthOutside = overview.month < quarter.from || overview.month > quarter.to
+  const monthNote = monthOutsideNote(overview.month, quarter)
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, subjectsRead })
+  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead })
   const category = buildCategory({
     overview,
     quarterVerdicts,
     monthLabel,
+    unlocked,
+    gate,
     windowApplied,
     themesRead,
-    monthOutside,
+    themesAsked,
+    monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
   })
-  const rivals = buildRivals({ overview, competitive: a.competitive })
+  const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
 
   // Everything the pages may speak from, in one list: the interpretation
@@ -677,7 +749,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
   const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt })
   const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
-  const unsettled = buildUnsettled({ verdicts, readings, overview, method })
+  const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
 
   return {
     brand: overview.brand,
@@ -981,7 +1053,15 @@ function buildRead(a: {
     advice,
     adviceNote: a.market ? a.market.advice.empty : 'The advice ledger could not be read for this workspace.',
     confidence: confidenceOf(a.verdicts, a.unlocked),
-    counted: countedLines(a.verdicts),
+    // THE QUARTER HALF, LIKE THE INTERPRETATION TWO LINES ABOVE IT. Handed the
+    // whole list, "What is counted under it" printed a MONTH's figure under a
+    // paragraph arguing about the quarter — September against August under
+    // "Nothing cleared its band this quarter", and on a workspace where no
+    // quarter verdict can be built at all every counted line was a month's. On
+    // a populated read a Q3 line and a September line sat in one list with
+    // nothing to tell them apart. A month's counted figures belong under a
+    // heading that names the month, and this heading does not.
+    counted: countedLines(a.quarterVerdicts),
   }
 }
 
@@ -1009,6 +1089,7 @@ function buildSubjects(a: {
   unlocked: boolean
   gate: string
   monthLabel: string
+  monthNote: string | null
   subjectsRead: boolean
 }): SubjectsPage {
   const block = a.overview.subjects
@@ -1035,6 +1116,7 @@ function buildSubjects(a: {
   return {
     rows,
     monthLabel: a.monthLabel,
+    monthNote: a.monthNote,
     note: block.note,
     notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet, so there is no quarter-on-quarter table to draw.' : null,
     gate: a.unlocked ? null : a.gate,
@@ -1047,7 +1129,6 @@ function buildSubjects(a: {
       : !a.subjectsRead
         ? 'Your subjects are not counted as one window for this workspace yet, so the quarter columns cannot be drawn.'
         : 'No subject carried a reading on both sides of this quarter, so the quarter columns are empty.',
-    setLine: null,
   }
 }
 
@@ -1057,9 +1138,12 @@ function buildCategory(a: {
   overview: OverviewData
   quarterVerdicts: Verdict[]
   monthLabel: string
+  unlocked: boolean
+  gate: string
   windowApplied: boolean
   themesRead: boolean
-  monthOutside: boolean
+  themesAsked: boolean
+  monthNote: string | null
   thisQuarter: WindowReading
   lastQuarter: WindowReading
 }): CategoryPage {
@@ -1080,8 +1164,14 @@ function buildCategory(a: {
     // is not even inside it, and the sentence has to say so — see
     // `monthBasisClause`.
     basis: `Movers and the mix are ${a.monthLabel} against ${prevMonthLabel}.${
-      a.monthOutside ? ` ${a.monthLabel} is outside this quarter — it is the month the product is in now.` : ''
+      a.monthNote ? ` ${a.monthNote}` : ''
     }`,
+    // THE GATE IS A CAVEAT, NOT A MASTHEAD. It says the quarter view needs six
+    // monthly readings and names how many stand behind this one, which reads
+    // as a live warning; printed unconditionally it said "needs six months —
+    // you have 9" to a workspace that cleared the gate three readings ago.
+    // `buildSubjects` has always dropped it at six; this page now does too.
+    gate: a.unlocked ? null : a.gate,
     growing: c.growing,
     fading: c.fading,
     moversNote: c.moversNote,
@@ -1093,17 +1183,22 @@ function buildCategory(a: {
     mood: c.mood,
     moodNote: c.moodNote,
     quarter,
-    // THREE SILENCES, AND THEY ARE NOT THE SAME CLAIM. No windowed reading at
-    // all is a migration that has not been applied; a windowed reading with no
-    // clustering behind it is an update that has not themed; and a pair of
-    // reads that produced no comparable row is a measurement.
+    // FOUR SILENCES, AND NO TWO OF THEM ARE THE SAME CLAIM. No windowed
+    // reading at all is a migration that has not been applied; no theme named
+    // to follow is a month that moved nothing clearly, so nothing was LOOKED
+    // FOR; a windowed reading with no clustering behind it is an update that
+    // has not themed; and a pair of reads that produced no comparable row is a
+    // measurement. The fourth used to be folded into the last, which stated a
+    // measurement about a question nobody asked.
     quarterNote: !a.windowApplied
       ? 'The quarter-on-quarter reading is not recorded for this workspace yet, so only the month is compared.'
-      : !a.themesRead
-        ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
-        : quarter.length === 0
-          ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
-          : null,
+      : !a.themesAsked
+        ? `Nothing moved clearly in ${a.monthLabel}, so no theme was named to follow across this quarter.`
+        : !a.themesRead
+          ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
+          : quarter.length === 0
+            ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
+            : null,
     quarterVolume: videos != null && before != null ? { videos, before } : null,
   }
 }
@@ -1116,10 +1211,17 @@ function previousMonthOf(month: string): string {
 
 // ---- page 5 · rivals ----------------------------------------------------------
 
-function buildRivals(a: { overview: OverviewData; competitive: CompetitiveSurfaceData | null }): RivalsPage {
+function buildRivals(a: {
+  overview: OverviewData
+  competitive: CompetitiveSurfaceData | null
+  monthLabel: string
+  monthNote: string | null
+}): RivalsPage {
   const co = a.competitive
   return {
     rows: a.overview.rivals.rows,
+    monthLabel: a.monthLabel,
+    monthNote: a.monthNote,
     recorded: a.overview.rivals.recorded,
     months: co?.standings.months ?? [],
     standings: co?.standings ?? null,
@@ -1176,6 +1278,9 @@ interface CheckRow {
 
 export interface FlagRow {
   object_kind: string
+  /** The key `flagOutcome` joins on — a subjects.id, an insight category slug,
+   *  a `competitor:<name>` string or a theme_registry.id. */
+  object_id: string
   label: string
   denominator: string
   week_start: string
@@ -1206,15 +1311,12 @@ function buildMethod(a: {
 
   const flags: QuarterFlag[] = checks.flags.map((f) => ({
     label: f.label,
-    objectKind: f.object_kind,
     weekStart: f.week_start,
     weekEnd: f.week_end,
     k: f.week_k,
     n: f.week_n,
-    changePts: Number(f.change_pts),
-    bandPts: Number(f.band_pts),
     denominator: f.denominator,
-    outcome: flagOutcome(f, a.verdicts),
+    outcome: flagOutcome({ objectKind: f.object_kind, objectId: f.object_id }, a.verdicts),
     sentences: f.explanation?.sentences ?? [],
   }))
 
@@ -1234,7 +1336,6 @@ function buildMethod(a: {
     checks: {
       ran: checks.ran,
       flagged: checks.flaggedRuns,
-      quiet: Math.max(0, checks.ran - checks.flaggedRuns),
       recorded: checks.recorded,
     },
     flags,
@@ -1262,7 +1363,12 @@ export function methodNumbers(
     // `overview.monthStatus` this row said "still filling" about a quarter that
     // had closed weeks earlier, because the MONTH the product is in was
     // filling.
-    { label: 'Period', value: `${quarter.from} – ${quarter.to}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
+    // AND IN THE READER'S DATES. This row printed the bounds raw — "Period ·
+    // 2026-07-01 – 2026-09-30" — on a client-facing sheet where every other
+    // date goes through fullDate / shortDate / longMonth; the mock's own row
+    // reads "1 Jul – 28 Sep 2026". The year is on the second date only,
+    // because a quarter never crosses one.
+    { label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
     out.push({ label: 'The corpus', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
@@ -1336,7 +1442,7 @@ export async function loadQuarterChecks(
     const flags = await selectAll<FlagRow>(() =>
       supabase
         .from('anomaly_flags')
-        .select('object_kind, label, denominator, week_start, week_end, week_k, week_n, change_pts, band_pts, explanation')
+        .select('object_kind, object_id, label, denominator, week_start, week_end, week_k, week_n, change_pts, band_pts, explanation')
         .eq('client_id', clientId)
         .in('run_id', flaggedRuns)
         .order('week_start', { ascending: true })
@@ -1358,6 +1464,11 @@ function buildUnsettled(a: {
   readings: number
   overview: OverviewData
   method: MethodPage
+  /** Whether the quarter's own window read could be taken at all, and whether
+   *  the subject half of it could. A comparison never attempted is not a
+   *  comparison drawn, and this is the page that has to say which it was. */
+  windowApplied: boolean
+  subjectsRead: boolean
 }): UnsettledPage {
   const waiting: string[] = []
   if (!quarterUnlocked(a.readings)) {
@@ -1374,8 +1485,21 @@ function buildUnsettled(a: {
   // wanted to know when had to count on their fingers. It is one reading a
   // month, so the arithmetic is honest and the page says on what assumption.
   const settlesIn = firstQuarterVerdictMonth(a.readings, a.overview.month)
+  // WHAT WAS NEVER ASKED. `unsettledItems` reads the verdicts the pages DREW,
+  // so where no quarter comparison could be built there is nothing unanswered
+  // and the page fell to "Every comparison this quarter asked for was drawn."
+  // — the one page whose whole job is confession, contradicting the four
+  // before it. The silences are the category page's own: no windowed reading
+  // at all is a migration, and a windowed reading with no subject half is a
+  // narrower one.
+  const notAsked = !a.windowApplied
+    ? 'No quarter-on-quarter comparison was attempted. This quarter is not counted as one window for this workspace yet, so nothing below is a reading of the quarter against the one before it.'
+    : !a.subjectsRead
+      ? 'Your subjects were not compared across this quarter — they are not counted as one window for this workspace yet, so no subject comparison was attempted.'
+      : null
   return {
     items: unsettledItems(a.verdicts, { side: audienceSideIn(a.overview) }),
+    notAsked,
     waiting,
     heldBack,
     settles: quarterUnlocked(a.readings)
