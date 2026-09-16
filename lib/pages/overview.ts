@@ -31,7 +31,7 @@ import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonth
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
 import {
   mergeSeriesNotes,
   monthAxis,
@@ -424,12 +424,7 @@ export function daysInto(month: string, now: string): number | null {
  * The month it is, then, which the stored rows answer exactly on every horizon,
  * and which is the month every other number on the page is about.
  */
-export function recordWindow(month: string, readingAt: string): RecordWindow {
-  const start = monthStartOf(month)
-  const lastDay = new Date(Date.parse(`${nextMonth(start)}T00:00:00.000Z`) - 86_400_000).toISOString().slice(0, 10)
-  const at = readingAt.slice(0, 10)
-  return { kind: 'month', from: start, to: at < lastDay ? at : lastDay }
-}
+export const recordWindow = monthRecordWindow
 
 /** The median of the numbers that exist — a month with no row is not a zero. */
 export function medianOf(values: readonly (number | null | undefined)[]): number | null {

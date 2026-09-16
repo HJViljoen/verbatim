@@ -8,7 +8,6 @@ import {
   originLine,
   periodPhrase,
   railNote,
-  recordWindow,
   selectSubject,
   setLine,
   subjectNotes,
@@ -225,13 +224,6 @@ describe('axisNote', () => {
 
   it('is silent when every line carries its n', () => {
     expect(axisNote([side({ n: 1388, k: 305 })], 100)).toBeNull()
-  })
-})
-
-describe('recordWindow', () => {
-  it('stops at today inside a filling month, and at the month’s end once it is past', () => {
-    expect(recordWindow('2026-09-01', '2026-09-18T09:00:00.000Z')).toEqual({ kind: 'month', from: '2026-09-01', to: '2026-09-18' })
-    expect(recordWindow('2026-08-01', '2026-09-18T09:00:00.000Z')).toEqual({ kind: 'month', from: '2026-08-01', to: '2026-09-01' })
   })
 })
 

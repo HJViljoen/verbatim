@@ -9,6 +9,7 @@ import {
   howSoundLine,
   isEnglishTag,
   longestGapDays,
+  monthRecordWindow,
   platformMixLine,
   recordLines,
   refusedSentence,
@@ -250,6 +251,23 @@ describe('isMissingThemeMembers — "M2 is not applied" and nothing else', () =>
     expect(isMissingThemeMembers(new Error('fetch failed'))).toBe(false)
     expect(isMissingThemeMembers({ code: '42703', message: 'column videos.analyzed_run_id does not exist' })).toBe(false)
     expect(isMissingThemeMembers(null)).toBe(false)
+  })
+})
+
+describe('monthRecordWindow', () => {
+  it('stops at today inside a filling month', () => {
+    expect(monthRecordWindow('2026-09-01', '2026-09-18T09:00:00.000Z'))
+      .toEqual({ kind: 'month', from: '2026-09-01', to: '2026-09-18' })
+  })
+
+  it('ends a closed month on its LAST DAY, never on the first of the next', () => {
+    // `to` is inclusive: loadRecordInputs refuses a window whose two ends sit
+    // in different months, and loadFrozenAt does .lte('month',
+    // monthStartOf(w.to)) — which would pull September's denominator row into
+    // August's record. Two pages had written this and one had written
+    // '2026-09-01', with a test calling it correct.
+    expect(monthRecordWindow('2026-08-01', '2026-09-18T09:00:00.000Z').to).toBe('2026-08-31')
+    expect(monthRecordWindow('2026-12-01', '2027-02-01T00:00:00.000Z').to).toBe('2026-12-31')
   })
 })
 

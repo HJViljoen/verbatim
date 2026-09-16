@@ -12,9 +12,9 @@ import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon, t
 import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeBoundary, freezeStateFor, isMissingMonthTable } from '../reading/monthly'
-import { monthStartOf, nextMonth } from '../reading/month-key'
+import { monthStartOf } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
-import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
+import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import type { FigureTable, Verdict } from '../reading/verdicts'
@@ -478,14 +478,6 @@ export function freezesOn(month: string): string {
   return freezeBoundary(month).slice(0, 10)
 }
 
-/** The window the record is composed over. */
-export function recordWindow(month: string, readingAt: string): RecordWindow {
-  const from = monthStartOf(month)
-  const end = nextMonth(month).slice(0, 10)
-  const today = readingAt.slice(0, 10)
-  return { kind: 'month', from, to: today < end ? today : end }
-}
-
 // ---- the rows the loader reads -------------------------------------------------
 
 interface RunRow {
@@ -823,7 +815,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
   const recordInputs = await loadRecordInputs(
     reading.client,
     clientId,
-    recordWindow(month, readingAt),
+    monthRecordWindow(month, readingAt),
     { comparisonsRefused: countRefused(pageVerdicts), refusals: refusals(pageVerdicts), now: readingAt },
   )
 
