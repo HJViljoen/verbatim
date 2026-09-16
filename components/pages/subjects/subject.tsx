@@ -45,7 +45,7 @@ function Side({ side, mode }: { side: SubjectSide; mode: RenderMode }): ReactNod
     return (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { padding: '4px 0' } : undefined}>
         <span className={email ? undefined : 'text-[11px] font-medium text-secondary-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>{side.label}</span>
-        <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>— not tracked</span>
+        <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>{side.silence === 'no_reading' ? '— no reading yet' : '— not tracked'}</span>
       </div>
     )
   }

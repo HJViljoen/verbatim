@@ -132,8 +132,20 @@ export interface SubjectSide {
   k: number | null
   n: number | null
   pct: number | null
-  /** False where this audience carried no row at all — "— not tracked". */
+  /** False where this side carries no share this month, for either reason. */
   observed: boolean
+  /**
+   * WHICH silence, in the page's own distinction (railNote's, one tile away).
+   *
+   * `not_tracked` is about the AUDIENCE: nothing was read for it at all, there
+   * is no denominator, and "— not tracked" is true of it. `no_reading` is
+   * about the SUBJECT: the audience was read — the denominator row proves it —
+   * and this subject carried no row in it. `monthly_subject_readings` emits a
+   * row only where videos > 0 (it is a group-by over matches), so a freshly
+   * confirmed subject with no members in a month has no row at all, and
+   * printing "— not tracked" for the client's OWN audience there is false.
+   */
+  silence: 'no_reading' | 'not_tracked' | null
   /** The banded month-on-month change, or null where none was drawn. */
   verdict: Verdict | null
   /** Three consecutive readings in one regime, or null. */
@@ -439,17 +451,22 @@ export function periodPhrase(horizon: Horizon, month: string): string {
  *  one per line. */
 export function axisNote(sides: readonly SubjectSide[], floorN: number): string | null {
   const hollow = sides.filter((s) => s.observed && (s.n ?? 0) < floorN)
-  const silent = sides.filter((s) => !s.observed)
+  const names = (of: readonly SubjectSide[]) => of.map((s) => s.label).join(' and ')
   const parts: string[] = []
   if (hollow.length > 0) {
     parts.push(
-      `${hollow.map((s) => s.label).join(' and ')} carried too few videos this month to compare ` +
+      `${names(hollow)} carried too few videos this month to compare ` +
       `(${hollow.map((s) => `${fmtInt(s.n ?? 0)}`).join(', ')}) — drawn hollow, with a level and no change.`,
     )
   }
-  if (silent.length > 0) {
-    parts.push(`${silent.map((s) => s.label).join(' and ')} — not tracked.`)
-  }
+  // TWO SILENCES, TWO SENTENCES. An audience we never read is "not tracked";
+  // an audience we read that carried nothing on this subject has "no reading
+  // yet", and the second is the one a newly confirmed subject is in on the
+  // client's OWN side.
+  const noReading = sides.filter((s) => s.silence === 'no_reading')
+  const notTracked = sides.filter((s) => s.silence === 'not_tracked')
+  if (noReading.length > 0) parts.push(`${names(noReading)} — no reading yet on this subject.`)
+  if (notTracked.length > 0) parts.push(`${names(notTracked)} — not tracked.`)
   return parts.length > 0 ? parts.join(' ') : null
 }
 
@@ -914,6 +931,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
     const n = perAudience.get(`${month}|${s.audience}`) ?? null
     const k = here?.k ?? null
     const observed = n != null && k != null
+    const silence: SubjectSide['silence'] = n == null ? 'not_tracked' : k == null ? 'no_reading' : null
 
     const point = (m: string): SeriesPoint => {
       const p = byMonth.get(m) ?? null
@@ -945,6 +963,7 @@ export function buildSides(input: SidesInput): SubjectSide[] {
       n,
       pct: pctOf(k, n),
       observed,
+      silence,
       verdict,
       direction: thin ? null : directionWord(axis.map(point)),
       previous: before ? { month: prevMonth, pct: pctOf(before.k, before.videos) } : null,

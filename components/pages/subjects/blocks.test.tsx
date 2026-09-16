@@ -140,6 +140,24 @@ describe('SU2 · the subject in full', () => {
     expect(verdicts.filter((v) => v.state === 'moved')).toHaveLength(1)
   })
 
+  it('says "no reading yet" where the audience was read and this subject was not in it', () => {
+    // monthly_subject_readings emits a row only where videos > 0, so this is
+    // the state of every freshly confirmed subject's first month — and the
+    // denominator row beside it proves the audience IS tracked.
+    const data = subjectsFixture()
+    const [own, ...rest] = data.selected!.sides
+    const unread = {
+      ...data,
+      selected: {
+        ...data.selected!,
+        sides: [{ ...own, k: null, pct: null, observed: false, silence: 'no_reading' as const }, ...rest],
+      },
+    }
+    const text = renderText(subjectsSubject.render(unread, 'app', ctx))
+    expect(text).toContain('— no reading yet')
+    expect(text).not.toContain('— not tracked')
+  })
+
   it('says the subject is provisional while its precision is unmeasured', () => {
     const data = subjectsFixture()
     const provisional = { ...data, selected: { ...data.selected!, calibration: 'calibrating' as const } }

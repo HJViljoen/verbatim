@@ -201,7 +201,7 @@ describe('periodPhrase', () => {
 describe('axisNote', () => {
   const side = (over: Partial<SubjectSide>): SubjectSide => ({
     audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)',
-    k: 26, n: 84, pct: 31, observed: true, verdict: null, direction: null,
+    k: 26, n: 84, pct: 31, observed: true, silence: null, verdict: null, direction: null,
     previous: null, kinds: [], reddit: null, ...over,
   })
 
@@ -217,8 +217,21 @@ describe('axisNote', () => {
     expect(note).toContain('You and Freitag carried too few videos')
   })
 
-  it('says "— not tracked" for a side with no row, never a zero', () => {
-    const note = axisNote([side({ label: 'Poler', kind: 'rival', observed: false, n: null, k: null, pct: null })], 100)!
+  it('says "— not tracked" for an audience with no row, never a zero', () => {
+    const note = axisNote([side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null })], 100)!
+    expect(note).toContain('Poler — not tracked.')
+  })
+
+  it('tells "no reading yet" apart from "not tracked" — the audience was read, this subject was not in it', () => {
+    // monthly_subject_readings emits a row only where videos > 0, so a freshly
+    // confirmed subject with no members in a month has no row while its
+    // audience's denominator row is right there. "— not tracked" about the
+    // client's own audience is false, and the rail one tile away says so.
+    const note = axisNote([
+      side({ observed: false, silence: 'no_reading', n: 84, k: null, pct: null }),
+      side({ label: 'Poler', kind: 'rival', observed: false, silence: 'not_tracked', n: null, k: null, pct: null }),
+    ], 100)!
+    expect(note).toContain('You — no reading yet on this subject.')
     expect(note).toContain('Poler — not tracked.')
   })
 
