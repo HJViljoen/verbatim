@@ -85,7 +85,16 @@ export function askBasisLine(basis: AskBasis, opts: { asked?: boolean } = {}): s
     ? `embedded as at ${shortDate(basis.lastEmbeddedAt)}`
     : 'when they were indexed is not recorded'
 
-  return [lead, months, searchable, embedded].join(' · ')
+  // THE TENSE BREAKS AFTER THE UPDATE. Only the first fact belongs to the
+  // answer; the other three are the index AS IT IS NOW, deliberately (a thread
+  // read today is searched today). Joined with the same `·` they read as four
+  // facts about an August answer — "Answered against the update of 23 Aug · 4
+  // monthly readings · 3,129 of 3,129 findings searchable" — and a reader has
+  // no seam to notice. A full stop and one word give them one. The unasked
+  // form needs none: everything in it is now.
+  return opts.asked
+    ? `${lead}. Today: ${[months, searchable, embedded].join(' · ')}`
+    : [lead, months, searchable, embedded].join(' · ')
 }
 
 /** True when a question asked now cannot reach a single finding — the state
