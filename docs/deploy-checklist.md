@@ -815,6 +815,16 @@ monthly send is the artefact nobody has seen against a frozen month.
   ~1,400 statements — the pattern that starved this instance on 16 September.
 - `node --env-file=.env.local --import tsx scripts/stored-artefacts-smoke.ts`
   again, **after** the migrations and the deploy. 36/36.
+- **The loader-output dump, if a reading page looks different to anyone.**
+  `node --env-file=.env.local --import tsx scripts/loader-dump.ts --confirm --out scratch/dump-new`
+  writes every page's loader output for both tenants on a frozen clock; the same
+  command in a worktree at the baseline sha writes the other side, and `diff -r`
+  is the answer. **WP23's "nothing a client reads has changed" was proved this
+  way against `eb8d787` and was NOT re-proved on the merged tree** — it is a
+  reasoned expectation there, not a checked fact, and this is how to convert it.
+  It is twelve page loads a side, ~500 statements: a quiet window, once per
+  tree. The one defect WP23 found in itself — a chunk size silently choosing
+  four of a tenant's quotes — was found by this diff and by nothing else.
 
 ---
 
