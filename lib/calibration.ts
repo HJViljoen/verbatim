@@ -279,6 +279,26 @@ export const DIRECTION_WORDS = [
   'improving', 'improved', 'improves', 'improve',
   'worsening', 'worsened', 'worsens', 'worsen',
   'more and more', 'less and less',
+  // The COMPARATIVES, listed whole. The first sweep of this list caught the
+  // participles and none of the plain comparisons a model reaches for instead:
+  // "Praise is higher than last month.", "Interest is stronger than last
+  // time.", "The share widened this month." all returned no hits and reached a
+  // reader under "Our read · Interpretation", where `interpretation_monthly` is
+  // policy 'both' and `dropUnverdictedDirection` was the thing that should have
+  // deleted them. Same lesson this docblock already draws about `grown`.
+  //
+  // `move`/`moved` is deliberately NOT here: the product's own code-written
+  // copy says "What moved this month", "What moved most" and "Nothing moved
+  // clearly in September's reading so far", so it needs the Verdict-licensed
+  // carve-out rather than a list entry. The comparatives have no such excuse.
+  // `bigger` / `smaller` are deliberately NOT here, for the reason classes 1-3
+  // above give: the product's own arm headings are "cleared their band · a
+  // larger share than last month" and "· a smaller share than last month",
+  // which is code naming what was done to a number beside the band that earned
+  // it. The six below have no such honest use in this product's copy.
+  'higher', 'lower', 'stronger', 'weaker',
+  'widened', 'widens', 'widening', 'narrowed', 'narrows', 'narrowing',
+  'on the rise', 'been building', 'building up',
   'upward', 'downward', 'uptick', 'downtick',
   'picking up', 'picked up', 'picks up',
   'tapering off', 'tapered off',

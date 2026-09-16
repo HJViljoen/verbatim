@@ -86,6 +86,30 @@ describe('directionHits — the scrubber’s match list, calibrated on productio
     expect(directionHits('Interest spiked after the launch.')).toContain('spiked')
   })
 
+  // THE COMPARATIVES, WHICH THE FIRST SWEEP CAUGHT NONE OF. Run through the
+  // branch's own directionHits before this, each of these returned [] — and
+  // `interpretation_monthly` is policy 'both', so an unearned movement sentence
+  // in those words survived dropUnverdictedDirection and reached the reader
+  // under "Our read · Interpretation" on Overview, Voice and This week.
+  it('catches a plain comparison, not only a participle', () => {
+    expect(directionHits('Praise is higher than last month.')).toContain('higher')
+    expect(directionHits('Complaints are lower than last month.')).toContain('lower')
+    expect(directionHits('Interest is stronger than last time.')).toContain('stronger')
+    expect(directionHits('The signal is weaker than last time.')).toContain('weaker')
+    expect(directionHits('The share widened this month.')).toContain('widened')
+    expect(directionHits('The gap narrowed this month.')).toContain('narrowed')
+    expect(directionHits('Mentions are on the rise.')).toContain('on the rise')
+    expect(directionHits('It has been building all month.')).toContain('been building')
+  })
+
+  // AND NOT THE PRODUCT'S OWN HONEST COPY. `bigger` / `smaller` are left off
+  // the list on purpose: VO2's arm headings are code naming what was done to a
+  // number, beside the band that earned it, and WK3's note says the same.
+  it('leaves the arm headings the product writes for itself alone', () => {
+    expect(directionHits('Cleared their band · a smaller share than last month')).toEqual([])
+    expect(directionHits('7 themes cleared their band with a larger share in this month’s reading.')).toEqual([])
+  })
+
   it('lists every family whole — the hole the first pass left', () => {
     // A family with one inflection missing is a family the rule fails open on.
     const families = [
