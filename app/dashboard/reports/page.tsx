@@ -193,14 +193,17 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // The snapshot a send went out with. It is deliberately NOT in `builds` —
   // the Built group subtracts everything that was sent — so it is read here,
   // by id, for the figures RP4 asks the archive to print beside the date.
-  interface SentSnapshot { id: string; created_at: string; figures: FigureTable | null; data: { reading: unknown; readingAt: string | null } }
+  // The row is passed to readingStampOf exactly as PostgREST returns it —
+  // `reading` and `readingAt` flat, under their aliases. Re-nesting it here
+  // was what hid the bug: this one call site read correctly and the three on
+  // the Built group and the cards did not.
+  interface SentSnapshot { id: string; created_at: string; figures: FigureTable | null; reading: unknown; readingAt: string | null }
   let sentSnapshot: SentSnapshot | null = null
   if (selectedSend?.snapshot_id) {
     const { data: snap } = await supabase.from('report_snapshots')
       .select('id, created_at, figures:data->figures, reading:data->reading, readingAt:data->>readingAt')
       .eq('client_id', clientId).eq('id', selectedSend.snapshot_id).maybeSingle()
-    const r = snap as { id: string; created_at: string; figures: FigureTable | null; reading: unknown; readingAt: string | null } | null
-    sentSnapshot = r ? { id: r.id, created_at: r.created_at, figures: r.figures, data: { reading: r.reading, readingAt: r.readingAt } } : null
+    sentSnapshot = (snap as SentSnapshot | null) ?? null
   }
 
   type ArtifactLite = { id: string; format: string; bytes: number; stale: boolean }

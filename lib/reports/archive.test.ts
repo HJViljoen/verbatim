@@ -77,9 +77,25 @@ describe('readingStampOf', () => {
     expect(s).toEqual({ at: '2026-09-13T06:00:00.000Z', inferred: false, month: null, monthStatus: null })
   })
 
+  // THE SHAPE THE QUERIES ACTUALLY RETURN. `select('reading:data->reading')`
+  // puts `reading` at the TOP LEVEL of the row, not under `data`. Reading only
+  // the nested shape made the Built group, all three cards and the Built date
+  // filter answer "built 1 Oct 2026 · no reading date recorded" for a snapshot
+  // that carries a month — one page giving two answers for one artefact.
+  it('reads the flat row PostgREST returns for an aliased data->reading', () => {
+    const s = readingStampOf({ created_at: created, reading: { readingAt: '2026-09-16T05:00:00.000Z', monthLabel: 'September 2026', monthStatus: 'filling' } })
+    expect(s).toEqual({ at: '2026-09-16T05:00:00.000Z', inferred: false, month: 'September 2026', monthStatus: 'filling' })
+  })
+
+  it('reads a weekly report\'s aliased data->>readingAt the same way', () => {
+    const s = readingStampOf({ created_at: created, readingAt: '2026-09-13T06:00:00.000Z' })
+    expect(s).toEqual({ at: '2026-09-13T06:00:00.000Z', inferred: false, month: null, monthStatus: null })
+  })
+
   it('falls back to the build instant and SAYS it is one', () => {
     const s = readingStampOf({ created_at: created, data: {} })
     expect(s).toEqual({ at: created, inferred: true, month: null, monthStatus: null })
+    expect(readingStampOf({ created_at: created, reading: null })).toEqual({ at: created, inferred: true, month: null, monthStatus: null })
   })
 })
 

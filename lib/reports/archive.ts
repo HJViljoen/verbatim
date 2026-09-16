@@ -64,7 +64,9 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number)
 /**
  * When a stored artefact says it read.
  *
- * FOUR CARRIERS, AND THE ORDER MATTERS. `report_snapshots.reading_at` is M9's
+ * FOUR CARRIERS, AND THE ORDER MATTERS. Each is read whether the query
+ * selected the whole `data` column or aliased the key flat, which is what
+ * every caller on the Reports page does. `report_snapshots.reading_at` is M9's
  * column and is preferred the moment it exists. Until then a brief carries
  * `data.reading.readingAt` (WP19) and the weekly report carries
  * `data.readingAt` (WP17) — both are the instant the artefact read, written by
@@ -83,17 +85,38 @@ export interface ReadingStamp {
   monthStatus: string | null
 }
 
-export function readingStampOf(
-  snapshot: { created_at: string; reading_at?: string | null; month?: string | null; month_status?: string | null; data?: unknown },
-): ReadingStamp {
-  const d = (snapshot.data ?? {}) as { readingAt?: unknown; reading?: { readingAt?: unknown; monthLabel?: unknown; monthStatus?: unknown } }
-  const fromData = typeof d.reading?.readingAt === 'string' ? d.reading.readingAt : typeof d.readingAt === 'string' ? d.readingAt : null
+/** A row as PostgREST hands it back. `data->reading` selected under an alias
+ *  arrives as a TOP-LEVEL `reading` key, not as `data.reading` — every caller
+ *  on the Reports page selects it that way, and reading only the nested shape
+ *  made every WP19 brief print "no reading date recorded" beside a snapshot
+ *  that carries one. Both shapes are read, and the flat one first because it
+ *  is what the queries ask for. */
+export interface ReadingStampRow {
+  created_at: string
+  reading_at?: string | null
+  month?: string | null
+  month_status?: string | null
+  /** `reading:data->reading`, aliased flat by the select. */
+  reading?: unknown
+  /** `readingAt:data->>readingAt`, aliased flat by the select. */
+  readingAt?: string | null
+  /** The whole `data` column, where a caller selected it whole. */
+  data?: unknown
+}
+
+export function readingStampOf(snapshot: ReadingStampRow): ReadingStamp {
+  type Reading = { readingAt?: unknown; monthLabel?: unknown; monthStatus?: unknown }
+  const d = (snapshot.data ?? {}) as { readingAt?: unknown; reading?: Reading }
+  const reading = (snapshot.reading ?? d.reading ?? null) as Reading | null
+  const flatAt = typeof snapshot.readingAt === 'string' ? snapshot.readingAt : null
+  const fromData = typeof reading?.readingAt === 'string' ? reading.readingAt
+    : flatAt ?? (typeof d.readingAt === 'string' ? d.readingAt : null)
   const at = snapshot.reading_at ?? fromData
   return {
     at: at ?? snapshot.created_at,
     inferred: at == null,
-    month: snapshot.month ?? (typeof d.reading?.monthLabel === 'string' ? d.reading.monthLabel : null),
-    monthStatus: snapshot.month_status ?? (typeof d.reading?.monthStatus === 'string' ? d.reading.monthStatus : null),
+    month: snapshot.month ?? (typeof reading?.monthLabel === 'string' ? reading.monthLabel : null),
+    monthStatus: snapshot.month_status ?? (typeof reading?.monthStatus === 'string' ? reading.monthStatus : null),
   }
 }
 
