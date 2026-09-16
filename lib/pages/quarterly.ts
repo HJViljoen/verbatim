@@ -267,7 +267,8 @@ export interface QuarterlyData {
   unlocked: boolean
   /** The gate sentence, always composed, printed where it bites. */
   gate: string
-  /** The run the reading was taken over, for the snapshot's `run_id`. */
+  /** Always null: a quarter belongs to no single update (see composeQuarterly).
+   *  Kept on the shape so the snapshot writer reads one field, not two. */
   runId: string | null
   cover: CoverPage
   read: ReadPage
@@ -433,39 +434,87 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   ])
   if (!overview) return null
 
+  // THE WINDOW PAIR. One read per side, over DISTINCT videos — never three
+  // month rows added together.
+  const reading = scope.reading?.client ?? readingClient()
+  const clientId = scope.clientId
+  const [thisQuarter, lastQuarter, checks, record] = await Promise.all([
+    windowFor(reading, clientId, quarter),
+    windowFor(reading, clientId, prior),
+    loadQuarterChecks(supabase, clientId, quarter),
+    loadRecordInputs(reading, clientId, { kind: 'quarter', from: quarter.from, to: quarter.to }, {
+      now: readingAt,
+      gate: 'tenant',
+    }).catch(() => null),
+  ])
+
+  return composeQuarterly({
+    overview,
+    market,
+    competitive,
+    quarter,
+    prior,
+    readingAt,
+    thisQuarter,
+    lastQuarter,
+    checks,
+    record,
+    draft: options.draft ?? null,
+  })
+}
+
+export interface ComposeQuarterlyInput {
+  overview: OverviewData
+  market: MarketSurfaceData | null
+  competitive: CompetitiveSurfaceData | null
+  quarter: Quarter
+  prior: Quarter
+  readingAt: string
+  thisQuarter: WindowReading
+  lastQuarter: WindowReading
+  checks: QuarterChecks
+  record: RecordInputs | null
+  draft?: string | null
+}
+
+/**
+ * The eight pages, composed. PURE — every read is the caller's.
+ *
+ * WHY THE SPLIT. A fixture that hand-types eight pages is a second reading of
+ * the product, and the first thing to drift from it. This way a block test and
+ * a production render walk the SAME composer, and the only difference between
+ * them is which rows the database handed back.
+ */
+export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
+  const { overview, quarter, prior, readingAt } = a
   const readings = overview.bar.readings
   const unlocked = quarterUnlocked(readings)
   const gate = quarterGateSentence(readings)
   const monthLabel = longMonth(overview.month)
 
-  // THE WINDOW PAIR. One read per side, over DISTINCT videos — never three
-  // month rows added together.
-  const reading = scope.reading?.client ?? readingClient()
-  const clientId = scope.clientId
-  const [thisQuarter, lastQuarter] = await Promise.all([
-    windowFor(reading, clientId, quarter),
-    windowFor(reading, clientId, prior),
-  ])
+  const quarterVerdicts = buildQuarterVerdicts({
+    quarter,
+    prior,
+    thisQuarter: a.thisQuarter,
+    lastQuarter: a.lastQuarter,
+    readings,
+    overview,
+  })
+  const windowApplied = a.thisQuarter.denominators != null
 
-  const quarterVerdicts = buildQuarterVerdicts({ quarter, prior, thisQuarter, lastQuarter, readings, overview })
-  const windowApplied = thisQuarter.denominators != null
-
-  const cover = buildCover({ overview, quarter, prior, readingAt, readings, thisQuarter })
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, windowApplied })
+  const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
+  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel })
   const category = buildCategory({ overview, quarterVerdicts, monthLabel, windowApplied })
-  const rivals = buildRivals({ overview, competitive })
-  const moves = buildMoves({ overview, market, quarter })
+  const rivals = buildRivals({ overview, competitive: a.competitive })
+  const moves = buildMoves({ overview, market: a.market, quarter })
 
   // Everything the pages may speak from, in one list: the interpretation
   // argues from it, the last page lists what it could not settle, and the
   // method page counts what it refused. One source, three readers.
-  const verdicts = [
-    ...overview.sentence.verdicts,
-    ...quarterVerdicts,
-  ]
-  const method = await buildMethod({ supabase, reading, clientId, quarter, readingAt, verdicts, overview })
-  const read = await buildRead({ supabase, overview, market, verdicts, unlocked, cover, options })
-  const unsettled = buildUnsettled({ verdicts, quarter, readings, overview, method })
+  const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
+  const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks })
+  const read = buildRead({ overview, market: a.market, verdicts, unlocked, cover, draft: a.draft ?? null })
+  const unsettled = buildUnsettled({ verdicts, readings, overview, method })
 
   return {
     brand: overview.brand,
@@ -478,6 +527,10 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     readings,
     unlocked,
     gate,
+    // A QUARTER IS NOT AN UPDATE'S ARTEFACT. The weekly report names the run
+    // it was built over because it IS that update; a quarterly review is dated
+    // by the comment across three months and belongs to no single run, so the
+    // snapshot carries none rather than the last one that happened to land.
     runId: null,
     cover,
     read,
@@ -573,7 +626,6 @@ function audienceName(audience: string, overview: OverviewData): string {
 function buildCover(a: {
   overview: OverviewData
   quarter: Quarter
-  prior: Quarter
   readingAt: string
   readings: number
   thisQuarter: WindowReading
@@ -641,22 +693,21 @@ function buildCover(a: {
 
 // ---- page 2 · our read --------------------------------------------------------
 
-async function buildRead(a: {
-  supabase: SupabaseClient
+function buildRead(a: {
   overview: OverviewData
   market: MarketSurfaceData | null
   verdicts: Verdict[]
   unlocked: boolean
   cover: CoverPage
-  options: QuarterlyOptions
-}): Promise<ReadPage> {
+  draft: string | null
+}): ReadPage {
   const quotes = a.overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
   const interpretation = composeInterpretation(
     'interpretation_quarterly',
     a.verdicts,
     proseFigures(a.cover.figures),
     quotes.map((q) => ({ ref: q.quote.ref, context: q.cite })),
-    { draft: a.options.draft ?? null },
+    { draft: a.draft },
   )
   const ledger = a.market?.advice.rows ?? []
   const advice: StandingAdvice[] = ledger.slice(0, 5).map((row) => ({
@@ -706,7 +757,6 @@ function buildSubjects(a: {
   unlocked: boolean
   gate: string
   monthLabel: string
-  windowApplied: boolean
 }): SubjectsPage {
   const block = a.overview.subjects
   const byObject = new Map(a.quarterVerdicts.map((v) => [`${v.objectKind}:${v.objectId}:${v.audience}`, v]))
@@ -829,7 +879,7 @@ interface CheckRow {
   week_start: string | null
 }
 
-interface FlagRow {
+export interface FlagRow {
   object_kind: string
   label: string
   denominator: string
@@ -842,26 +892,21 @@ interface FlagRow {
   explanation: { sentences?: string[] } | null
 }
 
-async function buildMethod(a: {
-  supabase: SupabaseClient
-  reading: SupabaseClient
-  clientId: string
+function buildMethod(a: {
   quarter: Quarter
-  readingAt: string
   verdicts: Verdict[]
   overview: OverviewData
-}): Promise<MethodPage> {
+  record: RecordInputs | null
+  checks: QuarterChecks
+}): MethodPage {
   const window: RecordWindow = { kind: 'quarter', from: a.quarter.from, to: a.quarter.to }
   const refused: Refusal[] = refusals(a.verdicts)
-  const [inputs, checks] = await Promise.all([
-    loadRecordInputs(a.reading, a.clientId, window, {
-      now: a.readingAt,
-      refusals: refused,
-      comparisonsRefused: refused.length,
-      gate: 'tenant',
-    }).catch(() => null),
-    loadQuarterChecks(a.supabase, a.clientId, a.quarter),
-  ])
+  const checks = a.checks
+  // THE REFUSALS ARE THIS RENDER'S, not the corpus's, so they are counted by
+  // the caller and stitched in here rather than read (lib/reading/record.ts).
+  const inputs: RecordInputs | null = a.record
+    ? { ...a.record, window, refusals: refused, comparisonsRefused: refused.length }
+    : null
 
   const flags: QuarterFlag[] = checks.flags.map((f) => ({
     label: f.label,
@@ -929,13 +974,21 @@ export function methodNumbers(inputs: RecordInputs | null, quarter: Quarter, ove
   return out
 }
 
+export interface QuarterChecks {
+  /** False where M7 is not applied here — told apart from a quiet quarter. */
+  recorded: boolean
+  ran: number
+  flaggedRuns: number
+  flags: FlagRow[]
+}
+
 /** Every unusual-week check that ran inside the quarter, and the flags they
  *  raised. Guarded by name: M7 is not applied in production. */
-async function loadQuarterChecks(
+export async function loadQuarterChecks(
   supabase: SupabaseClient,
   clientId: string,
   quarter: Quarter,
-): Promise<{ recorded: boolean; ran: number; flaggedRuns: number; flags: FlagRow[] }> {
+): Promise<QuarterChecks> {
   try {
     const checkRes = await supabase
       .from('anomaly_checks')
@@ -969,7 +1022,6 @@ async function loadQuarterChecks(
 
 function buildUnsettled(a: {
   verdicts: Verdict[]
-  quarter: Quarter
   readings: number
   overview: OverviewData
   method: MethodPage
