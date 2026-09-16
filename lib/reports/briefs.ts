@@ -63,11 +63,18 @@ export const briefWhat = (artefact: Artefact): string => ARTEFACT_COPY[artefact]
  * another page denies — the rule AGENTS.md states as "a page once claimed 'no
  * email is sent' while Resend sent". `recipientRows` computes
  * `buildable && !paused && active && recipients > 0`, and BUILDABLE_ARTEFACTS
- * is ['weekly'] because the send path resolves a due schedule by its starter
- * key: an armed `brief:sales` row would send the WEEKLY REPORT under the sales
- * brief's name. Unreachable today — `report_schedules.artefact` does not exist
- * in production, so every card degrades to "Not on a schedule" — which is why
- * it is cheap to state now rather than after the column lands.
+ * is `['weekly', 'monthly', 'quarterly']` — WP18 added `monthly` and WP20
+ * `quarterly`, each with its reason beside it in `lib/settings/artefacts.ts`.
+ * NO `brief:*` KEY IS IN IT, and that is what this function turns on: nothing
+ * in `lib/schedules/run.ts` sends a brief, so an armed `brief:sales` row is a
+ * list of people nothing delivers to. Unreachable today in a second way —
+ * `report_schedules.artefact` does not exist in production until M8, so every
+ * card degrades to "Not on a schedule" — which is why it is cheap to state now
+ * rather than after the column lands.
+ *
+ * The premise used to read "BUILDABLE_ARTEFACTS is ['weekly']", which was true
+ * when it was written and false two packages later. The conclusion never moved;
+ * the evidence for it did.
  */
 export function cardSending(a: {
   artefact: Artefact
