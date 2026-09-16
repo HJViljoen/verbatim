@@ -1,0 +1,161 @@
+import { fmtInt, fullDate, longMonth, platformLabel } from '../../format'
+import { blockAnswers, mergeFigures } from '../../blocks/types'
+import type { Block } from '../../blocks/types'
+import { freezeBoundary } from '../../reading/monthly'
+import { HORIZON_LABEL, type Horizon, type HorizonWindow } from '../../reading/horizon'
+import type { MonthStatus, PlatformMix } from '../../reading/types'
+import type { FigureTable as ReadingFigures, Verdict } from '../../reading/verdicts'
+import { proseFigures } from '../../prose/figures'
+import type { FigureTable } from '../types'
+import type { CoverageRecord } from '../../reading/record'
+
+/**
+ * The reading a brief is written from (Phase 1 WP19, item 43, decision R).
+ *
+ * WHAT ITEM 43 ACTUALLY ASKS FOR. Every number in every brief was
+ * run-indexed: `Signals.run` reads `run_summary.period_*`, the period string is
+ * literally "Update of 30 Aug 2026", and no figure anywhere carried a
+ * denominator, a band, an n or a reading date. "Rewire every number onto the
+ * monthly reading" is therefore not a template edit — it is a replacement of
+ * the source, and this module is that source.
+ *
+ * IT IS THE BLOCKS' OWN FIGURE TABLES, NOT A SECOND READ. The page blocks that
+ * Block B built already answer `figures()` and `verdicts()` — that is exactly
+ * what the Block contract added them for ("what a model may name", "the banded
+ * comparisons behind its direction words"). A brief that read the month tables
+ * for itself would be a second measurement of one quantity, and the product has
+ * already shipped that bug once. So a brief's numbers are the numbers the
+ * READER SEES ON THE PAGE, gathered off the same blocks the page draws, which
+ * is what makes item 43's "its numbers reproduce the page's blocks for the same
+ * month" true by construction rather than by test.
+ *
+ * TWO SHAPES OF FIGURE, AND THE ONE DOCUMENTED CROSSING. `measured` is the
+ * reading layer's `{value, unit, label}`; `figures` is the printed
+ * `{label, value: '3.4%', kind}` a document substitutes into prose. The
+ * crossing is `lib/prose/figures.ts proseFigures`, and it is the only one
+ * (Block A's own correction to the conventions line).
+ */
+
+/** One audience's month, as the method page prints it. */
+export interface BriefDenominator {
+  audience: string
+  label: string
+  videos: number
+  comments: number
+}
+
+export interface BriefReading {
+  /** The month every number on the brief is about, `YYYY-MM-01`. */
+  month: string
+  /** "September 2026". */
+  monthLabel: string
+  monthStatus: MonthStatus
+  /** ISO instant the brief was read at — printed, not inferred from created_at. */
+  readingAt: string
+  horizon: Horizon
+  window: HorizonWindow
+  /** Figures as measured — what a verdict argues from. */
+  measured: ReadingFigures
+  /** The same table as printed — what prose substitutes. */
+  figures: FigureTable
+  /** Every banded comparison the blocks drew. */
+  verdicts: Verdict[]
+  denominators: BriefDenominator[]
+  platformMix: PlatformMix
+  /** The reading layer's own caveats, said once (collapsed upstream). */
+  notes: string[]
+  /** True when the window crosses a recorded clustering boundary. A build may
+   *  target a past month; it may not cross a boundary without saying so. */
+  crossesClustering: boolean
+}
+
+/** What a brief says about its own window, on every page, in the design's
+ *  words: the month, the instant, and — while the month is still filling —
+ *  the day it stops moving.
+ *
+ *  THE STAMP IS THE PERIOD STRING. `periodOf(runDate)` printed "Update of 30
+ *  Aug 2026" on the method page, in the email and on every figure's frame; a
+ *  brief whose numbers are a month's cannot keep a stamp that names a run. */
+export function briefStamp(r: Pick<BriefReading, 'month' | 'monthStatus' | 'readingAt'>): string {
+  const parts = [monthAndYear(r.month), `reading as at ${fullDate(r.readingAt)}`]
+  if (r.monthStatus === 'filling') parts.push(`still filling until ${fullDate(freezeBoundary(r.month))}`)
+  return parts.join(' · ')
+}
+
+/** "September 2026". `longMonth` is the product's month name and carries no
+ *  year, which is right on a page a reader opened today and wrong on a
+ *  document they will open in March — a brief is read long after it is
+ *  written, and "September" alone is then ambiguous by twelve months. */
+export function monthAndYear(month: string): string {
+  const year = month.slice(0, 4)
+  const name = longMonth(month)
+  return /^\d{4}$/.test(year) && name !== month.slice(0, 10) ? `${name} ${year}` : name
+}
+
+/** The stamp for a brief with no monthly reading at all — honest about which
+ *  of the two things is missing. */
+export const NO_READING_STAMP = 'No monthly reading recorded for this workspace yet'
+
+/** "388 videos in the category · 158 of your own · 1,406 comments" — the
+ *  denominator every figure on the brief is a share of, printed once. */
+export function denominatorLine(denominators: readonly BriefDenominator[]): string {
+  if (denominators.length === 0) return 'No denominator recorded for this month.'
+  const videos = denominators.map((d) => `${fmtInt(d.videos)} ${d.videos === 1 ? 'video' : 'videos'} in ${d.label}`)
+  const comments = denominators.reduce((n, d) => n + d.comments, 0)
+  return `${videos.join(' · ')} · ${fmtInt(comments)} ${comments === 1 ? 'comment' : 'comments'} read.`
+}
+
+/** "TikTok 161 · YouTube 135 · Instagram 85 · Reddit 68" — the mix behind the
+ *  denominator, because a share of a corpus that is 90% one platform is a
+ *  statement about that platform. Empty where nothing was recorded. */
+export function platformLine(mix: PlatformMix): string {
+  const rows = Object.entries(mix)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  if (rows.length === 0) return ''
+  return rows.map(([p, n]) => `${platformLabel(p)} ${fmtInt(n)}`).join(' · ')
+}
+
+/** The line a brief prints when its window reaches across a clustering
+ *  boundary. Decision L: the reading continues, the caveat travels with it,
+ *  and no direction word is earned across it. */
+export const CLUSTERING_CAVEAT =
+  'Themes were grouped differently inside this window, so a comparison across it is not like for like.'
+
+/** What a brief is allowed to say its horizon is, in the reader's words. */
+export const horizonLine = (h: Horizon): string => HORIZON_LABEL[h]
+
+/** Every figure and verdict a set of blocks prints, gathered without rendering
+ *  any of them. The one crossing to printed figures happens here, once. */
+export function blockReading<D>(
+  blocks: readonly Block<D>[],
+  data: D,
+): { measured: ReadingFigures; figures: FigureTable; verdicts: Verdict[] } {
+  const answers = blocks.map((b) => blockAnswers(b, data))
+  const measured = mergeFigures(answers.map((a) => a.figures))
+  return {
+    measured,
+    figures: proseFigures(measured),
+    verdicts: answers.flatMap((a) => a.verdicts),
+  }
+}
+
+/** Fold several surfaces' block readings into one. A token printed by two
+ *  surfaces with two values is a bug in one of them; `figureConflicts` is what
+ *  names it, and the LAST one wins, exactly as `mergeFigures` decides. */
+export function mergeReadings(
+  parts: readonly { measured: ReadingFigures; verdicts: Verdict[] }[],
+): { measured: ReadingFigures; figures: FigureTable; verdicts: Verdict[] } {
+  const measured = mergeFigures(parts.map((p) => p.measured))
+  return { measured, figures: proseFigures(measured), verdicts: parts.flatMap((p) => p.verdicts) }
+}
+
+/** The month's denominators as the method page wants them: the audiences that
+ *  actually hold something, biggest first, with the category named. */
+export function denominatorsOf(coverage: readonly CoverageRecord[] | null, label: (audience: string) => string): BriefDenominator[] {
+  if (!coverage) return []
+  return coverage
+    .filter((c) => c.videos > 0 || c.comments > 0)
+    .map((c) => ({ audience: c.audience, label: label(c.audience), videos: c.videos, comments: c.comments }))
+    .sort((a, b) => b.videos - a.videos || a.label.localeCompare(b.label))
+}
