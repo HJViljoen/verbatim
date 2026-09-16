@@ -113,10 +113,15 @@ So: ship, confirm READY, then apply — and keep the gap short.
    "queued".
 4. **Re-register Inngest:**
    `curl -X PUT https://app.verbatimintel.com/api/inngest`
-   Then confirm the function list shows **54** step ids for `pipeline` and that
-   none of the 49 pre-existing ones changed name. An in-flight run across an
-   unregistered deploy is the failure this exists to stop, and step 0.1 is why
-   there is no in-flight run.
+   An in-flight run across an unregistered deploy is the failure this exists to
+   stop, and precondition 0.1 is why there is no in-flight run. **Do not go
+   looking for 54 step ids in the Inngest UI**: a PUT registers FUNCTIONS, and
+   Inngest discovers a step when a run reaches it — and many of the ids are
+   templates (`gate:${platform}`, `comments:${platform}:${n}`,
+   `pass-a:${i}-of-${n}`, `translate-quotes:${i}-of-${n}`, …) that do not exist
+   until a run mints them. The step-id check is precondition 0.8, read off the
+   ordered diff of `inngest/functions/pipeline.ts`, and it is done before you
+   get here.
 5. Load two pages signed in — `/dashboard` and `/dashboard/reports` — before
    you apply anything. The code is new and the migrations are NOT yet applied,
    which is the state the `isMissing*` guards were written for: expect "not
