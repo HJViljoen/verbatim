@@ -4,11 +4,37 @@ import {
   briefStaleLine,
   monthlyStatusOf,
   nextReadingOf,
+  pickLed,
   spanOf,
   sparkMonths,
   voiceNote,
   type BriefLink,
+  type ReadableSent,
 } from './monthly'
+
+const sent = (over: Partial<ReadableSent> = {}): ReadableSent => ({
+  snapshotId: 's1',
+  month: '2026-08',
+  audience: 'industry',
+  objectKind: 'theme',
+  objectId: 't1',
+  label: 'Durability',
+  value: 7.1,
+  unit: 'pct',
+  measure: 'videos',
+  k: 99,
+  n: 1388,
+  denominator: 'the category’s videos this month',
+  changePts: null,
+  bandPts: 2,
+  verdict: 'no_clear_change',
+  direction: null,
+  monthStatus: 'filling',
+  artefact: 'monthly',
+  readingAt: '2026-10-01T06:00:00.000Z',
+  sentAt: '2026-10-01T06:02:00.000Z',
+  ...over,
+})
 
 describe('the months a mover’s line is drawn on', () => {
   it('is this month and the five before it, oldest first', () => {
@@ -90,5 +116,28 @@ describe('a month’s status is one vocabulary', () => {
   it('passes straight through, because the two types are the same two strings', () => {
     expect(monthlyStatusOf('filling')).toBe('filling')
     expect(monthlyStatusOf('frozen')).toBe('frozen')
+  })
+})
+
+describe("the object last month's report led with", () => {
+  it('is the largest movement that cleared its band', () => {
+    const led = pickLed([
+      sent({ objectId: 't1', verdict: 'moved', changePts: 2.2 }),
+      sent({ objectId: 't2', verdict: 'moved', changePts: -5.1 }),
+    ])
+    expect(led?.objectId).toBe('t2')
+  })
+
+  // The confirming line says "<label> — September has closed at X, which is
+  // what the report of 1 Oct read." A month in which nothing cleared its band
+  // has no lead, and the fallback named whichever row came back first — a
+  // sentence about an object the artefact never led with.
+  it('is nothing where nothing moved', () => {
+    expect(pickLed([sent({ objectId: 't1' }), sent({ objectId: 't2' })])).toBeNull()
+    expect(pickLed([])).toBeNull()
+  })
+
+  it('does not count a refusal as a movement', () => {
+    expect(pickLed([sent({ verdict: 'refused', changePts: 9 })])).toBeNull()
   })
 })

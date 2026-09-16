@@ -599,15 +599,26 @@ async function loadConfirming(
 
 /** A sent row whose object CAN be re-read as a month series. The narrowing is
  *  what lets the caller pass `objectKind` straight through. */
-type ReadableSent = StoredSentFigure & { objectKind: 'theme' | 'subject' }
+export type ReadableSent = StoredSentFigure & { objectKind: 'theme' | 'subject' }
 
-/** The row the subject line would have led with: the largest movement that
- *  cleared its band, and nothing where none did. */
-function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
+/**
+ * The row the subject line would have led with: the largest movement that
+ * cleared its band, and NOTHING where none did.
+ *
+ * THE FALLBACK WAS THE DEFECT. It sorted the rows that had not moved by the
+ * absolute value of a change that is null on every one of them — so the sort
+ * was a no-op and the line named whichever object `newestByObject` happened to
+ * emit first, and then said "<that theme> — September has closed at 7.1%, which
+ * is what the report of 1 Oct read." on a client's artefact about a figure the
+ * artefact never led with. `leadVerdict` (lib/reports/monthly.ts), which is the
+ * rule this one mirrors, returns null in exactly this case: a month in which
+ * nothing cleared its band has no lead, and a confirming line about no lead is
+ * a sentence with no reason to exist.
+ */
+export function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
   const moved = rows.filter((r) => r.verdict === 'moved' && r.changePts != null)
-  const pool = moved.length > 0 ? moved : rows
-  if (pool.length === 0) return null
-  return [...pool].sort((a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0))[0]
+  if (moved.length === 0) return null
+  return [...moved].sort((a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0))[0]
 }
 
 /** The status a stored month carries, in the monthly report's own vocabulary —
