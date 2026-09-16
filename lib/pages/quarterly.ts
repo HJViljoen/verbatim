@@ -1195,7 +1195,12 @@ function buildCategory(a: {
       : !a.themesAsked
         ? `Nothing moved clearly in ${a.monthLabel}, so no theme was named to follow across this quarter.`
         : !a.themesRead
-          ? 'No clustering of this quarter could be read, so what the category talked about is compared month on month only.'
+          // NOT "clustering", WHICH IS OURS. The GLOSSARY's reader-facing word
+          // for it is under `theme` — "the grouping is ours and it can change;
+          // when it does, the line says so" — and every other arm of this
+          // four-way silence is already in plain words. This one went out on a
+          // sent artefact and behind the share link.
+          ? 'No grouping of this quarter’s themes could be read, so what the category talked about is compared month on month only.'
           : quarter.length === 0
             ? 'Nothing the category talked about carried a reading on both sides of this quarter.'
             : null,
