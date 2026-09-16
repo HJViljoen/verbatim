@@ -117,6 +117,15 @@ describe('MR1 · the month', () => {
     expect(figures.month_videos).toMatchObject({ value: 2359, unit: 'videos' })
   })
 
+  // `?? 0` wrote "0 videos read into this month" into a frozen snapshot and
+  // into a record that is never rewritten. A month nobody counted is not a
+  // month of zero.
+  it('declares no size at all where the month’s was not recorded', () => {
+    const bare = monthlyFixture()
+    bare.overview.bar.videos = null
+    expect(blockAnswers(block, bare).figures.month_videos).toBeUndefined()
+  })
+
   it('says so rather than printing an empty block when there is nothing yet', () => {
     const bare = formingMonthlyFixture()
     bare.overview.bar.videos = null

@@ -133,8 +133,14 @@ export const monthlyMonth: Block<MonthlyData> = {
     const b = data.overview.bar
     const out: FigureTable = { ...s.figures }
     // The month's own size, which is the figure "the report of {date} read X"
-    // is most often about.
-    out.month_videos = { value: b.videos ?? 0, unit: 'videos', label: 'videos read into this month' }
+    // is most often about — AND ONLY WHERE IT WAS READ. `?? 0` wrote "0 videos
+    // read into this month" into a frozen snapshot and into a record that can
+    // never be rewritten; n = 0 is not a reading of zero, it is a month nobody
+    // counted, which is the distinction verdictsWorthRecording refuses two
+    // files away. A missing figure is a silence and prints as one.
+    if (b.videos != null) {
+      out.month_videos = { value: b.videos, unit: 'videos', label: 'videos read into this month' }
+    }
     if (b.atLastMonthKnown && b.atLastMonth != null) {
       out.month_at_last_month = { value: b.atLastMonth, unit: 'videos', label: 'videos at this point last month' }
     }
