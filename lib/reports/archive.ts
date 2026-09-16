@@ -50,15 +50,135 @@ export function withinDates(iso: string | null | undefined, filter: DateFilter):
   return true
 }
 
-/** The line under the filter, in the reader's words. */
-export function dateFilterLine(filter: DateFilter, shown: number, total: number): string | null {
+/** One pool a group's list is drawn from: what the table holds for this
+ *  workspace (the exact head count) and the cap the query asked for. */
+export interface ListPool {
+  total: number | null | undefined
+  cap: number
+}
+
+/**
+ * How many rows the date filter actually searched, where the group holds more
+ * than that — and null where it searched everything.
+ *
+ * THE POOL IS THE QUERY'S, NOT THE RAIL'S. A group's list is loaded first and
+ * narrowed afterwards (the Built list drops what a send has taken), so the
+ * number on the rail is not the number the cap applies to. Every caller passes
+ * the head counts of the tables the LIST was read from, and the arithmetic is
+ * one line: a group holding more than it could search is a group with rows
+ * behind its cap.
+ *
+ * A group read from two tables (Sent: the sends and the updates emailed before
+ * schedules existed) passes both, so the clause names what was searched across
+ * the group rather than one table's cap.
+ *
+ * NO WORKSPACE'S ROW COUNT IS WRITTEN DOWN HERE. The first draft of this rule
+ * argued a cap was unreachable today and named the snapshots both live
+ * workspaces held; the number was measured once, disagreed with the next
+ * pass's own query, and would have gone on being quoted by everyone who read
+ * the file. "Verify claims against code and DB, not docs or notes" — whether a
+ * cap is reachable is a question for the head count at render time, and that
+ * is the only thing this function is given.
+ */
+export function listCap(pools: readonly ListPool[]): number | null {
+  let searched = 0
+  let total = 0
+  for (const p of pools) {
+    const held = Math.max(p.total ?? 0, 0)
+    searched += Math.min(held, p.cap)
+    total += held
+  }
+  return total > searched ? searched : null
+}
+
+/** What the archive knows about the list behind a group's filter line: how far
+ *  the filter reached, on which clock, and whether the list could be read at
+ *  all. Every field is absent on the happy path. */
+export interface ListReach {
+  /** `listCap` — how many rows were searched, where the group holds more. */
+  cappedAt?: number | null
+  /** The clock the cap is on, where it is not the one the filter compares. */
+  clock?: string
+  /** True where the list read itself failed. */
+  unread?: boolean
+}
+
+/**
+ * The line under the filter, in the reader's words.
+ *
+ * `total` IS EXACT AND `shown` IS NOT DRAWN FROM THE SAME POOL. RP4 replaced
+ * the rail's capped `.length` with a head count, which is the right number for
+ * the rail — but the LIST a filter narrows is still the newest 200 / 100 / 50
+ * rows, so a filter reaching back past that cap answers "0 of 340 items from
+ * 1 Jan 2025" about an archive that holds some. `cappedAt` is the cap the
+ * loaded list is sitting on, and naming it is the difference between "there
+ * are none" and "none of the ones we looked at" — the first is a claim about
+ * the workspace and only the second is true.
+ *
+ * `cappedAt` IS ALREADY THE ANSWER, NOT AN INPUT TO ONE. This function used to
+ * append the clause only where `total > cappedAt`, which is a test the caller's
+ * own numbers cannot always pass: the Built group's `total` is the head count
+ * MINUS the sends that took a snapshot out of the list, while the cap applies
+ * to the head count itself, so a workspace with 130 builds and 40 of them sent
+ * compared 90 against 100 and printed the claim with no caveat. Whether a cap
+ * hides anything is a question about the pool the LIST was drawn from, and only
+ * the caller knows that pool; here, a cap that is passed is a cap that hides
+ * something.
+ *
+ * `clock` NAMES THE CLOCK THE CAP IS ON, where it is not the one the filter
+ * compares. The Built list is the 100 most recently BUILT rows and the filter
+ * narrows them by the day each artefact READ — two clocks, days or weeks apart
+ * for a brief built late for an earlier month — so "the 100 most recent" left
+ * the reader to guess which. Passed, it reads "the 100 most recently built".
+ *
+ * `unread` IS THE ONE CASE THAT PRINTS NO NUMBERS. A list read that failed
+ * returns no rows and the head count beside it still answers, so the line read
+ * "0 of 340 items from 1 Jan 2025" — the strongest claim this page makes about
+ * a workspace, on the weakest evidence there is. The cards already say when a
+ * read failed rather than asserting through it; the filter line says it here.
+ */
+export function dateFilterLine(filter: DateFilter, shown: number, total: number, reach: ListReach = {}): string | null {
   if (!hasDateFilter(filter)) return null
+  if (reach.unread) return 'We could not read this list just now, so this is not a count of what is in those dates. Try again in a moment.'
   const span = filter.from && filter.to
     ? `${fullDate(`${filter.from}T00:00:00.000Z`)} to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
     : filter.from
       ? `from ${fullDate(`${filter.from}T00:00:00.000Z`)}`
       : `up to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
-  return `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
+  const head = `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
+  // A cap that hides nothing is not passed: a list sitting on its cap with
+  // nothing behind it is a complete list, and a caveat about nothing is noise.
+  const { cappedAt, clock } = reach
+  if (cappedAt == null) return head
+  const clause = clock
+    ? `Only the ${cappedAt} most recently ${clock} are searched, so anything ${clock} before those is not counted here.`
+    : `Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
+  return `${head} ${clause}`
+}
+
+/**
+ * The line in an empty pane, which has to agree with the line in the header.
+ *
+ * "Nothing was built in those dates." IS A CLAIM ABOUT THE WORKSPACE, and the
+ * pane printed it directly under a header saying only the newest hundred rows
+ * were searched — two sentences, one above the other, saying opposite things.
+ * Where the cap hides something the pane says what was looked at instead; where
+ * the list could not be read at all it says that and counts nothing.
+ */
+export function emptyGroupLine(args: {
+  /** The group's own verb: "was sent", "was built", "was exported". */
+  verb: string
+  /** What a genuinely empty archive is told instead — the invitation. */
+  invite: string
+  /** Is a date filter on? */
+  filtered: boolean
+  reach: ListReach
+}): string {
+  if (args.reach.unread) return 'We could not read this list just now. Try again in a moment.'
+  if (!args.filtered) return args.invite
+  return args.reach.cappedAt != null
+    ? `Nothing ${args.verb} in those dates among the ${args.reach.cappedAt} we searched.`
+    : `Nothing ${args.verb} in those dates.`
 }
 
 /**
@@ -66,14 +186,26 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number)
  *
  * FOUR CARRIERS, AND THE ORDER MATTERS. Each is read whether the query
  * selected the whole `data` column or aliased the key flat, which is what
- * every caller on the Reports page does. `report_snapshots.reading_at` is M9's
- * column and is preferred the moment it exists. Until then a brief carries
+ * every caller on the Reports page does. A brief carries
  * `data.reading.readingAt` (WP19) and the weekly report carries
  * `data.readingAt` (WP17) — both are the instant the artefact read, written by
  * the builder. `created_at` is LAST and is labelled differently, because it is
  * when the file was made and not when the conversation was read; printing it
  * under the same words would be the archive asserting a reading date it does
  * not have.
+ *
+ * M9'S COLUMN IS READ AND IS NOT YET SELECTED, AND THAT SEAM IS OPEN. This
+ * function prefers `reading_at` / `month` / `month_status` over every data
+ * carrier, but no query on the Reports page asks for them: naming a column
+ * PostgREST does not have fails the WHOLE select, so a page that selected them
+ * today would show a client an empty archive until the migration landed. The
+ * page is therefore correct with and without M9 and gains nothing from it
+ * until someone edits the two selects in `app/dashboard/reports/page.tsx` (the
+ * Built list and the sent snapshot) to add the three columns — which is the
+ * whole of the work, and is what makes `isMissingSentFigures` unnecessary
+ * here. WP18's `lib/reports/sent-figures.ts` already selects them on its own
+ * table and catches the failure; these two reads carry the rest of the page
+ * and cannot.
  */
 export interface ReadingStamp {
   /** ISO instant. */

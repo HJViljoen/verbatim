@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   dateFilterLine,
   hasDateFilter,
+  emptyGroupLine,
+  listCap,
   parseDateFilter,
   readingLine,
   readingStampOf,
@@ -44,6 +46,37 @@ describe('withinDates', () => {
   })
 })
 
+describe('listCap', () => {
+  it('is null where the group holds no more than it searched', () => {
+    expect(listCap([{ total: 47, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: 100, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: 0, cap: 50 }])).toBeNull()
+  })
+
+  it('names what was searched where the table holds more', () => {
+    expect(listCap([{ total: 340, cap: 100 }])).toBe(100)
+  })
+
+  it('weighs the head count of the pool the list came from, not the rail', () => {
+    // 130 kind='report' rows, 40 of them taken by the Sent group. The rail
+    // reads 90 and the cap still hides 30: the test is the head count.
+    expect(listCap([{ total: 130, cap: 100 }])).toBe(100)
+  })
+
+  it('counts a group read from two tables across both', () => {
+    // 200 sends exactly (a complete list) plus 47 rows of the legacy table:
+    // everything was searched, so there is nothing to caveat.
+    expect(listCap([{ total: 200, cap: 200 }, { total: 47, cap: 1000 }])).toBeNull()
+    // The same group with more sends than the cap searched 200 + 47.
+    expect(listCap([{ total: 260, cap: 200 }, { total: 47, cap: 1000 }])).toBe(247)
+  })
+
+  it('reads a head count that could not be taken as nothing, never as negative', () => {
+    expect(listCap([{ total: null, cap: 100 }])).toBeNull()
+    expect(listCap([{ total: undefined, cap: 100 }, { total: 340, cap: 100 }])).toBe(100)
+  })
+})
+
 describe('dateFilterLine', () => {
   it('is null where nothing is filtered', () => {
     expect(dateFilterLine(parseDateFilter(undefined, undefined), 5, 5)).toBeNull()
@@ -54,6 +87,83 @@ describe('dateFilterLine', () => {
       .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
     expect(dateFilterLine(parseDateFilter('2026-09-01', undefined), 1, 47)).toBe('1 of 47 items from 1 Sep 2026.')
     expect(dateFilterLine(parseDateFilter(undefined, '2026-09-30'), 3, 47)).toBe('3 of 47 items up to 30 Sep 2026.')
+  })
+
+  it('says the list was capped where the cap actually hides something', () => {
+    // 340 built, the newest 100 loaded, a filter reaching back past them: the
+    // head alone reads as "this workspace has none in that span", which is a
+    // claim about the archive rather than about what was looked at.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100 }))
+      .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
+  })
+
+  it('adds no caveat where nothing is behind the cap', () => {
+    // An uncapped group is unchanged, passed or omitted.
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47, { cappedAt: null }))
+      .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47))
+      .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
+  })
+
+  it('names the clock the cap is on where it is not the filter\'s', () => {
+    // The Built list is the 100 most recently BUILT rows; the filter compares
+    // the day each artefact read. "Most recent" alone left the two as one.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100, clock: 'built' }))
+      .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recently built are searched, so anything built before those is not counted here.')
+  })
+
+  it('does not weigh the cap against a total drawn from another pool', () => {
+    // The Built group's total is the head count minus the snapshots a send has
+    // taken; the cap applies to the head count. 130 built, 40 sent, the newest
+    // 100 loaded: the old `total > cappedAt` test compared 90 against 100 and
+    // suppressed the caveat over 30 rows that were never looked at.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 90, { cappedAt: 100 }))
+      .toBe('0 of 90 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
+  })
+})
+
+describe('dateFilterLine, where the list could not be read', () => {
+  it('says so instead of counting an archive it did not see', () => {
+    // readRows returns [] and logs; the head count beside it still answers, so
+    // the honest line is the one that makes no claim about the workspace.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { unread: true }))
+      .toBe('We could not read this list just now, so this is not a count of what is in those dates. Try again in a moment.')
+  })
+
+  it('outranks the cap caveat — neither number is worth anything', () => {
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100, clock: 'built', unread: true }))
+      .not.toMatch(/340|100/)
+  })
+
+  it('still says nothing where nothing is filtered', () => {
+    expect(dateFilterLine(parseDateFilter(undefined, undefined), 0, 340, { unread: true })).toBeNull()
+  })
+})
+
+describe('emptyGroupLine', () => {
+  const invite = 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
+  const args = { verb: 'was built', invite }
+
+  it('invites where the archive really is empty', () => {
+    expect(emptyGroupLine({ ...args, filtered: false, reach: {} })).toBe(invite)
+  })
+
+  it('says only what the filter looked at where a cap hides rows', () => {
+    // The header says the newest 100 were searched; the pane may not say
+    // "nothing was built in those dates" directly beneath it.
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { cappedAt: 100, clock: 'built' } }))
+      .toBe('Nothing was built in those dates among the 100 we searched.')
+  })
+
+  it('claims the workspace only where the whole group was searched', () => {
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { cappedAt: null } }))
+      .toBe('Nothing was built in those dates.')
+  })
+
+  it('says a failed read failed, filtered or not', () => {
+    const failed = 'We could not read this list just now. Try again in a moment.'
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { unread: true } })).toBe(failed)
+    expect(emptyGroupLine({ ...args, filtered: false, reach: { unread: true } })).toBe(failed)
   })
 })
 

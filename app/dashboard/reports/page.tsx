@@ -16,7 +16,7 @@ import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/r
 import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
-import { SENT_FIGURES_NOTE, dateFilterLine, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
+import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates, type ListReach } from '@/lib/reports/archive'
 import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
@@ -77,6 +77,10 @@ interface BuildRow {
 
 type Group = 'sent' | 'built' | 'exported'
 const BASE = '/dashboard/reports'
+/** What each list asks for, in one place: the `.limit()` the query carries and
+ *  the number `listCap` weighs the table's head count against. Two copies of a
+ *  cap is how a list and its caveat come to disagree. */
+const LIST_CAP = { sent: 200, legacy: 1000, built: 100, exported: 50 } as const
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
@@ -105,8 +109,15 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   const [sendRes, legacyRes, buildRes, exportRes, sendTotal, legacyTotal, builtTotal, exportTotal, reportRows, schedules] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
-      .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
-    supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
+      .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(LIST_CAP.sent),
+    // `.limit()` EXPLICITLY, BECAUSE A BARE SELECT IS NOT UNCAPPED. PostgREST
+    // stops at 1,000 rows and says nothing (AGENTS.md), so this read was capped
+    // all along while the caveat's arithmetic treated it as complete — the same
+    // two-pools defect one table over. `selectAll` is the other answer and is
+    // the wrong one here: nobody reads a list of ten thousand legacy updates,
+    // and the cap is now a number the caveat can name.
+    supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at')
+      .eq('client_id', clientId).order('week_end', { ascending: false }).limit(LIST_CAP.legacy),
     supabase.from('report_snapshots')
       // `readingAt:data->>readingAt` IS THE WEEKLY'S AND THE MONTHLY'S CARRIER.
       // A brief puts its reading instant in `data.reading.readingAt`; WP17's
@@ -117,10 +128,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // read below already aliased it; this list did not, and the monthly
       // report merged in beside it (WP18) is the artefact that made it visible.
       .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
-      .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(100),
+      .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(LIST_CAP.built),
     supabase.from('report_snapshots')
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
-      .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(50),
+      .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(LIST_CAP.exported),
     // THE COUNTS ARE THE REAL TOTALS (RP4, cut #106). They were `.length` of
     // queries capped at 200 / 100 / 50, so a busy workspace's rail read "200"
     // for ever and a reader could not tell a cap from a count. A head count is
@@ -135,6 +146,16 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // readRows, not `data ?? []`: a failed read and an empty archive render the
   // same page, so a broken query would show a client an empty Sent or Exported
   // tab with nothing anywhere saying the read failed.
+  // A READ THAT FAILED IS NOT AN EMPTY GROUP. `readRows` keeps the page
+  // rendering and logs, which is right — but the head counts beside these
+  // lists answer even when the lists do not, so an unread group would print
+  // "0 of 340 items" with nothing on the page saying the read failed. The
+  // filter line and the empty state both take this instead of asserting.
+  const unread = {
+    sent: sendRes.error != null || legacyRes.error != null,
+    built: buildRes.error != null,
+    exported: exportRes.error != null,
+  }
   const allSends = readRows<SendRow>(sendRes, 'reports.sends')
   const allLegacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
   const sentSnapshotIds = new Set(allSends.map((s) => s.snapshot_id).filter(Boolean))
@@ -145,7 +166,8 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // built at all.
   const everyBuild = readRows<BuildRow>(buildRes, 'reports.builds')
   const allBuilds = everyBuild.filter((b) => !sentSnapshotIds.has(b.id))
-  const allExports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
+  const exportSnapshots = readRows<ExportSnapshot>(exportRes, 'reports.exports')
+  const allExports = exportedRows(exportSnapshots)
 
   // The date filter narrows every group, on the day each row is dated BY:
   // a send by when it was claimed, a build by when it read (falling back to
@@ -160,6 +182,30 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     built: Math.max((builtTotal.count ?? allBuilds.length) - sentSnapshotIds.size, allBuilds.length),
     exported: exportTotal.count ?? allExports.length,
   }
+
+  // THE RAIL COUNTS ARE EXACT; THE LISTS ARE NOT. Each list above is the newest
+  // LIST_CAP rows, and the date filter narrows what was loaded — so a filter
+  // reaching back past a cap would otherwise report "0 of 340" about an archive
+  // that holds some. `cappedAt` is the cap a group's list is sitting on where
+  // the TABLE holds more than it.
+  //
+  // THE TEST IS THE HEAD COUNT OF THE POOL THE LIST WAS DRAWN FROM, NOT THE
+  // NUMBER ON THE RAIL. The Built list loads every `kind='report'` row and the
+  // rail then subtracts the ones a send has taken, so the two are different
+  // pools: 130 built, 40 of them sent, and a rail reading 90 against a cap of
+  // 100 said "nothing is hidden" while 30 rows were never loaded — the exact
+  // claim about the workspace this caveat exists to prevent.
+  // The Sent group is read from TWO tables and its caveat has to count both.
+  // `totals.sent` adds the legacy updates to the sends, so weighing it against
+  // the sends' cap alone told a workspace with exactly 200 sends and 47 legacy
+  // rows — a complete list, searched end to end — that "only the 200 most
+  // recent are searched". `listCap` takes both pools and answers about the
+  // group.
+  const cappedAt = group === 'sent'
+    ? listCap([{ total: sendTotal.count, cap: LIST_CAP.sent }, { total: legacyTotal.count, cap: LIST_CAP.legacy }])
+    : group === 'built'
+      ? listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
+      : listCap([{ total: exportTotal.count, cap: LIST_CAP.exported }])
 
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a
@@ -263,11 +309,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   const LIST_ID = 'reports-list'
   const shown = group === 'sent' ? sends.length + legacy.length : group === 'built' ? builds.length : exports.length
+  // The pane's line and the header's line are one answer: an empty pane must
+  // not say "nothing was built in those dates" under a header saying only the
+  // newest hundred were searched.
+  const reach: ListReach = { cappedAt, ...(group === 'built' ? { clock: 'built' } : {}), unread: unread[group] }
+  const emptyLine = (verb: string, invite: string) => emptyGroupLine({ verb, invite, filtered: hasDateFilter(dates), reach })
   const filter = (
     <ArchiveDateFilter
       filter={dates}
       hidden={{ ...(group !== 'sent' ? { group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported)}
+      // The Built list is capped by when each artefact was BUILT and narrowed
+      // by when it READ; the caveat names the clock its cap is on so the two
+      // dates cannot be read as one.
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, reach)}
     />
   )
   const list = group === 'sent' ? (
@@ -294,7 +348,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was sent in those dates.' : 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was sent', 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -317,7 +371,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was built in those dates.' : 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was built', 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -340,7 +394,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was exported in those dates.' : 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>
