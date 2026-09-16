@@ -217,7 +217,14 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       answer,
       prose: reply && !reply.result ? reply.content : null,
       outcome: reply?.outcome ?? null,
-      updateAt: reply?.run_id ? runStartedAt.get(reply.run_id) ?? null : null,
+      // The REPLY's run where there is one, and the submission's own where
+      // there is not: a document check writes its run on the user row and never
+      // replies with an agent message, so keying on the reply alone told a
+      // reader that nothing had been read for their workspace.
+      updateAt: (() => {
+        const rid = reply?.run_id ?? m.run_id
+        return rid ? runStartedAt.get(rid) ?? null : null
+      })(),
     })
   }
 
