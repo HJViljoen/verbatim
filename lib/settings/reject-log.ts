@@ -102,15 +102,54 @@ export interface GateTotals {
   firstAt: string | null
 }
 
+/**
+ * How many of the most recent verdicts a RATE is computed over.
+ *
+ * The totals above are exact and cost three head counts. The per-term and
+ * per-platform rates need the rows themselves, and the rows are unbounded:
+ * 1,700 on Össur and 2,777 on Sealand today, several hundred more every update,
+ * on a page any member can refresh. A thousand is PostgREST's own page (a bare
+ * select caps there silently — AGENTS.md), so this is one request that can
+ * never become four, and the surface says what the rates are over whenever the
+ * record is bigger than the sample.
+ */
+export const GATE_SAMPLE = 1000
+
+/** What to say when the rates are over a sample rather than the record. Null
+ *  when the sample IS the record, because a basis line nobody needs is noise. */
+export function sampleNote(sampled: number, found: number): string | null {
+  if (sampled <= 0 || found <= sampled) return null
+  return `Rates are over the ${sampled.toLocaleString('en-GB')} most recent judgements, of ${found.toLocaleString('en-GB')} recorded.`
+}
+
+/** The totals from COUNTS rather than from rows — three head counts and one
+ *  one-row read, which is what a loader should be spending on a number it only
+ *  prints. */
+export function gateTotalsFrom(c: {
+  found: number
+  kept: number
+  unjudged: number
+  firstAt: string | null
+}): GateTotals {
+  return {
+    found: c.found,
+    kept: c.kept,
+    dropped: c.found - c.kept,
+    keptPct: rate(c.found, c.kept),
+    unjudged: c.unjudged,
+    firstAt: c.firstAt,
+  }
+}
+
+/** The same totals over rows in hand. Kept for a caller that already holds the
+ *  whole set (the scripts, and the tests that state the rule). */
 export function gateTotals(rows: readonly GateVerdict[]): GateTotals {
-  const found = rows.length
-  const kept = rows.filter((r) => r.kept).length
-  const unjudged = rows.filter((r) => r.source === 'default').length
-  const firstAt = rows.reduce<string | null>(
-    (min, r) => (min === null || r.createdAt < min ? r.createdAt : min),
-    null,
-  )
-  return { found, kept, dropped: found - kept, keptPct: rate(found, kept), unjudged, firstAt }
+  return gateTotalsFrom({
+    found: rows.length,
+    kept: rows.filter((r) => r.kept).length,
+    unjudged: rows.filter((r) => r.source === 'default').length,
+    firstAt: rows.reduce<string | null>((min, r) => (min === null || r.createdAt < min ? r.createdAt : min), null),
+  })
 }
 
 /** The line above the table. States the record's start date every time,

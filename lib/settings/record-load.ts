@@ -7,7 +7,10 @@ import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { loadRecordInputs, type RecordInputs, type RecordWindow } from '../reading/record'
 import type { UpdateInput } from '../readiness/types'
 import { selectAll } from '../supabase-admin'
-import { REJECT_ROWS, appealKey, type GateVerdict, type RejectRow } from './reject-log'
+import {
+  GATE_SAMPLE, REJECT_ROWS, appealKey, gateTotalsFrom,
+  type GateTotals, type GateVerdict, type RejectRow,
+} from './reject-log'
 
 /**
  * The reads behind Settings › The record (Phase 1 WP16, design ST5–ST8).
@@ -51,6 +54,11 @@ export interface GateHalf {
   /** False until M8 is applied. Every number below is then meaningless and the
    *  page must not print one. */
   available: boolean
+  /** Exact, from head counts — never from the sample below. */
+  totals: GateTotals
+  /** The most recent `GATE_SAMPLE` judgements, for the per-term and
+   *  per-platform rates. Bounded on purpose: this table grows by several
+   *  hundred rows an update and the page is open to every member. */
   verdicts: GateVerdict[]
   /** The twenty rows with their excerpt — only for an owner or an admin, and
    *  empty for everyone else. */
@@ -71,7 +79,17 @@ export interface RecordPageInputs {
   coverage: RecordInputs
 }
 
-const empty: GateHalf = { available: false, verdicts: [], rows: [], appealed: new Set() }
+const noTotals: GateTotals = { found: 0, kept: 0, dropped: 0, keptPct: 0, unjudged: 0, firstAt: null }
+
+const empty: GateHalf = { available: false, totals: noTotals, verdicts: [], rows: [], appealed: new Set() }
+
+/** A head count that throws rather than hands back a null the page would print
+ *  as a zero (lib/reading/record.ts's own rule, applied here). */
+const headCount = async (q: PromiseLike<{ count: number | null; error: unknown }>): Promise<number> => {
+  const { count, error } = await q
+  if (error) throw new Error(`gate count: ${(error as { message?: string }).message ?? String(error)}`)
+  return count ?? 0
+}
 
 async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ updates: UpdateInput[]; slotsRecorded: boolean }> {
   // The bookkeeping columns land in their own migration; probe once rather
@@ -140,13 +158,30 @@ async function loadGate(
   if (isMissingGateAppeals(probe.error)) return empty
   if (probe.error) throw probe.error
 
-  // The counts every member may see: nine granted columns, no text.
-  const verdicts = await selectAll<{ platform: string; keyword: string | null; kept: boolean; source: string; created_at: string }>(() =>
+  // The counts every member may see: nine granted columns, no text. The three
+  // totals are COUNTS — the page prints them and nothing else derives from them
+  // — and only the rates need rows, so only the rates read any.
+  const count = () =>
+    client.from('gate_verdicts').select('id', { count: 'exact', head: true }).eq('client_id', clientId)
+  const [found, kept, unjudged, firstRead, sample] = await Promise.all([
+    headCount(count()),
+    headCount(count().eq('kept', true)),
+    headCount(count().eq('source', 'default')),
+    client.from('gate_verdicts').select('created_at').eq('client_id', clientId)
+      .order('created_at', { ascending: true }).limit(1).maybeSingle(),
     client.from('gate_verdicts')
       .select('platform, keyword, kept, source, created_at')
       .eq('client_id', clientId)
-      .order('id', { ascending: false }),
-  )
+      .order('id', { ascending: false })
+      .limit(GATE_SAMPLE),
+  ])
+  if (firstRead.error) throw firstRead.error
+  if (sample.error) throw sample.error
+  const verdicts = (sample.data ?? []) as { platform: string; keyword: string | null; kept: boolean; source: string; created_at: string }[]
+  const totals = gateTotalsFrom({
+    found, kept, unjudged,
+    firstAt: (firstRead.data as { created_at?: string } | null)?.created_at ?? null,
+  })
 
   const appealRows = await selectAll<{ run_id: string | null; platform: string; video_id: string }>(() =>
     client.from(GATE_APPEALS_TABLE).select('run_id, platform, video_id').eq('client_id', clientId),
@@ -175,6 +210,7 @@ async function loadGate(
 
   return {
     available: true,
+    totals,
     verdicts: verdicts.map((v) => ({
       platform: v.platform, keyword: v.keyword, kept: v.kept, source: v.source, createdAt: v.created_at,
     })),

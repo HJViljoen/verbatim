@@ -10,7 +10,7 @@ import { selectAll } from '../supabase-admin'
 import { loadTermPerformance } from '../keywords/performance'
 import type { TermSummary } from '../keywords/value'
 import { isMissingAffects } from './change-log'
-import { keptByCommunity, type KeptRate } from './reject-log'
+import { GATE_SAMPLE, keptByCommunity, type KeptRate } from './reject-log'
 import type { RivalCensusRow } from './rivals-view'
 import { termDates, termYieldByMonth, type KeywordRunRow, type TermDate, type TermYield } from './terms'
 
@@ -151,9 +151,15 @@ async function loadCommunityKept(admin: SupabaseClient | null, clientId: string)
   // column that names the community is not theirs to read. Null, and the page
   // says so — never a rate computed from a column that came back refused.
   if (!admin) return null
+  // Bounded, and explicitly: a bare select caps at a thousand SILENTLY
+  // (AGENTS.md), and this table grows by several hundred rows an update. The
+  // rate is over the most recent GATE_SAMPLE Reddit judgements, and the caller
+  // is told when that is fewer than everything.
   const { data, error } = await admin.from('gate_verdicts')
     .select('platform, keyword, kept, source, created_at, account_name')
     .eq('client_id', clientId).eq('platform', 'reddit')
+    .order('id', { ascending: false })
+    .limit(GATE_SAMPLE)
   if (error) return null
   return keptByCommunity((data ?? []).map((r) => ({
     platform: r.platform as string,

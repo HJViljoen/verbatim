@@ -8,7 +8,7 @@ import { recordLines } from '@/lib/reading/record'
 import { readChangeLog } from '@/lib/settings/change-log'
 import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
 import { loadRecordPage } from '@/lib/settings/record-load'
-import { gateSummary, gateTotals, keptByPlatform, keptByTerm } from '@/lib/settings/reject-log'
+import { gateSummary, keptByPlatform, keptByTerm, sampleNote } from '@/lib/settings/reject-log'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { AppealButton } from './appeal-button'
 
@@ -59,9 +59,12 @@ export default async function SettingsRecordPage() {
   const delivery = deliveryRecord({ updates: inputs.updates, slotsRecorded: inputs.slotsRecorded })
   const thisMonth = updatesInMonth(inputs.updates, month)
   const log = readChangeLog({ rows: inputs.changes.rows, viewerUserId: userId, emails: inputs.emails })
-  const totals = gateTotals(inputs.gate.verdicts)
+  // The totals are exact (head counts); the rates are over the most recent
+  // sample of judgements, and the card says so when the two differ.
+  const totals = inputs.gate.totals
   const byTerm = keptByTerm(inputs.gate.verdicts).slice(0, 10)
   const byPlatform = keptByPlatform(inputs.gate.verdicts)
+  const basis = sampleNote(inputs.gate.verdicts.length, totals.found)
   const lines = recordLines(inputs.coverage)
 
   return (
@@ -194,6 +197,8 @@ export default async function SettingsRecordPage() {
                   By platform: {byPlatform.map((p) => `${p.label} ${p.keptPct.toFixed(1)}%`).join(' · ')}.
                 </p>
               )}
+
+              {basis && <p className="mt-1 text-[11.5px] text-muted-foreground">{basis}</p>}
 
               {canSeeExcerpt ? (
                 <div className="mt-4">

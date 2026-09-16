@@ -12,7 +12,8 @@ import {
 } from './change-log'
 import { deliveryRecord, updatesInMonth } from './delivery'
 import {
-  appealKey, gateSummary, gateTotals, keptByCommunity, keptByPlatform, keptByTerm, REJECT_ROWS,
+  appealKey, gateSummary, gateTotals, gateTotalsFrom, keptByCommunity, keptByPlatform, keptByTerm,
+  sampleNote, GATE_SAMPLE, REJECT_ROWS,
   type GateVerdict,
 } from './reject-log'
 import { clientReadiness, withheldLine } from './readiness-view'
@@ -281,6 +282,18 @@ describe('the reject log', () => {
     const totals = gateTotals(rows)
     expect(gateSummary(totals, '2026-09-09T00:00:00Z')).not.toMatch(/show no share/)
     expect(gateSummary(gateTotals([]), null)).toBe('Nothing has been judged for this workspace yet.')
+  })
+
+  // The page's totals come off head counts now: the rows are unbounded and the
+  // three numbers it prints are countable without them.
+  it('totals the same from counts as from rows, and says what a rate is over', () => {
+    expect(gateTotalsFrom({ found: 6, kept: 4, unjudged: 1, firstAt: '2026-09-09T00:00:00Z' }))
+      .toEqual(gateTotals(rows))
+    expect(sampleNote(GATE_SAMPLE, 2_777))
+      .toBe('Rates are over the 1,000 most recent judgements, of 2,777 recorded.')
+    // The sample IS the record: a basis line nobody needs is noise.
+    expect(sampleNote(6, 6)).toBeNull()
+    expect(sampleNote(0, 0)).toBeNull()
   })
 
   it('keys an appeal the way the verdict is keyed', () => {
