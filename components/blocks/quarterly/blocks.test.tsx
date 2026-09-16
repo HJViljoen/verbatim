@@ -121,6 +121,20 @@ describe('the six-month gate', () => {
     expect(text).toContain('your 8th monthly reading')
     expect(text).not.toContain('the quarter view needs 6')
   })
+
+  // ON EVERY PAGE THAT PRINTS IT, not only the cover. The category page printed
+  // it unconditionally, so a workspace standing at eight readings — one that
+  // cleared the gate two readings ago — was told "Quarter against quarter needs
+  // six months — you have 8." as a live caveat under its own basis line.
+  it('is on the category page below six readings, and gone above', () => {
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx)))
+      .toContain(quarterGateSentence(3))
+    for (const read of [quarterlyFixture(), afterQuarterFixture()]) {
+      const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(read, 'app', ctx))
+      expect(text).toContain('Movers and the mix are')
+      expect(text).not.toContain('Quarter against quarter needs six months')
+    }
+  })
 })
 
 describe('what each page owes the reader', () => {

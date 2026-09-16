@@ -169,6 +169,10 @@ export interface CategoryPage {
   monthLabel: string
   /** "Movers and mix are September against August." */
   basis: string
+  /** The six-month gate, when this workspace has not cleared it — null once it
+   *  has. Printed unconditionally, this page told a workspace standing at nine
+   *  readings that the quarter view "needs six months — you have 9". */
+  gate: string | null
   growing: Mover[]
   fading: Mover[]
   moversNote: string | null
@@ -662,6 +666,8 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     overview,
     quarterVerdicts,
     monthLabel,
+    unlocked,
+    gate,
     windowApplied,
     themesRead,
     monthOutside,
@@ -1057,6 +1063,8 @@ function buildCategory(a: {
   overview: OverviewData
   quarterVerdicts: Verdict[]
   monthLabel: string
+  unlocked: boolean
+  gate: string
   windowApplied: boolean
   themesRead: boolean
   monthOutside: boolean
@@ -1082,6 +1090,12 @@ function buildCategory(a: {
     basis: `Movers and the mix are ${a.monthLabel} against ${prevMonthLabel}.${
       a.monthOutside ? ` ${a.monthLabel} is outside this quarter — it is the month the product is in now.` : ''
     }`,
+    // THE GATE IS A CAVEAT, NOT A MASTHEAD. It says the quarter view needs six
+    // monthly readings and names how many stand behind this one, which reads
+    // as a live warning; printed unconditionally it said "needs six months —
+    // you have 9" to a workspace that cleared the gate three readings ago.
+    // `buildSubjects` has always dropped it at six; this page now does too.
+    gate: a.unlocked ? null : a.gate,
     growing: c.growing,
     fading: c.fading,
     moversNote: c.moversNote,
