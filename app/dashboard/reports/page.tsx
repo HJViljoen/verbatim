@@ -14,8 +14,28 @@ import type { CoverText, FigureTable } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 import { rows as readRows } from '@/lib/pages/read'
+import { BriefCards } from '@/components/reports/brief-cards'
+import { ArchiveDateFilter } from '@/components/reports/date-filter'
+import { SENT_FIGURES_NOTE, dateFilterLine, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
+import { BRIEF_CARDS, cadenceWord, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
+import { loadReportsPage } from '@/lib/settings/reports-load'
+import { parseHorizon } from '@/lib/reading/horizon'
+import { isArtefact } from '@/lib/settings/artefacts'
 
-// Reports — the archive of what went out and what was built (Stage 3):
+// Reports — the three briefs, and the archive of what went out (Phase 1 WP19,
+// design RP1 and RP4; decision R).
+//
+// THE PAGE GAINED A TOP HALF. RP1's three cards — Sales, Marketing, Content —
+// sit above the archive, each with the cadence and the recipients its schedule
+// carries and the day the last one read. The Leadership brief is deliberately
+// not one of them (decision R) and the page says where it is.
+//
+// Below them, the archive as it was, with RP4's three corrections: the rail
+// counts are the real totals rather than the length of a capped query, a date
+// filter narrows every group, and a sent report prints the figures it went out
+// with beside the day it read.
+//
+// The archive of what went out and what was built (Stage 3):
 //   Sent  — every scheduled send (subject, who, when, the PDF, the share link,
 //           the email as sent — re-rendered from its snapshot, never stored),
 //           with the updates emailed before schedules existed beneath them.
@@ -48,6 +68,11 @@ interface BuildRow {
   report_id: string | null
   cover: CoverText | null
   figures: FigureTable | null
+  /** `data.reading` — the month a brief read (WP19); absent on everything
+   *  built before item 43 and on every arranged report. */
+  reading?: unknown
+  /** `data.template` — which document this is, where it is one. */
+  template?: string | null
   artifacts: { id: string; format: string; bytes: number; stale: boolean; rendered_at: string; version: number }[]
 }
 
@@ -56,10 +81,14 @@ const BASE = '/dashboard/reports'
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null)
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const fmtBytes = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1000))} KB`)
-const href = (group: Group, item?: string | null) => {
+/** Every link on this page carries the reader's filter and their window — a
+ *  rail link that dropped the date filter would silently widen the archive
+ *  under them, and the horizon is what a build is about to be built on. */
+const hrefWith = (extra: Record<string, string | undefined>) => (group: Group, item?: string | null) => {
   const q = new URLSearchParams()
   if (group !== 'sent') q.set('group', group)
   if (item) q.set('item', item)
+  for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v)
   const qs = q.toString()
   return qs ? `${BASE}?${qs}` : BASE
 }
@@ -70,30 +99,76 @@ const sendLine = (s: SendRow) =>
   : sendDidNotFinish(s.status, s.claimed_at) ? `did not finish · ${fmtWhen(s.claimed_at)}`
   : `sending · ${fmtWhen(s.claimed_at)}`
 
-export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string }> }) {
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string; from?: string; to?: string; horizon?: string }> }) {
   const sp = (await searchParams) ?? {}
   const { supabase, clientId } = await getSessionContext()
   const group: Group = sp.group === 'built' ? 'built' : sp.group === 'exported' ? 'exported' : 'sent'
+  const dates = parseDateFilter(sp.from, sp.to)
+  const horizon = parseHorizon(sp.horizon)
 
-  const [sendRes, legacyRes, buildRes, exportRes] = await Promise.all([
+  const [sendRes, legacyRes, buildRes, exportRes, sendTotal, legacyTotal, builtTotal, exportTotal, reportRows, schedules] = await Promise.all([
     supabase.from('report_sends').select('id, schedule_id, schedule_name, run_id, snapshot_id, artifact_id, share_link_id, subject, recipients, status, error, claimed_at, sent_at, report_schedules(name, attach_pdf)')
       .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
     supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
     supabase.from('report_snapshots')
-      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, artifacts(id, format, bytes, stale, rendered_at, version)')
+      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
       .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(100),
     supabase.from('report_snapshots')
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
       .eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']).order('created_at', { ascending: false }).limit(50),
+    // THE COUNTS ARE THE REAL TOTALS (RP4, cut #106). They were `.length` of
+    // queries capped at 200 / 100 / 50, so a busy workspace's rail read "200"
+    // for ever and a reader could not tell a cap from a count. A head count is
+    // one cheap round trip and answers the question the number is asked.
+    supabase.from('report_sends').select('id', { count: 'exact', head: true }).eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']),
+    supabase.from('weekly_reports').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+    supabase.from('report_snapshots').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('kind', 'report'),
+    supabase.from('report_snapshots').select('id', { count: 'exact', head: true }).eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']),
+    supabase.from('reports').select('id, template_key, kind').eq('client_id', clientId).eq('kind', 'document'),
+    loadReportsPage(supabase, clientId).catch(() => null),
   ])
   // readRows, not `data ?? []`: a failed read and an empty archive render the
   // same page, so a broken query would show a client an empty Sent or Exported
   // tab with nothing anywhere saying the read failed.
-  const sends = readRows<SendRow>(sendRes, 'reports.sends')
-  const legacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
-  const sentSnapshotIds = new Set(sends.map((s) => s.snapshot_id).filter(Boolean))
-  const builds = readRows<BuildRow>(buildRes, 'reports.builds').filter((b) => !sentSnapshotIds.has(b.id))
-  const exports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
+  const allSends = readRows<SendRow>(sendRes, 'reports.sends')
+  const allLegacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
+  const sentSnapshotIds = new Set(allSends.map((s) => s.snapshot_id).filter(Boolean))
+  const allBuilds = readRows<BuildRow>(buildRes, 'reports.builds').filter((b) => !sentSnapshotIds.has(b.id))
+  const allExports = exportedRows(readRows<ExportSnapshot>(exportRes, 'reports.exports'))
+
+  // The date filter narrows every group, on the day each row is dated BY:
+  // a send by when it was claimed, a build by when it read (falling back to
+  // when it was built), an export by when it was taken.
+  const sends = allSends.filter((x) => withinDates(x.sent_at ?? x.claimed_at, dates))
+  const legacy = allLegacy.filter((x) => withinDates(x.sent_at ?? x.week_end, dates))
+  const builds = allBuilds.filter((b) => withinDates(readingStampOf(b).at, dates))
+  const exports = allExports.filter((e) => withinDates(e.createdAt, dates))
+
+  const totals = {
+    sent: (sendTotal.count ?? allSends.length) + (legacyTotal.count ?? allLegacy.length),
+    built: Math.max((builtTotal.count ?? allBuilds.length) - sentSnapshotIds.size, allBuilds.length),
+    exported: exportTotal.count ?? allExports.length,
+  }
+
+  // ── RP1: the three cards ───────────────────────────────────────────────
+  const documentReports = ((reportRows.data ?? []) as { id: string; template_key: string | null }[])
+  const scheduleRows = schedules?.schedules ?? []
+  const cards: BriefCard[] = BRIEF_CARDS.map(({ role, artefact }) => {
+    const latest = allBuilds.find((b) => b.template === role) ?? null
+    const schedule = scheduleRows.find((x) => isArtefact(x.artefact) && x.artefact === artefact) ?? null
+    const recipients = schedule?.recipients ?? []
+    return {
+      role,
+      artefact,
+      label: briefLabel(artefact),
+      what: briefWhat(artefact),
+      reportId: documentReports.find((r) => r.template_key === role)?.id ?? null,
+      latest: latest ? { snapshotId: latest.id, title: latest.title, readingLine: readingLine(readingStampOf(latest)) } : null,
+      cadence: cadenceWord(schedule?.cadence ?? null),
+      recipients,
+      sending: Boolean(schedule?.active) && recipients.length > 0 && (schedules?.period ?? 'weekly') !== 'paused',
+    }
+  })
 
   // ── selection ─────────────────────────────────────────────────────────
   const sentIds = [...sends.map((s) => s.id), ...legacy.map((l) => l.id)]
@@ -118,6 +193,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     shareLinks = ((l ?? []) as { id: string; snapshot_id: string; token: string; title: string; expires_at: string | null; password_hash: string | null; revoked_at: string | null; view_count: number; last_viewed_at: string | null; created_at: string }[])
       .map((x) => ({ id: x.id, url: `${base}/r/${x.token}`, title: x.title, createdAt: x.created_at, expiresAt: x.expires_at, revokedAt: x.revoked_at, protected: Boolean(x.password_hash), views: x.view_count, lastViewedAt: x.last_viewed_at, buildAt: x.created_at }))
   }
+  // The snapshot a send went out with. It is deliberately NOT in `builds` —
+  // the Built group subtracts everything that was sent — so it is read here,
+  // by id, for the figures RP4 asks the archive to print beside the date.
+  interface SentSnapshot { id: string; created_at: string; figures: FigureTable | null; data: { reading: unknown; readingAt: string | null } }
+  let sentSnapshot: SentSnapshot | null = null
+  if (selectedSend?.snapshot_id) {
+    const { data: snap } = await supabase.from('report_snapshots')
+      .select('id, created_at, figures:data->figures, reading:data->reading, readingAt:data->>readingAt')
+      .eq('client_id', clientId).eq('id', selectedSend.snapshot_id).maybeSingle()
+    const r = snap as { id: string; created_at: string; figures: FigureTable | null; reading: unknown; readingAt: string | null } | null
+    sentSnapshot = r ? { id: r.id, created_at: r.created_at, figures: r.figures, data: { reading: r.reading, readingAt: r.readingAt } } : null
+  }
+
   type ArtifactLite = { id: string; format: string; bytes: number; stale: boolean }
   let artifact: ArtifactLite | null = null
   if (selectedSend?.artifact_id) {
@@ -137,24 +225,40 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
   const closeViewer = viewerHref(BASE, { group: sp.group, item: buildId ?? sentId ?? undefined }, null)
 
+  const carry: Record<string, string | undefined> = {
+    ...(dates.from ? { from: dates.from } : {}),
+    ...(dates.to ? { to: dates.to } : {}),
+    ...(horizon !== 'this_month' ? { horizon } : {}),
+  }
+  const href = hrefWith(carry)
+
   const rail = (
     <>
       <PaneHeader title="Archive" meta="what left the building" />
       <PaneBody>
         <RailGroup label="Reports">
-          <RailLink href={href('sent')} active={group === 'sent'} count={sends.length + legacy.length}>Sent</RailLink>
-          <RailLink href={href('built')} active={group === 'built'} count={builds.length}>Built</RailLink>
-          <RailLink href={href('exported')} active={group === 'exported'} count={exports.length}>Exported</RailLink>
+          <RailLink href={href('sent')} active={group === 'sent'} count={totals.sent}>Sent</RailLink>
+          <RailLink href={href('built')} active={group === 'built'} count={totals.built}>Built</RailLink>
+          <RailLink href={href('exported')} active={group === 'exported'} count={totals.exported}>Exported</RailLink>
         </RailGroup>
       </PaneBody>
     </>
   )
 
   const LIST_ID = 'reports-list'
+  const shown = group === 'sent' ? sends.length + legacy.length : group === 'built' ? builds.length : exports.length
+  const filter = (
+    <ArchiveDateFilter
+      filter={dates}
+      hidden={{ ...(group !== 'sent' ? { group } : {}), ...(horizon !== 'this_month' ? { horizon } : {}) }}
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported)}
+    />
+  )
   const list = group === 'sent' ? (
     <>
       <PaneHeader title="Sent" meta={sends.length + legacy.length > 0 ? 'newest first' : undefined}>
         {sends.length + legacy.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search sent updates…" />}
+        {filter}
       </PaneHeader>
       <PaneBody>
         <div id={LIST_ID}>
@@ -174,7 +278,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.</PaneEmpty>
+            <PaneEmpty>{dates.from || dates.to ? 'Nothing was sent in those dates.' : 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -183,6 +287,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <>
       <PaneHeader title="Built" meta={builds.length > 0 ? 'newest first' : undefined}>
         {builds.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search builds…" />}
+        {filter}
       </PaneHeader>
       <PaneBody>
         <div id={LIST_ID}>
@@ -191,12 +296,12 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               {builds.map((b) => (
                 <ListRow key={b.id} href={viewerHref(BASE, { group: 'built', item: b.id }, b.id)} active={b.id === buildId} search={b.title}>
                   <p className="line-clamp-2 text-[13px] font-semibold leading-[1.3]">{b.title}</p>
-                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">built {fmtWhen(b.created_at)} · {b.artifacts.length ? b.artifacts.map((a) => a.format.toUpperCase()).join(', ') : 'no file'}</p>
+                  <p className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">{readingLine(readingStampOf(b))} · {b.artifacts.length ? b.artifacts.map((a) => a.format.toUpperCase()).join(', ') : 'no file'}</p>
                 </ListRow>
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>Nothing built by hand yet. Build any template in the Studio and its PDF lands here.</PaneEmpty>
+            <PaneEmpty>{dates.from || dates.to ? 'Nothing was built in those dates.' : 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -205,6 +310,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <>
       <PaneHeader title="Exported" meta={exports.length > 0 ? 'newest first' : undefined}>
         {exports.length > 5 && <ListSearch scope={LIST_ID} placeholder="Search exports…" />}
+        {filter}
       </PaneHeader>
       <PaneBody>
         <div id={LIST_ID}>
@@ -218,7 +324,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>Nothing exported yet. Export any page or tile from its menu; the files collect here.</PaneEmpty>
+            <PaneEmpty>{dates.from || dates.to ? 'Nothing was exported in those dates.' : 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -235,6 +341,26 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <DetailSection label="To">
           <p className="text-[12.5px] text-secondary-foreground">{selectedSend.recipients.join(' · ') || 'nobody'}</p>
         </DetailSection>
+        {sentSnapshot && (
+          <DetailSection label="What it read, and the figures it went out with">
+            <p className="font-mono text-[11px] text-secondary-foreground">{readingLine(readingStampOf(sentSnapshot))}</p>
+            {sentFigures(sentSnapshot.figures).length > 0 ? (
+              <>
+                <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                  {sentFigures(sentSnapshot.figures).map((f) => (
+                    <div key={f.key} className="flex items-baseline justify-between gap-3 border-b border-border/50 py-0.5">
+                      <dt className="min-w-0 truncate text-[12px] text-muted-foreground">{f.label}</dt>
+                      <dd className="shrink-0 font-mono text-[12px] tabular-nums text-foreground">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-2 text-[11px] text-muted-foreground">{SENT_FIGURES_NOTE}</p>
+              </>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted-foreground">This report stored no figure table.</p>
+            )}
+          </DetailSection>
+        )}
         <DetailSection label="Files and links">
           <div className="flex flex-wrap items-center gap-3">
             {artifact ? (
@@ -266,7 +392,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   ) : group === 'built' ? (
     selectedBuild ? (
     <>
-      <DetailHeader eyebrow="Built in the Studio" title={selectedBuild.title} meta={`built ${fmtWhen(selectedBuild.created_at)}${selectedBuild.cover?.model ? '' : ' · cover written in code'}`} />
+      <DetailHeader eyebrow="Built in the Studio" title={selectedBuild.title} meta={readingLine(readingStampOf(selectedBuild))} />
       <DetailSection>
         {selectedBuild.cover && selectedBuild.figures && <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(selectedBuild.cover.body, selectedBuild.figures)}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -277,6 +403,19 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           {selectedBuild.report_id && <Link href={`/dashboard/studio?item=${selectedBuild.report_id}`} className="text-[12px] font-medium underline underline-offset-2">Open in the Studio</Link>}
         </div>
       </DetailSection>
+      {sentFigures(selectedBuild.figures).length > 0 && (
+        <DetailSection label="The figures it was built with">
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+            {sentFigures(selectedBuild.figures).map((f) => (
+              <div key={f.key} className="flex items-baseline justify-between gap-3 border-b border-border/50 py-0.5">
+                <dt className="min-w-0 truncate text-[12px] text-muted-foreground">{f.label}</dt>
+                <dd className="shrink-0 font-mono text-[12px] tabular-nums text-foreground">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mt-2 text-[11px] text-muted-foreground">{SENT_FIGURES_NOTE}</p>
+        </DetailSection>
+      )}
       <DetailSection label="Share">
         <ShareLinks snapshotId={selectedBuild.id} links={shareLinks} />
       </DetailSection>
@@ -304,9 +443,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   return (
     <PageFrame className="min-h-0 flex-1">
-      <PageBar title="Reports" context="what went out, and what was built">
+      <PageBar title="Reports" context="your briefs, and what went out">
         <Link href="/dashboard/studio"><BarPill primary>Open the Studio</BarPill></Link>
       </PageBar>
+      <BriefCards cards={cards} horizon={horizon} studioHref={(h) => hrefWith({ ...carry, horizon: h === 'this_month' ? undefined : h })(group, sp.item)} />
       <MasterDetail id="reports" rail={rail} list={list} detail={detail} />
       {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
     </PageFrame>

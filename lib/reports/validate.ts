@@ -5,6 +5,7 @@ import { DOCUMENT_BRIEF_MAX, EXPORT_PARAMS_MAX_CHARS, EXPORT_PARAMS_MAX_KEYS, RE
 import { DEFAULT_DOCUMENT_ROLE, DOCUMENT_BLOCK_KEYS, DOCUMENT_ROLES, documentSettings, type DocumentBlockKey, type DocumentRole, type DocumentSettings } from './documents/types'
 import { CUSTOM_KEY, documentTemplate } from './documents/templates'
 import type { Audience } from './types'
+import { HORIZONS, type Horizon } from '../reading/horizon'
 
 /** What a browser may put into a report: shared by the server actions and the
  *  routes, so a crafted POST meets the same caps as the Studio. */
@@ -51,6 +52,10 @@ export const documentSettingsPatch = z.object({
     .refine((b) => new Set(b).size === b.length, 'a block can only be included once')
     .optional(),
   role: z.enum(DOCUMENT_ROLES as [DocumentRole, ...DocumentRole[]]).optional(),
+  /** RP2's window control (Phase 1 WP19): the horizon this brief is built on.
+   *  The same four every reading surface offers, so a brief and the page it
+   *  was asked for from resolve the same selection. */
+  horizon: z.enum(HORIZONS as unknown as [Horizon, ...Horizon[]]).optional(),
 })
 export type DocumentSettingsPatch = z.infer<typeof documentSettingsPatch>
 
