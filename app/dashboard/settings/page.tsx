@@ -8,6 +8,7 @@ import { communityRows, communityWords, tableRows, unconfiguredShare } from '@/l
 import { RIVAL_PRECEDENCE, rivalRows, rivalState } from '@/lib/settings/rivals-view'
 import { termDateWords } from '@/lib/settings/terms'
 import { loadTrackingPage } from '@/lib/settings/tracking-load'
+import { createAdminClient } from '@/lib/supabase-admin'
 import { RivalRename } from './rival-rename'
 import { SearchTermsForm, type SearchTermsConfig } from './search-terms-form'
 import { SettingsForm, type TrackingConfig } from './settings-form'
@@ -33,7 +34,12 @@ import { TermPerformance } from './term-performance'
 export default async function SettingsTrackingPage() {
   const { supabase, clientId, role } = await getSessionContext()
   const canEdit = canManageTenant(role)
-  const inputs = await loadTrackingPage(supabase, clientId)
+  // The one read on this page that a tenant session may never make: the
+  // community a verdict was about is `gate_verdicts.account_name`, which M8
+  // withholds from `authenticated` for the same reason it withholds the
+  // caption. Owners and admins get it through the service role, in this server
+  // component; everyone else gets the table without the column and is told so.
+  const inputs = await loadTrackingPage(supabase, clientId, canEdit ? createAdminClient() : null)
 
   const c = inputs.config as TrackingConfig | null
   const terms = inputs.config as SearchTermsConfig | null
@@ -130,8 +136,8 @@ export default async function SettingsTrackingPage() {
             )}
             {inputs.communityKept === null && (
               <p className="mt-1 text-[11.5px] text-muted-foreground">
-                We cannot yet show you how much of each community we kept. The record exists; opening it to you is
-                a change we have not shipped.
+                How much of each community we kept is shown to owners and admins only — it is read off the accounts
+                other people posted from, and the fewer copies of those we hand around the better.
               </p>
             )}
           </SettingsCard>

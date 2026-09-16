@@ -11,20 +11,24 @@ import { loadTermPerformance } from '../keywords/performance'
 import type { TermSummary } from '../keywords/value'
 import { isMissingAffects } from './change-log'
 import { keptByCommunity, type KeptRate } from './reject-log'
-import { GATE_APPEALS_TABLE, isMissingGateAppeals } from './record-load'
 import type { RivalCensusRow } from './rivals-view'
 import { termDates, termYieldByMonth, type KeywordRunRow, type TermDate, type TermYield } from './terms'
 
 /**
  * The reads behind Settings › Tracking (Phase 1 WP16, design ST2 and ST4).
  *
- * Everything runs on the session client: every table here is tenant-scoped
- * already, and `gate_verdicts` becomes so with M8. The one exception is that
- * the per-community kept-rate simply is not available until M8 lands, and the
- * probe that tells us so is `gate_appeals` — before M8, `gate_verdicts` is
- * superadmin-only and RLS FILTERS rather than errors, so a member's read is
- * zero rows with no error and is indistinguishable from "nothing was judged".
- * The same reasoning, and the same probe, as Settings › The record.
+ * Everything runs on the session client except one read: every table here is
+ * tenant-scoped already, and `gate_verdicts` becomes so with M8.
+ *
+ * THE PER-COMMUNITY KEPT-RATE IS THE EXCEPTION, AND M8 WOULD NEVER HAVE FIXED
+ * IT. A community is `gate_verdicts.account_name`, and `account_name` is one of
+ * the three columns M8 deliberately WITHHOLDS from `authenticated` — a
+ * stranger's account beside the gate's words about their post. So a session
+ * client is refused that column before M8 and after it, and the honest fix is
+ * the one Settings › The record already makes for the reject log's excerpt: the
+ * read moves to the service-role client, in a server component, after the
+ * caller has checked canManageTenant. A member without that role reads the
+ * table without the column, and the page says which it is.
  *
  * WHY THE REDDIT ROI IS COMPUTED HERE AND NOT STORED. `lib/pipeline/
  * subreddit-roi.ts` says it: per-subreddit survival is already captured in the
@@ -51,6 +55,10 @@ export interface TrackingPageInputs {
   gathers: number
   entries: SubredditEntry[]
   roi: SubredditRoiRow[]
+  /** Per community, how much of what we looked at we kept. Null when the
+   *  reader is not an owner or an admin: the community is the stranger's
+   *  account the verdict was about, and M8 withholds that column from every
+   *  tenant session. Not a "not shipped yet" — a "not yours to read". */
   communityKept: KeptRate[] | null
   rivals: Competitor[]
   census: RivalCensusRow[]
@@ -138,14 +146,12 @@ async function loadRoi(client: SupabaseClient, clientId: string): Promise<Subred
   )
 }
 
-async function loadCommunityKept(client: SupabaseClient, clientId: string): Promise<KeptRate[] | null> {
-  const probe = await client.from(GATE_APPEALS_TABLE).select('id').limit(1)
-  if (isMissingGateAppeals(probe.error)) return null
-  if (probe.error) throw probe.error
-  // `account_name` is withheld from `authenticated` by M8's column grant, so a
-  // member's read of it is refused outright rather than silently emptied. That
-  // is the right failure: the page prints nothing instead of a wrong rate.
-  const { data, error } = await client.from('gate_verdicts')
+async function loadCommunityKept(admin: SupabaseClient | null, clientId: string): Promise<KeptRate[] | null> {
+  // No admin client means the caller is not an owner or an admin, and the
+  // column that names the community is not theirs to read. Null, and the page
+  // says so — never a rate computed from a column that came back refused.
+  if (!admin) return null
+  const { data, error } = await admin.from('gate_verdicts')
     .select('platform, keyword, kept, source, created_at, account_name')
     .eq('client_id', clientId).eq('platform', 'reddit')
   if (error) return null
@@ -181,6 +187,10 @@ async function loadCensus(client: SupabaseClient, clientId: string): Promise<Riv
 export async function loadTrackingPage(
   client: SupabaseClient,
   clientId: string,
+  /** The service-role client, and ONLY when the caller has checked
+   *  canManageTenant. It reads exactly one thing: the community a verdict was
+   *  about (`gate_verdicts.account_name`), which no tenant session may read. */
+  admin: SupabaseClient | null = null,
 ): Promise<TrackingPageInputs> {
   const [clientRead, configRead] = await Promise.all([
     client.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
@@ -193,7 +203,7 @@ export async function loadTrackingPage(
     loadTermYield(client, clientId),
     loadTermPerformance(client, clientId, TRACKING_GATHERS),
     loadRoi(client, clientId),
-    loadCommunityKept(client, clientId),
+    loadCommunityKept(admin, clientId),
     loadCompetitors(client, clientId),
     loadCensus(client, clientId),
   ])
