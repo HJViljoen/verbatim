@@ -90,7 +90,15 @@ export function askBasisLine(basis: AskBasis, opts: { asked?: boolean } = {}): s
 
 /** True when a question asked now cannot reach a single finding — the state
  *  `answerQuestion` throws on, said before the reader spends a turn finding
- *  out. */
+ *  out.
+ *
+ *  Read by /dashboard/agent, which disables the box and names the state in it.
+ *  That call site is the whole point of the predicate and it was missing: the
+ *  comment promised the reader was told first while nothing imported it, and a
+ *  question asked into an unembedded corpus takes one of the month's forty
+ *  slots on its way to throwing. Total of zero is NOT this state — a workspace
+ *  with no findings at all has its own sentence — and neither is a failed read,
+ *  which reports zero for both and so fails open. */
 export const nothingSearchable = (basis: AskBasis): boolean => basis.total > 0 && basis.embedded === 0
 
 /**

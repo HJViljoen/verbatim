@@ -3,7 +3,7 @@ import { AgentComposer } from '@/components/agent-composer'
 import { AgentCrowdRing } from '@/components/agent-stage'
 import { AgentHistory, type ThreadRow } from '@/components/agent-history'
 import { canAsk } from '@/lib/agent/access'
-import { askBasisLine, loadAskBasis } from '@/lib/agent/basis'
+import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
 
 // The Verbatim Agent — arrive with a question from your own work, get an answer
 // built from what your customers actually said.
@@ -38,6 +38,14 @@ export default async function AgentPage({ searchParams }: { searchParams?: Promi
     loadAskBasis(supabase, clientId),
   ])
   const threads = (rows ?? []) as ThreadRow[]
+  // THE ONE STATE WHERE ASKING CANNOT WORK. `match_insights` filters
+  // `embedding is not null`, so a corpus with nothing embedded returns zero
+  // rows for every question and `answerQuestion` throws — after the question
+  // has been stored, which means after it has taken one of the month's forty
+  // slots. The basis line below already says "none of N findings searchable";
+  // this is the same fact reaching the control, so the reader is told before
+  // they spend the turn rather than after.
+  const blocked = nothingSearchable(basis)
 
   return (
     // .agent-fixed is the hook a CSS rule uses to stop <main> scrolling and
@@ -52,7 +60,12 @@ export default async function AgentPage({ searchParams }: { searchParams?: Promi
       <AgentCrowdRing />
       <div className="agent-centre-in relative z-10 grid h-full place-items-center">
         <div className="w-full pb-24">  {/* clears the taller peek below */}
-          <AgentComposer canSend={canSend} showFigure ask={ask} />
+          <AgentComposer
+            canSend={canSend && !blocked}
+            disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+            showFigure
+            ask={ask}
+          />
           {/* AS3, under the box rather than over it: the reader came here to
               ask, and what the answer will be drawn from is the second thing
               they need, not the first. Said before a question is spent, because
