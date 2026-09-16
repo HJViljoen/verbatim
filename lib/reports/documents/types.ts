@@ -226,6 +226,37 @@ export interface DocumentMissingInput {
   sections: string[]
 }
 
+/**
+ * One borrowed page block, as the brief's deck prints it (Phase 1 WP19).
+ *
+ * "Deck pages that duplicate a block render the block in print mode" — so the
+ * section stores what to draw and where its data is, and the block draws
+ * itself. `empty` is the ONE line to print in its place: the block's own empty
+ * state where the block simply has nothing, and the missing-input sentence
+ * (naming the input and its ST1 owner) where the workspace has not recorded
+ * what the section needs. A section that could not be filled prints that
+ * sentence rather than dropping out of the brief in silence, which is what the
+ * compose walk did before.
+ */
+export interface DocBriefSection {
+  /** Stable, from the section map. Names a slide and an edit. */
+  id: string
+  /** `<surface>.<block>` — the block key, a stored contract. */
+  block: string
+  /** Which of `data.surfaces` holds this block's data. */
+  surface: string
+  title: string
+  framing: string
+  empty: string | null
+}
+
+/** The brief's order: written pages and borrowed blocks, interleaved. */
+export type DocLayoutEntry = { kind: 'page'; id: string } | { kind: 'section'; id: string }
+
+/** What a slide key looks like when it names a borrowed block rather than a
+ *  written page. Prefixed because both live in one `Slide.keys` vocabulary. */
+export const SECTION_SLIDE_PREFIX = 'section:'
+
 export interface DocumentMethod {
   conversations: number
   videos: number
@@ -257,6 +288,15 @@ export interface DocumentSnapshotData {
   reading?: DocumentReading | null
   /** What it could not fill, and who closes each one (WP19). */
   missing?: DocumentMissingInput[]
+  /** The borrowed page blocks, in the section map's order (WP19). */
+  sections?: DocBriefSection[]
+  /** Each borrowed surface's loader output, frozen — the same data the page
+   *  drew, so the brief and the page cannot come to say different things
+   *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */
+  surfaces?: Record<string, unknown>
+  /** Written pages and borrowed blocks in one order (WP19). Absent on a brief
+   *  built before the section maps, which paginates off `pages` as it did. */
+  layout?: DocLayoutEntry[]
   pages: DocPage[]
   /** What this document was COMPOSED FROM (WP7d, 2026-09-12), frozen beside
    *  the template key so a later reader (the structural eval, a rebuild, a

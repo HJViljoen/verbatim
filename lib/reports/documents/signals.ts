@@ -10,7 +10,7 @@ import { englishHits, keywordsOf } from '../../quotes'
 import { quoteRef } from '../../renderables/quotes-freeze'
 import type { Quote } from '../../renderables/types'
 import { competitorThemes, mergeAcrossBuckets, trajectoryWord, type MergeThemeRow, type MergedConcern } from './merge'
-import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocumentRole, type DocumentSettings } from './types'
+import { DEFAULT_DOCUMENT_ROLE, isDocumentRole, type DocBriefSection, type DocumentRole, type DocumentSettings } from './types'
 import { loadBriefReading } from './load-reading'
 import type { BriefReading } from './reading'
 import type { BriefEntry, BriefSurface, MissingInput } from './sections'
@@ -102,6 +102,8 @@ export interface Signals {
   surfaces: Partial<Record<BriefSurface, unknown>>
   /** The sections and written pages this brief is, in order. */
   map: readonly BriefEntry[]
+  /** The borrowed blocks, resolved against what was actually read. */
+  sections: DocBriefSection[]
   /** What this brief needed and the workspace has not recorded. */
   missing: MissingInput[]
   competitiveInsights: { id: string; category: string; competitor_name: string | null; title: string; finding: string; impact_level: string }[]
@@ -304,6 +306,7 @@ export async function loadSignals(
     reading: brief?.reading ?? null,
     surfaces: brief?.surfaces ?? {},
     map: brief?.map ?? [],
+    sections: brief?.sections ?? [],
     missing: brief?.missing ?? [],
   }
 }

@@ -18,8 +18,8 @@ import { DEFAULT_HORIZON, parseHorizon, type Horizon } from '../../reading/horiz
 import type { Scope } from '../../renderables/types'
 import type { Block } from '../../blocks/types'
 import { blockReading, denominatorsOf, mergeReadings, monthAndYear, type BriefReading } from './reading'
-import { briefMap, missingInputs, surfacesOf, type BriefEntry, type BriefSurface, type MissingInput, type ReadinessLike } from './sections'
-import type { DocumentRole } from './types'
+import { briefMap, missingInputs, missingSentence, sectionsOf, surfacesOf, type BriefEntry, type BriefSurface, type MissingInput, type ReadinessLike } from './sections'
+import type { DocBriefSection, DocumentRole } from './types'
 
 /**
  * The I/O half of a brief's reading (Phase 1 WP19).
@@ -78,6 +78,8 @@ export interface BriefReadingResult {
   surfaces: Partial<Record<BriefSurface, unknown>>
   missing: MissingInput[]
   map: readonly BriefEntry[]
+  /** The borrowed blocks, resolved against what was actually read. */
+  sections: DocBriefSection[]
 }
 
 export async function loadBriefReading(scope: Scope, options: BriefReadingOptions): Promise<BriefReadingResult> {
@@ -109,8 +111,9 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
 
   const overview = (loaded.find(([s]) => s === 'overview')?.[1] ?? null) as OverviewData | null
   const missing = await missingFor(scope, map, readingAt)
+  const sections = briefSections(map, surfaces, missing)
 
-  if (!overview) return { reading: null, surfaces, missing, map }
+  if (!overview) return { reading: null, surfaces, missing, map, sections }
 
   const parts = loaded
     .filter(([surface, data]) => data != null && wanted.includes(surface))
@@ -146,7 +149,38 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     // second rule for the same fact.
     crossesClustering: overview.notes.some((n) => n.kind === 'clustering_changed' || n.kind === 'split_keys'),
   }
-  return { reading, surfaces, missing, map }
+  return { reading, surfaces, missing, map, sections }
+}
+
+/**
+ * The borrowed blocks, resolved.
+ *
+ * A section's `empty` is the ONE line printed in its place, and the order of
+ * preference is the design's: the missing-input sentence first, because
+ * "we have not recorded your subjects, and here is who closes it" is a better
+ * answer than the block's own "nothing to show"; then the surface's own failure
+ * to read; then the block's empty state; then null, which means the block has
+ * something to draw.
+ */
+export function briefSections(
+  map: readonly BriefEntry[],
+  surfaces: Partial<Record<BriefSurface, unknown>>,
+  missing: readonly MissingInput[],
+): DocBriefSection[] {
+  const byId = new Map(missing.map((m) => [m.id, m]))
+  return sectionsOf(map).map((s) => {
+    const blocked = s.needs.map((n) => byId.get(n)).find(Boolean)
+    const data = surfaces[s.surface]
+    const block = BLOCKS[s.surface].find((b) => b.key === s.block)
+    const empty = blocked
+      ? missingSentence(blocked)
+      : data == null
+        ? 'This section could not be read for this month.'
+        : block
+          ? block.emptyState(data as never)
+          : 'This section names a block this build does not know how to draw.'
+    return { id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty }
+  })
 }
 
 /** What this brief needed and the workspace has not recorded. Read through the

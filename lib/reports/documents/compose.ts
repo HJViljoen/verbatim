@@ -5,7 +5,8 @@ import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import { briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
-import type { DocumentReading } from './types'
+import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
+import type { BriefEntry } from './sections'
 import { missingSentence, missingSummary } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
@@ -426,11 +427,26 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
 
   // The walk. A kind that repeats is emitted once by its builder, which
   // returns every page of that kind; a kind listed twice is built once.
+  //
+  // WP19: the ORDER is the section map's where the brief has one — written
+  // pages and borrowed page blocks interleaved — and the template's skeleton
+  // otherwise. A custom brief keeps the skeleton, and so does any brief built
+  // where the reading could not be loaded at all, which is the same fallback
+  // every other number on the page takes.
+  const layout: DocLayoutEntry[] = []
   const done = new Set<DocPageKind>()
-  for (const page of a.template.skeleton) {
-    if (done.has(page.kind)) continue
-    done.add(page.kind)
-    pages.push(...build[page.kind]())
+  const walk: { kind: 'page'; page: DocPageKind }[] | readonly BriefEntry[] =
+    (s.map?.length ?? 0) > 0 ? s.map : a.template.skeleton.map((p) => ({ kind: 'page' as const, page: p.kind }))
+  for (const entry of walk) {
+    if (entry.kind === 'block') {
+      layout.push({ kind: 'section', id: entry.section.id })
+      continue
+    }
+    if (done.has(entry.page)) continue
+    done.add(entry.page)
+    const built = build[entry.page]()
+    pages.push(...built)
+    for (const p of built) layout.push({ kind: 'page', id: p.id })
   }
 
   const data: DocumentSnapshotData = {
@@ -447,6 +463,7 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     delta: s.delta,
     ...(s.reading ? { reading: documentReading(s.reading) } : {}),
     ...(s.missing?.length ? { missing: s.missing.map((m) => ({ ...m, sections: [...m.sections] })) } : {}),
+    ...(s.sections?.length ? { sections: s.sections.map((x) => ({ ...x })), surfaces: s.surfaces ?? {}, layout } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -561,7 +578,34 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
   ].filter(Boolean)
 }
 
-/** One slide per page, plus the cover. Pagination decided here, never by the browser. */
+/**
+ * One slide per page, plus the cover. Pagination decided here, never by the
+ * browser.
+ *
+ * WP19: a brief composed from a section map paginates off `layout`, which
+ * carries the written pages and the borrowed blocks in one order. A brief built
+ * before the maps has no `layout` and paginates off `pages`, exactly as it did
+ * — a stored artefact must keep rendering what it rendered.
+ */
 export function documentSlides(data: DocumentSnapshotData): Slide[] {
-  return data.pages.map((p) => ({ title: p.title, keys: [p.id], layout: 'single' as const }))
+  if (!data.layout?.length) {
+    return data.pages.map((p) => ({ title: p.title, keys: [p.id], layout: 'single' as const }))
+  }
+  const out: Slide[] = []
+  for (const entry of data.layout) {
+    if (entry.kind === 'page') {
+      const page = data.pages.find((p) => p.id === entry.id)
+      if (page) out.push({ title: page.title, keys: [page.id], layout: 'single' })
+      continue
+    }
+    const section = data.sections?.find((x) => x.id === entry.id)
+    if (section) out.push({ title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' })
+  }
+  return out
+}
+
+/** The section a slide key names, or null where it names a written page. */
+export function sectionOfSlide(data: DocumentSnapshotData, key: string): DocBriefSection | null {
+  if (!key.startsWith(SECTION_SLIDE_PREFIX)) return null
+  return data.sections?.find((x) => x.id === key.slice(SECTION_SLIDE_PREFIX.length)) ?? null
 }

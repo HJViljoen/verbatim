@@ -4,9 +4,14 @@ import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
 import { substituteFigures } from '@/lib/reports/cover'
-import { documentSlides } from '@/lib/reports/documents/compose'
+import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { blocksFor } from '@/lib/reports/documents/load-reading'
+import type { BriefSurface } from '@/lib/reports/documents/sections'
+import { blockContext } from '@/lib/blocks/types'
+import { EMAIL } from '@/lib/email/theme'
+import { appBaseUrl } from '@/lib/site'
 import { findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
-import { shownTrajectory, type DocBlock, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
 // A document's deck from its (hydrated) snapshot data: the cover, then one
@@ -645,14 +650,50 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
   }
 }
 
+/**
+ * A borrowed page block, on paper (Phase 1 WP19).
+ *
+ * THE BLOCK DRAWS ITSELF, in `'print'` mode, from the surface data the brief
+ * froze — the same body of code the page and the email call, which is what
+ * makes "the report cannot say something the page cannot" true of these
+ * sections rather than merely intended. A section that could not be filled
+ * prints its one line instead: the block's own empty state, or the
+ * missing-input sentence naming the input and who closes it.
+ */
+function SectionBody({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+  const surface = (data.surfaces ?? {})[section.surface]
+  const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
+  const body = section.empty != null || !block || surface == null
+    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground" data-copy="stored">{section.empty ?? 'This section could not be read for this month.'}</p>
+    : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
+  return (
+    <div className="flex flex-col gap-3">
+      {section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
+      {body}
+    </div>
+  )
+}
+
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
   const slides = documentSlides(data)
   const pages = slides.length + 1
-  const chrome = (title: string) => ({ context: title, footer: <DeckFooter company={data.company} date={date} /> })
+  // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
+  // a reader of a PDF has no masthead to scroll back to, and a brief whose
+  // numbers are a month's has to name the month on the page they are read on.
+  const stamp = data.reading?.stamp ?? data.period
+  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
   return (
     <>
       <DocumentCover data={data} pages={pages} />
       {slides.map((s, i) => {
+        const section = sectionOfSlide(data, s.keys[0])
+        if (section) {
+          return (
+            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={i + 2} pages={pages} layout="single">
+              <SectionBody section={section} data={data} />
+            </Slide>
+          )
+        }
         const page = data.pages.find((p) => p.id === s.keys[0])
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
