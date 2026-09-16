@@ -220,10 +220,19 @@ const BACK_READ: MonthLabel = {
  * recorded before {date}", which is also one line and not a badge per row.
  */
 function unknownRegimeNote(months: readonly string[]): MonthLabel {
+  // ONE MONTH IS NOT "THOSE MONTHS". `spanList` handles a single span
+  // correctly and the sentence around it did not: Ossur's Overview and Voice
+  // read "We did not record how themes were grouped for Sep 2026, so those
+  // months are not strictly comparable with the ones after them" - one month,
+  // "those months", and "the ones after them" about the month currently
+  // filling, which has none after it.
+  const distinct = [...new Set(months.map(monthStartOf))].sort()
   return {
     kind: 'clustering_changed',
-    text: `We did not record how themes were grouped for ${spanList(months)}, so those months are not strictly comparable with the ones after them.`,
-    months: [...new Set(months.map(monthStartOf))].sort(),
+    text: distinct.length === 1
+      ? `We did not record how themes were grouped for ${spanList(months)}, so it is not strictly comparable with the months around it.`
+      : `We did not record how themes were grouped for ${spanList(months)}, so those months are not strictly comparable with the ones around them.`,
+    months: distinct,
   }
 }
 

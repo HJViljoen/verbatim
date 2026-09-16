@@ -254,6 +254,27 @@ describe('buildSeries · labels', () => {
     expect(collapsed[0].text).toContain('Sep 2026')
   })
 
+  // ONE MONTH IS NOT "THOSE MONTHS". Rendered on Ossur's Overview and Voice
+  // today: "We did not record how themes were grouped for Sep 2026, so those
+  // months are not strictly comparable with the ones after them" - one month,
+  // "those months", and "the ones after them" about the month currently
+  // filling, which has none after it.
+  it('words a single unrecorded month in the singular', () => {
+    const s = buildSeries({
+      axis,
+      audience: 'industry-other',
+      objectId: 't',
+      denominators: [den('2026-08-01', 628), den('2026-09-01', 388)],
+      readings: [
+        num('2026-08-01', 102, { clustering_key: 'k1' }),
+        num('2026-09-01', 44, { clustering_key: null }),
+      ],
+    })
+    const note = s.notes.find((n) => n.kind === 'clustering_changed')
+    expect(note?.months).toHaveLength(1)
+    expect(note?.text).toBe('We did not record how themes were grouped for Sep 2026, so it is not strictly comparable with the months around it.')
+  })
+
   // A SUBJECT'S MONTHS HAVE NO CLUSTERING TO BE UNRECORDED ABOUT.
   // `month_subject_readings` carries no `clustering_key` column, so every row
   // arrives with null and `clusteringBoundaries` marked every month but the
