@@ -51,7 +51,7 @@ export const BRIEF_CARDS: readonly { role: DocumentRole; artefact: Artefact }[] 
 export const LEADERSHIP_CARD = { role: 'leadership_brief' as DocumentRole, artefact: 'brief:leadership' as Artefact }
 
 export const LEADERSHIP_LINE =
-  'The leadership brief is built in the Studio rather than from here — it is the short management readout, and the quarterly review is built on it.'
+  'The leadership brief is built in the Studio rather than from here — it is the short management readout: the month in one page, with the method behind it.'
 
 export const briefLabel = (artefact: Artefact): string => ARTEFACT_COPY[artefact].label
 export const briefWhat = (artefact: Artefact): string => ARTEFACT_COPY[artefact].what
