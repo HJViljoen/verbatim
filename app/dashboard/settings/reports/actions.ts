@@ -8,7 +8,7 @@ import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 import { actorStamp, recordConfigChange } from '@/lib/config-log'
 import { DEFAULT_SCHEDULE_STARTER } from '@/lib/schedules/default'
 import { normaliseRecipients, splitRecipients } from '@/lib/schedules/validate'
-import { ARTEFACTS, ARTEFACT_COPY, isArtefact } from '@/lib/settings/artefacts'
+import { ARTEFACTS, ARTEFACT_COPY, isArtefact, isBuildable, notBuiltYet } from '@/lib/settings/artefacts'
 import { isMissingArtefact } from '@/lib/settings/reports-load'
 import { createAdminClient } from '@/lib/supabase-admin'
 
@@ -30,6 +30,15 @@ import { createAdminClient } from '@/lib/supabase-admin'
 // may not exist yet — six of the seven do not on either live tenant. Creating
 // it here is what makes the table an answer to "who receives the monthly
 // reading" rather than a list of whatever happens to exist.
+//
+// AND IT NEVER ARMS ONE. Nothing in the send path reads `artefact`: the runner
+// takes every active, due schedule for the tenant and resolves the document
+// from `starter_key`. A row written here for the monthly reading or a brief
+// therefore names the starter, and left active it would email THE WEEKLY DIGEST
+// under that artefact's name and stamp last_sent_at so this page called it
+// sent. So a list for an artefact nothing builds is stored SWITCHED OFF,
+// whatever the checkbox said, and the form says so
+// (lib/settings/artefacts.ts BUILDABLE_ARTEFACTS).
 
 export interface RecipientsState {
   ok: boolean
@@ -84,13 +93,16 @@ export async function updateArtefactRecipients(
   }
 
   const label = ARTEFACT_COPY[parsed.data.artefact].label
+  // The one value the form does not get to decide.
+  const buildable = isBuildable(parsed.data.artefact)
+  const active = buildable && parsed.data.active
   const before = existing
     ? { recipients: existing.recipients as string[], active: existing.active as boolean }
     : null
 
   const write = existing
     ? admin.from('report_schedules')
-      .update({ recipients: parsed.data.recipients, active: parsed.data.active, updated_at: new Date().toISOString() })
+      .update({ recipients: parsed.data.recipients, active, updated_at: new Date().toISOString() })
       .eq('id', existing.id)
     : admin.from('report_schedules').insert({
       client_id: clientId,
@@ -104,7 +116,7 @@ export async function updateArtefactRecipients(
       cadence: parsed.data.artefact === 'weekly' ? 'every_update'
         : parsed.data.artefact === 'quarterly' ? 'quarterly' : 'monthly',
       recipients: parsed.data.recipients,
-      active: parsed.data.active,
+      active,
       created_by: userId,
     })
 
@@ -119,13 +131,16 @@ export async function updateArtefactRecipients(
     surface: 'schedule',
     field: `report_schedules.${parsed.data.artefact}`,
     before,
-    after: { recipients: parsed.data.recipients, active: parsed.data.active },
+    after: { recipients: parsed.data.recipients, active },
     actor: actorStamp(session, 'reports and recipients'),
     note: parsed.data.recipients.length === 0
       ? `${label} now goes to nobody.`
-      : `${label} now goes to ${parsed.data.recipients.length} address${parsed.data.recipients.length === 1 ? '' : 'es'}${parsed.data.active ? '' : ', and is switched off'}.`,
+      : `${label} now goes to ${parsed.data.recipients.length} address${parsed.data.recipients.length === 1 ? '' : 'es'}${active ? '' : ', and is switched off'}.`,
   })
 
   revalidatePath('/dashboard/settings/reports')
-  return { ok: true, message: 'Saved.' }
+  return {
+    ok: true,
+    message: buildable ? 'Saved.' : `Saved. ${notBuiltYet(parsed.data.artefact)}`,
+  }
 }

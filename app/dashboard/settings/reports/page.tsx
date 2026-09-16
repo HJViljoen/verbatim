@@ -2,7 +2,7 @@ import { SettingsCard, SettingsFrame, SettingsRow, SettingsTable } from '@/compo
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { fullDate } from '@/lib/format'
 import { CADENCE_COPY, type ScheduleCadence } from '@/lib/schedules/types'
-import { recipientRows, sendingSummary, unnamedSchedules } from '@/lib/settings/artefacts'
+import { notBuiltYet, recipientRows, sendingSummary, unnamedSchedules } from '@/lib/settings/artefacts'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { RecipientsForm } from './recipients-form'
 
@@ -19,6 +19,13 @@ import { RecipientsForm } from './recipients-form'
 // A PAUSED WORKSPACE SENDS NOTHING, whatever a schedule says. That is the T0-7
 // rule the settings form already respects; a row reading "active" beside a
 // paused cadence is a claim the client can check and find false.
+//
+// AND NEITHER DOES AN ARTEFACT NOTHING BUILDS. Six of the seven have no builder
+// until WP17-WP20, and the send path resolves a due schedule by its starter
+// rather than by its artefact — so a row armed here would email the weekly
+// digest under another document's name. The table names the recipients, says
+// "not yet" where the document does not exist, and the form does not offer to
+// send one (lib/settings/artefacts.ts BUILDABLE_ARTEFACTS).
 
 const cadenceLabel = (c: string): string =>
   CADENCE_COPY.find((x) => x.key === (c as ScheduleCadence))?.label ?? c
@@ -61,9 +68,13 @@ export default async function SettingsReportsPage() {
                     <span className="block text-[11.5px] text-muted-foreground">{r.what}</span>
                   </span>,
                   <span key="c" className="text-[11.5px] text-muted-foreground">
-                    {r.schedule ? cadenceLabel(r.schedule.cadence) : '—'}
+                    {r.buildable ? (r.schedule ? cadenceLabel(r.schedule.cadence) : '—') : 'not yet'}
                     {r.schedule && !r.sending && (
-                      <span className="block">{inputs.period === 'paused' ? 'paused' : r.schedule.active ? 'nobody to send to' : 'switched off'}</span>
+                      <span className="block">
+                        {!r.buildable ? 'we do not produce this yet'
+                          : inputs.period === 'paused' ? 'paused'
+                            : r.schedule.active ? 'nobody to send to' : 'switched off'}
+                      </span>
                     )}
                   </span>,
                   <span key="r" className="flex flex-col items-end gap-1">
@@ -75,6 +86,8 @@ export default async function SettingsReportsPage() {
                       label={r.label}
                       recipients={r.recipients}
                       active={r.schedule?.active ?? true}
+                      buildable={r.buildable}
+                      notBuilt={notBuiltYet(r.artefact)}
                       canEdit={canEdit && inputs.named}
                     />
                   </span>,

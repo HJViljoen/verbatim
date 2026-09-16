@@ -61,6 +61,35 @@ export const ARTEFACT_COPY: Record<Artefact, { label: string; what: string }> = 
 
 export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
 
+/**
+ * The artefacts something can actually BUILD today, and the reason this list
+ * exists at all.
+ *
+ * Nothing in the send path reads `artefact`. A due schedule is resolved by
+ * `starter_key` (lib/schedules/resolve.ts), and a new artefact row has to name
+ * a starter because every schedule needs exactly one source — so a row created
+ * for the monthly reading and left active would send THE WEEKLY DIGEST,
+ * monthly, to those addresses, under the monthly reading's name, and then stamp
+ * last_sent_at so the page reported it as sent. That is the rule this WP states
+ * about the cadence picker — "an option that produces a schedule the builder
+ * cannot serve is a form that lies" (lib/schedules/types.ts) — applied to the
+ * form that writes.
+ *
+ * So a recipient list for an artefact nothing builds is RECORDED and INERT: who
+ * should receive the sales brief is worth writing down before the brief exists,
+ * and the row stays switched off until its builder lands. WP17 gives `weekly`
+ * its own document, WP19 the briefs and WP20 the quarterly review, and each
+ * joins this list with the builder that serves it.
+ */
+export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly']
+
+export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
+
+/** What to tell someone naming recipients for an artefact nothing builds yet.
+ *  Client wording: what happens to their list, not which work package. */
+export const notBuiltYet = (a: Artefact): string =>
+  `We do not produce ${ARTEFACT_COPY[a].label.replace(/^The /, 'the ')} yet. We will keep this list and start sending the day we do.`
+
 /** The label for a schedule whose artefact column is still null — a legacy
  *  starter row from before the seven existed. It is named by what it actually
  *  sends rather than guessed at, because guessing here would put a recipient
@@ -91,6 +120,10 @@ export interface RecipientRow {
    *  nothing, and a row that says "active" while updates are paused is a lie
    *  the client can check. */
   sending: boolean
+  /** Whether anything can produce this artefact yet. A row that cannot be
+   *  built is never `sending`, whatever its schedule says, because what would
+   *  go out is another document under this one's name. */
+  buildable: boolean
   lastSentAt: string | null
 }
 
@@ -106,13 +139,15 @@ export function recipientRows(schedules: readonly ScheduleLike[], period: string
   const paused = period === 'paused'
   return ARTEFACTS.map((artefact) => {
     const schedule = schedules.find((s) => s.artefact === artefact) ?? null
+    const buildable = isBuildable(artefact)
     return {
       artefact,
       label: ARTEFACT_COPY[artefact].label,
       what: ARTEFACT_COPY[artefact].what,
       schedule,
       recipients: schedule?.recipients ?? [],
-      sending: !paused && (schedule?.active ?? false) && (schedule?.recipients.length ?? 0) > 0,
+      sending: buildable && !paused && (schedule?.active ?? false) && (schedule?.recipients.length ?? 0) > 0,
+      buildable,
       lastSentAt: schedule?.lastSentAt ?? null,
     }
   })
@@ -146,5 +181,7 @@ export function sendingSummary(
   const sending = rows.filter((r) => r.sending)
   if (sending.length === 0) return `None of these has a recipient yet.${older}`
   const people = new Set(sending.flatMap((r) => r.recipients.map((e) => e.toLowerCase())))
-  return `${sending.length} of ${rows.length} artefacts are being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.${older}`
+  // "1 of 7 artefacts are being sent" was reachable before and is the ordinary
+  // sentence now that six of the seven have no builder.
+  return `${sending.length} of ${rows.length} artefacts ${sending.length === 1 ? 'is' : 'are'} being sent, to ${people.size} address${people.size === 1 ? '' : 'es'}.${older}`
 }

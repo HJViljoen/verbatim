@@ -4,7 +4,8 @@ import type { ConfigChange } from '../config-log'
 import type { ReadinessRow } from '../readiness/types'
 import type { UpdateInput } from '../readiness/types'
 import {
-  ARTEFACTS, isArtefact, recipientRows, sendingSummary, unnamedSchedules, type ScheduleLike,
+  ARTEFACTS, isArtefact, isBuildable, notBuiltYet, recipientRows, sendingSummary, unnamedSchedules,
+  type ScheduleLike,
 } from './artefacts'
 import {
   actorWords, breakClause, monthsOfRange, readChangeLog, renderSide,
@@ -68,12 +69,34 @@ describe('artefacts', () => {
       .toBe('None of these has a recipient yet.')
   })
 
+  // Nothing in the send path reads `artefact`: a due schedule is resolved by
+  // its starter, so an active row for the monthly reading would email the
+  // weekly digest under that name and then stamp last_sent_at. A row for an
+  // artefact nothing builds is recorded and inert.
+  it('does not call an artefact nothing builds "being sent", however its row is set', () => {
+    const rows = recipientRows([
+      schedule({ id: 'a', artefact: 'weekly' }),
+      schedule({ id: 'b', artefact: 'monthly', cadence: 'monthly' }),
+    ], 'weekly')
+    expect(rows[0].buildable).toBe(true)
+    expect(rows[0].sending).toBe(true)
+    expect(rows[1].artefact).toBe('monthly')
+    expect(rows[1].buildable).toBe(false)
+    expect(rows[1].sending).toBe(false)
+    expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 artefacts is being sent, to 1 address.')
+    expect(isBuildable('weekly')).toBe(true)
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly'])
+    expect(notBuiltYet('monthly')).toContain('the monthly reading')
+  })
+
   it('counts addresses once across artefacts', () => {
     const rows = recipientRows([
       schedule({ id: 'a', artefact: 'weekly', recipients: ['a@x.test', 'b@x.test'] }),
-      schedule({ id: 'b', artefact: 'monthly', recipients: ['B@x.test'] }),
     ], 'weekly')
-    expect(sendingSummary(rows, 'weekly')).toBe('2 of 7 artefacts are being sent, to 2 addresses.')
+    // The dedup itself, over two sending rows, without waiting for a second
+    // builder to exist.
+    const second = { ...rows[0], artefact: 'monthly' as const, recipients: ['B@x.test'], sending: true }
+    expect(sendingSummary([rows[0], second], 'weekly')).toBe('2 of 2 artefacts are being sent, to 2 addresses.')
   })
 
   it('keeps a schedule that names no artefact rather than dropping it', () => {
