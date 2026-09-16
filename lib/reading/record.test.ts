@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
+
 import {
   countRefused,
+  discardCounts,
+  languageOf,
+  readDepthOf,
   refusals,
   discardCaveat,
   halfOpenInstants,
@@ -310,5 +315,74 @@ describe('halfOpenInstants — an inclusive day pair for a half-open SQL window'
   it('refuses an instant — a HorizonWindow is a whole extra month', () => {
     expect(() => halfOpenInstants({ kind: 'month', from: '2026-09-01', to: '2026-10-01T00:00:00.000Z' }))
       .toThrow(/inclusive YYYY-MM-DD/)
+  })
+})
+
+// ---- WP23: the aggregates the merged corpus and gate reads compute ----------
+
+describe('readDepthOf', () => {
+  it('counts each flag as its own predicate — true, and separately null', () => {
+    const rows = [
+      { transcript_lang: 'en', analyzed_with_transcript: true, analyzed_with_translation: false, analyzed_with_ocr: true },
+      { transcript_lang: null, analyzed_with_transcript: null, analyzed_with_translation: null, analyzed_with_ocr: null },
+      { transcript_lang: 'de', analyzed_with_transcript: false, analyzed_with_translation: true, analyzed_with_ocr: false },
+    ]
+    expect(readDepthOf(rows)).toEqual({
+      analysed: 3, speech: 1, translated: 1, onScreenText: 1, unflagged: 1, basis: 'all_time_non_reddit',
+    })
+  })
+
+  it('a stored false is neither read nor unflagged', () => {
+    const rows = [{ transcript_lang: null, analyzed_with_transcript: false, analyzed_with_translation: false, analyzed_with_ocr: false }]
+    const d = readDepthOf(rows)
+    expect(d.speech).toBe(0)
+    expect(d.unflagged).toBe(0)
+  })
+
+  it('an empty corpus is zeros, not a missing record', () => {
+    expect(readDepthOf([])).toEqual({ analysed: 0, speech: 0, translated: 0, onScreenText: 0, unflagged: 0, basis: 'all_time_non_reddit' })
+  })
+})
+
+describe('languageOf', () => {
+  it('splits English from not-English and counts the untagged as unknown', () => {
+    const rows = [
+      { transcript_lang: 'en' }, { transcript_lang: 'EN-GB' }, { transcript_lang: 'english' },
+      { transcript_lang: 'de' }, { transcript_lang: '  ' }, { transcript_lang: null },
+    ]
+    expect(languageOf(rows)).toEqual({ analysed: 6, unknown: 2, english: 3, notEnglish: 1, basis: 'video_speech' })
+  })
+})
+
+describe('discardCounts', () => {
+  const rows = [
+    { kept: true, source: 'default', reason: GATE_DEFAULT_REASONS.undecided },
+    { kept: false, source: 'default', reason: GATE_DEFAULT_REASONS.off },
+    { kept: false, source: 'default', reason: GATE_DEFAULT_REASONS.failedOpen },
+    { kept: false, source: 'operator', reason: GATE_DEFAULT_REASONS.off },
+    { kept: null, source: null, reason: null },
+  ]
+
+  it('counts judged, kept and set aside off the window rows', () => {
+    const c = discardCounts(rows, true)
+    expect(c.judged).toBe(5)
+    expect(c.kept).toBe(1)
+    expect(c.setAside).toBe(4)
+  })
+
+  it("counts a reason only where the default gate is what reached it", () => {
+    const c = discardCounts(rows, true)
+    expect(c.clearedByHeuristic).toBe(1)
+    expect(c.gateOff).toBe(1)   // the operator-sourced row is not the default gate's doing
+    expect(c.failedOpen).toBe(1)
+  })
+
+  it('returns null reasons — not zero — where the column could not be read', () => {
+    const c = discardCounts(rows.map(({ kept, source }) => ({ kept, source })), false)
+    expect(c.judged).toBe(5)
+    expect(c.kept).toBe(1)
+    expect(c.clearedByHeuristic).toBeNull()
+    expect(c.gateOff).toBeNull()
+    expect(c.failedOpen).toBeNull()
   })
 })
