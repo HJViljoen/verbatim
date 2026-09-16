@@ -268,7 +268,10 @@ describe('WR5 · for content', () => {
     expect(text).toContain('9.4% · 130 of 1,388')
     // Run-indexed, unlike everything above it in this block, and the line has
     // to say so under a masthead that reads "this month so far".
-    expect(text).toContain('2.4× the median video’s engagement, over 31 videos in this update')
+    // THE LABEL IS THE READER'S WORD AND THE MULTIPLE PRINTS ITS n. The block
+    // printed the stored slug (`promotional`, and one day `trend-riding`) and a
+    // multiple over an unstated population.
+    expect(text).toContain('Talking head — 2.4× the median video’s engagement, over 31 of 402 videos in this update')
   })
 
   it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {

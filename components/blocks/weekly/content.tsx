@@ -131,7 +131,11 @@ export const weeklyContent: Block<WeeklyData> = {
                   as the month's. WR3 goes to trouble to label its update-scoped
                   counts; this line owed the reader the same clause, and its own
                   empty state was already saying it. */}
-              {c.format.label} — <span data-copy="figure">{(Math.round(c.format.multiple * 10) / 10).toFixed(1)}×</span> the median video’s engagement, over <span data-copy="figure">{fmtInt(c.format.videos)}</span> {c.format.videos === 1 ? 'video' : 'videos'} in this update
+              {/* AND THE MULTIPLE PRINTS ITS DENOMINATOR. "over 113 videos"
+                  was a multiple against a median over an unstated population;
+                  This week's equivalent reads "· 46 of 609 videos". `of` is the
+                  n the median was taken over. */}
+              {c.format.label} — <span data-copy="figure">{(Math.round(c.format.multiple * 10) / 10).toFixed(1)}×</span> the median video’s engagement, over <span data-copy="figure">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)}</span> {c.format.of === 1 ? 'video' : 'videos'} in this update
             </div>
           </Rail>
         ) : (

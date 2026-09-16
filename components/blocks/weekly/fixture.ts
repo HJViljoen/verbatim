@@ -121,7 +121,7 @@ function base(overview = overviewFixture()): WeeklyData {
       worthAReplyNote: null,
       rising: overview.category.growing,
       risingNote: null,
-      format: { label: 'talking head', multiple: 2.4, videos: 31 },
+      format: { label: 'Talking head', multiple: 2.4, videos: 31, of: 402 },
       weekHref: '/dashboard/week',
       briefHref: '/dashboard/reports',
     },

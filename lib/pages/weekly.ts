@@ -15,6 +15,7 @@ import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } 
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
+import { workedLabel } from './week'
 import {
   periodNounFor,
   weekCheck,
@@ -125,7 +126,9 @@ export interface ForContentBlock {
   worthAReplyNote: string | null
   rising: Mover[]
   risingNote: string | null
-  format: { label: string; multiple: number; videos: number } | null
+  /** `label` is the READER'S word for the format, through `workedLabel` — never
+   *  the stored slug. `of` is the n the median was read against. */
+  format: { label: string; multiple: number; videos: number; of: number } | null
   weekHref: string
   briefHref: string
 }
@@ -1014,7 +1017,18 @@ function buildContent(
     worthAReplyNote: top.length > 0 ? null : 'Nothing is waiting for a reply from this update.',
     rising,
     risingNote,
-    format: format ? { label: format.k, multiple: format.multiple, videos: format.count } : null,
+    // THROUGH `workedLabel`, WHICH EXISTS FOR THIS. Its docblock says why the
+    // humanising is done in the loader — "so the email arm, which has no
+    // stylesheet to capitalise with, and the report get the same words as the
+    // page" — and this call site did not make it. Today's top format is
+    // `promotional`, so only the capital was lost; production's
+    // classified_type also holds `behind-the-scenes` and `how-to`, and
+    // hook_style holds `personal-story`, `bold-claim`, `shock-value`,
+    // `trend-riding` and `before-after`, which the block falls back to when
+    // formats is empty. The first time one of those tops the ranking a client
+    // would have been emailed "trend-riding — 4.5× the median…"; workedLabel
+    // renders it "Riding what is current".
+    format: format ? { label: workedLabel(format.k), multiple: format.multiple, videos: format.count, of: c.works.rated } : null,
     weekHref,
     briefHref,
   }
