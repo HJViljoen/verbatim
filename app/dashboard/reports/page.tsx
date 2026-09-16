@@ -108,7 +108,15 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       .eq('client_id', clientId).in('status', ['sent', 'failed', 'claimed']).order('claimed_at', { ascending: false }).limit(200),
     supabase.from('weekly_reports').select('id, subject, week_start, week_end, sent_to, sent_at').eq('client_id', clientId).order('week_end', { ascending: false }),
     supabase.from('report_snapshots')
-      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
+      // `readingAt:data->>readingAt` IS THE WEEKLY'S AND THE MONTHLY'S CARRIER.
+      // A brief puts its reading instant in `data.reading.readingAt`; WP17's
+      // weekly report and WP18's monthly reading both put it TOP-LEVEL, in
+      // `data.readingAt`. Without the alias every one of those rows fell to
+      // `created_at` and the Built group printed "built … · no reading date
+      // recorded" beside a snapshot that carries the date. The sent-snapshot
+      // read below already aliased it; this list did not, and the monthly
+      // report merged in beside it (WP18) is the artefact that made it visible.
+      .select('id, title, created_at, report_id, cover:data->cover, figures:data->figures, reading:data->reading, readingAt:data->>readingAt, template:data->>template, artifacts(id, format, bytes, stale, rendered_at, version)')
       .eq('client_id', clientId).eq('kind', 'report').order('created_at', { ascending: false }).limit(100),
     supabase.from('report_snapshots')
       .select('id, title, kind, created_at, artifacts(id, format, bytes, stale)')
