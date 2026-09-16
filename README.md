@@ -373,7 +373,9 @@ timing loops and no `EXPLAIN ANALYZE` against the window functions; count
 `embedding is not null` as a predicate and never `count(embedding)` (and note
 that `embedded_at` is never backfilled, so it is not the same measure). SQL and
 PostgREST are separate paths — every script here goes through PostgREST
-(`createAdminClient`), which can refuse its schema cache while `select 1`
+(supabase-js: `createAdminClient`, or its own `createClient` in a few, such as
+`loader-dump.ts` and `reading-timing.ts`), which can refuse its schema cache
+while `select 1`
 answers fine, so a green SQL query proves nothing about whether a script will
 run. The full rules are in AGENTS.md; `loader-dump.ts` and `reading-timing.ts`
 carry them in their own flags.
