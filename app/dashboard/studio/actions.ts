@@ -162,7 +162,17 @@ export async function saveSchedule(args: { id?: string | null; input: ScheduleIn
   const { clientId, userId, role } = session
   if (!canManageTenant(role)) return NOT_ALLOWED
   const parsed = scheduleInputSchema.safeParse(args.input)
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? 'That could not be saved.' }
+  if (!parsed.success) {
+    // THE SCHEMA'S OWN SENTENCES ARE WRITTEN FOR A READER ("A schedule needs a
+    // name.", "Pick one template."). A Zod issue that carries none is Zod's
+    // words — "Invalid enum value. Expected 'every_update' | 'monthly'" — and
+    // this returned it verbatim to a client screen. Only a message the schema
+    // wrote is passed through; anything else is logged with the field named.
+    const first = parsed.error.issues[0]
+    const written = first && !/^Invalid|^Expected|^Required/.test(first.message) ? first.message : null
+    if (!written) console.error(`[studio] schedule input refused: ${first?.path.join('.') ?? '?'} — ${first?.message ?? 'no issue'}`)
+    return { ok: false, message: written ?? 'That could not be saved. Check the fields and try again.' }
+  }
   const s = parsed.data
   const admin = createAdminClient()
   if (s.starterKey && !starterTemplate(s.starterKey)) return { ok: false, message: 'Pick a template.' }
