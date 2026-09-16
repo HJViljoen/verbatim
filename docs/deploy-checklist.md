@@ -861,18 +861,47 @@ not seen any of them against real data.
 
 Three are cards on `/dashboard/reports` (Sales · Marketing · Content) and the
 fourth, Leadership, is built in the Studio — `lib/reports/briefs.ts` says so on
-the page. From the command line, one at a time:
+the page. From the command line:
+
+**`--template`, NOT `--role`, and `--keep`, and a separate `--out` each.** An
+earlier draft of this step printed `--role sales_brief` four times and claimed
+each run filed a `report_builds` row and a snapshot to read in the Reports
+page's **Built** group. All three parts were wrong, and following it cost four
+real builds and produced one PDF of one brief:
+
+* **`--role` is inert on this path.** `scripts/build-document.ts` defaults the
+  template to `sales_brief`, and `resolveTemplate` substitutes `settings.role`
+  only for `CUSTOM_KEY` — so all four runs composed the SALES brief: same
+  section map, same voice, same skeleton. `--template` is the flag that changes
+  the artefact.
+* **No `report_builds` row is written.** That path exists only under
+  `--report <id>`; the command below goes down `main()`'s standalone path.
+* **The snapshot is DELETED at the end** unless you pass `--keep`
+  (`if (!has('keep')) await admin.from('report_snapshots').delete()…`), so the
+  Built group you were told to read stays empty.
+* **The PDF is written to `${out}/${template.key}.pdf`** with `--out`
+  defaulting to `scratch/document`, so four runs into one directory overwrite
+  one file (and one `answers.json`, one `written.json`).
+* **`RENDER_BASE_URL` must be set**, or the render falls back to
+  `http://localhost:3000` and throws — AFTER the `finally` has deleted the
+  snapshot.
 
 ```
-node --env-file=.env.local --import tsx scripts/build-document.ts --client <össur uuid> --role sales_brief
-# then --role market_brief · --role content_brief · --role leadership_brief
+export RENDER_BASE_URL=https://app.verbatimintel.com   # or a local dev server
+for t in sales_brief market_brief content_brief leadership_brief; do
+  node --env-file=.env.local --import tsx scripts/build-document.ts \
+    --client <össur uuid> --template "$t" --keep --out "scratch/brief-$t"
+done
 ```
+
+If reading the four in the Reports page's **Built** group is genuinely the
+check you want, use `--report <uuid>` per brief instead: that path inserts the
+`report_builds` row, keeps the snapshot and sets `reports.latest_snapshot_id`,
+which is what the page's cards read.
 
 **This spends**: a real research-and-write build under a `$3` ceiling
-(`DOCUMENT_BUILD_BUDGET_USD`), so it is precondition 0.3's credits again, and
-`--questions` prints what it would ask without paying. Each build files a
-`report_builds` row and a snapshot — that is what the Reports page's **Built**
-group lists, and reading the four there is the check.
+(`DOCUMENT_BUILD_BUDGET_USD`) PER BRIEF, so it is precondition 0.3's credits
+again, and `--questions` prints what it would ask without paying.
 
 ### 7.2 · The quarterly review and the monthly report — through the preview
 
