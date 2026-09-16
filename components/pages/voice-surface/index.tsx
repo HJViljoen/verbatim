@@ -46,8 +46,11 @@ export const VOICE_BLOCKS: readonly Block<VoiceSurfaceData>[] = [
  * page is a column of full-width sections wearing the tile's own surface —
  * one white surface, the ambient shadow, no border — rather than cells in a
  * fixed grid.
+ *
+ * Exported so `app/dashboard/voice/loading.tsx` stands in for the shape the
+ * page actually draws rather than for a grid it abandoned.
  */
-function GrowingTile({ children }: { children: ReactNode }) {
+export function GrowingTile({ children }: { children: ReactNode }) {
   return (
     <section
       // print mode addresses a tile by these two attributes rather than by the

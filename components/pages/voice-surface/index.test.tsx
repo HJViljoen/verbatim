@@ -6,6 +6,7 @@ import { copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { VOICE_BLOCKS, VoiceSurfacePage, voiceContext } from './index'
 import { refusedVoiceFixture, voiceFixture } from './fixture'
+import VoiceLoading from '@/app/dashboard/voice/loading'
 
 // Voice — the page (Phase 1 WP13).
 
@@ -47,6 +48,18 @@ describe('VOICE_BLOCKS', () => {
       const empty = block.emptyState(bare)
       expect(typeof empty === 'string' || empty === null, block.key).toBe(true)
     }
+  })
+})
+
+describe('the skeleton at app/dashboard/voice/loading.tsx', () => {
+  it('draws the same four growing sections the page does, and asks for no row', () => {
+    // It drew four SkeletonTiles at row spans 2/4/6/4 after the page had
+    // stopped drawing a fixed grid at all — the layout shift a skeleton exists
+    // to prevent, under a comment saying it followed the page.
+    const markup = render(<VoiceLoading />)
+    expect(markup.match(/data-tile=""/g)).toHaveLength(VOICE_BLOCKS.length)
+    expect(markup).not.toMatch(/row-span-\d/)
+    expect(markup).toContain('Loading Voice')
   })
 })
 
