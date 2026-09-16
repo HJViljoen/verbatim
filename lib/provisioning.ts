@@ -119,6 +119,16 @@ export const TIKTOK_HANDLE = /^[A-Za-z0-9._]{2,24}(?<!\.)$/
  * is NOT one, and quietly stripping it to `@name` would produce a value that
  * passes as a handle and silently reads nothing. A YouTube URL is handed back
  * as it came so `validateHandles` can say what is wrong with it.
+ *
+ * NOTHING CALLS THIS YET, and that is a declared gap rather than an oversight
+ * (Phase 1 WP16). It is half of a pair — normalise, then validate — written for
+ * the per-rival handles form on Settings › Tracking, and that form cannot be
+ * built until `competitor_handles` has a column UPDATE grant for
+ * `authenticated`, which is a migration WP16 does not own. The rules here were
+ * checked against every handle the product stores and the pair is tested
+ * together; deleting the normaliser would mean rediscovering the YouTube
+ * exception the week the form lands. The rivals panel is read-only apart from
+ * the rename until then.
  */
 export function normaliseHandle(platform: string, raw: string): string {
   const s = (raw ?? '').trim()
