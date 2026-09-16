@@ -117,5 +117,13 @@ export function deliveryLine(card: Pick<BriefCard, 'cadence' | 'recipients' | 's
   return `${card.cadence} · ${who}.`
 }
 
-/** What a card says where this workspace has never built one. */
-export const NOT_BUILT_YET = 'Never built for this workspace. Building one takes a few minutes and costs a model call.'
+/**
+ * What a card says where this workspace has never built one.
+ *
+ * NO PRICE IN OUR UNIT. It used to end "and costs a model call" — our unit of
+ * spend, not the reader's. The reader is not billed in model calls and nothing
+ * else on this page prices anything; it is the same sentence class WP18 removed
+ * from the monthly artefact (lib/reports/monthly.ts:105-125). The honest
+ * warning is about time, and the time is still here.
+ */
+export const NOT_BUILT_YET = 'Never built for this workspace. Building one takes a few minutes.'
