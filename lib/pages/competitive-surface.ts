@@ -428,7 +428,7 @@ export function citationsInWindow<T extends { commentId: string | null }>(
  *  six-month top question theme is `location_inquiry` at n = 3 — a list of ones
  *  wearing the clothes of a ranking. */
 export const QUESTIONS_GROUPING_NOTE =
-  'Questions are listed as they were asked. Grouping them needs the clustering that names your subjects, which is not switched on for this workspace yet.'
+  'Questions are listed as they were asked. Grouping them needs the same reading that names your subjects, which is not switched on for this workspace yet.'
 
 export const QUESTIONS_SUBJECTS_NOTE =
   'Matching these against your own subjects arrives once subjects are named and confirmed for this workspace.'

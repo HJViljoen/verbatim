@@ -506,7 +506,7 @@ export function newThemesLine(seen: number, shown: number, floor: number = NEW_T
   if (shown > 0) {
     return `${fmtInt(shown)} of the ${fmtInt(seen)} themes first heard in this update carried ${fmtInt(floor)} videos or more this month.`
   }
-  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month. The grouping is re-made over the whole corpus every update, so most new names are the same conversation under a new label; below the floor there is nothing a reader can hold.`
+  return `${fmtInt(seen)} themes were heard for the first time in this update and none carried ${fmtInt(floor)} videos this month. The grouping is re-made over everything we have read for you every update, so most new names are the same conversation under a new label; below the floor there is nothing a reader can hold.`
 }
 
 /** "above typical" / "about typical" — the mock's tag on a subject row.
