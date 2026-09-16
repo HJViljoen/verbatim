@@ -493,7 +493,11 @@ function delivery(i: ReadinessInputs): ReadinessRow {
   return row(
     'delivery', 'Delivery', 'somewhere for the update to go',
     status, detail, 'client',
-    'Add the people who should get it in Studio, and turn the schedule on.',
+    // SETTINGS, NOT THE STUDIO. WP16 built Settings > Reports and recipients
+    // one rail entry below Readiness, with an "Add recipients" control per
+    // artefact, and Block B's own weekly email footer says "an owner or admin
+    // changes it in Verbatim, in Settings". Three surfaces, one answer now.
+    'Add the people who should get it in Settings, under Reports and recipients, and turn it on.',
     i.delivery.schedules
       .filter((s) => !s.active || s.recipients === 0)
       .map((s) => `${s.name} — ${s.active ? 'on' : 'off'}, ${s.recipients === 0 ? 'no addresses' : plural(s.recipients, 'address', 'addresses')}`),
