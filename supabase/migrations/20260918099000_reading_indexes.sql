@@ -55,23 +55,28 @@
 -- The key is `videos_analyzed_run_idx`'s plus `id`, and the INCLUDE columns are
 -- the five the record selects. `platform` is among them because it is a FILTER
 -- on this read, and a filter that sends the scan back to the heap is not an
--- index-only scan at all. `id` is in the KEY rather than the payload because
--- the read pages with `selectAll`, which needs a unique order to range over:
--- with `id` in the key, `order by analyzed_run_id, id` is the index's own
--- order, so the scan neither sorts nor opens the heap. loadCorpus orders by
--- exactly that pair for this reason, and the pair is unique because the read's
--- own filter excludes the null `analyzed_run_id`s.
+-- index-only scan at all.
 --
--- MEASURED on a throwaway PostgreSQL 17.11 cluster (port 5465) over
--- schema-baseline plus every migration, with 38,400 videos across two tenants
--- at production's row width and the target tenant at production's share of
--- them. The same read:
+-- THE READ DOES NOT PAGE IN THIS INDEX'S ORDER, AND MUST NOT. loadCorpus orders
+-- by `id` alone. `selectAll` fetches the population in 1,000-row ranges, and
+-- what a range-paged read needs of its order key is not that it is unique but
+-- that it cannot MOVE between pages — and `analyzed_run_id` is exactly the
+-- column incremental Pass A rewrites one video at a time, while these pages are
+-- expected to load with a run in flight. So the scan sorts, and the sort is
+-- cheap: the index tuple is the whole answer, so the sort is over index tuples
+-- and never opens the heap. `id` stays in the KEY rather than the payload
+-- because that is what makes the tuple whole and the index unique.
 --
---   with this index      Index Only Scan  Heap Fetches: 0  Buffers: 60
---   without it           Index Scan       (heap)           Buffers: 702
+-- MEASURED on a throwaway PostgreSQL 17 cluster over schema-baseline plus every
+-- migration, with 38,400 videos across two tenants and the target tenant at
+-- production's share of them. The read as it is actually issued (`order by id`,
+-- one 1,000-row page):
 --
--- — a twelfth of the pages, and on production those 702-equivalent pages are
--- 1,267 of them because the rows are fatter still.
+--   with this index    Index Only Scan + top-N sort  Heap Fetches: 0   49 buffers
+--   without it         Bitmap Heap Scan + sort       1,512 heap blocks  1,520 buffers
+--
+-- — a thirtieth of the pages, and on production the heap side is worse still:
+-- 1,267 buffers for 1,596 rows.
 --
 -- The cost is on the write side: `videos` is upserted by every gather, and this
 -- index adds ~500 KB and one more index to maintain per row written. Measured
@@ -82,7 +87,7 @@ create index if not exists videos_analysed_record_idx
   include (platform, transcript_lang, analyzed_with_transcript, analyzed_with_translation, analyzed_with_ocr);
 
 comment on index public.videos_analysed_record_idx is
-  'Covering index for the record''s corpus read (lib/reading/record.ts loadCorpus): the five columns the read-depth and language records are computed from, carried as INCLUDE payload, with `id` in the key so the read''s paging order (analyzed_run_id, id) is the index''s own and the scan is index-only with no sort. Without it the same read visits 1,267 heap pages for 1,596 rows, because a videos row averages 3.3 KB. Phase 1 WP23.';
+  'Covering index for the record''s corpus read (lib/reading/record.ts loadCorpus): the five columns the read-depth and language records are computed from, carried as INCLUDE payload, so the scan is index-only. The read itself pages by `id`, which cannot move under it while Pass A stamps analyzed_run_id per video, so it sorts index tuples rather than opening the heap. Without this index the same read is a Bitmap Heap Scan visiting 1,267 heap pages for 1,596 rows, because a videos row averages 3.3 KB. Phase 1 WP23.';
 
 -- ============================================================================
 -- 2 · gate_verdicts — the discard record's window, by time

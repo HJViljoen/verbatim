@@ -526,13 +526,24 @@ function loadCorpus(client: SupabaseClient, clientId: string): Promise<CorpusRow
         .eq('client_id', clientId)
         .not('analyzed_run_id', 'is', null)
         .neq('platform', 'reddit')
-        // ORDERED BY THE INDEX, NOT BY `id`. `selectAll` needs a unique order
-        // to range over, and this pair is one — the filter above excludes the
-        // null `analyzed_run_id`s — but it is also exactly M10's key, so the
-        // read is an Index Only Scan with no sort where M10 is applied and no
-        // worse than the `id` order where it is not (the plan sorted either
-        // way). Nothing here depends on the order; both records are counts.
-        .order('analyzed_run_id', { ascending: true })
+        // ORDERED BY `id`, WHICH NEVER CHANGES. `selectAll` ranges over this
+        // read in 1,000-row pages, and what range paging needs of its order key
+        // is not that it is UNIQUE but that it is IMMUTABLE while the pages are
+        // being fetched: a row that moves in the sort between page 1 and page 2
+        // is read twice or not at all. This was briefly ordered by
+        // `(analyzed_run_id, id)` to match M10's key — a unique pair, but
+        // `analyzed_run_id` is exactly the column incremental Pass A stamps one
+        // video at a time as it goes (lib/pipeline/pass-a.ts updateBookkeeping,
+        // both lanes), and these pages are expected to load while a run is in
+        // flight. One video re-stamped mid-read moves to a new random uuid and
+        // lands anywhere in the order; the counts below then silently count it
+        // twice or not at all. `id` is the primary key and is never rewritten.
+        //
+        // It costs a sort, and not the index: with M10 applied the plan is an
+        // Index Only Scan over the matching rows (Heap Fetches 0) feeding a
+        // top-N heapsort — 49 buffers a page against 1,520 without the index,
+        // measured on the local cluster this package's migration was verified
+        // on. The heap, not the sort, was the cost this read had.
         .order('id', { ascending: true }),
     ),
   )
