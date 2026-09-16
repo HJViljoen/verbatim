@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { fmtInt, longMonth, monthName } from '../format'
+import { fmtInt, fullDate, longMonth } from '../format'
 import { quoteRef } from '../renderables/quotes-freeze'
 import type { Quote, Scope } from '../renderables/types'
 import { fetchQuoteResolutionsByRefs } from '../quotes'
@@ -27,7 +27,6 @@ import {
   quarterGateSentence,
   quarterLabel,
   quarterOf,
-  quarterReadingMonth,
   quarterUnlocked,
   quarterlyPeriod,
   type Quarter,
@@ -615,6 +614,24 @@ function themeLabel(id: string, overview: OverviewData): string {
   return mover?.label ?? id
 }
 
+/**
+ * "449 videos in September · 10 updates in Q3 2026" — what this quarter rests
+ * on, in one line under the cover's figures.
+ *
+ * NOT `record.line`, which the method page already prints in full and which on
+ * a workspace whose windowed reading is unapplied is a sentence about our own
+ * bookkeeping rather than about the corpus. And never a quarter TOTAL summed
+ * from months: where the window read could not be taken there is no quarter
+ * count to print, and the line says the month instead of guessing one.
+ */
+function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
+  const parts: string[] = []
+  if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} videos read in ${quarterLabel(quarter, false)}`)
+  else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
+  if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
+  return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
+}
+
 function audienceName(audience: string, overview: OverviewData): string {
   if (audience === overview.category.audience) return overview.category.label
   const rival = overview.rivals.rows.find((r) => r.audience === audience)
@@ -669,7 +686,6 @@ function buildCover(a: {
     caption: readingCounter(a.readings),
   })
 
-  const platforms = overview.record.lines.find((l) => /TikTok|YouTube|Instagram|Reddit/.test(l)) ?? ''
   return {
     body: coverBody({
       lead,
@@ -680,14 +696,18 @@ function buildCover(a: {
     }),
     figures,
     stats,
+    // A DAY, NOT A MONTH. The first cut printed "as at Sep 2026", which is the
+    // month the reading is OF; the stamp is the day the reading was TAKEN, and
+    // on a still-filling quarter those are different facts about one artefact.
+    // The mock's own masthead says "as at 28 Sep 2026".
     stamp: [
-      `as at ${monthName(quarterReadingMonth(a.quarter, a.readingAt))}`,
+      `as at ${fullDate(a.readingAt)}`,
       overview.monthStatus === 'filling' ? `${longMonth(overview.month)} still filling` : null,
       readingCounter(a.readings),
     ]
       .filter(Boolean)
       .join(' · '),
-    corpus: platforms || overview.record.line,
+    corpus: corpusLine(overview, a.quarter, quarterVideos),
   }
 }
 
@@ -959,7 +979,22 @@ export function methodNumbers(inputs: RecordInputs | null, quarter: Quarter, ove
   // the tenant has never been read — two different silences, and neither is a
   // zero (lib/reading/record.ts).
   if (!inputs.coverage) {
-    out.push({ label: 'The corpus', value: 'not recorded', note: 'the comment-dated month tables are not applied for this workspace' })
+    // NOT "the month tables are not applied" — they are, and they are seeded.
+    // What is missing is the WINDOWED read (`window_denominators`, M3), which
+    // is the only honest way to count distinct videos over three months. The
+    // month in hand is printed instead, labelled as the month.
+    out.push({
+      label: `Videos in ${longMonth(overview.month)}`,
+      value: overview.bar.videos != null ? fmtInt(overview.bar.videos) : 'not recorded',
+      note: 'the quarter is not counted as one window for this workspace yet, so the month in hand is stated instead',
+    })
+    if (inputs.delivery.delivered > 0) {
+      out.push({
+        label: 'Updates',
+        value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
+        note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
+      })
+    }
     return out
   }
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)

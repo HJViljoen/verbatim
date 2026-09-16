@@ -162,18 +162,26 @@ describe('unsettledItems', () => {
 })
 
 describe('methodNumbers', () => {
-  const overview = { monthStatus: 'filling' } as never
+  const overview = { monthStatus: 'filling', month: '2026-09-01', bar: { videos: 449 } } as never
 
-  it('tells an unapplied migration apart from a tenant nobody read', () => {
+  it('tells a record that could not be read apart from a window that is not counted', () => {
     const q = quarterFor(2026, 3)
+    // No record at all: nothing to say, and it says that.
     const none = methodNumbers(null, q, overview)
     expect(none.at(-1)?.value).toBe('not recorded')
-    const unapplied = methodNumbers(
-      { coverage: null, delivery: { delivered: 0, dates: [], longestGapDays: null, failed: 0, basis: 'run_clock' } } as never,
+
+    // The record read, but the WINDOWED count (M3) is unapplied. The month
+    // tables ARE applied and seeded on both tenants, so "the month tables are
+    // not applied" would have been a false sentence on the artefact; what is
+    // missing is the one-window read, and the month in hand is stated instead.
+    const unwindowed = methodNumbers(
+      { coverage: null, delivery: { delivered: 10, dates: [], longestGapDays: 37, failed: 0, basis: 'run_clock' } } as never,
       q,
       overview,
     )
-    expect(unapplied.at(-1)?.note).toContain('not applied')
+    expect(unwindowed.find((r) => r.label === 'Videos in September')?.value).toBe('449')
+    expect(unwindowed.find((r) => r.label === 'Videos in September')?.note).toContain('not counted as one window')
+    expect(unwindowed.find((r) => r.label === 'Updates')?.value).toBe('10 this quarter')
   })
 
   it('counts videos and comments over the quarter and names the gap', () => {
