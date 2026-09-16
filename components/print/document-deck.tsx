@@ -84,7 +84,11 @@ function audiencePills(audiences: string, company: string) {
 }
 
 function DocumentCover({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
-  const sections = new Set(data.pages.map((p) => p.kind)).size
+  // A BORROWED BLOCK IS A SECTION TOO (WP19). Counting only written page KINDS
+  // read "0 sections · 6 pages" on a brief composed entirely from the section
+  // map — the count is what the cover is for, and it was about half the
+  // document.
+  const sections = new Set(data.pages.map((p) => p.kind)).size + (data.sections?.length ?? 0)
   return (
     <section className="vb-slide">
       <div className="vb-slide-body">
@@ -94,6 +98,8 @@ function DocumentCover({ data, pages }: { data: DocumentSnapshotData; pages: num
           <p className="font-mono text-[13px] text-muted-foreground">
             {sections} {sections === 1 ? 'section' : 'sections'} · {pages} {pages === 1 ? 'page' : 'pages'}
           </p>
+          {/* The month on the cover, where a reader meets the document. */}
+          {data.reading && <p className="font-mono text-[13px] text-secondary-foreground">{data.reading.stamp}</p>}
         </div>
       </div>
     </section>
@@ -664,7 +670,12 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
-    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground" data-copy="stored">{section.empty ?? 'This section could not be read for this month.'}</p>
+    // NO `data-copy` MARKER. These words are the product's own — composed in
+    // code from a readiness row, not written by a model and not read back out
+    // of a column — and the contract's kinds are all about a model's words.
+    // Marking it `stored` asked the scanner for a `data-slot` that does not
+    // exist (measured: two violations on Össur's marketing brief).
+    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{section.empty ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   return (
     <div className="flex flex-col gap-3">
