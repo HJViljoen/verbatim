@@ -31,7 +31,11 @@ describe('the nine surfaces', () => {
   })
 
   it('offers a horizon only on a reading of months', () => {
-    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive'])
+    // Market is a reading and NOT a reading of a window: its conclusions are
+    // the latest update's, its ledger is all-time by design. The control used
+    // to be drawn there and a press of it returned a byte-identical page.
+    expect(SURFACES.filter(hasHorizon).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'competitive'])
+    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toContain('market')
   })
 
   it('states a basis on every reading and on nothing else', () => {

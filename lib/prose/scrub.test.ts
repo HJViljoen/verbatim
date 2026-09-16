@@ -171,6 +171,7 @@ describe('the policy table — every prose slot is listed with its policy', () =
   // scrubber. "Extended to every prose slot" is only checkable if the slots
   // are written down; a new call adds itself here or it does not ship.
   const EXPECTED: Record<string, string> = {
+    pass_a_audience_insight: 'digits',
     pass_b_theme: 'none',
     pass_c_finding: 'digits',
     pass_d_a_insight: 'digits',

@@ -46,6 +46,9 @@ export interface Surface {
   question: string | null
   group: NavGroup
   bar: BarKind
+  /** False where the surface is a reading but not a reading of a WINDOW, so the
+   *  horizon control would change nothing on it. Absent means true. */
+  horizon?: false
   /** The page key this surface stores under, where it has one. */
   page?: PageKey
 }
@@ -59,7 +62,7 @@ export const SURFACES: readonly Surface[] = [
   { key: 'overview', href: '/dashboard', label: 'Overview', question: 'What is this month’s reading?', group: 'Intelligence', bar: 'reading', page: 'overview' },
   { key: 'subjects', href: '/dashboard/subjects', label: 'Subjects', question: 'How are we seen on this subject?', group: 'Intelligence', bar: 'reading', page: 'subjects' },
   { key: 'voice', href: '/dashboard/voice', label: 'Voice', question: 'Who is saying what in this category?', group: 'Intelligence', bar: 'reading', page: 'voice' },
-  { key: 'market', href: '/dashboard/market', label: 'Market', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', page: 'market' },
+  { key: 'market', href: '/dashboard/market', label: 'Market', question: 'What should we do, and is it working?', group: 'Intelligence', bar: 'reading', horizon: false, page: 'market' },
   { key: 'competitive', href: '/dashboard/competitive', label: 'Competitive', question: 'Who else is in this, and are they gaining?', group: 'Intelligence', bar: 'reading', page: 'competitive' },
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
   { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },
@@ -67,10 +70,22 @@ export const SURFACES: readonly Surface[] = [
   { key: 'settings', href: '/dashboard/settings', label: 'Settings', question: null, group: 'Account', bar: 'title' },
 ]
 
-/** The horizon control appears only where a horizon means something: a reading
- *  of calendar months. Not on This week (dated by the update), not on Ask,
- *  Reports or Settings. */
-export const hasHorizon = (s: Surface): boolean => s.bar === 'reading'
+/**
+ * The horizon control appears only where a horizon means something: a reading
+ * of calendar months. Not on This week (dated by the update), not on Ask,
+ * Reports or Settings.
+ *
+ * AND NOT ON MARKET, which is the one reading surface that is not a reading of
+ * a WINDOW (Phase 1 WP14). Its conclusions are the latest update's, its ledger
+ * is deliberately all-time ("every piece of advice this product has ever given
+ * you"), its moves are all moves and its claims are the latest update's. The
+ * bar drew the four-link control anyway, and a client pressing "Last 12 months"
+ * got a byte-identical page. A control that changes nothing is worse than an
+ * absent one: it teaches a reader that the other four do nothing either. The
+ * "how sound is this" band stays, because Market IS a reading — the two
+ * questions are separate and the flag says so rather than `bar` answering both.
+ */
+export const hasHorizon = (s: Surface): boolean => s.bar === 'reading' && s.horizon !== false
 
 /** The "how sound is this" band appears wherever the page IS a reading — the
  *  five month surfaces and This week, which reads an update. Ask, Reports and

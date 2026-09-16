@@ -1309,7 +1309,25 @@ export type DirectionReader =
   | 'agent.movement'
   /** Initiatives · whether the conversation went the way the client said they wanted. */
   | 'initiatives'
-  /** Competitive · share-point deltas "since your first update". */
+  /**
+   * Competitive · share-point deltas "since your first update".
+   *
+   * NOT FLIPPED BY WP14, and the plan's "done when" says it should be. It must
+   * not. This key gates the PARKED Competitive Intelligence page
+   * (components/pages/competitive/index.tsx, via `shareDeltaShown`) and the
+   * weekly digest's delta block (components/email/tiles.tsx), both of which
+   * read `run_summary.period_share_of_voice` exactly as they always have —
+   * two readings of one cumulative corpus taken at two arbitrary moments.
+   * Flipping the key would turn direction words back on inside those, which
+   * is what D1 forbids.
+   *
+   * The new Competitive surface (lib/pages/competitive-surface.ts) reads
+   * nothing here. Its direction words are earned by a `Verdict` off the
+   * comment-dated month rows, with an n and a band on both sides — the
+   * re-basing this map exists to make possible. A key flips when the surface
+   * it names re-bases; this one has not re-based, it has been replaced.
+   * WP11 reached the same answer about `dashboard.themes` for the same reason.
+   */
   | 'competitive.deltas'
   /** Consumer Profile · "How the mix has moved", the per-persona share line. */
   | 'profile.mix'

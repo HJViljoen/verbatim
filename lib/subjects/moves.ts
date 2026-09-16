@@ -85,7 +85,22 @@ export interface WriteResult<T> {
   ok: boolean
   message: string
   value?: T
+  /** True when the write failed because M4's tables are not applied here.
+   *
+   *  A CODE, BECAUSE THE PROSE IS NOT ONE. `accept-advice.ts` used to tell this
+   *  case apart with `message.includes('not switched on')`, and on an
+   *  advice-kinded move there is no subject to pre-read, so the only failure
+   *  path is the INSERT — whose message is `couldNotSave`'s "Could not save.
+   *  Try again". The client was therefore shown "Could not save" on a press
+   *  that HAD marked the row Done, and pressing again wrote a second decision.
+   *  A caller deciding what to say needs the cause, not a substring of the
+   *  sentence it is about to replace. */
+  missing?: boolean
 }
+
+/** What a caller is told when M4 is not applied here. One string, so a reader
+ *  and the three sites that return it cannot drift. */
+export const SUBJECTS_NOT_APPLIED = 'Subjects are not switched on for this workspace yet.'
 
 // ---- Pure -------------------------------------------------------------------
 
@@ -233,7 +248,10 @@ export async function declareMove(
   if (target.subject_id) {
     const { data, error } = await ctx.supabase
       .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('id', target.subject_id).maybeSingle()
-    if (error) return { ok: false, message: isMissingSubjects(error) ? 'Subjects are not switched on for this workspace yet.' : couldNotSave('declareMove subject read', error) }
+    if (error) {
+      if (isMissingSubjects(error)) return { ok: false, message: SUBJECTS_NOT_APPLIED, missing: true }
+      return { ok: false, message: couldNotSave('declareMove subject read', error) }
+    }
     if (!data) return { ok: false, message: 'That subject is not yours to track.' }
   }
   if (target.registry_ids) {
@@ -258,7 +276,14 @@ export async function declareMove(
     })
     .select('id, client_id, kind, subject_id, registry_ids, lineage_id, title, note, direction, declared_at, declared_by, status')
     .maybeSingle()
-  if (error) return { ok: false, message: couldNotSave('declareMove insert', error) }
+  if (error) {
+    // The insert is the ONLY failure path for an advice-kinded move — it has no
+    // subject to pre-read — so a missing `moves` table arrived here wearing
+    // "Could not save. Try again" and nothing upstream could tell the two
+    // apart. It says which it is now.
+    if (isMissingSubjects(error)) return { ok: false, message: SUBJECTS_NOT_APPLIED, missing: true }
+    return { ok: false, message: couldNotSave('declareMove insert', error) }
+  }
 
   const move = data as Move | null
   await recordConfigChange(admin, {
@@ -340,7 +365,7 @@ export async function nameSubject(
   }
 
   if (error) {
-    if (isMissingSubjects(error)) return { ok: false, message: 'Subjects are not switched on for this workspace yet.' }
+    if (isMissingSubjects(error)) return { ok: false, message: SUBJECTS_NOT_APPLIED, missing: true }
     // The partial unique index: one live subject per name per tenant.
     if ((error as { code?: string }).code === '23505') return { ok: false, message: `You are already tracking "${name}".` }
     const stopped = retiredFirst ? ` "${name}" has been stopped and the replacement was not saved — add it again.` : ''
@@ -395,7 +420,8 @@ export async function activateSubject(
   const { data: before, error: readError } = await ctx.supabase
     .from(TABLE_SUBJECTS).select('id, name, status').eq('client_id', ctx.clientId).eq('id', input.id).maybeSingle()
   if (readError) {
-    return { ok: false, message: isMissingSubjects(readError) ? 'Subjects are not switched on for this workspace yet.' : couldNotSave('confirmSubject read', readError) }
+    if (isMissingSubjects(readError)) return { ok: false, message: SUBJECTS_NOT_APPLIED, missing: true }
+    return { ok: false, message: couldNotSave('confirmSubject read', readError) }
   }
   const { data: live, error: countError } = await ctx.supabase
     .from(TABLE_SUBJECTS).select('id').eq('client_id', ctx.clientId).eq('status', 'active')
