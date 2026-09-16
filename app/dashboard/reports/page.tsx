@@ -146,6 +146,16 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // readRows, not `data ?? []`: a failed read and an empty archive render the
   // same page, so a broken query would show a client an empty Sent or Exported
   // tab with nothing anywhere saying the read failed.
+  // A READ THAT FAILED IS NOT AN EMPTY GROUP. `readRows` keeps the page
+  // rendering and logs, which is right — but the head counts beside these
+  // lists answer even when the lists do not, so an unread group would print
+  // "0 of 340 items" with nothing on the page saying the read failed. The
+  // filter line and the empty state both take this instead of asserting.
+  const unread = {
+    sent: sendRes.error != null || legacyRes.error != null,
+    built: buildRes.error != null,
+    exported: exportRes.error != null,
+  }
   const allSends = readRows<SendRow>(sendRes, 'reports.sends')
   const allLegacy = readRows<LegacyReport>(legacyRes, 'reports.legacy')
   const sentSnapshotIds = new Set(allSends.map((s) => s.snapshot_id).filter(Boolean))
@@ -306,7 +316,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // The Built list is capped by when each artefact was BUILT and narrowed
       // by when it READ; the caveat names the clock its cap is on so the two
       // dates cannot be read as one.
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, cappedAt, group === 'built' ? 'built' : undefined)}
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, { cappedAt, ...(group === 'built' ? { clock: 'built' } : {}), unread: unread[group] })}
     />
   )
   const list = group === 'sent' ? (

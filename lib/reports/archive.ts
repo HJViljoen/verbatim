@@ -83,6 +83,18 @@ export function listCap(pools: readonly ListPool[]): number | null {
   return total > searched ? searched : null
 }
 
+/** What the archive knows about the list behind a group's filter line: how far
+ *  the filter reached, on which clock, and whether the list could be read at
+ *  all. Every field is absent on the happy path. */
+export interface ListReach {
+  /** `listCap` — how many rows were searched, where the group holds more. */
+  cappedAt?: number | null
+  /** The clock the cap is on, where it is not the one the filter compares. */
+  clock?: string
+  /** True where the list read itself failed. */
+  unread?: boolean
+}
+
 /**
  * The line under the filter, in the reader's words.
  *
@@ -105,14 +117,21 @@ export function listCap(pools: readonly ListPool[]): number | null {
  * the caller knows that pool; here, a cap that is passed is a cap that hides
  * something.
  *
- * `capClock` NAMES THE CLOCK THE CAP IS ON, where it is not the one the filter
+ * `clock` NAMES THE CLOCK THE CAP IS ON, where it is not the one the filter
  * compares. The Built list is the 100 most recently BUILT rows and the filter
  * narrows them by the day each artefact READ — two clocks, days or weeks apart
  * for a brief built late for an earlier month — so "the 100 most recent" left
  * the reader to guess which. Passed, it reads "the 100 most recently built".
+ *
+ * `unread` IS THE ONE CASE THAT PRINTS NO NUMBERS. A list read that failed
+ * returns no rows and the head count beside it still answers, so the line read
+ * "0 of 340 items from 1 Jan 2025" — the strongest claim this page makes about
+ * a workspace, on the weakest evidence there is. The cards already say when a
+ * read failed rather than asserting through it; the filter line says it here.
  */
-export function dateFilterLine(filter: DateFilter, shown: number, total: number, cappedAt?: number | null, capClock?: string): string | null {
+export function dateFilterLine(filter: DateFilter, shown: number, total: number, reach: ListReach = {}): string | null {
   if (!hasDateFilter(filter)) return null
+  if (reach.unread) return 'We could not read this list just now, so this is not a count of what is in those dates. Try again in a moment.'
   const span = filter.from && filter.to
     ? `${fullDate(`${filter.from}T00:00:00.000Z`)} to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
     : filter.from
@@ -121,9 +140,10 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number,
   const head = `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
   // A cap that hides nothing is not passed: a list sitting on its cap with
   // nothing behind it is a complete list, and a caveat about nothing is noise.
+  const { cappedAt, clock } = reach
   if (cappedAt == null) return head
-  const clause = capClock
-    ? `Only the ${cappedAt} most recently ${capClock} are searched, so anything ${capClock} before those is not counted here.`
+  const clause = clock
+    ? `Only the ${cappedAt} most recently ${clock} are searched, so anything ${clock} before those is not counted here.`
     : `Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
   return `${head} ${clause}`
 }

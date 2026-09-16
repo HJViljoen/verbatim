@@ -92,13 +92,13 @@ describe('dateFilterLine', () => {
     // 340 built, the newest 100 loaded, a filter reaching back past them: the
     // head alone reads as "this workspace has none in that span", which is a
     // claim about the archive rather than about what was looked at.
-    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, 100))
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100 }))
       .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
   })
 
   it('adds no caveat where nothing is behind the cap', () => {
     // An uncapped group is unchanged, passed or omitted.
-    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47, null))
+    expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47, { cappedAt: null }))
       .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
     expect(dateFilterLine(parseDateFilter('2026-09-01', '2026-09-30'), 12, 47))
       .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
@@ -107,7 +107,7 @@ describe('dateFilterLine', () => {
   it('names the clock the cap is on where it is not the filter\'s', () => {
     // The Built list is the 100 most recently BUILT rows; the filter compares
     // the day each artefact read. "Most recent" alone left the two as one.
-    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, 100, 'built'))
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100, clock: 'built' }))
       .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recently built are searched, so anything built before those is not counted here.')
   })
 
@@ -116,8 +116,26 @@ describe('dateFilterLine', () => {
     // taken; the cap applies to the head count. 130 built, 40 sent, the newest
     // 100 loaded: the old `total > cappedAt` test compared 90 against 100 and
     // suppressed the caveat over 30 rows that were never looked at.
-    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 90, 100))
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 90, { cappedAt: 100 }))
       .toBe('0 of 90 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recent are searched, so anything older than those is not counted here.')
+  })
+})
+
+describe('dateFilterLine, where the list could not be read', () => {
+  it('says so instead of counting an archive it did not see', () => {
+    // readRows returns [] and logs; the head count beside it still answers, so
+    // the honest line is the one that makes no claim about the workspace.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { unread: true }))
+      .toBe('We could not read this list just now, so this is not a count of what is in those dates. Try again in a moment.')
+  })
+
+  it('outranks the cap caveat — neither number is worth anything', () => {
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, { cappedAt: 100, clock: 'built', unread: true }))
+      .not.toMatch(/340|100/)
+  })
+
+  it('still says nothing where nothing is filtered', () => {
+    expect(dateFilterLine(parseDateFilter(undefined, undefined), 0, 340, { unread: true })).toBeNull()
   })
 })
 
