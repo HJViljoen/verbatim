@@ -14,6 +14,7 @@ import {
   sideFigures,
   sideWhose,
   unansweredLead,
+  unansweredMeta,
   voiceFrom,
   voicesAcross,
   voicesMeta,
@@ -148,7 +149,7 @@ describe('matchWords / answeredBy', () => {
 })
 
 describe('unansweredLead', () => {
-  const row = { id: 'q', label: 'Will it survive a wet commute', videos: 130, reddit: 40, answered: false, href: null }
+  const row = { id: 'q', label: 'Will it survive a wet commute', videos: 130, reddit: 40, answered: false }
 
   it('says "grouped as", never "the category asked" — the label is the clustering\'s summary', () => {
     // Measured on production: a large group of Össur question insights sits
@@ -177,6 +178,11 @@ describe('unansweredLead', () => {
 
   it('has nothing to say when every question is answered', () => {
     expect(unansweredLead([{ ...row, answered: true }], 9, 'in Sep')).toBeNull()
+  })
+
+  it('puts the gate’s own number on the meta line rather than computing and dropping it', () => {
+    expect(unansweredMeta(214, 9)).toBe('214 videos asked about this subject · 9 posts of yours')
+    expect(unansweredMeta(1, 1)).toBe('1 video asked about this subject · 1 post of yours')
   })
 
   it('states the basis once, in the block’s own words', () => {

@@ -10,10 +10,10 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, loadTrackedRivals, rivalKey, type T
 import { audienceLabel } from '../readiness/types'
 import { SHARE_BAND } from '../report-bands'
 import { directionWord, monthChange, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
-import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
+import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } from '../reading/horizon'
 import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import { isMissingKindMoodAttention } from '../reading/attention'
-import { freezeBoundary, freezeStateFor, isMissingMonthTable } from '../reading/monthly'
+import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf } from '../reading/month-key'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
@@ -218,16 +218,14 @@ export interface UnansweredRow {
   reddit: number
   /** True where one of your own posts touches it. */
   answered: boolean
-  href: string | null
 }
 
 export interface UnansweredBlock {
   rows: UnansweredRow[]
-  /** Distinct non-owned videos carrying a question on this subject — the gate's
-   *  own number. */
+  /** Distinct non-owned videos that asked something about this subject in the
+   *  period shown — the gate's own number, printed on the block's meta line
+   *  the way the mock prints it ("in 130 videos this quarter"). */
   questionVideos: number
-  /** Videos read for the category, as the population the counts sit in. */
-  population: number | null
   /** Your own posts in the drawn window. */
   yourPosts: number
   lead: string | null
@@ -270,8 +268,6 @@ export interface SubjectPane {
 export interface SubjectsRecordBlock {
   line: string
   lines: string[]
-  href: string
-  freezesOn: string
 }
 
 export interface SubjectsData {
@@ -280,7 +276,6 @@ export interface SubjectsData {
   monthStatus: MonthStatus
   readingAt: string
   horizon: Horizon
-  window: HorizonWindow
   axis: string[]
   substrate: Substrate
   notes: MonthLabel[]
@@ -473,6 +468,14 @@ export function periodPhrase(horizon: Horizon, month: string): string {
   return `in the ${HORIZON_LABEL[horizon].toLowerCase()}`
 }
 
+/** SU3's meta line: what was asked, and what you published, in the period the
+ *  basis sentence names. The gate's own number is printed rather than computed
+ *  and dropped — the mock says "in 130 videos this quarter". */
+export function unansweredMeta(questionVideos: number, yourPosts: number): string {
+  const asked = `${fmtInt(questionVideos)} video${questionVideos === 1 ? '' : 's'} asked about this subject`
+  return `${asked} · ${fmtInt(yourPosts)} post${yourPosts === 1 ? '' : 's'} of yours`
+}
+
 /** The words above the axis about which lines carry an n (design §3 SU2's
  *  gate, and the mock's own sentence). ONE sentence for a run of lines, never
  *  one per line. */
@@ -515,11 +518,6 @@ export function axisNote(sides: readonly SubjectSide[], floorN: number): string 
  */
 export function subjectNotes(notes: readonly MonthLabel[] | null | undefined): MonthLabel[] {
   return (notes ?? []).filter((n) => n.kind !== 'clustering_changed')
-}
-
-/** The day this month stops moving, off the reading layer's own rule. */
-export function freezesOn(month: string): string {
-  return freezeBoundary(month).slice(0, 10)
 }
 
 // ---- the rows the loader reads -------------------------------------------------
@@ -844,7 +842,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       loadVoices(supabase, clientId, memberIds ?? []),
       loadUnanswered(supabase, clientId, memberIds ?? [], {
         window: { from: window.from, to: window.to },
-        population: perAudience.get(`${month}|${INDUSTRY_AUDIENCE}`) ?? null,
         period: periodPhrase(horizon, month),
         themedRunId,
       }),
@@ -895,7 +892,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     monthStatus,
     readingAt,
     horizon,
-    window,
     axis,
     substrate: subjectSet?.numeratorSubstrate ?? history.substrate,
     notes: subjectNotes(subjectSet?.notes),
@@ -904,8 +900,6 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     record: {
       line: howSoundLine(recordInputs),
       lines: recordLines(recordInputs),
-      href: '/dashboard/settings',
-      freezesOn: freezesOn(month),
     },
   }
 }
@@ -1147,7 +1141,6 @@ interface UnansweredInput {
   /** The period the reader chose, as half-open instants. Both halves of SU3
    *  are read inside it: the question videos AND your own posts. */
   window: { from: string; to: string }
-  population: number | null
   /** The period the reader chose, as `periodPhrase` words it. */
   period: string
   /** The update whose clustering names the questions. Null where no update has
@@ -1185,7 +1178,7 @@ async function loadUnanswered(
   input: UnansweredInput,
 ): Promise<UnansweredBlock> {
   const empty: UnansweredBlock = {
-    rows: [], questionVideos: 0, population: input.population, yourPosts: 0,
+    rows: [], questionVideos: 0, yourPosts: 0,
     lead: null, basis: UNANSWERED_BASIS, claims: UNANSWERED_CLAIMS_UNREADABLE,
     reddit: null, refusal: null,
   }
@@ -1315,8 +1308,10 @@ async function loadUnanswered(
       videos: g.videos.size,
       reddit: g.reddit.size,
       answered: answeredBy(g.label, haystack),
-      // Onward to the theme in full, which is where the comments are (VO3).
-      href: `/dashboard/voice?themes=${encodeURIComponent(registryId)}`,
+      // NO ONWARD LINK. The obvious one is Voice's `?themes=`, and that
+      // parameter matches on `themes.member_themes` SLUGS, not on a registry
+      // id — a link that would silently filter to nothing. VO3 (WP13) is where
+      // a question opens in full.
     }))
   const shown = ranked.filter((r) => !r.answered).slice(0, UNANSWERED_SHOWN)
   const redditVideos = [...groups.values()].reduce((n, g) => n + g.reddit.size, 0)
@@ -1324,7 +1319,6 @@ async function loadUnanswered(
   return {
     rows: shown,
     questionVideos,
-    population: input.population,
     yourPosts: ownVideos.length,
     lead: unansweredLead(shown, ownVideos.length, input.period),
     basis: UNANSWERED_BASIS,

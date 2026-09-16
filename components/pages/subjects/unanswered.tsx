@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { SubjectsData, UnansweredRow } from '@/lib/pages/subjects'
+import { unansweredMeta, type SubjectsData, type UnansweredRow } from '@/lib/pages/subjects'
 
 // SU3 · Questions on this subject your content never answers (design §3 SU3,
 // the mock's (d)).
@@ -73,7 +73,7 @@ export const subjectsUnanswered: Block<SubjectsData> = {
         title={subjectsUnanswered.title}
         question={subjectsUnanswered.question}
         mode={mode}
-        meta={`${fmtInt(u.yourPosts)} post${u.yourPosts === 1 ? '' : 's'} of yours in this window`}
+        meta={unansweredMeta(u.questionVideos, u.yourPosts)}
         footer={footer}
       >
         {u.lead ? (

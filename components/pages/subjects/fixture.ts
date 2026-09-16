@@ -1,4 +1,3 @@
-import { horizonWindow } from '@/lib/reading/horizon'
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '@/lib/reading/series'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { kindShares, redditRead } from '@/lib/reading/kinds'
@@ -102,15 +101,14 @@ function sidesAndSeries() {
 
 export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const { sides, series } = sidesAndSeries()
-  const window = horizonWindow('last_12', NOW, '2026-04-01')
   const rows = [
     { id: 's1', name: 'Durability', pct: 31, k: 26 },
     { id: 's2', name: 'Recycled materials', pct: 46, k: 39 },
     { id: 's3', name: 'Waterproofing', pct: 20, k: 17 },
   ]
   const unansweredRows = [
-    { id: 'will it survive a wet commute', label: 'Will it survive a wet commute', videos: 130, reddit: 49, answered: false, href: null },
-    { id: 'zips failing after a year', label: 'Zips failing after a year', videos: 71, reddit: 20, answered: false, href: null },
+    { id: 'will it survive a wet commute', label: 'Will it survive a wet commute', videos: 130, reddit: 49, answered: false },
+    { id: 'zips failing after a year', label: 'Zips failing after a year', videos: 71, reddit: 20, answered: false },
   ]
 
   return {
@@ -119,7 +117,6 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
     monthStatus: 'filling',
     readingAt: NOW,
     horizon: 'last_12',
-    window,
     axis: AXIS,
     substrate: 'seeded',
     notes: [],
@@ -172,7 +169,6 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       unanswered: {
         rows: unansweredRows,
         questionVideos: 214,
-        population: 1388,
         yourPosts: 9,
         lead: unansweredLead(unansweredRows, 9, periodPhrase('last_12', MONTH)),
         basis: UNANSWERED_BASIS,
@@ -188,8 +184,6 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
     record: {
       line: '4 updates · 2,359 videos · TikTok, YouTube, Instagram, Reddit',
       lines: ['4 updates delivered in this window.', 'Nothing was refused on this page.'],
-      href: '/dashboard/settings',
-      freezesOn: '2026-10-31',
     },
     ...over,
   }

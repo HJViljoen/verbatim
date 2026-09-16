@@ -275,11 +275,14 @@ describe('SU2 · the voices', () => {
 })
 
 describe('SU3 · questions your posts did not answer', () => {
-  it('says the count and the population, and prints no share', () => {
+  it('says the count, the population it counted in and your own posts — and prints no share', () => {
     const text = renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('came up in 130 of the videos we have read')
     expect(text).toContain('none of your 9 posts in the last 12 months touched it')
+    // The gate's own number, on the meta line, the way the mock prints it.
+    expect(text).toContain('214 videos asked about this subject · 9 posts of yours')
     expect(text).toContain('counts, not shares')
+    expect(text).not.toContain('%')
   })
 
   it('says which half of your posts it matched on, because the other half is unreadable', () => {
