@@ -93,10 +93,6 @@ export function monthAndYear(month: string): string {
   return /^\d{4}$/.test(year) && name !== month.slice(0, 10) ? `${name} ${year}` : name
 }
 
-/** The stamp for a brief with no monthly reading at all — honest about which
- *  of the two things is missing. */
-export const NO_READING_STAMP = 'No monthly reading recorded for this workspace yet'
-
 /** "388 videos in the category · 158 of your own · 1,406 comments" — the
  *  denominator every figure on the brief is a share of, printed once. */
 export function denominatorLine(denominators: readonly BriefDenominator[]): string {
@@ -119,9 +115,13 @@ export function platformLine(mix: PlatformMix): string {
 
 /** The line a brief prints when its window reaches across a clustering
  *  boundary. Decision L: the reading continues, the caveat travels with it,
- *  and no direction word is earned across it. */
+ *  and no direction word is earned across it.
+ *
+ *  ONE WORDING. The method page wrote its own, inline and slightly different,
+ *  which is "no two surfaces word the same emptiness differently" broken
+ *  inside one file. */
 export const CLUSTERING_CAVEAT =
-  'Themes were grouped differently inside this window, so a comparison across it is not like for like.'
+  'Themes were grouped differently inside part of this window, so a comparison across it is not like for like and no direction word is claimed over it.'
 
 /** Every figure and verdict a set of blocks prints, gathered without rendering
  *  any of them. The one crossing to printed figures happens here, once. */

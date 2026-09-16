@@ -4,7 +4,7 @@ import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
-import { briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
+import { CLUSTERING_CAVEAT, briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
 import { missingSentence, missingSummary, pageKindsOf } from './sections'
@@ -593,7 +593,7 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     asked ? `This brief was written to answer an instruction from ${s.company}: "${/[.!?]$/.test(asked) ? asked : `${asked}.`}"` : '',
     basis,
     r && sources.length ? `The words quoted in it were read on ${sources.join(', ')}.` : '',
-    r?.crossesClustering ? 'Themes were grouped differently inside part of this window, so a comparison across it is not like for like and no direction word is claimed over it.' : '',
+    r?.crossesClustering ? CLUSTERING_CAVEAT : '',
     ...(missing.length ? [missingSummary(missing) ?? '', ...missing.map(missingSentence)] : []),
     `Findings are the researcher's readings of that conversation, ordered by the evidence behind them. Each rests on grounded points the analysis extracted and verified; confidence is judged from how many conversations and how many independent strands support the reading (solid, reasonable or thin), never by the writer.${thin ? ' This update was thin, so fewer findings were written rather than stretch the evidence.' : ''}`,
     `${wherePagesComeFrom}${wherePagesComeFrom && s.heldBackPhrases ? ' ' : ''}${s.heldBackPhrases ? `${fmtCount(s.heldBackPhrases)} phrases in other languages were read for the counts but not quoted.` : ''}`,

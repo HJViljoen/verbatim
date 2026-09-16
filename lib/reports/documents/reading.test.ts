@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { Block } from '../../blocks/types'
 import { blockContext } from '../../blocks/types'
 import { EMAIL } from '../../email/theme'
+import { methodItems } from './compose'
 import {
+  CLUSTERING_CAVEAT,
   blockReading,
   briefStamp,
   denominatorLine,
@@ -34,6 +36,17 @@ const blockOf = (key: string, figures: ReadingFigures, verdicts: Verdict[] = [])
   figures: () => figures,
   verdicts: () => verdicts,
   emptyState: () => null,
+})
+
+describe('CLUSTERING_CAVEAT', () => {
+  it('is the one wording, and the method page prints it rather than its own', () => {
+    expect(CLUSTERING_CAVEAT).toContain('not like for like')
+    expect(CLUSTERING_CAVEAT).toContain('no direction word is claimed over it')
+    expect(methodItems(
+      { reading: { crossesClustering: true, monthLabel: 'September 2026', monthStatus: 'frozen', month: '2026-09-01', readingAt: '2026-09-16T05:00:00.000Z', denominators: [], platformMix: {} }, competitors: [], company: 'Ossur', phrases: [], heldBackPhrases: 0, run: { conversations: 1, videos: 1 }, missing: [] } as never,
+      'x', false, 5, ['method'],
+    ).join(' ')).toContain(CLUSTERING_CAVEAT)
+  })
 })
 
 describe('briefStamp', () => {

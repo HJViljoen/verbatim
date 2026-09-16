@@ -20,7 +20,9 @@ import type { DocPageKind, DocumentRole } from './types'
  * from the surface's own loader output, exactly as the reader saw it. The
  * design's "each section is a page block or a filter over one" is this list,
  * and "deck pages that duplicate a block render the block in print mode" is
- * what the deck does with it.
+ * what the deck does with it. Every section in the four maps is a WHOLE block;
+ * the filter half of that sentence is not declared until a map needs it,
+ * because a field no code reads is a promise in a type.
  *
  * A SECTION ID IS A STORED CONTRACT. It names a slide inside a built brief and
  * an edit in `report_edits`; renaming one orphans every artefact that named it.
@@ -69,8 +71,6 @@ export interface BriefBlockSection {
   title: string
   /** One line of framing, the operator's voice, printed under the title. */
   framing: string
-  /** The block's own selection, as URL params — "a filter over one". */
-  filter?: Record<string, string>
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
 }
