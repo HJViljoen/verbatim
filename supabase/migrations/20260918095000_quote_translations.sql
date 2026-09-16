@@ -295,6 +295,86 @@ grant select on public.month_evidence_refs to authenticated;
 grant select, insert, update, delete on public.month_evidence_refs to service_role;
 revoke truncate on public.month_evidence_refs from service_role;
 
+-- 2b. A FROZEN MONTH IS NOT DELETABLE EITHER ----------------------------------
+--
+-- The contract read "a frozen monthly reading is never rewritten, and the
+-- trigger refuses the UPDATE" — and that was the whole of it. There was no
+-- BEFORE DELETE anywhere, and service_role keeps DELETE on every month table
+-- (it needs it: the stale sweeps delete one filling key at a time). Measured on
+-- a throwaway PG 17 cluster built from the baseline and every 2026 migration,
+-- `set role service_role; delete from public.month_subject_readings where …`
+-- over a FROZEN row returned DELETE 1. So protection against rewriting lived in
+-- the database and protection against erasure lived in `.eq('status',
+-- 'filling')` restated in two TypeScript call sites — correct today, and not
+-- what the sentence above invites a reader to hear.
+--
+-- Nothing shipped is refused by this: the freeze upserts, and both sweeps
+-- (lib/reading/monthly.ts, lib/reading/evidence-refs.ts) restate `status =
+-- 'filling'`. What IS refused is the statement that takes the record away —
+-- including the one that arrives sideways, because month_theme_readings.theme_id
+-- is `on delete cascade` from theme_registry, so one delete there would have
+-- taken 2,957 frozen theme-month rows with it.
+--
+-- THE WORKSPACE GOING AWAY IS THE EXCEPTION. Every month table cascades from
+-- `clients`; during that cascade the parent row is already gone when this
+-- fires, which is how the guard tells "this tenant is being removed" from "this
+-- record is being erased" without trusting anything the caller says.
+create or replace function public.month_reading_delete_guard()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $del$
+begin
+  if not exists (select 1 from public.clients c where c.id = old.client_id) then
+    return old;
+  end if;
+  raise exception 'frozen monthly reading is never deleted: %, month %, audience %',
+    tg_table_name, old.month, old.audience
+    using errcode = 'restrict_violation',
+          hint = 'A frozen month is the record. The stale sweeps delete filling rows only.';
+  return null;
+end
+$del$;
+
+comment on function public.month_reading_delete_guard() is
+  'Refuses a DELETE of a frozen month row on any month table. The clients cascade is the one exception: the parent row is already gone when this fires.';
+
+drop trigger if exists month_denominators_delete_guard on public.month_denominators;
+create trigger month_denominators_delete_guard
+  before delete on public.month_denominators
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
+drop trigger if exists month_theme_readings_delete_guard on public.month_theme_readings;
+create trigger month_theme_readings_delete_guard
+  before delete on public.month_theme_readings
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
+drop trigger if exists month_subject_readings_delete_guard on public.month_subject_readings;
+create trigger month_subject_readings_delete_guard
+  before delete on public.month_subject_readings
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
+drop trigger if exists month_kind_readings_delete_guard on public.month_kind_readings;
+create trigger month_kind_readings_delete_guard
+  before delete on public.month_kind_readings
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
+drop trigger if exists month_audience_stats_delete_guard on public.month_audience_stats;
+create trigger month_audience_stats_delete_guard
+  before delete on public.month_audience_stats
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
+drop trigger if exists month_evidence_refs_delete_guard on public.month_evidence_refs;
+create trigger month_evidence_refs_delete_guard
+  before delete on public.month_evidence_refs
+  for each row when (old.status = 'frozen')
+  execute function public.month_reading_delete_guard();
+
 -- 3. The freeze-time read ------------------------------------------------------
 -- The same joins monthly_theme_readings makes, returning the ids it collapses
 -- into count(distinct …). Nothing new is computed and nothing new is read: the
