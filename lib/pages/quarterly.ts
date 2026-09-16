@@ -150,6 +150,10 @@ export interface SubjectQuarterRow {
 export interface SubjectsPage {
   rows: SubjectQuarterRow[]
   monthLabel: string
+  /** "October is outside this quarter …", where the month-level columns are of
+   *  a month the heading's quarter does not contain. Page 3 named its month and
+   *  never said that, under a heading reading "Q3 2026 against Q2 2026". */
+  monthNote: string | null
   /** The line under the table about which column carries what. */
   note: string | null
   /** Said instead of the table when `subjects` (M4) is not applied here. */
@@ -196,6 +200,13 @@ export interface CategoryPage {
 
 export interface RivalsPage {
   rows: RivalRow[]
+  /** The month THESE ROWS are of — Overview's, which is the month the product
+   *  is in. The page headed itself off `standings.monthLabel` instead, a
+   *  different read of a different surface: it printed "Sep 2026" while the
+   *  rest of the sheet said October. */
+  monthLabel: string
+  /** And whether that month falls outside the quarter under review. */
+  monthNote: string | null
   /** Whether the panel reading behind the two shares exists at all. False means
    *  `month_audience_stats` (M5) is not applied here, so a blank cell reads
    *  "not recorded yet" and NOT "not observed", which is a measurement
@@ -434,6 +445,14 @@ export function coverBody(input: {
 export function monthBasisClause(month: string, quarter: Quarter): string | null {
   if (month >= quarter.from && month <= quarter.to) return null
   return `the month-level pages read ${longMonth(month)}, outside this quarter`
+}
+
+/** The same fact as a sentence a page can print under its own rows. Null while
+ *  the month is inside the quarter, which is the only case in which a document
+ *  headed Q3 can let a month figure speak for itself. */
+export function monthOutsideNote(month: string, quarter: Quarter): string | null {
+  if (month >= quarter.from && month <= quarter.to) return null
+  return `${longMonth(month)} is outside this quarter — it is the month the product is in now.`
 }
 
 /**
@@ -682,10 +701,10 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // on a review of a closed quarter that is a month outside it. Every page that
   // prints a month figure says so rather than letting a Q3 masthead speak for
   // a November reading.
-  const monthOutside = overview.month < quarter.from || overview.month > quarter.to
+  const monthNote = monthOutsideNote(overview.month, quarter)
 
   const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, subjectsRead })
+  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead })
   const category = buildCategory({
     overview,
     quarterVerdicts,
@@ -694,11 +713,11 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     gate,
     windowApplied,
     themesRead,
-    monthOutside,
+    monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
   })
-  const rivals = buildRivals({ overview, competitive: a.competitive })
+  const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
 
   // Everything the pages may speak from, in one list: the interpretation
@@ -1047,6 +1066,7 @@ function buildSubjects(a: {
   unlocked: boolean
   gate: string
   monthLabel: string
+  monthNote: string | null
   subjectsRead: boolean
 }): SubjectsPage {
   const block = a.overview.subjects
@@ -1073,6 +1093,7 @@ function buildSubjects(a: {
   return {
     rows,
     monthLabel: a.monthLabel,
+    monthNote: a.monthNote,
     note: block.note,
     notRecorded: block.state === 'not_recorded' ? 'Subjects are not recorded for this workspace yet, so there is no quarter-on-quarter table to draw.' : null,
     gate: a.unlocked ? null : a.gate,
@@ -1099,7 +1120,7 @@ function buildCategory(a: {
   gate: string
   windowApplied: boolean
   themesRead: boolean
-  monthOutside: boolean
+  monthNote: string | null
   thisQuarter: WindowReading
   lastQuarter: WindowReading
 }): CategoryPage {
@@ -1120,7 +1141,7 @@ function buildCategory(a: {
     // is not even inside it, and the sentence has to say so — see
     // `monthBasisClause`.
     basis: `Movers and the mix are ${a.monthLabel} against ${prevMonthLabel}.${
-      a.monthOutside ? ` ${a.monthLabel} is outside this quarter — it is the month the product is in now.` : ''
+      a.monthNote ? ` ${a.monthNote}` : ''
     }`,
     // THE GATE IS A CAVEAT, NOT A MASTHEAD. It says the quarter view needs six
     // monthly readings and names how many stand behind this one, which reads
@@ -1162,10 +1183,17 @@ function previousMonthOf(month: string): string {
 
 // ---- page 5 · rivals ----------------------------------------------------------
 
-function buildRivals(a: { overview: OverviewData; competitive: CompetitiveSurfaceData | null }): RivalsPage {
+function buildRivals(a: {
+  overview: OverviewData
+  competitive: CompetitiveSurfaceData | null
+  monthLabel: string
+  monthNote: string | null
+}): RivalsPage {
   const co = a.competitive
   return {
     rows: a.overview.rivals.rows,
+    monthLabel: a.monthLabel,
+    monthNote: a.monthNote,
     recorded: a.overview.rivals.recorded,
     months: co?.standings.months ?? [],
     standings: co?.standings ?? null,

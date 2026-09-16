@@ -286,9 +286,24 @@ describe('what each page owes the reader', () => {
     expect(after.cover.stamp).not.toContain('still filling')
     expect(after.method.numbers[0].note).toBeUndefined()
     expect(after.category.basis).toContain('October is outside this quarter')
+    // EVERY PAGE THAT PRINTS A MONTH FIGURE, not three of five. Page 3 named
+    // its month and never said it fell outside the quarter, under a heading
+    // reading "Q3 2026 against Q2 2026"; page 5 named no month at all and took
+    // its meta from a different surface's read, printing "Sep 2026" while the
+    // rest of the sheet said October.
+    for (const key of ['quarterly.subjects', 'quarterly.rivals'] as const) {
+      const text = renderText(QUARTERLY_BLOCKS[key].render(after, 'app', ctx))
+      expect(text).toContain('October')
+      expect(text).toContain('October is outside this quarter')
+    }
+    expect(after.rivals.monthLabel).toBe('October')
     // And a review of the quarter it is standing in still says so.
     expect(quarterlyFixture().cover.stamp).toContain('Q3 2026 still filling')
     expect(quarterlyFixture().cover.stamp).not.toContain('outside this quarter')
+    for (const key of ['quarterly.subjects', 'quarterly.rivals'] as const) {
+      expect(renderText(QUARTERLY_BLOCKS[key].render(quarterlyFixture(), 'app', ctx)))
+        .not.toContain('outside this quarter')
+    }
   })
 
   it('states the rule of the moves page on the moves page', () => {
