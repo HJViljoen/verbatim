@@ -1,6 +1,6 @@
-import Link from 'next/link'
 
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
@@ -48,8 +48,8 @@ export const subjectsUnanswered: Block<SubjectsData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/reports`
     const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open the content brief →</a>
-      : <Link href={href} className="hover:underline">Open the content brief →</Link>
+      ? null
+      : openLink(mode, href, 'Open the content brief →')
 
     if (!u || empty) {
       return (

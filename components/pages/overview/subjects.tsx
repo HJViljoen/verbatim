@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { Sparkline } from '@/components/charts/sparkline'
@@ -116,8 +117,8 @@ export const overviewSubjects: Block<OverviewData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/subjects`
     const footer = email
-      ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
-      : <Link href={href} className="hover:underline">Open Subjects →</Link>
+      ? null
+      : openLink(mode, href, 'Open Subjects →')
     const frame = (children: ReactNode) => (
       <BlockFrame
         title={overviewSubjects.title}

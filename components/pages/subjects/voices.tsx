@@ -1,6 +1,6 @@
-import Link from 'next/link'
 
 import type { Block, QuoteRef } from '@/lib/blocks/types'
+import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuotes } from '@/components/blocks/quote'
 import { EMAIL } from '@/lib/email/theme'
@@ -28,9 +28,7 @@ export const subjectsVoices: Block<SubjectsData> = {
     const pane = data.selected
     const empty = subjectsVoices.emptyState(data)
     const href = `${ctx.appUrl}/dashboard/voice`
-    const footer = mode === 'email'
-      ? <a href={href} style={{ color: EMAIL.ink }}>Hear these voices in Voice →</a>
-      : <Link href={href} className="hover:underline">Hear these voices in Voice →</Link>
+    const footer = openLink(mode, href, 'Hear these voices in Voice →')
 
     if (!pane || empty) {
       return (

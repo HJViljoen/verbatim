@@ -98,3 +98,24 @@ describe('OV4 · rivals', () => {
     expect(markup).toContain('their own posts are not readable yet · Verbatim engineering')
   })
 })
+
+// A BRIEF'S PRINT ARM IS READ BY SOMEBODY OUTSIDE THE WORKSPACE (WP19): the
+// PDF and the /r/<token> share page. "Verbatim engineering" is a readiness
+// owner, which is right where a reader can open Settings › Readiness and an
+// internal label where they cannot; and "Open Competitive →" resolves, for
+// such a reader, to a login wall.
+describe('OV4 · rivals, read from outside the workspace', () => {
+  it('names the absence without naming our own owner', () => {
+    const print = renderText(overviewRivals.render(overviewFixture(), 'print', ctx))
+    const app = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(app).toContain('their own posts are not readable yet')
+    expect(app).toContain('Verbatim engineering')
+    expect(print).toContain('their own posts are not readable yet')
+    expect(print).not.toContain('Verbatim engineering')
+  })
+
+  it('draws no in-app affordance on paper', () => {
+    expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Competitive')
+    expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Competitive')
+  })
+})

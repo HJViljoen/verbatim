@@ -757,6 +757,13 @@ export const MOVES_MASTHEAD = MOVE_PROMISE
  */
 export const OWN_POSTS_UNREADABLE = '— not tracked · their own posts are not readable yet · Verbatim engineering'
 
+/** The same absence WITHOUT the owner, for a reader outside the workspace.
+ *  "Verbatim engineering" is a readiness owner — right on a page where a
+ *  tenant can go and look at Settings › Readiness, and an internal label in a
+ *  brief's PDF and on a `/r/<token>` share page, which is what WP19 put it in
+ *  front of. The absence is still named; only the owner is dropped. */
+export const OWN_POSTS_UNREADABLE_OUTSIDE = '— not tracked · their own posts are not readable yet'
+
 /** The precedence caveat OV4 carries (§7, bucket precedence). */
 export const RIVALS_CAVEAT =
   'A video that names both you and a rival counts in your audience only; the count of those is in the record.'

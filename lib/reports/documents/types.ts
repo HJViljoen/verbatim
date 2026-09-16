@@ -204,6 +204,10 @@ export interface DocumentMissingInput {
   id: string
   input: string
   owner: string
+  /** Which of the three owns it — so a later reader of the snapshot can tell a
+   *  promise ("we are building it") from an instruction ("name them in
+   *  Settings"). compose stores it; the type omitted it. */
+  ownerRole?: 'client' | 'ops' | 'engineering'
   unlocks: string
   sections: string[]
 }
