@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-import { LEADERSHIP_LINE, NOT_BUILT_YET, deliveryLine, type BriefCard } from '@/lib/reports/briefs'
+import { LEADERSHIP_LINE, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 
 // RP1 — the three brief cards (Phase 1 WP19, decision R).
 //
@@ -34,7 +34,7 @@ export function BriefCards({ cards }: { cards: readonly BriefCard[] }) {
             <p className="font-mono text-[10.5px] leading-[1.4] text-muted-foreground">{deliveryLine(c)}</p>
 
             <p className="mt-auto font-mono text-[10.5px] leading-[1.4] text-secondary-foreground">
-              {c.latest ? c.latest.readingLine : NOT_BUILT_YET}
+              {latestBriefLine(c)}
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-0.5">

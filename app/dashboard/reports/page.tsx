@@ -140,7 +140,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     supabase.from('weekly_reports').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
     supabase.from('report_snapshots').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('kind', 'report'),
     supabase.from('report_snapshots').select('id', { count: 'exact', head: true }).eq('client_id', clientId).in('kind', ['page', 'tile', 'agent_thread']),
-    supabase.from('reports').select('id, template_key, kind').eq('client_id', clientId).eq('kind', 'document'),
+    // `latest_snapshot_id` IS THE UNCAPPED ANSWER to "has this workspace ever
+    // built this brief?". The cards' own pool is the newest 100 kind='report'
+    // snapshots, and a claim about the WORKSPACE may not be drawn from a capped
+    // query (`latestBriefLine`, and the archive's own listCap precedent).
+    supabase.from('reports').select('id, template_key, kind, latest_snapshot_id').eq('client_id', clientId).eq('kind', 'document'),
     loadReportsPage(supabase, clientId).catch(() => null),
   ])
   // readRows, not `data ?? []`: a failed read and an empty archive render the
@@ -210,10 +214,15 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   // ── RP1: the three cards ───────────────────────────────────────────────
   // readRows, for the reason stated above: a failed read must not read as a
   // workspace that has never set a brief up.
-  const documentReports = readRows<{ id: string; template_key: string | null }>(reportRows, 'reports.documents')
+  const documentReports = readRows<{ id: string; template_key: string | null; latest_snapshot_id: string | null }>(reportRows, 'reports.documents')
   const scheduleRows = schedules?.schedules ?? []
+  // The pool the cards' `latest` is drawn from — the same 100 rows the Built
+  // list loads, weighed against the head count. Null means it searched
+  // everything, which is the only state in which "Never built" is a fact.
+  const briefPoolCappedAt = listCap([{ total: builtTotal.count, cap: LIST_CAP.built }])
   const cards: BriefCard[] = BRIEF_CARDS.map(({ role, artefact }) => {
     const latest = everyBuild.find((b) => b.template === role) ?? null
+    const reportRow = documentReports.find((r) => r.template_key === role) ?? null
     const schedule = scheduleRows.find((x) => isArtefact(x.artefact) && x.artefact === artefact) ?? null
     const recipients = schedule?.recipients ?? []
     return {
@@ -221,7 +230,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       artefact,
       label: briefLabel(artefact),
       what: briefWhat(artefact),
-      reportId: documentReports.find((r) => r.template_key === role)?.id ?? null,
+      reportId: reportRow?.id ?? null,
+      everBuilt: reportRow ? reportRow.latest_snapshot_id != null : null,
+      poolCappedAt: briefPoolCappedAt,
       latest: latest ? { snapshotId: latest.id, title: latest.title, readingLine: readingLine(readingStampOf(latest)) } : null,
       cadence: cadenceWord(schedule?.cadence ?? null),
       recipients,

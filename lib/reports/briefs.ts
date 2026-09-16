@@ -38,6 +38,13 @@ export interface BriefCard {
   /** False where the schedules could not be read at all. "Not on a schedule"
    *  is an assertion, and a failed read does not support it. */
   scheduleKnown: boolean
+  /** Has this workspace EVER built this brief? Off the `reports` row's own
+   *  `latest_snapshot_id`, which is uncapped — true, false where the row exists
+   *  and names nothing, null where there is no row at all. */
+  everBuilt: boolean | null
+  /** How many rows the builds list actually searched, where the workspace holds
+   *  more (`listCap`); null where it searched everything. */
+  poolCappedAt: number | null
 }
 
 /** The three the page draws, in the design's order. */
@@ -127,3 +134,28 @@ export function deliveryLine(card: Pick<BriefCard, 'cadence' | 'recipients' | 's
  * warning is about time, and the time is still here.
  */
 export const NOT_BUILT_YET = 'Never built for this workspace. Building one takes a few minutes.'
+
+/**
+ * The line under a card: when the last one read, or which silence this is.
+ *
+ * "NEVER BUILT FOR THIS WORKSPACE" IS A CLAIM ABOUT THE WORKSPACE, and the card
+ * drew it from `everyBuild.find(b => b.template === role)` over the newest 100
+ * `kind='report'` snapshots. That is precisely the defect the archive one
+ * section down already fixed — `listCap`, `dateFilterLine` and `emptyGroupLine`
+ * exist so it says "none of the ones we looked at" rather than "there are
+ * none". The same card could also say "Never built" while offering "Build it in
+ * the Studio" for a `reports` row that had been built, because `reportId` comes
+ * off the UNCAPPED read.
+ *
+ * So the uncapped read answers the question the capped one cannot: a `reports`
+ * row naming a `latest_snapshot_id` IS a brief this workspace has built,
+ * whether or not the snapshot is in the hundred we loaded.
+ */
+export function latestBriefLine(
+  card: Pick<BriefCard, 'latest' | 'everBuilt' | 'poolCappedAt'>,
+): string {
+  if (card.latest) return card.latest.readingLine
+  if (card.everBuilt) return 'Built before — the last one is not among the recent builds we looked at.'
+  if (card.poolCappedAt != null) return `Not among the ${card.poolCappedAt} most recent builds we looked at.`
+  return NOT_BUILT_YET
+}

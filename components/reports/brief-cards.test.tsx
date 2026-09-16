@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test/render'
-import { BRIEF_CARDS, LEADERSHIP_LINE, cadenceWord, cardSending, deliveryLine, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEF_CARDS, LEADERSHIP_LINE, cadenceWord, cardSending, deliveryLine, latestBriefLine, type BriefCard } from '@/lib/reports/briefs'
 import { BriefCards } from './brief-cards'
 
 const card = (over: Partial<BriefCard> = {}): BriefCard => ({
@@ -15,6 +15,8 @@ const card = (over: Partial<BriefCard> = {}): BriefCard => ({
   recipients: [],
   sending: false,
   scheduleKnown: true,
+  everBuilt: true,
+  poolCappedAt: null,
   ...over,
 })
 
@@ -78,6 +80,34 @@ describe('cardSending', () => {
   })
 })
 
+// "NEVER BUILT FOR THIS WORKSPACE" IS A CLAIM ABOUT THE WORKSPACE and the
+// card's `latest` comes from a query capped at 100 snapshots — the defect the
+// archive one section down already fixed with listCap and emptyGroupLine.
+describe('latestBriefLine', () => {
+  const none = { latest: null, everBuilt: null, poolCappedAt: null }
+
+  it('prints the reading line where there is a build to point at', () => {
+    expect(latestBriefLine(card())).toContain('read as at 16 Sep 2026')
+  })
+
+  it('claims nothing was ever built only where the pool searched everything', () => {
+    expect(latestBriefLine(none)).toContain('Never built for this workspace')
+    expect(latestBriefLine({ ...none, everBuilt: false })).toContain('Never built for this workspace')
+  })
+
+  it('says what was searched where the pool was capped', () => {
+    const line = latestBriefLine({ ...none, poolCappedAt: 100 })
+    expect(line).toBe('Not among the 100 most recent builds we looked at.')
+    expect(line).not.toContain('Never built')
+  })
+
+  it('never says "never built" about a report row that names a snapshot', () => {
+    const line = latestBriefLine({ ...none, everBuilt: true, poolCappedAt: 100 })
+    expect(line).toContain('Built before')
+    expect(line).not.toContain('Never built')
+  })
+})
+
 describe('cadenceWord', () => {
   it('is the client wording, and never a raw enum where one is known', () => {
     expect(cadenceWord('every_update')).toBe('Every update')
@@ -94,7 +124,7 @@ describe('the card', () => {
   })
 
   it('says it has never been built where it has not', () => {
-    const html = render(<BriefCards cards={[card({ latest: null, reportId: null })]} />)
+    const html = render(<BriefCards cards={[card({ latest: null, reportId: null, everBuilt: null })]} />)
     expect(html).toContain('Never built for this workspace')
     expect(html).toContain('Set it up in the Studio')
   })
