@@ -253,6 +253,12 @@ export const CHECK_NOT_RECORDED =
 export const CHECK_NO_WINDOW =
   'This update does not record the days it covered, so no week could be cut out of it and nothing was compared.'
 
+/** Printed when `anomaly_checks` says the check flagged and no flag row could
+ *  be read beside it. Not "nothing unusual" — the check fired — and not a count
+ *  of zero things, which `flaggedLine(0)` would have said. */
+export const CHECK_FLAGGED_NO_DETAIL =
+  'Something this week cleared the band, and what it was is not recorded.'
+
 export interface WeekCheckInput {
   state: WeekCheckState
   flags: WeekFlag[]
@@ -278,9 +284,13 @@ export function weekCheck(input: WeekCheckInput): WeekCheck {
   if (input.state === 'flagged') {
     const room = Math.max(0, Math.floor((FIRST_SCREEN_BUDGET - SENTENCE_FIGURES) / FLAG_FIGURES))
     const shown = input.flags.slice(0, Math.min(room, MAX_FLAGS))
+    // "0 things this week are unusual" was reachable: the arm is entered on the
+    // state alone, so an `outcome = 'flagged'` row whose `anomaly_flags` read
+    // came back empty printed a count of nothing. The check still fired, so the
+    // honest line says that and not the quiet one.
     return {
       state: 'flagged',
-      line: flaggedLine(shown.length),
+      line: shown.length > 0 ? flaggedLine(shown.length) : CHECK_FLAGGED_NO_DETAIL,
       baseline: null,
       reason: null,
       flags: shown,

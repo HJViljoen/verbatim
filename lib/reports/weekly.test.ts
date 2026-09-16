@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MAX_FLAGS } from '../reading/anomaly'
 import {
+  CHECK_FLAGGED_NO_DETAIL,
   FIRST_SCREEN_BUDGET,
   FLAG_FIGURES,
   NOTHING_UNUSUAL,
@@ -162,6 +163,16 @@ describe('weekCheck', () => {
         }).line,
     )
     expect(new Set(lines).size).toBe(lines.length)
+  })
+
+  // The flagged arm is entered on the state alone, so `outcome = 'flagged'`
+  // with an empty anomaly_flags read printed "0 things this week are unusual".
+  it('does not count zero things when the record flagged and no flag was read', () => {
+    const c = weekCheck({ state: 'flagged', flags: [], flaggedCount: 0 })
+    expect(c.state).toBe('flagged')
+    expect(c.line).toBe(CHECK_FLAGGED_NO_DETAIL)
+    expect(c.line).not.toMatch(/\b0 things\b/)
+    expect(c.line).not.toBe(NOTHING_UNUSUAL)
   })
 
   it('carries the suppression’s own reason and words', () => {

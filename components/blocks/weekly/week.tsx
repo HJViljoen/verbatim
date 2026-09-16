@@ -145,8 +145,11 @@ export const weeklyWeek: Block<WeeklyData> = {
   emptyState(data) {
     // NEVER NULL, and never "nothing": section 1 always says something, because
     // the reader came with a question and silence is not an answer to it. The
-    // check's own line IS the empty state when nothing fired.
-    return data.section1.check.state === 'flagged' ? null : data.section1.check.line
+    // check's own line IS the empty state when nothing fired — and when the
+    // record says something fired but no flag survived the read, which is a
+    // line of its own rather than a count of zero things.
+    const check = data.section1.check
+    return check.state === 'flagged' && check.flags.length > 0 ? null : check.line
   },
 }
 
