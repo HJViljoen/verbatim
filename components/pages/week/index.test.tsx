@@ -182,6 +182,26 @@ describe('WK §5 · for sales', () => {
     expect(text).toContain('Grounded answers to these sit in the sales brief.')
   })
 
+  it('puts the denominator on every ranked row, marked as the level it is', () => {
+    const markup = render(weekSales.render(weekFixture(), 'app', ctx))
+    expect(markup).toContain('<span data-copy="level">96 of 205 videos</span>')
+    assertCopyContract(markup)
+  })
+
+  it('says so, rather than printing bare counts, when there is no n to count against', () => {
+    // M3 unapplied → `windowVideos` null → `ForSalesData.videos` null. The page
+    // read "Brand controversy 3 · Brand association controversy 2" on Össur
+    // with no "of N" on any row and no n on the block.
+    const d = weekFixture()
+    const data = { ...d, sales: { ...d.sales, videos: null } }
+    for (const mode of MODES) {
+      const text = renderText(weekSales.render(data, mode, ctx))
+      expect(text, mode).toContain('so these counts have nothing to be a share of')
+      expect(text, mode).not.toContain('of 205 videos')
+      assertCopyContract(render(weekSales.render(data, mode, ctx)))
+    }
+  })
+
   it('counts switching comments before it caps them', () => {
     // The array holds the two the page shows; the stat has to say seven, or a
     // display cap reaches a salesperson as a measurement.

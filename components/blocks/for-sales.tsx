@@ -2,7 +2,7 @@ import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
-import { BlockRanked } from '@/components/blocks/bars'
+import { BlockRanked, type BlockRankedRow } from '@/components/blocks/bars'
 import { BlockStat } from '@/components/blocks/stat'
 import { forSalesEmpty, groupingLine, type ForSalesData, type SalesGroup, type SalesQuote } from '@/lib/blocks/for-sales'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -55,7 +55,8 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
 
           {d.objections.length > 0 ? (
             <Section title="The objections this update heard" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.objections)} />
+              <BlockRanked mode={mode} rows={rank(d.objections, d.videos)} />
+              {d.videos == null ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
               <Note mode={mode}>{groupingLine(d.grouping)}</Note>
               <Note mode={mode}>Grounded answers to these sit in the sales brief.</Note>
               <Quotes quotes={d.objections[0]?.quotes ?? []} mode={mode} />
@@ -95,8 +96,9 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
 
           {d.rivalComplaints.length > 0 ? (
             <Section title="What they complain about in a rival" mode={mode}>
-              <BlockRanked mode={mode} rows={rank(d.rivalComplaints)} />
+              <BlockRanked mode={mode} rows={rank(d.rivalComplaints, d.videos)} />
               <Note mode={mode}>Counted under videos about that rival, never under yours.</Note>
+              {d.videos == null && d.objections.length === 0 ? <Note mode={mode}>{NO_DENOMINATOR}</Note> : null}
             </Section>
           ) : null}
         </BlockFrame>
@@ -135,16 +137,40 @@ export function forSalesBlock<D>(key: string, pick: (data: D) => ForSalesData): 
   return block
 }
 
-/** Bars relative to the largest group, never to the denominator: a ranked list
- *  is about order and relative size, and scaling four objections against every
- *  video of the update would draw four invisible stubs. */
-function rank(groups: readonly SalesGroup[]) {
+/**
+ * The sentence for a ranked count with nothing to be a count OF.
+ *
+ * `d.videos` is null wherever the windowed read is not available — which is
+ * every workspace until M3 is applied — and a bare "Brand controversy 3" is the
+ * score rule (b) exists to stop. Named here rather than dropped, because
+ * printing three counts with no denominator anywhere and saying nothing about
+ * it is how a page stops being readable without looking broken.
+ */
+const NO_DENOMINATOR =
+  'The number of videos this update covered is not recorded for this workspace yet, so these counts have nothing to be a share of.'
+
+/**
+ * Bars relative to the largest group, never to the denominator: a ranked list
+ * is about order and relative size, and scaling four objections against every
+ * video of the update would draw four invisible stubs.
+ *
+ * THE COUNT CARRIES ITS DENOMINATOR AND IS MARKED AS THE LEVEL IT IS. A bare
+ * `fmtInt(g.videos)` marked `data-copy="figure"` by `BlockRanked` passed the
+ * copy contract while printing exactly what rule (b) forbids — my production
+ * render of Össur read "Brand controversy 3 · Brand association controversy 2"
+ * with no "of N" on any row and no n on the block. Marking it a level is what
+ * makes the rule apply; where there is no denominator to print, the count stays
+ * unmarked and `NO_DENOMINATOR` says why.
+ */
+function rank(groups: readonly SalesGroup[], of: number | null): BlockRankedRow[] {
   const max = Math.max(1, ...groups.map((g) => g.videos))
   return groups.map((g) => ({
     label: g.label,
     pct: (g.videos / max) * 100,
     color: 'var(--cat)',
-    count: fmtInt(g.videos),
+    count: of != null
+      ? <span data-copy="level">{fmtInt(g.videos)} of {fmtInt(of)} videos</span>
+      : fmtInt(g.videos),
   }))
 }
 

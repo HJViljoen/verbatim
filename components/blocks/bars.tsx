@@ -111,7 +111,7 @@ export function BlockRanked({
             label={r.label}
             pct={r.pct}
             color={tokenHex(r.color)}
-            count={typeof r.count === 'string' || typeof r.count === 'number' ? String(r.count) : ''}
+            count={r.count}
             badge={r.badge}
             dot
           />

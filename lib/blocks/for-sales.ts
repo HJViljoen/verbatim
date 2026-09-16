@@ -117,9 +117,14 @@ export function forSalesEmpty(data: ForSalesData): string | null {
     data.objections.length > 0 || data.praise.length > 0 ||
     data.switching.length > 0 || data.rivalComplaints.length > 0
   if (anything) return null
-  return data.videos != null
-    ? 'Nothing this update read was an objection, a switch or a piece of praise worth taking to a customer.'
-    : 'Nothing this update read was an objection, a switch or a piece of praise worth taking to a customer. This update covered no window, so there is nothing to count it against.'
+  const nothing = 'Nothing this update read was an objection, a switch or a piece of praise worth taking to a customer.'
+  // THE TWO REASONS THERE IS NO n ARE DIFFERENT FACTS. A run with no window
+  // covered no days; a run with a window whose month reading is not recorded
+  // here covered days nobody has counted. Keying both off `videos == null` told
+  // a reader with a thirty-day window that the update covered none.
+  if (data.window == null) return `${nothing} This update covered no window, so there is nothing to count it against.`
+  if (data.videos == null) return `${nothing} The number of videos it covered is not recorded for this workspace yet, so there is nothing to count it against.`
+  return nothing
 }
 
 /** "grouped by subject" / "grouped by theme, because no subjects are recorded
