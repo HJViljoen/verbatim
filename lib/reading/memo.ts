@@ -81,10 +81,22 @@ export function memoRead<T>(client: unknown, key: string, read: () => Promise<T>
   return started
 }
 
-/** A stable key fragment for a set of ids: order and duplicates must not make
- *  two identical asks look different. Long lists are named by their length and
- *  their bounds plus a cheap digest, because a key is a Map key and a
- *  three-thousand-id string is copied on every lookup. */
+/**
+ * A stable key fragment for a set of ids: order and duplicates must not make
+ * two identical asks look different.
+ *
+ * UP TO EIGHT IDS THIS IS AN IDENTITY. ABOVE THAT IT IS A DIGEST, and the rule
+ * stated two functions up — a key names every argument that changes the answer
+ * — holds only in the first case. A longer list is named by its size, its
+ * lowest and highest id and a 32-bit djb2 hash of all of them, because a key is
+ * a Map key and a three-thousand-id string is copied on every lookup. Two
+ * different sets that agree on all four would share an answer.
+ *
+ * A deliberate trade, said out loud rather than implied: the sets inside one
+ * request are a handful, they are one tenant's own objects, and a collision
+ * needs the size, both bounds and the hash to agree. A caller whose id sets are
+ * many, or not of its own making, should key on something it controls instead.
+ */
 export function idsKey(ids: readonly string[]): string {
   const sorted = [...new Set(ids)].sort()
   if (sorted.length <= 8) return sorted.join(',')
