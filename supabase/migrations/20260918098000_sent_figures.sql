@@ -363,6 +363,27 @@ alter table public.plan_checks
 comment on column public.plan_checks.notice is
   'What the reader was told about the document itself at the time of the check — "only the first N pages could be read", "the pages held no text". Null where nothing was wrong with it. Persisted because a judgement read back later must carry what it was made over.';
 
+-- AND THE TABLE'S GRANTS, SAID OUT LOUD WHILE WE ARE HERE.
+--
+-- `plan_checks` carries the Supabase default ALL grants — DELETE, INSERT,
+-- SELECT, UPDATE, TRUNCATE — to `anon` and `authenticated`, with RLS as its
+-- only protection and a SELECT policy as its only policy, so a write is
+-- refused by RLS rather than by a grant. That is a weaker posture than every
+-- Phase 0 table, and this migration is the one adding a column to it.
+--
+-- Nothing in the product loses anything: every write to `plan_checks` goes
+-- through the service role behind an authenticated route
+-- (app/api/ask/route.ts, app/api/agent/route.ts), and the one tenant-client
+-- read (lib/pages/agent-thread.ts) is a SELECT, which is exactly what is kept.
+-- The evaluations table beside it holds the same shape for the same reason.
+revoke all on public.plan_checks            from authenticated, anon;
+revoke all on public.plan_check_evaluations from authenticated, anon;
+grant select on public.plan_checks            to authenticated;
+grant select on public.plan_check_evaluations to authenticated;
+-- Stated, not inherited (the config_changes precedent, 2026-09-15).
+grant select, insert, update, delete on public.plan_checks            to service_role;
+grant select, insert, update, delete on public.plan_check_evaluations to service_role;
+
 -- ============================================================================
 -- EXERCISED before it was ever applied, on a throwaway PostgreSQL 17 cluster
 -- over schema-baseline.sql + every 2026 migration in filename order, applied
