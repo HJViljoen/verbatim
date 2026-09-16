@@ -204,7 +204,11 @@ describe('methodNumbers', () => {
       overview,
     )
     expect(rows.find((r) => r.label === 'Videos')?.value).toBe('1,084')
-    expect(rows.find((r) => r.label === 'Conversations')?.value).toBe('8,900')
+    // COMMENTS, not "Conversations": lib/calibration.ts fixes a conversation
+    // as one video and the comments it sparked, so 8,900 conversations beside
+    // 1,084 videos was the glossary's own pair contradicted on one table.
+    expect(rows.find((r) => r.label === 'Comments')?.value).toBe('8,900')
+    expect(rows.map((r) => r.label)).not.toContain('Conversations')
     expect(rows.find((r) => r.label === 'Updates')?.note).toBe('longest gap 35 days')
     expect(rows[0]).toMatchObject({ label: 'Period', value: '2026-07-01 – 2026-09-30', note: 'still filling' })
   })

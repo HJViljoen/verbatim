@@ -1171,7 +1171,12 @@ export function methodNumbers(inputs: RecordInputs | null, quarter: Quarter, ove
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)
   const comments = inputs.coverage.reduce((sum, c) => sum + c.comments, 0)
   out.push({ label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
-  out.push({ label: 'Conversations', value: fmtInt(comments), note: 'comments read across them' })
+  // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
+  // as one video and the comments it sparked, and says comments are always
+  // counted separately as comments — so this row under a Videos row labelled
+  // Conversations said the quarter held 1,388 videos and 11,840 conversations,
+  // where the glossary makes the conversations 1,388.
+  out.push({ label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
   out.push({
     label: 'Updates',
     value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
