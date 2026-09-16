@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildExtractPrompt, buildJudgePrompt, buildVerdictPrompt, clipInput } from './engine'
-import { dayStartIso, evaluateQuota } from './quota'
+import { dayStartIso } from './quota'
 
 // The prompts carry rules nothing downstream can re-check — whether the model
 // keeps the author's wording, whether it treats silence as a real answer,
@@ -66,18 +66,6 @@ describe('clipInput', () => {
     expect(out.clipped).toBe(true)
     expect(() => JSON.stringify(out.text)).not.toThrow()
     expect([...out.text]).toHaveLength(2)
-  })
-})
-
-describe('evaluateQuota', () => {
-  it('allows a tenant under the limit', () => {
-    expect(evaluateQuota(3, 25)).toEqual({ ok: true, used: 3 })
-  })
-
-  it('refuses at the limit with a message rather than a silent bill', () => {
-    const out = evaluateQuota(25, 25)
-    expect(out.ok).toBe(false)
-    if (!out.ok) expect(out.message).toContain('daily limit')
   })
 })
 

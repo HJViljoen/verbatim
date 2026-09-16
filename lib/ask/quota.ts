@@ -1,31 +1,26 @@
-import { ASK_DAILY_LIMIT, ASK_MONTHLY_CAP } from '../config'
+import { ASK_MONTHLY_CAP } from '../config'
 
 /**
- * Per-tenant daily cap on Ask submissions.
+ * What a client may spend on demand, and what they are told when they cannot.
  *
- * /api/ask is the first endpoint in this product where a logged-in user spends
- * real money on demand: three model calls, ~$0.35–0.50 for a large plan. With
- * no cap, one signed-in account submitting back to back is roughly $40/hour,
- * and twenty concurrent requests are far worse — Vercel will happily fan them
- * out and nothing in the code would notice.
+ * Ask is the only place in this product where a logged-in person spends real
+ * money by pressing a button: a question is two model calls, a document check
+ * is three and can reach ~$0.35–0.50 for a large plan. With no ceiling, one
+ * signed-in account submitting back to back is tens of dollars an hour, and
+ * twenty concurrent requests are far worse — Vercel will happily fan them out
+ * and nothing in the code would notice.
  *
- * A daily count is deliberately crude. It needs no new infrastructure (the
- * rows are already there), it cannot be defeated by concurrency in a way that
- * matters at this scale, and the failure mode is a clear message rather than a
- * silent bill. A real rate limiter belongs with the self-serve motion, next to
- * the signup gate's Turnstile.
+ * The counting is deliberately crude. It needs no new table (the rows are
+ * already there), it cannot be defeated by concurrency in a way that matters at
+ * this scale, and the failure mode is a sentence rather than a silent bill. A
+ * real reservation — a slot taken atomically before the call, the
+ * `suggestion_calls` shape — belongs with the self-serve motion, next to the
+ * signup gate's Turnstile.
+ *
+ * The daily variant retired with /api/ask (Phase 1 WP21): the monthly cap below
+ * is the whole ceiling now, on both faces of the one surface.
  */
 export type QuotaCheck = { ok: true; used: number } | { ok: false; message: string }
-
-export function evaluateQuota(usedToday: number, limit = ASK_DAILY_LIMIT): QuotaCheck {
-  if (usedToday >= limit) {
-    return {
-      ok: false,
-      message: `That is ${limit} checks today, which is the daily limit. It resets tomorrow — or tell us if you need more.`,
-    }
-  }
-  return { ok: true, used: usedToday }
-}
 
 /** Start of the current UTC day, as an ISO timestamp for the count query. */
 export function dayStartIso(now: Date): string {
