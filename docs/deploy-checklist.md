@@ -391,12 +391,30 @@ by; until they exist the whole product degrades honestly, which is why the
 apply may not precede the code deploy but may follow it by an hour.
 
 **M9.1 · `20260918098100_plan_check_notice.sql`**
+
+**The column's existence proves nothing here.** M9 already carries the same
+`alter table public.plan_checks add column if not exists notice text`, so
+`count(*) … where column_name='notice'` returns 1 after M9 alone and the check
+cannot fail. What M9.1 alone writes is the COLUMN-level ACL:
 ```sql
-select count(*) from information_schema.columns
- where table_name='plan_checks' and column_name='notice';
+select
+  (select count(*) from information_schema.columns
+     where table_name='plan_checks' and column_name='notice')                    as col,
+  (select a.attacl is not null from pg_attribute a
+     where a.attrelid = 'public.plan_checks'::regclass and a.attname = 'notice') as col_acl;
 ```
-Expect 1. (WP21's, small, and it is between M9 and M10 in filename order — do
-not skip it because the plan's table stops at M9.)
+Expect `col = 1` (true after M9 too) and **`col_acl = true`** (M9.1's, and only
+M9.1's — M9's grants on this table are table-level, which leaves
+`pg_attribute.attacl` null).
+
+**Do not skip the file**, even though the two overlap: `schema-baseline.sql`
+carries zero grant statements, so on a freshly built cluster `notice` is
+unreadable to `authenticated` without this line, and the file is one idempotent
+ALTER plus two grants. **But it should not stay a separate file.** Its own head
+says why it is one — M9 was being written in a sibling worktree and two
+packages creating one file is an add/add conflict at merge — and that reason
+expired when the branches merged. Folding it into M9 is a tidy for after the
+deploy, not during it.
 
 **M10 · `20260918099000_reading_indexes.sql`**
 ```sql
