@@ -288,7 +288,11 @@ export function missingInputs(
  * "Readiness" is the screen it is named on.
  */
 export function missingSentence(m: MissingInput): string {
-  return `${m.sections.join(' and ')} could not be filled: we have no ${m.input}. ${m.owner} closes this — ${trimStop(m.unlocks)}. It is the ${m.input} row on Settings › Readiness.`
+  // NOT "we have no {input}". Every readiness `input` is a noun phrase that
+  // already opens with its own article ("the rival accounts we read"), so the
+  // obvious wording reads "we have no the rival accounts we read". The verb
+  // carries the sentence instead, and the input is quoted as the row it is.
+  return `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}. ${m.owner} closes this — ${trimStop(m.unlocks)}. It is on Settings › Readiness.`
 }
 
 /** The line that opens the brief's own account of what it left out. */
