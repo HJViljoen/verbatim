@@ -14,7 +14,7 @@ import { isMonthlyData } from '../reports/monthly-build'
 import { renderWeeklyEmail } from '../email/weekly'
 import { renderMonthlyEmail } from '../email/monthly'
 import { recordSend } from '../reports/monthly-build'
-import { sentFigureRows } from '../reports/sent-figures'
+import { FIGURE_AUDIENCE, sentFigureRows } from '../reports/sent-figures'
 import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
 import { monthlyBlocksFor } from '../../components/blocks/monthly'
@@ -335,7 +335,16 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // send did not happen.
     if (recordable) {
       try {
-        const monthStatus = monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling')
+        // THE MONTH'S STATE IS READ, NEVER GUESSED. It decides whether "the
+        // report of {date} read X" is ever printed beside a live figure — a
+        // frozen month cannot have moved since — and it is written into a table
+        // with no UPDATE grant, so a guess is permanent. A snapshot built by an
+        // older deploy may carry neither key; the send stands and the figures
+        // are not recorded, which is the honest half of the pair.
+        const monthStatus = monthly ? monthly.monthStatus : weekly?.reading.monthStatus
+        if (monthStatus !== 'filling' && monthStatus !== 'frozen') {
+          throw new Error('the snapshot carries no month status, so what it printed is not recorded')
+        }
         const rows = sentFigureRows({
           month: recordable.month,
           monthStatus,
@@ -347,7 +356,7 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
           // month, and `sent_figures.month` is NOT NULL (lib/reports/weekly.ts
           // isMonthScopedFigure).
           figures: monthly ? recordable.figures : monthScopedFigures(recordable.figures),
-          figureAudience: 'artefact',
+          figureAudience: FIGURE_AUDIENCE,
         })
         await recordSend(admin, {
           clientId: schedule.client_id,

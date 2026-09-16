@@ -145,6 +145,19 @@ export interface StandingsInput {
 }
 
 /**
+ * The two populations a standings row is read over, in the words the block
+ * already prints them in ("Freitag, share of the panel's comments this month").
+ *
+ * SAID ON THE VERDICT BECAUSE NOTHING DOWNSTREAM CAN WORK IT OUT. Every other
+ * verdict in the product is a share of the audience it names; these two are a
+ * share of the PANEL, and the audience is the object. A reader of the verdict
+ * alone — the sent-figures record is one — has the audience string and nothing
+ * else to go on.
+ */
+const PANEL_VIDEOS = { measure: 'videos', population: 'the panel’s videos this month' } as const
+const PANEL_COMMENTS = { measure: 'comments', population: 'the panel’s comments this month' } as const
+
+/**
  * The standings: one row per brand, two shares each, both banded.
  *
  * A verdict is drawn only when both months were read over the SAME panel. A
@@ -152,6 +165,7 @@ export interface StandingsInput {
  * are two measurements — the same reason a rename refuses a comparison, and it
  * is recorded the same way, as `refused` with the counts still printed.
  */
+
 export function buildStandings(input: StandingsInput): StandingRow[] {
   const floor = input.floor ?? SHARE_BAND
   const byAudience = new Map(input.rows.map((r) => [r.audience, r]))
@@ -212,6 +226,12 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
           basis,
           value: { k: row.panel_videos, n: videos },
           baseline: { k: prev.panel_videos, n: prevVideos },
+          // WHAT THIS ROW IS A SHARE OF, said on the verdict. `audience` here
+          // names the OBJECT — `competitor:Freitag` — and n is the whole
+          // panel's, so anything deriving the denominator from the audience
+          // string would call it "Freitag's videos" and a record would store
+          // that sentence for ever (M9's denominator column has no UPDATE).
+          countedOver: PANEL_VIDEOS,
           floor,
           flags,
           ...(panelRefused ? { refused: 'tracking_change' as const } : {}),
@@ -233,6 +253,9 @@ export function buildStandings(input: StandingsInput): StandingRow[] {
         basis,
         value: { k: row.attention_comments, n: comments },
         baseline: { k: prev.attention_comments, n: prevComments },
+        // AND THIS ONE IS A SHARE OF COMMENTS, which is the whole reason the
+        // two verdicts on one row are two statements and not one.
+        countedOver: PANEL_COMMENTS,
         changePts: null,
         bandPts: null,
         state: 'too_little_data',

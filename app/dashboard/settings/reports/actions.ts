@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { SCHEDULE_RECIPIENTS_MAX } from '@/lib/config'
 import { actorStamp, recordConfigChange } from '@/lib/config-log'
-import { DEFAULT_SCHEDULE_STARTER } from '@/lib/schedules/default'
+import { starterKeyFor } from '@/lib/schedules/artefact'
 import { normaliseRecipients, splitRecipients } from '@/lib/schedules/validate'
 import { ARTEFACTS, ARTEFACT_COPY, isArtefact, isBuildable, notBuiltYet } from '@/lib/settings/artefacts'
 import { isMissingArtefact } from '@/lib/settings/reports-load'
@@ -140,10 +140,12 @@ export async function updateArtefactRecipients(
       client_id: clientId,
       name: label,
       // Every schedule needs exactly one source (report_schedules_one_source).
-      // A new artefact row points at the starter until WP17 and WP19 give each
-      // artefact its own; the artefact column is what actually decides what is
-      // sent, and the starter is the fallback the builder already understands.
-      starter_key: DEFAULT_SCHEDULE_STARTER,
+      // The artefact column is what decides what is sent; the starter is the
+      // fallback, and it names THIS artefact's own starter where there is one
+      // (lib/schedules/artefact.ts starterKeyFor) rather than the weekly
+      // report's for every row. An artefact with no starter and no builder
+      // keeps the default and stays inert.
+      starter_key: starterKeyFor(parsed.data.artefact),
       artefact: parsed.data.artefact,
       cadence: parsed.data.artefact === 'weekly' ? 'every_update'
         : parsed.data.artefact === 'quarterly' ? 'quarterly' : 'monthly',

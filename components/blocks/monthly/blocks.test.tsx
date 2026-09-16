@@ -4,7 +4,9 @@ import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
+import { fmtInt, fmtPct } from '@/lib/format'
+import { sentFigureRows } from '@/lib/reports/sent-figures'
+import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
 
@@ -339,9 +341,104 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
+  // OV5's own unlock is "Scoring, and the pre-filled monthly card, are not built
+  // yet. They will land on Market." — build status about an unshipped feature,
+  // and a page name, in an email to a client's staff. The artefact answers the
+  // question a reader actually has (why is there no score?) and says nothing
+  // about what is built.
+  it('say nothing about what is not built yet, in any mode', () => {
+    for (const data of STATES) {
+      for (const mode of MODES) {
+        const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, mode, ctx))
+        expect(text).not.toContain('not built yet')
+        expect(text).not.toContain('will land on Market')
+        expect(text).not.toContain('Press Track this')
+      }
+    }
+  })
+
+  it('still print the rows, the promise and the figures the page declares', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
+    expect(text).toContain(MONTHLY_MOVES_UNLOCK)
+    expect(text).toContain(data.overview.moves.masthead)
+    for (const row of data.overview.moves.rows) expect(text).toContain(row.line)
+  })
+
   it('merge into one figure table with no key printed two ways', () => {
     const data = monthlyFixture()
     const merged = mergeFigures(ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data).figures))
     expect(Object.keys(merged).length).toBeGreaterThan(0)
+  })
+})
+
+describe('what the artefact printed and what the record keeps', () => {
+  // THE ASSERTION NOTHING MADE BEFORE. `sent_figures` is append-only — no
+  // UPDATE grant and a BEFORE UPDATE trigger — so a row that disagrees with the
+  // sheet it was written from is a permanently wrong statement about a client's
+  // month. The two come off one reading in production; a fixture can put them
+  // out of step (and did: a mover's verdict carried another row's label and
+  // counts), and the render tier is the only place that can catch it.
+  const recorded = (data: ReturnType<typeof monthlyFixture>) => {
+    const answers = ALL_MONTHLY_BLOCKS.map((b) => blockAnswers(b, data))
+    return sentFigureRows({
+      month: data.month,
+      monthStatus: data.monthStatus,
+      artefact: 'monthly',
+      verdicts: answers.flatMap((a) => a.verdicts),
+      figures: mergeFigures(answers.map((a) => a.figures)),
+      figureAudience: 'artefact',
+    })
+  }
+
+  it('state the same level, the same two sides and the same label per object', () => {
+    const data = monthlyFixture()
+    const rows = new Map(recorded(data).map((r) => [`${r.objectKind}/${r.objectId}`, r]))
+    const printed = renderText(MONTHLY_BLOCKS['monthly.movers'].render(data, 'app', ctx))
+    let checked = 0
+    for (const m of [...data.movers.growing, ...data.movers.fading]) {
+      const row = rows.get(`theme/${m.id}`)
+      if (!row) continue
+      checked += 1
+      expect(row.label).toBe(m.label)
+      expect(row.k).toBe(m.k)
+      expect(row.n).toBe(m.n)
+      expect(row.value).toBe(m.pct)
+      // And the sheet printed that level, beside that label, in those words.
+      expect(printed).toContain(m.label)
+      expect(printed).toContain(`${fmtPct(m.pct as number)} · ${fmtInt(m.k)} of ${fmtInt(m.n)}`)
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+
+  // The covering rule joins a token to a verdict by the object's NAME, and the
+  // fixture's OV1 tokens used to read "share of the month" where the loader
+  // writes "<label>'s share of the month" — so the rule the record is built on
+  // fired on no fixture anywhere, and one reading of one theme was filed as
+  // three statements.
+  it('file one reading of one object once, however many blocks printed it', () => {
+    const data = monthlyFixture()
+    const rows = recorded(data)
+    const lead = data.overview.sentence.lead!
+    expect(rows.some((r) => r.objectKind === 'theme' && r.objectId === lead.objectId)).toBe(true)
+    for (const token of ['t1_share', 't1_videos']) {
+      expect(rows.some((r) => r.objectId === token)).toBe(false)
+    }
+  })
+
+  // A rival is read on two populations in one section: the object and the
+  // audience are the same on both and only the measure differs.
+  it('keep a rival’s two readings apart, each under its own population', () => {
+    const rival = recorded(monthlyFixture()).filter((r) => r.objectKind === 'rival')
+    expect(rival.map((r) => r.measure).sort()).toEqual(['comments', 'videos'])
+    expect(rival.find((r) => r.measure === 'comments')?.denominator).toBe('the panel’s comments this month')
+    expect(rival.find((r) => r.measure === 'videos')?.denominator).toBe('the panel’s videos this month')
+  })
+
+  it('never file two rows under one object and one measure', () => {
+    for (const data of STATES) {
+      const keys = recorded(data).map((r) => `${r.audience}/${r.objectKind}/${r.objectId}/${r.measure}`)
+      expect(new Set(keys).size).toBe(keys.length)
+    }
   })
 })

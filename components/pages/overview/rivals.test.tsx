@@ -78,10 +78,15 @@ describe('OV4 · rivals', () => {
     expect(text).toContain('tracked until 9 Sep')
   })
 
-  it('declares one attention figure per observed brand', () => {
+  it('declares one attention figure per observed brand, and every verdict a row drew', () => {
     const { figures, verdicts } = blockAnswers(overviewRivals, overviewFixture())
     expect(Object.keys(figures).sort()).toEqual(['dual_mention_videos', 'rival_client_attention', 'rival_competitor_freitag_attention'])
-    expect(verdicts).toHaveLength(2)
+    // Three: Freitag's two — its share of the panel's comments and its share of
+    // the panel's videos, which are two readings of one object — and the
+    // client's one. A row's verdicts are what the record keeps, and each says
+    // what it was read over.
+    expect(verdicts).toHaveLength(3)
+    expect(verdicts.map((v) => v.countedOver?.measure)).toEqual(['comments', 'videos', 'comments'])
   })
 
   it('is email-safe', () => {

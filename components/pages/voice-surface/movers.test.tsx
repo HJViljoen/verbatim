@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { copyViolations } from '@/lib/test/copy-contract'
 import { renderText } from '@/lib/test/render'
 import { voiceMovers } from './movers'
-import { mover, refusedVoiceFixture, verdict, voiceFixture } from './fixture'
+import { mover, refusedVoiceFixture, voiceFixture } from './fixture'
 
 // VO2 · what moved, on one axis (Phase 1 WP13).
 
@@ -52,7 +52,7 @@ describe('voiceMovers', () => {
 
   it('keeps every arm inside the length the data asked for', () => {
     const many = Array.from({ length: 14 }, (_, i) =>
-      mover({ id: `g${i}`, label: `Growing ${i}`, verdict: verdict({ objectId: `g${i}`, changePts: 3 - i / 10 }) }))
+      mover({ id: `g${i}`, label: `Growing ${i}`, verdict: { changePts: 3 - i / 10 } }))
     const base = voiceFixture()
     const six = draw({ ...base, movers: { ...base.movers, growing: many, shown: 6 } })
     const ten = draw({ ...base, movers: { ...base.movers, growing: many, shown: 10, expanded: true } })

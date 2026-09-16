@@ -233,6 +233,15 @@ create table if not exists public.sent_figures (
   -- movement in points. Without it "13" is unreadable and a confirming line
   -- could compare a percentage with a count.
   unit         text not null check (unit in ('pct', 'videos', 'comments', 'pts')),
+  -- WHAT k AND n COUNT, and part of the key rather than a description of it.
+  -- One object is read on two populations in one artefact: a rival's cut of the
+  -- panel's videos and its cut of the panel's comments are two statements, made
+  -- under one object_id and one audience, differing only in this. Without it in
+  -- the grain the second insert conflicts with the first and the record keeps
+  -- whichever was computed first, under the other's denominator. Defaulted to
+  -- the product's own default population so a writer that predates the column
+  -- still lands a row.
+  measure      text not null default 'videos' check (measure in ('videos', 'comments')),
   -- The two sides the share was measured on. Null on a unit that is not a
   -- share — a count has no k and n, it IS k.
   k            int,
@@ -271,7 +280,7 @@ create table if not exists public.sent_figures (
   -- When it was written down, which is when it was sent. Distinct from
   -- reading_at by the length of a render.
   sent_at      timestamptz not null default now(),
-  primary key (client_id, snapshot_id, audience, object_kind, object_id)
+  primary key (client_id, snapshot_id, audience, object_kind, object_id, measure)
 );
 
 comment on table public.sent_figures is
@@ -281,7 +290,9 @@ comment on column public.sent_figures.object_kind is
 comment on column public.sent_figures.object_id is
   'A subjects.id, a theme_registry.id (never themes.id — a per-run row id — and never the label), the literal competitor:<name> audience string, an insight kind slug, or a figure token. Text and unkeyed on purpose: a frozen statement must survive a re-minted registry row.';
 comment on column public.sent_figures.audience is
-  'The literal bucket string, competitor_name included verbatim. A NAME, not an identity: renaming a rival leaves its sent figures under the old string and no later visit re-keys them — the same rule month_denominators.audience carries, and the reason a rename is a logged break rather than an edit.';
+  'The literal bucket string, competitor_name included verbatim — a NAME, not an identity: renaming a rival leaves its sent figures under the old string and no later visit re-keys them, the same rule month_denominators.audience carries, and the reason a rename is a logged break rather than an edit. ONE VALUE IS NOT A BUCKET: ''artefact'' (lib/reports/sent-figures.ts FIGURE_AUDIENCE) files the artefact-level tokens, which are readings of no audience at all and carry object_kind = ''figure''. It cannot collide with a bucket string — a rival''s is prefixed ''competitor:'' and the pooled ones are named constants — and a join on this column against month_denominators.audience must exclude it.';
+comment on column public.sent_figures.measure is
+  'videos | comments — what k and n count, and the sixth part of the primary key. A rival is read on two populations in one artefact (its share of the panel''s videos, its share of the panel''s comments) under one object_id and one audience; without the measure in the grain the two collide and one is stored under the other''s denominator.';
 comment on column public.sent_figures.denominator is
   'The population the value is a share of, in the reader''s words. Stored rather than assumed: the same object is read against three denominators on one page, and a share quoted without its population cannot be checked against next month''s.';
 comment on column public.sent_figures.month_status is
@@ -331,8 +342,8 @@ language plpgsql
 set search_path = public, pg_temp
 as $guard$
 begin
-  raise exception 'a sent figure is never rewritten: snapshot %, month %, audience %, % %',
-    old.snapshot_id, old.month, old.audience, old.object_kind, old.object_id
+  raise exception 'a sent figure is never rewritten: snapshot %, month %, audience %, % % (%)',
+    old.snapshot_id, old.month, old.audience, old.object_kind, old.object_id, old.measure
     using errcode = 'restrict_violation',
           hint = 'A figure that has been sent is a statement made to named people on a date. Write a new reading; do not correct an old one.';
   return null;

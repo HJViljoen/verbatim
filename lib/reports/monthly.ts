@@ -99,6 +99,32 @@ export const monthlyRuleFor = (status: MonthlyStatus): string =>
   status === 'frozen' ? MONTHLY_RULE_FROZEN : MONTHLY_RULE
 
 /**
+ * What section 5 says about scoring, ON THE ARTEFACT.
+ *
+ * OV5's own sentence is "Scoring, and the pre-filled monthly card, are not
+ * built yet. They will land on Market." That was argued for an in-app surface,
+ * where Market is a page the reader can click and the sentence answers "why is
+ * this column empty here and not there?". Mailed to a client's staff it is
+ * build status about an unshipped feature and a page name they have no account
+ * for — pipeline jargon by the calibration rule, in the one artefact that goes
+ * to people outside the workspace. WP17's weekly report never carried OV5, so
+ * the monthly one is the first artefact that would have sent it.
+ *
+ * WHAT A CLIENT NEEDS FROM IT IS WHY THERE IS NO SCORE COLUMN, and that answer
+ * is already on every row: a move is dated, and its first score lands with a
+ * named reading. So the artefact says that, and says nothing about what is or
+ * is not built.
+ */
+export const MONTHLY_MOVES_UNLOCK =
+  'Nothing here is scored yet. Each move carries the reading its first score lands with.'
+
+/** And the artefact's own words for a workspace that has dated nothing. OV5's
+ *  say "Press Track this on a subject or a theme", which is a control on a page
+ *  the reader of an email is not looking at. */
+export const MONTHLY_MOVES_EMPTY =
+  'No move has been dated yet, so there is nothing here to score.'
+
+/**
  * The reading's own caveats, said once, on the artefact.
  *
  * THE PAGE PRINTS THESE AND THE ARTEFACT DID NOT. `MonthlyData.notes` was
@@ -242,14 +268,6 @@ export function seriesTrail(months: readonly string[], values: readonly (number 
 export function shortMonth(month: string): string {
   const long = longMonth(month)
   return long.slice(0, 3)
-}
-
-/** "22% · 305 of 1,388" — a level and the count it rests on, never one alone
- *  (the copy contract's rule (b)). The weekly report's own `levelOf`, restated
- *  here rather than imported, so the monthly composer does not depend on the
- *  weekly one; they are one line and two artefacts. */
-export function levelLine(k: number, n: number): string {
-  return n > 0 ? `${fmtPct((k / n) * 100)} · ${fmtInt(k)} of ${fmtInt(n)}` : `${fmtInt(k)} videos`
 }
 
 // ---- the sent figures a live surface prints beside its own ---------------------

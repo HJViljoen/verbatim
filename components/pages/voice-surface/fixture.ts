@@ -37,15 +37,35 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   ...over,
 })
 
-export const mover = (over: Partial<Mover> & { id: string; label: string }): Mover => ({
-  k: 130,
-  n: 1388,
-  pct: 9.4,
-  verdict: verdict({ objectId: over.id, objectLabel: over.label }),
-  direction: null,
-  isNew: false,
-  ...over,
-})
+/**
+ * One mover row, with a verdict that is a verdict OF THAT ROW.
+ *
+ * THE OVERRIDE IS MERGED, NEVER SUBSTITUTED, and that is the whole point. A
+ * caller passing a whole `verdict({ objectId: 't2', changePts: 1.9 })` replaced
+ * the row's verdict with one carrying the DEFAULT label and the DEFAULT counts,
+ * so t2 printed "Zips failing after a year · 5.1% · 71 of 1,388" while its own
+ * verdict said "Will it survive a wet commute · 9.4% · 130 of 1,388". In
+ * production the two come off one reading and agree; in a fixture they diverged
+ * silently, and the record written from the verdicts is append-only — the render
+ * tier is the only thing between a mismatch and a permanently wrong statement.
+ * So the identity and the two sides come from the row and only the rest is
+ * overridable.
+ */
+export const mover = (
+  over: Omit<Partial<Mover>, 'verdict'> & { id: string; label: string; verdict?: Partial<Verdict> },
+): Mover => {
+  const { verdict: said, ...row } = over
+  const base = { k: 130, n: 1388, pct: 9.4, direction: null, isNew: false, ...row }
+  return {
+    ...base,
+    verdict: verdict({
+      objectId: over.id,
+      objectLabel: over.label,
+      value: { k: base.k, n: base.n },
+      ...said,
+    }),
+  }
+}
 
 const point = (month: string, k: number | null, videos: number | null): MonthPoint => ({
   month,
@@ -71,10 +91,10 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
   const params = { audience: INDUSTRY_AUDIENCE }
   const growing = [
     mover({ id: 't1', label: 'Will it survive a wet commute', k: 130, pct: 9.4, direction: 'growing' }),
-    mover({ id: 't2', label: 'Zips failing after a year', k: 71, pct: 5.1, verdict: verdict({ objectId: 't2', changePts: 1.9 }) }),
+    mover({ id: 't2', label: 'Zips failing after a year', k: 71, pct: 5.1, verdict: { changePts: 1.9 } }),
   ]
   const fading = [
-    mover({ id: 't3', label: 'Made from truck tarps', k: 99, pct: 7.1, verdict: verdict({ objectId: 't3', changePts: -2.5 }) }),
+    mover({ id: 't3', label: 'Made from truck tarps', k: 99, pct: 7.1, verdict: { changePts: -2.5 } }),
   ]
 
   return {
@@ -120,8 +140,8 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
     movers: {
       growing,
       fading,
-      flat: [mover({ id: 't4', label: 'Airline carry-on fit', k: 42, pct: 3, verdict: verdict({ objectId: 't4', state: 'no_clear_change', changePts: 0.3 }) })],
-      newcomers: [mover({ id: 't5', label: 'Second-hand resale value', k: 26, pct: 1.9, isNew: true, verdict: verdict({ objectId: 't5', state: 'too_little_data', changePts: null, bandPts: null }) })],
+      flat: [mover({ id: 't4', label: 'Airline carry-on fit', k: 42, pct: 3, verdict: { state: 'no_clear_change', changePts: 0.3 } })],
+      newcomers: [mover({ id: 't5', label: 'Second-hand resale value', k: 26, pct: 1.9, isNew: true, verdict: { state: 'too_little_data', changePts: null, bandPts: null } })],
       goneQuiet: [{ id: 't6', label: 'Festival season packs', lastHeard: '2026-06-01' }],
       shown: 6,
       expanded: false,
@@ -240,7 +260,7 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
     },
     movers: {
       ...base.movers,
-      growing: [mover({ id: 'r1', label: 'Admiration for personal resilience', k: 34, n: 388, pct: 8.8, verdict: verdict({ objectId: 'r1', changePts: -5.1, bandPts: 4, value: { k: 34, n: 388 } }) })],
+      growing: [mover({ id: 'r1', label: 'Admiration for personal resilience', k: 34, n: 388, pct: 8.8, verdict: { changePts: -5.1, bandPts: 4 } })],
       fading: [],
       flat: [],
       newcomers: [],

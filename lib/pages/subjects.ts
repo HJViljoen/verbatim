@@ -692,6 +692,47 @@ async function loadSubjectMoves(supabase: SupabaseClient, clientId: string): Pro
   }
 }
 
+/**
+ * The member insight ids of MANY subjects, in one read.
+ *
+ * One statement for a workspace's whole subject list rather than one per
+ * subject: the monthly report asks for every active subject at once, and N
+ * chunked reads fired together is the shape that costs an instance its IO
+ * budget. Null — never an empty map — where M4 is not applied, the same answer
+ * the single-subject read gives.
+ */
+export async function loadMemberInsightIdsBySubject(
+  supabase: SupabaseClient,
+  clientId: string,
+  subjectIds: readonly string[],
+): Promise<Map<string, string[]> | null> {
+  const out = new Map<string, string[]>(subjectIds.map((id) => [id, []]))
+  if (subjectIds.length === 0) return out
+  try {
+    const rowsOut = await selectAll<MembershipRow & { subject_id: string }>(() =>
+      supabase
+        .from(TABLE_SUBJECT_MEMBERSHIPS)
+        .select('subject_id, audience_insight_id')
+        .eq('client_id', clientId)
+        .in('subject_id', [...subjectIds])
+        .eq('member', true)
+        .order('audience_insight_id', { ascending: true }),
+    )
+    const seen = new Map<string, Set<string>>(subjectIds.map((id) => [id, new Set<string>()]))
+    for (const r of rowsOut) {
+      const held = out.get(r.subject_id)
+      const marked = seen.get(r.subject_id)
+      if (!held || !marked || marked.has(r.audience_insight_id)) continue
+      marked.add(r.audience_insight_id)
+      held.push(r.audience_insight_id)
+    }
+    return out
+  } catch (error) {
+    if (isMissingSubjects(error)) return null
+    throw error
+  }
+}
+
 /** The member insight ids of one subject, at any judge version. Id-set lookups
  *  stay on the base tables (AGENTS.md): a membership row cascades with its
  *  insight, so an id that resolves is an insight that is still live. */
@@ -1100,31 +1141,93 @@ async function loadVoices(
   supabase: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
-): Promise<{ voices: SubjectVoice[]; from: number; sampled: boolean }> {
-  if (insightIds.length === 0) return { voices: [], from: 0, sampled: false }
-  const ids = [...insightIds].slice(0, VOICES_POOL_INSIGHTS)
-  const citations = await fetchQuoteCitationsByAudience(supabase, ids)
+): Promise<VoiceRead> {
+  const read = await loadVoicesMany(supabase, clientId, [{ key: 'one', insightIds }])
+  return read.get('one') ?? NO_VOICES
+}
 
-  const pool: QuoteCitation[] = []
-  const seen = new Set<string>()
-  for (const id of ids) {
-    for (const c of (citations.get(id) ?? []).sort((a, b) => a.rank - b.rank)) {
-      const text = cleanQuote(c.quote)
-      const key = text.toLowerCase()
-      if (!text || seen.has(key)) continue
-      if (!readsAsHeroQuote(text, c)) continue
-      seen.add(key)
-      pool.push({ ...c, quote: text })
+/** What one subject's voice read answers with. */
+export interface VoiceRead {
+  voices: SubjectVoice[]
+  /** How many citations were looked at — inside the month, where one was
+   *  asked for. */
+  from: number
+  /** Whether either cap bit, so the block stops claiming a denominator. */
+  sampled: boolean
+  /** How many citations passed the readability gate BEFORE any month filter.
+   *  Zero is "nothing about this subject can be quoted at all", which is a
+   *  different silence from "nothing was quotable this month". */
+  readable: number
+}
+
+const NO_VOICES: VoiceRead = { voices: [], from: 0, sampled: false, readable: 0 }
+
+export interface VoiceReadOptions {
+  /** Keep only citations whose COMMENT falls in this month ('2026-09' or its
+   *  first day). A monthly artefact asks for one; the Subjects page, which is
+   *  read over a horizon and says so, asks for none. */
+  month?: string
+}
+
+/**
+ * The same read, for many subjects at once, in a fixed number of statements.
+ *
+ * WHY IT IS NOT A LOOP OVER `loadVoices`. The monthly report asks for one voice
+ * on every active subject, and a `Promise.all` over that is one chunked
+ * membership read plus a citations read plus a chunked comments read plus a
+ * chunked videos read PER SUBJECT — eight subjects is thirty-odd statements
+ * fired at one instance at once, on the send path. The morning of 2026-09-16 is
+ * what that costs: five agents reading production together exhausted the
+ * instance's IO budget and the live app returned 504s to paying users. Three
+ * reads here, whatever N is.
+ *
+ * AND THE RANKING IS STILL PER SUBJECT. One query across every subject would
+ * rank a loud subject's citations above a quiet one's and print the same quote
+ * twice; the reads are shared, the pool, the caps, the de-duplication and the
+ * round-robin are each drawn inside one subject exactly as they were.
+ */
+async function loadVoicesMany(
+  supabase: SupabaseClient,
+  clientId: string,
+  groups: readonly { key: string; insightIds: readonly string[] }[],
+  opts?: VoiceReadOptions,
+): Promise<Map<string, VoiceRead>> {
+  const out = new Map<string, VoiceRead>(groups.map((g) => [g.key, NO_VOICES]))
+  const capped = groups.map((g) => ({
+    key: g.key,
+    asked: g.insightIds.length,
+    ids: [...g.insightIds].slice(0, VOICES_POOL_INSIGHTS),
+  }))
+  const union = [...new Set(capped.flatMap((g) => g.ids))]
+  if (union.length === 0) return out
+  const citations = await fetchQuoteCitationsByAudience(supabase, union)
+
+  const pools = capped.map((g) => {
+    const pool: QuoteCitation[] = []
+    const seen = new Set<string>()
+    for (const id of g.ids) {
+      for (const c of (citations.get(id) ?? []).sort((a, b) => a.rank - b.rank)) {
+        const text = cleanQuote(c.quote)
+        const key = text.toLowerCase()
+        if (!text || seen.has(key)) continue
+        if (!readsAsHeroQuote(text, c)) continue
+        seen.add(key)
+        pool.push({ ...c, quote: text })
+      }
     }
-  }
-  if (pool.length === 0) return { voices: [], from: 0, sampled: false }
+    // WHAT WAS LOOKED AT, AND WHETHER THAT WAS ALL OF IT. Both caps are the
+    // block's to say: past either one the six are drawn from a sample and the
+    // meta line stops claiming a denominator.
+    return {
+      key: g.key,
+      sampled: g.asked > VOICES_POOL_INSIGHTS || pool.length > VOICES_POOL_CITATIONS,
+      considered: pool.slice(0, VOICES_POOL_CITATIONS),
+    }
+  })
 
-  // WHAT WAS LOOKED AT, AND WHETHER THAT WAS ALL OF IT. Both caps are the
-  // block's to say: past either one the six are drawn from a sample and the
-  // meta line stops claiming a denominator.
-  const sampled = insightIds.length > VOICES_POOL_INSIGHTS || pool.length > VOICES_POOL_CITATIONS
-  const considered = pool.slice(0, VOICES_POOL_CITATIONS)
-  const commentIds = considered.map((c) => c.commentId).filter((id): id is string => Boolean(id))
+  const commentIds = [
+    ...new Set(pools.flatMap((p) => p.considered.map((c) => c.commentId).filter((id): id is string => Boolean(id)))),
+  ]
   type CommentMeta = { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }
   const meta = new Map<string, CommentMeta>()
   if (commentIds.length > 0) {
@@ -1163,40 +1266,60 @@ async function loadVoices(
     }
   }
 
-  // Grouped by the audience the quote was HEARD in, then drawn round-robin so
-  // one loud side cannot fill the list.
-  const byAudience = new Map<string, QuoteCitation[]>()
-  for (const c of considered) {
-    const m = c.commentId ? meta.get(c.commentId) : undefined
-    const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
-    const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
-    byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
-  }
-  const order = [CLIENT_AUDIENCE, ...[...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort(), INDUSTRY_AUDIENCE]
-  const shown = voicesAcross(
-    order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
-  )
-
-  const voices = shown.map((c) => {
-    const m = c.commentId ? meta.get(c.commentId) : undefined
-    const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
-    const audience = (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
-    const from = voiceFrom(audience)
-    const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, from]
-      .filter(Boolean).join(' · ')
-    const url = key ? urlByKey.get(key) ?? null : null
-    return {
-      quote: {
-        ref: quoteRef.evidence(c.evidenceId),
-        text: c.quote,
-        ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
-      } as Quote,
-      cite,
-      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
-      from,
+  for (const p of pools) {
+    // A PERIOD IS DATED BY THE COMMENT (AGENTS.md), so a caller that asks for a
+    // month gets the citations whose comment falls in it and no others — a
+    // citation whose comment cannot be dated is not in any month. Without this
+    // an artefact headed September prints a June comment under it.
+    const considered = opts?.month
+      ? p.considered.filter((c) => {
+          const date = c.commentId ? meta.get(c.commentId)?.comment_date ?? null : null
+          return date != null && date.slice(0, 7) === opts.month!.slice(0, 7)
+        })
+      : p.considered
+    if (considered.length === 0) {
+      out.set(p.key, { voices: [], from: 0, sampled: p.sampled, readable: p.considered.length })
+      continue
     }
-  })
-  return { voices, from: considered.length, sampled }
+    const audienceOf = (c: QuoteCitation): string => {
+      const m = c.commentId ? meta.get(c.commentId) : undefined
+      const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+      return (key ? audienceByKey.get(key) : null) ?? INDUSTRY_AUDIENCE
+    }
+
+    // Grouped by the audience the quote was HEARD in, then drawn round-robin so
+    // one loud side cannot fill the list.
+    const byAudience = new Map<string, QuoteCitation[]>()
+    for (const c of considered) {
+      const audience = audienceOf(c)
+      byAudience.set(audience, [...(byAudience.get(audience) ?? []), c])
+    }
+    const order = [CLIENT_AUDIENCE, ...[...byAudience.keys()].filter((a) => a !== CLIENT_AUDIENCE && a !== INDUSTRY_AUDIENCE).sort(), INDUSTRY_AUDIENCE]
+    const shown = voicesAcross(
+      order.filter((a) => byAudience.has(a)).map((a) => ({ audience: a, items: byAudience.get(a) ?? [] })),
+    )
+
+    const voices = shown.map((c) => {
+      const m = c.commentId ? meta.get(c.commentId) : undefined
+      const key = m?.platform && m.video_id ? `${m.platform}::${m.video_id}` : null
+      const from = voiceFrom(audienceOf(c))
+      const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, from]
+        .filter(Boolean).join(' · ')
+      const url = key ? urlByKey.get(key) ?? null : null
+      return {
+        quote: {
+          ref: quoteRef.evidence(c.evidenceId),
+          text: c.quote,
+          ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
+        } as Quote,
+        cite,
+        href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
+        from,
+      }
+    })
+    out.set(p.key, { voices, from: considered.length, sampled: p.sampled, readable: p.considered.length })
+  }
+  return out
 }
 
 /**
@@ -1213,8 +1336,26 @@ export function loadSubjectVoices(
   supabase: SupabaseClient,
   clientId: string,
   insightIds: readonly string[],
-): Promise<{ voices: SubjectVoice[]; from: number; sampled: boolean }> {
+): Promise<VoiceRead> {
   return loadVoices(supabase, clientId, insightIds)
+}
+
+/**
+ * The same, for every subject at once — three statements, not three per subject.
+ *
+ * WHAT THE MONTHLY REPORT ACTUALLY ASKS FOR. One voice on each of N subjects is
+ * one question, and asking it N times is how a send path fires thirty
+ * concurrent statements at an instance whose IO budget a single morning of
+ * parallel readers can exhaust. The ranking, the caps and the round-robin stay
+ * inside one subject; only the reads are shared.
+ */
+export function loadSubjectVoicesMany(
+  supabase: SupabaseClient,
+  clientId: string,
+  groups: readonly { key: string; insightIds: readonly string[] }[],
+  opts?: VoiceReadOptions,
+): Promise<Map<string, VoiceRead>> {
+  return loadVoicesMany(supabase, clientId, groups, opts)
 }
 
 // ---- SU3 -----------------------------------------------------------------------

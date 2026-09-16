@@ -14,16 +14,15 @@ import {
   monthlySubject,
   seriesTrail,
   shortMonth,
-  type MonthlyStatus,
 } from '../reports/monthly'
 import { confirmingLine } from '../reports/monthly'
 import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure } from '../reports/sent-figures'
 import { loadOverview, type LedgerRow, type Mover, type OverviewData } from './overview'
 import { loadVoiceSurface, type GoneQuiet, type VoiceSurfaceData } from './voice-surface'
 import {
-  loadMemberInsightIds,
+  loadMemberInsightIdsBySubject,
   loadSubjectRows,
-  loadSubjectVoices,
+  loadSubjectVoicesMany,
   type SubjectVoice,
 } from './subjects'
 
@@ -191,23 +190,52 @@ export function spanOf(months: readonly string[]): string {
 /**
  * Why a subject shows no voice this month.
  *
- * TWO SILENCES AND THEY ARE NOT ONE. "Nothing was said about it" is a reading
- * of the month; "nothing readable was said" is a reading of what we could quote
- * (a quote must pass the same gate Overview's two voices pass — item 8). One
- * sentence for both would tell a client their customers were quiet when what
- * happened is that nothing they said could be quoted.
+ * FOUR SILENCES AND THEY ARE NOT ONE. "Nothing has been said about it at all"
+ * is a reading of the whole corpus; "nothing readable was said" is a reading of
+ * what we could quote (a quote must pass the same gate Overview's two voices
+ * pass — item 8); "nothing quotable was said THIS MONTH" is a reading of the
+ * month; and the fourth is this artefact's own doing — the same comment can be
+ * a member of two subjects and it is printed once. One sentence for all four
+ * would tell a client their customers were quiet when what happened is that we
+ * quoted them one section earlier.
  *
- * AND THERE IS NO THIRD. The first cut had "we do not count this subject yet"
- * as well, and it could never be reached: the loader filters to
- * `status === 'active'` and then asked whether the subject was active, so
- * `counted` was always true. A workspace with no confirmed subject is answered
- * one level up, by the section's own note, which says exactly that — an arm
- * only a test could reach is an arm a reader never sees.
+ * AND IT ALWAYS SAYS SOMETHING. A row with no voice and no note renders an
+ * empty paragraph under a subject's name, which reads as a bug rather than as a
+ * silence.
+ *
+ * NO ARM MAY CLAIM A MONTH THE POOL IS NOT SCOPED TO. `readable` counts the
+ * whole corpus and `inMonth` counts the month, because the citations are
+ * filtered by their comment's date (AGENTS.md: a period is dated by the
+ * comment) — so the month is named only in the arm that is about it.
  */
-export function voiceNote(input: { citations: number; readable: number }): string | null {
-  if (input.citations === 0) return 'nothing was said about this one this month'
-  if (input.readable === 0) return 'what was said this month could not be quoted — too short, or nothing but a handle'
-  return null
+export function voiceNote(input: { citations: number; readable: number; inMonth: number }): string {
+  if (input.citations === 0) return 'nothing has been said about this one yet'
+  if (input.readable === 0) return 'what was said about this one could not be quoted — too short, or nothing but a handle'
+  if (input.inMonth === 0) return 'nothing quotable was said about this one this month'
+  return 'the voices from this month are already quoted above'
+}
+
+/**
+ * What the subject line leads with — over everything the ARTEFACT printed.
+ *
+ * `overview.sentence.verdicts` is the page's pool: its subjects, and its movers
+ * THREE A SIDE (lib/pages/overview.ts). This artefact prints ten a side, so a
+ * mover at rank eight with the month's largest banded change was printed on
+ * page two and could never reach the subject line the WP says is "from the
+ * largest banded change". Both pools are joined here; `leadVerdict` still
+ * refuses anything that did not clear its band, and a verdict named twice by
+ * two sections is the same reading either way it is picked.
+ */
+export function leadOf(
+  sentenceVerdicts: readonly Verdict[],
+  movers: Pick<MoversSection, 'growing' | 'fading'>,
+): Verdict | null {
+  const printed = [
+    ...sentenceVerdicts,
+    ...movers.growing.map((r) => r.verdict),
+    ...movers.fading.map((r) => r.verdict),
+  ]
+  return leadVerdict(printed.filter((v) => isAnswer(v.state)))
 }
 
 /** When the next monthly reading lands: the first of the month after this one.
@@ -245,8 +273,8 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     // own "show ten" control sets, so the artefact prints exactly what a reader
     // who pressed it would see.
     loadVoiceSurface({ ...monthScope, params: { ...monthScope.params, movers: 'all' } }),
-    loadSubjectVoicesPerSubject(supabase, scope.clientId),
-    loadBriefLink(supabase, scope.clientId, readingAt),
+    loadSubjectVoicesPerSubject(supabase, scope.clientId, month),
+    loadBriefLink(supabase, scope.clientId, readingAt, month),
     loadConfirming(reading.client, scope.clientId, month),
   ])
 
@@ -276,7 +304,7 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
     href: '/dashboard/market',
   }
 
-  const lead = leadVerdict(verdicts.filter((v) => isAnswer(v.state)))
+  const lead = leadOf(verdicts, moversSection)
   return {
     brand: overview.brand,
     month,
@@ -396,11 +424,17 @@ async function buildMovers(
 /**
  * Section 6 — one voice per subject.
  *
- * SUBJECTS' OWN VOICE READ, ONE ROW EACH. `loadSubjectVoices` draws six voices
- * across the audiences for ONE subject; this asks it for each subject and keeps
- * the first, which is the highest-ranked citation that passes the readability
- * gate. The alternative — a single query across every subject — would rank one
- * loud subject's citations above another's and print the same subject twice.
+ * SUBJECTS' OWN VOICE READ, ONE ROW EACH. `loadSubjectVoicesMany` draws six
+ * voices across the audiences for each subject and this keeps the first, which
+ * is the highest-ranked citation that passes the readability gate. The ranking
+ * is still per subject — a single ranking across every subject would put one
+ * loud subject's citations above another's — and only the READS are shared.
+ *
+ * AND THE READS ARE THE POINT. A `Promise.all` over the subjects asked for one
+ * chunked membership read plus four more reads EACH, so eight subjects fired
+ * roughly thirty-five statements at one instance at once, on the send path.
+ * Two reads now cover every subject's memberships and citations whatever N is
+ * (lib/pages/subjects.ts `loadVoicesMany`).
  *
  * ONE PER SUBJECT AND NEVER TWO OF THE SAME WORDS. A comment can be a member of
  * two subjects; printing it twice under two headings reads as a copy-paste
@@ -409,6 +443,7 @@ async function buildMovers(
 async function loadSubjectVoicesPerSubject(
   supabase: SupabaseClient,
   clientId: string,
+  month: string,
 ): Promise<VoicesSection> {
   const href = '/dashboard/subjects'
   const subjects = await loadSubjectRows(supabase, clientId)
@@ -420,16 +455,21 @@ async function loadSubjectVoicesPerSubject(
     return { rows: [], note: 'No subject has been confirmed yet, so there is nothing to hear one voice on.', href }
   }
 
-  const perSubject = await Promise.all(
-    active.map(async (s) => {
-      const ids = await loadMemberInsightIds(supabase, clientId, s.id)
-      const read = await loadSubjectVoices(supabase, clientId, ids ?? [])
-      return { subject: s, ids: ids ?? [], read }
-    }),
+  const members = await loadMemberInsightIdsBySubject(supabase, clientId, active.map((s) => s.id))
+  const reads = await loadSubjectVoicesMany(
+    supabase,
+    clientId,
+    active.map((s) => ({ key: s.id, insightIds: members?.get(s.id) ?? [] })),
+    // THE MONTH THE ARTEFACT IS ABOUT, and the block asks "what does this month
+    // actually sound like?" — so the pool is dated by the comment rather than
+    // taken from the whole corpus and printed under a September heading.
+    { month },
   )
 
   const shown = new Set<string>()
-  const rows: SubjectVoiceRow[] = perSubject.map(({ subject, ids, read }) => {
+  const rows: SubjectVoiceRow[] = active.map((subject) => {
+    const ids = members?.get(subject.id) ?? []
+    const read = reads.get(subject.id) ?? { voices: [], from: 0, sampled: false, readable: 0 }
     const voice = read.voices.find((v) => !shown.has(v.quote.ref)) ?? null
     if (voice) shown.add(voice.quote.ref)
     return {
@@ -438,7 +478,7 @@ async function loadSubjectVoicesPerSubject(
       voice,
       note: voice
         ? null
-        : voiceNote({ citations: ids.length, readable: read.voices.length }),
+        : voiceNote({ citations: ids.length, readable: read.readable, inMonth: read.from }),
       href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}`,
     }
   })
@@ -473,6 +513,7 @@ async function loadBriefLink(
   supabase: SupabaseClient,
   clientId: string,
   readingAt: string,
+  month: string,
 ): Promise<BriefLink | null> {
   type ReportRow = { id: string; title: string; latest_snapshot_id: string | null; updated_at: string }
   const { data } = await supabase
@@ -509,15 +550,24 @@ async function loadBriefLink(
     public: Boolean(live) && !live?.password_hash,
     locked: Boolean(live?.password_hash),
     builtAt: report.updated_at,
-    // The brief is this reading's companion only if it was built during it.
-    stale: report.updated_at < monthStartOfReading(readingAt),
+    // The brief is this reading's companion only if it was built during the
+    // month the artefact is ABOUT.
+    stale: report.updated_at < monthStartInstant(month),
   }
 }
 
-/** The first instant of the month this reading is in — what "built during this
- *  reading" means. */
-function monthStartOfReading(readingAt: string): string {
-  return `${readingAt.slice(0, 7)}-01T00:00:00.000Z`
+/**
+ * The first instant of the month this artefact is about.
+ *
+ * OFF THE MONTH KEY, NEVER OFF THE READING INSTANT. The first cut sliced the
+ * UTC month out of `readingAt`, which for a tenant two hours ahead of UTC is
+ * the WRONG MONTH for any reading taken between local midnight and 02:00 on the
+ * 1st — the hours a monthly schedule fires in. The month key is the artefact's
+ * own answer to "which month is this?", so the brief's staleness and the
+ * report's title cannot disagree.
+ */
+function monthStartInstant(month: string): string {
+  return `${month.slice(0, 7)}-01T00:00:00.000Z`
 }
 
 /**
@@ -581,20 +631,27 @@ async function loadConfirming(
 
 /** A sent row whose object CAN be re-read as a month series. The narrowing is
  *  what lets the caller pass `objectKind` straight through. */
-type ReadableSent = StoredSentFigure & { objectKind: 'theme' | 'subject' }
+export type ReadableSent = StoredSentFigure & { objectKind: 'theme' | 'subject' }
 
-/** The row the subject line would have led with: the largest movement that
- *  cleared its band, and nothing where none did. */
-function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
+/**
+ * The row the subject line would have led with: the largest movement that
+ * cleared its band, and NOTHING where none did.
+ *
+ * THE FALLBACK WAS THE DEFECT. It sorted the rows that had not moved by the
+ * absolute value of a change that is null on every one of them — so the sort
+ * was a no-op and the line named whichever object `newestByObject` happened to
+ * emit first, and then said "<that theme> — September has closed at 7.1%, which
+ * is what the report of 1 Oct read." on a client's artefact about a figure the
+ * artefact never led with. `leadVerdict` (lib/reports/monthly.ts), which is the
+ * rule this one mirrors, returns null in exactly this case: a month in which
+ * nothing cleared its band has no lead, and a confirming line about no lead is
+ * a sentence with no reason to exist.
+ */
+export function pickLed(rows: readonly ReadableSent[]): ReadableSent | null {
   const moved = rows.filter((r) => r.verdict === 'moved' && r.changePts != null)
-  const pool = moved.length > 0 ? moved : rows
-  if (pool.length === 0) return null
-  return [...pool].sort((a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0))[0]
+  if (moved.length === 0) return null
+  return [...moved].sort((a, b) => Math.abs(b.changePts ?? 0) - Math.abs(a.changePts ?? 0))[0]
 }
-
-/** The status a stored month carries, in the monthly report's own vocabulary —
- *  the two types are the same two strings and this is where they meet. */
-export const monthlyStatusOf = (status: MonthStatus): MonthlyStatus => status
 
 export const briefStaleLine = (brief: BriefLink): string =>
   `Built ${shortDate(brief.builtAt)}, before this reading — the numbers in it are that day’s.`

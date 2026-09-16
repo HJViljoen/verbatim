@@ -7,7 +7,7 @@ import { loadMonthly } from '../pages/monthly'
 import { readingHandle } from '../reading/read'
 import { MONTHLY_BLOCK_KEYS, monthlyPeriod, type MonthlyBlockKey } from './monthly'
 import { stampSnapshotReading } from './reading-stamp'
-import { sentFigureRows, writeSentFigures, type SentFigureRow } from './sent-figures'
+import { FIGURE_AUDIENCE, sentFigureRows, writeSentFigures, type SentFigureRow } from './sent-figures'
 
 /**
  * Freezing the monthly report (Phase 1 WP18).
@@ -146,7 +146,7 @@ export async function snapshotMonthly(args: {
       artefact: 'monthly',
       verdicts,
       figures,
-      figureAudience: 'artefact',
+      figureAudience: FIGURE_AUDIENCE,
     }),
   }
 }

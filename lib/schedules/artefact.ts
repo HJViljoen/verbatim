@@ -28,10 +28,9 @@ export type Artefact = 'weekly' | 'monthly' | 'quarterly' | (string & {})
 export const WEEKLY_STARTER_KEY = 'weekly_report'
 
 /** And the monthly one's (Phase 1 WP18). A schedule names its artefact through
- *  `report_schedules.artefact` the moment M8 lands; until then a starter key is
- *  the only stored thing that has ever said what a schedule sends, and the
- *  monthly report needs one of its own so an operator can migrate a schedule
- *  before either migration is applied. */
+ *  `report_schedules.artefact` the moment M8 lands, and that column is what
+ *  `scheduleArtefact` reads first; the starter key is the FALLBACK, and it is
+ *  what a stored row still says if that column is ever rolled back under it. */
 export const MONTHLY_STARTER_KEY = 'monthly_report'
 
 /** The starter key it replaces. Still resolvable — stored rows name it. */
@@ -46,6 +45,27 @@ export const isMonthlyArtefact = (a: Artefact | null): boolean => a === 'monthly
 export const QUARTERLY_STARTER_KEY = 'quarterly_review'
 
 export const isQuarterlyArtefact = (a: Artefact | null): boolean => a === 'quarterly'
+
+/**
+ * The starter key a schedule for this artefact is stored under.
+ *
+ * WRITTEN, NOT ONLY DEFINED. Settings wrote `DEFAULT_SCHEDULE_STARTER` —
+ * 'weekly_report' — on every new row whatever artefact it was for, so
+ * `MONTHLY_STARTER_KEY`'s own docblock described a migration path no writer in
+ * the product took, and a monthly row's only correct answer lived in a column
+ * M8 adds. lib/settings/artefacts.ts names what that costs if the column is
+ * ever absent under a row that has one: the row "would send THE WEEKLY REPORT,
+ * monthly, to those addresses, under the monthly reading's name". The fallback
+ * now agrees with the column.
+ *
+ * An artefact with no starter of its own keeps the default: it has no builder
+ * either, so its row is recorded and inert until one lands.
+ */
+export function starterKeyFor(artefact: Artefact | null): string {
+  if (artefact === 'monthly') return MONTHLY_STARTER_KEY
+  if (artefact === 'quarterly') return QUARTERLY_STARTER_KEY
+  return WEEKLY_STARTER_KEY
+}
 
 /** What this schedule sends, or null where nothing has said. */
 export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): Artefact | null {

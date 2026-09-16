@@ -5,7 +5,9 @@ import {
   isMissingSentFigures,
   monthDate,
   newestByObject,
+  objectKey,
   sentFigureRows,
+  sentMonthOf,
   sentReadingOf,
   type StoredSentFigure,
 } from './sent-figures'
@@ -34,6 +36,7 @@ const stored = (over: Partial<StoredSentFigure> = {}): StoredSentFigure => ({
   label: 'Durability',
   value: 19,
   unit: 'pct',
+  measure: 'videos',
   k: 264,
   n: 1388,
   denominator: 'the category’s videos this month',
@@ -143,6 +146,21 @@ describe('what a delivered artefact writes down', () => {
     expect(rows.map((r) => r.objectId)).toEqual(['t1', 't1_last'])
   })
 
+  // Labels are a model's words, and two of them being prefixes of each other is
+  // ordinary. A bare containment test let "Zip" swallow a statement about
+  // "Zips failing after a year" on a coincidence of value — into a record that
+  // can never be corrected.
+  it('keeps a token whose object merely starts with a recorded one’s name', () => {
+    const rows = sentFigureRows({
+      ...base,
+      verdicts: [verdict({ objectLabel: 'Zip' })],
+      figures: {
+        t2_share: { value: 22, unit: 'pct', label: "Zips failing after a year's share of the month" },
+      },
+    })
+    expect(rows.map((r) => r.objectId)).toEqual(['t1', 't2_share'])
+  })
+
   it('keeps a token that reads the same number about something else', () => {
     // A coincidence of value is not a reading of the same thing, and the
     // month's own denominator names no object at all.
@@ -186,7 +204,85 @@ describe('what a delivered artefact writes down', () => {
   })
 })
 
+describe('one object read on two populations', () => {
+  // The rivals block returns [attentionVerdict, contentVerdict] for every row:
+  // one objectId, one audience, two measures. Keyed by the object alone they
+  // are one row, and the survivor carries the other's denominator.
+  const attention = verdict({
+    objectKind: 'rival',
+    objectId: 'competitor:Freitag',
+    objectLabel: 'Freitag',
+    audience: 'competitor:Freitag',
+    value: { k: 6200, n: 41200 },
+    countedOver: { measure: 'comments', population: 'the panel’s comments this month' },
+  })
+  const content = verdict({
+    objectKind: 'rival',
+    objectId: 'competitor:Freitag',
+    objectLabel: 'Freitag',
+    audience: 'competitor:Freitag',
+    value: { k: 11, n: 77 },
+    countedOver: { measure: 'videos', population: 'the panel’s videos this month' },
+  })
+
+  it('writes both readings, not one of them', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, content],
+      figures: {},
+    })
+    expect(rows).toHaveLength(2)
+    expect(rows.map((r) => r.measure).sort()).toEqual(['comments', 'videos'])
+  })
+
+  it('gives each of them the population it was actually read over', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, content],
+      figures: {},
+    })
+    const said = new Map(rows.map((r) => [r.measure, r]))
+    expect(said.get('comments')!.denominator).toBe('the panel’s comments this month')
+    expect(said.get('comments')!.n).toBe(41200)
+    expect(said.get('videos')!.denominator).toBe('the panel’s videos this month')
+    expect(said.get('videos')!.n).toBe(77)
+  })
+
+  it('still files one object read twice by two blocks as one row', () => {
+    const rows = sentFigureRows({
+      month: '2026-09',
+      monthStatus: 'filling',
+      artefact: 'monthly',
+      verdicts: [attention, attention],
+      figures: {},
+    })
+    expect(rows).toHaveLength(1)
+  })
+
+  it('keys the two apart, so a live surface asking for one cannot get the other', () => {
+    expect(objectKey('competitor:Freitag', 'rival', 'competitor:Freitag', 'comments')).not.toBe(
+      objectKey('competitor:Freitag', 'rival', 'competitor:Freitag', 'videos'),
+    )
+    // The default is the population every other verdict in the product is read
+    // over, so a caller that names no measure asks the question it means.
+    expect(objectKey('industry', 'theme', 't1')).toBe(objectKey('industry', 'theme', 't1', 'videos'))
+  })
+})
+
 describe('the denominator is named, never assumed', () => {
+  it('takes the verdict’s own population where it has one', () => {
+    expect(
+      denominatorOf({
+        audience: 'competitor:Freitag',
+        countedOver: { measure: 'comments', population: 'the panel’s comments this month' },
+      }),
+    ).toBe('the panel’s comments this month')
+  })
+
   it('names each of the three audiences in the reader’s words', () => {
     expect(denominatorOf({ audience: 'client' })).toBe('your own videos this month')
     expect(denominatorOf({ audience: 'industry' })).toBe('the category’s videos this month')
@@ -222,6 +318,34 @@ describe('reading the record back', () => {
       n: 1388,
       monthStatus: 'filling',
     })
+  })
+})
+
+describe('ordering two readings of one object', () => {
+  // Two rows rendered with different offsets name the later and the earlier
+  // instant and sort the wrong way round as text.
+  it('is by instant, not by the text PostgREST happened to render', () => {
+    const newest = newestByObject([
+      stored({ readingAt: '2026-10-01T08:00:00+02:00', value: 19 }),
+      stored({ readingAt: '2026-10-01T07:00:00+00:00', value: 22 }),
+    ])
+    expect([...newest.values()][0].value).toBe(22)
+  })
+
+  it('never lets a row nobody can date displace one that can be', () => {
+    const newest = newestByObject([
+      stored({ readingAt: '2026-10-01T06:00:00.000Z', value: 19 }),
+      stored({ readingAt: 'Sun 13 Sep', value: 99 }),
+    ])
+    expect([...newest.values()][0].value).toBe(19)
+  })
+
+  it('names the newest artefact as the month’s lead by the same rule', () => {
+    const month = sentMonthOf([
+      stored({ readingAt: '2026-10-01T08:00:00+02:00', artefact: 'weekly' }),
+      stored({ readingAt: '2026-10-01T07:00:00+00:00', artefact: 'monthly' }),
+    ])
+    expect(month?.artefact).toBe('monthly')
   })
 })
 

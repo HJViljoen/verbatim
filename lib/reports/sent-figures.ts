@@ -44,6 +44,21 @@ export type SentObjectKind = 'subject' | 'theme' | 'rival' | 'kind' | 'figure'
 
 export type SentUnit = 'pct' | 'videos' | 'comments' | 'pts'
 
+/**
+ * What the row's two sides count — and part of the grain, not decoration.
+ *
+ * ONE OBJECT, TWO READINGS, TWO ROWS. A rival's block prints its cut of the
+ * panel's videos AND its cut of the panel's comments; both verdicts carry the
+ * same objectKind, the same objectId and the same audience (`Verdict.countedOver`
+ * says why). Keyed by the object alone they collide: the record kept the first
+ * and dropped the second, and `sent_figures`' primary key would have refused it
+ * anyway. The measure is therefore in the key here and in the primary key there.
+ *
+ * 'videos' is the product's default population and what a row carries when its
+ * verdict says nothing else — the same default `Counted` documents.
+ */
+export type SentMeasure = 'videos' | 'comments'
+
 /** One row, as it is written. Every field here is a column; nothing is derived
  *  at read time, because a record that has to be recomputed to be read is not a
  *  record. */
@@ -55,6 +70,8 @@ export interface SentFigureRow {
   label: string
   value: number
   unit: SentUnit
+  /** What k and n count. Part of the grain — see `SentMeasure`. */
+  measure: SentMeasure
   k: number | null
   n: number | null
   denominator: string
@@ -80,9 +97,32 @@ export interface SentFigureRow {
 const KEY_SEP = String.fromCharCode(31)
 
 /** The key a live surface and the record look an object up by. ONE shape, here,
- *  so a page and the record cannot spell it two ways. */
-export const objectKey = (audience: string, kind: string, id: string): string =>
-  [audience, kind, id].join(KEY_SEP)
+ *  so a page and the record cannot spell it two ways. The measure is the fourth
+ *  part because an object read on two populations is two readings; it defaults
+ *  to the product's own default population, so a caller that has never heard of
+ *  the second one asks the question it means. */
+export const objectKey = (
+  audience: string,
+  kind: string,
+  id: string,
+  measure: SentMeasure = 'videos',
+): string => [audience, kind, id, measure].join(KEY_SEP)
+
+/**
+ * The audience an artefact-level token is filed under.
+ *
+ * NOT A BUCKET STRING, AND SAID SO. Every other value in this column is the
+ * literal audience a reading was taken in — 'client', 'industry',
+ * 'competitor:<name>' — which is the rule `month_denominators.audience` carries
+ * and what WP19's archive joins on. A token is the month's own size or the
+ * count of videos behind it: it belongs to no audience at all, and filing it
+ * under one would say a reading was taken in a slice it was not. The sentinel
+ * is spelled once, here; it is not a legal bucket string (a rival's is prefixed
+ * `competitor:`, and the three pooled ones are named constants), so it can
+ * never collide with one, and `object_kind = 'figure'` marks the same rows a
+ * second time for a reader who joins on the kind instead.
+ */
+export const FIGURE_AUDIENCE = 'artefact'
 
 /**
  * Every figure an artefact printed, from the blocks' own answers.
@@ -139,7 +179,8 @@ export function sentFigureRows(input: {
   artefact: string
   verdicts: readonly Verdict[]
   figures: FigureTable
-  /** The audience a token belongs to when it names none of its own. */
+  /** The audience a token belongs to when it names none of its own.
+   *  `FIGURE_AUDIENCE` unless a caller has a real bucket for it. */
   figureAudience?: string
 }): SentFigureRow[] {
   const out: SentFigureRow[] = []
@@ -149,11 +190,15 @@ export function sentFigureRows(input: {
   for (const v of verdictsWorthRecording(input.verdicts)) {
     const kind = objectKindOf(v.objectKind)
     if (!kind) continue
-    const k = key(v.audience, kind, v.objectId)
+    const measure = v.countedOver?.measure ?? 'videos'
+    const k = key(v.audience, kind, v.objectId, measure)
     // A VERDICT NAMED TWICE BY TWO BLOCKS IS ONE READING. Both the subjects
     // table and the movers list can carry the same theme in the same audience;
     // the primary key would refuse the second insert anyway, and a row dropped
     // here is a row a batch insert does not have to survive a conflict over.
+    // TWO MEASURES OF ONE OBJECT ARE NOT THAT, which is why the measure is in
+    // the key: a rival's two verdicts are one object read on two populations
+    // and both are statements the artefact made.
     if (seen.has(k)) continue
     seen.add(k)
     out.push({
@@ -164,6 +209,7 @@ export function sentFigureRows(input: {
       label: v.objectLabel,
       value: share(v.value.k, v.value.n),
       unit: 'pct',
+      measure,
       k: v.value.k,
       n: v.value.n,
       denominator: denominatorOf(v),
@@ -181,9 +227,13 @@ export function sentFigureRows(input: {
   const stated = out.map((r) => ({ label: r.label.toLowerCase(), pct: r.value, k: r.k }))
   const said = new Set<string>()
 
-  const audience = input.figureAudience ?? 'artefact'
+  const audience = input.figureAudience ?? FIGURE_AUDIENCE
   for (const [token, figure] of Object.entries(input.figures)) {
-    const k = key(audience, 'figure', token)
+    // A TOKEN'S MEASURE IS ITS OWN UNIT where that is a population, and the
+    // product's default where it is not: a share or a movement in this product
+    // is a share of videos, bar the one the standings draw.
+    const measure: SentMeasure = figure.unit === 'comments' ? 'comments' : 'videos'
+    const k = key(audience, 'figure', token, measure)
     if (seen.has(k)) continue
     const value = round1(figure.value)
     if (coveredByVerdict(figure.label, figure.unit, value, stated)) continue
@@ -199,6 +249,7 @@ export function sentFigureRows(input: {
       label: figure.label,
       value,
       unit: figure.unit,
+      measure,
       // A TOKEN HAS NO SIDES. `FigureTable` holds a value, a unit and a label
       // and nothing else — which is exactly why the object-keyed half exists —
       // so k and n are null here rather than guessed from the label.
@@ -238,6 +289,16 @@ interface StatedReading {
  * month`, `${label}, share of the month`, `videos that raised ${label}` — so
  * containment is the join, case-folded because one surface lower-cases its
  * label on the way in. A verdict with an empty label matches nothing.
+ *
+ * AND THE NAME HAS TO BE THE WHOLE NAME. A bare `includes` matches a label that
+ * merely STARTS one: a theme called "Zip" would cover "Zips failing after a
+ * year's share of the month" on a value coincidence, and the record would lose
+ * a statement about a different theme it can never be told about again (the
+ * table has no UPDATE). Labels are a model's words, so two of them being
+ * prefixes of each other is ordinary. The match therefore has to sit on a
+ * boundary at both ends — the start of the label or a non-letter before it, the
+ * end or a non-letter after it — which is what "'s share of the month" and
+ * "videos that raised X" both do.
  */
 function coveredByVerdict(
   label: string,
@@ -250,9 +311,23 @@ function coveredByVerdict(
   return stated.some(
     (s) =>
       s.label.length > 0 &&
-      l.includes(s.label) &&
+      namesObject(l, s.label) &&
       ((unit === 'pct' && s.pct === value) || (unit === 'videos' && s.k != null && s.k === value)),
   )
+}
+
+/** Does this token's label name that object — the whole name, and not the start
+ *  of a longer one? Both already lower-cased. */
+function namesObject(label: string, object: string): boolean {
+  const edge = /[\p{L}\p{N}]/u
+  let at = label.indexOf(object)
+  while (at !== -1) {
+    const before = at === 0 ? null : label[at - 1]
+    const after = at + object.length >= label.length ? null : label[at + object.length]
+    if ((before == null || !edge.test(before)) && (after == null || !edge.test(after))) return true
+    at = label.indexOf(object, at + 1)
+  }
+  return false
 }
 
 /**
@@ -285,10 +360,19 @@ function objectKindOf(kind: Verdict['objectKind']): SentObjectKind | null {
  * STORED RATHER THAN ASSUMED. The same subject is read against three
  * denominators on one page — your videos, your lead rival's, the category's —
  * and a share quoted without its population cannot be checked against next
- * month's. The audience string is the population, so the words are derived from
- * it once, here, and travel with the row.
+ * month's.
+ *
+ * THE VERDICT'S OWN ANSWER FIRST, AND THE AUDIENCE ONLY AFTER IT. Deriving the
+ * words from the audience string alone is right for every verdict whose
+ * audience IS its population and wrong for the two the standings draw, where
+ * the audience names the OBJECT and n is the panel's: `competitor:Freitag` read
+ * that way stored "15 pct · k 6,200 · n 41,200 · Freitag's videos this month"
+ * about a share of the panel's COMMENTS. `Verdict.countedOver` is the verdict
+ * saying what it counted; this falls back to the audience only where it says
+ * nothing.
  */
-export function denominatorOf(v: Pick<Verdict, 'audience'>): string {
+export function denominatorOf(v: Pick<Verdict, 'audience' | 'countedOver'>): string {
+  if (v.countedOver) return v.countedOver.population
   if (v.audience === 'client') return 'your own videos this month'
   if (v.audience.startsWith('competitor:')) return `${v.audience.slice('competitor:'.length)}’s videos this month`
   if (v.audience === 'industry' || v.audience === 'industry-other') return 'the category’s videos this month'
@@ -322,11 +406,29 @@ export function sentReadingOf(row: SentFigureRow & { readingAt: string }): SentR
 export function newestByObject(rows: readonly StoredSentFigure[]): Map<string, StoredSentFigure> {
   const out = new Map<string, StoredSentFigure>()
   for (const r of rows) {
-    const key = objectKey(r.audience, r.objectKind, r.objectId)
+    const key = objectKey(r.audience, r.objectKind, r.objectId, r.measure)
     const held = out.get(key)
-    if (!held || r.readingAt > held.readingAt) out.set(key, r)
+    if (!held || readingMs(r) > readingMs(held)) out.set(key, r)
   }
   return out
+}
+
+/**
+ * When a reading was taken, as an instant.
+ *
+ * NOT A STRING COMPARE. `reading_at` reaches here as whatever PostgREST
+ * rendered a `timestamptz` as, and two rows rendered with different offsets —
+ * '2026-10-01T08:00:00+02:00' beside '2026-10-01T07:00:00+00:00' — sort the
+ * wrong way round as text while naming the later and the earlier instant. "The
+ * report of {date} read X" would then quote the older artefact. The ordering
+ * this file is built on is an ordering of instants, so it compares instants.
+ *
+ * An unreadable value sorts OLDEST, so a row nobody can date never displaces
+ * one that can be.
+ */
+function readingMs(row: { readingAt: string }): number {
+  const t = Date.parse(row.readingAt)
+  return Number.isNaN(t) ? -Infinity : t
 }
 
 export interface StoredSentFigure extends SentFigureRow {
@@ -354,7 +456,7 @@ export function isMissingSentFigures(error: unknown): boolean {
 }
 
 /** The grain, named where the write happens: `sent_figures`' primary key. */
-const SENT_FIGURES_CONFLICT = 'client_id,snapshot_id,audience,object_kind,object_id'
+const SENT_FIGURES_CONFLICT = 'client_id,snapshot_id,audience,object_kind,object_id,measure'
 
 /**
  * Write what this artefact printed. Returns how many rows were written, or null
@@ -396,6 +498,7 @@ export async function writeSentFigures(
     label: r.label,
     value: r.value,
     unit: r.unit,
+    measure: r.measure,
     k: r.k,
     n: r.n,
     denominator: r.denominator,
@@ -438,7 +541,7 @@ export async function loadSentFigures(
     const rows = await selectAll<Record<string, unknown>>(() =>
       admin
         .from(SENT_FIGURES_TABLE)
-        .select('snapshot_id, month, audience, object_kind, object_id, label, value, unit, k, n, denominator, change_pts, band_pts, verdict, direction, month_status, artefact, reading_at, sent_at')
+        .select('snapshot_id, month, audience, object_kind, object_id, label, value, unit, measure, k, n, denominator, change_pts, band_pts, verdict, direction, month_status, artefact, reading_at, sent_at')
         .eq('client_id', args.clientId)
         .eq('month', monthDate(args.month))
         .order('reading_at', { ascending: true }),
@@ -463,6 +566,7 @@ function hydrate(row: Record<string, unknown>): StoredSentFigure {
     label: String(row.label ?? ''),
     value: Number(row.value ?? 0),
     unit: row.unit as SentUnit,
+    measure: (row.measure as SentMeasure | null) ?? 'videos',
     k: num(row.k),
     n: num(row.n),
     denominator: String(row.denominator ?? ''),
@@ -515,12 +619,12 @@ export function sentMonthOf(rows: readonly StoredSentFigure[] | null): SentMonth
   const byToken: Record<string, SentReading> = {}
   for (const r of newest) {
     if (r.objectKind === 'figure') byToken[r.objectId] = sentReadingOf(r)
-    else byObject[objectKey(r.audience, r.objectKind, r.objectId)] = sentReadingOf(r)
+    else byObject[objectKey(r.audience, r.objectKind, r.objectId, r.measure)] = sentReadingOf(r)
   }
   // THE NEWEST ARTEFACT, not the newest row: four weekly readings and a monthly
   // one can all carry September, and "the report of {date}" means the last
   // thing we told this client about it.
-  const lead = [...rows].sort((a, b) => (a.readingAt < b.readingAt ? 1 : -1))[0]
+  const lead = [...rows].sort((a, b) => readingMs(b) - readingMs(a))[0]
   return {
     readingAt: lead.readingAt,
     artefact: lead.artefact,
