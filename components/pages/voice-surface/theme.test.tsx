@@ -15,6 +15,28 @@ const ctx = blockContext('', EMAIL, { audience: 'industry-other' })
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceTheme.render(data, mode, ctx))
 
 describe('voiceTheme', () => {
+  // "0 OF THE VOICES" WAS BOTH DEFECTS AT ONCE: not English on the zero path,
+  // and a count with a definite article and no denominator on every other.
+  // Rendered on production: Össur "0 of the voices", Sealand "6 of the voices".
+  it('names the voices against the n behind the theme, and says "Voices" when there are none', () => {
+    expect(draw()).toContain('2 of 182 voices')
+    expect(draw()).not.toContain('of the voices')
+
+    const none = voiceFixture()
+    none.theme.quotes = []
+    none.theme.quoteCites = []
+    expect(draw(none)).toContain('Voices')
+    expect(draw(none)).toContain('No comment behind this theme can be quoted.')
+    expect(draw(none)).not.toContain('0 of 182 voices')
+    expect(draw(none)).not.toContain('voices No comment')
+
+    // No theme row for this registry entry: the count stands on its own rather
+    // than inventing a denominator.
+    const unknown = voiceFixture()
+    unknown.theme.quotesOf = null
+    expect(draw(unknown)).toContain('2 voices')
+  })
+
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [voiceFixture(), refusedVoiceFixture()]) {
       for (const mode of MODES) {

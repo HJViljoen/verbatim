@@ -310,6 +310,13 @@ export interface ThemeBlock {
   onCamera: string | null
   quotes: Quote[]
   quoteCites: string[]
+  /** How many quotes the theme has behind it at all — `themes.evidence_count`,
+   *  the same n the on-camera line divides. Null where the run carries no theme
+   *  row for this registry entry. The block prints "2 of 182 voices" with it,
+   *  because a count with a definite article and no denominator ("2 of the
+   *  voices") says nothing a reader can check — and on the zero path it was not
+   *  English. */
+  quotesOf: number | null
   /** The spoken line and the on-screen text behind the strongest evidence. */
   spoken: SpokenLine | null
   onScreen: SpokenLine | null
@@ -1312,7 +1319,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     tone: null,
     toneNote: null,
     onCamera: null,
-    quotes: [], quoteCites: [],
+    quotes: [], quoteCites: [], quotesOf: null,
     spoken: null, onScreen: null,
     withheld: 0,
     conclusionHref: '/dashboard/market',
@@ -1380,6 +1387,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
   // per-run row id that must never be a cross-run key (AGENTS.md).
   let quotes: Quote[] = []
   let quoteCites: string[] = []
+  let quotesOf: number | null = null
   let withheld = 0
   let onCamera: string | null = null
   let spoken: SpokenLine | null = null
@@ -1400,6 +1408,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     if (themeRow) {
       description = description ?? themeRow.description
       onCamera = onCameraScope(themeRow.video_evidence_count, themeRow.evidence_count)
+      quotesOf = themeRow.evidence_count
       const insightIds = (themeRow.supporting_insight_ids ?? []).slice(0, EVIDENCE_PER_THEME)
       const videoIds = (themeRow.supporting_video_ids ?? []).slice(0, 4)
       const [evidenceRes, videoRes] = await Promise.all([
@@ -1528,6 +1537,7 @@ async function buildTheme(input: ThemeInput): Promise<ThemeBlock> {
     quoteCites,
     spoken,
     onScreen,
+    quotesOf,
     withheld,
     // A LINK, NOT A LIST (decision Q). Market's MK1 owns "what we concluded
     // this month"; this page carries the reader there with the theme selected,

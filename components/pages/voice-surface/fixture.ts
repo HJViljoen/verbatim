@@ -164,6 +164,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
         { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
       ],
       quoteCites: ['in the comments', 'in the comments'],
+      quotesOf: 182,
       spoken: { text: 'One bag, three years, no regrets.', cite: 'TikTok · 11 Sep · a category video', href: 'https://example.test/v' },
       onScreen: { text: '1 bag. 3 years. 0 regrets', cite: 'TikTok · 11 Sep · a category video', href: null },
       withheld: 4,

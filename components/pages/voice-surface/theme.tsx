@@ -61,6 +61,13 @@ function Line({ label, mode, children }: { label: string; mode: RenderMode; chil
   )
 }
 
+/** "2 of 182 voices", or just "Voices" when there are none to count. */
+function voicesLabel(t: ThemeBlock): string {
+  if (t.quotes.length === 0) return 'Voices'
+  if (t.quotesOf == null) return `${fmtInt(t.quotes.length)} ${t.quotes.length === 1 ? 'voice' : 'voices'}`
+  return `${fmtInt(t.quotes.length)} of ${fmtInt(t.quotesOf)} voices`
+}
+
 /** The spoken line or the on-screen text, with where it came from. */
 function Said({ line, label, mode }: { line: SpokenLine; label: string; mode: RenderMode }) {
   const cite = (
@@ -256,7 +263,13 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
             )}
           </Line>
 
-          <Line label={`${fmtInt(t.quotes.length)} of the voices`} mode={mode}>
+          {/* "0 OF THE VOICES" IS NOT ENGLISH AND NAMES NO DENOMINATOR. The
+              label read `${n} of the voices` — rendered on production as
+              Össur's "0 of the voices", above "No comment behind this theme can
+              be quoted". Overview's equivalent is "2 of 83 voices", and this
+              block already knows the 83: three lines down it prints "9 of the
+              182 quotes behind this theme were said on camera". */}
+          <Line label={voicesLabel(t)} mode={mode}>
             {t.quotes.length > 0 ? (
               <BlockQuotes
                 mode={mode}
