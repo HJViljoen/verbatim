@@ -453,6 +453,26 @@ export function axisNote(sides: readonly SubjectSide[], floorN: number): string 
   return parts.length > 0 ? parts.join(' ') : null
 }
 
+/**
+ * The caveats a subject reading may carry.
+ *
+ * NOT THE CLUSTERING'S. `buildSeries` labels a run of months whose clustering
+ * key is unrecorded, because two of a THEME's months either side of a
+ * re-clustering are not the same object. A subject is not a theme: its
+ * membership is a judge's answer, pinned by `JUDGE_VERSION`, and `buildSides`
+ * says so in its own arithmetic (`regime: 'n/a'` on every point). Printing
+ * "We did not record how themes were grouped for Apr 2021 to Sep 2026" under a
+ * subject's axis is the page refusing a caveat in its numbers and printing it
+ * in its prose — which is what BOTH tenants read at every horizon.
+ *
+ * And the notes come from the SUBJECT'S series or from nowhere. They used to
+ * fall back to `history`, which spans 2019-01-01 to now for the axis
+ * arithmetic, so a page drawing one month named sixty.
+ */
+export function subjectNotes(notes: readonly MonthLabel[] | null | undefined): MonthLabel[] {
+  return (notes ?? []).filter((n) => n.kind !== 'clustering_changed')
+}
+
 /** The day this month stops moving, off the reading layer's own rule. */
 export function freezesOn(month: string): string {
   return freezeBoundary(month).slice(0, 10)
@@ -816,7 +836,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
     window,
     axis,
     substrate: subjectSet?.numeratorSubstrate ?? history.substrate,
-    notes: subjectSet?.notes ?? history.notes,
+    notes: subjectNotes(subjectSet?.notes),
     list,
     selected,
     record: {

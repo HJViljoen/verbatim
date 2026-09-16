@@ -11,6 +11,7 @@ import {
   recordWindow,
   selectSubject,
   setLine,
+  subjectNotes,
   sideFigures,
   unansweredLead,
   voiceFrom,
@@ -164,6 +165,27 @@ describe('unansweredLead', () => {
 
   it('states the basis once, in the block’s own words', () => {
     expect(UNANSWERED_BASIS).toContain('counts, not shares')
+  })
+})
+
+describe('subjectNotes', () => {
+  const clustering = {
+    kind: 'clustering_changed' as const,
+    text: 'We did not record how themes were grouped for Apr 2021 to Sep 2026, so those months are not strictly comparable with the ones after them.',
+    months: ['2021-04-01'],
+  }
+  const filling = { kind: 'still_filling' as const, text: 'Still filling — this month is still taking comments.' }
+
+  it('drops the theme-clustering caveat a subject\u2019s own arithmetic refuses', () => {
+    // buildSides puts `regime: 'n/a'` on every point because a subject's
+    // membership is a judge's answer, not a clustering artefact. The page
+    // cannot refuse the caveat in its numbers and print it in its prose.
+    expect(subjectNotes([clustering, filling])).toEqual([filling])
+  })
+
+  it('says nothing at all when no subject is drawn', () => {
+    expect(subjectNotes(null)).toEqual([])
+    expect(subjectNotes(undefined)).toEqual([])
   })
 })
 
