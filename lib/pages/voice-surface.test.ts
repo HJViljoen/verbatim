@@ -13,6 +13,7 @@ import {
   firstSentences,
   flatMovers,
   heardLine,
+  largestRead,
   moversNote,
   newMovers,
   onCameraReach,
@@ -172,6 +173,29 @@ describe('the one axis', () => {
       mover({ id: `t${i}`, label: `T${i}`, isNew: true, k: 100 - i }))
     expect(newMovers(rows, MOVERS_HERE)).toHaveLength(6)
     expect(newMovers(rows, MOVERS_EXPANDED)).toHaveLength(10)
+  })
+})
+
+describe('largestRead', () => {
+  it('opens the largest reading of the month, not the largest of the axis', () => {
+    const rows = [
+      mover({ id: 'a', label: 'A', k: 4 }),
+      mover({ id: 'b', label: 'B', k: 34 }),
+      mover({ id: 'c', label: 'C', k: 12 }),
+    ]
+    expect(largestRead(rows)).toBe('b')
+  })
+
+  it('never opens a theme that was not said this month', () => {
+    // Össur, own-brand audience: "Price and availability questions" led the
+    // axis and read 0 of 19 videos in September. Opened, it printed a
+    // calibrated level and six quotes over a zero numerator.
+    expect(largestRead([mover({ id: 'z', label: 'Z', k: 0 })])).toBeNull()
+  })
+
+  it('settles a tie by label rather than by whatever order a read came back in', () => {
+    const rows = [mover({ id: 'b', label: 'B', k: 9 }), mover({ id: 'a', label: 'A', k: 9 })]
+    expect(largestRead(rows)).toBe('a')
   })
 })
 

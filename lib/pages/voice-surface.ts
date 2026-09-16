@@ -494,6 +494,21 @@ export function newMovers(movers: readonly Mover[], shown: number): Mover[] {
     .slice(0, shown)
 }
 
+/**
+ * The theme VO3 opens when no link asked for one: the largest reading of the
+ * month, and never a zero.
+ *
+ * The first cut took pool order — `loadTopObjects` ranks by comments over the
+ * WHOLE drawn axis — so a theme that dominated the axis and was not said at
+ * all this month opened the pane. On Össur's own-brand audience that is
+ * exactly what happened.
+ */
+export function largestRead(movers: readonly Mover[]): string | null {
+  const read = movers.filter((m) => m.k > 0)
+  if (read.length === 0) return null
+  return [...read].sort((a, b) => b.k - a.k || a.label.localeCompare(b.label))[0].id
+}
+
 /** The sentence VO2 prints when no arm of the axis has a row. */
 export function moversNote(input: {
   read: boolean
@@ -1020,14 +1035,24 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // out" the page drew "Beautiful design that works", state 'ready', with
   // nothing saying a different theme was on screen. A saved or shared link did
   // the same thing.
+  //
+  // AND A THEME WITH NO VIDEOS THIS MONTH IS NOT OPENED AT ALL. The reading
+  // layer answers 0 rather than null where a denominator exists and the theme
+  // carried no row, so the pool admits zero-numerator rows — they belong in
+  // the movers, where a theme that fell to nothing is a real fading row. They
+  // do not belong under this block's heading: opened, Össur's own-brand page
+  // drew "Price and availability questions · 0% · too little data · Early
+  // signal · 0 of 19 videos", six quotes from the run, a "Said on camera" line
+  // and a link to "The 0 videos behind it". A calibrated level over a zero
+  // numerator is the score-without-evidence the contract exists to stop.
   const askedId = params.theme ?? null
   const askedRow = askedId ? pool.find((m) => m.id === askedId) ?? null : null
   const asked = askedId
-    ? { id: askedId, label: registryById.get(askedId)?.canonical_label ?? null, found: askedRow != null }
+    ? { id: askedId, label: registryById.get(askedId)?.canonical_label ?? null, found: askedRow != null && askedRow.k > 0 }
     : null
   const openId = asked
     ? (asked.found ? askedId : null)
-    : [...growing, ...fading, ...flat, ...pool].map((m) => m.id).find((id) => seriesById.has(id)) ?? null
+    : largestRead(pool)
 
   const themeBlock = await buildTheme({
     supabase,
