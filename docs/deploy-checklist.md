@@ -724,8 +724,26 @@ monthly send is the artefact nobody has seen against a frozen month.
 
 ### 7.4 · Screenshots and the preview
 
-- `node --env-file=.env.local --import tsx scripts/shot.ts` — the nine pages on
-  both tenants, for Heinrich.
+- **Screenshots — TWO invocations, one per tenant.** `scripts/shot.ts` signs in
+  once at the top of a run (`SHOT_EMAIL` / `SHOT_PASSWORD`, defaulting to the
+  demo tenant) and has no tenant loop and no mid-run session switch, so "both
+  tenants" is two commands with two logins and two `--out` directories. It also
+  defaults `--base` to `http://localhost:3000`; against production say so:
+
+  ```
+  SHOT_EMAIL=<össur login> SHOT_PASSWORD=<…> \
+    node --env-file=.env.local --import tsx scripts/shot.ts \
+    --base https://app.verbatimintel.com --out scratch/shots-ossur
+  SHOT_EMAIL=<sealand login> SHOT_PASSWORD=<…> \
+    node --env-file=.env.local --import tsx scripts/shot.ts \
+    --base https://app.verbatimintel.com --out scratch/shots-sealand
+  ```
+
+  It shoots nineteen URLs — the nine surfaces plus the parked pages and the
+  deep-link follows — and `--only <prefix>` narrows it. **Open the first PNG of
+  each directory and check the workspace name before you trust the set**: the
+  credentials come from the environment, and a run that silently signed in as
+  the demo tenant looks exactly like a run that worked.
 - The weekly report preview for Össur, read against the page: same
   month-to-date figures.
 - `node --env-file=.env.local --import tsx scripts/reading-timing.ts --page overview --rounds 2 --client <uuid>` — read the SECOND round. WP23's target
