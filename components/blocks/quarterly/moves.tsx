@@ -23,9 +23,15 @@ import { Note, Row, Rule, Stored } from './parts'
 // and the title is the operator's, and marking either would claim a
 // provenance it does not have.
 //
-// "ACTED ON 2 OF 5" COUNTS DECISIONS MADE INSIDE THE QUARTER, not decisions
-// standing. A ledger row decided in June is not something you did this quarter,
-// and a quarterly review that counted it would be flattering itself.
+// THE ACTED LINE IS NOT QUARTER-SCOPED, AND SAYS SO ON THE PAGE. It once read
+// "You acted on N of 12 this quarter", which was quarter-scoped on neither
+// side: the numerator counted decisions dated inside the quarter, and the
+// denominator was the twelve OLDEST rows this page happens to DRAW out of a
+// ledger that runs to 56 and 64. The ledger has no quarter — every identity
+// ever recommended is in it — so the page takes the Market page's own
+// sentence, over the real total, composed once in lib/pages/market-surface.ts.
+// The MOVES above it are genuinely quarter-scoped: a move carries the day it
+// was declared.
 
 export const quarterlyMoves: Block<QuarterlyData> = {
   key: 'quarterly.moves',

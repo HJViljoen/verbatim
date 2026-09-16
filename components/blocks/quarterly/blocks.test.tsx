@@ -5,6 +5,7 @@ import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
 import { CLIENT_AUDIENCE } from '@/lib/rivals'
+import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
 import { closedFixture, formingFixture, quarterlyFixture } from './fixture'
 
@@ -160,6 +161,15 @@ describe('what each page owes the reader', () => {
     expect(forming.category.quarterVolume).toBeNull()
     const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx))
     expect(text).toContain('not recorded for this workspace yet')
+  })
+
+  it('counts the advice ledger over the whole ledger, not over what it drew', () => {
+    // "You acted on N of 12 this quarter" divided decisions dated inside the
+    // quarter by the twelve OLDEST rows the page draws, out of 56 and 64.
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.moves'].render(data, 'app', ctx))
+    expect(text).toContain('every piece of advice this product has ever given you')
+    expect(text).not.toMatch(/acted on \d+ of \d+ this quarter/)
+    expect(data.moves.actedLine).toBe(marketFixture().advice.actedLine)
   })
 
   it('states the rule of the moves page on the moves page', () => {

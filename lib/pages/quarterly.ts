@@ -210,7 +210,9 @@ export interface MovesPage {
   moves: MoveRow[]
   movesNote: string | null
   advice: AdviceRow[]
-  /** "You acted on 2 of 5 this quarter." */
+  /** The Market page's own sentence, over the WHOLE ledger and not the twelve
+   *  rows drawn: "You have acted on 7 of 64 — every piece of advice this
+   *  product has ever given you." Never quarter-scoped; see buildMoves. */
   actedLine: string
   adviceNote: string | null
   claims: ClaimRow[]
@@ -1032,15 +1034,19 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
   const inQuarter = (day: string | null): boolean => !!day && day >= a.quarter.from && day <= a.quarter.to
   const moves = (m?.moves.rows ?? []).filter((r) => inQuarter(r.declaredAt.slice(0, 10)))
   const advice = m?.advice.rows ?? []
-  const acted = advice.filter((r) => inQuarter(r.decidedAt?.slice(0, 10) ?? null)).length
   return {
     moves,
     movesNote: m ? (m.moves.recorded ? m.moves.empty : 'Moves are not recorded for this workspace yet.') : 'Moves could not be read for this workspace.',
     advice,
-    actedLine:
-      advice.length === 0
-        ? 'No advice stands on this workspace yet.'
-        : `You acted on ${fmtInt(acted)} of ${fmtInt(advice.length)} this quarter.`,
+    // NEITHER SIDE OF THIS WAS QUARTER-SCOPED, AND THE DENOMINATOR WAS A
+    // DISPLAY CAP. "You acted on N of 12 this quarter" divided decisions dated
+    // inside the quarter by `market.advice.rows.length` — the twelve OLDEST
+    // rows of a ledger that runs to 56 and 64 (`ledgerRowsShown`). The Market
+    // page next door already answers this over the real total, and its own
+    // docblock explains why the quarter is a lie on it: a decision carries a
+    // date, but the denominator is every identity ever recommended, which has
+    // no quarter at all. One sentence, computed once, in that module.
+    actedLine: m ? m.advice.actedLine : 'The advice ledger could not be read for this workspace.',
     adviceNote: m?.advice.empty ?? null,
     claims: m?.ways.claims ?? [],
     claimsLine: m?.ways.claimsLine ?? 'What you say and what they say back could not be read for this workspace.',
