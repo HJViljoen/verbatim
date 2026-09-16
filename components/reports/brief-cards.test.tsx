@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test/render'
-import { BRIEF_CARDS, LEADERSHIP_LINE, cadenceWord, deliveryLine, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEF_CARDS, LEADERSHIP_LINE, cadenceWord, cardSending, deliveryLine, type BriefCard } from '@/lib/reports/briefs'
 import { BriefCards } from './brief-cards'
 
 const card = (over: Partial<BriefCard> = {}): BriefCard => ({
@@ -45,6 +45,28 @@ describe('deliveryLine', () => {
       .toBe('Monthly · 1 person listed, but nothing is being sent yet.')
     expect(deliveryLine({ cadence: 'Monthly', recipients: ['a@b.c', 'd@e.f'], sending: true }))
       .toBe('Monthly · 2 people.')
+  })
+})
+
+// A card must not claim a send the send path cannot make: Settings gates on
+// BUILDABLE_ARTEFACTS (['weekly']) and Reports did not, so an armed brief:sales
+// schedule would have had one page say "Every update · 4 people" and the other
+// say nothing sends it — and what went out would be the weekly report under
+// the sales brief's name.
+describe('cardSending', () => {
+  const armed = { active: true, recipients: ['a@b.c'], period: 'weekly' }
+
+  it('is false for a brief, because no schedule can send one yet', () => {
+    expect(cardSending({ artefact: 'brief:sales', ...armed })).toBe(false)
+    expect(cardSending({ artefact: 'brief:marketing', ...armed })).toBe(false)
+    expect(cardSending({ artefact: 'brief:content', ...armed })).toBe(false)
+  })
+
+  it('is true only for a buildable artefact with people, active, unpaused', () => {
+    expect(cardSending({ artefact: 'weekly', ...armed })).toBe(true)
+    expect(cardSending({ artefact: 'weekly', ...armed, period: 'paused' })).toBe(false)
+    expect(cardSending({ artefact: 'weekly', ...armed, recipients: [] })).toBe(false)
+    expect(cardSending({ artefact: 'weekly', ...armed, active: false })).toBe(false)
   })
 })
 

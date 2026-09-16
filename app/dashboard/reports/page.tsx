@@ -17,7 +17,7 @@ import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { SENT_FIGURES_NOTE, dateFilterLine, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
-import { BRIEF_CARDS, cadenceWord, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
+import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
 
@@ -163,7 +163,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       latest: latest ? { snapshotId: latest.id, title: latest.title, readingLine: readingLine(readingStampOf(latest)) } : null,
       cadence: cadenceWord(schedule?.cadence ?? null),
       recipients,
-      sending: Boolean(schedule?.active) && recipients.length > 0 && (schedules?.period ?? 'weekly') !== 'paused',
+      sending: cardSending({ artefact, active: Boolean(schedule?.active), recipients, period: schedules?.period ?? 'weekly' }),
     }
   })
 

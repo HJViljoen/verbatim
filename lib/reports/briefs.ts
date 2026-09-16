@@ -1,4 +1,4 @@
-import { ARTEFACT_COPY, type Artefact } from '../settings/artefacts'
+import { ARTEFACT_COPY, isBuildable, type Artefact } from '../settings/artefacts'
 import { CADENCE_COPY, type ScheduleCadence } from '../schedules/types'
 import type { DocumentRole } from './documents/types'
 
@@ -52,6 +52,29 @@ export const LEADERSHIP_LINE =
 
 export const briefLabel = (artefact: Artefact): string => ARTEFACT_COPY[artefact].label
 export const briefWhat = (artefact: Artefact): string => ARTEFACT_COPY[artefact].what
+
+/**
+ * Would a schedule actually send this brief today?
+ *
+ * THE SAME GATE SETTINGS APPLIES, and it has to be, or one page claims a send
+ * another page denies — the rule AGENTS.md states as "a page once claimed 'no
+ * email is sent' while Resend sent". `recipientRows` computes
+ * `buildable && !paused && active && recipients > 0`, and BUILDABLE_ARTEFACTS
+ * is ['weekly'] because the send path resolves a due schedule by its starter
+ * key: an armed `brief:sales` row would send the WEEKLY REPORT under the sales
+ * brief's name. Unreachable today — `report_schedules.artefact` does not exist
+ * in production, so every card degrades to "Not on a schedule" — which is why
+ * it is cheap to state now rather than after the column lands.
+ */
+export function cardSending(a: {
+  artefact: Artefact
+  active: boolean
+  recipients: readonly string[]
+  /** `tracking_configs.report_period`; 'paused' stops every schedule. */
+  period: string
+}): boolean {
+  return isBuildable(a.artefact) && a.active && a.recipients.length > 0 && a.period !== 'paused'
+}
 
 /** The cadence in the reader's words, or null where nothing is scheduled. */
 export function cadenceWord(cadence: string | null | undefined): string | null {
