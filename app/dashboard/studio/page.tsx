@@ -18,6 +18,7 @@ import { coverPlainText } from '@/lib/reports/cover'
 import { catalogueTitle } from '@/lib/reports/catalogue'
 import { AUDIENCES, type CoverSpec, type CoverText, type FigureTable, type ReportSection } from '@/lib/reports/types'
 import { CADENCES, type ScheduleRow } from '@/lib/schedules/types'
+import { artefactTitle, scheduleArtefact, sendsArtefact } from '@/lib/schedules/artefact'
 import { sendFailureSentence } from '@/lib/schedules/copy'
 import { claimDecision } from '@/lib/schedules/claim'
 import { cn } from '@/lib/utils'
@@ -57,10 +58,22 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   const sends = (sendData ?? []) as SendRow[]
   const sendable = (runData ?? []).length > 0
   const scheduleOf = new Map(schedules.filter((s) => s.report_id).map((s) => [s.report_id as string, s]))
+  // A SCHEDULE THAT SENDS AN ARTEFACT HAS NO `reports` ROW (Phase 1 WP17), and
+  // the Studio is the only place any schedule can be read or edited. Listing
+  // only `reports` meant that the moment `migrate-schedule-keys --apply` moved
+  // a workspace onto the weekly report, its recipients field, Preview, Send now
+  // and Active toggle all disappeared and SQL became the only door to the list
+  // of people it emails. So an artefact schedule is listed in its own right,
+  // under `?item=schedule:<id>`, until WP16's delivery screen takes it over.
+  const artefacts = schedules.filter((s) => sendsArtefact(s))
+  const artefactKey = (s: ScheduleRow) => `schedule:${s.id}`
+  const pickedArtefact = sp.item?.startsWith('schedule:')
+    ? artefacts.find((s) => artefactKey(s) === sp.item) ?? null
+    : null
 
-  const selectedId = sp.item && reports.some((r) => r.id === sp.item) ? sp.item : reports[0]?.id ?? null
+  const selectedId = pickedArtefact ? null : sp.item && reports.some((r) => r.id === sp.item) ? sp.item : reports[0]?.id ?? null
   const selected = selectedId ? reports.find((r) => r.id === selectedId) ?? null : null
-  const schedule = selected ? scheduleOf.get(selected.id) ?? null : null
+  const schedule = pickedArtefact ?? (selected ? scheduleOf.get(selected.id) ?? null : null)
   const scheduleSends = schedule ? sends.filter((s) => s.schedule_id === schedule.id) : []
   const history = scheduleSends.slice(0, 6)
   // A build waiting for a person: the newest one, shown to every member.
@@ -129,8 +142,9 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
   // rather than downloaded. The loader scopes it to this workspace.
   let viewer: ViewerSnapshot | null = null
   if (sp.view) viewer = await loadViewerSnapshot(createAdminClient(), clientId, sp.view)
-  const openViewer = (snapshotId: string) => viewerHref(BASE, { item: selectedId ?? undefined }, snapshotId)
-  const closeViewer = viewerHref(BASE, { item: selectedId ?? undefined }, null)
+  const itemKey = pickedArtefact ? artefactKey(pickedArtefact) : selectedId ?? undefined
+  const openViewer = (snapshotId: string) => viewerHref(BASE, { item: itemKey }, snapshotId)
+  const closeViewer = viewerHref(BASE, { item: itemKey }, null)
 
   const sendingLine = (s: ScheduleRow | null) => {
     if (!s) return 'not sent to anyone yet'
@@ -149,13 +163,21 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
             <Link href={`${BASE}/new`} aria-label="New report" className="inline-flex size-6 items-center justify-center rounded-full bg-inner text-[15px] leading-none text-secondary-foreground ring-1 ring-border hover:bg-tile">+</Link>
           </PaneHeader>
           <PaneBody>
-            {reports.length ? (
+            {reports.length || artefacts.length ? (
               <ul className="flex flex-col">
                 {reports.map((r) => (
                   <li key={r.id}>
                     <Link href={`${BASE}?item=${r.id}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', r.id === selectedId && 'bg-inner')}>
                       <p className={cn('truncate text-[13px] leading-[1.3]', r.id === selectedId ? 'font-semibold' : 'font-medium')}>{r.title}</p>
                       <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">for {readerOf(r)} · {scheduleOf.get(r.id)?.active ? `sends to ${scheduleOf.get(r.id)!.recipients.length}` : r.status === 'built' ? 'built' : 'draft'}</p>
+                    </Link>
+                  </li>
+                ))}
+                {artefacts.map((s) => (
+                  <li key={s.id}>
+                    <Link href={`${BASE}?item=${artefactKey(s)}`} className={cn('block rounded-[4px] px-3 py-2 hover:bg-inner', pickedArtefact?.id === s.id && 'bg-inner')}>
+                      <p className={cn('truncate text-[13px] leading-[1.3]', pickedArtefact?.id === s.id ? 'font-semibold' : 'font-medium')}>{artefactTitle(scheduleArtefact(s))}</p>
+                      <p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">written by Verbatim · {s.active ? `sends to ${s.recipients.length}` : 'sending off'}</p>
                     </Link>
                   </li>
                 ))}
@@ -167,7 +189,50 @@ export default async function StudioPage({ searchParams }: { searchParams?: Prom
         </section>
 
         <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-lg bg-tile shadow-tile">
-          {selected ? (
+          {pickedArtefact ? (
+            <>
+              <DetailHeader
+                eyebrow="Written by Verbatim · nothing to arrange"
+                title={artefactTitle(scheduleArtefact(pickedArtefact))}
+                meta={sendingLine(pickedArtefact)}
+              />
+              <DetailSection>
+                <p className="max-w-[60ch] text-[12.5px] leading-relaxed text-muted-foreground">
+                  Verbatim writes this one from your update — there is no outline to edit. What you choose here is who receives it, when, and what rides along.
+                </p>
+              </DetailSection>
+              <DetailSection label="Sending">
+                <ScheduleForm
+                  key={`${pickedArtefact.id}:${pickedArtefact.updated_at}:${readySend?.id ?? 'none'}`}
+                  reportId={null}
+                  starterKey={pickedArtefact.starter_key}
+                  reportTitle={pickedArtefact.name}
+                  schedule={pickedArtefact}
+                  canManage={canManage}
+                  userEmail={email ?? null}
+                  sendable={sendable}
+                  ready={readySend ? { id: readySend.id, subject: readySend.subject, readyAt: readySend.ready_at, error: readySend.error ? sendFailureSentence(readySend.error) : null, stalled } : null}
+                />
+                {history.length > 0 && (
+                  <ul className="mt-4 flex flex-col gap-1.5 border-t border-border/60 pt-3">
+                    {history.map((s) => (
+                      <li key={s.id} className="flex flex-wrap items-baseline gap-x-3 text-[12.5px]">
+                        {s.status === 'ready'
+                          ? <span className="font-medium">{s.subject ?? 'Update'}</span>
+                          : <Link href={`/dashboard/reports?group=sent&item=${s.id}`} className="font-medium underline-offset-2 hover:underline">{s.subject ?? 'Update'}</Link>}
+                        <span className="font-mono text-[10.5px] text-muted-foreground">
+                          {s.status === 'sent' && s.sent_at
+                            ? `sent ${fmtWhen(s.sent_at)} to ${s.recipients.length}`
+                            : s.status === 'failed' ? `did not send ${fmtWhen(s.claimed_at)} · ${sendFailureSentence(s.error)}`
+                            : `${s.status} ${fmtWhen(s.claimed_at)}`}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </DetailSection>
+            </>
+          ) : selected ? (
             <>
               <DetailHeader eyebrow={`${isDocument ? 'Written report' : 'Report'} · written for ${readerOf(selected)}`} title={selected.title}
                 meta={isDocument

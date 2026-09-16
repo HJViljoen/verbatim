@@ -28,7 +28,7 @@ import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Directi
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
-import { monthStartOf, nextMonth } from '../reading/month-key'
+import { monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals } from '../reading/record'
@@ -390,6 +390,16 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * IT MOVED TO lib/format.ts IN WP15 and is re-exported here so this module's
  * callers are untouched. One caption was not a vocabulary change; two pages
  * writing the same month two ways would have been.
+ *
+ * WP17 MOVED IT TOO, to lib/reading/month-key.ts, for the same reason from the
+ * other side: the weekly report composes this stamp and must not drag this
+ * module's graph — a Supabase client, every reading loader — into a pure
+ * composer to get a month's name. Both moves were right and the merge keeps
+ * one of them. lib/format.ts wins because it is the leaf the rest of the date
+ * vocabulary already lives in AND because its copy obeys that file's own rule:
+ * no `toLocaleString`, whose ICU data differs between the Node server and the
+ * browser, and an unparseable month gives back its own string rather than
+ * rendering as nothing. month-key's copy did neither.
  */
 export { longMonth }
 
@@ -1271,11 +1281,6 @@ async function readSubjectsAtThisPointLastMonth(
     if (isMissingSubjects(error) || isMissingMonthlyReading(error)) return null
     throw error
   }
-}
-
-function previousMonthOf(month: string): string {
-  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
-  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
 }
 
 /** The tenant's named subjects. Null — never [] — before M4 is applied. */

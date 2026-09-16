@@ -10,7 +10,13 @@ import { enqueueDocumentBuild } from '../reports/documents/enqueue'
 import { isDocumentData } from '../reports/documents/types'
 import { expiryFromDays, mintShareToken } from '../reports/share'
 import type { ReportSnapshotData } from '../reports/types'
+import type { WeeklySnapshotData as WeeklySnapshot } from '../reports/weekly-build'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
+import { renderWeeklyEmail } from '../email/weekly'
+import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
+import { blockAnswers } from '../blocks/types'
+import { weeklyBlocksFor } from '../../components/blocks/weekly'
+import { sendsWeekly } from './artefact'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -164,6 +170,12 @@ async function runDocumentSchedule(
   return { status: sent ? 'sent' : 'failed', subject: email.subject, ms: ms(), ...(sent ? {} : { error: 'email not sent, provider not configured or the send failed' }) }
 }
 
+/** The workspace's name, for an artefact that resolves no template. */
+async function companyName(admin: SupabaseClient, clientId: string): Promise<string> {
+  const { data } = await admin.from('clients').select('company_name').eq('id', clientId).maybeSingle()
+  return ((data as { company_name?: string } | null)?.company_name ?? '').trim()
+}
+
 export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult> {
   const t0 = Date.now()
   const ms = () => Date.now() - t0
@@ -187,7 +199,13 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
   let snapshotId: string | undefined
   let artifactStored = false
   try {
-    const resolved = await resolveScheduleReport(admin, schedule)
+    // A WEEKLY SCHEDULE NAMES NO TEMPLATE, and must not be failed for it. The
+    // weekly report is an arrangement over BLOCK keys rather than over page
+    // sections, so there is no `reports` row and no starter to resolve — only
+    // a company name, which is the one thing `resolveScheduleReport` would have
+    // been asked for.
+    const weekly = sendsWeekly(schedule)
+    const resolved = weekly ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
     if (!resolved) {
       await mark('failed', 'The template this schedule sends no longer exists.')
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
@@ -201,25 +219,57 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // A written report is not assembled from pages: the agent writes it over
     // minutes. A due schedule starts that build, carrying this send row, and
     // the build's own deliver step finishes the job (T9c, 2026-08-31).
-    if (resolved.report.kind === 'document') {
+    if (resolved.report?.kind === 'document') {
       return await runDocumentSchedule({ ...a, to, sendId, reportId: resolved.report.id, ms })
     }
 
-    let snap
-    try {
-      snap = await snapshotReport({ admin, supabase: admin, clientId: schedule.client_id, userId: null, report: resolved.report, company: resolved.company })
-    } catch (e) {
-      if (e instanceof BuildEmptyError) {
-        await mark('skipped', e.message)
-        return { status: 'skipped', sendId, ms: ms(), error: e.message }
+    // THE WEEKLY REPORT IS A DIFFERENT ARTEFACT ON THE SAME TRANSPORT (Phase 1
+    // WP17). Everything above and below this — the claim, the recipients, the
+    // share link, the send row, `last_sent_at`, the failure rules — is shared;
+    // what differs is the reading that is frozen and the body that is rendered
+    // from it. A schedule says which it is through `lib/schedules/artefact.ts`,
+    // and a schedule that says nothing sends exactly what it sent before.
+    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot; title: string; sections: number }
+    if (weekly) {
+      let built
+      try {
+        built = await snapshotWeekly({
+          admin,
+          supabase: admin,
+          clientId: schedule.client_id,
+          userId: null,
+          company: resolved.company,
+          figuresOf: (reading, keys) => weeklyBlocksFor(keys).map((b) => blockAnswers(b, reading).figures),
+        })
+      } catch (e) {
+        if (e instanceof WeeklyEmptyError) {
+          await mark('skipped', e.message)
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
       }
-      throw e
+      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.keys.length }
+    } else {
+      try {
+        const built = await snapshotReport({ admin, supabase: admin, clientId: schedule.client_id, userId: null, report: resolved.report!, company: resolved.company })
+        snap = { snapshotId: built.snapshotId, data: built.data, title: built.title, sections: built.data.sections.length }
+      } catch (e) {
+        if (e instanceof BuildEmptyError) {
+          await mark('skipped', e.message)
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
+      }
     }
     snapshotId = snap.snapshotId
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
+    const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
+      weekly
+        ? renderWeeklyEmail({ data: snap.data as WeeklySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : renderDigestEmail({ data: snap.data as ReportSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
 
     if (a.mode === 'preview') {
-      const email = renderDigestEmail({ data: snap.data, shareUrl: null, appUrl: a.baseUrl, attached: schedule.attach_pdf, cadenceWord })
+      const email = renderEmail(null)
       await admin.from('report_snapshots').delete().eq('id', snapshotId)
       return { status: 'preview', subject: email.subject, html: email.html, text: email.text, ms: ms() }
     }
@@ -228,9 +278,12 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // A review build renders no PNGs: the recipient email comes later, from
     // deliverSend, which renders its own.
     const reviewing = recording && schedule.review
-    const imageTiles = reviewing ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    // The weekly report says every number in words (lib/email/weekly.tsx), so
+    // it asks the runner for no PNGs at all and an image-blocking client loses
+    // nothing.
+    const imageTiles = reviewing || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
-      return snap.data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
+      return (snap.data as ReportSnapshotData).sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
     const rendered = await renderMany({
       baseUrl: a.renderBaseUrl ?? a.baseUrl,
@@ -293,7 +346,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
       images[k] = `cid:${cid}`
       inline.push({ filename: `${k}.png`, content: rendered[i + 1].buffer, contentType: 'image/png', contentId: cid })
     })
-    const email = renderDigestEmail({ data: snap.data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
+    const email = renderEmail(shareUrl, images)
     const attachments = pruneInlineImages(email.html, inline)
     if (schedule.attach_pdf) attachments.push({ filename: pdfFilename, content: rendered[0].buffer, contentType: 'application/pdf' })
     const { sent } = await sendReportEmail({ to, subject: email.subject, html: email.html, text: email.text, attachments })

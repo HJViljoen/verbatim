@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { hydrateSnapshot, SNAPSHOT_COLS, type SnapshotRow } from '../snapshots'
 import { applyEdits, loadEdits } from './documents/edits'
 import { isDocumentData, type DocumentSnapshotData } from './documents/types'
+import { isWeeklyData, type WeeklySnapshotData } from './weekly-build'
+import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { deckSlides } from './compose'
 import type { ReportSnapshotData } from './types'
 
@@ -14,10 +16,12 @@ import type { ReportSnapshotData } from './types'
 /** What the panel needs: the frozen pages, plus the line above them. */
 export interface ViewerSnapshot {
   id: string
-  kind: 'document' | 'report'
+  /** Which deck draws it. Three kinds share `report_snapshots.kind = 'report'`
+   *  and are told apart inside `data` — the `isDocumentData` precedent. */
+  kind: 'document' | 'report' | 'weekly'
   /** Hydrated (quote texts resolved live) and, for a document, with the
    *  operator's edits applied — the same pages the PDF prints. */
-  data: DocumentSnapshotData | ReportSnapshotData
+  data: DocumentSnapshotData | ReportSnapshotData | WeeklySnapshotData
   title: string
   builtAt: string
   pageCount: number
@@ -67,12 +71,32 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
     return { ...common, kind: 'document', data: withEdits, pageCount: withEdits.pages.length + 1 }
   }
 
+  // A WEEKLY REPORT (Phase 1 WP17): six blocks over one reading, and NO
+  // `sections`. Without this branch the cast below handed `deckSlides` a
+  // snapshot with no sections and `d.sections.forEach` threw inside a server
+  // component — and the row is reachable: /dashboard/reports lists every
+  // kind='report' snapshot that no report_sends row carries under "Builds",
+  // which is exactly what a weekly send that stored its PDF and then failed at
+  // the email leaves behind. One sheet per block, as WeeklyDeck paginates.
+  if (isWeeklyData(raw)) {
+    return { ...common, kind: 'weekly', data: raw, pageCount: weeklyViewerPages(raw.keys) }
+  }
+
   // An arranged report: the cover plus every section's slides. The page
   // modules are loaded here rather than at the top of the file so this
   // module stays cheap for callers that only want the href helper.
   const report = raw as ReportSnapshotData
   const { pageModule } = await import('@/components/pages/registry')
   return { ...common, kind: 'report', data: report, pageCount: deckSlides(report, pageModule).length }
+}
+
+/**
+ * How many sheets a stored weekly report prints — one per block key this build
+ * still knows, and never zero: `WeeklyDeck` draws a sheet saying so when it
+ * knows none of them, so the header must not say "0 pages" over it.
+ */
+export function weeklyViewerPages(keys: readonly string[]): number {
+  return Math.max(1, keys.filter((k) => (WEEKLY_BLOCK_KEYS as readonly string[]).includes(k)).length)
 }
 
 /**

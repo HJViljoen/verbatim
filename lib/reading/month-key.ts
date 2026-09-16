@@ -27,3 +27,15 @@ export function nextMonth(month: string): string {
   const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
   return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString())
 }
+
+/** The month before this one. */
+export function prevMonth(month: string): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
+}
+
+// `longMonth` was written here by WP17 and by lib/format.ts by WP15, in the
+// same week, for the same reason. It lives in lib/format.ts — the leaf the rest
+// of the date vocabulary is already in, and the copy that obeys that file's
+// rule against `toLocaleString`. Nothing month-shaped is missing here; the name
+// of a month is a formatting question, not an arithmetic one.

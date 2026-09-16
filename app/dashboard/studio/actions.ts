@@ -67,6 +67,14 @@ export async function createReport(formData: FormData): Promise<void> {
   if (templateKey) {
     const t = starterTemplate(templateKey)
     if (!t) throw new Error('unknown template')
+    // AN ARTEFACT IS NOT A STARTING POINT. `starterTemplate('weekly_report')`
+    // resolves on purpose — a schedule names what it sends through
+    // `starter_key`, and saveSchedule's "is this a template we know?" guard has
+    // to answer yes — but the weekly report is composed from BLOCK keys and
+    // carries no sections, so resolving it here made a report with nothing in
+    // it. The picker stopped offering it (`starterTemplates()`); a server
+    // action is POST-reachable, so it refuses it too.
+    if (t.artefact) throw new Error('that template is written by Verbatim and cannot be arranged')
     title = t.name; audience = t.audience; sections = instantiate(t.sections); key = t.key
   }
   const cover: CoverSpec = { register: audience }

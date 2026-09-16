@@ -85,6 +85,9 @@ describe('platforms', () => {
 describe('the month words', () => {
   it('names the month, in UTC, with no locale data behind it', () => {
     expect(longMonth('2026-09-01')).toBe('September')
+    // The last day of a month is still that month — WP17's case, kept when the
+    // two copies of this formatter became one.
+    expect(longMonth('2026-01-31')).toBe('January')
     expect(longMonth('2026-09-13T23:59:59Z')).toBe('September')
     expect(monthName('2026-08-01')).toBe('Aug 2026')
   })

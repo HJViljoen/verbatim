@@ -4,6 +4,8 @@ import { ReportDeck } from '@/components/print/report-deck'
 import { FitWidth } from '@/components/reports/fit-width'
 import { ViewerEscape } from '@/components/reports/report-viewer-close'
 import { isDocumentData } from '@/lib/reports/documents/types'
+import { isWeeklyData } from '@/lib/reports/weekly-build'
+import { WeeklyDeck } from '@/components/print/weekly-deck'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
 
@@ -26,7 +28,9 @@ export function ReportViewer({ snapshot, closeHref }: { snapshot: ViewerSnapshot
   const date = fmtDate(builtAt)
   const deck = isDocumentData(data)
     ? <DocumentDeck data={data} date={date} />
-    : <ReportDeck data={data as ReportSnapshotData} date={date} />
+    : isWeeklyData(data)
+      ? <WeeklyDeck data={data} date={date} />
+      : <ReportDeck data={data as ReportSnapshotData} date={date} />
 
   return (
     <>
