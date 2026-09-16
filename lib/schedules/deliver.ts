@@ -10,6 +10,8 @@ import { expiryFromDays, mintShareToken } from '../reports/share'
 import { isDocumentData } from '../reports/documents/types'
 import { isWeeklyData } from '../reports/weekly-build'
 import { renderWeeklyEmail } from '../email/weekly'
+import { isQuarterlyData } from '../reports/quarterly-build'
+import { renderQuarterlyEmail } from '../email/quarterly'
 import type { ReportSnapshotData } from '../reports/types'
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -76,7 +78,7 @@ export async function readyForReview(
   const schedule = scheduleRow as ScheduleRow | null
 
   const data = await hydrateSnapshot<ReportSnapshotData>(admin, snapRow)
-  const subject = isWeeklyData(data)
+  const subject = isWeeklyData(data) || isQuarterlyData(data)
     ? data.subject
     : isDocumentData(data)
     ? documentSubject(applyEdits(data, await loadEdits(admin, snapRow.id)))
@@ -197,10 +199,12 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // A written report carries no inline tile pictures: its pages are the
     // report, and the email is the way in.
     const document = isDocumentData(data) ? data : null
-    // A weekly artefact says every number in words and asks for no PNGs.
+    // A weekly artefact says every number in words and asks for no PNGs, and
+    // so does a quarterly one (lib/email/quarterly.tsx).
     const weekly = isWeeklyData(data) ? data : null
+    const quarterly = isQuarterlyData(data) ? data : null
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
-    const imageTiles = document || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = document || weekly || quarterly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return data.sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })
@@ -263,6 +267,8 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     })
     const email = weekly
       ? renderWeeklyEmail({ data: weekly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+      : quarterly
+      ? renderQuarterlyEmail({ data: quarterly, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
       : document
         ? renderDocumentEmail({ data: document, edits: await loadEdits(admin, snapRow.id), shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })

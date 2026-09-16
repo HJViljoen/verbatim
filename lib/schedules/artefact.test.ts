@@ -83,7 +83,11 @@ describe('a schedule with no report of its own', () => {
   it('has a name to be listed under, for every artefact the column may hold', () => {
     expect(artefactTitle('weekly')).toBe('Weekly report')
     expect(artefactTitle('monthly')).toBe('Monthly report')
-    expect(artefactTitle('quarterly')).toBe('Quarterly report')
+    // "Quarterly review", not "report" (Phase 1 WP20): it is the artefact's
+    // name everywhere else — the design's item 14, the mock's masthead and the
+    // deck's own title — and a schedules list that called it something else
+    // would be the only place in the product that did.
+    expect(artefactTitle('quarterly')).toBe('Quarterly review')
     expect(artefactTitle('brief:sales')).toBe('Sales brief')
     expect(artefactTitle(null)).toBe('Sending')
   })

@@ -8,6 +8,8 @@ import { loadEdits } from '@/lib/reports/documents/edits'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import { isWeeklyData } from '@/lib/reports/weekly-build'
 import { renderWeeklyEmail } from '@/lib/email/weekly'
+import { isQuarterlyData } from '@/lib/reports/quarterly-build'
+import { renderQuarterlyEmail } from '@/lib/email/quarterly'
 import { runSchedule } from '@/lib/schedules/run'
 import type { ScheduleRow } from '@/lib/schedules/types'
 import type { ReportSnapshotData } from '@/lib/reports/types'
@@ -58,6 +60,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // ever stored.
     if (isWeeklyData(data)) {
       return page(renderWeeklyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
+    }
+    if (isQuarterlyData(data)) {
+      return page(renderQuarterlyEmail({ data, shareUrl, appUrl: appBaseUrl(), attached: s.attach_pdf }).html)
     }
     if (isDocumentData(data)) {
       // Edits are read fresh: an edit made a minute ago shows on the next open.

@@ -30,15 +30,6 @@ export function Note({ children, mode = 'app', tone = 'muted' }: { children: Rea
   return <p className={`m-0 mt-1 text-[11.5px] leading-relaxed ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
 }
 
-/** A paragraph of the product's own prose. Code's sentences, so they carry
- *  their figures and are not marked as a model's. */
-export function Para({ children, mode = 'app' }: { children: ReactNode; mode?: RenderMode }) {
-  if (mode === 'email') {
-    return <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: 1.6, color: EMAIL.ink, marginTop: 6 }}>{children}</div>
-  }
-  return <p className="m-0 mt-1.5 text-[12.5px] leading-relaxed text-foreground">{children}</p>
-}
-
 /** A measured number, with what it is out of beside it. The "of N" is REQUIRED
  *  by copy-contract rule (b) wherever a level word is printed, and is good
  *  manners everywhere else. */

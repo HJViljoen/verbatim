@@ -14,9 +14,12 @@ import type { WeeklySnapshotData as WeeklySnapshot } from '../reports/weekly-bui
 import { hydrateSnapshot, loadSnapshot } from '../snapshots'
 import { renderWeeklyEmail } from '../email/weekly'
 import { snapshotWeekly, WeeklyEmptyError } from '../reports/weekly-build'
+import { renderQuarterlyEmail } from '../email/quarterly'
+import { snapshotQuarterly, QuarterlyEmptyError, type QuarterlySnapshotData } from '../reports/quarterly-build'
+import { quarterlyBlocksFor } from '../../components/blocks/quarterly'
 import { blockAnswers } from '../blocks/types'
 import { weeklyBlocksFor } from '../../components/blocks/weekly'
-import { sendsWeekly } from './artefact'
+import { sendsQuarterly, sendsWeekly } from './artefact'
 import { readyForReview } from './deliver'
 import { resolveScheduleReport } from './resolve'
 import { claimDecision, pruneInlineImages, type ExistingSend } from './claim'
@@ -205,7 +208,11 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // a company name, which is the one thing `resolveScheduleReport` would have
     // been asked for.
     const weekly = sendsWeekly(schedule)
-    const resolved = weekly ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
+    // A QUARTERLY SCHEDULE NAMES NO TEMPLATE EITHER, for the same reason: the
+    // review is an arrangement over eight BLOCK keys, so there is no `reports`
+    // row to resolve and no starter to fail on.
+    const quarterly = sendsQuarterly(schedule)
+    const resolved = weekly || quarterly ? { report: null, company: await companyName(admin, schedule.client_id) } : await resolveScheduleReport(admin, schedule)
     if (!resolved) {
       await mark('failed', 'The template this schedule sends no longer exists.')
       return { status: 'failed', sendId, ms: ms(), error: 'The template this schedule sends no longer exists.' }
@@ -229,8 +236,27 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // what differs is the reading that is frozen and the body that is rendered
     // from it. A schedule says which it is through `lib/schedules/artefact.ts`,
     // and a schedule that says nothing sends exactly what it sent before.
-    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot; title: string; sections: number }
-    if (weekly) {
+    let snap: { snapshotId: string; data: ReportSnapshotData | WeeklySnapshot | QuarterlySnapshotData; title: string; sections: number }
+    if (quarterly) {
+      let built
+      try {
+        built = await snapshotQuarterly({
+          admin,
+          supabase: admin,
+          clientId: schedule.client_id,
+          userId: null,
+          company: resolved.company,
+          figuresOf: (reading, keys) => quarterlyBlocksFor(keys).map((b) => blockAnswers(b, reading).figures),
+        })
+      } catch (e) {
+        if (e instanceof QuarterlyEmptyError) {
+          await mark('skipped', e.message)
+          return { status: 'skipped', sendId, ms: ms(), error: e.message }
+        }
+        throw e
+      }
+      snap = { snapshotId: built.snapshotId, data: built.data, title: built.data.title, sections: built.data.keys.length }
+    } else if (weekly) {
       let built
       try {
         built = await snapshotWeekly({
@@ -264,7 +290,9 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     snapshotId = snap.snapshotId
     const cadenceWord = schedule.cadence === 'monthly' ? 'monthly' : 'weekly'
     const renderEmail = (shareUrl: string | null, images?: Record<string, string>) =>
-      weekly
+      quarterly
+        ? renderQuarterlyEmail({ data: snap.data as QuarterlySnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
+        : weekly
         ? renderWeeklyEmail({ data: snap.data as WeeklySnapshot, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf })
         : renderDigestEmail({ data: snap.data as ReportSnapshotData, shareUrl, appUrl: a.baseUrl, attached: schedule.attach_pdf, images, cadenceWord })
 
@@ -281,7 +309,7 @@ export async function runSchedule(a: RunScheduleArgs): Promise<RunScheduleResult
     // The weekly report says every number in words (lib/email/weekly.tsx), so
     // it asks the runner for no PNGs at all and an image-blocking client loses
     // nothing.
-    const imageTiles = reviewing || weekly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
+    const imageTiles = reviewing || weekly || quarterly ? [] : EMAIL_IMAGE_TILES.filter((k) => {
       const page = k.split('.')[0]
       return (snap.data as ReportSnapshotData).sections.some((s) => s.section.page === page && (s.section.keys ? s.section.keys.includes(k) : true))
     })

@@ -32,16 +32,30 @@ export const RETIRED_DIGEST_KEY = 'weekly_digest'
 
 export const isWeeklyArtefact = (a: Artefact | null): boolean => a === 'weekly'
 
+/** The starter key the quarterly review is sent under, for a workspace whose
+ *  `report_schedules.artefact` column (M8) is not applied yet — the same two
+ *  steps the weekly report reads, for the same reason. */
+export const QUARTERLY_STARTER_KEY = 'quarterly_review'
+
+export const isQuarterlyArtefact = (a: Artefact | null): boolean => a === 'quarterly'
+
 /** What this schedule sends, or null where nothing has said. */
 export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): Artefact | null {
   const stored = typeof schedule.artefact === 'string' ? schedule.artefact.trim() : ''
   if (stored) return stored
-  return schedule.starter_key === WEEKLY_STARTER_KEY ? 'weekly' : null
+  if (schedule.starter_key === WEEKLY_STARTER_KEY) return 'weekly'
+  if (schedule.starter_key === QUARTERLY_STARTER_KEY) return 'quarterly'
+  return null
 }
 
 /** Does this schedule send the weekly report? */
 export function sendsWeekly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
   return isWeeklyArtefact(scheduleArtefact(schedule))
+}
+
+/** Does this schedule send the quarterly review? */
+export function sendsQuarterly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
+  return isQuarterlyArtefact(scheduleArtefact(schedule))
 }
 
 /**
@@ -58,7 +72,7 @@ export function artefactTitle(artefact: Artefact | null): string {
   if (!artefact) return 'Sending'
   if (artefact === 'weekly') return 'Weekly report'
   if (artefact === 'monthly') return 'Monthly report'
-  if (artefact === 'quarterly') return 'Quarterly report'
+  if (artefact === 'quarterly') return 'Quarterly review'
   if (artefact.startsWith('brief:')) {
     const who = artefact.slice('brief:'.length).replace(/[_-]+/g, ' ').trim()
     return who ? `${who.charAt(0).toUpperCase()}${who.slice(1)} brief` : 'Brief'

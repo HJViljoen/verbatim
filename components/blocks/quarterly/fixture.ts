@@ -1,12 +1,15 @@
+import { blockAnswers } from '@/lib/blocks/types'
 import type { QuarterChecks, QuarterlyData } from '@/lib/pages/quarterly'
 import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
-import { previousQuarter, quarterFor } from '@/lib/reports/quarterly'
+import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
+import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
 import { marketFixture, unrecordedFixture } from '@/components/pages/market-surface/fixture'
 import { competitiveFixture, unreadMonthsFixture } from '@/components/pages/competitive-surface/fixture'
+import { quarterlyBlocksFor } from './index'
 
 // The quarterly review's fixtures (Phase 1 WP20).
 //
@@ -136,4 +139,30 @@ export function closedFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13),
   })
+}
+
+/**
+ * A frozen quarterly artefact, over one of the readings above.
+ *
+ * Built the way `snapshotQuarterly` builds one — the same title, period,
+ * subject and merged figure table — so a deck test, an email test and a share
+ * test all exercise the shape the send path actually writes.
+ */
+export function quarterlySnapshotFixture(reading: QuarterlyData = quarterlyFixture()): QuarterlySnapshotData {
+  const company = reading.brand
+  return {
+    version: 1,
+    kind: 'quarterly',
+    company,
+    title: quarterlyTitle(company, reading.quarter),
+    period: reading.period,
+    readingAt: reading.readingAt,
+    quarter: reading.quarter,
+    prior: reading.prior,
+    readings: reading.readings,
+    keys: [...QUARTERLY_BLOCK_KEYS],
+    reading,
+    figures: Object.assign({}, ...quarterlyBlocksFor().map((b) => blockAnswers(b, reading).figures)),
+    subject: quarterlySubject(company, reading.quarter, reading.readings),
+  }
 }

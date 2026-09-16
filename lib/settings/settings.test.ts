@@ -89,7 +89,9 @@ describe('artefacts', () => {
     // thirteen.
     expect(sendingSummary(rows, 'weekly')).toBe('1 of 7 reports is being sent, to 1 address.')
     expect(isBuildable('weekly')).toBe(true)
-    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly'])
+    // `quarterly` joined the buildable list in WP20, with snapshotQuarterly
+    // and the eight-page deck behind it.
+    expect(ARTEFACTS.filter(isBuildable)).toEqual(['weekly', 'quarterly'])
     expect(notBuiltYet('monthly')).toContain('the monthly reading')
     // ABOUT THE SCHEDULE, NOT ABOUT THE DOCUMENT. Össur has a built report
     // titled "Sales brief" and two Block B surfaces link to it in the same

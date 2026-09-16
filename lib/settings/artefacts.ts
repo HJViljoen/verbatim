@@ -84,8 +84,16 @@ export const artefactLabel = (a: Artefact): string => ARTEFACT_COPY[a].label
  * and the row stays switched off until its builder lands. WP17 gives `weekly`
  * its own document, WP19 the briefs and WP20 the quarterly review, and each
  * joins this list with the builder that serves it.
+ *
+ * `quarterly` JOINED IT IN WP20, with `snapshotQuarterly`
+ * (lib/reports/quarterly-build.ts) behind it, the eight-page deck in
+ * components/print/quarterly-deck.tsx and the `sendsQuarterly` branch in
+ * lib/schedules/run.ts. A schedule created for it must carry
+ * `QUARTERLY_STARTER_KEY` ('quarterly_review') OR the M8 `artefact` column, for
+ * the reason the paragraph above gives: with neither, the default starter makes
+ * it send the WEEKLY report under the quarterly review's name.
  */
-export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly']
+export const BUILDABLE_ARTEFACTS: readonly Artefact[] = ['weekly', 'quarterly']
 
 export const isBuildable = (a: Artefact): boolean => BUILDABLE_ARTEFACTS.includes(a)
 
