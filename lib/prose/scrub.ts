@@ -368,12 +368,50 @@ function clausesOf(sentence: string): string[] {
  * is item 9's remaining half rather than a line. Until then the breach is
  * visible where it lands: a `data-copy="stored"` node naming this slot
  * (lib/test/copy-contract.ts) says out loud that these words were adjudicated
- * by nothing. Then: `agent_answer`, `ask_verdict`,
- * `ask_judge` and `ask_extract_title` wait for WP21, which is where Ask gets
- * the figure table it actually holds — its answers count things, and the digit
- * rule with an empty table would delete a truthful answer to "how many".
- * The three interpretation slots wait for the packages that write them
- * (WP8, WP18, WP20); `composeInterpretation` runs their policy already.
+ * by nothing.
+ *
+ * `agent_answer` USED TO SAY IT WAS WAITING FOR WP21. WP21 has landed — Ask's
+ * movement block is re-based on the monthly reading and
+ * `DIRECTION_WORDS_BY_READER['agent.movement']` is the map's first `true`, so
+ * this table is now the only thing that could hold the slot. It still does not,
+ * and the reason is MEASURED rather than assumed. Replaying both rules over the
+ * 101 stored agent strings (135 sentences) in production, 2026-09-16:
+ *
+ *  · the DIRECTION rule with an empty `verdicts[]` drops 11 of the 135 and
+ *    empties 8 of the 101 strings outright — and all eleven are false positives
+ *    of calibration class 2, a direction word about the SUBJECT rather than
+ *    about a reading. The words that did it, with the phrase each landed in:
+ *    `lower` ("a first or replacement LOWER-LIMB prosthesis" — this tenant's
+ *    product category is a direction word), `falls` ("FALLS and balance
+ *    challenges"), `stronger` ("the STRONGER signal is not that people are
+ *    unaware"), `gains` ("measurable GAINS in comfort"), `improved` and
+ *    `improving`, `drop` ("referral DROP-off analysis") and `new` ("the
+ *    message is not that a product is NEW"). Ask answers in conversational
+ *    analyst prose, where those are the thing itself, and no word list tells
+ *    them from a claim about movement. None of the 101 carries a movement
+ *    claim at all.
+ *  · the DIGIT rule with an empty table drops exactly one sentence, and it is
+ *    "openness to innovation through 3D printing" — a name, not a figure. The
+ *    allow-list cannot rescue that one either: `3D` is shaped like `90k`, and
+ *    `allowTokens` drops that shape by its ordinal rule.
+ *
+ * Wiring the slot today would therefore delete about one stored answer in
+ * twelve to catch nothing — the trade this table already refused for a
+ * recommendation. What it waits on is nameable rather than hand-waved: a figure
+ * table Ask holds (its answers count things, and the movement block now hands
+ * the model real month figures — "44 of 388 videos (11.3%)" — which a digit
+ * rule with no table deletes as readily as an invented one), and a licence
+ * check that can tell a noun from a reading. Until both exist, the guard on a
+ * direction word in an Ask answer is the movement block itself: every line in
+ * it carries a verdict decided in code, and a line that earned no direction
+ * says so in words. That is weaker than a scrubber, and it is written down here
+ * rather than shipped as though it were not.
+ *
+ * `ask_verdict`, `ask_judge` and `ask_extract_title` were pointed at WP21 too,
+ * and WP21 did not touch them: they write over the CLIENT'S OWN DOCUMENT rather
+ * than over the reading, and they wait on the same figure table. The three
+ * interpretation slots wait for the packages that write them (WP8, WP18, WP20);
+ * `composeInterpretation` runs their policy already.
  */
 export const PROSE_SLOTS = [
   'pass_a_audience_insight',
@@ -425,9 +463,12 @@ export type ProsePolicy = 'none' | 'digits' | 'direction' | 'both'
  * about a reading, written without verdicts. The direction rule with an empty
  * `verdicts[]` deletes every directional sentence — which is exactly what the
  * prompts already ask for in words and have never enforced (the agent's
- * NO_TREND_BLOCK is a sentence in a prompt). When a reader's direction words
+ * movement block is a sentence in a prompt). When a reader's direction words
  * are turned back on (DIRECTION_WORDS_BY_READER), its slot starts being handed
- * verdicts and the same rule lets the earned sentences through.
+ * verdicts and the same rule lets the earned sentences through — WHERE THE SLOT
+ * IS WIRED AT ALL. `agent_answer` is the first slot to reach the second half of
+ * that sentence without the first: WP21 turned `agent.movement` on, and the
+ * measurement above is why this policy row still drives nothing.
  *
  * WHY AN OWNED EVENT'S EXPLANATION IS ONLY `digits`. Step 2c is the one slot
  * where the direction is already code's: `detectAccountEvents` computes

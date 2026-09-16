@@ -131,6 +131,25 @@ describe('dropUnverdictedDirection — the rule that did not exist', () => {
     expect(out.droppedDirection).toBe(1)
   })
 
+  // WHY `agent_answer` IS IN THE POLICY TABLE AND STILL DRIVES NOTHING (see the
+  // docblock). Calibration class 2 on a conversational slot: in an analyst's
+  // prose about what people SAID, the direction words are the subject. All
+  // three sentences below are verbatim from production's stored agent answers,
+  // and the word that condemns each is a noun, a comparative adjective and a
+  // product category — `falls`, `stronger`, `lower`. Replayed over all 101
+  // stored strings the rule drops 11 of 135 sentences and empties 8 answers,
+  // none of which carries a movement claim; pinned here so the cost of wiring
+  // that slot is a failing expectation rather than an argument.
+  it('cannot tell a subject word from a reading, which is what holds a conversational slot off', () => {
+    for (const raw of [
+      'Instability is part of both daily life and athletic participation, with falls and balance challenges showing up as real parts of living with a prosthesis.',
+      'On awareness, the stronger signal is not that people are unaware prostheses exist, but that they lack practical guidance on where to go.',
+      'The primary target should be people choosing a first or replacement lower-limb prosthesis.',
+    ]) {
+      expect(dropUnverdictedDirection(raw, []).text).toBe('')
+    }
+  })
+
   it('keeps a sentence where every directional clause names its own earned object', () => {
     const raw = 'Durability is growing and fit is fading.'
     const verdicts = [verdict('durability', 'growing'), verdict('fit', 'fading')]
