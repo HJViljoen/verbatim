@@ -5,7 +5,7 @@ import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
   buildStandingsBlock, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
-  competitiveUnlockRows, mixLine, questionsEmpty, rivalState, trackingRules,
+  competitiveUnlockRows, mixLine, questionsEmpty, rivalState, storedDenominators, trackingRules,
   type StandingsMonthRow,
 } from './competitive-surface'
 
@@ -78,6 +78,50 @@ describe('citationsInWindow — what CO5 may count and may show', () => {
     // window was shifted a day at both ends.
     expect(citationsInWindow([{ commentId: 'c-sep-first' }], dates, window)).toHaveLength(1)
     expect(citationsInWindow([{ commentId: 'c-oct-first' }], dates, window)).toHaveLength(0)
+  })
+})
+
+describe('storedDenominators — one line per rival, under the name it wears now', () => {
+  const history = (rows: ReturnType<typeof den>[], renames: { from: string; to: string; at: string }[] = []) =>
+    ({ substrate: 'seeded' as const, denominators: rows as never, renames: renames as never })
+
+  it('keys a renamed rival\u2019s months under its newest name', () => {
+    // AGENTS.md: "audience is a NAME … renaming a rival splits its series".
+    // Read off the table, the two keys are two brands: buildStandings draws
+    // the tracked name as "not observed" and the old key through its "an
+    // audience the panel saw that nobody asked for" branch, and both charts
+    // carry two lines for one rival.
+    const rows = [
+      den({ month: '2026-07-01', audience: 'competitor:Topo', videos: 5, comments: 20 }),
+      den({ month: '2026-08-01', audience: 'competitor:Topo Designs', videos: 7, comments: 30 }),
+    ]
+    const out = storedDenominators(
+      history(rows, [{ from: 'competitor:Topo', to: 'competitor:Topo Designs', at: '2026-08-01' }]),
+      ['2026-07-01', '2026-08-01'],
+    )!
+    expect(out.map((d) => d.audience)).toEqual(['competitor:Topo Designs', 'competitor:Topo Designs'])
+    expect(out.map((d) => d.videos)).toEqual([5, 7])
+  })
+
+  it('keeps one row per month per rival, first one wins, never a sum', () => {
+    // videos counts DISTINCT videos and two keys' sets overlap, so a sum
+    // overstates — the reading layer's own rule (lib/reading/series.ts).
+    const rows = [
+      den({ month: '2026-08-01', audience: 'competitor:Topo', videos: 7, comments: 30 }),
+      den({ month: '2026-08-01', audience: 'competitor:Topo Designs', videos: 9, comments: 44 }),
+    ]
+    const out = storedDenominators(
+      history(rows, [{ from: 'competitor:Topo', to: 'competitor:Topo Designs', at: '2026-08-01' }]),
+      ['2026-08-01'],
+    )!
+    expect(out).toHaveLength(1)
+    expect(out[0].videos).toBe(7)
+  })
+
+  it('keeps only the months on the axis, and says nothing rather than [] when the tables are absent', () => {
+    const rows = [den({ month: '2026-07-01' }), den({ month: '2026-09-01' })]
+    expect(storedDenominators(history(rows), ['2026-09-01'])!.map((d) => d.month)).toEqual(['2026-09-01'])
+    expect(storedDenominators({ substrate: 'missing', denominators: [], renames: [] }, ['2026-09-01'])).toBeNull()
   })
 })
 

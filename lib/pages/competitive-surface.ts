@@ -7,13 +7,13 @@ import { fmtInt, monthName, platformLabel } from '../format'
 import { fetchQuoteCitationsByAudience } from '../quotes'
 import { attentionTotals, type AttentionRow } from '../reading/attention'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
-import { freezeStateFor, isMissingMonthlyReading, monthStartOf } from '../reading/monthly'
-import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { freezeStateFor, monthStartOf } from '../reading/monthly'
+import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
-import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey } from '../rivals'
+import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey, stitchRenames } from '../rivals'
 import type { Quote, Scope } from '../renderables/types'
 import { quoteRef } from '../renderables/quotes-freeze'
 import { selectAll } from '../supabase-admin'
@@ -496,10 +496,8 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   const prevMonth = previousMonthOf(month)
   const readAxis = axis[0] <= prevMonth ? axis : [prevMonth, ...axis]
 
-  const [denominators, changes] = await Promise.all([
-    readDenominators(reading.client, clientId, readAxis),
-    loadConfigChanges(reading.client, clientId),
-  ])
+  const denominators = storedDenominators(history, readAxis)
+  const changes = await loadConfigChanges(reading.client, clientId)
 
   const standings = buildStandingsBlock({
     brand,
@@ -630,28 +628,49 @@ async function loadSubreddits(supabase: SupabaseClient, clientId: string): Promi
     .map((s) => s.name as string)
 }
 
-/** The stored months, read straight. Null — never [] — when the month tables
- *  are not applied here. */
-async function readDenominators(
-  client: SupabaseClient,
-  clientId: string,
+/**
+ * The stored months on one axis, keyed by the name each rival wears NOW.
+ *
+ * READ OUT OF `loadMonthSeries`, NOT OFF THE TABLE. This queried
+ * `month_denominators` directly, which is a read the reading layer already
+ * owns and owns for a reason: "audience is a NAME … renaming a rival splits
+ * its series" (AGENTS.md), and `loadMonthSeries` widens the ask through
+ * `renameChains` and keys the answer by the newest name. Skipping it meant
+ * that the moment M1 lands and a rename is logged, `buildStandings` would draw
+ * the rival TWICE — once under the tracked name reading "not observed", once
+ * under the old key through its "an audience the panel saw that nobody asked
+ * for" branch — and both charts would carry two lines for one brand. Nothing
+ * triggers it today (no logged rename in production), which is exactly why a
+ * render and a test could both be clean.
+ *
+ * `stitchRenames` is the shared fold and the one-row-per-month rule is the
+ * reading layer's own (lib/reading/series.ts): a month carrying a row under two
+ * of a rival's keys keeps the FIRST, because `videos` counts DISTINCT videos
+ * and the two rows' sets overlap, so a sum overstates.
+ *
+ * It also stops being a second copy of `readStoredMonths` in
+ * lib/pages/overview.ts, and it costs one query rather than two — the whole
+ * history is read once for `sinceStart` either way.
+ */
+export function storedDenominators(
+  history: Pick<MonthSeriesSet, 'substrate' | 'denominators' | 'renames'>,
   months: readonly string[],
-): Promise<StoredDenominatorRow[] | null> {
-  if (months.length === 0) return []
-  try {
-    return await selectAll<StoredDenominatorRow>(() =>
-      client.from('month_denominators')
-        .select('month, audience, videos, comments, platform_mix, dual_mention, status, run_id')
-        .eq('client_id', clientId)
-        .gte('month', months[0])
-        .lte('month', months[months.length - 1])
-        .order('month', { ascending: true })
-        .order('audience', { ascending: true }),
-    )
-  } catch (error) {
-    if (isMissingMonthlyReading(error)) return null
-    throw error
+): StoredDenominatorRow[] | null {
+  if (history.substrate === 'missing') return null
+  const onAxis = new Set(months.map(monthStartOf))
+  const rows = (history.denominators as unknown as StoredDenominatorRow[])
+    .filter((d) => onAxis.has(monthStartOf(d.month)))
+  const out: StoredDenominatorRow[] = []
+  for (const group of stitchRenames(rows, history.renames)) {
+    const seen = new Set<string>()
+    for (const p of group.points) {
+      const month = monthStartOf(p.month)
+      if (seen.has(month)) continue
+      seen.add(month)
+      out.push({ ...p, month, audience: group.audience })
+    }
   }
+  return out.sort((a, b) => a.month.localeCompare(b.month) || a.audience.localeCompare(b.audience))
 }
 
 /** The columns a rule needs, and no more: `config_changes.before` and `.after`
