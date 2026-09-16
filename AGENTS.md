@@ -19,7 +19,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
   `noteError`'d, the `keyword-discovery` precedent — because a record kept
   alongside the report must not make a clean run read `partial`; and both
   no-op rather than retry when their migration has not been applied yet.
-  **Phase 1 adds five more, unapplied on `feat/phase1` and in their own
+  **Phase 1 adds five more, on `feat/phase1`, not yet deployed and in their own
   positions:** `plan-translate-quotes` and `translate-quotes:${i}-of-${n}`
   (after the Pass A wave, before `embed-insights`), `plan-subject-membership`
   and `subject-membership:${i}-of-${n}` (after `embed-insights`, before
