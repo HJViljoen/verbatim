@@ -938,28 +938,40 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   const horizon = parseHorizon(params.horizon)
 
   // ── wave 1: who this is, and what has been delivered ───────────────────
-  // THE THEMED RUN AND THE LEDGER JOIN THIS WAVE (WP23). Neither depends on
-  // the month axis, and both used to be awaited on the critical path after it
-  // — the themed-run read alone was a second of Össur's Overview, spent while
-  // nothing else was in flight. The themed run still waits on the running-run
-  // ids, because that is what it filters by; it just waits on them here,
-  // beside the other three reads, instead of two waves later.
-  const [clientRes, runsRaw, themedRunId, rivals, ledger] = await Promise.all([
+  // WHAT MAY GO IN WAVE 1, AND WHAT MAY NOT. Wave 1 is above the empty-state
+  // guard, so every read in it is paid by a tenant that draws nothing. Three
+  // belong there because the guard itself is one of them: the client's name,
+  // the delivered runs, and the tracked rivals the page cannot be shaped
+  // without. Everything else STARTS ON THE LINE AFTER THE GUARD — started, not
+  // awaited, so it still overlaps wave 2 and costs the page no hop, and costs
+  // an empty tenant nothing. That is the same rule the record follows, applied
+  // to its neighbours.
+  const [clientRes, runsRaw, rivals] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     selectAll<RunRow>(() =>
       supabase.from('pipeline_runs').select('id, started_at')
         .eq('client_id', clientId).in('status', ['completed', 'partial'])
         .order('started_at', { ascending: true }),
     ),
-    fetchRunningRunIds(supabase, clientId, 'overview').then((ids) =>
-      fetchThemedRunId(supabase, clientId, ids, 'overview'),
-    ),
     loadTrackedRivals(supabase, clientId),
-    loadLedger(supabase, clientId),
   ])
   const client = row<{ company_name: string | null }>(clientRes, 'overview.client')
   const brand = client?.company_name ?? 'Your brand'
   if (runsRaw.length === 0) return null
+
+  // THE THEMED RUN AND THE LEDGER, STARTED HERE AND TAKEN WHERE THEY ARE USED
+  // (WP23). Neither depends on the month axis, and both were once awaited on
+  // the critical path after it — the themed-run read alone was a second of
+  // Össur's Overview, spent while nothing else was in flight. The themed run
+  // still waits on the running-run ids, because that is what it filters by. A
+  // rejection is still the page's, at the await below; the `catch` only stops
+  // an early throw elsewhere becoming an unhandled rejection.
+  const themedRunAhead = fetchRunningRunIds(supabase, clientId, 'overview').then((ids) =>
+    fetchThemedRunId(supabase, clientId, ids, 'overview'),
+  )
+  const ledgerAhead = loadLedger(supabase, clientId)
+  themedRunAhead.catch(() => {})
+  ledgerAhead.catch(() => {})
 
   const updatesByMonth: Record<string, number> = {}
   for (const r of runsRaw) {
@@ -1021,6 +1033,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
   sentAhead.catch(() => {})
 
   // ── wave 3: the readings ───────────────────────────────────────────────
+  const themedRunId = await themedRunAhead
   const rivalAudiences = rivals.map((r) => rivalKey(r.name))
   const audiences = [CLIENT_AUDIENCE, ...rivalAudiences, INDUSTRY_AUDIENCE]
   const top = themedRunId
@@ -1217,7 +1230,7 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     figures: head.figures,
     anomaly,
     interpretation,
-    ledger,
+    ledger: await ledgerAhead,
     voices: voices.voices,
     voicesFrom: voices.from,
     verdicts: sentenceVerdicts,
