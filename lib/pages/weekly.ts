@@ -101,8 +101,18 @@ export interface SalesRow {
 
 export interface ForSalesBlock {
   rows: SalesRow[]
-  /** How many more of these the month holds, past what is printed. */
-  more: number
+  /**
+   * Whether the month holds more of these than the four printed.
+   *
+   * A BOOLEAN, NOT A COUNT, and deliberately. The count printed here was
+   * `insights.length - rows.length` over a query capped at 120, so both tenants
+   * printed the identical "116 more in their own words" while the real numbers
+   * of qualifying rows were 838 and 1,486 — two workspaces of very different
+   * size printing the same number is the tell. An exact count means counting
+   * every quoted comment of the month, which is a read this artefact does not
+   * need in order to draw one link.
+   */
+  hasMore: boolean
   note: string | null
   briefHref: string
 }
@@ -749,7 +759,7 @@ async function loadSales(
   const briefHref = '/dashboard/reports'
   const empty: ForSalesBlock = {
     rows: [],
-    more: 0,
+    hasMore: false,
     note: 'Nothing a customer said this month was an objection, a complaint, a switching signal or a selling point we could quote.',
     briefHref,
   }
@@ -878,7 +888,7 @@ async function loadSales(
   })
   return {
     rows: out,
-    more: Math.max(0, insights.length - out.length),
+    hasMore: insights.length > out.length,
     note: overview.subjects.state === 'not_recorded' ? 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.' : null,
     briefHref,
   }

@@ -4,7 +4,6 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
 import type { SalesRow } from '@/lib/pages/weekly'
 import type { WeeklyData } from '@/lib/pages/weekly'
 
@@ -83,10 +82,15 @@ export const forSales: Block<WeeklyData> = {
             />
           </Rail>
         ))}
-        {s.more > 0 ? (
+        {/* THE LINK, WITHOUT A COUNT. This said "{n} more in their own words",
+            where n was the query's LIMIT minus the four printed — so Össur and
+            Sealand both printed 116 while their real numbers were 838 and
+            1,486. A count nobody counted is not worth a reader's trust; the
+            link is what the line was for. */}
+        {s.hasMore ? (
           mode === 'email'
-            ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><a href={`${ctx.appUrl}/dashboard/voice`} style={{ color: EMAIL.link, textDecoration: 'none' }}>{fmtInt(s.more)} more in their own words →</a></div>
-            : <Link href="/dashboard/voice" className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">{fmtInt(s.more)} more in their own words →</Link>
+            ? <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted, marginTop: 6 }}><a href={`${ctx.appUrl}/dashboard/voice`} style={{ color: EMAIL.link, textDecoration: 'none' }}>More in their own words →</a></div>
+            : <Link href="/dashboard/voice" className="mt-1.5 inline-block text-[12px] font-semibold hover:underline">More in their own words →</Link>
         ) : null}
         {s.note
           ? mode === 'email'

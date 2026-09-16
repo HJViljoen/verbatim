@@ -102,7 +102,7 @@ function base(overview = overviewFixture()): WeeklyData {
           href: null,
         },
       ],
-      more: 18,
+      hasMore: true,
       note: null,
       briefHref: '/dashboard/reports',
     },
@@ -170,7 +170,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       check: weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }),
     },
     incoming: { ...data.incoming, analysed: null, newThemes: [], newThemesNote: 'No theme was heard for the first time in this update.', rivalPosts: [], rivalPostsNote: 'No tracked rival posted in this update’s window.' },
-    sales: { rows: [], more: 0, note: 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.', briefHref: '/dashboard/reports' },
+    sales: { rows: [], hasMore: false, note: 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.', briefHref: '/dashboard/reports' },
     content: {
       ...data.content,
       worthAReply: [],
