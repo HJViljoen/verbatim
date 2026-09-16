@@ -12,6 +12,7 @@ import { documentSettings, isDocumentData, type DocumentWorkings } from '@/lib/r
 import { CUSTOM_KEY, documentTemplate, resolveTemplate } from '@/lib/reports/documents/templates'
 import { BUILD_ACTIVE, type ReportRow } from '@/lib/reports/types'
 import { buildBlockedReason, latestBuild } from '@/lib/reports/documents/builds'
+import { documentViewerPages } from '@/lib/reports/viewer'
 import { BUILD_PHASE_WORDS } from '@/lib/reports/documents/builds'
 
 // The document editor (T8c, 2026-08-31): settings on the left, the built
@@ -68,7 +69,10 @@ export async function DocumentStudioPage({ report, clientId }: { report: ReportR
     }
   }
 
-  const pageCount = snapshot && isDocumentData(snapshot.data) ? snapshot.data.pages.length + 1 : null
+  // THE SAME COUNT THE DECK PAGINATES BY. A brief's sheets are its written
+  // pages AND its borrowed page blocks (WP19); `pages.length + 1` undercounted
+  // every one of the four briefs by roughly half.
+  const pageCount = snapshot && isDocumentData(snapshot.data) ? documentViewerPages(snapshot.data) : null
   return (
     <PageFrame className="min-h-0 flex-1">
       <PageBar title={report.title} context={`Written report · ${template?.name ?? 'document'}${pageCount ? ` · ${pageCount} pages` : ''}${build ? ` · ${build.status === 'done' ? `built ${fmtWhen(build.finished_at ?? build.started_at)}` : BUILD_PHASE_WORDS[build.status].toLowerCase()}` : ''}${reviewNote ? ` · read before sending: ${reviewNote}` : ''}`}>

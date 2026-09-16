@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { render } from '@/lib/test/render'
 import { overviewFixture } from '@/components/pages/overview/fixture'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentViewerPages } from '@/lib/reports/viewer'
 import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
 import { DocumentDeck } from './document-deck'
 
@@ -61,6 +62,17 @@ describe('documentSlides over a layout', () => {
   it('sectionOfSlide resolves only section keys', () => {
     expect(sectionOfSlide(base(), 'section:mk.month')?.block).toBe('overview.sentence')
     expect(sectionOfSlide(base(), 'method')).toBeNull()
+  })
+
+  // THE HEADERS COUNT WHAT THE DECK PAGINATES. Both the viewer header and the
+  // Studio bar counted `pages.length + 1` while DocumentDeck numbered
+  // `documentSlides(data).length + 1`, so a brief's sheets were undercounted by
+  // its borrowed blocks — roughly half of every one of the four briefs.
+  it('documentViewerPages counts a borrowed block as a sheet', () => {
+    expect(documentViewerPages(base())).toBe(documentSlides(base()).length + 1)
+    expect(documentViewerPages(base())).toBe(3)
+    const old = base({ layout: undefined, sections: undefined, surfaces: undefined })
+    expect(documentViewerPages(old)).toBe(2)
   })
 })
 

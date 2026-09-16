@@ -9,6 +9,7 @@ import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { MONTHLY_BLOCK_KEYS } from './monthly'
 import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
+import { documentSlides } from './documents/compose'
 import type { ReportSnapshotData } from './types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
@@ -72,7 +73,7 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   if (isDocumentData(raw)) {
     const edits = await loadEdits(admin, row.id)
     const withEdits = applyEdits(raw, edits)
-    return { ...common, kind: 'document', data: withEdits, pageCount: withEdits.pages.length + 1 }
+    return { ...common, kind: 'document', data: withEdits, pageCount: documentViewerPages(withEdits) }
   }
 
   // A WEEKLY REPORT (Phase 1 WP17): six blocks over one reading, and NO
@@ -112,6 +113,26 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
   const report = raw as ReportSnapshotData
   const { pageModule } = await import('@/components/pages/registry')
   return { ...common, kind: 'report', data: report, pageCount: deckSlides(report, pageModule).length }
+}
+
+/**
+ * How many sheets a stored brief prints — one per WRITTEN page, one per
+ * BORROWED page block, plus the cover.
+ *
+ * A BORROWED BLOCK IS A SHEET TOO (WP19). `DocumentDeck` paginates off
+ * `documentSlides`, which walks `layout` — the written pages and the borrowed
+ * sections in one order — while both headers still counted `pages.length + 1`.
+ * Every brief this product builds is affected: MARKETING_MAP is 3 written pages
+ * and 5 blocks, SALES_MAP 4 and 4, CONTENT_MAP 4 and 3, LEADERSHIP_MAP 3 and 4,
+ * so the viewer header and the Studio bar undercounted by roughly half. The
+ * same deck already fixed the twin bug on its own cover and stopped one line
+ * short of the page count.
+ *
+ * This is the seam WP17 added `weeklyViewerPages` for, and WP18 and WP20 both
+ * took the lesson; the brief is the one kind that did not.
+ */
+export function documentViewerPages(data: DocumentSnapshotData): number {
+  return documentSlides(data).length + 1
 }
 
 /**
