@@ -188,15 +188,20 @@ export function spanOf(months: readonly string[]): string {
 /**
  * Why a subject shows no voice this month.
  *
- * THREE SILENCES AND THEY ARE NOT ONE. "Nothing was said about it" is a reading
+ * TWO SILENCES AND THEY ARE NOT ONE. "Nothing was said about it" is a reading
  * of the month; "nothing readable was said" is a reading of what we could quote
- * (a quote must pass the same gate Overview's two voices pass — item 8); "we do
- * not count this subject yet" is a fact about the workspace's own setup. A
- * single sentence for all three would tell a client their customers were quiet
- * when what happened is that nobody confirmed the subject.
+ * (a quote must pass the same gate Overview's two voices pass — item 8). One
+ * sentence for both would tell a client their customers were quiet when what
+ * happened is that nothing they said could be quoted.
+ *
+ * AND THERE IS NO THIRD. The first cut had "we do not count this subject yet"
+ * as well, and it could never be reached: the loader filters to
+ * `status === 'active'` and then asked whether the subject was active, so
+ * `counted` was always true. A workspace with no confirmed subject is answered
+ * one level up, by the section's own note, which says exactly that — an arm
+ * only a test could reach is an arm a reader never sees.
  */
-export function voiceNote(input: { counted: boolean; citations: number; readable: number }): string | null {
-  if (!input.counted) return 'not counted yet — confirm it and counting starts with the next update'
+export function voiceNote(input: { citations: number; readable: number }): string | null {
   if (input.citations === 0) return 'nothing was said about this one this month'
   if (input.readable === 0) return 'what was said this month could not be quoted — too short, or nothing but a handle'
   return null
@@ -430,7 +435,7 @@ async function loadSubjectVoicesPerSubject(
       voice,
       note: voice
         ? null
-        : voiceNote({ counted: subject.status === 'active', citations: ids.length, readable: read.voices.length }),
+        : voiceNote({ citations: ids.length, readable: read.voices.length }),
       href: `/dashboard/subjects?item=${encodeURIComponent(subject.id)}`,
     }
   })

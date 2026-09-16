@@ -32,17 +32,19 @@ describe('the months a mover’s line is drawn on', () => {
 })
 
 describe('why a subject shows no voice', () => {
-  it('tells three silences apart', () => {
-    expect(voiceNote({ counted: false, citations: 40, readable: 3 }))
-      .toBe('not counted yet — confirm it and counting starts with the next update')
-    expect(voiceNote({ counted: true, citations: 0, readable: 0 }))
+  // Two, not three: the loader filters to active subjects, so the arm that
+  // said "not counted yet" could only ever be reached by a test calling it
+  // directly. A workspace with no confirmed subject is answered by the
+  // section's own note.
+  it('tells the two silences apart', () => {
+    expect(voiceNote({ citations: 0, readable: 0 }))
       .toBe('nothing was said about this one this month')
-    expect(voiceNote({ counted: true, citations: 12, readable: 0 }))
+    expect(voiceNote({ citations: 12, readable: 0 }))
       .toBe('what was said this month could not be quoted — too short, or nothing but a handle')
   })
 
   it('says nothing where there is a voice to print', () => {
-    expect(voiceNote({ counted: true, citations: 12, readable: 4 })).toBeNull()
+    expect(voiceNote({ citations: 12, readable: 4 })).toBeNull()
   })
 })
 
