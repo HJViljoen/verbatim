@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describes, migration, parseArgs, validate } from './migrate-keys'
+import { chooseSchedules, describes, migration, parseArgs, validate } from './migrate-keys'
 import { WEEKLY_STARTER_KEY } from './artefact'
 
 describe('the flags', () => {
@@ -56,5 +56,33 @@ describe('what it writes', () => {
 
   it('stamps the row it touches', () => {
     expect(migration(false, new Date('2026-09-18T09:00:00.000Z')).updated_at).toBe('2026-09-18T09:00:00.000Z')
+  })
+})
+
+// `--client` alone used to convert EVERY schedule of the workspace, including a
+// document or brief schedule with its own report_id. The script's own header
+// says "row by row".
+describe('which schedules a run touches', () => {
+  const rows = [
+    { id: 'a', is_default: true },
+    { id: 'b', is_default: false },
+    { id: 'c', is_default: false },
+  ]
+
+  it('takes the default schedule when nothing else is named', () => {
+    expect(chooseSchedules(rows, { scheduleId: null, all: false }).map((s) => s.id)).toEqual(['a'])
+  })
+
+  it('takes exactly the one named', () => {
+    expect(chooseSchedules(rows, { scheduleId: 'c', all: false }).map((s) => s.id)).toEqual(['c'])
+  })
+
+  it('takes every one only when asked for every one', () => {
+    expect(chooseSchedules(rows, { scheduleId: null, all: true }).map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('reads --all off the command line, and does not invent it', () => {
+    expect(parseArgs(['--client', 'x', '--all']).all).toBe(true)
+    expect(parseArgs(['--client', 'x']).all).toBe(false)
   })
 })

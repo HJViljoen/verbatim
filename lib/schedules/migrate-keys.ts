@@ -13,20 +13,46 @@ import type { ScheduleRow } from './types'
 export interface MigrateArgs {
   clientId: string | null
   scheduleId: string | null
+  /** Every schedule of the workspace, not just the default one. */
+  all: boolean
   apply: boolean
 }
 
 export function parseArgs(argv: string[]): MigrateArgs {
-  const a: MigrateArgs = { clientId: null, scheduleId: null, apply: false }
+  const a: MigrateArgs = { clientId: null, scheduleId: null, all: false, apply: false }
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i]
     const next = () => argv[++i]
     if (flag === '--client') a.clientId = next()
     else if (flag === '--schedule') a.scheduleId = next()
+    else if (flag === '--all') a.all = true
     else if (flag === '--apply') a.apply = true
     else throw new Error(`unknown flag: ${flag}`)
   }
   return a
+}
+
+/**
+ * Which of a workspace's schedules this run touches.
+ *
+ * THE DEFAULT IS THE DEFAULT SCHEDULE, not all of them. The script's own header
+ * says the change is made "ROW BY ROW, by an operator", and `--client` alone
+ * used to convert EVERY row — including a document or brief schedule with its
+ * own `report_id`, all of them rewritten to the weekly report. It is dry by
+ * default and prints each row before `--apply`, but the safe reading of a flag
+ * should not depend on the operator noticing a line.
+ *
+ * So: `--schedule <id>` names one, `--all` asks for every one on purpose, and
+ * `--client` alone takes the workspace digest — the row this migration exists
+ * for.
+ */
+export function chooseSchedules<T extends { id: string; is_default: boolean }>(
+  all: readonly T[],
+  args: Pick<MigrateArgs, 'scheduleId' | 'all'>,
+): T[] {
+  if (args.scheduleId) return all.filter((s) => s.id === args.scheduleId)
+  if (args.all) return [...all]
+  return all.filter((s) => s.is_default)
 }
 
 export function validate(a: MigrateArgs): string[] {

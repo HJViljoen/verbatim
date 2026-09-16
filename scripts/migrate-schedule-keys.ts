@@ -2,7 +2,7 @@ import { createAdminClient } from '../lib/supabase-admin'
 import { recordConfigChange, scriptActor } from '../lib/config-log'
 import { sendsWeekly } from '../lib/schedules/artefact'
 import { WEEKLY_BLOCK_KEYS } from '../lib/reports/weekly'
-import { migration, parseArgs, validate, describes } from '../lib/schedules/migrate-keys'
+import { chooseSchedules, migration, parseArgs, validate, describes } from '../lib/schedules/migrate-keys'
 import type { ScheduleRow } from '../lib/schedules/types'
 
 // Move a live schedule onto the weekly report's block keys (Phase 1 WP17).
@@ -25,7 +25,13 @@ import type { ScheduleRow } from '../lib/schedules/types'
 // change and no trigger watches this table.
 //
 //   node --env-file=.env.local --import tsx scripts/migrate-schedule-keys.ts \
-//     --client <uuid> [--schedule <uuid>] [--apply]
+//     --client <uuid> [--schedule <uuid> | --all] [--apply]
+//
+// ONE ROW BY DEFAULT — the workspace's default schedule. `--client` alone used
+// to take EVERY schedule of the tenant, a document or brief schedule with its
+// own report_id included, which is not "row by row" however carefully the
+// preview is read. `--schedule` names one; `--all` asks for all of them on
+// purpose.
 //
 // DRY BY DEFAULT. Without --apply it prints what each schedule sends now, what
 // it would send after, and what is left behind — and writes nothing.
@@ -58,10 +64,14 @@ async function main() {
   const client = clientRes.data as { company_name: string } | null
   if (!client) throw new Error(`no client ${clientId}`)
   const all = (schedulesRes.data ?? []) as ScheduleRow[]
-  const chosen = args.scheduleId ? all.filter((s) => s.id === args.scheduleId) : all
+  const chosen = chooseSchedules(all, args)
   if (args.scheduleId && chosen.length === 0) throw new Error(`no schedule ${args.scheduleId} on this workspace`)
+  if (!args.scheduleId && !args.all && chosen.length === 0) {
+    throw new Error(`no default schedule on this workspace — name one with --schedule <uuid>, or pass --all (${all.length} schedule(s) here)`)
+  }
 
-  console.log(`${client.company_name} — schedule keys ${args.apply ? 'APPLY' : 'dry run'}`)
+  const scope = args.scheduleId ? 'one schedule' : args.all ? `every schedule (${all.length})` : 'the default schedule'
+  console.log(`${client.company_name} — schedule keys ${args.apply ? 'APPLY' : 'dry run'} · ${scope}`)
   console.log(`  report_schedules.artefact (M8): ${hasArtefact ? 'applied — the column is written too' : 'NOT applied — the starter key carries it for now'}\n`)
 
   // The sections a `report_id` schedule sends today, so the operator sees what
@@ -113,7 +123,7 @@ async function main() {
       field: 'report_schedules.starter_key',
       before: { starter_key: s.starter_key, report_id: s.report_id, artefact: s.artefact ?? null },
       after: { starter_key: payload.starter_key, report_id: null, artefact: hasArtefact ? 'weekly' : null },
-      actor: scriptActor(`scripts/migrate-schedule-keys.ts --client ${clientId} --apply`),
+      actor: scriptActor(`scripts/migrate-schedule-keys.ts --client ${clientId} --schedule ${s.id} --apply`),
       note: `${s.name} now sends the weekly report`,
     })
     console.log(`  ✓ ${s.name}`)
