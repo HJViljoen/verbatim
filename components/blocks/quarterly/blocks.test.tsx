@@ -157,6 +157,25 @@ describe('what each page owes the reader', () => {
     }
   })
 
+  it('calls the category’s count the category’s, not every audience added up', () => {
+    // The figure summed the window read across every audience — your own, each
+    // rival's and the category's — and the prose called the total "the
+    // category". On Össur's real Q3 rows that is ~1,306 against a category of
+    // 1,134. The fixture's own pair is 4,147 category videos and 249 of yours.
+    expect(data.cover.figures.quarter_videos?.value).toBe(4147)
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))).toContain('The category was read across 4,147 videos')
+  })
+
+  it('argues the interpretation from the quarter’s own comparisons only', () => {
+    // The slot's sentences all say "this quarter", so a month verdict handed to
+    // it wrote "X cleared the band this quarter" about a month's reading — the
+    // same figure the cover was calling a quarter change.
+    const windows = new Set(data.read.interpretation ? data.category.quarter.map((v) => v.window.kind) : [])
+    expect([...windows]).toEqual(['quarter'])
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(forming, 'app', ctx))
+    expect(text).toContain('Nothing cleared its band this quarter')
+  })
+
   it('states the volume of a read quarter and the silence of an unread one', () => {
     expect(forming.category.quarterVolume).toBeNull()
     const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(forming, 'app', ctx))

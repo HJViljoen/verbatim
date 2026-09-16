@@ -364,15 +364,31 @@ export function coverBody(input: {
   quarterLabel: string
   unlocked: boolean
   readings: number
+  /** Whether the month the lead belongs to falls outside the quarter under
+   *  review — the normal case on a scheduled send. */
+  monthOutside?: boolean
 }): string {
   const parts: string[] = []
+  // ONE SENTENCE, ONE PERIOD. `overview.sentence.lead` is a MONTH verdict —
+  // the largest banded change in the month the product is in — and the first
+  // cut called it "the biggest banded change THIS QUARTER … in September".
+  // A cover is the sheet most likely to be read on its own and forwarded, so
+  // it names the month the figure belongs to and says nothing about the
+  // quarter it does not have.
   if (input.lead && isAnswer(input.lead.state)) {
     parts.push(
-      `The biggest banded change this quarter is ${input.lead.objectLabel}, at [[lead_share]] of [[lead_of]] videos in ${input.monthLabel}.`,
+      `The biggest banded change in ${input.monthLabel} is ${input.lead.objectLabel}, at [[lead_share]] of [[lead_of]] videos${
+        input.monthOutside ? `, the month in hand rather than a month of ${input.quarterLabel}` : ''
+      }.`,
     )
   } else {
-    parts.push(`Nothing on either side cleared its band this quarter by more than the reading can carry.`)
+    parts.push(`Nothing on either side cleared its band in ${input.monthLabel} by more than the reading can carry.`)
   }
+  // THE CATEGORY'S OWN DENOMINATOR. This figure summed the window read across
+  // EVERY audience — your own, each rival's and the category's — and then
+  // called the total "the category": on Össur's real Q3 rows, ~1,306 against a
+  // category of 1,134. Each audience counts the same corpus from a different
+  // side, so a sum of them is not a count of anything.
   parts.push(`The category was read across [[quarter_videos]] videos in ${input.quarterLabel}.`)
   parts.push(
     input.unlocked
@@ -633,7 +649,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // method page counts what it refused. One source, three readers.
   const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
   const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt })
-  const read = buildRead({ overview, market: a.market, verdicts, unlocked, cover, draft: a.draft ?? null })
+  const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
   const unsettled = buildUnsettled({ verdicts, readings, overview, method })
 
   return {
@@ -785,7 +801,7 @@ function themeLabel(id: string, overview: OverviewData): string | null {
  */
 function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
   const parts: string[] = []
-  if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} videos read in ${quarterLabel(quarter, false)}`)
+  if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} category videos read in ${quarterLabel(quarter, false)}`)
   else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
   if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
   return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
@@ -810,9 +826,10 @@ function buildCover(a: {
 }): CoverPage {
   const { overview } = a
   const lead = overview.sentence.lead
-  const quarterVideos = a.thisQuarter.denominators
-    ? a.thisQuarter.denominators.reduce((sum, d) => sum + d.videos, 0)
-    : null
+  // THE CATEGORY'S OWN WINDOWED COUNT, not a sum across audiences. See
+  // `windowVideos` and `coverBody`.
+  const quarterVideos = windowVideos(a.thisQuarter, overview.category.audience)
+  const monthOutside = monthBasisClause(overview.month, a.quarter) != null
 
   const figures: ReadingFigures = { ...overview.sentence.figures }
   if (lead && isAnswer(lead.state) && lead.value.n > 0) {
@@ -820,7 +837,7 @@ function buildCover(a: {
     figures.lead_of = { value: lead.value.n, unit: 'videos', label: 'videos it is a share of' }
   }
   if (quarterVideos != null) {
-    figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `videos read in ${quarterLabel(a.quarter, false)}` }
+    figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `${overview.category.label} videos read in ${quarterLabel(a.quarter, false)}` }
   }
 
   const stats: CoverStat[] = []
@@ -854,6 +871,7 @@ function buildCover(a: {
       quarterLabel: quarterLabel(a.quarter, false),
       unlocked: quarterUnlocked(a.readings),
       readings: a.readings,
+      monthOutside,
     }),
     figures,
     stats,
@@ -884,14 +902,23 @@ function buildRead(a: {
   overview: OverviewData
   market: MarketSurfaceData | null
   verdicts: Verdict[]
+  /** The quarter-on-quarter half alone — what the interpretation may argue
+   *  from, because its slot's sentences all say "this quarter". */
+  quarterVerdicts: Verdict[]
   unlocked: boolean
   cover: CoverPage
   draft: string | null
 }): ReadPage {
   const quotes = a.overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
+  // THE QUARTERLY SLOT'S SENTENCES SAY "THIS QUARTER", so only comparisons
+  // whose window IS the quarter may be argued from. Handed the whole list, the
+  // page wrote "X cleared the band this quarter" about a month verdict — the
+  // same figure the cover was calling a quarter change. A month's reading is
+  // still on the pages that own it, and is still in `verdicts` below for
+  // anything that audits what this artefact drew.
   const interpretation = composeInterpretation(
     'interpretation_quarterly',
-    a.verdicts,
+    a.quarterVerdicts,
     proseFigures(a.cover.figures),
     quotes.map((q) => ({ ref: q.quote.ref, context: q.cite })),
     { draft: a.draft },

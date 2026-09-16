@@ -78,6 +78,10 @@ describe('confidenceOf', () => {
 describe('coverBody', () => {
   it('names the lead and its denominator as tokens, never as digits', () => {
     const body = coverBody({ lead: verdict(), monthLabel: 'September', quarterLabel: 'Q3 2026', unlocked: true, readings: 8 })
+    // ONE SENTENCE, ONE PERIOD. The lead is a MONTH verdict and the sentence
+    // used to call it "the biggest banded change this quarter … in September".
+    expect(body).toContain('The biggest banded change in September')
+    expect(body).not.toMatch(/banded change this quarter/)
     expect(body).toContain('[[lead_share]]')
     expect(body).toContain('[[lead_of]]')
     expect(body).toContain('[[quarter_videos]]')
@@ -93,6 +97,11 @@ describe('coverBody', () => {
     // Lower-cased mid-sentence: the gate is a clause here, not a heading.
     expect(body).toContain('quarter against quarter needs six months')
     expect(body).toContain('you have 3')
+  })
+
+  it('says the month the lead is of is not a month of the quarter, when it is not', () => {
+    const body = coverBody({ lead: verdict(), monthLabel: 'October', quarterLabel: 'Q3 2026', unlocked: true, readings: 9, monthOutside: true })
+    expect(body).toContain('the month in hand rather than a month of Q3 2026')
   })
 
   it('says nothing cleared rather than inventing a lead', () => {
