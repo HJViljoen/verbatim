@@ -104,6 +104,13 @@ describe('dateFilterLine', () => {
       .toBe('12 of 47 items 1 Sep 2026 to 30 Sep 2026.')
   })
 
+  it('names the clock the cap is on where it is not the filter\'s', () => {
+    // The Built list is the 100 most recently BUILT rows; the filter compares
+    // the day each artefact read. "Most recent" alone left the two as one.
+    expect(dateFilterLine(parseDateFilter('2025-01-01', '2025-03-01'), 0, 340, 100, 'built'))
+      .toBe('0 of 340 items 1 Jan 2025 to 1 Mar 2025. Only the 100 most recently built are searched, so anything built before those is not counted here.')
+  })
+
   it('does not weigh the cap against a total drawn from another pool', () => {
     // The Built group's total is the head count minus the snapshots a send has
     // taken; the cap applies to the head count. 130 built, 40 sent, the newest

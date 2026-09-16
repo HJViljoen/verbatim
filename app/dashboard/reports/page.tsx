@@ -303,7 +303,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
     <ArchiveDateFilter
       filter={dates}
       hidden={{ ...(group !== 'sent' ? { group } : {}), ...(sp.item ? { item: sp.item } : {}) }}
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, cappedAt)}
+      // The Built list is capped by when each artefact was BUILT and narrowed
+      // by when it READ; the caveat names the clock its cap is on so the two
+      // dates cannot be read as one.
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, cappedAt, group === 'built' ? 'built' : undefined)}
     />
   )
   const list = group === 'sent' ? (

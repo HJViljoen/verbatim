@@ -104,8 +104,14 @@ export function listCap(pools: readonly ListPool[]): number | null {
  * hides anything is a question about the pool the LIST was drawn from, and only
  * the caller knows that pool; here, a cap that is passed is a cap that hides
  * something.
+ *
+ * `capClock` NAMES THE CLOCK THE CAP IS ON, where it is not the one the filter
+ * compares. The Built list is the 100 most recently BUILT rows and the filter
+ * narrows them by the day each artefact READ — two clocks, days or weeks apart
+ * for a brief built late for an earlier month — so "the 100 most recent" left
+ * the reader to guess which. Passed, it reads "the 100 most recently built".
  */
-export function dateFilterLine(filter: DateFilter, shown: number, total: number, cappedAt?: number | null): string | null {
+export function dateFilterLine(filter: DateFilter, shown: number, total: number, cappedAt?: number | null, capClock?: string): string | null {
   if (!hasDateFilter(filter)) return null
   const span = filter.from && filter.to
     ? `${fullDate(`${filter.from}T00:00:00.000Z`)} to ${fullDate(`${filter.to}T00:00:00.000Z`)}`
@@ -115,9 +121,11 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number,
   const head = `${shown} of ${total} ${total === 1 ? 'item' : 'items'} ${span}.`
   // A cap that hides nothing is not passed: a list sitting on its cap with
   // nothing behind it is a complete list, and a caveat about nothing is noise.
-  return cappedAt != null
-    ? `${head} Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
-    : head
+  if (cappedAt == null) return head
+  const clause = capClock
+    ? `Only the ${cappedAt} most recently ${capClock} are searched, so anything ${capClock} before those is not counted here.`
+    : `Only the ${cappedAt} most recent are searched, so anything older than those is not counted here.`
+  return `${head} ${clause}`
 }
 
 /**
