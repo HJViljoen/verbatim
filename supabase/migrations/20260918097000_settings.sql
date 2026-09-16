@@ -71,13 +71,28 @@ revoke all on public.gate_verdicts from authenticated, anon;
 grant select (id, client_id, run_id, platform, video_id, keyword, kept, source, created_at)
   on public.gate_verdicts to authenticated;
 
--- The gate writer is the pipeline, on the service-role key. The record of a
--- decision that its own writer can rewrite answers no question worth asking
--- (the rec_decisions precedent): nothing in the repo updates or deletes a
--- verdict — lib/gather/gate-verdicts.ts inserts, lib/readiness/load.ts,
--- lib/reading/record.ts and the scripts read.
-grant select, insert on public.gate_verdicts to service_role;
-revoke update, delete, truncate on public.gate_verdicts from service_role;
+-- The gate writer is the pipeline, on the service-role key, and it UPSERTS.
+-- lib/gather/gate-verdicts.ts recordGateVerdicts is
+-- `.upsert(part, { onConflict: 'client_id,run_id,platform,video_id' })`,
+-- deliberately: the step it runs in can replay, and a re-insert would double
+-- every survival rate the table exists to measure. PostgreSQL requires the
+-- UPDATE privilege to PLAN an `insert ... on conflict do update`, whether or
+-- not a row actually conflicts — so a revoke here does not harden the record,
+-- it stops the record being written at all. Every platform's
+-- recordGateVerdicts would throw, lib/gather/gather.ts would push "gate
+-- verdicts not recorded" into `errors`, and every run would read `partial`
+-- while the reject log, the per-term kept-rate and readiness row 8 quietly
+-- stopped growing. (Exercised: with insert alone, a plain INSERT succeeds and
+-- the same statement with ON CONFLICT DO UPDATE fails "permission denied for
+-- table gate_verdicts".)
+--
+-- So the grant follows the writer, and what is withheld is what the writer
+-- never does: nothing in the repo DELETES a verdict, and a record its own
+-- writer can erase answers no question worth asking (the rec_decisions
+-- precedent). lib/readiness/load.ts, lib/reading/record.ts and the scripts
+-- read.
+grant select, insert, update on public.gate_verdicts to service_role;
+revoke delete, truncate on public.gate_verdicts from service_role;
 
 comment on column public.gate_verdicts.caption_excerpt is
   'Two hundred characters of a third party''s public caption, scraped. NOT granted to `authenticated` (WP16): a row-level policy keys on client_id and never on role, so granting it would publish every stranger''s caption to every member of the workspace. The reject log serves it through a server component gated canManageTenant, on the service-role client.';
@@ -222,9 +237,11 @@ comment on column public.video_claims.quote is
 --     "permission denied for TABLE gate_verdicts", because there is no
 --     table-level SELECT to fall back to, so that is the message an operator
 --     chasing this will see;
---   * the same session holds no insert, update or delete on gate_verdicts, and
---     service_role's update and delete are refused ("permission denied for
---     table gate_verdicts");
+--   * the same session holds no insert, update or delete on gate_verdicts;
+--     service_role's own write — the product's write, an INSERT ... ON CONFLICT
+--     DO UPDATE over the natural key — succeeds and updates the conflicting row
+--     rather than doubling it, and service_role's DELETE is refused
+--     ("permission denied for table gate_verdicts");
 --   * gate_appeals takes one row per (client, run, platform, video) and refuses
 --     the second on gate_appeals_unique; a tenant session reads its own and its
 --     INSERT is refused; service_role's DELETE is refused;
