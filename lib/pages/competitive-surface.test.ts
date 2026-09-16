@@ -119,6 +119,35 @@ describe('CO2 · the standings', () => {
     )
   })
 
+  it('never says "nothing was not observed" — the refusal is a month, not a negation', () => {
+    // The sentence was `Nothing was ${NOT_OBSERVED} in ${month}.`, which
+    // composes "Nothing was not observed in Oct 2026" — the opposite of what
+    // it means. It could only fire where the table's month held no rows, and
+    // that state now refuses by naming the month.
+    const cases = [
+      build(),
+      buildStandingsBlock({
+        brand: 'Össur', rivals: [{ name: 'Ottobock', retiredAt: null }], denominators: OSSUR,
+        axis: ['2026-10-01'], readAxis: ['2026-09-01', '2026-10-01'], month: '2026-10-01', changes: [],
+      }),
+      buildStandingsBlock({
+        brand: 'Össur', rivals: [], denominators: null,
+        axis: ['2026-09-01'], readAxis: ['2026-09-01'], month: '2026-09-01', changes: [],
+      }),
+      // A month whose only stored audience is one nobody asked for: the row is
+      // drawn (hiding it would stop the shares adding up), so the table is not
+      // empty and says nothing about observation at all.
+      buildStandingsBlock({
+        brand: 'Sealand', rivals: [{ name: 'Cotopaxi', retiredAt: null }],
+        denominators: [den({ month: '2026-09-01', audience: 'competitor:Patagonia', videos: 4, comments: 9, dual_mention: 0 })],
+        axis: ['2026-09-01'], readAxis: ['2026-08-01', '2026-09-01'], month: '2026-09-01', changes: [],
+      }),
+    ]
+    for (const block of cases) expect(block.empty ?? '').not.toMatch(/was not observed/)
+    expect(cases[3].empty).toBeNull()
+    expect(cases[3].rows.map((r) => r.label)).toContain('Patagonia')
+  })
+
   it('says nothing is behind when the month in hand is the month read', () => {
     expect(build().behind).toBeNull()
     expect(build().month).toBe('2026-09-01')

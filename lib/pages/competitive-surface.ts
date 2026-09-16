@@ -9,7 +9,7 @@ import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWind
 import { freezeStateFor, isMissingMonthlyReading, monthStartOf } from '../reading/monthly'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
-import { buildStandings, NOT_OBSERVED, type StandingRow } from '../reading/standings'
+import { buildStandings, type StandingRow } from '../reading/standings'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
 import { CLIENT_AUDIENCE, isMissingCompetitors, loadCompetitors, rivalKey } from '../rivals'
@@ -780,7 +780,15 @@ export function buildStandingsBlock(input: StandingsInputs): StandingsBlock {
     rules: trackingRules(input.changes, input.axis),
     dualMention: (byMonth.get(month) ?? []).find((d) => d.audience === CLIENT_AUDIENCE)?.dual_mention ?? null,
     caveat: comparabilityCaveat(denominators),
-    empty: rows.every((r) => !r.observed) ? `Nothing was ${NOT_OBSERVED} in ${monthName(month)}.` : null,
+    // NO "EVERY ROW UNOBSERVED" SENTENCE. There was one, and it read
+    // `Nothing was ${NOT_OBSERVED} in ${month}.` — "Nothing was not observed in
+    // Oct 2026", which states the opposite of what it means. It could only
+    // fire on the month-mislabel path (a table whose month held no rows), and
+    // that path now refuses in its own words above, with the month named. Every
+    // row here is a row of a month that HAS rows, and `buildStandings` draws a
+    // row for every audience the month holds, so the branch was unreachable as
+    // well as backwards.
+    empty: null,
   }
 }
 
