@@ -728,13 +728,19 @@ it is not a script.
 
 **For Össur this is a RESTORATION, not a new list.** Both schedules are
 `active` with ZERO recipients today (read on production 2026-09-16, the row at
-the top of this file) — and a digest went to **four** Össur addresses on
-13 September. The list did not shrink on purpose: it moved to
+the top of this file), and `tracking_configs.report_emails` holds **four** live
+Össur addresses (read the same day). That a digest went to those four on
+13 September is Block B's reading of `report_sends` and **was not re-read
+today** — the query below is how you check it in the deploy window, and it
+costs nothing. The list did not shrink on purpose: it moved to
 `report_schedules.recipients` at T0-10 and those four never came with it, which
 is why `tracking_configs.report_emails` still holds them and why step 5.5 tells
 you to copy them out BEFORE you clear that column. Put the same four back, read
 them one by one against the send that went out, and treat a fifth address as a
-decision somebody has to have made rather than a typo to be kept.
+decision somebody has to have made rather than a typo to be kept. If
+`report_sends` shows a different set, believe `report_sends`: it is the record
+of what was delivered, and `report_emails` is a column nothing has read since
+T0-10.
 `select subject, recipients, created_at from public.report_sends where client_id = '<össur uuid>' order by created_at desc limit 3;`
 is the record of who actually received one.
 
