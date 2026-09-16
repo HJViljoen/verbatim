@@ -29,6 +29,15 @@ describe('voiceCast', () => {
     expect(text).not.toMatch(/527 of /)
   })
 
+  it('never calls its population "comments" — it is not a comment count', () => {
+    // `insight_population` counts the points Pass A extracted and the
+    // workspace holds: Össur's 3,129 against 10,534 comments in the September
+    // category. "Comments" has a fixed meaning in this product's copy.
+    const text = draw()
+    expect(text).toContain('read over 3,129 separate points people made')
+    expect(text).not.toContain("comments' worth")
+  })
+
   it('says the groups overlap instead of taking a remainder from them', () => {
     expect(draw()).toContain('A video can carry more than one group, so these counts overlap and do not add up to a whole.')
   })

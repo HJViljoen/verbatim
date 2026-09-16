@@ -127,7 +127,15 @@ export const voiceCast: Block<VoiceSurfaceData> = {
       title: voiceCast.title,
       question: voiceCast.question,
       mode,
-      meta: c.population != null ? `read over ${fmtInt(c.population)} comments' worth of insight` : undefined,
+      // NOT "comments". `consumer_profiles.insight_population` counts the
+      // POINTS Pass A extracted and the workspace currently holds — Össur's
+      // 3,129 against 10,534 comments in the September category — and
+      // "comments" has a fixed meaning in this product's copy
+      // (lib/calibration.ts GLOSSARY), so calling these that is a wrong
+      // number wearing a defined word. "Insight" is pipeline vocabulary and
+      // is not one of the thirteen words either, so the line says the plain
+      // thing instead.
+      meta: c.population != null ? `read over ${fmtInt(c.population)} separate points people made` : undefined,
       footer: email
         ? <span style={{ color: EMAIL.muted }}>{c.floorNote}</span>
         : <Link href={href} className="hover:underline">{c.floorNote}</Link>,

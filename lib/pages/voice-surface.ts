@@ -369,8 +369,11 @@ export interface CastBlock {
   state: 'ready' | 'no_personas' | 'not_run'
   personas: CastPersona[]
   selected: string | null
-  /** The insights the profile was read over — its own population, named as
-   *  what it is. Null on a profile written before the column existed. */
+  /** The points Pass A extracted that the workspace currently holds, which is
+   *  what the profile was read over (`consumer_profiles.insight_population`).
+   *  NOT a comment count — Össur's is 3,129 against 10,534 comments in the
+   *  September category, and "comments" has a fixed meaning in this product's
+   *  copy. Null on a profile written before the column existed. */
   population: number | null
   /** Said on the block: these groups overlap, so their counts do not add up to
    *  a whole and no remainder can be taken from them. The mock's "No persona
