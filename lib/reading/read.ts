@@ -274,6 +274,13 @@ export async function loadMonthSeries(
   // substrate is not `seeded` the answer is dropped unread, exactly as if it
   // had never been asked for.
   //
+  // A FAILING CHUNK COSTS MORE THAN ONE REQUEST NOW. These chunks go out
+  // together, so when `month_subject_readings` turns out not to exist the guard
+  // below learns it after up to min(chunks, READ_CONCURRENCY) requests rather
+  // than after one — bounded here because an object set is tens to low hundreds
+  // of ids, so one or two chunks. lib/chunk.ts `mapWithLimit` states the rule
+  // and what to do if that ever stops being true.
+  //
   // MULTI_ROW_IN_CHUNK, NOT THE UUID SIZE. One object id names a row per month
   // per audience here (the reading tables are keyed
   // (client_id, month, audience, <object>)), so a twelve-month window over five
@@ -534,6 +541,11 @@ function loadLabels(
     // branches are about, not the table they read.
     const table = objectKind === 'subject' ? TABLE_SUBJECTS : 'theme_registry'
     const column = objectKind === 'subject' ? 'name' : 'canonical_label'
+    // (A missing `subjects` table is learnt after up to min(chunks,
+    // READ_CONCURRENCY) requests rather than one, because the chunks go out
+    // together — bounded because these id sets are one chunk in practice. See
+    // `mapWithLimit` in lib/chunk.ts.)
+    //
     // THROUGH `selectAll`, THOUGH ONE CHUNK CANNOT FILL A PAGE TODAY. The
     // `.in()` column is the primary key, so 250 ids is at most 250 rows and a
     // bare `.select()` would be correct — but `UUID_IN_CHUNK` is a SHARED

@@ -1723,7 +1723,11 @@ async function loadNewThemes(
       // cap, not the URL cap: PostgREST answers 1,000 rows at a time and
       // `selectAll` pages the rest SERIALLY, inside a chunk that was going to be
       // one of several concurrent requests. lib/chunk.ts MULTI_ROW_IN_CHUNK has
-      // the arithmetic.
+      // the arithmetic — and `mapWithLimit` beside it has the other half: the
+      // chunks go out together, so the `isMissingMonthTable` guard below learns
+      // a missing table after up to min(chunks, READ_CONCURRENCY) requests
+      // rather than after one. Bounded here: the themes first heard in one
+      // update are tens of ids, which is a single chunk.
       MULTI_ROW_IN_CHUNK,
     )
   } catch (error) {
