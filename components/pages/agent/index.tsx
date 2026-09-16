@@ -151,6 +151,12 @@ function DocumentPage({ d, page }: { d: D; page: number }) {
             {doc.summary.supported} supported · {doc.summary.contradicted} contradicted · {doc.summary.untested} untested
           </p>
         )}
+        {/* Where the reading stopped, on the page that leaves the building. A
+            deck showing verdicts over a document it only half read, without
+            saying so, is the one thing a PDF must not do. */}
+        {page === 0 && doc.notice && (
+          <p className="mb-3 text-[11px] text-muted-foreground">{doc.notice}</p>
+        )}
         <p className="whitespace-pre-wrap font-serif text-[12.5px] leading-[1.6] text-foreground">
           {segs.map((s, i) => {
             const claim = s.ref ? doc.claims.find((c) => c.ref === s.ref) : null

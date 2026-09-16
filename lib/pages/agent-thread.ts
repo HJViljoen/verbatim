@@ -7,6 +7,7 @@ import { resolveCitations, type CitationMeta } from '../evidence-cite'
 import { ASK_THEMES_PER_CLAIM } from '../config'
 import { weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
+import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
 import type { AgentAnswer } from '../agent/types'
 import type { MethodNoteData } from '../../components/print/method-note'
@@ -51,6 +52,10 @@ export interface Citation extends Quote, CitationMeta {
 
 export interface DocumentCheck {
   sourceFilename: string | null
+  /** What the reader is told about the READING — clipped, or past the page
+   *  limit. Null when the whole document was read, and null where the column
+   *  that stores it has not been applied yet. */
+  notice: string | null
   claims: ClaimResult[]
   summary: AskSummary
   judgement: Judgement[]
@@ -114,12 +119,22 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       judgement: Judgement[] | null
       input_text: string | null
       source_filename: string | null
-    }>(await supabase
-      .from('plan_checks')
-      .select('claims, summary, judgement, input_text, source_filename')
-      .eq('id', thread.plan_check_id as string)
-      .eq('client_id', clientId)
-      .maybeSingle(), 'agentThread.planCheck')
+      notice: string | null
+    }>(await (async () => {
+      const columns = 'claims, summary, judgement, input_text, source_filename'
+      const read = (cols: string) => supabase
+        .from('plan_checks')
+        .select(cols)
+        .eq('id', thread.plan_check_id as string)
+        .eq('client_id', clientId)
+        .maybeSingle()
+      const withNotice = await read(`${columns}, notice`)
+      // `notice` arrives with its own migration and a deploy can land first.
+      // Narrow by name, the embeddingCoverage precedent: any other failure of
+      // this read is still a failure, and the whole document check must not
+      // disappear because one column is not there yet.
+      return isMissingColumnError(withNotice.error, 'notice') ? await read(columns) : withNotice
+    })(), 'agentThread.planCheck')
     if (check) {
       const claims = (check.claims ?? []) as ClaimResult[]
       const allIds = [...new Set(claims.flatMap((c) => (c.insightIds ?? []).slice(0, ASK_THEMES_PER_CLAIM)))]
@@ -136,6 +151,7 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       const { segments, anchored } = anchorClaims((check.input_text as string) ?? '', ordered)
       document = {
         sourceFilename: (check.source_filename as string | null) ?? null,
+        notice: (check.notice as string | null) ?? null,
         claims,
         summary: (check.summary ?? { supported: 0, contradicted: 0, untested: 0 }) as AskSummary,
         judgement: (check.judgement ?? []) as Judgement[],

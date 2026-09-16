@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getRouteSession } from '@/lib/auth'
-import { createAdminClient, selectAll } from '@/lib/supabase-admin'
+import { createAdminClient, isMissingColumnError, selectAll } from '@/lib/supabase-admin'
 import { answerQuestion } from '@/lib/agent/answer'
 import { runAsk, clipInput } from '@/lib/ask/engine'
 import { extractPdfText, pageWarning, PdfTooLargeError, PdfUnreadableError } from '@/lib/ask/pdf'
@@ -228,6 +228,18 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
       }
       sourceFilename = file.name
       const out = await extractPdfText(Buffer.from(await file.arrayBuffer()))
+      // A SCANNED DECK IS REFUSED, not read. /api/ask refused these from the
+      // day it shipped and this route never did: `imageOnly` was computed and
+      // ignored, so a deck of images reached runAsk, spent the extract call and
+      // came back "I could not find any claims about customers or the market",
+      // which blames the document for a limit that is ours. There is no OCR
+      // here; saying so costs nothing and the client can paste the text.
+      if (out.imageOnly) {
+        return NextResponse.json(
+          { error: 'This PDF has no readable text — it looks like scans or images. Paste the text instead.' },
+          { status: 422 },
+        )
+      }
       text = out.text
       notice = pageWarning(out.pages)
     } else {
@@ -312,17 +324,34 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
     )
   }
 
-  const { data: check, error: checkErr } = await admin
-    .from('plan_checks')
-    .insert({
-      client_id: clientId, run_id: runId, kind: 'plan',
-      title: result.title || sourceFilename || null,
-      input_text: text, source_filename: sourceFilename,
-      claims: result.claims, summary: result.summary, judgement: result.judgement,
-      created_by: userId,
-    })
-    .select('id')
-    .single()
+  // What the reader must be told about the READING of this document, stored
+  // with it (C11). It used to be computed, returned in the JSON body and thrown
+  // away — the composer only navigates, and the thread page hard-coded
+  // `notice={null}` — so a 90-page deck read to its first 60,000 characters was
+  // shown verdicts over the whole thing with nothing saying where the reading
+  // stopped.
+  const readingNotice = clip.clipped || result.clipped
+    ? 'That document was longer than I can read in one go — only the earlier part was checked.'
+    : notice
+
+  const checkRow = {
+    client_id: clientId, run_id: runId, kind: 'plan',
+    title: result.title || sourceFilename || null,
+    input_text: text, source_filename: sourceFilename,
+    claims: result.claims, summary: result.summary, judgement: result.judgement,
+    created_by: userId,
+  }
+  let { data: check, error: checkErr } = await admin
+    .from('plan_checks').insert({ ...checkRow, notice: readingNotice }).select('id').single()
+  // The column arrives with its own migration and this deploy may land first.
+  // A check that ran and cannot be saved over a notice would lose the whole
+  // thing — three model calls and the client's document — so the retry drops
+  // the notice and keeps the check, the recordConfigChanges precedent
+  // (lib/config-log.ts). Once the migration is applied the retry never runs.
+  if (isMissingColumnError(checkErr, 'notice')) {
+    ;({ data: check, error: checkErr } = await admin
+      .from('plan_checks').insert(checkRow).select('id').single())
+  }
   if (checkErr || !check) {
     return NextResponse.json({ error: 'The check ran but could not be saved.' }, { status: 500 })
   }
@@ -333,10 +362,7 @@ async function handleDocument(request: Request, ctx: { clientId: string; userId:
     .eq('id', threadId)
     .eq('client_id', clientId)
 
-  return NextResponse.json({
-    threadId,
-    notice: clip.clipped || result.clipped
-      ? 'That document was longer than I can read in one go — only the earlier part was checked.'
-      : notice,
-  })
+  // The notice travels with the thread now; the body keeps it so a caller that
+  // does not navigate still has it.
+  return NextResponse.json({ threadId, notice: readingNotice })
 }

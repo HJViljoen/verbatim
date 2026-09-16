@@ -67,7 +67,7 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
             quotesByClaim={new Map(Object.entries(doc.quotesByClaim).map(([ref, qs]) => [ref, qs.map((q) => q.text)]))}
             segments={doc.segments}
             anchored={doc.anchored}
-            notice={null}
+            notice={doc.notice}
           />
         </div>
       </ExportScope>
