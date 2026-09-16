@@ -869,7 +869,15 @@ export function recordLines(input: RecordInputs): string[] {
   const r = input.readDepth
   if (r.analysed > 0) {
     lines.push(
-      `Of everything read for you, speech was read on ${share(r.speech, r.analysed)}, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)} — Reddit excluded, which has neither audio nor a cover frame.`,
+      // THE BASIS IS STATED, BECAUSE IT IS NOT THIS WINDOW'S. `ReadDepthRecord
+      // .basis` is 'all_time_non_reddit' and the type says so; the sentence did
+      // not, and it is printed between two lines that both end "in this window"
+      // ("2 updates delivered, 6 Sep to 13 Sep" and "449 videos carried
+      // conversation in this window"). The three shares are internally
+      // consistent — all three numerators are head counts over the same
+      // `analysed` denominator — so this was a basis that was not stated rather
+      // than a share that was wrong.
+      `Of everything we have ever read for you, not just this window, speech was read on ${share(r.speech, r.analysed)}, translated on ${share(r.translated, r.analysed)}, and on-screen text read on ${share(r.onScreenText, r.analysed)} — Reddit excluded, which has neither audio nor a cover frame.`,
     )
     if (r.unflagged > 0) lines.push(`${plural(r.unflagged, 'video')} were read before the product recorded which of the three it managed.`)
   }

@@ -151,6 +151,10 @@ describe('recordLines — every fact with its basis', () => {
 
   it('prints the three read-depth shares and names the exclusion', () => {
     expect(has('speech was read on 50%, translated on 13%, and on-screen text read on 17%')).toBe(true)
+    // AND THE BASIS IS ON THE LINE. ReadDepthRecord.basis is
+    // 'all_time_non_reddit' and this sentence sits between two that both end
+    // "in this window".
+    expect(has('Of everything we have ever read for you, not just this window')).toBe(true)
     expect(has('Reddit excluded, which has neither audio nor a cover frame')).toBe(true)
   })
 
