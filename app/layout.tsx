@@ -35,7 +35,19 @@ const emoji = Noto_Color_Emoji({
   preload: false,
 });
 
+// Absolute base for the share card (app/opengraph-image.tsx) and the icons.
+// Same source as lib/legal.ts: the apex is the host links are shared from, and
+// it is where NEXT_PUBLIC_SITE_URL points. A preview deployment resolves to
+// itself instead, so what it unfurls is the card it built. Without this Next
+// falls back to localhost and says so on every build.
+const ORIGIN =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+  (process.env.VERCEL_ENV && process.env.VERCEL_ENV !== "production"
+    ? `https://${process.env.VERCEL_URL}`
+    : "https://verbatimintel.com");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(ORIGIN),
   title: "Verbatim — Consumer Intelligence",
   description:
     "Media-based consumer intelligence for D2C brands — market research-grade insights from real audience conversations.",

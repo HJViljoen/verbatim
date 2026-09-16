@@ -9,6 +9,7 @@ import {
 import { switchWorkspace } from "@/app/dashboard/workspace/actions"
 import type { OperatorView } from "@/lib/auth"
 import type { WorkspaceRow } from "@/lib/workspaces"
+import { VerbatimMark } from "@/components/brand/mark"
 
 /**
  * The tenant switcher, rendered only for platform admins (the loader decides;
@@ -36,6 +37,7 @@ export function WorkspaceSwitcher({
         disabled={pending}
         className="flex w-full items-center gap-1.5 rounded-md px-4 pt-5 pb-1 text-left outline-hidden hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
       >
+        <VerbatimMark size={20} className="shrink-0 text-primary" />
         <span className="truncate text-[17px] font-bold tracking-[-0.02em] text-foreground">
           {operator.viewingName}
         </span>

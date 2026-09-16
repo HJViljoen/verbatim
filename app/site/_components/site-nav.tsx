@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { VerbatimMark } from '@/components/brand/mark'
 import { USE_CASES_PUBLIC } from '../_data/playbooks'
 
 const APP_URL = 'https://app.verbatimintel.com'
@@ -11,6 +12,7 @@ export function SiteNav({ variant, current }: { variant: 'dark' | 'light'; curre
     <nav className={`nav ${variant}`} aria-label="Main">
       <div className="wrap">
         <Link href="/" className="wordmark">
+          <VerbatimMark size={22} className="mark" />
           <b>Verbatim</b>
           <span>consumer intelligence</span>
         </Link>

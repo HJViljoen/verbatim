@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { VerbatimMark } from '@/components/brand/mark'
 import { USE_CASES_PUBLIC } from '../_data/playbooks'
 
 export function SiteFooter() {
@@ -6,6 +7,7 @@ export function SiteFooter() {
     <footer className="site-footer">
       <div className="wrap">
         <span className="wordmark">
+          <VerbatimMark size={16} className="mark" />
           <b>Verbatim</b>
           <span>consumer intelligence</span>
         </span>

@@ -10,6 +10,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // The images Next generates from app/icon.tsx, app/apple-icon.tsx and
+  // app/opengraph-image.tsx. Their URLs carry no extension, so the rule above
+  // misses them, and without this a crawler asking the apex for the share card
+  // is handed the marketing rewrite and a logged-out browser asking the app
+  // host for its favicon is handed /login. They are brand art on both hosts:
+  // never gated, never rewritten.
+  if (['/icon', '/apple-icon', '/opengraph-image'].includes(request.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
+
   // ── Marketing site (apex domain) ─────────────────────────────────────────
   // verbatimintel.com serves the public marketing pages (app/site/*) and never
   // touches Supabase; the product lives on app.verbatimintel.com. Host-based

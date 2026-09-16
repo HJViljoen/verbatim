@@ -9,6 +9,7 @@ import { LayoutDashboard, Target, MessageCircle, Swords, Play, FileText, LayoutT
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { signOut } from "@/app/login/actions"
+import { VerbatimMark } from "@/components/brand/mark"
 
 // Two groups (component-map §1, MASTER rule 1): the intelligence pages a client
 // reads, then the account pages. Trends was dissolved into the pages it served
@@ -92,7 +93,8 @@ export function AppSidebar({ showAgent = false, header, ops }: { showAgent?: boo
           this is the wordmark, unchanged. */}
       <SidebarHeader>
         {header ?? (
-          <div className="flex items-baseline gap-2 px-4 pt-5 pb-1">
+          <div className="flex items-center gap-2 px-4 pt-5 pb-1">
+            <VerbatimMark size={20} className="shrink-0 text-primary" />
             <span className="text-[17px] font-bold tracking-[-0.02em] text-foreground">Verbatim</span>
           </div>
         )}
