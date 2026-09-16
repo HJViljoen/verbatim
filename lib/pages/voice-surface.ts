@@ -26,7 +26,7 @@ import { loadMonthSeries, loadTopObjects, type ReadingHandle } from '../reading/
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
 import { pointsByMonth, type DenominatorPoint, type MonthLabel, type MonthPoint, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
-import type { FigureTable, Verdict } from '../reading/verdicts'
+import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import { selectAll } from '../supabase-admin'
 import { onCameraNote } from '../voice-tiles'
 import {
@@ -509,14 +509,23 @@ export function largestRead(movers: readonly Mover[]): string | null {
   return [...read].sort((a, b) => b.k - a.k || a.label.localeCompare(b.label))[0].id
 }
 
-/** The sentence VO2 prints when no arm of the axis has a row. */
+/**
+ * The sentence VO2 prints when no arm of the axis has a row — the CAUSE first,
+ * and only then the reading.
+ *
+ * A thin month is why nothing could be compared, so it is said before the
+ * comparison's own absence: on Össur's own-brand audience the reader is told
+ * the same thing VO1's pill says, "19 · too thin to compare", rather than a
+ * second, different-sounding account of the same nineteen videos.
+ */
 export function moversNote(input: {
+  /** A comparison was actually DRAWN — not merely that a row exists. */
   read: boolean
   thin: boolean
   any: boolean
 }): string | null {
-  if (!input.read) return 'No theme carried enough of this month to be compared.'
   if (input.thin) return 'Too little conversation this month to say what moved.'
+  if (!input.read) return 'No theme carried enough of this month to be compared.'
   return input.any ? null : 'Nothing moved clearly this month.'
 }
 
@@ -890,13 +899,20 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   let kindFilters: FilterOption[] = []
   let kindsNote: string | null = null
   let reddit: RedditRead | null = null
+  // ONE THIN RULE FOR THE WHOLE PAGE. VO1 marks an audience under
+  // THIN_AUDIENCE_VIDEOS "too thin to compare" on its own pill; VO2 ran
+  // `thinMonth` alone and, on Össur's own-brand audience, printed "Nothing
+  // moved clearly this month" two blocks under "19 · too thin to compare" —
+  // two accounts of the same nineteen videos on one page. The page now takes
+  // the stricter of the two, so a reader is told one thing and every change
+  // below the mark is suppressed rather than half-suppressed.
   const thin = thinMonth(
     { month, videos: selectedDenom?.videos ?? null, k: null },
     history.denominators
       .filter((d) => d.audience === selected && monthStartOf(d.month) < month)
       .map((d) => d.videos),
     { updates: updatesByMonth[month] ?? 0, firstRunMonth },
-  )
+  ) || audienceThin(selectedDenom?.videos ?? null)
   if (kindRows == null) {
     kindsNote = 'What kind of thing is being said is not recorded month by month for this workspace yet.'
   } else {
@@ -1015,7 +1031,12 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
     expanded,
     expandHref: voiceSurfaceHref(params, { movers: expanded ? null : 'all' }),
     note: moversNote({
-      read: pool.length > 0,
+      // READ MEANS A COMPARISON WAS ACTUALLY DRAWN, not that a row exists.
+      // `pool.length > 0` counted rows whose verdict is `too_little_data` —
+      // including the zero-numerator ones — as read, which suppressed the one
+      // honest sentence for the case and printed "Nothing moved clearly this
+      // month" instead.
+      read: pool.some((m) => isAnswer(m.verdict.state)),
       thin: thin,
       any: growing.length + fading.length + flat.length + newcomers.length > 0,
     }),

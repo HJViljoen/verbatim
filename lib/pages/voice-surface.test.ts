@@ -200,13 +200,15 @@ describe('largestRead', () => {
 })
 
 describe('moversNote', () => {
-  it('says the month could not be read when no theme cleared its floors', () => {
+  it('says the month could not be compared when no comparison was drawn', () => {
     expect(moversNote({ read: false, thin: false, any: false }))
       .toBe('No theme carried enough of this month to be compared.')
   })
 
-  it('says the month is thin before it says nothing moved', () => {
+  it('says the month is thin before anything else — the cause, not the symptom', () => {
     expect(moversNote({ read: true, thin: true, any: false }))
+      .toBe('Too little conversation this month to say what moved.')
+    expect(moversNote({ read: false, thin: true, any: false }))
       .toBe('Too little conversation this month to say what moved.')
   })
 
@@ -216,6 +218,15 @@ describe('moversNote', () => {
 
   it('is silent when the page has rows', () => {
     expect(moversNote({ read: true, thin: false, any: true })).toBeNull()
+  })
+
+  it('the thin sentence is the same fact VO1 prints on its own pill', () => {
+    // Össur's own brand: 19 videos. VO1 marks the pill "too thin to compare";
+    // VO2 said "Nothing moved clearly this month" two blocks below it, because
+    // the page ran two thin rules. It runs one now, so both say the same.
+    expect(audienceThin(19)).toBe(true)
+    expect(moversNote({ read: true, thin: true, any: false }))
+      .toBe('Too little conversation this month to say what moved.')
   })
 })
 
