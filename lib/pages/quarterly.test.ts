@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { directionRe } from '../test/copy-contract'
 import type { Verdict } from '../reading/verdicts'
 import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/types'
 import { quarterFor } from '../reports/quarterly'
@@ -155,6 +156,21 @@ describe('flagOutcome', () => {
   it('does not take another kind of object’s reading because the labels match', () => {
     expect(flagOutcome({ objectKind: 'rival', objectId: 'competitor:Ottobock' }, [verdict({ objectLabel: 'Durability' })]))
       .toBe('no later reading of the same object has been taken')
+  })
+
+  // ALL FIVE BRANCHES, NOT THE ONE THE FIXTURE REACHES. `method.tsx` prints
+  // these unmarked ("What it turned out to be: …"), so a direction word in any
+  // of them breaks rule (c) on QR7 — and three of the five opened "the month it
+  // fell in", with `fell` in DIRECTION_WORDS. The block test was green because
+  // the fixture's single flag resolves to the one branch that had none.
+  it('never puts a direction word in an outcome', () => {
+    const outcomes = [
+      flagOutcome(flag, []),
+      ...(['moved', 'no_clear_change', 'too_little_data', 'refused', 'baseline_forming'] as const)
+        .map((state) => flagOutcome(flag, [verdict({ state })])),
+    ]
+    expect(outcomes.length).toBe(6)
+    for (const line of outcomes) expect(line).not.toMatch(directionRe())
   })
 })
 

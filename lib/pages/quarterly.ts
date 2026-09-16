@@ -471,9 +471,16 @@ export function flagOutcome(flag: { objectKind: string; objectId: string }, late
   if (!match) return 'no later reading of the same object has been taken'
   if (match.state === 'moved') return `the month's own reading agreed — it cleared its band`
   if (match.state === 'no_clear_change') return `the month's own reading did not agree — inside the band`
-  if (match.state === 'too_little_data') return 'the month it fell in read on too little to settle it'
-  if (match.state === 'refused') return 'the month it fell in could not be compared'
-  return 'the month it fell in has no baseline behind it yet'
+  // "LANDED", NOT "FELL". `fell` is in DIRECTION_WORDS, and `method.tsx` prints
+  // these unmarked ("What it turned out to be: …"), so three of these five
+  // branches broke rule (c) in all three modes. The calendar sense is not a
+  // claim that anything moved — but the block test passed only because the
+  // fixture's single flag carries the one branch of five with no direction
+  // word in it, which makes the contract unsatisfiable the moment a real flag
+  // resolves any other way.
+  if (match.state === 'too_little_data') return 'the month it landed in read on too little to settle it'
+  if (match.state === 'refused') return 'the month it landed in could not be compared'
+  return 'the month it landed in has no baseline behind it yet'
 }
 
 /**
