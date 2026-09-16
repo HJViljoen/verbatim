@@ -57,7 +57,6 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
     month: '2026-09-01',
     monthStatus: 'filling',
     readingAt: NOW,
-    horizon: 'this_month',
     masthead: MOVES_MASTHEAD,
     conclusions: {
       rows: [

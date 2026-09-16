@@ -9,7 +9,6 @@ import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_READ_LIMIT, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
 import type { ReadingHandle } from '../reading/read'
-import { parseHorizon, type Horizon } from '../reading/horizon'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
@@ -44,11 +43,20 @@ import { fetchThemedRunId } from './themed-run'
 // run-indexed delta anywhere (D1, AGENTS.md): the only movement this surface
 // prints is a move's month, and a move with one reading prints the month its
 // first comparison lands in rather than a direction.
+//
+// AND NO HORIZON. This is a reading and it is not a reading of a WINDOW: the
+// conclusions are the latest update's, the ledger is deliberately all-time
+// ("every piece of advice this product has ever given you"), the moves are all
+// moves and the claims are the latest update's. The loader parsed `?horizon=`
+// and carried it on `MarketSurfaceData` where nothing read it, while the page
+// bar drew the four-link control — so a client pressing "Last 12 months" got a
+// byte-identical page. Both are gone: `lib/nav.ts` marks this surface
+// `horizon: false`, and the type no longer carries a field nothing means.
 
 /** The URL parameters this surface honours. `?rec=` is the legacy deep link
  *  four sent emails and every digest until WP17 still carry; it selects a
  *  LINEAGE here, resolved from the recommendation id it names. */
-export type MarketSurfaceParams = { rec?: string; item?: string; horizon?: string }
+export type MarketSurfaceParams = { rec?: string; item?: string }
 
 /** How many ledger rows are drawn before the rest are counted. 64 rows of
  *  advice nobody has acted on is a filing cabinet, not a page; the oldest are
@@ -205,7 +213,6 @@ export interface MarketSurfaceData {
   month: string
   monthStatus: MonthStatus
   readingAt: string
-  horizon: Horizon
   masthead: string
   conclusions: ConclusionsBlock
   advice: AdviceBlock
@@ -573,7 +580,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const params = scope.params as MarketSurfaceParams
   const reading: ReadingHandle = scope.reading
   const readingAt = new Date().toISOString()
-  const horizon = parseHorizon(params.horizon)
 
   const [clientRes, latestRunRes, runningIds] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
@@ -747,7 +753,6 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     month,
     monthStatus,
     readingAt,
-    horizon,
     masthead: MOVES_MASTHEAD,
     conclusions,
     advice,
