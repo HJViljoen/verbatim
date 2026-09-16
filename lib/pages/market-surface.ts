@@ -6,7 +6,7 @@ import { fmtInt, monthName, shortDate } from '../format'
 import { distinctVideos, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
-import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_READ_LIMIT, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
+import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals } from '../reading/record'
 import type { ReadingHandle } from '../reading/read'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -781,13 +781,20 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
  *  not writing decisions down", which are different sentences. */
 async function loadDecisions(supabase: SupabaseClient, clientId: string): Promise<RecDecision[] | null> {
   try {
+    // NO `.limit()` HERE. `REC_DECISIONS_READ_LIMIT` is PostgREST's silent
+    // 1,000-row cap written down for a caller that uses a bare `.select()`;
+    // `selectAll` pages past that cap with `.range(from, from + 999)`, and
+    // range OVERWRITES limit in postgrest-js — so the constant did nothing and
+    // the read was already fetching the whole table. The ledger wants the
+    // whole table: `inheritedStatus` needs the newest decision per lineage and
+    // a cap would answer for the newest thousand rows instead. The order is a
+    // total one (`id` is unique), which is what range paging needs.
     return await selectAll<RecDecision>(() =>
       supabase.from(REC_DECISIONS_TABLE)
         .select('id, lineage_id, status, decided_at')
         .eq('client_id', clientId)
         .order('decided_at', { ascending: false })
-        .order('id', { ascending: false })
-        .limit(REC_DECISIONS_READ_LIMIT),
+        .order('id', { ascending: false }),
     )
   } catch (error) {
     if (isMissingRecDecisions(error)) return null

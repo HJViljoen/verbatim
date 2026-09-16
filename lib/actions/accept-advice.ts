@@ -53,11 +53,20 @@ export async function acceptAdvice(lineageId: string, title: string): Promise<Ac
   // The lineage must be this tenant's, read through the session client so a
   // foreign id resolves to nothing here rather than reaching the write. Any
   // copy of the lineage will do — the identity is what is being accepted.
+  //
+  // MATCHED THE WAY THE LEDGER KEYS IT: `coalesce(lineage_id, id)`. A bare
+  // `.eq('lineage_id', …)` misses a row written between a deploy and the
+  // backfill, which is the exact case `lineageKey`'s `?? r.id` exists for — the
+  // ledger would draw the row, the button would name its id, and the client
+  // would be told "That piece of advice is no longer here." Zero such rows in
+  // production today, and none of that is a reason to key one read two ways.
+  // The id is a validated uuid, so it cannot carry PostgREST syntax.
+  const lineage = parsed.data.lineageId
   const { data: rec, error } = await supabase
     .from('recommendations')
     .select('id')
     .eq('client_id', clientId)
-    .eq('lineage_id', parsed.data.lineageId)
+    .or(`lineage_id.eq.${lineage},and(lineage_id.is.null,id.eq.${lineage})`)
     .limit(1)
     .maybeSingle()
   if (error) {
