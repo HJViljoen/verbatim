@@ -3,7 +3,8 @@ import { DOCUMENT_BLOCK_MAX } from '../../config'
 import { CALIBRATED_PROSE_RULE } from '../../pipeline/prose-rules'
 import type { FigureTable } from '../types'
 import type { DocumentTemplate } from './templates'
-import type { DocumentSettings } from './types'
+import { pageKindsOf } from './sections'
+import type { DocPageKind, DocumentSettings } from './types'
 import { SELLS_TO } from './types'
 import type { Signals } from './signals'
 import type { ResearchAnswer } from './research'
@@ -44,6 +45,25 @@ export interface WriterArgs {
 const cap = (field: string) => DOCUMENT_BLOCK_MAX[field] ?? 400
 
 /**
+ * The pages the model is actually asked for (Phase 1 WP19 fix pass).
+ *
+ * The compose walk prints the SECTION MAP's pages where a brief has one and
+ * throws every other written page away. The writer's schema and its
+ * instruction set nevertheless came off `t.skeleton`, so a marketing build
+ * still generated say_hear, one competitor block per rival, personas and
+ * language — model spend and latency on tokens the artefact discards, plus
+ * checkDocument verdicts and workings referencing pages the document does not
+ * contain. One list, and it is the same one `composeDocument` walks.
+ */
+export function writerPageKinds(
+  signals: Pick<Signals, 'map'> | undefined,
+  template: Pick<DocumentTemplate, 'skeleton'>,
+): DocPageKind[] {
+  const map = signals?.map ?? []
+  return map.length > 0 ? pageKindsOf(map) : template.skeleton.map((p) => p.kind)
+}
+
+/**
  * The schema is built from the template's SKELETON: a brief with no competitor
  * page is never asked for competitor blocks, and the model is never handed a
  * field whose page will not be printed. The three constants below are on every
@@ -60,7 +80,7 @@ const cap = (field: string) => DOCUMENT_BLOCK_MAX[field] ?? 400
  * brief reproduces exactly the order it was approved on
  * (in_short, findings, competitors, persona_lines, care, not_sure_yet).
  */
-export function writerSchema(t: DocumentTemplate) {
+export function writerSchema(t: DocumentTemplate, kinds: DocPageKind[] = t.skeleton.map((p) => p.kind)) {
   const shape: Record<string, z.ZodTypeAny> = {
     in_short: z.object({
       summary: z.string().describe(`The executive summary: what the conversation shows this update, what changed since the last brief, and what matters ${t.lens.short}, developed in one or two paragraphs (separate paragraphs with a blank line). Under ${cap('summary')} characters. Cite figures by [[key]] only.`),
@@ -76,9 +96,9 @@ export function writerSchema(t: DocumentTemplate) {
       continued_from: z.string().nullable().describe("If this finding carries one of the previous brief's headlines, that headline verbatim; else null."),
     })),
   }
-  // The middle of the brief, in the order the skeleton prints it.
-  for (const page of t.skeleton) {
-    switch (page.kind) {
+  // The middle of the brief, in the order it prints.
+  for (const kind of kinds) {
+    switch (kind) {
       case 'competitor':
         shape.competitors ??= z.array(z.object({
         name: z.string(),
@@ -151,7 +171,14 @@ const registerLine = (s: DocumentSettings) => {
 
 export function buildWriterPrompts(a: WriterArgs): { system: string; user: string } {
   const t = a.template
-  const has = (kind: string) => t.skeleton.some((p) => p.kind === kind)
+  const kinds = writerPageKinds(a.signals, t)
+  const has = (kind: DocPageKind) => kinds.includes(kind)
+  // A BRIEF WITH A MONTHLY READING IS NOT COMPARED WITH THE PREVIOUS UPDATE.
+  // Its figures are a month's; the delta is one run against the run before it,
+  // which is the run-indexed series item 43 exists to take out of the
+  // artefacts. Handing the model both tables is how it writes a sentence that
+  // is half a month and half a Sunday.
+  const monthly = a.signals.reading != null
   const findingsMax = a.thin ? Math.min(Math.min(a.settings.findings, t.findingsMax), 3) : Math.min(a.settings.findings, t.findingsMax)
   // The operator's own brief, where there is one (WP7d): the top instruction,
   // before the role, because a custom brief exists to answer it. The role and
@@ -177,7 +204,9 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
     '- Every finding rests on grounded points: cite them in based_on. Never claim a product fact the grounded points do not carry; if a natural claim has no support, leave it out and put the open question in not_sure_yet instead.',
     `- Write at most ${findingsMax} findings, and fewer when the evidence is thin. Order does not matter; the product orders them by evidence.`,
     a.previous
-      ? '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true and what moved since last time. Mark only what is new as new.'
+      ? monthly
+        ? '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true about it. Do not claim movement between the two briefs: this one is a reading of one month, and the last one was a reading of a different period.'
+        : '- Continuity: the previous brief\'s headlines are listed. When a finding still holds, keep its headline (put it in continued_from) and say what is still true and what moved since last time. Mark only what is new as new.'
       : '- This is the first brief: say so in one clause of the summary, without apology.',
     a.thin ? '- The update was thin (see the summary note). Say so plainly in the summary and write fewer findings rather than stretch the evidence.' : '',
     has('standing') ? '- The standing page: the shares and what moved are printed beside your paragraphs as a table. Read them together and say what position they describe; do not list them back.' : '',
@@ -202,7 +231,7 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
   const concerns = s.concerns.map((c) =>
     `${c.id} (${countKey(c.id)}; heard from ${c.buckets.map((b) => bucketWord(b.bucket, s.company)).join(', ')}; ${c.trajectory || 'history unknown'}): ${c.label}. ${c.description}`)
 
-  const deltaWords = deltaInWords(s, a.figures)
+  const deltaWords = monthly ? [] : deltaInWords(s, a.figures)
 
   const competitors = s.competitors.map((c) => [
     `${c.name}${c.thin ? ' (thin this update: few videos, read with care)' : ''}; ${figureKeyFor(a.figures, c.name)}`,
@@ -238,7 +267,9 @@ export function buildWriterPrompts(a: WriterArgs): { system: string; user: strin
     a.thin ? `Note: this update was thin (${s.runStatus === 'partial' ? 'the update finished partially' : 'few conversations in the period'}).` : '',
     a.previous ? `Previous brief, in short: ${a.previous.summary}\nPrevious brief's headlines:\n${a.previous.headlines.map((h) => `- ${h}`).join('\n')}` : 'Previous brief: none, this is the first.',
     `Figures available (cite by placeholder; you do not know their values):\n${figureLines.join('\n')}`,
-    `What moved since the previous update:\n${deltaWords.map((d) => `- ${d}`).join('\n')}`,
+    monthly
+      ? `This brief is a reading of ${s.reading?.monthLabel ?? 'the month'}. There is no update-against-update comparison in it: do not write one.`
+      : `What moved since the previous update:\n${deltaWords.map((d) => `- ${d}`).join('\n')}`,
     `The researcher's questions and what the conversation answered, in short:\n${answersSummary.join('\n') || '- nothing answered'}`,
     `Grounded points (evidence; cite by index):\n${points.join('\n') || '- none'}`,
     judgements.length ? `The researcher's own reads (not evidence; may inform "what it means", never "what we saw"):\n${judgements.join('\n')}` : '',

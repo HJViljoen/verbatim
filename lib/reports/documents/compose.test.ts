@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { composeDocument, documentFigures, documentSlides, heardLine, pickQuote, thinWeek } from './compose'
-import { buildWriterPrompts, deltaInWords, figureKeyFor, writerSchema, type WriterOutput } from './write'
+import { buildWriterPrompts, deltaInWords, figureKeyFor, writerPageKinds, writerSchema, type WriterOutput } from './write'
 import { CONTENT_BRIEF, CUSTOM_BRIEF, LEADERSHIP_BRIEF, MARKET_BRIEF, SALES_BRIEF, resolveTemplate, type DocumentTemplate } from './templates'
 import { overviewTiles } from './overview'
 import { MARKETING_MAP } from './sections'
@@ -250,6 +250,25 @@ describe('a document composed from a section map', () => {
     expect(items).not.toContain('Competitor pages read')
     expect(items).not.toContain('Personas come from the consumer profile')
     expect(items).not.toContain('The claims page sets what the company says')
+  })
+
+  // The model was still generating say_hear, competitor blocks and personas
+  // for a brief that prints none of them.
+  it('asks the model only for the pages the map prints', () => {
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(mapped, MARKET_BRIEF)).shape))
+      .toEqual(['in_short', 'findings', 'not_sure_yet'])
+    expect(Object.keys(writerSchema(MARKET_BRIEF, writerPageKinds(undefined, MARKET_BRIEF)).shape))
+      .toContain('say_hear')
+  })
+
+  // Deviation 3 withdrew the run-against-run figures; the prose that produces
+  // the same sentence stayed in the prompt.
+  it('hands a month-based brief no update-against-update comparison', () => {
+    const withReading = { ...mapped, reading: { monthLabel: 'September 2026' } } as unknown as Signals
+    const { user, system } = buildWriterPrompts({ template: MARKET_BRIEF, settings: DEFAULT_DOCUMENT_SETTINGS, company: 'Ossur', period: 'p', reader: null, figures: {}, signals: withReading, answers: [], previous: { summary: 's', headlines: ['h'] }, thin: false })
+    expect(user).not.toContain('What moved since the previous update')
+    expect(user).toContain('reading of September 2026')
+    expect(system).toContain('Do not claim movement between the two briefs')
   })
 
   it('still describes the pages the template alone would print', () => {
