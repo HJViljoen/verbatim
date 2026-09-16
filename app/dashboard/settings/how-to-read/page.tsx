@@ -89,8 +89,25 @@ export default async function HowToReadPage() {
           title="The thirteen words"
           description="Every figure in this product is built out of these. Each one means the same thing on every page and in every document, and each is assigned by a fixed rule from counted data — never worded by the model."
         >
+          {/* Thirteen, and then two. lib/calibration.ts is careful about this —
+              "the thirteen words, in the design's own order, plus the two
+              flags" — and a card headed "The thirteen words" that runs fifteen
+              entries together is not. The flags are a different kind of thing:
+              a word says what a figure IS, a flag says something about the row
+              it sits on. */}
           <dl className="flex flex-col gap-1.5">
-            {[...THIRTEEN_WORDS, ...READER_FLAGS].map((k) => (
+            {THIRTEEN_WORDS.map((k) => (
+              <div key={k} className="flex gap-2 text-[12px] leading-[1.5]">
+                <dt className="w-[110px] shrink-0 font-semibold">{GLOSSARY[k][0]}</dt>
+                <dd className="text-secondary-foreground">{GLOSSARY[k][1]}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="mb-1.5 mt-3 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+            And two flags a row can carry
+          </p>
+          <dl className="flex flex-col gap-1.5">
+            {READER_FLAGS.map((k) => (
               <div key={k} className="flex gap-2 text-[12px] leading-[1.5]">
                 <dt className="w-[110px] shrink-0 font-semibold">{GLOSSARY[k][0]}</dt>
                 <dd className="text-secondary-foreground">{GLOSSARY[k][1]}</dd>
