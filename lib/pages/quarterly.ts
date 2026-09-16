@@ -1106,8 +1106,17 @@ function buildMethod(a: {
 
   return {
     window,
-    line: inputs ? howSoundLine(inputs) : a.overview.record.line,
-    lines: inputs ? recordLines(inputs) : a.overview.record.lines,
+    // A MONTH'S RECORD IS NOT THE QUARTER'S. The fallback printed Overview's
+    // own record here — "3 updates · 2,359 videos …", "3 updates delivered,
+    // 2026-09-06 to 2026-09-13, longest gap 7 days", and another page's
+    // refusals — under the heading "How was this quarter read?", two lines
+    // above a numbers table that said "The corpus — not recorded" and six
+    // pages before one that said every comparison was drawn. Three
+    // contradictions on one artefact. A record that could not be read says so.
+    line: inputs
+      ? howSoundLine(inputs)
+      : 'How this quarter was read could not be recovered for this workspace, so nothing about its coverage is stated here.',
+    lines: inputs ? recordLines(inputs) : [],
     checks: {
       ran: checks.ran,
       flagged: checks.flaggedRuns,

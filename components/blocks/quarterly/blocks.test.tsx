@@ -167,6 +167,17 @@ describe('what each page owes the reader', () => {
     expect(text).toContain('We never claim you caused it.')
   })
 
+  it('never prints a MONTH’s record as the quarter’s', () => {
+    // The fallback printed Overview's own record — a month's updates, a
+    // month's video count and another page's refusals — under "How was this
+    // quarter read?", above a table that said the corpus was not recorded.
+    const text = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(forming, 'app', ctx))
+    expect(text).toContain('could not be recovered for this workspace')
+    expect(text).not.toContain('3 updates delivered')
+    expect(text).not.toContain('2,359 videos')
+    expect(forming.method.lines).toEqual([])
+  })
+
   it('tells an unrun check apart from a quiet quarter', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(forming, 'app', ctx))
     expect(text).toContain('not recorded for this workspace yet')
