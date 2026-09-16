@@ -1,6 +1,12 @@
 import type { Block } from '@/lib/blocks/types'
-import { MONTHLY_BLOCK_KEYS, type MonthlyBlockKey } from '@/lib/reports/monthly'
+import {
+  MONTHLY_BLOCK_KEYS,
+  MONTHLY_MOVES_EMPTY,
+  MONTHLY_MOVES_UNLOCK,
+  type MonthlyBlockKey,
+} from '@/lib/reports/monthly'
 import type { MonthlyData } from '@/lib/pages/monthly'
+import type { OverviewData } from '@/lib/pages/overview'
 import { overviewSubjects } from '@/components/pages/overview/subjects'
 import { overviewRivals } from '@/components/pages/overview/rivals'
 import { overviewMoves } from '@/components/pages/overview/moves'
@@ -28,10 +34,24 @@ export const MONTHLY_BLOCKS: Record<MonthlyBlockKey, Block<MonthlyData>> = {
   'monthly.subjects': fromOverview('monthly.subjects', overviewSubjects),
   'monthly.movers': monthlyMovers,
   'monthly.rivals': fromOverview('monthly.rivals', overviewRivals),
-  'monthly.moves': fromOverview('monthly.moves', overviewMoves),
+  'monthly.moves': fromOverview('monthly.moves', overviewMoves, artefactMoves),
   'monthly.voices': monthlyVoices,
   'monthly.decide': monthlyDecide,
   'monthly.sound': fromOverview('monthly.sound', overviewRecord),
+}
+
+/**
+ * OV5, said the way an artefact has to say it.
+ *
+ * The page's two sentences name a control the reader can press and a page they
+ * can open, and one of them is the build state of a feature that has not
+ * shipped ("Scoring, and the pre-filled monthly card, are not built yet. They
+ * will land on Market."). This artefact is emailed to a client's staff, some of
+ * whom have no account. The rows, the masthead, the figures and the verdicts
+ * are untouched — only the two sentences change.
+ */
+function artefactMoves(data: OverviewData): OverviewData {
+  return { ...data, moves: { ...data.moves, unlock: MONTHLY_MOVES_UNLOCK, empty: MONTHLY_MOVES_EMPTY } }
 }
 
 /**

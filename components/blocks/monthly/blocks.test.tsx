@@ -4,7 +4,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { MONTHLY_BLOCK_KEYS } from '@/lib/reports/monthly'
+import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
 
@@ -337,6 +337,30 @@ describe('the five sections that are Overview’s', () => {
       const text = renderText(MONTHLY_BLOCKS[key].render(monthlyFixture(), 'app', ctx))
       expect(text).toContain(MONTHLY_BLOCKS[key].title)
     }
+  })
+
+  // OV5's own unlock is "Scoring, and the pre-filled monthly card, are not built
+  // yet. They will land on Market." — build status about an unshipped feature,
+  // and a page name, in an email to a client's staff. The artefact answers the
+  // question a reader actually has (why is there no score?) and says nothing
+  // about what is built.
+  it('say nothing about what is not built yet, in any mode', () => {
+    for (const data of STATES) {
+      for (const mode of MODES) {
+        const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, mode, ctx))
+        expect(text).not.toContain('not built yet')
+        expect(text).not.toContain('will land on Market')
+        expect(text).not.toContain('Press Track this')
+      }
+    }
+  })
+
+  it('still print the rows, the promise and the figures the page declares', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
+    expect(text).toContain(MONTHLY_MOVES_UNLOCK)
+    expect(text).toContain(data.overview.moves.masthead)
+    for (const row of data.overview.moves.rows) expect(text).toContain(row.line)
   })
 
   it('merge into one figure table with no key printed two ways', () => {

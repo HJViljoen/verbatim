@@ -31,14 +31,27 @@ import type { MonthlyData } from '@/lib/pages/monthly'
  * a different reason: those are the READING, and a report that declared
  * different figures from the page it is made of would be a second reading of
  * one month.
+ *
+ * AND `project` IS FOR WORDS, NEVER FOR NUMBERS. A page may carry a sentence
+ * that only makes sense on the page — a control the reader can press, a page
+ * name they can click, the build state of something not shipped — and the same
+ * block mailed to a client's staff carries it to people with no account. The
+ * projection is where an artefact says that sentence its own way. It is handed
+ * the page's data and must return the page's data with copy changed and nothing
+ * else: a projection that moved a number would make the report a second reading
+ * of one month, which is the thing this adapter exists to prevent.
  */
-export function fromOverview(key: string, block: Block<OverviewData>): Block<MonthlyData> {
+export function fromOverview(
+  key: string,
+  block: Block<OverviewData>,
+  project: (data: OverviewData) => OverviewData = (d) => d,
+): Block<MonthlyData> {
   return {
     key,
     title: block.title,
     ...(block.question ? { question: block.question } : {}),
     render(data, mode, ctx) {
-      return block.render(data.overview, mode, ctx)
+      return block.render(project(data.overview), mode, ctx)
     },
     figures(data) {
       return block.figures?.(data.overview) ?? {}
@@ -50,7 +63,7 @@ export function fromOverview(key: string, block: Block<OverviewData>): Block<Mon
       return block.quotes?.(data.overview) ?? []
     },
     emptyState(data) {
-      return block.emptyState(data.overview)
+      return block.emptyState(project(data.overview))
     },
   }
 }
