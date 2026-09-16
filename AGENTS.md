@@ -262,10 +262,19 @@ This version has breaking changes — APIs, conventions, and file structure may 
   not null` is NOT that measure**: the column arrived 2026-09-15 and is never
   backfilled, so every vector written before it reads as unembedded — it
   answers "when was the last vector written", never "how much of the corpus is
-  embedded". The vectors themselves are read by the RPCs
-  (`set_insight_embeddings`, `match_insights`) and by bounded reads of a small
-  table (`lib/pipeline/themes.ts` takes one run's `themes.embedding`), and
-  nowhere else.
+  embedded". **The rule is about `audience_insights.embedding` in
+  particular**: that table's vectors are reached through the RPCs
+  (`set_insight_embeddings`, `match_insights`), which filter server-side, and
+  are never bulk-selected or counted from application code.
+  `themes.embedding` and `theme_registry.embedding` are a different case and
+  ARE read directly today — `lib/pipeline/themes.ts` (one run's themes, and
+  the whole tenant's registry), `lib/ask/engine.ts`,
+  `lib/reports/documents/signals.ts`, `scripts/citation-floor.ts` — because
+  those tables are two orders of magnitude smaller than `audience_insights`,
+  so even a whole-tenant registry read is a few megabytes and not seventy-five.
+  Treat that as the shape of the rule, not as a closed list: before you
+  "fix" a vector read you have found, check which table it is on and how many
+  rows it bounds, and count the predicate rather than the column either way.
 - **Production reads from agents are serialised and rationed.** Five agents
   reading production at once is what caused the outage above, so this is the
   fix and not caution. Before the first read of a session, `select 1` through
