@@ -43,3 +43,31 @@ export function scheduleArtefact(schedule: Pick<ScheduleRow, 'starter_key'> & { 
 export function sendsWeekly(schedule: Pick<ScheduleRow, 'starter_key'> & { artefact?: string | null }): boolean {
   return isWeeklyArtefact(scheduleArtefact(schedule))
 }
+
+/**
+ * What to call an artefact schedule on a screen.
+ *
+ * An artefact schedule has no `reports` row, so there is no title to read off
+ * one — and the Studio, which is the only place a schedule can be read or
+ * edited, builds its list out of `reports`. Until WP16's delivery screen lands,
+ * this is the name the Studio lists it under; without it a migrated schedule
+ * has no recipients field, no Preview, no Send now and no Active toggle, and
+ * SQL is the only door to the list of people it emails.
+ */
+export function artefactTitle(artefact: Artefact | null): string {
+  if (!artefact) return 'Sending'
+  if (artefact === 'weekly') return 'Weekly report'
+  if (artefact === 'monthly') return 'Monthly report'
+  if (artefact === 'quarterly') return 'Quarterly report'
+  if (artefact.startsWith('brief:')) {
+    const who = artefact.slice('brief:'.length).replace(/[_-]+/g, ' ').trim()
+    return who ? `${who.charAt(0).toUpperCase()}${who.slice(1)} brief` : 'Brief'
+  }
+  return `${artefact.charAt(0).toUpperCase()}${artefact.slice(1)} report`
+}
+
+/** A schedule that sends an artefact rather than one of the workspace's own
+ *  templates — the rows the Studio would otherwise never draw. */
+export function sendsArtefact(schedule: Pick<ScheduleRow, 'starter_key' | 'report_id'> & { artefact?: string | null }): boolean {
+  return !schedule.report_id && scheduleArtefact(schedule) != null
+}

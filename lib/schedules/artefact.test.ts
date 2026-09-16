@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RETIRED_DIGEST_KEY, WEEKLY_STARTER_KEY, scheduleArtefact, sendsWeekly } from './artefact'
+import { RETIRED_DIGEST_KEY, WEEKLY_STARTER_KEY, artefactTitle, scheduleArtefact, sendsArtefact, sendsWeekly } from './artefact'
 import { STARTER_TEMPLATES, starterTemplate, starterTemplates } from '../reports/templates'
 import { DEFAULT_SCHEDULE_STARTER } from './default'
 
@@ -61,5 +61,30 @@ describe('the retiring starter', () => {
   it('is not what a new workspace is born on', () => {
     expect(DEFAULT_SCHEDULE_STARTER).toBe(WEEKLY_STARTER_KEY)
     expect(sendsWeekly({ starter_key: DEFAULT_SCHEDULE_STARTER })).toBe(true)
+  })
+})
+
+// The Studio builds its list out of `reports`, so a schedule with no report row
+// had no screen at all once an operator migrated it: no recipients field, no
+// Preview, no Send now, no Active toggle, and SQL the only door to the list of
+// people it emails. These two answers are what puts it back on the page.
+describe('a schedule with no report of its own', () => {
+  it('is the one the Studio has to list in its own right', () => {
+    expect(sendsArtefact({ starter_key: WEEKLY_STARTER_KEY, report_id: null })).toBe(true)
+    expect(sendsArtefact({ starter_key: null, report_id: null, artefact: 'weekly' })).toBe(true)
+  })
+
+  it('is not one that already has a template to be listed under', () => {
+    expect(sendsArtefact({ starter_key: WEEKLY_STARTER_KEY, report_id: 'r1' })).toBe(false)
+    expect(sendsArtefact({ starter_key: RETIRED_DIGEST_KEY, report_id: null })).toBe(false)
+    expect(sendsArtefact({ starter_key: null, report_id: null })).toBe(false)
+  })
+
+  it('has a name to be listed under, for every artefact the column may hold', () => {
+    expect(artefactTitle('weekly')).toBe('Weekly report')
+    expect(artefactTitle('monthly')).toBe('Monthly report')
+    expect(artefactTitle('quarterly')).toBe('Quarterly report')
+    expect(artefactTitle('brief:sales')).toBe('Sales brief')
+    expect(artefactTitle(null)).toBe('Sending')
   })
 })
