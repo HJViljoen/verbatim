@@ -243,6 +243,16 @@ revoke all on public.video_claims from authenticated, anon;
 grant select (id, client_id, run_id, platform, source_video_id, entity, claim, created_at)
   on public.video_claims to authenticated;
 grant select, insert, delete on public.video_claims to service_role;
+-- AND NOTHING ELSE, STATED. `revoke all … from authenticated, anon` does not
+-- touch what Supabase's default ACL handed service_role when the table was
+-- created (arwdDxtm), so the three-verb grant above read as the whole of it
+-- while the role still held UPDATE and TRUNCATE — on the table this migration
+-- has just opened to a tenant session. M4 and M5 both learned this about the
+-- month tables and revoked TRUNCATE by name; this is the same lesson on the
+-- same branch. Pass D-a resolves claims and rewrites the set; it never edits a
+-- stored claim in place, and emptying the record in one statement is not an
+-- operation any writer needs.
+revoke update, truncate on public.video_claims from service_role;
 
 comment on column public.video_claims.quote is
   'The verbatim line from the video''s own transcript that the claim was read out of. NOT granted to `authenticated` (WP16), for the reason gate_verdicts.caption_excerpt is not: it is a whole sentence of a third party''s speech, and a row-level policy cannot tell a member from an owner. The subject proposer reads it server-side and hands the browser labels and counts.';
