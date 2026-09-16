@@ -213,15 +213,29 @@ select
         ('month_denominators','clustering_key'),('month_theme_readings','clustering_key')))  as cols,
   (select count(*) from public.theme_registry where cardinality(member_video_ids) > 0)       as backfilled,
   (select count(*) from public.theme_registry)                                               as entries,
+  (select count(*) from public.theme_observations where cardinality(member_video_ids) > 0)   as obs_backfilled,
+  (select count(*) from public.theme_observations)                                           as observations,
   (select count(*) from information_schema.role_table_grants
      where table_schema='public'
        and table_name in ('themes','theme_registry','theme_observations')
        and grantee in ('anon','authenticated')
        and privilege_type in ('INSERT','UPDATE','DELETE'))                                   as leftover_writes;
 ```
-Expect `cols = 8`, `leftover_writes = 0`, and `backfilled` close to `entries`
-(the backfill takes the newest `themes` row per `registry_id`; ~120 observation
-rows are legitimately empty — the migration says so at line 166).
+Expect `cols = 8` and `leftover_writes = 0`. The two backfills are separate
+tables with separate misses, and the migration measured both on 2026-09-15:
+
+- **`entries − backfilled` ≈ 67.** Össur 1,096 of 1,096, Sealand 1,860 of
+  1,927. The 67 have no `themes` row at all to lift from — debris from two
+  retried `persist-themes` runs whose first attempt's theme rows were deleted
+  by the retry while the observations upsert kept the entries alive.
+- **`observations − obs_backfilled` ≈ 120.** A different table and a different
+  count, same cause. An observation's video set is the `themes` row of ITS OWN
+  run, so a run whose theme rows a retry took keeps `'{}'`.
+
+**Both numbers grow by roughly thirty per retried run of that size**, so they
+are readings and not constants: a larger gap is not a failed backfill unless
+the gap is most of the table. A gap of ZERO on either is the surprise worth
+stopping for — nothing has re-created the deleted `themes` rows.
 
 **M3 · `20260918092000_reading_windows.sql`** — the first of the two guards.
 ```sql
