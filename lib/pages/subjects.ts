@@ -124,6 +124,13 @@ export const UNANSWERED_BASIS =
 export const UNANSWERED_CLAIMS_UNREADABLE =
   'We match these against what your posts are about. What your posts claim is not readable yet — Verbatim engineering.'
 
+/** The same caveat WITHOUT the readiness owner, for a reader outside the
+ *  workspace — a brief's PDF and its `/r/<token>` share page (WP19). The half
+ *  we could not read is still named; only our internal owner is dropped, the
+ *  same rule as OWN_POSTS_UNREADABLE_OUTSIDE. */
+export const UNANSWERED_CLAIMS_UNREADABLE_OUTSIDE =
+  'We match these against what your posts are about. What your posts claim is not readable yet.'
+
 /** Reddit's own caveat wherever a question count leans on it (design §3 SU3). */
 export const REDDIT_THREAD_CAP =
   'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'
