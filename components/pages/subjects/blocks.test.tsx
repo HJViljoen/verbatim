@@ -236,6 +236,13 @@ describe('SU2 · the kind mix', () => {
   })
 })
 
+describe('SU2 · the kind mix, on its own month', () => {
+  it('names the month, because it is one month among twelve months of furniture', () => {
+    const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Sep · every video in the audience')
+  })
+})
+
 describe('SU2 · the voices', () => {
   it('shows the original and the English beneath it, labelled', () => {
     const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))

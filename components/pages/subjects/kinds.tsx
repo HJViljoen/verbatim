@@ -4,7 +4,7 @@ import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockRanked } from '@/components/blocks/bars'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, fmtPct } from '@/lib/format'
+import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { KIND_ORDER } from '@/lib/reading/kinds'
 import type { SubjectSide, SubjectsData } from '@/lib/pages/subjects'
 
@@ -101,7 +101,11 @@ export const subjectsKinds: Block<SubjectsData> = {
         title={subjectsKinds.title}
         question={subjectsKinds.question}
         mode={mode}
-        meta="every video in the audience"
+        // THE MONTH IS ON THE META LINE, as the mock draws it ("Sep · every
+        // video in the audience"). This block is always ONE month while the
+        // rest of the page follows the horizon, so on Last 12 months an
+        // unlabelled one-month kind mix sat among twelve-month furniture.
+        meta={`${monthName(data.month).split(' ')[0]} · every video in the audience`}
         footer={footer}
       >
         {withKinds.map((s) => <Audience key={s.audience} side={s} mode={mode} />)}
