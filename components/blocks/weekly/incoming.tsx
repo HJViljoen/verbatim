@@ -88,7 +88,18 @@ export const weeklyIncoming: Block<WeeklyData> = {
           i.rivalPosts.map((p) => (
             <Line key={`${p.platform}:${p.account}:${p.uploadDate ?? ''}`} mode={mode}>
               <strong>{p.rival}</strong> posted on {platformLabel(p.platform)}
-              {p.uploadDate ? ` · ${shortDate(p.uploadDate)}` : ''} · <span data-copy="figure">{fmtInt(p.comments)}</span> {p.comments === 1 ? 'comment' : 'comments'} read
+              {p.uploadDate ? ` · ${shortDate(p.uploadDate)}` : ''}
+              {/* OUR OWN COUNT, NOT THE PLATFORM'S. `commentsRead` counts the
+                  comments rows we hold. `videos.comments_count` — what this
+                  line used to print — is the platform's current report, which
+                  said 106 where we hold 95 and 1 where we hold none. In the
+                  section whose printed question is "What did this update
+                  actually read?", that is a false claim about our own
+                  coverage. Absent means the count could not be read; it is
+                  never printed as a zero. */}
+              {p.commentsRead != null
+                ? <> · <span data-copy="figure">{fmtInt(p.commentsRead)}</span> {p.commentsRead === 1 ? 'comment' : 'comments'} read</>
+                : ' · how many of its comments we read is not recorded'}
               {p.href ? (
                 mode === 'email'
                   ? <> · <a href={p.href} style={{ color: EMAIL.link, textDecoration: 'none' }}>see the post →</a></>

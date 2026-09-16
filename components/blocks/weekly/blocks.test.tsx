@@ -171,6 +171,22 @@ describe('WR3 · what came in this week', () => {
     expect(text).toContain('310 comments read')
   })
 
+  // The platform's own comments_count is not a count of what we read, and this
+  // block's printed question is what the update actually read. A post whose
+  // count could not be read says so rather than printing a zero.
+  it('says the comments read are not recorded rather than printing a zero', () => {
+    const data = weeklyFixture()
+    const text = renderText(
+      block.render(
+        { ...data, incoming: { ...data.incoming, rivalPosts: data.incoming.rivalPosts.map((p) => ({ ...p, commentsRead: null })) } },
+        'app',
+        ctx,
+      ),
+    )
+    expect(text).toContain('how many of its comments we read is not recorded')
+    expect(text).not.toContain('comments read')
+  })
+
   it('says nothing was heard rather than dropping the line', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
     expect(text).toContain('No theme was heard for the first time in this update')

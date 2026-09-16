@@ -64,7 +64,21 @@ export interface RivalPost {
   account: string
   platform: string
   views: number
-  comments: number
+  /**
+   * How many of that post's comments WE HOLD — `comments` rows, counted.
+   *
+   * NOT `videos.comments_count`, which is the platform's own current report and
+   * is documented twice in this codebase as the opposite of a count of stored
+   * comments (`lib/reading/types.ts`, `lib/reading/attention.ts`). WR3's
+   * printed question is "What did this update actually read?", and the three
+   * Ottobock posts it prints today report 106 / 1 / 0 against 95 / 0 / 0
+   * actually held — so the old line claimed "1 comment read" on a post we read
+   * none of, and overstated another ninefold.
+   *
+   * Null where the count could not be read: a claim about our own coverage
+   * that we could not check is not printed as a number.
+   */
+  commentsRead: number | null
   uploadDate: string | null
   href: string | null
 }
@@ -520,12 +534,13 @@ async function baselineMonths(
 
 interface VideoRow {
   platform: string | null
+  /** The platform's own id for the post — what `comments.video_id` holds. */
+  video_id: string | null
   account_name: string | null
   competitor_name: string | null
   is_competitor: boolean | null
   video_url: string | null
   views: number | null
-  comments_count: number | null
   upload_date: string | null
   analyzed_run_id?: string | null
 }
@@ -555,14 +570,14 @@ async function loadIncoming(
     selectAll<VideoRow>(() =>
       supabase
         .from('videos')
-        .select('platform, account_name, competitor_name, is_competitor, video_url, views, comments_count, upload_date, analyzed_run_id')
+        .select('platform, video_id, account_name, competitor_name, is_competitor, video_url, views, upload_date, analyzed_run_id')
         .eq('client_id', clientId)
         .eq('run_id', run.id),
     ).catch(() =>
       selectAll<VideoRow>(() =>
         supabase
           .from('videos')
-          .select('platform, account_name, competitor_name, is_competitor, video_url, views, comments_count, upload_date')
+          .select('platform, video_id, account_name, competitor_name, is_competitor, video_url, views, upload_date')
           .eq('client_id', clientId)
           .eq('run_id', run.id),
       ),
@@ -581,19 +596,20 @@ async function loadIncoming(
       if (v.analyzed_run_id === run.id) analysed += 1
     }
   }
-  const rivalPosts = videoRes
+  const topRivals = videoRes
     .filter((v) => v.is_competitor && v.competitor_name)
     .sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
     .slice(0, RIVAL_POSTS)
-    .map((v) => ({
-      rival: v.competitor_name ?? '',
-      account: v.account_name ?? '',
-      platform: v.platform ?? '',
-      views: v.views ?? 0,
-      comments: v.comments_count ?? 0,
-      uploadDate: v.upload_date,
-      href: v.video_url,
-    }))
+  const read = await commentsHeldFor(supabase, clientId, topRivals)
+  const rivalPosts: RivalPost[] = topRivals.map((v) => ({
+    rival: v.competitor_name ?? '',
+    account: v.account_name ?? '',
+    platform: v.platform ?? '',
+    views: v.views ?? 0,
+    commentsRead: read.get(`${v.platform}::${v.video_id}`) ?? null,
+    uploadDate: v.upload_date,
+    href: v.video_url,
+  }))
 
   return {
     gathered: videoRes.length,
@@ -607,6 +623,50 @@ async function loadIncoming(
     rivalPosts,
     rivalPostsNote: rivalPosts.length > 0 ? null : 'No tracked rival posted in this update’s window.',
   }
+}
+
+/**
+ * How many comments we HOLD for each of these posts, keyed `platform::video_id`.
+ *
+ * COUNTED, NOT REPORTED. `videos.comments_count` is the platform's own current
+ * number and drifts upward between updates; this section's printed question is
+ * what the update actually READ, and the only honest answer to that is a count
+ * of `comments` rows. Three head counts, one per post named — not a fetch of
+ * the rows, which on a popular post is thousands of comments read to print one
+ * integer.
+ *
+ * A COUNT THAT FAILS IS ABSENT, NOT ZERO. "0 comments read" is a claim about
+ * our coverage; a missing key is a claim about this read, and the block says
+ * which it is.
+ */
+async function commentsHeldFor(
+  supabase: SupabaseClient,
+  clientId: string,
+  videos: readonly VideoRow[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  const wanted = videos.filter((v) => v.platform && v.video_id)
+  if (wanted.length === 0) return out
+  const counts = await Promise.all(
+    wanted.map(async (v) => {
+      const res = await supabase
+        .from('comments')
+        .select('id', { count: 'exact', head: true })
+        .eq('client_id', clientId)
+        .eq('platform', v.platform as string)
+        .eq('video_id', v.video_id as string)
+      if (res.error) {
+        console.error(`[pages] weekly.commentsRead: ${res.error.message}`)
+        return null
+      }
+      return res.count ?? 0
+    }),
+  )
+  wanted.forEach((v, i) => {
+    const n = counts[i]
+    if (n != null) out.set(`${v.platform}::${v.video_id}`, n)
+  })
+  return out
 }
 
 /**

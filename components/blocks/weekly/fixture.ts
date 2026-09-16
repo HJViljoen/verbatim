@@ -77,7 +77,7 @@ function base(overview = overviewFixture()): WeeklyData {
       newThemes: [{ label: 'Zips failing after a year', videos: 12 }],
       newThemesNote: null,
       rivalPosts: [
-        { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, comments: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
+        { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, commentsRead: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
       ],
       rivalPostsNote: null,
     },
