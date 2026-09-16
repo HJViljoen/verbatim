@@ -192,6 +192,22 @@ describe('MR3 · what moved', () => {
     expect(answers.verdicts.length).toBe(data.movers.growing.length + data.movers.fading.length)
   })
 
+  // A MONTH WITH NO DENOMINATOR HAS NO SHARE, AND A BARE COUNT IS NOT A LEVEL.
+  // `pct` is null exactly when the month's denominator is zero, and the row
+  // printed "130 videos" inside a data-copy="level" node with no "of N" in it.
+  it('keeps the copy contract on a row with no share', () => {
+    const data = monthlyFixture()
+    const strip = <T extends { pct: number | null }>(r: T): T => ({ ...r, pct: null })
+    data.movers = {
+      ...data.movers,
+      growing: data.movers.growing.map(strip),
+      fading: data.movers.fading.map(strip),
+      newcomers: data.movers.newcomers.map(strip),
+    }
+    for (const mode of MODES) assertCopyContract(render(block.render(data, mode, ctx)))
+    expect(renderText(block.render(data, 'app', ctx))).toContain('130 videos')
+  })
+
   it('says what it could not read rather than printing an empty list', () => {
     expect(block.emptyState(formingMonthlyFixture()))
       .toBe('Too little conversation this month to say what moved.')

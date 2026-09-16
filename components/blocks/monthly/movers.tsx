@@ -164,14 +164,26 @@ function Heading({ children, mode }: { children: ReactNode; mode: RenderMode }) 
   )
 }
 
+/**
+ * A mover's share, with the count it rests on — or, where there is no share,
+ * the count alone and NOT marked as a level.
+ *
+ * RULE (b) IS ABOUT THE MARKER, NOT ABOUT THE NUMBER. `pct` is null exactly
+ * when the month's denominator is zero (lib/reading/series.ts), and
+ * `loadVoiceSurface` guards on `videos != null` rather than `> 0`, so the arm
+ * is reachable — and it printed "130 videos" inside a data-copy="level" node
+ * with no "of N" in it, four violations a side in each of the three modes. The
+ * bare count is honest and there is no denominator to print beside it; what was
+ * wrong was calling it a calibrated level.
+ */
+function Level({ k, n, pct }: { k: number; n: number; pct: number | null }) {
+  if (pct == null) return <span>{fmtInt(k)} videos</span>
+  return <span data-copy="level">{`${fmtPct(pct)} · ${fmtInt(k)} of ${fmtInt(n)}`}</span>
+}
+
 function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
   const email = mode === 'email'
-  // RULE (b): a level never prints without the count it rests on.
-  const level = (
-    <span data-copy="level">
-      {row.pct == null ? `${fmtInt(row.k)} videos` : `${fmtPct(row.pct)} · ${fmtInt(row.k)} of ${fmtInt(row.n)}`}
-    </span>
-  )
+  const level = <Level k={row.k} n={row.n} pct={row.pct} />
 
   if (email) {
     return (
@@ -220,9 +232,7 @@ function Flags({ heading, rows, mode }: { heading: string; rows: readonly Mover[
   const line = (r: Mover) => (
     <>
       <span data-copy="subject" data-slot="pass_b_theme">{r.label}</span>{' — '}
-      <span data-copy="level">
-        {r.pct == null ? `${fmtInt(r.k)} videos` : `${fmtPct(r.pct)} · ${fmtInt(r.k)} of ${fmtInt(r.n)}`}
-      </span>
+      <Level k={r.k} n={r.n} pct={r.pct} />
     </>
   )
   return (
