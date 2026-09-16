@@ -1717,7 +1717,16 @@ async function resolveRefs(
     ...(byId ? rows<EvidenceRow>(byId, 'week.flagEvidence') : []),
     ...(byComment ? rows<EvidenceRow>(byComment, 'week.flagEvidenceByComment') : []),
   ]
-  const parents = [...new Set(found.map((e) => e.audience_insight_id))]
+  // SCOPED TO THE TENANT — ON THE PARENT, because `insight_evidence` carries no
+  // `client_id` (schema-baseline.sql: nine columns, none of them a tenant) and
+  // is scoped everywhere in this product through the insight above it. The ids
+  // come off this tenant's own flag rows and the app path hands in an
+  // RLS-scoped session client, so today this is belt and braces — but WP17 and
+  // WP19 will hand this loader an ADMIN client for an export, and an unscoped
+  // `in()` under one is a cross-tenant read waiting for the day the ids are not
+  // ours. Filtering the parents is enough: the citations below are fetched for
+  // these and nothing else.
+  const parents = await tenantInsights(supabase, clientId, [...new Set(found.map((e) => e.audience_insight_id))])
   if (parents.length === 0) return []
   const citations = await fetchQuoteCitationsByAudience(supabase, parents)
   const wantedEvidence = new Set([...evidenceIds, ...found.filter((e) => e.comment_id && commentIds.includes(e.comment_id)).map((e) => e.id)])
@@ -1731,6 +1740,20 @@ async function resolveRefs(
     }
   }
   return citeQuotes(supabase, clientId, pool.slice(0, refs.length))
+}
+
+/** Of these insight ids, the ones that belong to this tenant. `audience_insights`
+ *  is where the tenant lives; `insight_evidence` has no `client_id` of its own. */
+async function tenantInsights(
+  supabase: SupabaseClient,
+  clientId: string,
+  ids: readonly string[],
+): Promise<string[]> {
+  if (ids.length === 0) return []
+  const held = await inChunks<{ id: string }>(ids, (part) => () =>
+    supabase.from('audience_insights').select('id').eq('client_id', clientId).in('id', part).order('id', { ascending: true }),
+  )
+  return held.map((r) => r.id)
 }
 
 /**
