@@ -307,24 +307,40 @@ export async function deliverSend(a: DeliverArgs): Promise<DeliverResult> {
     // the day somebody clicked. Non-fatal, and only for a block artefact; a
     // document brief's figures are display strings with no object behind them
     // until WP19 re-bases them.
+    //
+    // AND THE WHOLE OF IT IS OUTSIDE THIS FUNCTION'S FAILURE BOUNDARY, ROWS
+    // INCLUDED. `recordSend` guards its own two writes, but the rows were
+    // COMPUTED as its argument — `blockAnswers` over a snapshot frozen days
+    // earlier, possibly by an older deploy, and it carries no guard of its own.
+    // A throw there, after Resend has accepted the mail, ran the catch below:
+    // a scheduled send was marked `failed`, and a by-hand one went back to
+    // `ready`, from which a person can press Send and the client receives the
+    // artefact twice. Nothing after the mail has gone may be able to say the
+    // send did not happen.
     if (arranged) {
-      await recordSend(admin, {
-        clientId: schedule.client_id,
-        snapshotId: snapRow.id,
-        readingAt: arranged.readingAt,
-        month: arranged.month,
-        monthStatus: monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling'),
-        rows: sentFigureRows({
+      try {
+        const monthStatus = monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling')
+        const rows = sentFigureRows({
           month: arranged.month,
-          monthStatus: monthly ? monthly.monthStatus : (weekly?.reading.monthStatus ?? 'filling'),
+          monthStatus,
           artefact: monthly ? 'monthly' : 'weekly',
           verdicts: monthly
             ? monthlyBlocksFor(monthly.keys).flatMap((b) => blockAnswers(b, monthly.reading).verdicts)
             : weeklyBlocksFor(weekly!.keys).flatMap((b) => blockAnswers(b, weekly!.reading).verdicts),
           figures: arranged.figures,
           figureAudience: 'artefact',
-        }),
-      })
+        })
+        await recordSend(admin, {
+          clientId: schedule.client_id,
+          snapshotId: snapRow.id,
+          readingAt: arranged.readingAt,
+          month: arranged.month,
+          monthStatus,
+          rows,
+        })
+      } catch (error) {
+        console.warn(`[deliver ${sendId}] could not record what was sent`, error)
+      }
     }
     return { status: 'sent', subject: email.subject, ms: ms() }
   } catch (e) {
