@@ -89,8 +89,16 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                         <div style={{ ...text.small, marginTop: 12 }}>
                           {attached ? 'The PDF is attached. ' : ''}One link per section; the evidence behind each figure opens on the page.
                         </div>
+                        {/* "Prepared FOR", not "by". The share shell says "by"
+                            because a share link is a document the client
+                            forwards to THEIR stakeholders; this is a list
+                            Verbatim sends to the client's own staff, and the
+                            two clauses of this sentence cannot both be true of
+                            one reader otherwise. WP15 wrote the right one four
+                            days earlier: "Prepared for Össur with Verbatim"
+                            (lib/pages/week.ts). */}
                         <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
-                          Prepared by {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
+                          Prepared for {data.company} · with Verbatim. You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
                         </div>
                       </td>
                     </tr>
