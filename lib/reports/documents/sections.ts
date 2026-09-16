@@ -329,7 +329,16 @@ export function missingSentence(m: MissingInput): string {
     : m.ownerRole === 'ops'
       ? 'We are setting it up, and it appears here the moment it is there.'
       : 'We are building it, and it appears here the moment it is there.'
-  return `${head} ${act} It is on Settings › Readiness.`
+  // NO IN-APP DESTINATION. Every rendering of a brief is a printed one — the
+  // PDF, the share link at /r/<token>, the deck in the Studio — and this
+  // sentence is composed ONCE and frozen into the snapshot, so there is no
+  // arm of it that only an app reader sees. "It is on Settings › Readiness"
+  // sent a share-link reader, who may not have an account at all, to a screen
+  // of ours; it is the same rule `openLink` follows (a link in the app, an
+  // <a> in an email, nothing on paper) and the same one the two _OUTSIDE
+  // constants follow for readiness owners. A client row's own act still names
+  // the screen the client acts on, because that is the act.
+  return `${head} ${act}`
 }
 
 /** The line that opens the brief's own account of what it left out. */

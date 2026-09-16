@@ -144,8 +144,11 @@ describe('the method page', () => {
     const joined = items.join(' ')
     expect(joined).toContain('One thing this brief needed is not recorded')
     expect(joined).toContain('Your subjects could not be filled')
-    expect(joined).toContain('Client closes this')
-    expect(joined).toContain('Settings › Readiness')
+    expect(joined).toContain('This one is yours to close')
+    expect(joined).toContain('Name them in Settings › Subjects')
+    // The method page is a printed page behind a share link: it names the act,
+    // never our own readiness screen.
+    expect(joined).not.toContain('Settings › Readiness')
   })
 })
 

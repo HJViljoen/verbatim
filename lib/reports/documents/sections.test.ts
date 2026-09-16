@@ -128,7 +128,7 @@ describe('missingSentence', () => {
 
   it('names the input and who closes it — and no work package', () => {
     expect(missingSentence(m)).toBe(
-      'Your subjects could not be filled. We have not recorded the five to eight subjects this workspace is read against. This one is yours to close. Name the subjects in Settings › Subjects. It is on Settings › Readiness.',
+      'Your subjects could not be filled. We have not recorded the five to eight subjects this workspace is read against. This one is yours to close. Name the subjects in Settings › Subjects.',
     )
   })
 
@@ -167,6 +167,14 @@ describe('missingSentence', () => {
     expect(line).not.toContain('Apply the monthly reading')
     expect(line).not.toContain('seed it')
     expect(line).not.toContain('closes this')
+  })
+
+  it('sends nobody to our readiness screen — the sentence is printed on paper', () => {
+    // Composed once and frozen: the same string is the PDF, the share link and
+    // the Studio's deck. A reader of /r/<token> has no Settings to open.
+    for (const role of ['client', 'ops', 'engineering'] as const) {
+      expect(missingSentence({ ...m, ownerRole: role, owner: OWNER_LABEL[role] })).not.toContain('Settings › Readiness')
+    }
   })
 
   it('never doubles a full stop', () => {
