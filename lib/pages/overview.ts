@@ -30,7 +30,7 @@ import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Directi
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
-import { longMonth, monthStartOf, nextMonth } from '../reading/month-key'
+import { longMonth, monthStartOf, nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { moodChange, moodShares, framingShare, type MoodShare } from '../reading/mood'
 import { loadMonthSeries, loadTopObjects, loadWindowReading, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordWindow } from '../reading/record'
@@ -1295,11 +1295,6 @@ async function readSubjectsAtThisPointLastMonth(
     if (isMissingSubjects(error) || isMissingMonthlyReading(error)) return null
     throw error
   }
-}
-
-function previousMonthOf(month: string): string {
-  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
-  return monthStartOf(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)).toISOString())
 }
 
 /** The tenant's named subjects. Null — never [] — before M4 is applied. */
