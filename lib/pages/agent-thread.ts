@@ -9,7 +9,7 @@ import { weekdayDate } from '../format'
 import { row, rows as readRows } from './read'
 import { isMissingColumnError } from '../supabase-admin'
 import type { ClaimResult, Judgement, AskSummary } from '../ask/types'
-import type { AgentAnswer } from '../agent/types'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/types'
 import { loadIndexFacts, type AskBasis } from '../agent/basis'
 import type { MethodNoteData } from '../../components/print/method-note'
 
@@ -293,14 +293,14 @@ export function agentThreadSlides(d: AgentThreadData): Slide[] {
     const pages = documentPages(d.document.segments)
     pages.forEach((_, p) => slides.push({ title: p === 0 ? `The brief, checked${d.document?.sourceFilename ? ` · ${d.document.sourceFilename}` : ''}` : 'The brief, checked (continued)', keys: [`agent.doc:${p}`], layout: 'single' }))
     for (let c = 0; c < Math.ceil(d.document.claims.length / GROUNDED_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Claim by claim' : 'Claim by claim (continued)', keys: [`agent.claims:${c}`], layout: 'single' })
-    if (d.document.judgement.length) slides.push({ title: 'What the agent would take from that', keys: ['agent.judgement'], layout: 'single' })
+    if (d.document.judgement.length) slides.push({ title: JUDGEMENT_HEADING, keys: ['agent.judgement'], layout: 'single' })
     return slides
   }
   d.turns.forEach((t, i) => {
     const grounded = t.answer?.grounded.length ?? 0
     const parts = Math.max(1, Math.ceil(grounded / GROUNDED_PER_SLIDE))
     for (let p = 0; p < parts; p++) slides.push({ title: i === 0 ? d.title : `Follow-up ${i}`, keys: [`agent.turn:${i}:${p}`], layout: 'single' })
-    if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: 'Close to it, and what the agent would take from that', keys: [`agent.turn:${i}:more`], layout: 'single' })
+    if (t.answer && (t.answer.nearest.length || t.answer.judgement.length)) slides.push({ title: `${NEAREST_HEADING}, and ${JUDGEMENT_HEADING.charAt(0).toLowerCase()}${JUDGEMENT_HEADING.slice(1)}`, keys: [`agent.turn:${i}:more`], layout: 'single' })
   })
   for (let c = 0; c < Math.ceil(d.citations.length / CITATIONS_PER_SLIDE); c++) slides.push({ title: c === 0 ? 'Evidence — every quoted voice' : 'Evidence (continued)', keys: [`agent.citations:${c}`], layout: 'single' })
   if (d.silentQuestions.length) slides.push({ title: 'Nothing in the data speaks to this', keys: ['agent.silent'], layout: 'single' })

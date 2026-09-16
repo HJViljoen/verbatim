@@ -91,7 +91,7 @@ export default async function AgentThreadPage({ params }: { params: Promise<{ id
               {(t.answer || t.prose) && (
                 <Card className="bg-popover">
                   <CardContent className="py-5">
-                    {t.answer ? <AgentAnswerView answer={t.answer} /> : <p className="text-[15px] leading-relaxed text-foreground">{t.prose}</p>}
+                    {t.answer ? <AgentAnswerView answer={t.answer} citations={data.citations} /> : <p className="text-[15px] leading-relaxed text-foreground">{t.prose}</p>}
                     {/* AS3 under the answer it is about: which update it was
                         answered against, and how much of the corpus could be
                         searched when it was. The index facts are today's — a

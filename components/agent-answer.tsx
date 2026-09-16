@@ -1,5 +1,7 @@
-import { Quotes } from '@/components/quotes'
-import type { AgentAnswer } from '@/lib/agent/types'
+import { QuoteBlock } from '@/components/quote-block'
+import { platformLabel, shortDate } from '@/lib/format'
+import { JUDGEMENT_HEADING, NEAREST_HEADING, saidHeading } from '@/lib/agent/types'
+import type { Citation, ThreadAnswer } from '@/lib/pages/agent-thread'
 
 // Rendering the three registers.
 //
@@ -22,7 +24,42 @@ function ConversationCount({ n }: { n: number }) {
   )
 }
 
-export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
+/** Where one quoted voice was said, as the line under it (AS4).
+ *
+ *  THIS USED TO BE IN THE PDF ONLY. The deck has rendered "platform · date ·
+ *  link" per quote since the export landed, and the screen rendered the words
+ *  alone — `loadAgentThread` handed the page the number, the platform, the date
+ *  and the deep link, and the page threw all four away. A reader on screen
+ *  could not tell a YouTube comment from a TikTok caption, and could not go and
+ *  read it.
+ *
+ *  The NUMBER is the deck's number: assigned across the whole thread in the
+ *  loader, so the superscript here, the appendix on paper and a share link all
+ *  name the same voice. `commentLevel` is the honest half — YouTube deep-links
+ *  the comment itself, TikTok and Instagram can only reach the post, and the
+ *  link says which. */
+function Provenance({ q, meta }: { q: ThreadAnswer['grounded'][number]['quotes'][number]; meta?: Citation }) {
+  const where = [meta?.platform ? platformLabel(meta.platform) : null, meta?.date ? shortDate(meta.date) : null]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <span className="tabular-nums">
+      {q.n}
+      {where ? ` · ${where}` : ' · source on file'}
+      {meta?.href && (
+        <>
+          {' · '}
+          <a href={meta.href} target="_blank" rel="noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">
+            {meta.commentLevel ? 'the comment' : 'the post'}
+          </a>
+        </>
+      )}
+    </span>
+  )
+}
+
+export function AgentAnswerView({ answer, citations = [] }: { answer: ThreadAnswer; citations?: Citation[] }) {
+  const metaByRef = new Map(citations.map((c) => [c.ref, c]))
   const hasGrounded = answer.grounded.length > 0
   // The model's refs ("G1", "G3") are internal handles and mean nothing to a
   // reader. Number the findings as they appear and cite THOSE, so "based on 1
@@ -45,11 +82,7 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
               about whose audience spoke, and on 2026-09-10 it was printed over
               a comment from another brand's audience. It is said only when
               every point rests on the client's own videos. */}
-          <h3 className="text-sm font-semibold">
-            {answer.grounded.every((p) => p.voices === 'client')
-              ? 'What your customers said'
-              : 'What people said'}
-          </h3>
+          <h3 className="text-sm font-semibold">{saidHeading(answer.grounded)}</h3>
           {answer.grounded.map((point, i) => (
             <div key={point.id} className="space-y-2 rounded-lg border border-border/60 bg-popover p-4">
               {/* Not flex-wrap: a finding that runs to two lines was dropping
@@ -62,7 +95,15 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
                 </p>
                 <ConversationCount n={point.conversationCount} />
               </div>
-              <Quotes items={point.quotes.map((q) => ({ text: q.text, lang: q.lang, english: q.english }))} />
+              <div className="space-y-2">
+                {point.quotes.map((q) => (
+                  <QuoteBlock
+                    key={q.ref + q.n}
+                    quote={{ text: q.text, lang: q.lang, english: q.english }}
+                    cite={<Provenance q={q} meta={metaByRef.get(q.ref)} />}
+                  />
+                ))}
+              </div>
               {point.themeRefs.length > 0 && (
                 <p className="text-xs text-muted-foreground">
                   {point.themeRefs.map((t) => t.label).filter(Boolean).join(' · ')}
@@ -75,7 +116,7 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
 
       {answer.nearest.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Not what you asked, but close</h3>
+          <h3 className="text-sm font-semibold">{NEAREST_HEADING}</h3>
           {answer.nearest.map((n, i) => (
             <div key={i} className="flex items-baseline justify-between gap-3 rounded-lg border border-dashed border-border/60 bg-popover p-4">
               <p className="min-w-0 flex-1 text-[15px] leading-snug text-foreground/90">{n.text}</p>
@@ -87,7 +128,7 @@ export function AgentAnswerView({ answer }: { answer: AgentAnswer }) {
 
       {answer.judgement.length > 0 && (
         <section className="space-y-2">
-          <h3 className="text-sm font-semibold">What I&rsquo;d take from that</h3>
+          <h3 className="text-sm font-semibold">{JUDGEMENT_HEADING}</h3>
           {/* Visually distinct from the evidence above on purpose. A reader
               skimming must never mistake this column for the one their
               customers stand behind. */}
