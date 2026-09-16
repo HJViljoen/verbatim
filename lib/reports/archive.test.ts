@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   dateFilterLine,
   hasDateFilter,
+  emptyGroupLine,
   listCap,
   parseDateFilter,
   readingLine,
@@ -136,6 +137,33 @@ describe('dateFilterLine, where the list could not be read', () => {
 
   it('still says nothing where nothing is filtered', () => {
     expect(dateFilterLine(parseDateFilter(undefined, undefined), 0, 340, { unread: true })).toBeNull()
+  })
+})
+
+describe('emptyGroupLine', () => {
+  const invite = 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
+  const args = { verb: 'was built', invite }
+
+  it('invites where the archive really is empty', () => {
+    expect(emptyGroupLine({ ...args, filtered: false, reach: {} })).toBe(invite)
+  })
+
+  it('says only what the filter looked at where a cap hides rows', () => {
+    // The header says the newest 100 were searched; the pane may not say
+    // "nothing was built in those dates" directly beneath it.
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { cappedAt: 100, clock: 'built' } }))
+      .toBe('Nothing was built in those dates among the 100 we searched.')
+  })
+
+  it('claims the workspace only where the whole group was searched', () => {
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { cappedAt: null } }))
+      .toBe('Nothing was built in those dates.')
+  })
+
+  it('says a failed read failed, filtered or not', () => {
+    const failed = 'We could not read this list just now. Try again in a moment.'
+    expect(emptyGroupLine({ ...args, filtered: true, reach: { unread: true } })).toBe(failed)
+    expect(emptyGroupLine({ ...args, filtered: false, reach: { unread: true } })).toBe(failed)
   })
 })
 

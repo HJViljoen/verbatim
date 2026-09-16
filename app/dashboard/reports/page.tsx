@@ -16,7 +16,7 @@ import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/r
 import { rows as readRows } from '@/lib/pages/read'
 import { BriefCards } from '@/components/reports/brief-cards'
 import { ArchiveDateFilter } from '@/components/reports/date-filter'
-import { SENT_FIGURES_NOTE, dateFilterLine, listCap, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates } from '@/lib/reports/archive'
+import { SENT_FIGURES_NOTE, dateFilterLine, emptyGroupLine, hasDateFilter, listCap, parseDateFilter, readingLine, readingStampOf, sentFigures, withinDates, type ListReach } from '@/lib/reports/archive'
 import { BRIEF_CARDS, cadenceWord, cardSending, briefLabel, briefWhat, type BriefCard } from '@/lib/reports/briefs'
 import { loadReportsPage } from '@/lib/settings/reports-load'
 import { isArtefact } from '@/lib/settings/artefacts'
@@ -309,6 +309,11 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
 
   const LIST_ID = 'reports-list'
   const shown = group === 'sent' ? sends.length + legacy.length : group === 'built' ? builds.length : exports.length
+  // The pane's line and the header's line are one answer: an empty pane must
+  // not say "nothing was built in those dates" under a header saying only the
+  // newest hundred were searched.
+  const reach: ListReach = { cappedAt, ...(group === 'built' ? { clock: 'built' } : {}), unread: unread[group] }
+  const emptyLine = (verb: string, invite: string) => emptyGroupLine({ verb, invite, filtered: hasDateFilter(dates), reach })
   const filter = (
     <ArchiveDateFilter
       filter={dates}
@@ -316,7 +321,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       // The Built list is capped by when each artefact was BUILT and narrowed
       // by when it READ; the caveat names the clock its cap is on so the two
       // dates cannot be read as one.
-      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, { cappedAt, ...(group === 'built' ? { clock: 'built' } : {}), unread: unread[group] })}
+      line={dateFilterLine(dates, shown, group === 'sent' ? totals.sent : group === 'built' ? totals.built : totals.exported, reach)}
     />
   )
   const list = group === 'sent' ? (
@@ -343,7 +348,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was sent in those dates.' : 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was sent', 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -366,7 +371,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was built in those dates.' : 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was built', 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -389,7 +394,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>{dates.from || dates.to ? 'Nothing was exported in those dates.' : 'Nothing exported yet. Export any page or tile from its menu; the files collect here.'}</PaneEmpty>
+            <PaneEmpty>{emptyLine('was exported', 'Nothing exported yet. Export any page or tile from its menu; the files collect here.')}</PaneEmpty>
           )}
         </div>
       </PaneBody>

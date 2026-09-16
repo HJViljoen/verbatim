@@ -149,6 +149,31 @@ export function dateFilterLine(filter: DateFilter, shown: number, total: number,
 }
 
 /**
+ * The line in an empty pane, which has to agree with the line in the header.
+ *
+ * "Nothing was built in those dates." IS A CLAIM ABOUT THE WORKSPACE, and the
+ * pane printed it directly under a header saying only the newest hundred rows
+ * were searched — two sentences, one above the other, saying opposite things.
+ * Where the cap hides something the pane says what was looked at instead; where
+ * the list could not be read at all it says that and counts nothing.
+ */
+export function emptyGroupLine(args: {
+  /** The group's own verb: "was sent", "was built", "was exported". */
+  verb: string
+  /** What a genuinely empty archive is told instead — the invitation. */
+  invite: string
+  /** Is a date filter on? */
+  filtered: boolean
+  reach: ListReach
+}): string {
+  if (args.reach.unread) return 'We could not read this list just now. Try again in a moment.'
+  if (!args.filtered) return args.invite
+  return args.reach.cappedAt != null
+    ? `Nothing ${args.verb} in those dates among the ${args.reach.cappedAt} we searched.`
+    : `Nothing ${args.verb} in those dates.`
+}
+
+/**
  * When a stored artefact says it read.
  *
  * FOUR CARRIERS, AND THE ORDER MATTERS. Each is read whether the query
