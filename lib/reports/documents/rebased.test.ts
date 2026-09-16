@@ -80,6 +80,25 @@ describe('documentFigures, re-based', () => {
     const f = documentFigures(signals({ reading: reading() }), answers)
     expect(f.category_videos).toEqual({ label: 'videos read for the category this month', value: '388', kind: 'count' })
   })
+
+  // Measured on production: OV0's month_videos and the standings block's
+  // standings_videos both read 449 on Össur in September — 388 + 42 + 19,
+  // with 6 videos naming two rivals counted twice — beside a method page
+  // printing 388. The same sum competitor_videos was withdrawn for.
+  it('withdraws the block figures that sum videos across audiences', () => {
+    const f = documentFigures(signals({
+      reading: reading({
+        figures: {
+          category_videos: { label: 'videos read for the category this month', value: '388', kind: 'count' },
+          month_videos: { label: 'videos read into this month', value: '449', kind: 'count' },
+          standings_videos: { label: 'videos read in Sep 2026', value: '449', kind: 'count' },
+        },
+      }),
+    }), answers)
+    expect(f.month_videos).toBeUndefined()
+    expect(f.standings_videos).toBeUndefined()
+    expect(f.category_videos).toBeTruthy()
+  })
 })
 
 describe('briefPeriod', () => {

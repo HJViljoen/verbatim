@@ -68,13 +68,30 @@ export function thinWeek(s: Pick<Signals, 'runStatus' | 'run'>): boolean {
  * each rival gets its own figure instead. Comments DO sum exactly, which is
  * why `conversations` still has one.
  *
+ * AND THE SAME SUM DOES NOT COME BACK IN THROUGH THE BLOCK TABLE. The blocks'
+ * merged figures open this table, and two of them are that sum by another
+ * name: `month_videos` ("videos read into this month", OV0's own total across
+ * audiences) and `standings_videos` ("videos read in Sep 2026"). Measured on
+ * production, Össur, September: both hand the writer 449 while the same
+ * brief's method page prints "388 videos in the category · 42 videos in
+ * Ottobock · 19 videos in your own brand", and `dual_mention_videos` = 6
+ * proves the overlap is real. Whether 449 is the right number for the page it
+ * is drawn on is Overview's argument; putting it in a document's citable list
+ * beside a contradicting 388 is this module's.
+ *
  * WHEN THERE IS NO READING the update figures stand, unchanged, and the method
  * page says which basis this brief used. That is the isMissing* precedent: a
  * brief on a workspace whose month tables are not applied prints what it has
  * and names what it could not read.
  */
+/** Block figures a brief withdraws: a video count summed across audiences,
+ *  which double-counts a video naming two rivals. Withdrawn by KEY rather than
+ *  by a guess at the label, so adding one is a deliberate line here. */
+export const AUDIENCE_SUMMED_VIDEO_FIGURES: readonly string[] = ['month_videos', 'standings_videos']
+
 export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTable {
-  const f: FigureTable = s.reading ? { ...s.reading.figures } : {}
+  const f: FigureTable = {}
+  if (s.reading) for (const [k, v] of Object.entries(s.reading.figures)) if (!AUDIENCE_SUMMED_VIDEO_FIGURES.includes(k)) f[k] = v
   if (s.reading) {
     const r = s.reading
     const of = (audience: string) => r.denominators.find((d) => d.audience === audience) ?? null
