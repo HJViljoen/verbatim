@@ -164,22 +164,34 @@ describe('leadVerdict', () => {
 })
 
 describe('the series trail under a mover row', () => {
-  it('reads as the mock prints it', () => {
-    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [5.1, 6.8, 9.4]))
-      .toBe('Jul 5.1% → Aug 6.8% → Sep 9.4%')
+  const p = (pct: number, n: number) => ({ pct, n })
+
+  // RULE (b) OVER SIX LEVELS. The trail used to read "Jul 5.1% → Aug 6.8% →
+  // Sep 9.4%" — up to six levels with no "of N" anywhere, ten rows a side, on
+  // the one artefact a client reads unaccompanied.
+  it('reads as the mock prints it, with every point’s denominator', () => {
+    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [p(5.1, 1349), p(6.8, 1388), p(9.4, 1388)]))
+      .toBe('Jul 5.1% of 1,349 → Aug 6.8% of 1,388 → Sep 9.4% of 1,388')
   })
 
   it('names a month with no reading and leaves it blank — never closes the gap', () => {
-    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [null, 6.8, 9.4]))
-      .toBe('Jul — → Aug 6.8% → Sep 9.4%')
+    expect(seriesTrail(['2026-07', '2026-08', '2026-09'], [null, p(6.8, 1388), p(9.4, 1388)]))
+      .toBe('Jul — → Aug 6.8% of 1,388 → Sep 9.4% of 1,388')
   })
 
   it('is empty rather than misleading when it has no months', () => {
     expect(seriesTrail([], [])).toBe('')
   })
 
+  // A ROW OF DASHES IS NOT A READING. Every month under the floor comes back
+  // null, so a mover nobody could read anywhere in the span prints no line
+  // rather than "Apr — → May — → Jun —".
+  it('is empty where no month in the span could be read', () => {
+    expect(seriesTrail(['2026-07', '2026-08'], [null, null])).toBe('')
+  })
+
   it('reads only as far as the shorter of the two lists', () => {
-    expect(seriesTrail(['2026-08', '2026-09'], [6.8])).toBe('Aug 6.8%')
+    expect(seriesTrail(['2026-08', '2026-09'], [p(6.8, 1388)])).toBe('Aug 6.8% of 1,388')
   })
 
   it('abbreviates the month without repeating the year', () => {

@@ -5,7 +5,7 @@ import { proseFigures } from '../prose/figures'
 import type { Scope } from '../renderables/types'
 import { nextMonth, prevMonth as previousMonthOf } from '../reading/month-key'
 import { loadMonthSeries, readingHandle, type ReadingHandle } from '../reading/read'
-import { mergeNotes, mergeSeriesNotes, pointsByMonth, type MonthLabel } from '../reading/series'
+import { isReadable, mergeNotes, mergeSeriesNotes, pointsByMonth, type MonthLabel, type MonthPoint } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
 import { isAnswer, type FigureTable, type Verdict } from '../reading/verdicts'
 import {
@@ -14,6 +14,7 @@ import {
   monthlySubject,
   seriesTrail,
   shortMonth,
+  type TrailPoint,
 } from '../reports/monthly'
 import { confirmingLine } from '../reports/monthly'
 import { loadSentFigures, newestByObject, sentReadingOf, type StoredSentFigure } from '../reports/sent-figures'
@@ -61,8 +62,10 @@ export interface MoverRow extends Mover {
   /** The months `spark` is indexed by, same length — a line that cannot be
    *  drawn still says which months it had. */
   sparkMonths: string[]
-  /** "Jul 5.1% → Aug 6.8% → Sep 9.4%" — the reading in words, for the email,
-   *  which has no stylesheet and may have no images. */
+  /** "Jul 5.1% of 388 → Aug 6.8% of 402" — the reading in words, for the email,
+   *  which has no stylesheet and may have no images. Every point carries its
+   *  denominator and only readable months carry a point; empty where no month
+   *  in the span could be read. */
   trail: string
 }
 
@@ -356,6 +359,28 @@ export async function loadMonthly(scope: Scope): Promise<MonthlyData | null> {
  * fixture produced it — which is why two direction words survived a green
  * suite. The block test renders it now.
  */
+/**
+ * One month of a mover's trail, or nothing.
+ *
+ * ONLY THE MONTHS A COMPARISON MAY REST ON. `MonthPoint.pct` is computed for
+ * every month that has a denominator row, `below_floor` included — a month
+ * under `SHARE_BAND.minN`, which every verdict in the product refuses to band
+ * and which `isReadable` exists to exclude. Without this gate a 40-video month
+ * printed as a point on the same line as a 388-video one, indistinguishable, in
+ * a trail that is the artefact's claim and not its picture.
+ *
+ * WHAT IS DELIBERATELY NOT GATED: a readable month in which the theme has no
+ * numerator row prints 0.0%, not a dash. `MonthPoint.k` is documented as "0
+ * where the audience has a row and the object does not appear in it, because
+ * that IS zero for this clustering" (lib/reading/series.ts), so the zero is a
+ * reading and a dash would be a silence — two different facts.
+ */
+export function trailPointOf(point: MonthPoint | undefined): TrailPoint | null {
+  if (!point || !isReadable(point)) return null
+  if (point.pct == null || point.videos == null) return null
+  return { pct: point.pct, n: point.videos }
+}
+
 export const MOVERS_UNREAD_NOTE = 'What moved has not been read for this workspace yet.'
 
 async function buildMovers(
@@ -387,7 +412,7 @@ async function buildMovers(
   const fading = voice.movers.fading.slice(0, MONTHLY_MOVERS)
   const ids = [...new Set([...growing, ...fading].map((m) => m.id))]
 
-  let byObject = new Map<string, (number | null)[]>()
+  let byObject = new Map<string, (TrailPoint | null)[]>()
   let seriesNotes: MonthLabel[] = []
   if (ids.length > 0) {
     const set = await loadMonthSeries(reading.client, clientId, {
@@ -408,7 +433,7 @@ async function buildMovers(
         .filter((s) => s.objectId != null)
         .map((s) => {
           const points = pointsByMonth(s)
-          return [s.objectId as string, months.map((m) => points.get(m)?.pct ?? null)] as const
+          return [s.objectId as string, months.map((m) => trailPointOf(points.get(m)))] as const
         }),
     )
     // AND WHAT THE SERIES SAY ABOUT THEMSELVES. These lines cross the same
@@ -421,8 +446,12 @@ async function buildMovers(
   }
 
   const withSpark = (m: Mover): MoverRow => {
-    const spark = byObject.get(m.id) ?? months.map(() => null)
-    return { ...m, spark, sparkMonths: months, trail: seriesTrail(months, spark) }
+    const points = byObject.get(m.id) ?? months.map(() => null)
+    // ONE GATED SERIES, DRAWN TWICE. The sparkline used to draw the unfiltered
+    // values while the trail printed them; a picture and a claim disagreeing
+    // about which months are readable is two readings of one row.
+    const spark = points.map((p) => p?.pct ?? null)
+    return { ...m, spark, sparkMonths: months, trail: seriesTrail(months, points) }
   }
 
   return {

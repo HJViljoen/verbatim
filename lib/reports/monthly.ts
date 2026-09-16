@@ -237,8 +237,18 @@ export function leadVerdict(verdicts: readonly Verdict[]): Verdict | null {
 
 // ---- the series a mover row prints --------------------------------------------
 
+/** One readable month of a mover's trail: the share, and the videos it is a
+ *  share OF. Null where the month carries no reading a comparison may rest on
+ *  (`isReadable`, lib/reading/series.ts). */
+export interface TrailPoint {
+  pct: number
+  /** The audience's videos that month — the denominator, printed. */
+  n: number
+}
+
 /**
- * "Jul 5.1 → Aug 6.8 → Sep 9.4" — the mock's own trail under every mover row.
+ * "Jul 5.1% of 388 → Aug 6.8% of 402 → Sep 9.4% of 371" — the mock's own trail
+ * under every mover row.
  *
  * WHY IT IS WORDS AND NOT ONLY A PICTURE. The mock draws a sparkline AND this
  * line on every row, and it is right to: an email has no stylesheet, half of
@@ -247,19 +257,31 @@ export function leadVerdict(verdicts: readonly Verdict[]): Verdict | null {
  * get both, email gets the words, and no mode is missing a number the others
  * have.
  *
+ * AND EVERY POINT CARRIES ITS DENOMINATOR. The trail is up to six LEVELS, ten
+ * rows a side, on the one artefact a client reads unaccompanied, and it printed
+ * six bare percentages — "Jul 5.1% → Aug 6.8%" — with no "of N" anywhere. It
+ * escaped the copy contract only because the span carried no `data-copy`
+ * marker at all, which rule (b) is checked on. The GLOSSARY's rule is the
+ * block's own rule eight lines up: a level never prints without the count it
+ * rests on.
+ *
  * A MONTH WITH NO READING IS NAMED AND LEFT BLANK, never closed up and never
- * printed as a zero: "Jul — → Aug 6.8" says that July held nothing readable,
- * where "Aug 6.8 → Sep 9.4" would silently re-date the whole series.
+ * printed as a zero: "Jul — → Aug 6.8% of 402" says that July held nothing
+ * readable, where "Aug 6.8% → Sep 9.4%" would silently re-date the whole
+ * series. A trail with NO readable month at all is empty rather than a row of
+ * dashes, so a row with nothing to say prints no line.
  */
-export function seriesTrail(months: readonly string[], values: readonly (number | null)[]): string {
+export function seriesTrail(months: readonly string[], values: readonly (TrailPoint | null)[]): string {
   const n = Math.min(months.length, values.length)
   if (n === 0) return ''
   const parts: string[] = []
+  let readable = 0
   for (let i = 0; i < n; i += 1) {
     const v = values[i]
-    parts.push(`${shortMonth(months[i])} ${v == null ? '—' : fmtPct(v)}`)
+    if (v) readable += 1
+    parts.push(`${shortMonth(months[i])} ${v == null ? '—' : `${fmtPct(v.pct)} of ${fmtInt(v.n)}`}`)
   }
-  return parts.join(' → ')
+  return readable === 0 ? '' : parts.join(' → ')
 }
 
 /** "Jul" from "2026-07". `monthName` in lib/format.ts is the same three-letter

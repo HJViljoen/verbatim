@@ -21,8 +21,13 @@ import { voiceFixture } from '@/components/pages/voice-surface/fixture'
 
 const MONTHS = sparkMonths('2026-09-01')
 
+/** The denominator each month of the trail is a share of — the category's
+ *  videos, which the fixture's own rows count out of. */
+const TRAIL_N = [1_204, 1_260, 1_311, 1_349, 1_388, 1_388]
+
 function moverRow(m: Mover, values: (number | null)[]): MoverRow {
-  return { ...m, spark: values, sparkMonths: MONTHS, trail: seriesTrail(MONTHS, values) }
+  const points = values.map((v, i) => (v == null ? null : { pct: v, n: TRAIL_N[i] ?? m.n }))
+  return { ...m, spark: values, sparkMonths: MONTHS, trail: seriesTrail(MONTHS, points) }
 }
 
 const voiceRow = (over: Partial<SubjectVoiceRow> & { subjectId: string; subject: string }): SubjectVoiceRow => ({

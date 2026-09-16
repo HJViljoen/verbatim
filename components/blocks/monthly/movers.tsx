@@ -181,6 +181,16 @@ function Level({ k, n, pct }: { k: number; n: number; pct: number | null }) {
   return <span data-copy="level">{`${fmtPct(pct)} · ${fmtInt(k)} of ${fmtInt(n)}`}</span>
 }
 
+/**
+ * One mover: the theme, its level, its verdict and its trail.
+ *
+ * THE TRAIL IS MARKED AS THE LEVELS IT IS. It carried no `data-copy` at all,
+ * and rule (b) is checked on marked nodes alone — so six bare percentages a row
+ * escaped the contract the level beside them keeps. `seriesTrail` now prints
+ * each point's denominator and `buildMovers` gates each point on `isReadable`,
+ * so a month under the floor is a dash rather than a point indistinguishable
+ * from a 388-video month.
+ */
 function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
   const email = mode === 'email'
   const level = <Level k={row.k} n={row.n} pct={row.pct} />
@@ -197,7 +207,7 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
         </div>
         <div style={{ fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{level}</div>
         {row.trail ? (
-          <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint, marginTop: 2 }}>{row.trail}</div>
+          <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint, marginTop: 2 }}>{row.trail}</div>
         ) : null}
       </div>
     )
@@ -212,7 +222,7 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
       <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">{level}</span>
       <BlockMovement verdict={row.verdict} unit="pts" mode={mode} />
       {row.trail ? (
-        <span className="w-full font-mono text-[10.5px] tabular-nums text-muted-foreground">{row.trail}</span>
+        <span data-copy="level" className="w-full font-mono text-[10.5px] tabular-nums text-muted-foreground">{row.trail}</span>
       ) : null}
     </div>
   )

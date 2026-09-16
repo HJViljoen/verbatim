@@ -7,11 +7,13 @@ import {
   pickLed,
   spanOf,
   sparkMonths,
+  trailPointOf,
   voiceNote,
   type BriefLink,
   type MoverRow,
   type ReadableSent,
 } from './monthly'
+import type { MonthPoint } from '../reading/series'
 import type { Verdict } from '../reading/verdicts'
 
 const themeVerdict = (over: Partial<Verdict> = {}): Verdict => ({
@@ -183,5 +185,52 @@ describe('what the subject line leads with', () => {
       fading: [],
     })
     expect(lead).toBeNull()
+  })
+})
+
+// THE TRAIL IS THE ARTEFACT'S CLAIM, NOT ITS PICTURE. Every point used to be
+// `points.get(m)?.pct ?? null` with no readability gate, so a month under
+// SHARE_BAND.minN — one every verdict in the product refuses to band — printed
+// as a point on the same line as a full month, indistinguishable.
+describe('which months a mover’s trail may carry', () => {
+  const point = (over: Partial<MonthPoint> = {}): MonthPoint => ({
+    month: '2026-08-01',
+    state: 'frozen',
+    videos: 388,
+    comments: 4_100,
+    k: 34,
+    kComments: 300,
+    pct: 8.8,
+    audience: 'industry',
+    status: 'frozen',
+    origin: 'live',
+    readAt: null,
+    runId: null,
+    frozenAt: null,
+    clusteringKey: null,
+    labels: [],
+    ...over,
+  })
+
+  it('takes a frozen or filling month, with its denominator', () => {
+    expect(trailPointOf(point())).toEqual({ pct: 8.8, n: 388 })
+    expect(trailPointOf(point({ state: 'filling', status: 'filling' }))).toEqual({ pct: 8.8, n: 388 })
+  })
+
+  it('refuses a month under the floor, and every other unreadable state', () => {
+    for (const state of ['below_floor', 'hollow', 'missing', 'not_seeded'] as const) {
+      expect(trailPointOf(point({ state }))).toBeNull()
+    }
+  })
+
+  it('refuses a month nobody read at all', () => {
+    expect(trailPointOf(undefined)).toBeNull()
+    expect(trailPointOf(point({ pct: null }))).toBeNull()
+    expect(trailPointOf(point({ videos: null }))).toBeNull()
+  })
+
+  // A THEME ABSENT FROM A READABLE MONTH READ ZERO, and zero is a reading.
+  it('keeps a zero, which is not the same fact as a silence', () => {
+    expect(trailPointOf(point({ k: 0, pct: 0 }))).toEqual({ pct: 0, n: 388 })
   })
 })
