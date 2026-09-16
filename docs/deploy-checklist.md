@@ -325,11 +325,16 @@ select
 Expect `tables = 2`, **`writable = 0`**, `policies = 2`. Append-only means
 append-only, and the consequence is on the rehearsal in step 7.
 
-**M8 · `20260918097000_settings.sql`** — the one with a privacy limb.
+**M8 · `20260918097000_settings.sql`** — the one with TWO privacy limbs.
 ```sql
 select
   (select array_agg(column_name order by column_name) from information_schema.column_privileges
      where table_schema='public' and table_name='gate_verdicts' and grantee='authenticated') as gv_cols,
+  (select array_agg(column_name order by column_name) from information_schema.column_privileges
+     where table_schema='public' and table_name='video_claims' and grantee='authenticated')  as vc_cols,
+  (select count(*) from information_schema.role_table_grants
+     where table_schema='public' and table_name='video_claims' and grantee='service_role'
+       and privilege_type in ('UPDATE','TRUNCATE'))                                          as vc_writable,
   (select count(*) from information_schema.tables
      where table_schema='public' and table_name='gate_appeals')                              as appeals,
   (select count(*) from information_schema.columns
@@ -340,10 +345,26 @@ select
      where tablename in ('gate_verdicts','gate_appeals','video_claims'))                     as policies,
   (select count(*) from pg_indexes where indexname='report_schedules_one_per_artefact')      as uniq;
 ```
-`gv_cols` must be exactly
+**Both column lists, and neither is optional.** `gv_cols` must be exactly
 `{created_at, client_id, id, kept, keyword, platform, run_id, source, video_id}`
-and must **not** contain `caption_excerpt`, `account_name` or `reason` — those
-three are a third party's words and a tenant does not read them.
+and must **not** contain `caption_excerpt`, `account_name` or `reason`.
+`vc_cols` must be exactly
+`{claim, client_id, created_at, entity, id, platform, run_id, source_video_id}`
+and must **not** contain `quote` — M8 grants `authenticated` those eight
+columns of `video_claims` by name and withholds the ninth for the reason it
+withholds `gate_verdicts.caption_excerpt`: the quote is "a whole sentence of a
+third party's speech" out of a video's own transcript, and a row-level policy
+cannot tell a member from an owner. The subject proposer reads it server-side
+and hands the browser labels and counts. A `quote` in that list is the privacy
+failure of the whole apply, and counting `video_claims` policies does not see
+it.
+
+`vc_writable` must be **0**. `revoke all … from authenticated, anon` does not
+touch Supabase's default `arwdDxtm` for `service_role`, so M8 revokes UPDATE
+and TRUNCATE by name on the table it has just opened to a tenant session
+(M4 and M5 learned the same thing about the month tables). Pass D-a rewrites
+the claim set and never edits a stored claim in place.
+
 `cadence_check` must contain `quarterly`. Expect `appeals = 1`,
 `artefact_col = 1`, `policies = 3`, `uniq = 1`.
 
