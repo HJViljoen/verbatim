@@ -1412,8 +1412,17 @@ export function sideFigures(pane: SubjectPane | null): FigureTable {
   for (const s of pane.sides) {
     if (s.pct == null || s.k == null || s.n == null) continue
     const token = `subject_${s.kind}_${s.audience.replace(/[^a-z0-9]+/gi, '_').toLowerCase()}`
-    out[`${token}_share`] = { value: s.pct, unit: 'pct', label: `${pane.name}, ${s.label}'s share this month` }
-    out[`${token}_videos`] = { value: s.k, unit: 'videos', label: `${pane.name}, ${s.label}'s videos this month` }
+    const whose = sideWhose(s)
+    out[`${token}_share`] = { value: s.pct, unit: 'pct', label: `${pane.name}, ${whose} share this month` }
+    out[`${token}_videos`] = { value: s.k, unit: 'videos', label: `${pane.name}, ${whose} videos this month` }
   }
   return out
+}
+
+/** Whose figure this is, in a label a reader and the cover prompt both see.
+ *  Your own side is "your", never "You's"; a name that already ends in s takes
+ *  the bare apostrophe. */
+export function sideWhose(side: Pick<SubjectSide, 'kind' | 'label'>): string {
+  if (side.kind === 'you') return 'your'
+  return side.label.endsWith('s') ? `${side.label}’` : `${side.label}’s`
 }

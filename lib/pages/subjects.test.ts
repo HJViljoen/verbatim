@@ -12,6 +12,7 @@ import {
   setLine,
   subjectNotes,
   sideFigures,
+  sideWhose,
   unansweredLead,
   voiceFrom,
   voicesAcross,
@@ -372,7 +373,16 @@ describe('sideFigures', () => {
       'subject_rival_competitor_freitag_share', 'subject_rival_competitor_freitag_videos',
       'subject_you_client_share', 'subject_you_client_videos',
     ])
-    expect(figures.subject_you_client_videos).toEqual({ value: 26, unit: 'videos', label: 'Durability, You\'s videos this month' })
+    // A FigureTable label is read by a person and by the cover prompt, so it
+    // says "your", never "You's".
+    expect(figures.subject_you_client_videos).toEqual({ value: 26, unit: 'videos', label: 'Durability, your videos this month' })
+    expect(figures.subject_rival_competitor_freitag_share.label).toBe('Durability, Freitag\u2019s share this month')
+  })
+
+  it('never writes a possessive nobody would say', () => {
+    expect(sideWhose({ kind: 'you', label: 'You' })).toBe('your')
+    expect(sideWhose({ kind: 'rival', label: 'Freitag' })).toBe('Freitag\u2019s')
+    expect(sideWhose({ kind: 'rival', label: 'Adidas' })).toBe('Adidas\u2019')
   })
 
   it('declares nothing at all without a selected subject', () => {
