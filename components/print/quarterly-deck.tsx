@@ -50,7 +50,12 @@ export function QuarterlyDeck({ data, date = fmtDate(new Date()) }: { data: Quar
       {blocks.map((block, i) => (
         <Slide
           key={block.key}
-          title={i === 0 ? data.title : block.title}
+          // THE ARTEFACT'S NAME ON EVERY SHEET, not the page's. Each block
+          // already prints its own heading, so a slide headed with the same
+          // words read as a stutter ("Our read / OUR READ") — seen in the
+          // browser, invisible in markup. A reader holding sheet 6 of a
+          // forwarded PDF also needs to know which document it is.
+          title={data.title}
           chrome={chrome}
           page={i + 1}
           pages={blocks.length}

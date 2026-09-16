@@ -108,11 +108,17 @@ describe('what each page owes the reader', () => {
   const data = quarterlyFixture()
   const forming = formingFixture()
 
-  it('prints the rule that keeps it honest, on the artefact', () => {
-    const cover = renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))
-    expect(cover).toContain(QUARTERLY_RULE)
-    const method = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'app', ctx))
-    expect(method).toContain(QUARTERLY_RULE)
+  // THE RULE IS CHROME, NOT A PAGE. The deck's footer, the share page's header
+  // and the email's masthead each print it once; a page that printed it too put
+  // it twice on one sheet, which the browser render showed and the markup did
+  // not. `transport.test.tsx` asserts the chrome carries it on every sheet.
+  it('leaves the artefact-wide rule to the chrome, and says nothing twice', () => {
+    for (const key of ['quarterly.cover', 'quarterly.method'] as const) {
+      expect(renderText(QUARTERLY_BLOCKS[key].render(data, 'app', ctx))).not.toContain(QUARTERLY_RULE)
+    }
+    // The method page keeps a line of its own about its own labels.
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'app', ctx)))
+      .toContain('assigned by a fixed rule from counted data')
   })
 
   it('labels the interpretation page as interpretation, and says who wrote it', () => {
@@ -142,6 +148,18 @@ describe('what each page owes the reader', () => {
   it('says what each flag turned out to be', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.method'].render(data, 'app', ctx))
     expect(text).toContain('What it turned out to be')
+  })
+
+  it('tells "not observed" apart from "not recorded yet" on the rivals page', () => {
+    // Nobody looked is not the same claim as we looked and they were not
+    // there — the defect the Block B fix pass corrected on OV4 (c0102bd).
+    const unrecorded = { ...data, rivals: { ...data.rivals, recorded: false } }
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.rivals'].render(unrecorded, 'app', ctx))).not.toContain('not observed')
+    const recorded = {
+      ...data,
+      rivals: { ...data.rivals, recorded: true, rows: data.rivals.rows.map((r) => ({ ...r, attention: null, content: null })) },
+    }
+    expect(renderText(QUARTERLY_BLOCKS['quarterly.rivals'].render(recorded, 'app', ctx))).toContain('not observed')
   })
 
   it('never prints a zero share for a side nobody read', () => {

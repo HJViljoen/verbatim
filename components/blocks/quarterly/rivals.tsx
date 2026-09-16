@@ -5,7 +5,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
-import { standingText, type StandingShare } from '@/lib/reading/standings'
+import { NOT_OBSERVED, NOT_RECORDED, standingText, type StandingShare } from '@/lib/reading/standings'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
 import { Figure, Note, Row } from './parts'
 
@@ -18,20 +18,25 @@ import { Figure, Note, Row } from './parts'
 // read as a share of the category is the single most dangerous misreading this
 // product can produce.
 //
-// "NOT OBSERVED" AND "NOT RECORDED YET" ARE DIFFERENT ANSWERS.
-// `standingText` answers the first (a rival we watched and did not see) and
-// `standingsNote` the second (a table nobody has applied). A cell that printed
-// 0% for either would be a measurement of a thing nobody measured.
+// "NOT OBSERVED" AND "NOT RECORDED YET" ARE DIFFERENT ANSWERS, AND THE CELL
+// HAS TO SAY WHICH. "Not observed" means we looked at the panel and this brand
+// was not in it; "not recorded yet" means `month_audience_stats` (M5) does not
+// exist here and nobody looked. `RivalsBlock.recorded` is the flag that tells
+// them apart, and rendering without it is the exact defect the Block B fix pass
+// corrected on OV4 (commit c0102bd) — reintroduced here in the first cut and
+// caught by reading the printed deck, where every Össur row said "not
+// observed" about a table nobody has applied.
 //
 // THE HEADING IS NOT THE MOCK's. "…and are they gaining?" makes its claim
 // before a band is drawn — the finding the Block B fix pass acted on for the
 // Competitive page bar's own question.
 
-function Share({ share, mode }: { share: StandingShare | null; mode: RenderMode }): ReactNode {
+function Share({ share, recorded, mode }: { share: StandingShare | null; recorded: boolean; mode: RenderMode }): ReactNode {
   if (!share || share.pct == null) {
+    const words = recorded ? NOT_OBSERVED : NOT_RECORDED
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{standingText(share)}</span>
-      : <span className="text-[12px] text-muted-foreground">{standingText(share)}</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{words}</span>
+      : <span className="text-[12px] text-muted-foreground">{words}</span>
   }
   return <Figure mode={mode} value={standingText(share)} of={`${fmtInt(share.k)} of ${fmtInt(share.n)}`} />
 }
@@ -70,7 +75,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
               </>
             }
           >
-            attention <Share share={row.attention} mode={mode} /> · content <Share share={row.content} mode={mode} />
+            attention <Share share={row.attention} recorded={r.recorded} mode={mode} /> · content <Share share={row.content} recorded={r.recorded} mode={mode} />
             {row.retiredAt ? ' · no longer tracked' : null}
           </Row>
         ))}

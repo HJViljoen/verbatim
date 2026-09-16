@@ -3,8 +3,8 @@ import { BlockFrame } from '@/components/blocks/frame'
 import { BlockStat } from '@/components/blocks/stat'
 import { TokenProse } from '@/components/blocks/prose'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
-import { QUARTERLY_RULE, QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Note, Rule } from './parts'
+import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
+import { Note } from './parts'
 
 // QR1 · The cover (design item 14, mock QuarterlyReview page 1).
 //
@@ -13,6 +13,12 @@ import { Note, Rule } from './parts'
 // reason. A cover is read by people who never reach page 2 — often people the
 // workspace forwarded it to — so it states what was counted and nothing else,
 // with every number as a `[[token]]` the surface substitutes here.
+//
+// THE RULE IS CHROME, NOT A PAGE. `QUARTERLY_RULE` is printed by the deck's
+// footer (on every sheet, because a PDF has no masthead to scroll back to), by
+// the share page's header and by the email's masthead. The first cut printed it
+// here as well, which put it twice on one sheet and twice on one screen — read
+// in the browser, where it was obvious and in markup it was not.
 //
 // THE STAMP CARRIES THE GATE. "your 3rd monthly reading, the quarter view needs
 // 6" is on the first page, above the fold, because a quarterly review whose own
@@ -53,7 +59,6 @@ export const quarterlyCover: Block<QuarterlyData> = {
             ))}
           </div>
           <Note mode={mode}>{c.corpus}</Note>
-          <Rule mode={mode}>{QUARTERLY_RULE}</Rule>
         </div>
       </BlockFrame>
     )

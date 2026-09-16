@@ -178,6 +178,11 @@ export interface CategoryPage {
 
 export interface RivalsPage {
   rows: RivalRow[]
+  /** Whether the panel reading behind the two shares exists at all. False means
+   *  `month_audience_stats` (M5) is not applied here, so a blank cell reads
+   *  "not recorded yet" and NOT "not observed", which is a measurement
+   *  (lib/reading/standings.ts; Block B fix c0102bd). */
+  recorded: boolean
   months: string[]
   standings: StandingsBlock | null
   standingsNote: string | null
@@ -850,6 +855,7 @@ function buildRivals(a: { overview: OverviewData; competitive: CompetitiveSurfac
   const co = a.competitive
   return {
     rows: a.overview.rivals.rows,
+    recorded: a.overview.rivals.recorded,
     months: co?.standings.months ?? [],
     standings: co?.standings ?? null,
     standingsNote: co ? co.standings.empty : 'The standings could not be read for this workspace.',

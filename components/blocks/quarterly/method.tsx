@@ -3,7 +3,7 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
 import { fmtInt, shortDate } from '@/lib/format'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
-import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, QUARTERLY_RULE, quarterLabel } from '@/lib/reports/quarterly'
+import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
 import { Figure, Note, Row, Rule } from './parts'
 
 // QR7 · Coverage and method (mock page 7).
@@ -85,7 +85,11 @@ export const quarterlyMethod: Block<QuarterlyData> = {
         </div>
 
         {m.refusedLine ? <Note mode={mode}>{m.refusedLine}</Note> : null}
-        <Rule mode={mode}>{QUARTERLY_RULE}</Rule>
+        {/* NOT `QUARTERLY_RULE` — the deck footer, the share header and the
+            email masthead all carry that, and this page would be the second
+            copy on the same sheet. The mock's own closing line says the thing
+            this page is actually about. */}
+        <Rule mode={mode}>Every label on this page is assigned by a fixed rule from counted data.</Rule>
       </div>
     )
   },
