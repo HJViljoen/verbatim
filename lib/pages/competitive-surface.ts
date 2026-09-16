@@ -354,6 +354,47 @@ export function questionsEmpty(input: {
   return null
 }
 
+/**
+ * The citations that fall inside the window a block's sentences frame.
+ *
+ * CO5 used to sum EVERY citation of every kept insight, in or out of window,
+ * under "…with {quotes} comments behind them" in a block whose other lines say
+ * "in this window". Measured read-only on production: Össur/Ottobock this month
+ * printed 19 against 18 in window and last 3 printed 79 against 78;
+ * Sealand/Cotopaxi this month printed 12 against 8 — a 50% overstatement at the
+ * horizon every reader opens first.
+ *
+ * A CITATION WITH NO COMMENT IS NOT A COMMENT. `insight_evidence.source` is
+ * 'video' or 'video_text' on some rows and `fetchQuoteCitationsByAudience`
+ * returns those too; they carry no comment id, so they resolve no date and fall
+ * out here. None of today's question rows on either tenant has one, and now
+ * none ever can be counted as a comment.
+ *
+ * COMPARED ON THE DAY, NEVER ON THE STRING. `comments.comment_date` comes back
+ * as `2026-08-29T00:00:00+00:00` and `HorizonWindow` carries
+ * `2026-10-01T00:00:00.000Z`; compared as strings, `+` (0x2B) sorts before `.`
+ * (0x2E), so a comment at midnight on the 1st of the month AFTER the window
+ * read as inside it and one at midnight on the window's own first day read as
+ * outside — every comment_date in this corpus is midnight, so the window was
+ * shifted a day at both ends. Both sides are cut to `YYYY-MM-DD`, which is
+ * exact for a column that holds no time of day, and the half-open rule is then
+ * the calendar's.
+ */
+export function citationsInWindow<T extends { commentId: string | null }>(
+  cited: readonly T[],
+  dates: ReadonlyMap<string, string>,
+  window: { from: string; to: string },
+): T[] {
+  const from = window.from.slice(0, 10)
+  const to = window.to.slice(0, 10)
+  return cited.filter((c) => {
+    const d = c.commentId ? dates.get(c.commentId) : undefined
+    if (d == null) return false
+    const day = d.slice(0, 10)
+    return day >= from && day < to
+  })
+}
+
 /** Why the questions are listed one by one rather than grouped into themes.
  *
  *  `audience_insights.theme` is a RAW PER-INSIGHT SLUG, not a clustered theme:
@@ -904,15 +945,25 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
 
   const from = input.window.from
   const to = input.window.to
-  const inWindow = (id: string): boolean => {
-    const cited = citations.get(id) ?? []
-    return cited.some((c) => {
-      const d = c.commentId ? dates.get(c.commentId) : undefined
-      return d != null && d >= from && d < to
-    })
-  }
+  // THE CITATIONS THIS BLOCK MAY COUNT AND MAY SHOW: the ones whose comment
+  // falls in the window the block's own sentences frame.
+  //
+  // `quotes` used to sum EVERY citation of every kept insight, in or out of
+  // window, under a sentence reading "…with {quotes} comments behind them" in a
+  // block whose other lines say "in this window". Measured read-only on
+  // production: Össur/Ottobock this month 19 printed against 18 in window,
+  // last 3 79 against 78; Sealand/Cotopaxi this month 12 against 8 — a 50%
+  // overstatement at the default horizon. The two quotes shown per question
+  // were picked by rank alone and not dated either, so a September block could
+  // print an August comment with no caveat.
+  //
+  // A citation with no comment behind it — `insight_evidence.source` 'video' or
+  // 'video_text', which this read returns too — carries no comment date and so
+  // falls out here as well. It was being counted as a comment; none of today's
+  // question rows on either tenant has one, and now none ever can.
+  const citedInWindow = (id: string) => citationsInWindow(citations.get(id) ?? [], dates, { from, to })
 
-  const kept = mine.filter((i) => inWindow(i.id))
+  const kept = mine.filter((i) => citedInWindow(i.id).length > 0)
   const keptVideos = new Set(kept.map((i) => i.source_video_id as string))
   const mix: PlatformMix = {}
   for (const id of keptVideos) {
@@ -921,8 +972,9 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
   }
   let quotes = 0
   const rows: QuestionRow[] = kept.slice(0, QUESTIONS_SHOWN).map((i) => {
-    const cited = (citations.get(i.id) ?? []).slice().sort((a, b) => a.rank - b.rank).slice(0, QUOTES_PER_QUESTION)
-    quotes += (citations.get(i.id) ?? []).length
+    const window = citedInWindow(i.id)
+    const cited = window.slice().sort((a, b) => a.rank - b.rank).slice(0, QUOTES_PER_QUESTION)
+    quotes += window.length
     const video = i.source_video_id ? videoById.get(i.source_video_id) ?? null : null
     return {
       id: i.id,
@@ -932,7 +984,7 @@ async function buildQuestions(input: QuestionInputs): Promise<QuestionsBlock> {
       quotes: cited.map((c) => ({ ref: quoteRef.evidence(c.evidenceId), text: c.quote, lang: c.lang ?? null, english: c.english ?? null })),
     }
   })
-  for (const i of kept.slice(QUESTIONS_SHOWN)) quotes += (citations.get(i.id) ?? []).length
+  for (const i of kept.slice(QUESTIONS_SHOWN)) quotes += citedInWindow(i.id).length
 
   return {
     rival: input.rival,

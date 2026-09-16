@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 
+import { horizonWindow } from '../reading/horizon'
 import { NOT_OBSERVED } from '../reading/standings'
 import {
   ATTENTION_UNLOCK, CORPUS_DENOMINATOR_LINE, QUESTIONS_GROUPING_NOTE,
-  buildStandingsBlock, comparabilityCaveat, competitiveSurfaceHref, competitiveUnlockRows,
-  mixLine, questionsEmpty, rivalState, trackingRules, type StandingsMonthRow,
+  buildStandingsBlock, citationsInWindow, comparabilityCaveat, competitiveSurfaceHref,
+  competitiveUnlockRows, mixLine, questionsEmpty, rivalState, trackingRules,
+  type StandingsMonthRow,
 } from './competitive-surface'
 
 const den = (over: Partial<{ month: string; audience: string; videos: number; comments: number; dual_mention: number; run_id: string | null }> = {}) => ({
@@ -39,6 +41,45 @@ const build = (rows = OSSUR, rivals: { name: string; retiredAt: string | null }[
     month: '2026-09-01',
     changes: [],
   })
+
+describe('citationsInWindow — what CO5 may count and may show', () => {
+  // The shape production returns: a timestamptz at midnight with a +00:00
+  // offset, not a bare date and not a Z instant.
+  const dates = new Map([
+    ['c-jul', '2026-07-14T00:00:00+00:00'],
+    ['c-sep-first', '2026-09-01T00:00:00+00:00'],
+    ['c-sep', '2026-09-03T00:00:00+00:00'],
+    ['c-oct-first', '2026-10-01T00:00:00+00:00'],
+  ])
+  const window = horizonWindow('this_month', '2026-09-18T09:00:00.000Z', '2026-06-01')
+  const cited = [
+    { commentId: 'c-jul', rank: 1 },
+    { commentId: 'c-sep', rank: 2 },
+    { commentId: 'c-oct-first', rank: 3 },
+    // A video-sourced citation: no comment behind it, so no date, so not a
+    // comment this block may count as one.
+    { commentId: null, rank: 4 },
+  ]
+
+  it('keeps only the citations the block\u2019s own sentence covers', () => {
+    expect(citationsInWindow(cited, dates, window).map((c) => c.rank)).toEqual([2])
+  })
+
+  it('drops a citation with no comment behind it', () => {
+    const all = { from: '2000-01-01', to: '2100-01-01' }
+    expect(citationsInWindow(cited, dates, all).map((c) => c.rank)).toEqual([1, 2, 3])
+  })
+
+  it('takes the window\u2019s own first day and not the next month\u2019s', () => {
+    // Compared as strings, "+" (0x2B) sorts before "." (0x2E), so
+    // "2026-10-01T00:00:00+00:00" < "2026-10-01T00:00:00.000Z": October's
+    // first day read as inside September and September's first read as
+    // outside it. Every comment_date in this corpus is midnight, so the whole
+    // window was shifted a day at both ends.
+    expect(citationsInWindow([{ commentId: 'c-sep-first' }], dates, window)).toHaveLength(1)
+    expect(citationsInWindow([{ commentId: 'c-oct-first' }], dates, window)).toHaveLength(0)
+  })
+})
 
 describe('CO2 · the standings', () => {
   it('reproduces September’s shares from the stored months', () => {
