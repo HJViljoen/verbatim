@@ -14,6 +14,7 @@ import type { CoverText, FigureTable } from '@/lib/reports/types'
 import { sendDidNotFinish, sendFailureSentence } from '@/lib/schedules/copy'
 import { exportedRows, exportedLine, type ExportSnapshot } from '@/lib/exports/rows'
 import { rows as readRows } from '@/lib/pages/read'
+import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 
 // Reports — the archive of what went out and what was built (Stage 3):
 //   Sent  — every scheduled send (subject, who, when, the PDF, the share link,
@@ -23,6 +24,11 @@ import { rows as readRows } from '@/lib/pages/read'
 //   Exported — the pages and tiles a reader took from the export control on
 //           the page itself; the only place those files can be found again.
 // Making things happens in the Studio; this page is what left the building.
+//
+// Every door into the Studio on this page is gated on canSeeStudio
+// (lib/studio-visibility.ts, owner's call 2026-09-17): a client reads the
+// archive and downloads from it, and is never pointed at a page they cannot
+// find. Reading, downloading and sharing are untouched.
 
 interface SendRow {
   id: string
@@ -72,7 +78,9 @@ const sendLine = (s: SendRow) =>
 
 export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ group?: string; item?: string; view?: string }> }) {
   const sp = (await searchParams) ?? {}
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId } = session
+  const studio = canSeeStudio(session)
   const group: Group = sp.group === 'built' ? 'built' : sp.group === 'exported' ? 'exported' : 'sent'
 
   const [sendRes, legacyRes, buildRes, exportRes] = await Promise.all([
@@ -174,7 +182,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.</PaneEmpty>
+            <PaneEmpty>{studio
+              ? 'Nothing sent yet. Each report in the Studio sends after the next update; the first lands then.'
+              : 'Nothing sent yet. Your updates are set up by Verbatim and send after the next update; the first lands then.'}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -196,7 +206,9 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
               ))}
             </ListRows>
           ) : (
-            <PaneEmpty>Nothing built by hand yet. Build any template in the Studio and its PDF lands here.</PaneEmpty>
+            <PaneEmpty>{studio
+              ? 'Nothing built by hand yet. Build any template in the Studio and its PDF lands here.'
+              : 'Nothing built by hand yet. Ask your Verbatim contact for a report built to order and its PDF lands here.'}</PaneEmpty>
           )}
         </div>
       </PaneBody>
@@ -230,7 +242,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       <>
         <DetailHeader eyebrow={scheduleName(selectedSend)} title={selectedSend.subject ?? 'Update'} meta={sendLine(selectedSend)} />
         {(selectedSend.status === 'failed' || sendDidNotFinish(selectedSend.status, selectedSend.claimed_at)) && (
-          <DetailSection><p className="text-[12.5px] text-negative">This update did not reach anyone. {selectedSend.status === 'failed' ? sendFailureSentence(selectedSend.error) : 'The send started and never finished.'} An owner or admin can send it again from the Studio.</p></DetailSection>
+          <DetailSection><p className="text-[12.5px] text-negative">This update did not reach anyone. {selectedSend.status === 'failed' ? sendFailureSentence(selectedSend.error) : 'The send started and never finished.'} {studio ? 'An owner or admin can send it again from the Studio.' : 'Ask your Verbatim contact to send it again.'}</p></DetailSection>
         )}
         <DetailSection label="To">
           <p className="text-[12.5px] text-secondary-foreground">{selectedSend.recipients.join(' · ') || 'nobody'}</p>
@@ -266,7 +278,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   ) : group === 'built' ? (
     selectedBuild ? (
     <>
-      <DetailHeader eyebrow="Built in the Studio" title={selectedBuild.title} meta={`built ${fmtWhen(selectedBuild.created_at)}${selectedBuild.cover?.model ? '' : ' · cover written in code'}`} />
+      <DetailHeader eyebrow={studio ? 'Built in the Studio' : 'Built for you'} title={selectedBuild.title} meta={`built ${fmtWhen(selectedBuild.created_at)}${selectedBuild.cover?.model ? '' : ' · cover written in code'}`} />
       <DetailSection>
         {selectedBuild.cover && selectedBuild.figures && <p className="text-[12.5px] leading-relaxed text-secondary-foreground">{coverPlainText(selectedBuild.cover.body, selectedBuild.figures)}</p>}
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -274,7 +286,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           {selectedBuild.artifacts.map((a) => (
             <a key={a.id} href={`/api/artifacts/${a.id}`} className="text-[12px] font-medium underline underline-offset-2">Download {a.format.toUpperCase()} · {fmtBytes(a.bytes)}{a.stale ? ' · rebuilt on download' : ''}</a>
           ))}
-          {selectedBuild.report_id && <Link href={`/dashboard/studio?item=${selectedBuild.report_id}`} className="text-[12px] font-medium underline underline-offset-2">Open in the Studio</Link>}
+          {studio && selectedBuild.report_id && <Link href={`${STUDIO_HREF}?item=${selectedBuild.report_id}`} className="text-[12px] font-medium underline underline-offset-2">Open in the Studio</Link>}
         </div>
       </DetailSection>
       <DetailSection label="Share">
@@ -305,10 +317,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
   return (
     <PageFrame className="min-h-0 flex-1">
       <PageBar title="Reports" context="what went out, and what was built">
-        <Link href="/dashboard/studio"><BarPill primary>Open the Studio</BarPill></Link>
+        {studio && <Link href={STUDIO_HREF}><BarPill primary>Open the Studio</BarPill></Link>}
       </PageBar>
       <MasterDetail id="reports" rail={rail} list={list} detail={detail} />
-      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} />}
+      {viewer && <ReportViewer snapshot={viewer} closeHref={closeViewer} showStudio={studio} />}
     </PageFrame>
   )
 }

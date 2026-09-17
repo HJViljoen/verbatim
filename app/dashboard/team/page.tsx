@@ -7,6 +7,7 @@ import { recipientsBySchedule } from '@/lib/schedules/default'
 import { getBaseUrl } from '@/lib/site'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { InviteForm, RevokeButton, MemberControls, CopyLinkButton } from './team-ui'
+import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 
 // Team management — list members + pending invites, invite teammates, manage
 // roles. Owners/admins can invite + revoke; only owners change roles or remove
@@ -27,7 +28,10 @@ function RoleBadge({ role }: { role: string }) {
 }
 
 export default async function TeamPage() {
-  const { supabase, clientId, role, userId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, role, userId } = session
+  // A client is never pointed at the Studio (lib/studio-visibility.ts).
+  const studio = canSeeStudio(session)
   const canManage = canManageTenant(role)
   const isOwner = role === 'owner'
 
@@ -135,9 +139,15 @@ export default async function TeamPage() {
         <CardContent className="space-y-3">
           {totalRecipients === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Nobody yet. Add addresses to a schedule in{' '}
-              <Link href="/dashboard/studio" className="underline underline-offset-2">the Studio</Link>,
-              or invite a teammate, they join the Weekly digest when they accept.
+              {studio ? (
+                <>
+                  Nobody yet. Add addresses to a schedule in{' '}
+                  <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>,
+                  or invite a teammate, they join the Weekly digest when they accept.
+                </>
+              ) : (
+                <>Nobody yet. Invite a teammate and they join the Weekly digest when they accept, or ask us to add an address.</>
+              )}
             </p>
           ) : (
             schedules.map((s) => (
@@ -160,10 +170,14 @@ export default async function TeamPage() {
             <p className="text-xs text-muted-foreground">
               {membersOffReport.length} teammate{membersOffReport.length === 1 ? '' : 's'} on this workspace {membersOffReport.length === 1 ? 'is' : 'are'} not on any schedule.
               {canManage ? (
-                <>
-                  {' '}Add them in{' '}
-                  <Link href="/dashboard/studio" className="underline underline-offset-2">the Studio</Link>.
-                </>
+                studio ? (
+                  <>
+                    {' '}Add them in{' '}
+                    <Link href={STUDIO_HREF} className="underline underline-offset-2">the Studio</Link>.
+                  </>
+                ) : (
+                  <> Ask us to add them to a list.</>
+                )
               ) : null}
             </p>
           )}

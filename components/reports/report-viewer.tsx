@@ -6,6 +6,7 @@ import { ViewerEscape } from '@/components/reports/report-viewer-close'
 import { isDocumentData } from '@/lib/reports/documents/types'
 import type { ViewerSnapshot } from '@/lib/reports/viewer'
 import type { ReportSnapshotData } from '@/lib/reports/types'
+import { STUDIO_HREF } from '@/lib/studio-visibility'
 
 // Read a build in the app (Heinrich, 2026-09-09): the pages the PDF prints,
 // on a panel over the page, with the sidebar still showing and still working.
@@ -21,7 +22,10 @@ import type { ReportSnapshotData } from '@/lib/reports/types'
 const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 const PILL = 'inline-flex h-8 items-center rounded-full bg-tile px-3 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner'
 
-export function ReportViewer({ snapshot, closeHref }: { snapshot: ViewerSnapshot; closeHref: string }) {
+// showStudio: the caller has already asked canSeeStudio (lib/studio-visibility.ts).
+// The viewer itself is untouched by the gate — a client still reads the pages
+// and downloads the PDF; only the way back into the Studio goes.
+export function ReportViewer({ snapshot, closeHref, showStudio = false }: { snapshot: ViewerSnapshot; closeHref: string; showStudio?: boolean }) {
   const { data, title, builtAt, pageCount, artifactId, reportId } = snapshot
   const date = fmtDate(builtAt)
   const deck = isDocumentData(data)
@@ -49,7 +53,7 @@ export function ReportViewer({ snapshot, closeHref }: { snapshot: ViewerSnapshot
           <p className="font-mono text-[11px] text-muted-foreground">built {date} · {pageCount} {pageCount === 1 ? 'page' : 'pages'}</p>
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {artifactId && <a href={`/api/artifacts/${artifactId}`} className={PILL}>Download PDF</a>}
-            {reportId && <Link href={`/dashboard/studio?item=${reportId}`} className={PILL}>Open in the Studio</Link>}
+            {showStudio && reportId && <Link href={`${STUDIO_HREF}?item=${reportId}`} className={PILL}>Open in the Studio</Link>}
             <Link href={closeHref} scroll={false} className={PILL}>Close</Link>
           </div>
         </header>

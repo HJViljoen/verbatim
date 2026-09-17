@@ -5,6 +5,7 @@ import { loadTermPerformance } from '@/lib/keywords/performance'
 import { SettingsForm, type TrackingConfig } from './settings-form'
 import { SearchTermsForm, type SearchTermsConfig } from './search-terms-form'
 import { row } from '@/lib/pages/read'
+import { canSeeStudio } from '@/lib/studio-visibility'
 import { TermPerformance } from './term-performance'
 
 // Settings — edit the client's tracking_configs (what gather scrapes + report
@@ -19,7 +20,9 @@ import { TermPerformance } from './term-performance'
 
 export default async function SettingsPage() {
   // Auth + tenant + role via the RLS-enforced session client. See lib/auth.ts.
-  const { supabase, clientId, role } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId, role } = session
+  const showStudio = canSeeStudio(session)
 
   const [clientRes, cfgRes, performance] = await Promise.all([
     supabase.from('clients').select('company_name, plan').eq('id', clientId).maybeSingle(),
@@ -58,7 +61,7 @@ export default async function SettingsPage() {
                 : <span className="text-muted-foreground">none yet</span>}
             </FactRow>
           </SettingsCard>
-          <SettingsForm cfg={c} canEdit={canEdit} />
+          <SettingsForm cfg={c} canEdit={canEdit} showStudio={showStudio} />
           <SearchTermsForm cfg={terms} canEdit={canEdit} />
           <TermPerformance rows={performance.rows} updates={performance.updates} />
         </div>

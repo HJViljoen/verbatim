@@ -4,6 +4,7 @@ import { platformLabel } from '@/lib/format'
 import { SettingsFrame, SettingsCard, ConnectionRow } from '@/components/settings-frame'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { recipientsBySchedule } from '@/lib/schedules/default'
+import { canSeeStudio, STUDIO_HREF } from '@/lib/studio-visibility'
 
 // Connections (component-map §3): where Verbatim reads from and where its
 // reports go, as status rows. Every status is a fact about this workspace —
@@ -14,7 +15,9 @@ import { recipientsBySchedule } from '@/lib/schedules/default'
 const SOURCES = ['tiktok', 'instagram', 'youtube'] as const
 
 export default async function ConnectionsPage() {
-  const { supabase, clientId } = await getSessionContext()
+  const session = await getSessionContext()
+  const { supabase, clientId } = session
+  const studio = canSeeStudio(session)
   const [{ data: client }, { data: tc }, schedules] = await Promise.all([
     supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
     supabase.from('tracking_configs').select('platforms, own_handles, competitor_handles, report_period').eq('client_id', clientId).maybeSingle(),
@@ -71,12 +74,18 @@ export default async function ConnectionsPage() {
           </SettingsCard>
         ) : null}
 
-        <SettingsCard title="Where reports go" description="Scheduled updates go out by email, each schedule to its own list. Chat destinations are next.">
+        {/* The Edit link is the only door into the Studio on this page, so it
+            goes for a client (lib/studio-visibility.ts). The row keeps saying
+            what is true of the workspace either way; a client who wants the
+            list changed asks us, which the card's description now says. */}
+        <SettingsCard title="Where reports go" description={studio
+          ? 'Scheduled updates go out by email, each schedule to its own list. Chat destinations are next.'
+          : 'Scheduled updates go out by email, each schedule to its own list. Verbatim manages the lists for now, ask us to change one. Chat destinations are next.'}>
           <ConnectionRow
             name="Email"
             what={paused ? 'Updates are paused for this workspace, nothing is being sent' : hasRecipients ? `${scheduleCount} schedule${scheduleCount === 1 ? '' : 's'} · ${addressCount} address${addressCount === 1 ? '' : 'es'}` : 'no addresses yet'}
             status={paused ? 'paused' : hasRecipients ? 'connected' : 'not-connected'}
-            action={<Link href="/dashboard/studio" className="text-[12px] font-medium hover:underline">Edit →</Link>}
+            action={studio ? <Link href={STUDIO_HREF} className="text-[12px] font-medium hover:underline">Edit →</Link> : undefined}
           />
           <ConnectionRow name="Slack" what="The weekly report and movement alerts in a channel" status="coming-soon" />
           <ConnectionRow name="Microsoft Teams" what="The weekly report and movement alerts in a channel" status="coming-soon" />
