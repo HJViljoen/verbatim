@@ -119,11 +119,11 @@ async function main() {
   const companyName = (client.company_name as string | undefined) ?? ''
 
   const { data: userRows, error: uErr } = await admin
-    .from('users').select('id, email, role').eq('client_id', args.clientId)
+    .from('users').select('id, email, role, full_name').eq('client_id', args.clientId)
   if (uErr) throw new Error(`read members: ${uErr.message}`)
-  const members = new Map<string, { id: string; role: string }>()
-  for (const u of (userRows ?? []) as { id: string; email: string; role: string }[]) {
-    members.set((u.email ?? '').toLowerCase(), { id: u.id, role: u.role })
+  const members = new Map<string, { id: string; role: string; fullName: string | null }>()
+  for (const u of (userRows ?? []) as { id: string; email: string; role: string; full_name: string | null }[]) {
+    members.set((u.email ?? '').toLowerCase(), { id: u.id, role: u.role, fullName: u.full_name })
   }
 
   const { data: pendingRows, error: pErr } = await admin
@@ -138,11 +138,15 @@ async function main() {
   // it has to be a real member, or the email would name a stranger.
   let invitedById: string | null = null
   let inviterEmail: string | undefined
+  let inviterName: string | undefined
   if (args.invitedBy) {
     const m = members.get(args.invitedBy)
     if (!m) throw new Error(`--invited-by ${args.invitedBy} is not a member of ${companyName || args.clientId}`)
     invitedById = m.id
     inviterEmail = args.invitedBy
+    // The name the body uses, the address the Reply-To uses — the same split
+    // the server action makes, off the same `users` row.
+    inviterName = m.fullName?.trim() || undefined
   }
 
   const mode = args.apply ? (args.send ? 'APPLY + SEND' : 'APPLY (no email)') : 'dry run'
@@ -150,7 +154,7 @@ async function main() {
   console.log(`  workspace     ${companyName} (${args.clientId})${client.is_active ? '' : '  ! is_active = false'}`)
   console.log(`  members now   ${members.size ? [...members].map(([e, m]) => `${e} (${m.role})`).join(', ') : '(none)'}`)
   console.log(`  pending now   ${pending.size ? [...pending].join(', ') : '(none)'}`)
-  console.log(`  from          ${inviterEmail ?? '(no inviter named — the email will not say who invited them)'}`)
+  console.log(`  from          ${inviterName ?? inviterEmail ?? '(no inviter named — the email will not say who invited them)'}${inviterEmail && inviterName ? ` <${inviterEmail}>` : ''}`)
   console.log(`  expiry        7 days (invitations.expires_at column default; neither path sets it)\n`)
 
   const ok: Invite[] = []
@@ -185,10 +189,12 @@ async function main() {
     inviteUrl: `${baseUrl()}/invite/<token>`,
     companyName,
     invitedByEmail: inviterEmail,
+    invitedByName: inviterName,
   })
   console.log('\n  === the email ===')
   console.log(`  from:    ${sample.from ?? '(RESEND_API_KEY / EMAIL_FROM not set here — sendInviteEmail would be a logged no-op)'}`)
   console.log(`  to:      <each recipient>`)
+  console.log(`  reply-to: ${sample.replyTo ?? '(none — a reply would go to the from address)'}`)
   console.log(`  subject: ${sample.subject}`)
   console.log('  text:')
   for (const line of sample.text.split('\n')) console.log(`    ${line}`)
@@ -233,6 +239,7 @@ async function main() {
       inviteUrl: c.url,
       companyName,
       invitedByEmail: inviterEmail,
+      invitedByName: inviterName,
     })
     console.log(`  ${sent ? 'sent   ' : 'NOT SENT'} ${c.email}${sent ? '' : ' — send the link by hand'}`)
   }

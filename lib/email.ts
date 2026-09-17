@@ -20,6 +20,11 @@ export interface InviteEmail {
   inviteUrl: string
   companyName: string
   invitedByEmail?: string
+  /** The inviter's `users.full_name`, when they have one. Preferred over the
+   *  address in the body: an invite is from a PERSON, and "Heinrich Viljoen
+   *  invited you" is the sentence a stranger can act on. The address is still
+   *  carried, as Reply-To, so answering the mail reaches them. */
+  invitedByName?: string
 }
 
 // Returns whether the email was actually dispatched. False (no provider wired, or
@@ -33,10 +38,20 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<{ sent: bool
     return { sent: false }
   }
 
-  const { subject, text, html } = renderInviteEmail(invite)
+  const { subject, text, html, replyTo } = renderInviteEmail(invite)
 
   try {
-    const { error } = await resend.emails.send({ from, to: invite.to, subject, text, html })
+    // replyTo spread rather than passed as undefined, the shape sendReportEmail
+    // and sendLeadEmail already use: a reply goes to the person who invited
+    // them, not to the unattended invites@ mailbox the `from` names.
+    const { error } = await resend.emails.send({
+      from,
+      to: invite.to,
+      subject,
+      text,
+      html,
+      ...(replyTo ? { replyTo } : {}),
+    })
     if (error) {
       console.error(`[email] invite send failed -> ${invite.to}:`, error)
       return { sent: false }
@@ -232,9 +247,22 @@ export async function sendReportEmail(report: ReportEmail): Promise<{ sent: bool
   }
 }
 
-/** The invite email exactly as it would be sent — subject, text and html, and
- *  the `from` the provider is configured with (null when Resend is unwired and
- *  `sendInviteEmail` is a logged no-op).
+/** Who the invite says it is from, as the body names them: the person's name
+ *  when we have one, else their address, else nobody.
+ *
+ *  Trailing space and all, because the callers interpolate it straight before
+ *  "invited you to join" and the no-inviter case has to close up cleanly. The
+ *  HTML side escapes this; the text side must not. */
+function inviterPrefix(invite: InviteEmail): string {
+  const name = invite.invitedByName?.trim()
+  if (name) return `${name} `
+  const email = invite.invitedByEmail?.trim()
+  return email ? `${email} ` : ''
+}
+
+/** The invite email exactly as it would be sent — subject, text, html, the
+ *  Reply-To it carries, and the `from` the provider is configured with (null
+ *  when Resend is unwired and `sendInviteEmail` is a logged no-op).
  *
  *  Exported so an operator CLI can PRINT the email it is about to send instead
  *  of re-typing the template beside it. Two copies of an email body eventually
@@ -244,9 +272,13 @@ export function renderInviteEmail(invite: InviteEmail): {
   text: string
   html: string
   from: string | null
+  /** The inviter's address, so a reply reaches the person rather than the
+   *  unattended mailbox `from` names. Absent when we don't know it. */
+  replyTo?: string
 } {
   const workspace = invite.companyName?.trim()
-  const inviter = invite.invitedByEmail ? `${invite.invitedByEmail} ` : ''
+  const inviter = inviterPrefix(invite)
+  const replyTo = invite.invitedByEmail?.trim()
   return {
     subject: workspace
       ? `You're invited to ${workspace} on Verbatim`
@@ -254,6 +286,7 @@ export function renderInviteEmail(invite: InviteEmail): {
     text: inviteText(invite, workspace, inviter),
     html: inviteHtml(invite, workspace, inviter),
     from: from ?? null,
+    ...(replyTo ? { replyTo } : {}),
   }
 }
 
@@ -284,7 +317,7 @@ function inviteHtml(invite: InviteEmail, workspace: string | undefined, inviter:
               ${escapeHtml(inviter)}invited you to join ${where} on <strong>Verbatim</strong>.
             </p>
             <p style="margin:0 0 24px;font-size:14px;line-height:1.5;color:#475569">
-              Verbatim is a consumer-intelligence platform — sign in to see your team's dashboards.
+              Verbatim is a consumer-intelligence platform. Sign in to see your team's dashboards.
             </p>
             <a href="${invite.inviteUrl}"
                style="display:inline-block;background:#1E40AF;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 24px;border-radius:8px">
