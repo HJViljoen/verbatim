@@ -75,12 +75,15 @@ const COMPETITOR_NAMES = [
  *             TNF's own sites (thenorthface.co.za and thenorthface.com.tr
  *             footers; the YT id read from `<meta itemprop="identifier">` on the
  *             channel both of them link, whose own link list points back to
- *             thenorthface.com). NO TIKTOK: thenorthface.com and most TNF
+ *             thenorthface.com). TT @thenorthface is the ONE handle here that
+ *             was not read off a page at all: thenorthface.com and most TNF
  *             regional sites answer a non-browser fetch with 403, the two that
- *             do answer link IG/FB/YT/X and no TikTok at all, and TNF runs
- *             REGIONAL TikTok accounts (@thenorthface.ca exists) — which is
- *             exactly the shape of guess the Cotopaxi @cotopaxi mistake was.
- *             Left out until it can be read off a TNF-owned page.
+ *             do answer link IG/FB/YT/X and no TikTok at all, and tiktok.com
+ *             serves a JS bot-check to every fetch — so it was SUPPLIED BY THE
+ *             OWNER on 2026-09-17 and is written on his word. Worth a second
+ *             look in a browser, because TNF runs REGIONAL TikTok accounts
+ *             (@thenorthface.ca exists) and a wrong handle credits another
+ *             account's posts to a tracked rival.
  *             SOUTH AFRICA: @thenorthfacesouthafrica is real and official
  *             (thenorthface.co.za's footer; verified account, bio "Official
  *             Page. Shop @ TNF Canal Walk, Sandton, V&A Waterfront…"), and it
@@ -125,7 +128,9 @@ const COMPETITOR_HANDLES: Record<string, Record<string, string>> = {
   Freitag: { instagram: 'freitaglab', tiktok: 'freitaglab', youtube: 'UCHyhAHfoZOUw0zRCn1JSAMg' },
   Rareform: { instagram: 'rareform', tiktok: 'rareform' },
   // added 2026-09-17
-  'The North Face': { instagram: 'thenorthface', youtube: 'UCNfWDbERpf34FsSWIpqGD0Q' },
+  // tiktok handle supplied by the owner 2026-09-17 (site footers unreadable
+  // behind bot wall)
+  'The North Face': { instagram: 'thenorthface', tiktok: 'thenorthface', youtube: 'UCNfWDbERpf34FsSWIpqGD0Q' },
   Patagonia: { instagram: 'patagonia', tiktok: 'patagonia', youtube: 'UCl3xZ-f3cQhOHvH6f-7-ssQ' },
   'Freedom of Movement': { instagram: 'fombrand', tiktok: 'fombrand' },
   'Old School': { instagram: 'oldschool_ltd', tiktok: 'oldschool_ltd' },
