@@ -33,20 +33,10 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<{ sent: bool
     return { sent: false }
   }
 
-  const workspace = invite.companyName?.trim()
-  const inviter = invite.invitedByEmail ? `${invite.invitedByEmail} ` : ''
-  const subject = workspace
-    ? `You're invited to ${workspace} on Verbatim`
-    : `You're invited to a Verbatim workspace`
+  const { subject, text, html } = renderInviteEmail(invite)
 
   try {
-    const { error } = await resend.emails.send({
-      from,
-      to: invite.to,
-      subject,
-      text: inviteText(invite, workspace, inviter),
-      html: inviteHtml(invite, workspace, inviter),
-    })
+    const { error } = await resend.emails.send({ from, to: invite.to, subject, text, html })
     if (error) {
       console.error(`[email] invite send failed -> ${invite.to}:`, error)
       return { sent: false }
@@ -239,6 +229,31 @@ export async function sendReportEmail(report: ReportEmail): Promise<{ sent: bool
   } catch (err) {
     console.error('[email] report send threw:', err)
     return { sent: false }
+  }
+}
+
+/** The invite email exactly as it would be sent — subject, text and html, and
+ *  the `from` the provider is configured with (null when Resend is unwired and
+ *  `sendInviteEmail` is a logged no-op).
+ *
+ *  Exported so an operator CLI can PRINT the email it is about to send instead
+ *  of re-typing the template beside it. Two copies of an email body eventually
+ *  disagree, and the copy nobody sends is the one that goes stale. */
+export function renderInviteEmail(invite: InviteEmail): {
+  subject: string
+  text: string
+  html: string
+  from: string | null
+} {
+  const workspace = invite.companyName?.trim()
+  const inviter = invite.invitedByEmail ? `${invite.invitedByEmail} ` : ''
+  return {
+    subject: workspace
+      ? `You're invited to ${workspace} on Verbatim`
+      : `You're invited to a Verbatim workspace`,
+    text: inviteText(invite, workspace, inviter),
+    html: inviteHtml(invite, workspace, inviter),
+    from: from ?? null,
   }
 }
 
