@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract } from '@/lib/test/copy-contract'
+import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { COMPETITIVE_BLOCKS } from './index'
 import { competitiveRivals } from './rivals'
@@ -260,5 +260,74 @@ describe('the sections that are not built', () => {
     const data = competitiveFixture({ unlocks: { rows: competitiveUnlockRows([]) } })
     const text = renderText(competitiveUnlocks.render(data, 'app', ctx))
     expect(text).toContain('— not tracked · Your digital director')
+  })
+})
+
+describe('CO3 and CO7 · the data wave 2 binds (Block D, D6)', () => {
+  // WAVE 1 IS THE DATA, WAVE 2 IS THE TILE. Nothing on this page renders the
+  // head-to-head or the playbook yet, which is why the CO3 and CO7 unlock rows
+  // are still printed above — so what is asserted here is the FIXTURE: the
+  // shape a port binds, in the two states it will be reviewed in.
+
+  it('carries a head-to-head and both playbook matrices on the surface reading', () => {
+    const data = competitiveFixture()
+    expect(data.headToHead).not.toBeNull()
+    expect(data.playbook).not.toBeNull()
+    expect(data.headToHead!.measures.map((m) => m.key)).toEqual([
+      'videos', 'comments_per_video', 'engagement', 'sentiment', 'posts',
+    ])
+    expect(data.playbook!.formats.sides.map((s) => s.label)).toEqual(['The category', 'Össur', 'Ottobock'])
+    expect(data.playbook!.hooks.sides.map((s) => s.label)).toEqual(['The category', 'Össur', 'Ottobock'])
+  })
+
+  it('refuses both where no month has been read, rather than drawing empty tables', () => {
+    const data = unreadMonthsFixture()
+    expect(data.headToHead).toBeNull()
+    expect(data.playbook).toBeNull()
+  })
+
+  it('gives a tracked-but-unread rival a column that says so, never a zero', () => {
+    const data = unreadRivalFixture()
+    const side = data.playbook!.formats.sides.find((s) => s.label === 'Rareform')!
+    expect(side.of).toBe(0)
+    expect(side.unread).toContain('published nothing we read in September')
+    for (const cell of Object.values(side.byKey)) expect(cell).toBeNull()
+    const share = data.headToHead!.measures.find((m) => m.key === 'videos')!
+    expect(share.them).toBeNull()
+    expect(share.why).toContain('Rareform')
+  })
+
+  it('carries an "of N" on every cell a port would print, and a basis beside it', () => {
+    const data = competitiveFixture()
+    for (const side of [...data.playbook!.formats.sides, ...data.playbook!.hooks.sides]) {
+      for (const cell of Object.values(side.byKey)) {
+        if (cell) expect(cell.value.n).toBe(side.of)
+      }
+    }
+    expect(data.playbook!.basisLine).toBe('videos published in September')
+    expect(data.playbook!.coverageLine).toContain('687 of The category’s 757')
+    for (const m of data.headToHead!.measures) expect(m.basisLine).toContain('September')
+  })
+
+  it('states a reason wherever it declines to band a measure', () => {
+    for (const m of competitiveFixture().headToHead!.measures) {
+      if (m.verdict === null && m.you !== null) expect(m.verdictWhy).not.toBeNull()
+      if (m.verdict !== null) expect(m.verdict.bandPts).not.toBeNull()
+    }
+  })
+
+  it('prints no direction word in any sentence the two blocks compose', () => {
+    const data = competitiveFixture()
+    const words = [
+      data.playbook!.basisLine,
+      data.playbook!.coverageLine,
+      data.playbook!.excludedNote,
+      data.playbook!.formats.conclusion ?? '',
+      ...data.playbook!.formats.keys.map((k) => k.label),
+      ...data.playbook!.hooks.keys.map((k) => k.label),
+      data.headToHead!.footerLine,
+      ...data.headToHead!.measures.flatMap((m) => [m.label, m.basisLine, m.verdictWhy ?? '', m.why ?? '']),
+    ].join(' ')
+    expect(directionRe().test(words)).toBe(false)
   })
 })

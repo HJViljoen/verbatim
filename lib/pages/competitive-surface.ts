@@ -12,6 +12,8 @@ import { loadMonthSeries, type MonthSeriesSet, type ReadingHandle } from '../rea
 import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { buildStandings, type StandingRow } from '../reading/standings'
+import type { HeadToHead } from '../reading/head-to-head'
+import { buildHeadToHead, buildPlaybook, loadPlaybookVideos, type PlaybookBlock } from './playbook'
 import type { MonthStatus, PlatformMix } from '../reading/types'
 import type { Verdict } from '../reading/verdicts'
 // D3 · own posts, own claims and what the rivals say. This module's own two
@@ -244,6 +246,15 @@ export interface CompetitiveSurfaceData {
    * them — a document built on the service role — binds the same field.
    */
   saidAbout: SaidAbout[]
+  /** CO3 — you against the selected rival, one row per measure, each row
+   *  naming the clock it keeps. Null where no rival is selected or the two
+   *  months hold nothing. Nothing on this page RENDERS it yet (Block D wave 1
+   *  is the data; wave 2 ports the tile), which is why the CO3 unlock row is
+   *  still printed. */
+  headToHead: HeadToHead | null
+  /** CO7 — formats and hooks for the category, for you and for the selected
+   *  rival, on the published clock, with the classified n per column. */
+  playbook: PlaybookBlock | null
   unlocks: { rows: CompetitiveUnlockRow[] }
   record: { line: string; lines: string[]; href: string }
   /**
@@ -673,6 +684,12 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   if (index >= 0) options[index] = { ...options[index], selected: true }
   const selected = index >= 0 ? options[index] : null
 
+  // ── CO3 and CO7 · the published-video reading ──────────────────────────
+  // ONE `videos` read for both sections, started before CO5's own reads and
+  // awaited after them: the head-to-head and the playbook want the same rows
+  // and a second scan of the largest table on the page would buy nothing.
+  const playbookAhead = loadPlaybookVideos(supabase, clientId, month).catch(() => null)
+
   // ── CO5 · what the category asks under their content ───────────────────
   const questions = await buildQuestions({
     supabase,
@@ -687,6 +704,18 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
   // CO4 · the censuses, taken before the return because the readiness row below
   // is read off them.
   const ownClaims = await ownClaimsAhead
+  const playbookVideos = await playbookAhead
+  const playbook = playbookVideos ? buildPlaybook({ month, brand, rival: selected?.name ?? null, videos: playbookVideos }) : null
+  const headToHead =
+    playbookVideos && selected
+      ? buildHeadToHead({
+          month,
+          brand,
+          rival: selected.name,
+          videos: playbookVideos,
+          denominators: denominators ?? [],
+        })
+      : null
 
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
@@ -721,6 +750,8 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     ),
     // CO4's readiness row is read off the censuses beside it: a page may not
     // say "their accounts are not configured" above ten of Freitag's posts.
+    headToHead,
+    playbook,
     unlocks: { rows: competitiveUnlockRows(ownClaims) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),

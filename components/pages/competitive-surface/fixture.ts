@@ -7,6 +7,7 @@ import {
 } from '@/lib/pages/competitive-surface'
 import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 import { rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
+import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
 
 // Competitive's block fixtures (Phase 1 WP14).
 //
@@ -94,6 +95,150 @@ function ownClaimsFixture() {
   return rivalOwnClaims(inputs)
 }
 
+
+// ---- CO3 and CO7's videos (Phase 1 Block D, D6) --------------------------------
+//
+// ÖSSUR'S OWN SEPTEMBER AND AUGUST, read read-only on 2026-09-18 and rebuilt
+// here as the rows the loader would have read.
+//
+// WHAT IS REPRODUCED EXACTLY: September published 757 / 109 / 145 by audience,
+// classified 687 / 84 / 124, hooks 647 / 81 / 118, each format's own count and
+// its own measured median, the judged and positive counts, and Ottobock's own
+// accounts yielding ZERO posts in either month while Össur's yielded 29 in
+// August and 8 in September.
+//
+// WHAT IS NEAR AND NOT EXACT, AND WHY — stated because a fixture comment that
+// claims a figure it does not build is worse than no comment. Production's
+// rated counts (non-Reddit, rate > 0) are 483 / 77 / 86 with medians
+// 3.0 / 2.1 / 2.6; this expansion builds 438 / 63 / 72 with medians
+// 3.1 / 1.8 / 2.6. The gap is 45 / 14 / 14 videos that carry a rate and NO
+// `classified_type`, which the per-format expansion below has nowhere to put:
+// it hands a rate only to a classified video. The medians drift with it,
+// because every rated video of a format here carries that format's median
+// rather than its own spread.
+//
+// THREE OF THOSE FACTS ARE WHY THE FIXTURE IS REAL RATHER THAN INVENTED:
+//   · the classified n is well under the published one on every side (84 of
+//     109 on the client's own), which is the gap mock-gap D6 says the artboard
+//     hides by printing "read from all 1,388 category videos";
+//   · the rival's own-post count is not zero, it is UNRECORDED — no video of
+//     Ottobock's has ever come in through an owned account — so the row prints
+//     a reason and not a false zero;
+//   · September's judged counts are 5 and 19, far under any band's floor, so
+//     the positive-share row refuses a comparison on live data. An invented
+//     fixture would have handed it 71 and 126 and never exercised the refusal.
+
+interface AudienceSpec {
+  audience: string
+  published: number
+  /** [classified_type, videos, median engagement, videos carrying a rate] */
+  formats: [string, number, number | null, number][]
+  /** [hook_style, videos] */
+  hooks: [string, number][]
+  judged: number
+  positive: number
+  owned: number
+  source: 'owned' | 'competitor_owned'
+}
+
+const SEPTEMBER: AudienceSpec[] = [
+  {
+    audience: 'industry-other',
+    published: 757,
+    formats: [
+      ['story', 280, 3.4, 206], ['educational', 113, 2.9, 66], ['promotional', 105, 1.3, 30],
+      ['testimonial', 73, 2.9, 60], ['entertainment', 54, 3.1, 39], ['tutorial', 20, 2.1, 16],
+      ['behind-the-scenes', 19, 1.7, 9], ['how-to', 11, 1.3, 6], ['review', 6, 3.7, 4],
+      ['comparison', 3, 0.5, 1], ['challenge', 3, 2.6, 1],
+    ],
+    hooks: [
+      ['personal-story', 309], ['bold-claim', 169], ['question', 66], ['demonstration', 38],
+      ['listicle', 18], ['before-after', 16], ['controversy', 12], ['statistic', 10],
+      ['shock-value', 8], ['trend-riding', 1],
+    ],
+    judged: 252, positive: 171, owned: 0, source: 'owned',
+  },
+  {
+    audience: 'client',
+    published: 109,
+    formats: [
+      ['story', 28, 2.4, 21], ['testimonial', 21, 1.6, 14], ['promotional', 18, 1.1, 12],
+      ['tutorial', 6, 1.8, 6], ['educational', 3, 1.3, 2], ['entertainment', 3, 7.6, 3],
+      ['behind-the-scenes', 2, 10.3, 2], ['how-to', 1, 15.2, 1], ['comparison', 1, 2.3, 1],
+      ['review', 1, 2.1, 1],
+    ],
+    hooks: [
+      ['personal-story', 45], ['bold-claim', 21], ['before-after', 5], ['question', 5],
+      ['demonstration', 2], ['shock-value', 2], ['trend-riding', 1],
+    ],
+    judged: 5, positive: 5, owned: 8, source: 'owned',
+  },
+  {
+    audience: 'competitor:Ottobock',
+    published: 145,
+    formats: [
+      ['promotional', 30, 2.8, 13], ['story', 27, 3.4, 15], ['testimonial', 26, 2.1, 18],
+      ['educational', 15, 1.9, 10], ['tutorial', 7, 3.2, 4], ['behind-the-scenes', 7, 0.9, 3],
+      ['review', 5, 1.5, 4], ['how-to', 4, 2.6, 3], ['entertainment', 3, 14.5, 2],
+    ],
+    hooks: [
+      ['personal-story', 48], ['bold-claim', 34], ['demonstration', 13], ['question', 13],
+      ['listicle', 7], ['statistic', 2], ['shock-value', 1],
+    ],
+    judged: 19, positive: 17, owned: 0, source: 'competitor_owned',
+  },
+]
+
+/** August, as the aggregates alone — the previous month is only ever read for
+ *  the head-to-head's "then", which wants totals and not a format table. */
+const AUGUST: AudienceSpec[] = [
+  { audience: 'industry-other', published: 1681, formats: [['story', 1387, 2.7, 1387]], hooks: [], judged: 538, positive: 439, owned: 0, source: 'owned' },
+  { audience: 'client', published: 112, formats: [['story', 73, 2.7, 73]], hooks: [], judged: 11, positive: 9, owned: 29, source: 'owned' },
+  { audience: 'competitor:Ottobock', published: 247, formats: [['story', 222, 2.8, 222]], hooks: [], judged: 48, positive: 42, owned: 0, source: 'competitor_owned' },
+]
+
+/** One audience's month, expanded into the rows the loader reads. Each format's
+ *  rated videos carry that format's own measured median, so the group medians
+ *  come back exactly and the audience median is a real median of a real set. */
+function expand(spec: AudienceSpec, month: string): PlaybookVideo[] {
+  const day = (i: number) => `${month.slice(0, 8)}${String((i % 27) + 1).padStart(2, '0')}`
+  const out: PlaybookVideo[] = []
+  for (let i = 0; i < spec.published; i++) {
+    out.push({
+      id: `${spec.audience}-${month}-${i}`,
+      upload_date: day(i),
+      platform: i % 4 === 3 ? 'youtube' : 'tiktok',
+      classified_type: null,
+      hook_style: null,
+      engagement_rate: null,
+      is_client: spec.audience === 'client',
+      is_competitor: spec.audience.startsWith('competitor:'),
+      competitor_name: spec.audience.startsWith('competitor:') ? spec.audience.slice('competitor:'.length) : null,
+      source: i < spec.owned ? spec.source : 'discovered',
+      sentiment: i < spec.positive ? 'positive' : i < spec.judged ? 'neutral' : null,
+      sentiment_source: i < spec.judged ? 'audience' : null,
+      analyzed_lane: 'full',
+    })
+  }
+  let at = 0
+  for (const [key, k, med, rated] of spec.formats) {
+    for (let i = 0; i < k && at < out.length; i++, at++) {
+      out[at].classified_type = key
+      if (i < rated && med !== null) out[at].engagement_rate = med
+    }
+  }
+  let hookAt = 0
+  for (const [key, k] of spec.hooks) {
+    for (let i = 0; i < k && hookAt < out.length; i++, hookAt++) out[hookAt].hook_style = key
+  }
+  return out
+}
+
+export const PLAYBOOK_VIDEOS: PlaybookVideo[] = [
+  ...SEPTEMBER.flatMap((s) => expand(s, MONTH)),
+  ...AUGUST.flatMap((s) => expand(s, '2026-08-01')),
+]
+
 export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): CompetitiveSurfaceData {
   const window = horizonWindow('last_3', NOW, '2026-06-01')
   const standings = buildStandingsBlock({
@@ -138,6 +283,14 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       empty: null,
     },
     standings,
+    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: PLAYBOOK_VIDEOS }),
+    headToHead: buildHeadToHead({
+      month: MONTH,
+      brand: 'Össur',
+      rival: 'Ottobock',
+      videos: PLAYBOOK_VIDEOS,
+      denominators: OSSUR,
+    }),
     questions: {
       rival: 'Ottobock',
       videos: 33,
@@ -211,6 +364,18 @@ export function unreadRivalFixture(): CompetitiveSurfaceData {
   return {
     ...base,
     rivals: { ...base.rivals, options: [...base.rivals.options.map((o) => ({ ...o, selected: false })), option], selected: option },
+    // THE RIVAL COLUMN IS PRESENT AND EMPTY, WITH ITS REASON. A side that was
+    // never read is not a side that published nothing, and CO7's third column
+    // has to say which — `formatReading` puts that sentence on `unread` and the
+    // cells stay null so nothing prints a zero for it.
+    playbook: buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Rareform', videos: PLAYBOOK_VIDEOS }),
+    headToHead: buildHeadToHead({
+      month: MONTH,
+      brand: 'Össur',
+      rival: 'Rareform',
+      videos: PLAYBOOK_VIDEOS,
+      denominators: OSSUR,
+    }),
     questions: {
       ...base.questions,
       rival: 'Rareform',
@@ -268,6 +433,13 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
   return {
     ...base,
     method: methodRefusedFixture(),
+    // FIVE OF SEVEN OVERVIEW BLOCKS STILL SAY "not recorded" UNTIL M1–M9 ARE
+    // APPLIED, and wave 2 is reviewed in that state — so the degraded arm is
+    // part of the handover, not an afterthought. Nothing read means nothing to
+    // put side by side and no format to read, and both are null rather than
+    // empty tables: an empty table claims a measurement.
+    headToHead: null,
+    playbook: null,
     standings: {
       ...base.standings,
       rows: [],

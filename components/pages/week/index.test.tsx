@@ -419,3 +419,46 @@ describe('the page', () => {
     expect(weekContext().appUrl).toBe('')
   })
 })
+
+describe('WK §6 · your own side, month to date (Block D, D6)', () => {
+  // WAVE 1 IS THE DATA. `worked.sides` renders nowhere yet, so what is pinned
+  // here is the FIXTURE: the two states wave 2 has to draw, which are not the
+  // same state. A full column with a coverage gap, and a column that exists
+  // and is nearly empty.
+
+  it('gives the full arm a column with the month’s classified n beside its published one', () => {
+    const sides = weekFixture().worked.sides!
+    expect(sides.formats.sides.map((s) => s.audience)).toEqual(['client'])
+    expect(sides.formats.sides[0].of).toBe(84)
+    expect(sides.formats.sides[0].published).toBe(109)
+    expect(sides.basisLine).toBe('videos published in September')
+    expect(sides.coverageLine).toBe('Read from 84 of Össur’s 109 videos published in September.')
+  })
+
+  it('gives the degraded arm a thin column, not an absent one', () => {
+    const sides = thinFixture().worked.sides!
+    expect(sides.formats.sides[0].of).toBe(5)
+    expect(sides.formats.sides[0].published).toBe(17)
+    expect(sides.coverageLine).toBe('Read from 5 of Sealand’s 17 videos published in September.')
+    // Five classified videos split 3 / 2 — one format exactly at
+    // `ENGAGEMENT_MIN_VIDEOS` and one under it — so the column carries a median
+    // in one cell and none in the other, both with their n. Wave 2 has to print
+    // those two differently.
+    expect(sides.formats.sides[0].byKey['story']!.engagement).toEqual({ median: 2.1, n: 3 })
+    expect(sides.formats.sides[0].byKey['testimonial']!.engagement).toEqual({ median: null, n: 2 })
+    // …and the column was READ, which is what makes a "0 of 5" cell honest.
+    expect(sides.formats.sides[0].unread).toBeNull()
+  })
+
+  it('keeps every cell’s "of N" equal to its own column’s denominator', () => {
+    for (const fixture of FIXTURES) {
+      const sides = fixture().worked.sides
+      if (!sides) continue
+      for (const side of [...sides.formats.sides, ...sides.hooks.sides]) {
+        for (const cell of Object.values(side.byKey)) {
+          if (cell) expect(cell.value.n).toBe(side.of)
+        }
+      }
+    }
+  })
+})
