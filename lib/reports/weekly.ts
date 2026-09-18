@@ -305,6 +305,31 @@ export const NOTHING_UNUSUAL = 'Nothing unusual this week.'
 export const nothingUnusualLine = (noun: PeriodNoun): string =>
   noun === 'week' ? NOTHING_UNUSUAL : 'Nothing unusual in this update.'
 
+/** The coda after a flag: it was the only one. The same line the quiet state
+ *  prints, in the position the artboard puts it — after the card, not instead
+ *  of it. */
+export const nothingElseUnusual = (noun: PeriodNoun): string =>
+  noun === 'week' ? 'Nothing else unusual this week.' : 'Nothing else unusual in this update.'
+
+/**
+ * "271 videos this update · 2,359 in September so far" — WR1's meta.
+ *
+ * THE MOCK'S "n = 312 videos this week", WITH THE CONTRIBUTION RESTATEMENT
+ * (mock-gap §6 D6). A week-only n at the top of the first screen is the
+ * run-indexed reading in one clause; the month beside it is what stops a
+ * reader taking the update for a period. Where the month is not recorded the
+ * half that is true is printed alone, and the clause that would have been a
+ * zero is simply absent.
+ *
+ * NOT A NEW FIGURE. Both counts are WR3's `update_videos` / `month_videos`,
+ * declared there and restated here; nothing on the first screen declares a
+ * thirteenth token against the budget.
+ */
+export function updateMeta(gathered: number, monthVideos: number | null, month: string): string {
+  const head = `${fmtInt(gathered)} ${gathered === 1 ? 'video' : 'videos'} this update`
+  return monthVideos == null ? head : `${head} · ${fmtInt(monthVideos)} in ${longMonth(month)} so far`
+}
+
 export const CHECK_NOT_RECORDED =
   'The weekly check is not recorded for this workspace yet.'
 

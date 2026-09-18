@@ -95,13 +95,43 @@ describe('WR1 · the week in one sentence', () => {
     expect(renderText(block.render(quietFixture(), 'app', ctx))).toContain(NOTHING_UNUSUAL)
   })
 
+  // THE ARTBOARD'S CARD (block D wave 2): both sides as a share over the count
+  // it rests on, the bar drawn from those two shares, and the movement in the
+  // badge the product's vocabulary allows — never the mock's "▲ 3.1× usual",
+  // which is a ratio with no denominator on either side of it.
   it('prints the flag with its week, its baseline, its change and its band', () => {
-    const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('Objections')
-    expect(text).toContain('14.1% · 29 of 205 this week')
-    expect(text).toContain('3.5% · 38 of 1,089 across the three months behind it')
-    expect(text).toContain('+10.7 pts on a band of 5.0')
-    expect(text).toContain('every audience together')
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('Unusual this week · Objections')
+      expect(text, mode).toContain('This week 14.1% 29 of 205')
+      expect(text, mode).toContain('Three months behind 3.5% 38 of 1,089')
+      expect(text, mode).toMatch(/10\.7 pts · band 5/)
+      expect(text, mode).toContain('counted against every audience together')
+      expect(text, mode).not.toMatch(/×\s*usual/)
+    }
+  })
+
+  it('carries the "of N" on both sides of the comparison, in a level node', () => {
+    const markup = render(block.render(weeklyFixture(), 'app', ctx))
+    expect(copyViolations(markup)).toEqual([])
+    expect(markup).toContain('data-copy="level"')
+  })
+
+  it('says the flag was the only one rather than leaving the reader to wonder', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain('Nothing else unusual this week.')
+  })
+
+  it('counts the flags it could not print instead of the coda', () => {
+    const data = weeklyFixture()
+    const more = { ...data, section1: { ...data.section1, check: { ...data.section1.check, moreFlags: 2 } } }
+    const text = renderText(block.render(more, 'app', ctx))
+    expect(text).toContain('2 more cleared the band and are on This week.')
+    expect(text).not.toContain('Nothing else unusual')
+  })
+
+  it('states this update’s videos and the month they contribute to, not a week-only n', () => {
+    expect(renderText(block.render(weeklyFixture(), 'app', ctx)))
+      .toContain('271 videos this update · 2,359 in September so far')
   })
 
   it('labels the model’s paragraph as interpretation and keeps its evidence', () => {
@@ -139,7 +169,7 @@ describe('WR1 · the week in one sentence', () => {
     const text = renderText(block.render(update, 'app', ctx))
     expect(text).toContain('The update in one sentence')
     expect(text).not.toContain('The week in one sentence')
-    expect(text).toContain('14.1% · 29 of 205 in this update')
+    expect(text).toContain('This update 14.1% 29 of 205')
     expect(renderText(WEEKLY_BLOCKS['weekly.incoming'].render(update, 'app', ctx))).toContain('What came in this update')
   })
 

@@ -22,7 +22,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 // missing figure can never reach a reader as an empty gap.
 
 export function TokenProse({
-  body, figures, mode = 'app', model = false, className,
+  body, figures, mode = 'app', model = false, className, size,
 }: {
   /** The sentence(s), with `[[key]]` placeholders. */
   body: string
@@ -35,6 +35,18 @@ export function TokenProse({
    *  would claim a provenance they do not have. */
   model?: boolean
   className?: string
+  /**
+   * The email arm's font size, in px. Optional and defaulting to the body
+   * scale, so nothing that does not pass it changes.
+   *
+   * WHY A PROP AND NOT A WRAPPER. The email arm sets `fontSize` on its own
+   * element (a client reads no stylesheet, so every rule is inline and nothing
+   * inherits past an explicit one), and the artboards run a HERO line — the
+   * page's one sentence at 17.5px — through the same token substitution as
+   * body copy. A caller that wants the hero scale has no way to ask for it
+   * from outside. The app and print arms take `className`, as they already do.
+   */
+  size?: number
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
@@ -45,7 +57,7 @@ export function TokenProse({
   )
   if (mode === 'email') {
     return (
-      <div {...(model ? { 'data-copy': 'prose' } : {})} style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}>
+      <div {...(model ? { 'data-copy': 'prose' } : {})} style={{ fontFamily: FONT.sans, fontSize: size ?? 13.5, lineHeight: 1.5, color: EMAIL.ink }}>
         {children}
       </div>
     )
