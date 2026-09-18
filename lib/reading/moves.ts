@@ -248,11 +248,17 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
   // posts is about the same month and may not exceed it.
   const read = Math.min(input.readPosts ?? n, n)
   const subjectsBasis = read === n ? basis : `posts of yours we read in ${longMonth(month)}`
+  // AND k NEVER EXCEEDS ITS OWN n. `read` is floored from above already; a
+  // caller passing a read count smaller than the posts a subject matched would
+  // otherwise print "3 of 0", which is not a reading of anything. Unreachable
+  // from the page loader — `audience_insights_current` joins on
+  // `analyzed_run_id`, so a matched post is always a read one — but this is a
+  // pure function with a public signature and the guard belongs in it.
   const subjects = input.membership
     .map((m) => ({
       subjectId: m.subjectId,
       label: m.label,
-      matched: counted(new Set([...m.videoIds].filter((id) => ids.has(id))).size, read),
+      matched: counted(Math.min(new Set([...m.videoIds].filter((id) => ids.has(id))).size, read), read),
     }))
     .filter((s) => s.matched.k > 0)
     .sort((a, b) => b.matched.k - a.matched.k || a.label.localeCompare(b.label))
@@ -331,6 +337,17 @@ export interface MoveReading {
   /** The months the reading spans, for the axis of a chart that cannot say
    *  a direction. */
   months: string[]
+  /**
+   * The span the caller LOADED the series over — not the span it compared.
+   *
+   * RECORDED BECAUSE IT WAS ASKED FOR AND IS NOT THE VERDICT'S. The verdict
+   * carries its own window (one month against one month, `monthChange`'s);
+   * this is the window the loader read, which starts a month before the
+   * oldest declaration so the before side exists at all. A reader that prints
+   * "read over" needs this one, and a caller's input that reaches no field is
+   * a parameter nobody can check.
+   */
+  window: VerdictWindow
   /** "declared 12 Aug · read against the two months since" — the footer. */
   line: string
   /**
@@ -548,6 +565,7 @@ export function readMove(input: MoveReadingInput): MoveReading {
     control,
     figures,
     months,
+    window: input.window,
     line: `declared ${shortDate(input.move.declared_at)} · read against ${countWord(since)}`,
     chartNote: moveChartNote(touched),
     unread,

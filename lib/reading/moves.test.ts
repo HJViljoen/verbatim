@@ -194,6 +194,25 @@ describe('buildMoveCandidate — the pre-filled card', () => {
     expect(card({ readPosts: 40 }).readPosts.value).toEqual({ k: 9, n: 9 })
   })
 
+  it('never prints a subject row whose k is bigger than its own n', () => {
+    // "3 of 0" is not a reading of anything. Unreachable from the loader — a
+    // matched post is always a read one — but the guard belongs in the pure
+    // function, not in the one caller that happens to be safe.
+    const c = card({ readPosts: 0 })
+    expect(c.subjects.every((s) => s.matched.k <= s.matched.n)).toBe(true)
+    // Nothing read is no subject row at all — the `k > 0` filter then does the
+    // rest — and the card still says how little was read.
+    expect(c.subjects).toEqual([])
+    expect(c.readPosts.value).toEqual({ k: 0, n: 9 })
+    // One read post and two matched still prints one of one, never two of one.
+    const one = card({ readPosts: 1 })
+    expect(one.subjects.every((s) => s.matched.k <= s.matched.n)).toBe(true)
+    expect(one.subjects.map((s) => [s.label, s.matched.k, s.matched.n])).toEqual([
+      ['Durability', 1, 1],
+      ['Recycled materials', 1, 1],
+    ])
+  })
+
   it('a floor the caller names excludes the posts under it', () => {
     expect(card({ commentFloor: 20 }).overFloor.value).toEqual({ k: 1, n: 9 })
     expect(card({ commentFloor: 1 }).overFloor.value).toEqual({ k: 6, n: 9 })
@@ -282,6 +301,10 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(r.months).toEqual(['2026-07-01', '2026-08-01', '2026-09-01'])
     expect(r.line).toBe('declared 12 Aug · read against the one month since')
     expect(r.unread).toBeNull()
+    // The window the caller LOADED over is recorded, and it is not the
+    // verdict's own one-month-against-one-month window.
+    expect(r.window).toEqual({ kind: 'since', from: '2026-07-01', to: '2026-10-01' })
+    expect(r.window).not.toEqual(r.verdict?.window)
   })
 
   it('prints the control beside the verdict when the control also moved', () => {
