@@ -11,7 +11,7 @@ import { monthlyLineLabel } from '@/lib/pages/overview'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import type { Citation, ThreadAnswer, Turn } from '@/lib/pages/agent-thread'
 import { findingKey } from '@/lib/pages/agent-thread'
-import { DirectionWord, InferencePill, PrevalenceLevel } from './marks'
+import { DirectionWord, FindingLevel, InferencePill } from './marks'
 
 // The answer, as the artboard draws it (Block D wave 2, E-ask · `ask.thread.*`,
 // `ask.grounded.*`, `ask.quotes`, `ask.judgement`, `ask.followup`).
@@ -37,9 +37,11 @@ import { DirectionWord, InferencePill, PrevalenceLevel } from './marks'
 //   · the lead sentence stays SANS. The mock sets it in Plex Serif 17/500;
 //     serif in this product is speech and nothing else (globals.css, DESIGN.md,
 //     P0's ruling), and the answer is ours.
-//   · "Strong evidence" becomes a PREVALENCE word. A tier chip belongs to a
-//     conclusion; a grounded finding is a theme reading (D11) — see
-//     `./marks.tsx`.
+//   · "Strong evidence" becomes the COUNTED PAIR and no ladder word at all. A
+//     tier chip belongs to a conclusion (D11), and the prevalence ladder that
+//     first replaced it is legacy vocabulary defined over run-indexed
+//     conversations — outside `ASK_LEGEND`, which is the whole list this
+//     surface may print. See `./marks.tsx`.
 //   · the chart draws ONE line, the side that has the n. The mock draws
 //     Freitag beside it, and a rival's months are out of Ask's scope by
 //     construction: retrieval drops every rival voice before an answer is
@@ -63,7 +65,7 @@ export const answeredMeta = (turn: Turn): string | null =>
 function Marks({ f }: { f: FindingMeasure }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <PrevalenceLevel value={f.value} />
+      <FindingLevel value={f.value} />
       {/* The band travels with the change or neither is printed — D2. The
           non-answer arm prints the word alone and never a magnitude beside it,
           which is what `MovementBadge` already enforces. */}

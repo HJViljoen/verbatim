@@ -5,6 +5,7 @@ import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { citationWhere, saidHeading } from '@/lib/agent/types'
+import { PREVALENCE_LABEL } from '@/lib/calibration'
 
 // The answer tile's render tier (Block D wave 2, E-ask).
 //
@@ -48,6 +49,18 @@ describe('the answer keeps the copy contract', () => {
 
 describe('the measurement half', () => {
   const text = renderText(tile(measured))
+
+  it('prints no word outside the surface’s own legend', () => {
+    // AGENTS.md: a new reading surface draws its vocabulary from
+    // THIRTEEN_WORDS + READER_FLAGS and prints nothing outside it. The
+    // prevalence ladder is legacy — its glossary entries are defined over
+    // run-indexed CONVERSATIONS while this chip's denominator is a
+    // comment-dated month's VIDEOS, so the word a reader would click "How to
+    // read this page" about was the one word the legend could not explain.
+    for (const word of Object.values(PREVALENCE_LABEL)) {
+      expect(text).not.toContain(word)
+    }
+  })
 
   it('prints the level with its own denominator, never a bare count', () => {
     // 130 of 1,388 — the month table's k and n, not

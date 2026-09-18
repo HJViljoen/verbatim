@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { PREVALENCE_LABEL, prevalenceTier } from '@/lib/calibration'
 import { fmtInt } from '@/lib/format'
 import type { Direction } from '@/lib/reading/bands'
 import type { Counted } from '@/lib/reading/verdicts'
@@ -12,30 +11,47 @@ import type { Counted } from '@/lib/reading/verdicts'
 // finding cannot print a level without its "of N" by forgetting to.
 
 /**
- * A finding's LEVEL: the calibrated word and the counted pair that earned it.
+ * A finding's LEVEL: the counted pair, and nothing else.
  *
- * THE ARTBOARD'S CHIP SAYS "Strong evidence" AND THIS DOES NOT (D11). A tier
- * chip belongs to a CONCLUSION — `gateTier` turns a model's confidence and a
- * grounding count into one of three words, and that is a statement about a
- * recommendation, not about a theme. A grounded finding is a THEME reading, so
- * it earns a PREVALENCE word: `prevalenceTier` against the same denominator
- * the figures beside it print, which is the ladder `lib/calibration.ts` has
- * held since the calibration pass and the one a reader is measured against in
- * the glossary.
+ * TWO WORDS WERE WRONG HERE AND THE SECOND ONE IS THIS FIX.
+ *
+ * The artboard's chip says "Strong evidence". That was right to refuse (D11):
+ * a tier chip belongs to a CONCLUSION — `gateTier` over a model's confidence
+ * and a grounding count — and a grounded finding is a theme reading, not a
+ * recommendation.
+ *
+ * What replaced it was `PREVALENCE_LABEL` — Dominant · Widespread · Recurring ·
+ * Early signal — and that is wrong for a different reason, which D11 did not
+ * reach. AGENTS.md: "a new surface draws its vocabulary from `THIRTEEN_WORDS`
+ * plus the two `READER_FLAGS` and prints no term outside them". Those four are
+ * outside it, and `ASK_LEGEND` — this surface's own "How to read this page" —
+ * is exactly that list, so the chip a reader is most likely to click the legend
+ * about was the one word the legend could not explain. Worse, the glossary
+ * entry they WOULD find is legacy and written in the other unit: "at least 15%
+ * of the group's analysed CONVERSATIONS (minimum 5)", computed per run over the
+ * cumulative corpus, under a chip whose denominator is a comment-dated month's
+ * VIDEOS. Two definitions of one word on one page.
+ *
+ * So the level prints as the glossary's own example of a level — "130 of 1,388
+ * videos" — and the ladder word goes. Nothing is lost that the page did not
+ * already say: the audience and the month are in the mono line beside it, the
+ * comparison is in the badge after it, and `level` is one of the thirteen.
+ * Adding the prevalence ladder to `THIRTEEN_WORDS` instead would be this
+ * surface re-legislating a rule that belongs to `lib/calibration.ts` and to
+ * every other reading page; `components/pages/voice-surface/theme.tsx` prints
+ * the same ladder and is Voice's to answer for.
  *
  * `data-copy="level"` with the "of N" inside the SAME node, because rule (b)
- * reads a level node's whole text: "Widespread · 130 of 1,388 videos" passes
- * and "Widespread" beside a figure in a sibling cell does not — which is
- * exactly the failure the rule was written for.
+ * reads a level node's whole text: a bare figure beside a denominator in a
+ * sibling cell is exactly the failure the rule was written for.
  */
-export function PrevalenceLevel({ value, noun = 'videos' }: { value: Counted; noun?: string }) {
-  const tier = prevalenceTier(value.k, value.n)
+export function FindingLevel({ value, noun = 'videos' }: { value: Counted; noun?: string }) {
   return (
     <span
       data-copy="level"
-      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-inner px-2 py-px text-[12px] font-medium text-muted-foreground"
+      className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full bg-inner px-2 py-px text-[12px] font-medium text-foreground tabular-nums"
     >
-      {PREVALENCE_LABEL[tier]} · {fmtInt(value.k)} of {fmtInt(value.n)} {noun}
+      {fmtInt(value.k)} of {fmtInt(value.n)} {noun}
     </span>
   )
 }
