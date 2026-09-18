@@ -153,9 +153,26 @@ describe('WK §2 · this week in your subjects', () => {
 describe('WK §3 · moving now', () => {
   it('prints the month-to-date level with the trailing baseline beside it', () => {
     const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('Socket comfort after a long day · of 398 category videos in September')
+    // The label leads the column and the level sits under the figure, which
+    // is the artboard's own column order; both are still on the row.
+    expect(text).toContain('Socket comfort after a long day')
+    expect(text).toContain('44 of 398 category videos in September')
     expect(text).toContain('against 5% across the three months behind it')
     expect(text).toContain('18 of them arrived with this update')
+  })
+
+  it('draws three across and leads each column with the month', () => {
+    // The artboard's column leads "34 videos this week" and puts the month
+    // second; D6 refuses a week alone, so the figure is the month's and the
+    // update's contribution is stated under it.
+    const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('44 videos this month')
+    expect(text).toContain('18 of them arrived with this update')
+    expect(text).not.toContain('videos this week')
+    // No "growing, 3rd month" chip: one banded comparison cannot earn one, and
+    // `voice.movers` is false.
+    expect(text).not.toContain('3rd month')
+    expect(text).not.toContain('2nd month')
   })
 
   it('carries the quotes that make it a make-this prompt', () => {
@@ -193,7 +210,9 @@ describe('WK §3 · moving now', () => {
     // the balance. Sealand's category reads 449 video-months against 446
     // distinct videos on production today.
     const text = renderText(weekRising.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('added together, so a video that was talked about in two of them is counted in both')
+    // In the footer's own mono slot since the artboard port: it is a fact
+    // about the comparison's arithmetic, not a finding.
+    expect(text).toContain('the three months behind are added together, so a video talked about in two of them counts in both')
 
     // AND NOT PRINTED WHEN THE BASELINE IS A WINDOW. `QuarterChangeInput`
     // forbids summing month rows for a banded n; §3 does it only while M3's
