@@ -167,7 +167,13 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
     return (
       <BlockFrame
         title={voiceAudience.title}
-        question={voiceAudience.question}
+        // NO QUESTION LINE ON THE FILTER BAR (mock-gap §7, and the same call
+        // VO3 makes). The artboard's bar has neither a heading nor a question;
+        // it is the page's scope, drawn as four dense rows. The question is
+        // still the block's contract and is still declared on the object — the
+        // print and email spines and the block catalogue read it — but on the
+        // screen it is a 12.5px line pushing the rows the block exists for
+        // further down a bar the artboard draws in 105px.
         mode={mode}
         meta={a.videos != null ? `${fmtInt(a.videos)} videos · ${fmtInt(a.comments ?? 0)} comments` : undefined}
         footer={email
@@ -188,8 +194,16 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             </div>
           </Row>
 
+          {/* NO NOTE ON THIS ROW, AND NONE ON THE NEXT. The right-hand basis
+              is here because each row is a share of a DIFFERENT denominator —
+              and these two are not. The platform mix divides the same
+              population the row above names ("1,388 videos in this audience ·
+              Sep 2026", printed identically), and every kind pill carries its
+              own "of N" inside it, which is what D4 / D10 require of a kind
+              share. Printing the same string three times down one bar is how a
+              reader learns to stop reading the column. */}
           {a.platformMix.length > 0 ? (
-            <Row label="Where it was said" mode={mode} note={of ?? undefined}>
+            <Row label="Where it was said" mode={mode}>
               {/* A PLATFORM THE MONTH DID NOT CARRY IS ABSENT, not a 0% row.
                   Össur's own brand read no Reddit thread at all in September,
                   and "Reddit 0" would be a reading of a platform nobody
@@ -207,7 +221,7 @@ export const voiceAudience: Block<VoiceSurfaceData> = {
             </Row>
           ) : null}
 
-          <Row label="Kind of thing said" mode={mode} note={of ? <>share of {of}</> : undefined}>
+          <Row label="Kind of thing said" mode={mode}>
             {kinds}
             {a.reddit && a.reddit.pct != null ? (
               <p className={email ? undefined : 'm-0 mt-1.5 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>

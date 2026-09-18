@@ -15,6 +15,21 @@ const ctx = blockContext('', EMAIL, {})
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceAudience.render(data, mode, ctx))
 
 describe('voiceAudience', () => {
+  it('states the population once, and keeps its question off the bar', () => {
+    // The right-hand basis column exists because each row is a share of a
+    // different denominator — and two of them were not: the platform mix
+    // divides the same population the audience row names, and every kind pill
+    // carries its own "of N" inside it. The identical string printed three
+    // times down one bar is how a reader learns to stop reading the column.
+    const text = draw()
+    expect(text.split('1,388 videos in this audience · Sep 2026')).toHaveLength(2)
+    expect(text).not.toContain('share of 1,388 videos in this audience')
+    // The question stays the block's declared contract — the print and email
+    // spines read it — and off the artboard's 105px filter bar.
+    expect(voiceAudience.question).toContain('Whose conversation is this')
+    expect(text).not.toContain('Whose conversation is this')
+  })
+
   it('renders in all three modes and keeps the copy contract', () => {
     for (const data of [voiceFixture(), refusedVoiceFixture()]) {
       for (const mode of MODES) {
@@ -80,9 +95,10 @@ describe('voiceAudience', () => {
     expect(text).toContain('Asking how it works 34% 472 of 1,388')
     expect(text).toContain('Saying it worked 28% 389 of 1,388')
     // D4: the mock's bare "questions 34%" beside five others reads as a
-    // partition, and the kinds do not partition anything — every pill carries
-    // its own count and the row names the denominator once.
-    expect(text).toContain('share of 1,388 videos in this audience · Sep 2026')
+    // partition, and the kinds do not partition anything — so every pill
+    // carries its own count, INSIDE the pill. That is what makes the row's own
+    // repeat of the population unnecessary.
+    expect(text).not.toContain('share of 1,388 videos in this audience · Sep 2026')
   })
 
   it('says what is not recorded instead of a kind ladder when M5 is unapplied', () => {
