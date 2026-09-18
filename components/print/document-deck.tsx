@@ -24,7 +24,7 @@ import { UNFILLED_FRAMING, UNFILLED_SHEET, type BriefSurface } from '@/lib/repor
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { concludedBasisLine, coverCarriesSummary, findingCards, findingHeadlines, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { concludedBasisLine, coverCarriesSummary, findingCards, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -511,14 +511,11 @@ function SheetTitle({ data, pages }: { data: DocumentSnapshotData; pages: number
   )
 }
 
-/** The count and the confidence word behind finding n, off the finding page
- *  itself so an edit to the deck's pages flows through to this list. */
-function findingMeta(data: DocumentSnapshotData, i: number): { conversations: number; sure: string } | null {
-  const page = data.pages.filter((p) => p.kind === 'finding')[i]
-  const conversations = Number(page?.meta?.conversations ?? 0)
-  if (!page || !Number.isFinite(conversations) || conversations <= 0) return null
-  return { conversations, sure: page.meta?.sure ?? 'thin' }
-}
+// `findingMeta` STOOD HERE (merge, Block D wave 2). E-marketing read the
+// finding's count and confidence word off the page's meta one at a time;
+// E-sales's `findingCards` (lib/reports/documents/overview.ts) returns the same
+// two with the headline, the strands and the audiences beside them, and the
+// In-short list is built from that. One reader of `page.meta`, not two.
 
 function OverviewPage({ page, data, title, pages }: { page: DocPage; data: DocumentSnapshotData; title?: boolean; pages?: number }) {
   const f = data.figures
