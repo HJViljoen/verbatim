@@ -159,6 +159,16 @@ describe('afterwardsFor', () => {
     expect(a.line).toContain('partway through it')
   })
 
+  it('never ends a clause with a digit in front of a month, which reads as a date', () => {
+    // Rendered on the ledger this printed "…and we compare from 2. Sep 2026
+    // itself is in neither side — you decided partway through it": "2. Sep
+    // 2026" is a date in most of the world, and the sentence break disappears
+    // inside it.
+    const a = afterwardsFor({ decidedAt: '2026-08-14', targetIds: ['reg-1'], series: SERIES, audience: 'client' })
+    expect(a.line).not.toMatch(/\d\.\s+[A-Z][a-z]{2}/)
+    expect(a.line).toContain('we do not compare until 2 have been read')
+  })
+
   it('is too_soon with one reading and names how many it has', () => {
     const a = afterwardsFor({
       decidedAt: '2026-08-14',
