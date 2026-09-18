@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SubredditEntry } from '../gather/types'
+import { OWN_POSTS_NO_ACCOUNTS } from '../reading/own-posts'
 import type { Competitor } from '../rivals'
 import { communityRows, communityWords, tableRows, unconfiguredShare, UNCONFIGURED_SHOWN } from './communities'
 import { RIVAL_PRECEDENCE, rivalRows, rivalState } from './rivals-view'
@@ -145,6 +146,24 @@ describe('rivalRows', () => {
 
     const cotopaxi = rows.find((r) => r.name === 'Cotopaxi')!
     expect(rivalState(cotopaxi)).toBe('31 of their posts captured, 3 read')
+  })
+
+  it('reads a handle of nothing but spaces as no account at all', () => {
+    // A BEHAVIOUR CHANGE, ON PURPOSE. `noAccounts` used to be `filter(Boolean)`,
+    // so a handle saved as "  " counted as a configured account and the panel
+    // stayed green about a rival nobody was reading. `ownPostCensus` trims
+    // before it decides the same thing, and one product may not answer "is this
+    // account configured" two ways.
+    const [blank] = rivalRows({
+      names: ['Poler'],
+      handles: { Poler: { instagram: '   ', tiktok: '' } },
+      identities: [],
+      census: [],
+      month: '2026-09-01',
+    })
+    expect(blank.noAccounts).toBe(true)
+    expect(blank.ownPosts).toBeNull()
+    expect(blank.ownPostsWhy).toBe(OWN_POSTS_NO_ACCOUNTS)
   })
 
   it('carries the capture-versus-read census per platform — the only real handle check', () => {
