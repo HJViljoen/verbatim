@@ -226,6 +226,23 @@ describe('WR2 · where things stand', () => {
     expect(renderText(block.render(formingFixture(), 'app', ctx))).toContain('not recorded for this workspace yet')
   })
 
+  // IN AN EMAIL NOTHING INHERITS PAST AN EXPLICIT RULE. "you" and the rival's
+  // name were bare text nodes inside a `<td>` that declared no font, so both
+  // fell to the client's default — 16px in most webmail, 11pt Calibri in
+  // Outlook — beside 11px mono figures.
+  it('declares a font for every word of the row in the email arm', () => {
+    const markup = render(block.render(weeklyFixture(), 'email', ctx))
+    expect(markup).toMatch(/font-size:11px;color:#6E7378">you /)
+    // And the rival's name is still INSIDE that wrapper: more spans have been
+    // opened than closed between the two words, so nothing has fallen back to
+    // the client's own default between them.
+    const you = markup.indexOf('>you ')
+    const rival = markup.indexOf('· Freitag', you)
+    expect(rival).toBeGreaterThan(you)
+    const between = markup.slice(markup.lastIndexOf('<span', you), rival)
+    expect(between.split('<span').length).toBeGreaterThan(between.split('</span>').length)
+  })
+
   it('prints a direction word only inside a verdict node', () => {
     const markup = render(block.render(weeklyFixture(), 'app', ctx))
     expect(markup).toContain('growing, 3 months')

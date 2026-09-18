@@ -114,11 +114,26 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
       of={row.category.pct == null ? undefined : `${fmtInt(row.category.k ?? 0)} of ${fmtInt(row.category.n ?? 0)}`}
     />
   )
-  const sides = (
-    <>
-      you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
-    </>
-  )
+  // EVERY WORD IN THE EMAIL ARM CARRIES ITS OWN FONT. "you" and the rival's
+  // name went in as BARE TEXT NODES inside a `<td>` that declared none, and
+  // `<body>` sets a family with no size — so in an email, where nothing
+  // inherits past an explicit rule, both fell to the client's default: 16px in
+  // most webmail and 11pt Calibri in Outlook, beside 11px mono figures and a
+  // 13.5px label. The row shouted the two words carrying no measurement and
+  // whispered the four that do, and how loudly depended on the client. The app
+  // arm wrapped the identical fragment at `text-[11px]`, which is why only the
+  // email was wrong.
+  const sides = mode === 'email'
+    ? (
+        <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>
+          you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
+        </span>
+      )
+    : (
+        <>
+          you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
+        </>
+      )
   const movement = (
     <>
       <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} /> <DirectionWord direction={row.direction} mode={mode} />
