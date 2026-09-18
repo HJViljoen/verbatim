@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import type { WeekData } from '@/lib/pages/week'
 import { weekUnusual } from './unusual'
-import { thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -21,6 +21,7 @@ describe('WK1 · unusual this week', () => {
     const states: WeekData[] = [
       weekFixture(),
       thinFixture(),
+      absentReadingFixture(),
       withState('nothing_unusual'),
       withState('refused', { note: 'This update read well under its usual number of videos, so this week is not compared with the months behind it.' }),
       withState('not_checked', { setSize: null, tested: null }),
@@ -162,6 +163,107 @@ describe('WK1 · unusual this week', () => {
       const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
       expect(text, mode).not.toMatch(/\b(rising|growing|fading|gaining|climbing|surging)\b/i)
     }
+  })
+
+  it('draws the thirteen-update series and says it is a series of UPDATES', () => {
+    for (const mode of MODES) {
+      const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      // THE COUNT BAND CARRIES ITS UNIT. This block's other band is in
+      // percentage points ("a band of 4.9"); an unlabelled count band beside it
+      // is how 4.9 points gets read as five videos.
+      expect(text, mode).toContain('618 videos this update found')
+      expect(text, mode).toContain('ran 1–559 videos, typical 462')
+      // THREE OF THE TWELVE BEHIND IT FOUND NOTHING, and the legend counts 9
+      // rather than 12: a legend saying "the 12 before it" while the band was
+      // drawn on 9 would be the page and the picture disagreeing.
+      expect(text, mode).toContain('the 9 that found anything')
+      expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
+      // The axis's own words, which are the whole deviation: thirteen
+      // deliveries, not thirteen weeks.
+      expect(text, mode).toContain('the last 13 updates · what each one brought in')
+      expect(text, mode).not.toContain('weeks')
+      // And no multiple: the mock's "3.1× its usual rate" has no honest form.
+      expect(text, mode).not.toContain('×')
+    }
+  })
+
+  it('restates the newest update’s count as a contribution to its month', () => {
+    // THE RULE THIS SURFACE LIVES UNDER. The legend states three window-dated
+    // counts and the axis a fourth; without the restatement a reader has four
+    // numbers about a delivery and nothing tying any of them to a period.
+    for (const mode of MODES) {
+      const text = renderText(weekUnusual.render(weekFixture(), mode, ctx))
+      expect(text, mode).toContain('this update’s contribution to September so far: 205 of 449')
+      expect(text, mode).toContain('each point is one delivery’s own days, never a month')
+    }
+  })
+
+  it('states the SAME contribution §4 states, because it is the same read', () => {
+    // §1 and §4 print this claim from one windowed read clipped one way. A
+    // fixture in which they disagreed would be the page contradicting itself
+    // in the artefact wave 2 builds its port against.
+    const d = weekFixture()
+    const one = renderText(weekUnusual.render(d, 'app', ctx))
+    expect(d.cameIn.contribution).not.toBeNull()
+    expect(one).toContain(`this update’s contribution to September so far: ${d.cameIn.contribution!.videos} of ${d.cameIn.contribution!.of}`)
+    const thin = thinFixture()
+    expect(thin.cameIn.contribution).not.toBeNull()
+    expect(renderText(weekUnusual.render(thin, 'app', ctx)))
+      .toContain(`this update’s contribution to September so far: ${thin.cameIn.contribution!.videos} of ${thin.cameIn.contribution!.of}`)
+  })
+
+  it('names BOTH months where the window crossed one', () => {
+    // Sealand's newest update covers 11 Aug – 10 Sep. A window that crosses
+    // carries two months, each with its own clipped numerator and its own
+    // denominator — never one sum, because denominators do not add.
+    const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('this update’s contribution to August so far: 260 of 512')
+    expect(text).toContain('this update’s contribution to September so far: 394 of 475')
+  })
+
+  it('draws the series on the arm production is in, with no contribution to state', () => {
+    // M3 unapplied on both tenants: thirteen points, their windows and their
+    // counts are all still true, and the contribution is a sentence.
+    const text = renderText(weekUnusual.render(absentReadingFixture(), 'app', ctx))
+    expect(text).toContain('1,098 videos this update found')
+    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
+    expect(text).toContain('The windowed reading is not installed for this workspace')
+    expect(text).not.toContain('contribution to September so far')
+  })
+
+  it('says so rather than leaving four window counts standing alone', () => {
+    // Production today: M3 is not applied, so every point's contribution is
+    // empty. The restatement is then a sentence, not a silence.
+    const d = weekFixture()
+    const series = d.unusual.series!
+    const points = series.points.map((p) => ({ ...p, contribution: [], comments: null }))
+    const text = renderText(weekUnusual.render(
+      { ...d, unusual: { ...d.unusual, series: { ...series, points } } }, 'app', ctx,
+    ))
+    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
+    expect(text).not.toContain('contribution to September so far')
+  })
+
+  it('draws the series while the baseline is still forming', () => {
+    // Sealand cannot be told whether its update was unusual for two more
+    // months. What it CAN be told is what each update brought in — a fact about
+    // our reading, true whether or not there are three months to compare it
+    // with, and the honest half of "baseline forming".
+    const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('baseline forming — 1 of 3 months')
+    expect(text).toContain('1,098 videos this update found')
+    expect(text).toContain('the last 13 updates · what each one brought in')
+    // SEVEN OF SEALAND'S TWELVE FOUND NOTHING. The band stands on five, and the
+    // seven are drawn rather than dropped.
+    expect(text).toContain('the 5 that found anything')
+    expect(text).toContain('7 of the updates behind this one found nothing at all')
+  })
+
+  it('says nothing about the series where no update carries a window', () => {
+    const d = weekFixture()
+    const text = renderText(weekUnusual.render({ ...d, unusual: { ...d.unusual, series: null } }, 'app', ctx))
+    expect(text).not.toContain('this update ·')
+    expect(text).not.toContain('what each one brought in')
   })
 
   it('is email-safe', () => {

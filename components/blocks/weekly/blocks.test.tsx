@@ -226,6 +226,31 @@ describe('WR3 · what came in this week', () => {
     expect(text).toContain('No tracked rival posted')
     expect(text).toContain('how many were analysed is not recorded')
   })
+
+  it('prints the new quotes on your subjects, with how many there were', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('41 comments on your subjects were written in these days')
+      expect(text, mode).toContain('Third winter on mine and the strap has not given at all')
+      // The original leads and the English rendering follows — the order
+      // QuoteBlock keeps, and the cite names the subject it was counted under.
+      expect(text, mode).toContain('Durability · YouTube · 9 Sep')
+    }
+  })
+
+  it('hands back the quote REFS and never the words', () => {
+    const refs = block.quotes?.(weeklyFixture()) ?? []
+    expect(refs).toEqual(['e:ev-w1', 'e:ev-w2', 'e:ev-w3'])
+    // A snapshot freezes ids and resolves the text at render (decision H), so
+    // nothing under lib/reports/ holds a comment's words.
+    for (const ref of refs) expect(ref).not.toContain(' ')
+  })
+
+  it('says why there are no quotes rather than showing none', () => {
+    const text = renderText(block.render(formingFixture(), 'app', ctx))
+    expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
+    expect(block.quotes?.(formingFixture())).toEqual([])
+  })
 })
 
 describe('WR4 · for sales', () => {

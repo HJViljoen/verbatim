@@ -7,6 +7,7 @@ import {
   baselineFormingLine,
   baselineStartsWith,
   contributionLine,
+  crossedIntoLine,
   coverageLine,
   crossingLine,
   flagFigures,
@@ -15,10 +16,14 @@ import {
   NEW_THEME_FLOOR,
   pooledBaseline,
   refsOf,
+  postCaption,
   refTargets,
+  subjectLead,
+  typicalContribution,
   typicalTag,
   windowDays,
   workedLabel,
+  type SubjectWeekRow,
   type UnusualFlag,
   type WeekWindow,
 } from './week'
@@ -59,6 +64,14 @@ describe('the contribution line', () => {
   it('says so when the window reached back past the month', () => {
     expect(crossingLine('2026-09-01', '2026-08-01')).toContain('also covered days of August')
     expect(crossingLine('2026-09-01', '2026-08-01')).toContain('counts only its September days')
+  })
+
+  it('says the crossing alone where no contribution was printed above it', () => {
+    // Production today. "The contribution above counts only its September
+    // days" under "this update's contribution to it cannot be stated" points a
+    // reader at a figure that is not on the page.
+    expect(crossedIntoLine('2026-08-01')).toBe('This update also covered days of August.')
+    expect(crossedIntoLine('2026-08-01')).not.toContain('contribution')
   })
 })
 
@@ -158,6 +171,88 @@ describe('the typical tag', () => {
     expect(typicalTag(null, 22)).toBeNull()
     expect(typicalTag(31, null)).toBeNull()
     expect(typicalTag(31, 0)).toBeNull()
+  })
+})
+
+describe('what an update typically puts into a subject', () => {
+  it('scales the subject’s month size by this update’s share of the month', () => {
+    // Össur: 96 client videos in September so far, 14 of them from this update.
+    // A subject holding 31 of the month would ordinarily take 31 × 14/96 ≈ 4.5
+    // of this update; it took 8, which is above.
+    expect(typicalContribution({ monthVideos: 31, monthOf: 96, updateVideos: 14 })).toBeCloseTo(4.52, 2)
+    expect(typicalTag(8, typicalContribution({ monthVideos: 31, monthOf: 96, updateVideos: 14 }))).toBe('above typical')
+    expect(typicalTag(1, typicalContribution({ monthVideos: 19, monthOf: 96, updateVideos: 14 }))).toBe('below typical')
+  })
+
+  it('refuses rather than inventing one', () => {
+    // NO WINDOW READ, NO TYPICAL. A subject compared against a denominator
+    // nobody read is a tag with nothing behind it.
+    expect(typicalContribution({ monthVideos: 31, monthOf: 96, updateVideos: null })).toBeNull()
+    expect(typicalContribution({ monthVideos: 31, monthOf: 0, updateVideos: 14 })).toBeNull()
+  })
+})
+
+describe('the subjects lead', () => {
+  const row = (label: string, tag: string | null): SubjectWeekRow => ({
+    id: label, label, monthVideos: 20, monthOf: 96, addedVideos: 5, typical: tag ? 4 : null, tag, verdict: null,
+  })
+
+  it('counts the rows that ran above typical, k of n, and names them', () => {
+    const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'above typical'), row('Durability', 'below typical')], '2026-09-01')
+    expect(lead).toBe('2 of your 3 subjects ran above typical in this update — Comfort and Price each took a larger share of it than they hold of September so far.')
+  })
+
+  it('reads as one subject when one ran above', () => {
+    const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'about typical')], '2026-09-01')
+    expect(lead).toBe('1 of your 2 subjects ran above typical in this update — Comfort took a larger share of it than it holds of September so far.')
+  })
+
+  it('says none rather than leaving the sentence out', () => {
+    const lead = subjectLead([row('Comfort', 'about typical'), row('Price', 'below typical')], '2026-09-01')
+    expect(lead).toContain('None of your 2 subjects ran above typical')
+  })
+
+  it('keeps an uncompared subject OUT of the denominator and says so', () => {
+    // A subject the window read cannot answer for has not been compared;
+    // folding it into "of 3" would count a silence as a comparison that came
+    // back "not above".
+    const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'about typical'), row('Durability', null)], '2026-09-01')
+    expect(lead).toContain('1 of the 2 of your 3 subjects this update could be read against')
+  })
+
+  it('is null where nothing could be compared at all', () => {
+    expect(subjectLead([row('Comfort', null)], '2026-09-01')).toBeNull()
+    expect(subjectLead([], '2026-09-01')).toBeNull()
+  })
+
+  it('names at most three and counts the rest', () => {
+    const rows = ['A', 'B', 'C', 'D', 'E'].map((l) => row(l, 'above typical'))
+    expect(subjectLead(rows, '2026-09-01')).toContain('A, B and C and 2 more')
+  })
+
+  it('speaks no direction word', () => {
+    const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'below typical')], '2026-09-01')!
+    expect(directionRe().test(lead)).toBe(false)
+  })
+})
+
+describe('a rival post’s caption, standing in for the title it has no column for', () => {
+  it('collapses whitespace and keeps a short caption whole', () => {
+    expect(postCaption('  Cutting the tarp:\n how one bag  becomes another ')).toBe('Cutting the tarp: how one bag becomes another')
+  })
+
+  it('cuts on a word and marks the cut', () => {
+    const long = 'Every single bag we make is cut from a different truck tarpaulin, which is why no two of them have ever matched'
+    const cut = postCaption(long, 40)
+    expect(cut.length).toBeLessThanOrEqual(41)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(cut).not.toContain('  ')
+    expect(long).toContain(cut.slice(0, -1))
+  })
+
+  it('is an empty string where the post carries no caption — never an invented one', () => {
+    expect(postCaption(null)).toBe('')
+    expect(postCaption('   ')).toBe('')
   })
 })
 

@@ -4,14 +4,16 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { platformMixLine } from '@/lib/reading/record'
 import {
   contributionLine,
+  crossedIntoLine,
   crossingLine,
   newThemesLine,
   windowDays,
   type CameInBlock,
+  type RivalPost,
   type WeekData,
 } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -54,6 +56,18 @@ export const weekCameIn: Block<WeekData> = {
     const email = mode === 'email'
     const empty = weekCameIn.emptyState(data)
     const days = windowDays(c.window)
+    // WHAT THE COLUMN BELOW ACTUALLY ADDS TO. The rows are built from the
+    // videos THIS update fetched; `windowComments` is every audience the
+    // windowed read returned, and that read counts videos of ANY update that
+    // carry a comment dated in these days. So an audience with comments in the
+    // window under videos an earlier update found contributes to the total and
+    // gets no row — and the column a reader can sum then falls short of the
+    // number printed above it, on the one surface whose discipline is that a
+    // stated number is checkable. Null where any row's comments are unknown,
+    // because a partial sum is not a sum.
+    const rowedComments = c.rows.every((r) => r.comments != null)
+      ? c.rows.reduce((t, r) => t + (r.comments ?? 0), 0)
+      : null
 
     return (
       <BlockFrame
@@ -88,7 +102,20 @@ export const weekCameIn: Block<WeekData> = {
                 The month’s own reading is not available here, so this update’s contribution to it cannot be stated.
               </Note>
             )}
-            {c.crossesInto ? <Note mode={mode}>{crossingLine(data.month, c.crossesInto)}</Note> : null}
+            {c.windowComments != null && rowedComments != null && rowedComments < c.windowComments ? (
+              <Note mode={mode}>
+                The rows below account for <span data-copy="figure">{fmtInt(rowedComments)}</span> of those comments; the rest were written in these days under videos an earlier update found, in audiences this update read no video of.
+              </Note>
+            ) : null}
+            {/* THE CROSSING QUALIFIES THE CONTRIBUTION, so where there is no
+                contribution it is said alone: "the contribution above counts
+                only its September days" under "this update's contribution to
+                it cannot be stated" is the block contradicting itself. */}
+            {c.crossesInto ? (
+              <Note mode={mode}>
+                {c.contribution ? crossingLine(data.month, c.crossesInto) : crossedIntoLine(c.crossesInto)}
+              </Note>
+            ) : null}
             <Audiences rows={c.rows} mode={mode} month={data.month} />
           </>
         ) : null}
@@ -143,6 +170,14 @@ function Audiences({ rows, mode, month }: { rows: CameInBlock['rows']; mode: 'ap
                 {contributionLine(month, r.contribution.videos, r.contribution.of)}
               </div>
             ) : null}
+            {r.share.n > 0 ? (
+              <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
+                <span data-copy="level">{fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed</span>
+                {r.comments != null
+                  ? <> · <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} written in these days</>
+                  : ' · comments in these days are not recorded for this workspace yet'}
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
@@ -164,9 +199,67 @@ function Audiences({ rows, mode, month }: { rows: CameInBlock['rows']; mode: 'ap
               {contributionLine(month, r.contribution.videos, r.contribution.of)}
             </span>
           ) : null}
+          <AudienceShare row={r} />
         </p>
       ))}
     </div>
+  )
+}
+
+/**
+ * The share bar's own numbers and the row's comments — the mock's two missing
+ * columns (`week.camein.col.share`, `week.camein.col.comments`).
+ *
+ * BOTH SIDES OF THE SHARE, NEVER A BARE PERCENTAGE. "360 of 508" is a
+ * measurement; "71%" on its own is the score this product does not print. And
+ * the denominator named is the UPDATE's analysed total — the one thing on this
+ * block every row is genuinely a part of — not the month's and not the
+ * category's.
+ *
+ * THE COMMENTS ARE WINDOW-DATED AND ABSENT MEANS ABSENT. Null is "the windowed
+ * reading is not installed here", which is a different sentence from a zero,
+ * and a zero here is a real zero: this audience drew no comment in the days the
+ * update covered.
+ */
+function AudienceShare({ row }: { row: CameInBlock['rows'][number] }) {
+  if (row.share.n <= 0) return null
+  return (
+    <span className="block text-[11.5px] text-muted-foreground">
+      <span data-copy="level">{fmtInt(row.share.k)} of {fmtInt(row.share.n)} videos this update analysed</span>
+      {row.comments != null
+        ? <> · <span data-copy="figure">{fmtInt(row.comments)}</span> {row.comments === 1 ? 'comment' : 'comments'} written in these days</>
+        : ' · comments in these days are not recorded for this workspace yet'}
+    </span>
+  )
+}
+
+/**
+ * One rival post, by the only identity a post in this product has
+ * (`week.rivalposts.col.post` / `.col.comments`).
+ *
+ * THE CAPTION AND THE ACCOUNT ARE SOMEBODY ELSE'S WORDS, so they are marked as
+ * a quote: rule (c) may not police them, for the reason the copy contract
+ * already gives about a commenter — a rival whose caption says "growing" has
+ * not made a direction claim on this product's behalf. Everything code says
+ * about the post sits outside those nodes.
+ */
+function Post({ post, mode }: { post: RivalPost; mode: 'app' | 'print' | 'email' }) {
+  const email = mode === 'email'
+  return (
+    <span
+      className={email ? undefined : 'block pl-3 text-[11.5px] text-muted-foreground'}
+      style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, paddingLeft: 10 } : undefined}
+    >
+      {platformLabel(post.platform)}
+      {post.account ? <> · <span data-copy="quote">{post.account}</span></> : null}
+      {/* THE POST'S OWN DATE, and the only figure on this row that is not
+          window-dated: `videos.upload_date` is the video's clock. The comments
+          beside it are dated by the days the update covered, which is why the
+          two are worded differently and never joined by a comma. */}
+      {post.postedOn ? ` · posted ${shortDate(post.postedOn)}` : ''}
+      {post.caption ? <> · <span data-copy="quote">{post.caption}</span></> : null}
+      {' · '}<span data-copy="figure">{fmtInt(post.comments)}</span> {post.comments === 1 ? 'comment' : 'comments'} under it in these days
+    </span>
   )
 }
 
@@ -210,6 +303,21 @@ function Rivals({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
               ? ' · their own posts are not read yet — Verbatim engineering'
               : `, ${fmtInt(r.byThem)} ${r.byThem === 1 ? 'post' : 'posts'} of their own`}
           </span>
+          {/* THE POSTS THEMSELVES, AND WHAT THE COLUMN IS A COLUMN OF. Three of
+              ninety-four, said out loud: the comment count beside the rival is
+              the sum over the posts NAMED and not that rival's week, which is
+              the claim a bare total would make. */}
+          {r.posts.length > 0 ? (
+            <>
+              <span className={mode === 'email' ? undefined : 'block text-[11.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+                {/* THE RULE, NOT JUST THE RATIO. The pick is two stages — the
+                    widest-reaching few, then the most-commented of those — and
+                    "3 of 94" alone would describe a rule this did not follow. */}
+                <span data-copy="figure">{fmtInt(r.posts.length)}</span> shown: the most commented on in these days of the <span data-copy="figure">{fmtInt(r.postsConsidered)}</span> widest-reaching of <span data-copy="figure">{fmtInt(r.postsTotal)}</span>; <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} under them in these days
+              </span>
+              {r.posts.map((post, i) => <Post key={`${post.platform}:${post.href ?? i}`} post={post} mode={mode} />)}
+            </>
+          ) : null}
         </p>
       ))}
     </div>
