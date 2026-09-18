@@ -281,9 +281,23 @@ function EmailCard({ row, n }: { row: AdviceRow; n: number | null }) {
   )
 }
 
+/** Every row the block draws, computed once. `verdicts()` and `quotes()` each
+ *  re-ran `toMake` and called `toStop` twice inside themselves — four
+ *  traversals of the ledger per `blockAnswers` (code review 12). */
+export function shownRows(data: MarketSurfaceData): AdviceRow[] {
+  const stop = toStop(data.advice.rows)
+  return [...toMake(data.advice.rows), ...(stop ? [stop] : [])]
+}
+
 export const contentMake: Block<MarketSurfaceData> = {
   key: 'content.make',
-  title: 'Three things to make, and one to stop',
+  // NOT "THREE THINGS TO MAKE, AND ONE TO STOP" (design review 15). A block
+  // title is fixed and the ledger is not: the same words printed over two open
+  // items, over none, and — on the empty arm — over "Advice lands with your
+  // next update." The mock's "3 to make · 1 to stop" is a COUNT, and a count
+  // belongs where a count can be recomputed, which is the meta line below and
+  // the cover's stamp. The title says what the page is.
+  title: 'What to make, and what to stop',
   question: 'What has the conversation asked for, and what did you decide about each one?',
 
   render(data, mode = 'app') {
@@ -297,7 +311,9 @@ export const contentMake: Block<MarketSurfaceData> = {
     }
     const make = toMake(data.advice.rows)
     const stop = toStop(data.advice.rows)
-    const meta = `${fmtInt(data.advice.total)} in the ledger · oldest first`
+    // THE COUNTS THE TITLE NO LONGER CLAIMS, where they can be recomputed from
+    // the rows actually drawn (design review 15).
+    const meta = `${fmtInt(make.length)} to make${stop ? ' · 1 to stop' : ''} · ${fmtInt(data.advice.total)} in the ledger`
 
     if (mode === 'email') {
       return (
@@ -347,13 +363,11 @@ export const contentMake: Block<MarketSurfaceData> = {
   },
 
   verdicts(data): Verdict[] {
-    const rows = [...toMake(data.advice.rows), ...(toStop(data.advice.rows) ? [toStop(data.advice.rows)!] : [])]
-    return rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
+    return shownRows(data).map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
   },
 
   quotes(data) {
-    const rows = [...toMake(data.advice.rows), ...(toStop(data.advice.rows) ? [toStop(data.advice.rows)!] : [])]
-    return rows.map((r) => r.quote?.ref).filter((ref): ref is string => !!ref)
+    return shownRows(data).map((r) => r.quote?.ref).filter((ref): ref is string => !!ref)
   },
 
   emptyState(data) {

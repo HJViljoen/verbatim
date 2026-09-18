@@ -220,9 +220,14 @@ export const CONTENT_MAP: readonly BriefEntry[] = [
   // one rests on; `ct.advice` keeps the whole table behind it, which is what a
   // reader goes to when they want the twelve rather than the three. Both read
   // `MarketSurfaceData`, so the pair costs one surface load.
+  // THE TITLE AND THE FRAMING SAY NOTHING THE ROWS MIGHT NOT (design review 15).
+  // They were "Three things to make" and "…with the count behind it", printed
+  // unchanged over two rows, over none, and over a card whose advice has no
+  // reading yet. A section's words are fixed; the ledger is not, so the counts
+  // live on the block, which recomputes them from the rows it drew.
   block({
     id: 'ct.make', block: 'content.make', surface: 'market',
-    title: 'Three things to make', framing: 'Each one is something the conversation asked for, with the count behind it.',
+    title: 'What to make next', framing: 'Each one is something the conversation asked for, with the reading behind it where there is one.',
     needs: [],
   }),
   block({

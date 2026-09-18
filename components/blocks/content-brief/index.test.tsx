@@ -10,7 +10,7 @@ import { markupText, render } from '@/lib/test/render'
 import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
-import { toMake } from './make'
+import { shownRows, toMake } from './make'
 import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
@@ -377,11 +377,33 @@ describe('content.make — the mock’s page 2', () => {
     expect(markup).not.toContain('<svg')
   })
 
+  it('walks the ledger once for the rows it draws', () => {
+    // `verdicts()` and `quotes()` each re-ran `toMake` and called `toStop`
+    // twice inside themselves (code review 12).
+    const rows = shownRows(data)
+    expect(rows.length).toBe(toMake(data.advice.rows).length + 1)
+    expect(rows[rows.length - 1].status).toBe('dismissed')
+  })
+
   it('hands its verdicts and its quote refs back for freezing', () => {
     const answers = blockAnswers(contentMake, data)
     expect(answers.quotes).toContain('e:ev-9')
     expect(answers.verdicts.length).toBeGreaterThan(0)
     for (const v of answers.verdicts) expect(v.value.n).toBeGreaterThan(0)
+  })
+
+  // A FIXED TITLE MAY NOT CLAIM A COUNT (design review 15). "Three things to
+  // make, and one to stop" printed unchanged over two rows, over none, and over
+  // "Advice lands with your next update."
+  it('claims no count in its title, and counts what it drew in its meta', () => {
+    expect(contentMake.title).not.toMatch(/\b(one|two|three|four|1|2|3|4)\b/i)
+    const app = markupText(render(contentMake.render(data, 'app', ctx)))
+    expect(app).toContain(`${toMake(data.advice.rows).length} to make · 1 to stop`)
+    // The empty arm prints the same title over a sentence about nothing, and
+    // that is now a true sentence.
+    const none = markupText(render(contentMake.render(emptyLedger(), 'app', ctx)))
+    expect(none).toContain(contentMake.title)
+    expect(none).toContain('Advice lands with your next update.')
   })
 
   it('says advice lands with the next update when the ledger is empty', () => {

@@ -32,7 +32,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ o
   const slides = [
     {
       key: 'make',
-      title: 'Three things to make',
+      title: 'What to make next',
       framing: 'Each one is something the conversation asked for, with the reading behind it where there is one.',
       body: contentMake.render(ledger, 'print', ctx),
     },
