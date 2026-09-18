@@ -265,6 +265,26 @@ describe('methodNumbers', () => {
     ...over,
   })
 
+  it('every row carries a stable id, and page 8 joins on it', () => {
+    // Page 8 reads the gate's share off this table by `r.id === 'held_back'`.
+    // It used to match `r.label === 'Held back'`, so a copy edit to that row
+    // would have dropped the share and the "why no sample is drawn" sentence
+    // off the last page with nothing failing.
+    const rows = methodNumbers(
+      record({
+        coverage: [{ audience: INDUSTRY_AUDIENCE, videos: 1388, comments: 11840, platformMix: { tiktok: 527, youtube: 403 }, dualMention: 0, excludedUndated: 0 }],
+        discard: { readable: true, judged: 1480, kept: 1388, setAside: 92, clearedByHeuristic: 0, gateOff: 0, failedOpen: 0, recordedFrom: '2026-06-28', basis: 'run_clock' },
+      }),
+      quarterFor(2026, 3),
+      overview,
+      INSIDE,
+    )
+    for (const row of rows) expect(row.id).toBeTruthy()
+    expect(rows.find((r) => r.id === 'held_back')?.label).toBe('Held back')
+    // And no two rows of one table share an id.
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length)
+  })
+
   it('tells a record that could not be read apart from a window that is not counted', () => {
     const q = quarterFor(2026, 3)
     // No record at all: nothing to say, and it says that.

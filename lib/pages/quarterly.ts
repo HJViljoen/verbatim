@@ -503,7 +503,7 @@ export interface MethodPage {
   flags: QuarterFlag[]
   flagsNote: string | null
   /** The corpus in numbers, row by row. */
-  numbers: { label: string; value: string; note?: string }[]
+  numbers: MethodNumberRow[]
   unit: string
   /** The comparisons this artefact asked for and did not draw, and why —
    *  printed, not promised (lib/reading/record.ts `refusedSentence`). */
@@ -2088,6 +2088,27 @@ function buildMethod(a: {
   }
 }
 
+/**
+ * ONE ROW OF THE METHOD TABLE, WITH AN ID THAT IS NOT ITS DISPLAY STRING.
+ *
+ * Page 8 reads the gate's share off this table rather than computing it again,
+ * so the two pages of one artefact cannot disagree about how much was set
+ * aside — which is right. It reached it by `r.label === 'Held back'`, which
+ * couples the two pages through a piece of COPY: rename that row, which is a
+ * copy edit anybody may make, and the gate share and the "why no sample is
+ * drawn" sentence drop off page 8 with no test failing. The id is the join.
+ */
+export type MethodNumberId =
+  | 'period' | 'videos' | 'videos_month' | 'comments' | 'updates'
+  | 'sources' | 'held_back' | 'languages' | 'refused'
+
+export interface MethodNumberRow {
+  id: MethodNumberId
+  label: string
+  value: string
+  note?: string
+}
+
 /** The corpus in numbers, as the mock's own table. Every row carries what it
  *  is out of, or says it was not recorded. */
 export function methodNumbers(
@@ -2095,8 +2116,8 @@ export function methodNumbers(
   quarter: Quarter,
   overview: OverviewData,
   readingAt: string,
-): { label: string; value: string; note?: string }[] {
-  const out: { label: string; value: string; note?: string }[] = [
+): MethodNumberRow[] {
+  const out: MethodNumberRow[] = [
     // THE PERIOD IS THE QUARTER'S, SO ITS STATE IS THE QUARTER'S. Keyed off
     // `overview.monthStatus` this row said "still filling" about a quarter that
     // had closed weeks earlier, because the MONTH the product is in was
@@ -2106,13 +2127,13 @@ export function methodNumbers(
     // date goes through fullDate / shortDate / longMonth; the mock's own row
     // reads "1 Jul – 28 Sep 2026". The year is on the second date only,
     // because a quarter never crosses one.
-    { label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
+    { id: 'period', label: 'Period', value: `${shortDate(quarter.from)} – ${fullDate(quarter.to)}`, note: quarterFilling(quarter, readingAt) ? 'still filling' : undefined },
   ]
   if (!inputs) {
     // NOT "The corpus", WHICH IS OURS, and this is the row a young workspace
     // is most likely to be shown. Every other label in this table is already in
     // the reader's words — Videos, Comments, Updates, "Videos in September".
-    out.push({ label: 'Videos', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
+    out.push({ id: 'videos', label: 'Videos', value: 'not recorded', note: 'the quarter’s record could not be read for this workspace' })
     return out
   }
   // `coverage` is NULL when the month tables are not applied and EMPTY when
@@ -2124,12 +2145,14 @@ export function methodNumbers(
     // is the only honest way to count distinct videos over three months. The
     // month in hand is printed instead, labelled as the month.
     out.push({
+      id: 'videos_month',
       label: `Videos in ${longMonth(overview.month)}`,
       value: overview.bar.videos != null ? fmtInt(overview.bar.videos) : 'not recorded',
       note: 'the quarter is not counted as one window for this workspace yet, so the month in hand is stated instead',
     })
     if (inputs.delivery.delivered > 0) {
       out.push({
+        id: 'updates',
         label: 'Updates',
         value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
         note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
@@ -2139,14 +2162,15 @@ export function methodNumbers(
   }
   const videos = inputs.coverage.reduce((sum, c) => sum + c.videos, 0)
   const comments = inputs.coverage.reduce((sum, c) => sum + c.comments, 0)
-  out.push({ label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
+  out.push({ id: 'videos', label: 'Videos', value: fmtInt(videos), note: 'distinct videos with an analysed comment in the quarter' })
   // "COMMENTS", NOT "CONVERSATIONS". `lib/calibration.ts` fixes a conversation
   // as one video and the comments it sparked, and says comments are always
   // counted separately as comments — so this row under a Videos row labelled
   // Conversations said the quarter held 1,388 videos and 11,840 conversations,
   // where the glossary makes the conversations 1,388.
-  out.push({ label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
+  out.push({ id: 'comments', label: 'Comments', value: fmtInt(comments), note: 'comments read across those videos' })
   out.push({
+    id: 'updates',
     label: 'Updates',
     value: `${fmtInt(inputs.delivery.delivered)} this quarter`,
     note: inputs.delivery.longestGapDays != null ? `longest gap ${fmtInt(inputs.delivery.longestGapDays)} days` : undefined,
@@ -2159,9 +2183,10 @@ export function methodNumbers(
   const mix: PlatformMix = {}
   for (const c of inputs.coverage) for (const [k, n] of Object.entries(c.platformMix)) mix[k] = (mix[k] ?? 0) + n
   const sources = platformShareLine(mix)
-  if (sources) out.push({ label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
+  if (sources) out.push({ id: 'sources', label: 'Sources', value: sources, note: 'of the videos read in this quarter' })
   if (inputs.discard.readable && inputs.discard.judged > 0) {
     out.push({
+      id: 'held_back',
       label: 'Held back',
       value: `${fmtPct((inputs.discard.setAside / inputs.discard.judged) * 100, 0)} set aside by the relevance gate`,
       // THE GATE'S OWN CLOCK, NAMED. `recordedFrom` is the day the gate started
@@ -2174,6 +2199,7 @@ export function methodNumbers(
   if (inputs.language.analysed > 0 && inputs.language.notEnglish + inputs.language.english > 0) {
     const known = inputs.language.notEnglish + inputs.language.english
     out.push({
+      id: 'languages',
       label: 'Languages',
       value: `${fmtPct((inputs.language.notEnglish / known) * 100, 0)} not in English`,
       // THE BASIS TRAVELS WITH THE FIGURE (D15). It is a share of the videos
@@ -2184,6 +2210,7 @@ export function methodNumbers(
   }
   if (inputs.comparisonsRefused != null) {
     out.push({
+      id: 'refused',
       label: 'Refused',
       value: inputs.comparisonsRefused === 1 ? '1 comparison' : `${fmtInt(inputs.comparisonsRefused)} comparisons`,
       note: 'held back rather than drawn — the reasons are under this table',
@@ -2294,9 +2321,20 @@ function buildUnsettled(a: {
   // computed again, so the two pages of one artefact cannot disagree about how
   // much was set aside.
   const heldBack: string[] = []
-  const gate = a.method.numbers.find((r) => r.label === 'Held back')
+  // BY ITS ID, NOT BY ITS DISPLAY STRING. `r.label === 'Held back'` coupled
+  // these two pages through a piece of copy: renaming that row would have
+  // dropped the gate share AND the "why no sample is drawn" sentence off page
+  // 8 with nothing failing. `note` is optional on the row, so it is guarded
+  // rather than interpolated — an `undefined` in the middle of a sentence is
+  // exactly what the suite's no-`undefined` net exists to catch, and a page
+  // should not be relying on that net.
+  const gate = a.method.numbers.find((r) => r.id === 'held_back')
   if (gate) {
-    heldBack.push(`${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject (${gate.note}).`)
+    heldBack.push(
+      `${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject${
+        gate.note ? ` (${gate.note})` : ''
+      }.`,
+    )
     // AND WHY THE MOCK'S THREE-ROW SAMPLE IS NOT UNDER IT. M8 withholds
     // `gate_verdicts.reason` from an authenticated reader, so the reasons a
     // sample would carry cannot be selected on a tenant session at all. Saying
