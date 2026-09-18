@@ -5,6 +5,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Move, Subject } from '../subjects/types'
 import { actedTally } from '../reading/moves'
 import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
+import { buildAdviceRows } from './market-surface'
 import {
   buildCategory,
   buildRivals,
@@ -32,6 +33,7 @@ import {
   type StoredKindRow,
   type StoredStatsRow,
   type SubjectRow,
+  ledgerTally,
 } from './overview'
 import type { Verdict } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
@@ -736,5 +738,53 @@ describe('buildMoves — OV5, with the card and the readings (Block D · D2)', (
     expect(b.unlock).toBe(MOVES_UNLOCK)
     expect(b.masthead).toContain('We never claim you caused it')
     expect(b.unlock).not.toMatch(/not built yet/)
+  })
+})
+
+describe('ledgerTally — one "acted" rule for two surfaces', () => {
+  const rec = (over: Partial<Parameters<typeof ledgerTally>[0][number]> = {}) => ({
+    id: 'r1',
+    title: 'Lead with repairability',
+    lineage_id: 'L1',
+    status: 'new',
+    priority: 'high',
+    based_on: null,
+    created_at: '2026-09-13T00:00:00.000Z',
+    ...over,
+  })
+
+  it('takes the newest copy of a lineage, never any copy that ever moved', () => {
+    // One lineage, two copies: the OLDER one was marked done and the newest
+    // update rewrote it as new. Overview used to OR across the copies and call
+    // it acted; Market takes the newest copy and calls it new.
+    const rows = [
+      rec({ id: 'old', status: 'acted_on', created_at: '2026-09-10T00:00:00.000Z' }),
+      rec({ id: 'new', status: 'new', created_at: '2026-09-13T00:00:00.000Z' }),
+    ]
+    expect(ledgerTally(rows, []).decided).toBe(0)
+    expect(ledgerTally(rows, []).of).toBe(1)
+    // And that is the answer Market prints off the same rows.
+    const market = buildAdviceRows(
+      rows.map((r) => ({ id: r.id, title: r.title, lineage_id: r.lineage_id, status: r.status, type: 'content', created_at: r.created_at, run_id: r.id })),
+      [],
+    )
+    expect(market.filter((r) => r.status !== 'new')).toHaveLength(0)
+  })
+
+  it('a decision on the lineage is inherited over the newest copy', () => {
+    const rows = [rec({ id: 'a' }), rec({ id: 'b', lineage_id: 'L2' })]
+    const tally = ledgerTally(rows, [
+      { id: 'd1', lineage_id: 'L1', status: 'acted_on', decided_at: '2026-09-14T00:00:00.000Z' },
+    ])
+    expect(tally.decided).toBe(1)
+    expect(tally.of).toBe(2)
+    expect(tally.line).toContain('1 of 2')
+    expect(tally.line).not.toMatch(/quarter/i)
+  })
+
+  it('counts lineages and not copies, and falls back to the row id', () => {
+    const rows = [rec({ id: 'a', lineage_id: null }), rec({ id: 'b', lineage_id: null })]
+    expect(ledgerTally(rows, []).of).toBe(2)
+    expect(ledgerTally([rec({ id: 'a' }), rec({ id: 'b' })], []).of).toBe(1)
   })
 })

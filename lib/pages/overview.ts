@@ -920,6 +920,9 @@ interface RecRow {
   status: string | null
   priority: string | null
   based_on: { insight_ids?: string[] } | null
+  /** Which copy of a lineage is the current one — `buildAdviceRows`'s sort key,
+   *  read here so the two surfaces count "acted" by one rule. */
+  created_at?: string | null
 }
 
 interface AnomalyFlagRow {
@@ -1982,9 +1985,53 @@ async function loadMoves(supabase: SupabaseClient, clientId: string): Promise<Mo
  * THE KEY IS THE LINEAGE, NEVER THE ROW ID. Pass D-b deletes and reinserts
  * every recommendation each update, so `id` counts copies and `lineage_id`
  * counts advice; `coalesce(lineage_id, id)` is `lineageKey`'s own rule
- * (lib/pages/market-surface.ts), restated because this loader reads neither
- * `created_at` nor `type` and cannot call `buildAdviceRows`.
+ * (lib/pages/market-surface.ts), restated because this loader does not read
+ * `type` and cannot call `buildAdviceRows`.
+ *
+ * AND "ACTED" IS THE NEWEST COPY'S STATUS, WHICH IS MARKET'S RULE. Sharing the
+ * read is not sharing the rule: this counted a lineage acted if ANY copy of it
+ * carried a status other than `new`, where `buildAdviceRows` takes the newest
+ * copy's status alone. The two agree on production today (64 lineages, 1
+ * acted, both ways) and would part the first time an older copy carried a
+ * non-`new` status with no `rec_decisions` row behind it — one page saying you
+ * acted on 2 of 64 and the other 1 of 64. `created_at` is read for that, one
+ * more column on a 65-row read.
  */
+/**
+ * "You have acted on 1 of 64" — one lineage, one status, Market's rule.
+ *
+ * THE STATUS OF A LINEAGE IS ITS NEWEST COPY'S, with a `rec_decisions` status
+ * inherited over it. This counted a lineage acted if ANY copy of it carried a
+ * status other than `new`, where `buildAdviceRows` (lib/pages/market-surface.ts)
+ * takes the newest copy alone — a shared READ is not a shared rule, and the two
+ * part the first time an older copy carries a non-`new` status with no decision
+ * row behind it: one page saying 2 of 64 and the other 1 of 64 off one table.
+ *
+ * Newest is `created_at` then `id`, descending, which is `buildAdviceRows`'s
+ * own sort. A row with no `created_at` sorts oldest, so a lineage whose copies
+ * carry no dates at all falls back to the largest id — stable, and the same
+ * answer both surfaces reach.
+ */
+export function ledgerTally(
+  rows: readonly RecRow[],
+  decisions: readonly RecDecision[],
+): { decided: number; of: number; line: string } {
+  const newestOf = new Map<string, RecRow>()
+  for (const r of rows) {
+    const key = r.lineage_id ?? r.id
+    const held = newestOf.get(key)
+    const at = (x: RecRow) => x.created_at ?? ''
+    if (!held || at(r).localeCompare(at(held)) > 0 || (at(r) === at(held) && r.id.localeCompare(held.id) > 0)) {
+      newestOf.set(key, r)
+    }
+  }
+  const decided = [...newestOf.entries()].filter(([key, newest]) => {
+    const inherited = inheritedStatus(key, [...decisions])
+    return recStatus(inherited ?? newest.status) !== 'new'
+  }).length
+  return actedTally(decided, newestOf.size)
+}
+
 async function loadLedger(
   supabase: SupabaseClient,
   clientId: string,
@@ -2003,7 +2050,7 @@ async function loadLedger(
         // `lineage_id` is the only thing about it that survives. Ordering is
         // `topRecommendation`'s — priority, then how well grounded — so Overview
         // and Market name the same top row.
-        .select('id, title, lineage_id, status, priority, based_on')
+        .select('id, title, lineage_id, status, priority, based_on, created_at')
         .eq('client_id', clientId)
         .order('id', { ascending: true }),
     ).catch((error: unknown) => {
@@ -2022,14 +2069,7 @@ async function loadLedger(
   ])
   // THE TALLY FIRST, because it survives a ledger with no top row: a tenant
   // whose every recommendation has been decided still has a ratio to print.
-  const byLineage = new Map<string, boolean>()
-  for (const r of recRows) {
-    const key = r.lineage_id ?? r.id
-    const inherited = inheritedStatus(key, decisionRes)
-    const acted = recStatus(inherited ?? r.status) !== 'new'
-    byLineage.set(key, (byLineage.get(key) ?? false) || acted)
-  }
-  const acted = actedTally([...byLineage.values()].filter(Boolean).length, byLineage.size)
+  const acted = ledgerTally(recRows, decisionRes)
 
   const rec = topRecommendation(recRows)
   if (!rec) return { top: null, acted }
