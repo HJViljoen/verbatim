@@ -21,7 +21,7 @@ import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan 
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isMissingMonthTable } from '../reading/monthly'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
-import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
+import { gapBasisLine, gapBetween, gapLine, inheritRefusal, GAP_WORDS, type Gap, type GapSide } from '../reading/gap'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
@@ -111,10 +111,30 @@ export interface CoverStat {
   /** The token this figure is substituted from on the cover paragraph. */
   token: string
   value: string
+  /**
+   * Whether `value` is a FIGURE or a WORD.
+   *
+   * The artboard's cover card sets its value in mono at 38px, which is right
+   * for "13 pts" and wrong for "comparison refused". Both reach this card:
+   * where the mock prints a magnitude the product sometimes has only the
+   * refusal, and D2's rule is that the word stands alone rather than a
+   * magnitude standing beside it. So the card keeps the mock's LAYOUT and the
+   * renderer sets a word at reading size.
+   */
+  kind: 'figure' | 'word'
   /** What the number is, in the reader's words. */
   label: string
   /** The evidence under it — the denominator, the band, the panel. */
   caption: string
+  /**
+   * The banded step this card carries, where it carries one.
+   *
+   * A `Verdict` and never a magnitude of our own: `MovementBadge` prints
+   * points only where the band was cleared, and the three cards the mock draws
+   * ("−18%", "−3 pts") are exactly the claims that rule refuses on today's
+   * corpus.
+   */
+  verdict?: Verdict | null
 }
 
 export interface CoverPage {
@@ -1039,7 +1059,6 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // a November reading.
   const monthNote = monthOutsideNote(overview.month, quarter)
 
-  const cover = buildCover({ overview, quarter, readingAt, readings, thisQuarter: a.thisQuarter })
   // ONE SET OF VOICES, THREE PAGES. `overview.sentence.voices` is the month's
   // own evidence, already resolved and already erasure-safe; the quarterly
   // pages that want a quote take REFS from it rather than each running its own
@@ -1064,6 +1083,16 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     monthNote,
     thisQuarter: a.thisQuarter,
     lastQuarter: a.lastQuarter,
+  })
+  // THE COVER IS BUILT AFTER THE PAGES IT QUOTES, NOT BEFORE THEM. Its three
+  // cards are page 3's quarter gap, page 4's attention panel and the largest of
+  // the quarter's own banded steps, so it reads what those pages drew rather
+  // than drawing any of it a second time — the rule the whole artefact is
+  // arranged under (`buildMoves` takes Market's own acted sentence for it).
+  const cover = buildCover({
+    overview, quarter, prior, readingAt, readings, thisQuarter: a.thisQuarter,
+    gaps: subjects.rows.map((r) => r.gap).filter((g): g is Gap => g != null),
+    quarterVerdicts,
   })
   const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
@@ -1260,9 +1289,14 @@ function windowVideos(reading: WindowReading, audience: string): number | null {
 function buildCover(a: {
   overview: OverviewData
   quarter: Quarter
+  prior: Quarter
   readingAt: string
   readings: number
   thisQuarter: WindowReading
+  /** The quarter gaps page 3 draws — the cover's first card is one of them. */
+  gaps: readonly Gap[]
+  /** The quarter's own banded steps — the cover's third card is the largest. */
+  quarterVerdicts: readonly Verdict[]
 }): CoverPage {
   const { overview } = a
   const lead = overview.sentence.lead
@@ -1280,10 +1314,74 @@ function buildCover(a: {
     figures.quarter_videos = { value: quarterVideos, unit: 'videos', label: `${overview.category.label} videos read in ${quarterLabel(a.quarter, false)}` }
   }
 
+  // THE MOCK'S THREE CARDS, IN THE MOCK'S ORDER, AND NONE OF THE MOCK'S THREE
+  // CLAIMS (`qr.p1.stats`).
+  //
+  //   "13 pts · gap to Freitag … narrowed from 19 points in June"
+  //     → the QUARTER gap between the two columns page 3 prints, with both
+  //       sides' k of n and the band, and the earlier quarter as its own dated
+  //       reading rather than as the word "narrowed" (D1, lib/reading/gap.ts).
+  //   "−18% · category attention since June … panel re-frozen 3 Sep"
+  //     → the panel's own level with the size of the panel under it, and the
+  //       latest BANDED step beside it. June to September crosses the
+  //       3 September re-freeze, which is the refusal `AttentionBlock.verdict`
+  //       carries instead of a percentage (D7, D8).
+  //   "−3 pts · price in the category, Q2 33% to Q3 30%. Fading for a 3rd month."
+  //     → the largest quarter-on-quarter step that CLEARED its band, printed as
+  //       its two counts with the badge. No direction word: three consecutive
+  //       quarters is not something any tenant has (D2, D5).
+  //
+  // THE CARDS FALL BACK RATHER THAN GOING BLANK. Below the migrations none of
+  // the three can be read, and a cover of three absences is not the artefact —
+  // so the month's own lead, the month's videos and the reading counter fill
+  // the remaining slots, in that order, and the cover always carries three
+  // real figures. Trimmed to three at the end, which is the mock's grid.
   const stats: CoverStat[] = []
+  const gap = [...a.gaps].sort((g, h) => (h.state === 'apart' ? 1 : 0) - (g.state === 'apart' ? 1 : 0))[0] ?? null
+  if (gap) {
+    const apart = gap.state === 'apart' && gap.gapPts != null
+    stats.push({
+      token: `gap_${gap.objectId}`,
+      kind: apart ? 'figure' : 'word',
+      value: apart ? `${Math.round(Math.abs(gap.gapPts as number) * 10) / 10} pts` : GAP_WORDS[gap.state],
+      label: `${gap.objectLabel} — you against ${gap.b.label}, ${quarterLabel(a.quarter, false)}`,
+      caption: [gapLine(gap, { period: true }), gapBasisLine(gap)].filter(Boolean).join(' · '),
+    })
+  }
+  const attention = overview.category.attention
+  const panelMonth = attention?.months[attention.months.length - 1] ?? null
+  if (attention && panelMonth) {
+    stats.push({
+      token: 'panel_comments',
+      kind: 'figure',
+      value: fmtInt(panelMonth.comments),
+      label: `panel comments under ${overview.category.label.toLowerCase()} in ${longMonth(panelMonth.month)}`,
+      caption: [
+        attention.accountCount != null ? `a fixed panel of ${fmtInt(attention.accountCount)} accounts` : 'a fixed panel of accounts',
+        attention.panel?.frozen_at ? `frozen ${fullDate(attention.panel.frozen_at)}` : null,
+      ].filter(Boolean).join(' · '),
+      verdict: attention.verdict,
+    })
+  }
+  const moved = [...a.quarterVerdicts]
+    .filter((v) => v.state === 'moved' && v.changePts != null)
+    .sort((v, w) => Math.abs(w.changePts as number) - Math.abs(v.changePts as number))[0] ?? null
+  if (moved) {
+    stats.push({
+      token: `quarter_${moved.objectKind}_${moved.objectId}`,
+      kind: 'figure',
+      value: `${fmtInt(moved.value.k)} of ${fmtInt(moved.value.n)}`,
+      label: `${moved.objectLabel}, ${quarterLabel(a.quarter, false)}`,
+      caption: moved.baseline
+        ? `against ${fmtInt(moved.baseline.k)} of ${fmtInt(moved.baseline.n)} in ${quarterLabel(a.prior, false)}`
+        : `read over ${quarterLabel(a.quarter, false)}`,
+      verdict: moved,
+    })
+  }
   if (lead && isAnswer(lead.state) && lead.value.n > 0) {
     stats.push({
       token: 'lead_share',
+      kind: 'figure',
       value: pct1((lead.value.k / lead.value.n) * 100),
       label: `${lead.objectLabel} in ${longMonth(overview.month)}`,
       caption: `${fmtInt(lead.value.k)} of ${fmtInt(lead.value.n)} videos${lead.bandPts != null ? ` · band ±${Math.round(lead.bandPts * 10) / 10}` : ''}`,
@@ -1292,6 +1390,7 @@ function buildCover(a: {
   if (overview.bar.videos != null) {
     stats.push({
       token: 'month_videos',
+      kind: 'figure',
       value: fmtInt(overview.bar.videos),
       label: `videos in ${longMonth(overview.month)}`,
       caption: overview.bar.line,
@@ -1312,6 +1411,7 @@ function buildCover(a: {
   // narrower of the two.
   stats.push({
     token: 'readings',
+    kind: 'figure',
     value: String(a.readings),
     label: 'monthly readings so far',
     caption: readingCounter(a.readings),
@@ -1327,7 +1427,7 @@ function buildCover(a: {
       monthOutside,
     }),
     figures,
-    stats,
+    stats: stats.slice(0, 3),
     // A DAY, NOT A MONTH. The first cut printed "as at Sep 2026", which is the
     // month the reading is OF; the stamp is the day the reading was TAKEN, and
     // on a still-filling quarter those are different facts about one artefact.
