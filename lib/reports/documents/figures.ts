@@ -123,7 +123,14 @@ export function switchingFigure(input: SwitchingInput): SwitchingFigure | null {
   // BELOW THE FLOOR IT REFUSES AND SAYS HOW MANY IT HAD. `bandVerdict` with no
   // baseline already answers `too_little_data`; the floor is checked here so a
   // pool of 54 does not get a verdict object that looks like an answer.
-  const clears = pool >= floor.minN && (floor.minK == null || toward.k >= floor.minK)
+  // TWO FLOORS, AND A READER CAN DO THE SUBTRACTION. `SHARE_BAND` is
+  // `{ minN: 100, minK: 10 }` and either arm can be the one that bites: a pool
+  // of 124 with 4 toward clears n and fails k. Saying "too few to compare: 124
+  // videos where a banded reading needs 100" about that pool is a sentence
+  // that refutes itself on the page, so which floor bit is carried and said.
+  const clearsN = pool >= floor.minN
+  const clearsK = floor.minK == null || toward.k >= floor.minK
+  const clears = clearsN && clearsK
   const verdict = clears
     ? bandVerdict({
         objectKind: 'audience',
@@ -147,9 +154,13 @@ export function switchingFigure(input: SwitchingInput): SwitchingFigure | null {
   // have. Both are said, because a reader shown "3 of 54" and nothing else
   // cannot tell which of them they are looking at.
   const unreadParts: string[] = []
-  if (!clears) {
+  if (!clearsN) {
     unreadParts.push(
       `Too few to compare: ${fmtInt(pool)} ${pool === 1 ? 'video' : 'videos'} where a banded reading needs ${fmtInt(floor.minN)}.`,
+    )
+  } else if (!clearsK) {
+    unreadParts.push(
+      `Too few to compare: ${fmtInt(toward.k)} of ${fmtInt(pool)} leaned toward you where a banded reading needs ${fmtInt(floor.minK ?? 0)}.`,
     )
   }
   if (neither.k > 0) {

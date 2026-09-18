@@ -79,10 +79,15 @@ describe('switchingFigure', () => {
     expect(f?.verdict?.countedOver?.measure).toBe('videos')
   })
 
-  it('still refuses when the pool clears n but the toward count is under minK', () => {
+  it('still refuses when the pool clears n but the toward count is under minK, and says which floor bit', () => {
     const f = switching(pool({ toward: 4, away: 40, neither: 80 }))
     expect(f?.pool).toBe(124)
     expect(f?.verdict).toBeNull()
+    // "124 videos where a banded reading needs 100" about a pool of 124 is a
+    // sentence a reader can refute by subtraction. The k floor is what bit.
+    expect(f?.unread).toContain('4 of 124 leaned toward you')
+    expect(f?.unread).toContain('10')
+    expect(f?.unread).not.toContain('needs 100')
   })
 
   it('prints the pool in the line and names what nothing judged', () => {
