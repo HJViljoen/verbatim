@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState, useState, useTransition } from 'react'
+import { Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -68,7 +69,18 @@ export function TrackThisSubject({
   return (
     <>
       {move ? <DeclaredMove move={move} /> : null}
-      <Button type="button" size="sm" data-print-hide onClick={() => setOpen(true)}>
+      {/* THE MOCK'S PRIMARY PILL. The page's one green control (MASTER rule 1
+          — green does four jobs and "primary button" is one of them), at the
+          artboard's 32px height and full radius rather than the default
+          rounded rectangle every other button on the page is. */}
+      <Button
+        type="button"
+        size="sm"
+        data-print-hide
+        onClick={() => setOpen(true)}
+        className="h-8 flex-none gap-1.5 whitespace-nowrap rounded-full px-3.5 text-[12px] font-medium"
+      >
+        <Plus className="size-3.5" aria-hidden />
         Track this
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>

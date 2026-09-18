@@ -1,15 +1,18 @@
 import Link from 'next/link'
+import { CircleQuestionMark } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
+import { TileColumns } from '@/components/shell/page-grid'
 import { TrackThisSubject } from '@/components/subjects/track-this'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, monthName } from '@/lib/format'
 import type { Direction } from '@/lib/reading/bands'
+import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import { sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
+import { sideCaption, sideEyebrow, sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · One subject, in full — the hero (design §3 SU2, the mock's (a) header).
 //
@@ -22,6 +25,25 @@ import { sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/su
 // AND TWO THINGS A READER CAN DO. Track this declares a move (the button the
 // design makes primary); Ask about this opens the subject in Ask. Both are
 // app-only: a button in a PDF is a picture of a button.
+//
+// ---- what wave 2 changed, and why -------------------------------------------
+//
+// THE LEAD IS THE GAP, AND IT IS `gapLine` (D1). The mock's biggest sentence is
+// "Durability — you 31% · Freitag 44% · gap 13 points, narrowed from 19 in
+// June", and two halves of it are claims the product will not make: a
+// difference between two audiences is not a `Verdict` and takes its own band,
+// and "narrowed" is a direction over three readings that nothing here has
+// earned. `gapLine` prints both levels with both denominators and the banded
+// difference, and `gapBasisLine` prints the EARLIER gap as its own dated,
+// banded reading beside it — the mock's information, with the claim the mock
+// makes about it removed. On this month's n it reads "too few to compare",
+// which is the same refusal the badge one cell away prints, and that agreement
+// is the point.
+//
+// AND NO "flat, 3 months" (D5 / D11). `directionWord` returns `flat` when three
+// readings exist and disagree — that is "no direction was earned", not a word a
+// reader should be shown, and "flat" is not in this product's vocabulary at
+// all. `DirectionWord` prints `growing` and `fading` and nothing else.
 
 /**
  * The direction word, and the only node allowed to print one.
@@ -29,47 +51,83 @@ import { sideFigures, type SubjectSide, type SubjectsData } from '@/lib/pages/su
  * Earned by `directionWord` over three consecutive months in one regime, each
  * clearing both floors — never read off a single comparison. Marked `verdict`
  * so the copy contract can see there is a reading behind it (rule (c)).
+ *
+ * `flat` PRINTS NOTHING. It is `directionWord`'s answer for "three readings
+ * exist and do not agree", which is the absence of a direction rather than a
+ * direction; and the word itself is one the product retired (`MOVEMENT_WORDS`
+ * has no "flat", mock-gap §6 D11). The build printed "flat, 3 months" beside
+ * Freitag's "no clear change" — two non-answers, one of them dressed as a
+ * finding.
  */
 export function DirectionWord({ direction, mode = 'app' }: { direction: Direction | null; mode?: RenderMode }) {
-  if (!direction) return null
+  if (!direction || direction === 'flat') return null
   if (mode === 'email') {
     return <span data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>{direction}, 3 months</span>
   }
-  return <span data-copy="verdict" className="text-[11px] text-muted-foreground">{direction}, 3 months</span>
+  return (
+    <span data-copy="verdict" className="inline-block whitespace-nowrap rounded-full bg-inner px-2 py-0.5 text-[12px] font-medium text-muted-foreground">
+      {direction}, 3 months
+    </span>
+  )
 }
 
 /** One side's column: the level, its count, the change where one was drawn. */
-function Side({ side, mode }: { side: SubjectSide; mode: RenderMode }): ReactNode {
+function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }): ReactNode {
   const email = mode === 'email'
+  const eyebrow = sideEyebrow(side, brand)
+  const label = (
+    <span
+      className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}
+      style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+    >
+      {eyebrow}
+    </span>
+  )
   if (!side.observed || side.pct == null) {
     return (
-      <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { padding: '4px 0' } : undefined}>
-        <span className={email ? undefined : 'text-[11px] font-medium text-secondary-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>{side.label}</span>
+      <div className={email ? undefined : 'flex min-w-0 flex-col justify-center gap-1'} style={email ? { padding: '4px 0' } : undefined}>
+        {label}
         <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>{side.silence === 'no_reading' ? '— no reading yet' : '— not tracked'}</span>
       </div>
     )
   }
   return (
-    <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'} style={email ? { padding: '4px 0' } : undefined}>
-      <span className={email ? undefined : 'text-[11px] font-medium text-secondary-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>{side.label}</span>
-      <span data-copy="figure" className={email ? undefined : 'font-mono text-[20px] font-semibold tabular-nums tracking-[-0.02em]'} style={email ? { fontFamily: FONT.mono, fontSize: 20, fontWeight: 600, color: EMAIL.ink } : undefined}>
-        {fmtPct(side.pct)}
+    <div className={email ? undefined : 'flex min-w-0 flex-col justify-center gap-1'} style={email ? { padding: '4px 0' } : undefined}>
+      {label}
+      {/* THE FIGURE AND THE POPULATION IT IS A SHARE OF, ON ONE LINE. The
+          artboard's stat is ~24px mono against the build's 20px, and the unit
+          word beside it ("of your videos") is what stops the three columns
+          reading as three shares of one denominator. */}
+      <span className={email ? undefined : 'inline-flex items-baseline gap-1.5'}>
+        <span
+          data-copy="figure"
+          className={email ? undefined : 'font-mono text-[24px] font-semibold leading-none tracking-[-0.03em] tabular-nums'}
+          style={email ? { fontFamily: FONT.mono, fontSize: 20, fontWeight: 600, color: EMAIL.ink } : { color: side.kind === 'you' ? 'var(--you)' : undefined }}
+        >
+          {fmtPct(side.pct)}
+        </span>{' '}
+        <span className={email ? undefined : 'text-[12px] font-medium text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>
+          {sideCaption(side)}
+        </span>
       </span>
-      <span data-copy="level" className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}>
+      <span data-copy="level" className={email ? undefined : 'font-mono text-[11px] tabular-nums text-muted-foreground decoration-dotted underline-offset-[3px] [text-decoration-line:underline]'} style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}>
         {fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)} videos
       </span>
-      <span className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
+      <span className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
         <BlockMovement verdict={side.verdict} unit="pts" mode={mode} />
         <DirectionWord direction={side.direction} mode={mode} />
+        {side.previous && side.previous.pct != null ? (
+          <span className={email ? undefined : 'whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground/80'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
+            {monthName(side.previous.month).split(' ')[0]} <span data-copy="figure">{fmtPct(side.previous.pct)}</span>
+          </span>
+        ) : null}
       </span>
-      {side.previous && side.previous.pct != null ? (
-        <span className={email ? undefined : 'text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}>
-          {monthName(side.previous.month).split(' ')[0]} <span data-copy="figure">{fmtPct(side.previous.pct)}</span>
-        </span>
-      ) : null}
     </div>
   )
 }
+
+/** The mock's secondary pill — a control, not a 12.5px text link. */
+const PILL = 'inline-flex h-8 flex-none items-center gap-1.5 whitespace-nowrap rounded-full bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner'
 
 export const subjectsSubject: Block<SubjectsData> = {
   key: 'subjects.subject',
@@ -93,14 +151,64 @@ export const subjectsSubject: Block<SubjectsData> = {
     // a blank composer. A subject id is not a question either; the question is.
     const href = `${ctx.appUrl}/dashboard/agent?ask=${encodeURIComponent(`How are we seen on ${pane.name}?`)}`
     const meta = `named ${fullDate(pane.namedAt)} · ${fmtInt(pane.index)} of ${fmtInt(pane.of)} subjects`
+    // THE EARLIER GAP PRINTS ONLY WHERE ONE OF THE TWO IS AN ANSWER. Where
+    // both refuse, "too few to compare. Too few to compare in August." is the
+    // same non-answer twice, and a sentence that repeats itself reads as a
+    // rendering fault rather than as a refusal.
+    const answered = (state: string) => state === 'apart' || state === 'level'
+    const basis = pane.gap && (answered(pane.gap.state) || answered(pane.gap.basis?.state ?? ''))
+      ? gapBasisLine(pane.gap)
+      : null
+    const lead = pane.gap ? `${pane.name} — ${gapLine(pane.gap)}${basis ? `; ${basis}` : ''}.` : null
+
+    const behind = pane.behind
+      ? mode === 'print'
+        ? null
+        : (
+          <Link href={`${ctx.appUrl}${pane.behind.href}`} className="font-medium text-foreground decoration-dotted underline-offset-[3px] [text-decoration-line:underline] hover:decoration-solid">
+            the <span data-copy="figure">{fmtInt(pane.behind.videos)}</span> videos behind your figure →
+          </Link>
+        )
+      : null
 
     return (
-      <BlockFrame title={pane.name} question={subjectsSubject.question} mode={mode} meta={meta}>
+      <BlockFrame
+        title={pane.name}
+        question={subjectsSubject.question}
+        mode={mode}
+        meta={meta}
+        heading={mode !== 'email'}
+        // THE LEAD IS A FIGURE NODE, NOT PROSE. Every digit in it is code's —
+        // `gapLine` composes it from the two sides' own k and n — so rule (a)
+        // is satisfied by provenance rather than by tokenisation.
+        lead={lead ? <span data-copy="level">{lead}</span> : undefined}
+        actions={mode === 'app' ? (
+          <>
+            <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} />
+            <Link href={href} className={PILL}>
+              <CircleQuestionMark className="size-3.5" aria-hidden />
+              Ask about this
+            </Link>
+          </>
+        ) : undefined}
+        footer={behind}
+        // The mock's right-hand note: the category's last three readings, so
+        // the reader can see the series the chart below draws without reading
+        // the chart. Levels, dated, in the category's own n.
+        footerNote={pane.trail}
+      >
         {pane.notRecorded ? <BlockEmpty mode={mode}>{pane.notRecorded}</BlockEmpty> : null}
 
-        <div className={email ? undefined : 'grid grid-cols-1 gap-4 sm:grid-cols-3'}>
-          {pane.sides.map((s) => <Side key={s.audience} side={s} mode={mode} />)}
-        </div>
+        {email ? (
+          <div>{pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}</div>
+        ) : (
+          // THE MOCK'S VERTICAL HAIRLINES, from the primitive that owns them
+          // (P0 item 3). Three hand-rolled `grid-cols-3`s is how a product ends
+          // up with four gutters.
+          <TileColumns of={3} className="gap-x-4 [&>*]:px-4 [&>*:first-child]:pl-0 [&>*:last-child]:pr-0">
+            {pane.sides.map((s) => <Side key={s.audience} side={s} brand={data.brand} mode={mode} />)}
+          </TileColumns>
+        )}
 
         {pane.axisNote ? (
           <p
@@ -118,20 +226,6 @@ export const subjectsSubject: Block<SubjectsData> = {
           >
             We are still checking how often we get this subject right, so treat these as provisional.
           </p>
-        ) : null}
-
-        {mode === 'app' ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <TrackThisSubject subjectId={pane.id} subjectName={pane.name} move={pane.move} />
-            <Link href={href} className="text-[12.5px] font-medium text-foreground underline-offset-2 hover:underline">
-              Ask about this →
-            </Link>
-            {pane.behind ? (
-              <Link href={`${ctx.appUrl}${pane.behind.href}`} className="text-[12px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                the <span data-copy="figure">{fmtInt(pane.behind.videos)}</span> videos behind your figure →
-              </Link>
-            ) : null}
-          </div>
         ) : null}
       </BlockFrame>
     )

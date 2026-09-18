@@ -4,10 +4,11 @@ import type { Block } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { calendarBandsFor, calendarRulesFor, seriesToCalendar } from '@/lib/charts/from-series'
-import type { CalendarSeries } from '@/lib/charts/calendar'
+import { backReadBandLabel, type CalendarSeries } from '@/lib/charts/calendar'
 import { EMAIL } from '@/lib/email/theme'
-import { fmtPct } from '@/lib/format'
-import type { SubjectsData } from '@/lib/pages/subjects'
+import { fmtPct, monthName } from '@/lib/format'
+import { GAP_WORDS } from '@/lib/reading/gap'
+import { sideLegend, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU2 · the monthly line (design §3 SU2 "you, each rival and the category by
 // month as lines with the counts"; the mock's (a)).
@@ -23,6 +24,14 @@ import type { SubjectsData } from '@/lib/pages/subjects'
 // re-grouping draw ONE dated rule each across the whole chart however many
 // lines carry them, and a run of back-read months is one shaded band rather
 // than one caveat per bar (lib/charts/from-series.ts).
+//
+// AND THE "gap 13 pts" BRACKET IS THE BANDED GAP OR NOTHING (D1). The artboard
+// draws a dashed bracket between your line and the rival's with the distance
+// beside it. That distance is a reading with its own floors, so the chart is
+// handed the WORD the gap earned — never a subtraction of two plotted values,
+// which would print a magnitude one tile above refuses. On this month's n the
+// gap is `too_little_data` and the bracket does not appear, which is the same
+// answer the hero's own lead gives.
 
 export const subjectsLine: Block<SubjectsData> = {
   key: 'subjects.line',
@@ -40,26 +49,69 @@ export const subjectsLine: Block<SubjectsData> = {
       )
     }
 
+    // THE KEY IS QUALIFIED; THE END LABEL IS NOT. "Category — no brand 24.5% of
+    // 1,388" does not fit the plot's right-hand gutter and lost its
+    // denominator to the clip, which is the one part of an end label that may
+    // not go missing.
+    const legendOf = new Map(pane.sides.map((s) => [s.audience, sideLegend(s, data.brand)]))
     const lines: CalendarSeries[] = pane.sides
       .map((side) => {
         const series = pane.series.find((s) => s.audience === side.audience)
         if (!series) return null
-        return seriesToCalendar(series, { color: side.color, label: side.label })
+        return seriesToCalendar(series, {
+          color: side.color,
+          label: side.label,
+          legendLabel: legendOf.get(side.audience) ?? side.label,
+        })
       })
       .filter((s): s is CalendarSeries => s != null)
 
-    const href = `${ctx.appUrl}/dashboard/voice`
+    const href = `${ctx.appUrl}/dashboard/subjects`
     const footer = mode === 'email'
       ? <a href={href} style={{ color: EMAIL.ink }}>Compare another subject →</a>
       : <Link href={href} className="hover:underline">Compare another subject →</Link>
+
+    // The mock's axis meta: the months the axis actually spans, named, rather
+    // than a count of them — "Apr → Sep 2026" tells a reader which six.
+    const first = data.axis[0]
+    const last = data.axis[data.axis.length - 1]
+    const span = data.axis.length === 0
+      ? null
+      : data.axis.length === 1
+        ? monthName(last)
+        : `${monthName(first).split(' ')[0]} → ${monthName(last)}`
+
+    // The back-read band's own words, in the footer's mono slot — the artboard's
+    // "Apr–Jun read at setup". The band is still shaded on the axis; this is
+    // the sentence that says what the shading means without a hover.
+    const bands = calendarBandsFor(pane.series)
+    const backRead = bands.length === 1
+      ? `${bands[0].months.map((m) => monthName(m).split(' ')[0]).filter((_, i, a) => i === 0 || i === a.length - 1).join('–')} read at setup`
+      : bands.length > 1
+        ? backReadBandLabel(bands.reduce((n, b) => n + b.months.length, 0))
+        : null
+
+    // D1 · the bracket. `apart` is the only state that carries a magnitude —
+    // `gapLine` prints one only there and so does this, for the same reason.
+    const gap = pane.gap
+    const you = pane.sides.find((s) => s.kind === 'you')
+    const rival = pane.sides.find((s) => s.audience === gap?.b.audience)
+    const annotate = gap && gap.state === 'apart' && gap.gapPts != null && you && rival
+      ? {
+          from: you.label,
+          to: rival.label,
+          label: `${GAP_WORDS.apart} ${Math.abs(Math.round(gap.gapPts * 10) / 10)} pts`,
+        }
+      : null
 
     return (
       <BlockFrame
         title={`Share of videos where ${pane.name.toLowerCase()} came up`}
         question={subjectsLine.question}
         mode={mode}
-        meta={`monthly · ${data.axis.length} month${data.axis.length === 1 ? '' : 's'}`}
+        meta={span ? `monthly · ${span}` : 'monthly'}
         footer={footer}
+        footerNote={backRead}
       >
         {lines.length > 0 ? (
           <BlockCalendar
@@ -67,7 +119,8 @@ export const subjectsLine: Block<SubjectsData> = {
             axis={data.axis}
             series={lines}
             rules={calendarRulesFor(pane.series)}
-            bands={calendarBandsFor(pane.series)}
+            bands={bands}
+            annotate={annotate}
             format={(v) => fmtPct(v)}
             label={`${pane.name}, share of each audience's videos, month by month`}
             caption={pane.axisNote ?? undefined}
