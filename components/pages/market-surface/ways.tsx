@@ -1,80 +1,64 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
-import { fmtInt } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
-import type { ClaimRow, MarketSurfaceData, WayRow } from '@/lib/pages/market-surface'
+import type { MarketSurfaceData, WayRow } from '@/lib/pages/market-surface'
 import { AcceptAdviceButton } from './accept-button'
 
-// MK5 · How a move is made (design §3 MK5).
+// MK5 · How a move is made (design §3 MK5; ported to the artboard, Block D
+// wave 2).
 //
-// FIVE WAYS, TWO OF THEM LIVE, AND THE OTHER THREE SAY WHY NOT. The design
-// describes this section as "the explanation and the buttons", holding no
-// numbers except the per-month verdict on a registered claim — which is the one
-// number it cannot produce, so it prints none.
+// FIVE BUTTONS IN A ROW, NOT FIVE PARAGRAPHS. The artboard draws this as one
+// full-width strip of 44px controls in a fixed order — Confirm this month's
+// card · Track this · Accept advice · Register a claim · Upload a plan — and
+// that order is the argument: the card first, because it is the one a client
+// meets already filled in. The block was five stacked rows of title, prose and
+// an unlock sentence, at four times the height, with the accept button rendered
+// separately below the list it belongs in.
 //
-// "Track this" is live but NOT HERE: it needs a subject or a theme in hand and
-// Market has neither, so its one click is the link to the surface that does.
-// "Accept this advice" is the button on this page that writes, and it writes a
-// move against the ledger's oldest undecided row.
+// A WAY THAT DOES NOT WORK KEEPS ITS SENTENCE INSIDE ITS OWN SLOT. The artboard
+// draws five live buttons; two of these five write nothing yet, and a control
+// that looks pressable and is not is worse than a control that says why. So a
+// dead way renders as a disabled-looking slot with its unlock underneath it, in
+// the same cell — never as a live button, and never dropped, because the count
+// of ways in is part of what this block tells a reader.
 //
-// THE CLAIMS ARE A CURRENT READING, NOT A VERDICT PER MONTH. Measured on
-// production, 6 of the 8 say-vs-hear claims that have ever recurred have
-// already flipped their verdict — the same coin-flip MK6 is withheld for, on
-// the same data. MK6's rule is "only when a verdict has held for two
-// consecutive updates" and MK5 carries no such rule in the design, so this
-// block prints the latest update's reading and says that is what it is.
+// "Track this" IS LIVE BUT NOT HERE: it needs a subject or a theme in hand and
+// Market has neither, so its one click is a link to the surface that does.
+// "Accept this advice" is the one button on this page that writes, and it
+// writes a move against the ledger's oldest undecided row — its own slot now,
+// where it belongs, with the row it would act on named beneath it.
+//
+// THE CLAIMS MOVED OUT (`market.sayhear`). They were a tail on the bottom of
+// this block under this block's heading; they are a different question and the
+// artboard gives them a card.
+
+/** The artboard's button shape: 44px, rounded 6, green for the one primary. */
+const BUTTON = 'inline-flex h-[44px] items-center gap-2 rounded-md px-4 text-[13px] font-medium'
+const LIVE = `${BUTTON} bg-tile text-foreground ring-1 ring-border transition-colors hover:bg-inner`
+const DEAD = `${BUTTON} bg-tile text-muted-foreground ring-1 ring-border`
 
 function Way({ way, mode, appUrl }: { way: WayRow; mode: RenderMode; appUrl: string }) {
   const email = mode === 'email'
-  const title = way.href && !email
-    ? <Link href={`${appUrl}${way.href}`} className="hover:underline">{way.title} →</Link>
-    : way.href && email
-      ? <a href={`${appUrl}${way.href}`} style={{ color: EMAIL.ink }}>{way.title} →</a>
-      : way.title
-
   if (email) {
     return (
       <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>{title}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 12.5, fontWeight: 600, color: EMAIL.ink }}>
+          {way.href ? <a href={`${appUrl}${way.href}`} style={{ color: EMAIL.ink }}>{way.title} →</a> : way.title}
+        </div>
         <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{way.how}</div>
         {way.unlock ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 }}>{way.unlock}</div> : null}
       </div>
     )
   }
-
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 pt-2">
-      <p className="m-0 text-[12.5px] font-medium">{title}</p>
-      <p className="m-0 text-[12px] text-secondary-foreground">{way.how}</p>
-      {way.unlock ? <p className="m-0 text-[11.5px] text-muted-foreground">{way.unlock}</p> : null}
-    </div>
-  )
-}
-
-function Claim({ claim, mode }: { claim: ClaimRow; mode: RenderMode }) {
-  const email = mode === 'email'
-  const verdict = email
-    ? <span style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, color: EMAIL.ink2 }}>{claim.verdictLabel}</span>
-    : <span className="rounded-full bg-inner px-2 py-px text-[10.5px] font-medium text-secondary-foreground">{claim.verdictLabel}</span>
-
-  if (email) {
-    return (
-      <div style={{ padding: '5px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
-        <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink }}>{claim.youSay}</div>
-        <div style={{ marginTop: 2 }}>{verdict}</div>
-        {claim.theySay ? <div data-copy="stored" data-slot="pass_d_a_say_vs_hear" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, marginTop: 2 }}>{claim.theySay}</div> : null}
-      </div>
-    )
-  }
-
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5 border-t border-border/70 pt-2">
-      <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[12.5px]">{claim.youSay}</p>
-      <span className="flex flex-wrap items-center gap-2">{verdict}</span>
-      {claim.theySay ? <p data-copy="stored" data-slot="pass_d_a_say_vs_hear" className="m-0 text-[12px] text-secondary-foreground">{claim.theySay}</p> : null}
-    </div>
+    <span className="flex min-w-0 flex-col gap-1">
+      {way.href && mode === 'app'
+        ? <Link href={`${appUrl}${way.href}`} className={LIVE} title={way.how}>{way.title}</Link>
+        : <span className={way.live ? LIVE : DEAD} title={way.how}>{way.title}</span>}
+      {way.unlock ? <span className="max-w-[240px] text-[11px] leading-[1.35] text-muted-foreground">{way.unlock}</span> : null}
+    </span>
   )
 }
 
@@ -93,35 +77,31 @@ export const marketWays: Block<MarketSurfaceData> = {
         title={marketWays.title}
         question={marketWays.question}
         mode={mode}
-        meta={`${fmtInt(live)} of ${fmtInt(w.ways.length)} ways work today`}
+        // THE ARTBOARD'S META, and the count it leaves out. "five ways in · a
+        // move is scored from the update after it" is true and says nothing
+        // about how many of the five a reader can actually use today, which on
+        // this page is the more useful half.
+        meta={`five ways in · ${live} of ${w.ways.length} work today · a move is scored from the update after it`}
       >
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
-          {w.ways.map((way) => <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />)}
-        </div>
-        {/* THE BUTTON IS APP-ONLY. On paper and in an email the way above says
-            what it does; a control in an export is a control nobody can press. */}
-        {mode === 'app' && w.acceptable ? (
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className="m-0 text-[12px] text-secondary-foreground">The oldest piece of advice you have not decided on: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span></p>
-            <AcceptAdviceButton lineageId={w.acceptable.lineageId} title={w.acceptable.title} />
+        {email ? (
+          <div>{w.ways.map((way) => <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />)}</div>
+        ) : (
+          <div className="flex flex-wrap items-start gap-2.5">
+            {w.ways.map((way) => (
+              way.key === 'advice' && mode === 'app' && w.acceptable ? (
+                // THE ONE BUTTON ON THIS PAGE THAT WRITES, in its own slot in
+                // the artboard's order, with the row it would act on named
+                // under it. It used to be rendered below the whole list.
+                <span key={way.key} className="flex min-w-0 flex-col gap-1">
+                  <AcceptAdviceButton lineageId={w.acceptable.lineageId} title={w.acceptable.title} />
+                  <span className="max-w-[240px] text-[11px] leading-[1.35] text-muted-foreground">
+                    The oldest you have not decided on: <span data-copy="stored" data-slot="pass_d_b_recommendation">{w.acceptable.title}</span>
+                  </span>
+                </span>
+              ) : <Way key={way.key} way={way} mode={mode} appUrl={ctx.appUrl} />
+            ))}
           </div>
-        ) : null}
-
-        <p
-          className={email ? undefined : 'm-0 text-[12px]'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginTop: 8 } : undefined}
-        >
-          {w.claimsLine}
-        </p>
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
-          {w.claims.map((claim) => <Claim key={claim.id} claim={claim} mode={mode} />)}
-        </div>
-        <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}
-        >
-          {w.claimsCaveat}
-        </p>
+        )}
       </BlockFrame>
     )
   },

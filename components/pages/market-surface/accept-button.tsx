@@ -13,9 +13,12 @@ import { acceptAdvice } from '@/lib/actions/accept-advice'
 // reinserts every recommendation each update, so the id in this button's props
 // is gone by Sunday and the lineage is not.
 //
-// Quiet chrome until it is pressed (MASTER rule 1): the primary action on this
-// page is reading the ledger, not filing a decision, and a green button per row
-// would be the page shouting at the client to click something.
+// ONE GREEN ON THE PAGE, AND THIS IS IT (MASTER rule 1, and the artboard's own
+// button row). Green is for a page's primary action; the artboard spends it on
+// "Confirm this month's card", which is the press that is not built, so on the
+// built page the one control that actually writes is this one. It sits in its
+// own slot in "How a move is made", at the artboard's 44px, and there is still
+// no green button per ledger row.
 
 export function AcceptAdviceButton({ lineageId, title }: { lineageId: string; title: string }) {
   const [pending, start] = useTransition()
@@ -32,7 +35,7 @@ export function AcceptAdviceButton({ lineageId, title }: { lineageId: string; ti
         data-print-hide
         disabled={pending}
         onClick={() => start(async () => setResult(await acceptAdvice(lineageId, title)))}
-        className="inline-flex h-[26px] cursor-pointer items-center rounded-full bg-primary px-3 text-[12px] font-medium text-primary-foreground transition-colors hover:bg-accent-foreground disabled:opacity-60"
+        className="inline-flex h-[44px] cursor-pointer items-center gap-2 rounded-md bg-primary px-4 text-[13px] font-semibold text-primary-foreground transition-colors hover:bg-accent-foreground disabled:opacity-60"
       >
         {pending ? 'Saving…' : 'Accept this advice'}
       </button>

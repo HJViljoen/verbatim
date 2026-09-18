@@ -9,7 +9,10 @@ import { MOVES_UNLOCK } from '@/lib/pages/overview'
 import { MARKET_BLOCKS } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
+import { marketCard } from './card'
 import { marketMoves } from './moves'
+import { marketPlans } from './plans'
+import { marketSayHear } from './sayhear'
 import { marketWays } from './ways'
 import { marketUnlocks } from './unlocks'
 import { deepLinkFixture, firstUpdateFixture, marketFixture, unrecordedFixture } from './fixture'
@@ -312,13 +315,14 @@ describe('MK4 · declared moves', () => {
 describe('MK5 · how a move is made', () => {
   // THREE OF FIVE SINCE D4 — "Upload a plan" was named as not built while the
   // feature ran on Ask; Market now reads the result back and the row links to
-  // where a document is uploaded.
+  // where a document is uploaded. The ARTBOARD PORT (wave 2) turned the five
+  // stacked paragraphs into the artboard's row of 44px controls, and moved the
+  // say-vs-hear claims out into their own card (`market.sayhear`).
   it('lists five ways and says how many work today', () => {
     const text = renderText(marketWays.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('3 of 5 ways work today')
-    expect(text).toContain('Confirm this month’s card')
+    expect(text).toContain('five ways in · 3 of 5 work today')
+    expect(text).toContain('Confirm this month\u2019s card')
     expect(text).toContain('Track this')
-    expect(text).toContain('Accept a piece of advice')
     expect(text).toContain('Register a claim you make')
     expect(text).toContain('Upload a plan')
   })
@@ -328,17 +332,112 @@ describe('MK5 · how a move is made', () => {
     expect(markup).toContain('/dashboard/subjects')
   })
 
-  it('draws the accept button in the app and nowhere else', () => {
-    expect(render(marketWays.render(marketFixture(), 'app', ctx))).toContain('Accept this advice')
+  it('draws the accept button in the app and nowhere else, in its own slot', () => {
+    const app = render(marketWays.render(marketFixture(), 'app', ctx))
+    expect(app).toContain('Accept this advice')
+    // The row it would act on is named beneath the button rather than in a
+    // paragraph under the whole list.
+    expect(renderText(app)).toContain('The oldest you have not decided on')
     expect(render(marketWays.render(marketFixture(), 'print', ctx))).not.toContain('<button')
     expect(render(marketWays.render(marketFixture(), 'email', ctx))).not.toContain('<button')
   })
 
-  it('says the claim verdicts are a current reading, not a verdict per month', () => {
-    const text = renderText(marketWays.render(marketFixture(), 'app', ctx))
+  it('keeps a way that does not work as a slot with its unlock, never a live control', () => {
+    const markup = render(marketWays.render(marketFixture(), 'app', ctx))
+    expect(renderText(markup)).toContain('Registering a claim')
+    // "Register a claim you make" is not live, so it is not a link.
+    expect(markup).not.toMatch(/<a[^>]*>\s*Register a claim you make/)
+  })
+})
+
+describe('MK5b · say vs hear', () => {
+  it('is its own card, with the verdicts and the hold they do not have', () => {
+    const text = renderText(marketSayHear.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('Say vs hear')
+    expect(text).toContain('3 claims · your audience')
     expect(text).toContain('Pushed back')
     expect(text).toContain('how each claim reads in the latest update')
     expect(text).toContain('held across two updates')
+  })
+
+  it('prints no per-claim count, because `SayVsHearEntry` carries none', () => {
+    // The artboard writes "echoed 14 videos · pushed back 3". The schema has no
+    // count field and lib/pipeline is not this package's to change, so the
+    // card prints the verdict and says what the verdict is worth.
+    const text = renderText(marketSayHear.render(marketFixture(), 'app', ctx))
+    expect(text).not.toMatch(/echoed \d/)
+    expect(text).not.toMatch(/pushed back \d/)
+  })
+
+  it('says so when nothing of the client\u2019s own was read this update', () => {
+    expect(marketSayHear.emptyState(unrecordedFixture())).toContain('Nothing you have said in your own posts')
+  })
+})
+
+describe('MK3 · this month\u2019s card', () => {
+  it('counts the posts, the floor and the claims, each against the population it is a share of', () => {
+    const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('posts published in September')
+    expect(text).toContain('cleared the comment floor')
+    expect(text).toContain('Claims you made')
+    // The subject rows denominate on what was READ, not on what was published.
+    expect(text).toMatch(/Counted over posts/)
+  })
+
+  it('names the press rather than drawing a button nobody can press', () => {
+    const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
+    expect(text).not.toContain('Yes, count this as a move')
+    expect(text).toContain(MOVES_UNLOCK)
+  })
+
+  it('prints the two movement rows as verdicts, with no magnitude beside a refusal', () => {
+    const markup = render(marketCard.render(marketFixture(), 'app', ctx))
+    // D2: a verdict carries the change and the band together or neither.
+    expect(markup).toContain('data-copy="verdict"')
+    expect(renderText(markup)).not.toMatch(/too few to compare\s*[\u25b2\u25bc]/)
+  })
+})
+
+describe('MK6 · plans re-checked', () => {
+  it('prints the three verdict counts against the claims they partition', () => {
+    const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
+    // The DOCUMENT'S OWN NAME leads, not a model-written title of it.
+    expect(text).toContain('summer-2627-brief.pdf')
+    expect(text).toContain('Supported 1 of 3')
+    expect(text).toContain('Contradicted 1 of 3')
+    expect(text).toContain('Untested 1 of 3')
+  })
+
+  it('dates the chips by the re-reading, and never claims a verdict was held', () => {
+    const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('as re-read on 13 Sep')
+    expect(text).not.toMatch(/held \d+ updates?/)
+  })
+
+  it('says what a claim count is a count of, and what the floor is', () => {
+    const text = renderText(marketPlans.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('not out of one month')
+    expect(text).toContain('nothing here is held')
+  })
+
+  it('names its own absence for a workspace with no plan', () => {
+    expect(marketPlans.emptyState(unrecordedFixture())).toContain('No plan has been checked')
+  })
+})
+
+describe('MK4 · a move, read', () => {
+  it('draws the chart only where three readings stand behind it', () => {
+    const markup = render(marketMoves.render(marketFixture(), 'app', ctx))
+    // The fixture's move has three months in one regime, so the line is drawn.
+    expect(markup).toContain('<svg')
+    expect(renderText(markup)).toContain('You · 10 of 84 videos')
+    expect(renderText(markup)).toContain('Freitag · 41 of 142 videos')
+  })
+
+  it('prints the control beside the move and never subtracted from it', () => {
+    const text = renderText(marketMoves.render(marketFixture(), 'app', ctx))
+    expect(text).toContain('Beside it, the category')
+    expect(text).not.toMatch(/net of|adjusted for|minus the category/i)
   })
 })
 
