@@ -376,3 +376,50 @@ export function refusedFixture(over: Partial<AgentThreadData> = {}): AgentThread
   }
 }
 
+
+/**
+ * A thread with a FOLLOW-UP on it — the state the footer used to get wrong.
+ *
+ * Turn 1 rests on ONE grounded point, and it is the second theme
+ * (`REGISTRY_ID_2`, k = 194), so any figure this turn prints that reads 130 is
+ * turn 0's. `answerFindings` keys findings by turn (`findingKey`), so the
+ * measurement carries `1:G2` as well as turn 0's two: one measurement per
+ * thread, indexed by turn, which is exactly the shape a renderer has to resolve
+ * rather than index into.
+ */
+export function followUpFixture(over: Partial<AgentThreadData> = {}): AgentThreadData {
+  const base = agentFixture()
+  const followUp = turn(
+    'Recycled materials is what your own audience raises; the category has not moved on it.',
+    'The recycled-sails claim is asked about rather than repeated back.',
+  )
+  return {
+    ...base,
+    turns: [
+      base.turns[0],
+      {
+        ...followUp,
+        question: 'And what about the recycled sails on their own?',
+        askedAt: '2026-09-28T09:10:00.000Z',
+        answer: followUp.answer
+          ? { ...followUp.answer, grounded: followUp.answer.grounded.filter((g) => g.id === 'G2') }
+          : null,
+      },
+    ],
+    measure: askMeasure({
+      ...measureAnswer({
+        findings: [
+          { findingId: '0:G1', registryIds: [REGISTRY_ID] },
+          { findingId: '0:G2', registryIds: [REGISTRY_ID_2] },
+          { findingId: '1:G2', registryIds: [REGISTRY_ID_2] },
+        ],
+        series: [CATEGORY, OWN, CATEGORY_2, OWN_2],
+        month: MONTH,
+        directionWords: true,
+        ownAudience: CLIENT_AUDIENCE,
+        hasJudgement: true,
+      }),
+    }),
+    ...over,
+  }
+}

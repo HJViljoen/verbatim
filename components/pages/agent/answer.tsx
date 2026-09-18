@@ -164,6 +164,28 @@ function FindingChart({ f }: { f: FindingMeasure }) {
   )
 }
 
+/**
+ * The findings THIS TURN produced, in the turn's own order.
+ *
+ * ONE MEASUREMENT PER THREAD, INDEXED BY TURN. `AnswerMeasure.findings` holds
+ * the whole thread's findings and `answerFindings` emits them in turn order
+ * (`['0:G1','0:G2','1:G1', …]`), so `findings[0]` is turn 0's first grounded
+ * point on EVERY turn. The footer read it directly and printed the first
+ * answer's k under the second answer's prose — a counted figure under an answer
+ * that did not produce it, on the one surface whose whole argument is that
+ * every figure on it was counted for the answer it sits under. `Finding` has
+ * always resolved by `findingKey`; this is that resolution, for the tile.
+ */
+function turnFindings(
+  turn: Turn,
+  measure: AnswerMeasure | null,
+  turnIndex: number,
+): FindingMeasure[] {
+  return (turn.answer?.grounded ?? [])
+    .map((p) => measure?.findings.find((x) => x.findingId === findingKey(turnIndex, p.id)))
+    .filter((f): f is FindingMeasure => Boolean(f))
+}
+
 /** One grounded point: its number, the model's sentence, the measurement under
  *  it and — where three readings earned one — the line beside it. */
 function Finding({
@@ -331,12 +353,21 @@ function Judgement({
  * `GroundedPoint.conversationCount`, which is the agent's retrieval count and
  * has no denominator.
  */
-function AnswerFooter({ measure }: { measure: AnswerMeasure | null }) {
-  const f = measure?.findings[0]
+function AnswerFooter({ f }: { f: FindingMeasure | null }) {
   if (!f) return null
   return (
     <>
-      <Link href={`/dashboard/voice?theme=${encodeURIComponent(f.verdict?.objectId ?? '')}`} className="hover:underline">
+      {/* THE AUDIENCE TRAVELS WITH THE FIGURE. The k is the audience's own —
+          the category's, usually — and Voice picks its own audience when it is
+          not told one (`pickAudience` defaults to `industry-other`, which is
+          why this read right by accident). The HORIZON deliberately does not
+          travel: Voice's horizons are rolling windows and this figure is a
+          calendar month, so pinning one would be a claim that the two are the
+          same period. The footer note beside this names the month instead. */}
+      <Link
+        href={`/dashboard/voice?theme=${encodeURIComponent(f.verdict?.objectId ?? '')}&audience=${encodeURIComponent(f.audience)}`}
+        className="hover:underline"
+      >
         Open the <span data-copy="figure">{fmtInt(f.value.k)}</span> videos behind this →
       </Link>
     </>
@@ -372,7 +403,10 @@ export function AnswerTile({
   row?: number
 }) {
   const answer = turn.answer
-  const f = measure?.findings[0]
+  // THIS TURN's best-evidenced finding, never the thread's first — see
+  // `turnFindings`. A turn that measured nothing prints no footer rather than
+  // another turn's figure.
+  const f = turnFindings(turn, measure, turnIndex)[0] ?? null
   return (
     <Tile
       col={12}
@@ -380,7 +414,7 @@ export function AnswerTile({
       eyebrow={turnIndex === 0 ? 'The answer' : 'The follow-up'}
       meta={answeredMeta(turn) ?? undefined}
       exportKey={`agent.answer:${turnIndex}`}
-      footer={<AnswerFooter measure={measure} />}
+      footer={<AnswerFooter f={f} />}
       footerNote={f ? `${f.audienceLabel.toLowerCase()} · ${longMonth(measure?.month ?? '')}` : undefined}
     >
       {/* The question, under a mono eyebrow — the artboard's device, and the

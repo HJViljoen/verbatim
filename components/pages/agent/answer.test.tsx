@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { AnswerTile } from './answer'
-import { agentFixture, refusedFixture } from './fixture'
+import { agentFixture, followUpFixture, refusedFixture } from './fixture'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
@@ -154,5 +154,49 @@ describe('the tile’s chrome', () => {
   it('reports no contract violation for either state', () => {
     expect(copyViolations(tile(measured))).toEqual([])
     expect(copyViolations(tile(refused))).toEqual([])
+  })
+})
+
+describe('a follow-up prints its own turn’s figure', () => {
+  // THE DEFECT THIS PINS. `AnswerMeasure.findings` is the whole thread's, in
+  // turn order, so `findings[0]` is turn 0's first grounded point on every
+  // turn — and the footer read it directly. A follow-up resting only on
+  // "Recycled materials" (k = 194) printed "Open the 130 videos behind this",
+  // which is the wet-commute finding's k from the answer above it.
+  const thread = followUpFixture()
+  const followUp = (
+    <AnswerTile
+      turn={thread.turns[1]}
+      turnIndex={1}
+      measure={thread.measure}
+      citations={thread.citations}
+      basis={thread.basis}
+    />
+  )
+
+  it('resolves the footer from the turn’s own grounded ids', () => {
+    const text = renderText(followUp)
+    expect(text).toContain('Open the 194 videos behind this')
+    expect(text).not.toContain('Open the 130 videos behind this')
+  })
+
+  it('wears the follow-up eyebrow and keeps the contract', () => {
+    expect(renderText(followUp)).toContain('The follow-up')
+    expect(copyViolations(followUp)).toEqual([])
+  })
+
+  it('prints no footer at all where the turn measured nothing', () => {
+    // A turn whose points rest on no theme the months carry: absent, not zero,
+    // and never the neighbouring turn's figure.
+    const unmeasured = (
+      <AnswerTile
+        turn={thread.turns[1]}
+        turnIndex={9}
+        measure={thread.measure}
+        citations={thread.citations}
+        basis={thread.basis}
+      />
+    )
+    expect(renderText(unmeasured)).not.toContain('Open the')
   })
 })
