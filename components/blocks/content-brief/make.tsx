@@ -165,7 +165,9 @@ function Reading({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode 
  * word a scanner needs.
  */
 const STOP_HEAD = 'What not to make'
-const STOP_LABEL = 'The advice you dismissed'
+/** The eyebrow, in the numeral's slot. Short because the chip beside it already
+ *  says "Dismissed" and the provenance line under it says when. */
+const STOP_LABEL = 'Stop'
 
 /**
  * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
@@ -195,7 +197,7 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
     <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
       <div className="flex items-center justify-between gap-2">
         {stop
-          ? <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</span>
+          ? <span className="font-mono text-[13px] font-medium uppercase tracking-[0.06em] text-negative">{STOP_LABEL}</span>
           : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
         <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
       </div>
@@ -343,7 +345,14 @@ export const contentMake: Block<MarketSurfaceData> = {
               and a full-width stop card under three columns runs off the
               sheet. Four columns keeps every card on the page at the mock's
               own density, and the stop card keeps its own eyebrow. */}
-          <div className={`grid min-w-0 gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+          {/* `items-start`, SO A CARD IS ITS OWN HEIGHT. Stretched, the row
+              was as tall as the fullest card and the thinnest — a row with no
+              reading, no quote and no argument yet — was a bordered box two
+              thirds white (design review 2's second half). The mock's three
+              cards are all full because the mock's three rows all carry
+              everything; ours do not, and a short card that ends where its
+              content ends says so. */}
+          <div className={`grid min-w-0 items-start gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
             {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
           </div>

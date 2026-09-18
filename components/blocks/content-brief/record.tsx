@@ -57,7 +57,10 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
     )
   }
   return (
-    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
+    /* `self-start`, THE ARTBOARD'S OWN `align-self:start`: the card ends where
+       its rows end instead of stretching to the height of the prose column
+       beside it and printing a third of a page of bordered white. */
+    <div className="flex flex-col gap-2.5 self-start rounded-md border border-border bg-tile px-4 py-3">
       <Eyebrow>This brief in numbers</Eyebrow>
       <dl className="m-0 grid grid-cols-[130px_1fr] gap-x-4 gap-y-2">
         {rows.map((r) => (

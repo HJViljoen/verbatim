@@ -345,7 +345,9 @@ describe('content.make — the mock’s page 2', () => {
     // headline is.
     expect(markup).toMatch(/<h3[^>]*>What not to make<\/h3>/)
     expect(markup).not.toMatch(/<h3[^>]*>Lead with price comparisons/)
-    expect(text).toContain('The advice you dismissed')
+    // And the chip beside the eyebrow still says what was decided.
+    expect(text).toContain('Stop')
+    expect(text).toContain('Dismissed')
   })
 
   // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
