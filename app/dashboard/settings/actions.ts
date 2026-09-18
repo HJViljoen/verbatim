@@ -36,17 +36,34 @@ const csv = (v: FormDataEntryValue | null) =>
  *
  * The rivals table posts ONE HIDDEN INPUT PER NAME (the artboard's table is the
  * list, and a name carrying a comma has to survive the round trip); the old
- * settings form posted one comma-separated box. Both shapes are read here, so
+ * settings form posted ONE comma-separated box. Both shapes are read here, so
  * an older client, a cached page or a hand-made POST cannot silently truncate
- * the list to its first name. De-duplicated case-insensitively, keeping the
- * spelling the reader typed first — `rivalSlug` folds them downstream anyway,
- * and two rows reading "Freitag" and "freitag" would each claim the other's
- * months.
+ * the list to its first name.
+ *
+ * THE COMMA SPLIT BELONGS TO THE OLD SHAPE ALONE, AND THE MARKER IS WHAT SAYS
+ * WHICH SHAPE THIS IS. A POST carrying `RIVALS_PRESENT` came from the table,
+ * where every name is its own value and a comma inside one is part of the name;
+ * a POST without it is the old box, where a comma is the separator and nothing
+ * else. Counting the values cannot tell them apart — a workspace tracking one
+ * rival posts exactly one value too, which is the case that matters, because
+ * `addRival` lets a comma through (2–80 characters). Split there and "Smith,
+ * Wesson & Co" saves as TWO rivals: two `competitor_keywords`, two
+ * `ensureRivals` identities, and two `competitor:<name>` audiences whose frozen
+ * months can never be re-keyed, because `audience` is in the primary key. The
+ * terms path already round-trips losslessly (`getAll(name).map(String)`); this
+ * is the one list that did not.
+ *
+ * De-duplicated case-insensitively, keeping the spelling the reader typed
+ * first — `rivalSlug` folds them downstream anyway, and two rows reading
+ * "Freitag" and "freitag" would each claim the other's months.
  */
 const trackedNames = (formData: FormData): string[] | null => {
+  const fromTable = formData.get(RIVALS_PRESENT) != null
   const raw = formData.getAll('competitor_names')
-  if (raw.length === 0) return formData.get(RIVALS_PRESENT) != null ? [] : null
-  const all = raw.flatMap((v) => csv(v))
+  if (raw.length === 0) return fromTable ? [] : null
+  const all = fromTable
+    ? raw.map((v) => String(v).trim().replace(/\s+/g, ' ')).filter(Boolean)
+    : raw.flatMap((v) => csv(v))
   const seen = new Set<string>()
   return all.filter((n) => {
     const key = n.toLowerCase()

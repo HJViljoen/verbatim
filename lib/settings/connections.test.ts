@@ -195,6 +195,20 @@ describe('every configuration write on this page carries an actor', () => {
     expect(rivalsSection).toContain('name={RIVALS_PRESENT}')
   })
 
+  it('does not split a rival’s own name on a comma', () => {
+    // C2: the table posts one value per name, so a comma inside one is part of
+    // the name. "Smith, Wesson & Co" split in two would be two rivals, two
+    // identities and two competitor:<name> audiences whose frozen months can
+    // never be re-keyed. The old comma-separated box is the only shape the
+    // split belongs to, and the marker — not the number of values — is what
+    // says which shape arrived.
+    const fn = actions.slice(actions.indexOf('const trackedNames'), actions.indexOf('// Facts vs knobs'))
+    expect(fn).toContain('const fromTable = formData.get(RIVALS_PRESENT) != null')
+    expect(fn).toMatch(/fromTable\s*\n?\s*\?\s*raw\.map/)
+    // The legacy box keeps the split, and only it.
+    expect(fn).toMatch(/:\s*raw\.flatMap\(\(v\) => csv\(v\)\)/)
+  })
+
   it('keeps the one save row on the two existing write paths', () => {
     // `saveTracking` composes; it does not open a third path to the columns.
     const save = actions.slice(actions.indexOf('export async function saveTracking'))
