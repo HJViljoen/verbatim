@@ -58,8 +58,10 @@ import { moversCoda, voiceSurfaceHref } from '@/lib/pages/voice-surface'
 // whole reason the change is banded — and a share with no population is the
 // score this product does not show.
 
-/** How many rows an arm keeps at a given length. */
-const arm = (rows: readonly Mover[], shown: number): Mover[] => rows.slice(0, shown)
+/** How many rows an arm keeps at a given length — every arm, including the two
+ *  flag lists. `goneQuiet` is not a `Mover` (it is a registry row with a last
+ *  month), which is the only reason it was ever unbounded. */
+const arm = <T,>(rows: readonly T[], shown: number): T[] => rows.slice(0, shown)
 
 /** "Aug 6.8% of 1,200" — the side this row moved FROM, with its own n. */
 function baselineOf(mover: Mover): string | null {
@@ -295,7 +297,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
                     </>}
                   />
                 ))}
-                {m.goneQuiet.map((g) => (
+                {arm(m.goneQuiet, m.shown).map((g) => (
                   <Flag
                     key={g.id}
                     mode={mode}

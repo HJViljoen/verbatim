@@ -92,7 +92,7 @@ describe('voiceMovers', () => {
     expect(text.split(note)).toHaveLength(2)
   })
 
-  it('keeps every arm inside the length the data asked for', () => {
+  it('keeps every arm inside the length the data asked for — the flags row too', () => {
     const many = Array.from({ length: 14 }, (_, i) =>
       mover({ id: `g${i}`, label: `Growing ${i}`, verdict: { changePts: 3 - i / 10 } }))
     const base = voiceFixture()
@@ -100,6 +100,13 @@ describe('voiceMovers', () => {
     const ten = draw({ ...base, movers: { ...base.movers, growing: many, shown: 10, expanded: true } })
     expect(six.match(/Growing \d/g)).toHaveLength(6)
     expect(ten.match(/Growing \d/g)).toHaveLength(10)
+
+    // `goneQuiet` was the one list the expander did not bound — harmless while
+    // it held one row, and it is now rendered in a tinted two-column block
+    // that would have grown without limit.
+    const quiet = Array.from({ length: 14 }, (_, i) => ({ id: `q${i}`, label: `Quiet ${i}`, lastHeard: '2026-06-01' }))
+    const cut = draw({ ...base, movers: { ...base.movers, goneQuiet: quiet, shown: 6 } })
+    expect(cut.match(/Quiet \d/g)).toHaveLength(6)
   })
 
   it('offers the expanded list, and offers to close it again', () => {
