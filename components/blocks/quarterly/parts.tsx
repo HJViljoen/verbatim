@@ -1,6 +1,8 @@
 import { Fragment, type ReactNode } from 'react'
 import type { RenderMode } from '@/lib/blocks/types'
+import type { CalendarSeries } from '@/lib/charts/calendar'
 import { EMAIL, FONT } from '@/lib/email/theme'
+import { monthName } from '@/lib/format'
 
 // The quarterly review's shared pieces (Phase 1 WP20).
 //
@@ -373,6 +375,46 @@ export function Pull({ children, mode = 'app' }: { children: ReactNode; mode?: R
     return <div style={{ fontFamily: FONT.serif, fontSize: 13, fontStyle: 'italic', lineHeight: 1.45, color: EMAIL.ink2, background: EMAIL.inner, padding: '11px 16px', borderRadius: 6, marginTop: 8 }}>{children}</div>
   }
   return <div className="max-w-[66ch] rounded-md bg-inner px-3 py-2 font-serif text-[12px] italic leading-[1.4] text-secondary-foreground">{children}</div>
+}
+
+/**
+ * THE LAST READING OF EACH LINE, UNDER THE CHART.
+ *
+ * `CalendarLine` normally prints a line's name and its last value in the right
+ * gutter, at a fixed 11px inside the viewBox. A deck column is narrow by
+ * construction and nothing clips that text, so on this artefact it painted
+ * past the slide's own edge on page 3 and off the end of its card on page 4 —
+ * and on a PDF, which is what this deck is, a label that overflows is simply
+ * gone, taking the only place either series was named with it. The deck's
+ * charts turn the gutter off (`endLabels={false}`), which also gives the plot
+ * the width back, and print the reading here instead: at the block's own type
+ * size, in the flow, where it cannot overflow anything.
+ *
+ * The month is named once, because every line ends on the same axis and a
+ * value with no month on a page of three clocks is not a reading.
+ */
+export function ChartEndings({ series, format, mode = 'app' }: {
+  series: readonly CalendarSeries[]
+  format: (v: number) => string
+  mode?: RenderMode
+}) {
+  const ends = series
+    .map((s) => {
+      const last = [...s.points].reverse().find((p) => p.value != null)
+      return last == null || last.value == null ? null : { label: s.label, month: last.month, text: format(last.value) }
+    })
+    .filter((e): e is { label: string; month: string; text: string } => e != null)
+  if (ends.length === 0) return null
+  return (
+    <Note mode={mode}>
+      {monthName(ends[ends.length - 1].month)}
+      {ends.map((e) => (
+        <Fragment key={e.label}>
+          {' · '}{e.label} <span data-copy="figure">{e.text}</span>
+        </Fragment>
+      ))}
+    </Note>
+  )
 }
 
 /** A `<dl>` of label → value, the artboard's method table (design-system §5

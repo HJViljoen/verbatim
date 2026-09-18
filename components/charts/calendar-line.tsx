@@ -81,7 +81,7 @@ const RULE_STROKE: Record<CalendarRule['kind'], { stroke: string; dash: string; 
 export function CalendarLine({
   axis, series, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
-  zeroBase = true, legend = true, maxLabels = 12,
+  zeroBase = true, legend = true, maxLabels = 12, endLabels = true,
   caption, label, id, className,
 }: {
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
@@ -100,6 +100,21 @@ export function CalendarLine({
    *  explain. Identity is never colour-alone (MASTER.md). */
   legend?: boolean
   maxLabels?: number
+  /**
+   * Whether each line prints its name and its last value in the right gutter.
+   *
+   * TRUE EVERYWHERE IT ALWAYS WAS — this is additive (Block D wave 2, the
+   * E-quarterly fix pass) and no existing caller changes. It exists because
+   * the end label is drawn at `width - padR + 10` in the viewBox and is NOT
+   * clipped by anything: on the quarterly deck's narrow columns it painted
+   * "Durability · The category 22%" past the slide's own edge (13px past, at
+   * HEAD) and "The category 41,2" off the end of its card. The label is lost
+   * either way on the one output this artefact has, a PDF. A caller with a
+   * column too narrow for the gutter turns it off, gives the plot the space
+   * back, and prints the last reading under the chart at its own type size —
+   * where the legend already names the lines.
+   */
+  endLabels?: boolean
   /** The line under the chart, in the caller's words — a `MonthLabel.text`
    *  from lib/reading/series.ts, never a sentence invented here. */
   caption?: ReactNode
@@ -252,6 +267,7 @@ export function CalendarLine({
             format={format}
             padR={g.padR}
             labelY={labelYs[i]}
+            endLabel={endLabels}
           />
         ))}
 
@@ -306,7 +322,7 @@ export function CalendarLine({
 /** One series: its segments, its points, its gutter marks, its filling bar and
  *  its end label. Split out so the chart body reads as a list of layers. */
 function SeriesMarks({
-  series, geometry: g, y, format, padR, labelY = null,
+  series, geometry: g, y, format, padR, labelY = null, endLabel = true,
 }: {
   series: CalendarSeries
   geometry: ReturnType<typeof calendarGeometry>
@@ -316,6 +332,9 @@ function SeriesMarks({
   /** Where the end label sits, de-collided against the other series by the
    *  chart (`spreadLabels`). Falls back to the point's own y. */
   labelY?: number | null
+  /** False where the caller's column is too narrow for the right gutter and
+   *  the last reading is printed under the chart instead. */
+  endLabel?: boolean
 }) {
   const points = series.points
   const runs = lineSegments(points)
@@ -375,7 +394,7 @@ function SeriesMarks({
         )
       })}
 
-      {end && endX != null && end.value != null && (
+      {endLabel && end && endX != null && end.value != null && (
         <text x={padR + 10} y={labelY ?? y(end.value) + 4} fontSize={11} fontWeight={600} fontFamily="var(--font-plex-sans), sans-serif" fill="var(--foreground)">
           {series.labelSlot ? <tspan data-copy="subject" data-slot={series.labelSlot}>{series.label}</tspan> : series.label}{' '}
           <tspan data-copy="figure" fontFamily="var(--font-plex-mono), monospace" fontWeight={500}>{format(end.value)}</tspan>

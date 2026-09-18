@@ -13,7 +13,7 @@ import { monthlyLineLabel, type Mover } from '@/lib/pages/overview'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { CategoryPage, QuarterlyData, QuarterMover } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
-import { Card, Chip, Column, Columns, Eyebrow, Line, Note } from './parts'
+import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note } from './parts'
 
 // QR4 · What the category talked about (mock page 4).
 //
@@ -333,10 +333,15 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 height={92}
                 width={330}
                 padL={40}
-                padR={96}
+                // THE GUTTER IS OFF (see `ChartEndings`): at 96px it cut
+                // "The category 41,200" to "The category 41,2" on the one
+                // output this artefact has.
+                padR={16}
+                endLabels={false}
                 format={(v) => fmtInt(v)}
                 label="comments under the panel's videos, month by month"
               />
+              <ChartEndings series={panel} format={(v) => fmtInt(v)} mode={mode} />
               <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
                 <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
                 <Note mode={mode}>

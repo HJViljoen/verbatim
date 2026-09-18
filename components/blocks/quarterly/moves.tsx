@@ -10,7 +10,7 @@ import type { MoveReading } from '@/lib/reading/moves'
 import { moveTail, type QuarterlyData } from '@/lib/pages/quarterly'
 import type { MoveRow } from '@/lib/pages/market-surface'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Card, Chip, Column, Columns, Eyebrow, Line, Note, Stored } from './parts'
+import { Card, ChartEndings, Chip, Column, Columns, Eyebrow, Line, Note, Stored } from './parts'
 
 // QR6 · Your moves, and what happened after (mock page 6).
 //
@@ -104,18 +104,25 @@ function MoveCard({ move, reading, sideOf, mode }: { move: MoveRow; reading: Mov
         <span>{move.on}</span>
       </p>
       {drawable ? (
-        <BlockCalendar
-          blockKey={`quarterly.moves.${move.id}`}
-          axis={reading!.months}
-          series={series}
-          mode={mode}
-          height={124}
-          width={330}
-          padL={34}
-          padR={92}
-          format={(v) => fmtPct(v)}
-          label={`${move.title}, month by month`}
-        />
+        <>
+          {/* THE GUTTER IS OFF (see `ChartEndings`). Three lines ending within
+              a few points of each other stacked three 11px labels in an 82px
+              gutter; under the chart they are one readable line. */}
+          <BlockCalendar
+            blockKey={`quarterly.moves.${move.id}`}
+            axis={reading!.months}
+            series={series}
+            mode={mode}
+            height={124}
+            width={330}
+            padL={34}
+            padR={16}
+            endLabels={false}
+            format={(v) => fmtPct(v)}
+            label={`${move.title}, month by month`}
+          />
+          <ChartEndings series={series} format={(v) => fmtPct(v)} mode={mode} />
+        </>
       ) : reading?.chartNote ? (
         <Note mode={mode}>{reading.chartNote}</Note>
       ) : null}

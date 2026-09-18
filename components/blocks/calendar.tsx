@@ -37,7 +37,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
-  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padL, padR,
+  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padL, padR, endLabels,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -66,6 +66,9 @@ export function BlockCalendar({
   width?: number
   padL?: number
   padR?: number
+  /** Forwarded to `CalendarLine` (additive). False where the caller's column
+   *  is too narrow for the right gutter the end labels are drawn in. */
+  endLabels?: boolean
 }) {
   if (!axis.length || !series.length) return null
 
@@ -83,6 +86,7 @@ export function BlockCalendar({
         width={width}
         padL={padL}
         padR={padR}
+        endLabels={endLabels}
         // The block key alone is not an identity: it is stripped of its
         // punctuation (so `overview.line` and `overview-line` collide) and WP12
         // draws one calendar per audience under ONE key, which is exactly the

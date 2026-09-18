@@ -12,7 +12,7 @@ import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { MonthLine } from '@/lib/reports/documents/figures'
 import { leadGap, type QuarterlyData, type SubjectQuarterRow, type SubjectsPage } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Card, Column, Columns, Eyebrow, Note, NotDrawn, TableHead, TableRow } from './parts'
+import { Card, ChartEndings, Column, Columns, Eyebrow, Note, NotDrawn, TableHead, TableRow } from './parts'
 
 // QR3 · Your subjects, quarter on quarter (mock page 3).
 //
@@ -177,19 +177,29 @@ export const quarterlySubjects: Block<QuarterlyData> = {
           <Card mode={mode}>
             <Eyebrow mode={mode}>{s.line.series[0]?.label ?? 'By month'}</Eyebrow>
             {series.length > 0 ? (
-              <BlockCalendar
-                blockKey={quarterlySubjects.key}
-                axis={s.line.months}
-                series={series}
-                mode={mode}
-                height={150}
-                width={340}
-                padL={34}
-                padR={92}
-                format={(v) => fmtPct(v)}
-                label="the subject's share of the audience's videos, month by month"
-                caption={s.line.label ?? undefined}
-              />
+              <>
+                {/* THE GUTTER IS OFF AND THE READING IS UNDER THE CHART. The
+                    end label is drawn at a fixed 11px inside the viewBox and
+                    nothing clips it: at 92px of gutter "Durability · The
+                    category 22%" painted 13px past the slide's own edge, and
+                    on a PDF that is not truncation, it is loss. The plot takes
+                    the width back. */}
+                <BlockCalendar
+                  blockKey={quarterlySubjects.key}
+                  axis={s.line.months}
+                  series={series}
+                  mode={mode}
+                  height={150}
+                  width={340}
+                  padL={34}
+                  padR={16}
+                  endLabels={false}
+                  format={(v) => fmtPct(v)}
+                  label="the subject's share of the audience's videos, month by month"
+                  caption={s.line.label ?? undefined}
+                />
+                <ChartEndings series={series} format={(v) => fmtPct(v)} mode={mode} />
+              </>
             ) : (
               <Note mode={mode}>{s.line.label ?? s.line.empty}</Note>
             )}
