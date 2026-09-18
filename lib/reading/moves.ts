@@ -119,7 +119,19 @@ export interface MoveCandidate {
   /** What the confirm button would declare. Null when there is nothing to
    *  declare (no posts, or M4 not applied). */
   proposal: DeclareMoveInput | null
-  /** Why the card cannot be pre-filled, in the reader's words. Null when it can. */
+  /**
+   * What stands between this card and a confirmed move, in the reader's words.
+   * Null when nothing does.
+   *
+   * IT IS NOT ONE FACT, AND THE FIELD SAYS SO RATHER THAN PRETENDING. Two
+   * sentences reach it and they are different states: `CARD_NO_POSTS` means
+   * the card counts NOTHING (we found no posts of yours this month), and
+   * `CARD_NOT_DECLARABLE` means the card counts and cannot be CONFIRMED
+   * (`moves` is not applied here). A surface that prints this string in place
+   * of the card is right for the first and wrong for the second — the counted
+   * rows are real either way, and `proposal` being null is what "cannot be
+   * confirmed" is stated by.
+   */
   unread: string | null
 }
 
