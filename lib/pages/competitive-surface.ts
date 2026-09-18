@@ -751,7 +751,7 @@ interface RivalPostRow {
  * (lib/settings/rivals-view.ts). `rivalOwnClaims` takes the handles per rival
  * and words each state itself.
  */
-async function loadRivalOwnPosts(
+export async function loadRivalOwnPosts(
   supabase: SupabaseClient,
   clientId: string,
   month: string,

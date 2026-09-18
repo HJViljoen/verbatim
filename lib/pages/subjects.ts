@@ -859,7 +859,7 @@ function monthDays(month: string): { from: string; to: string } {
  * without its words and the census carries no quote for it — withheld by a
  * policy, not missing.
  */
-async function loadOwnPosts(
+export async function loadOwnPosts(
   supabase: SupabaseClient,
   clientId: string,
   month: string,
@@ -987,7 +987,7 @@ async function loadSayHear(supabase: SupabaseClient, clientId: string): Promise<
  * and a k above its own n is not a proportion. The maximum is the honest
  * single reading: "the most-carried thing this claim rests on reached k of n".
  */
-async function loadClaimEchoes(
+export async function loadClaimEchoes(
   supabase: SupabaseClient,
   reading: ReadingHandle,
   clientId: string,
