@@ -98,6 +98,9 @@ export interface TrackingPageInputs {
    *  blank, never zero. */
   platformMix: PlatformMix | null
   monthVideos: number | null
+  /** True where the read itself failed — which is not the same answer as "the
+   *  monthly reading is not applied", and may not be printed as one. */
+  monthUnread: boolean
   monthStatus: MonthStatus
   /** What the rail prints beside the other sub-pages. A key that could not be
    *  counted is absent rather than zero. */
@@ -294,12 +297,19 @@ async function loadLastChange(
  * denominators answer the same question from the comment-dated months, and
  * where the functions are not applied the answer is null — which the column
  * prints as a dash and the basis sentence explains.
+ *
+ * AND A FAILED READ IS NOT AN UNREAD MONTH. `loadWindowReading` already
+ * swallows the one expected absence (the monthly reading is not applied) and
+ * rethrows everything else, so a blanket catch here absorbed only REAL
+ * failures — a PostgREST schema-cache outage then rendered "the month has not
+ * been read", which is a claim about our own bookkeeping that nobody checked.
+ * The two answers are carried apart: `failed` means we could not look.
  */
 async function loadPlatformMix(
   client: SupabaseClient,
   clientId: string,
   month: string,
-): Promise<{ mix: PlatformMix | null; videos: number | null }> {
+): Promise<{ mix: PlatformMix | null; videos: number | null; failed: boolean }> {
   const next = new Date(`${month}T00:00:00.000Z`)
   next.setUTCMonth(next.getUTCMonth() + 1)
   try {
@@ -309,10 +319,11 @@ async function loadPlatformMix(
       audiences: [CLIENT_AUDIENCE],
     })
     const own = reading.denominators?.find((d) => d.audience === CLIENT_AUDIENCE) ?? null
-    if (!own) return { mix: null, videos: null }
-    return { mix: own.platform_mix ?? {}, videos: own.videos }
-  } catch {
-    return { mix: null, videos: null }
+    if (!own) return { mix: null, videos: null, failed: false }
+    return { mix: own.platform_mix ?? {}, videos: own.videos, failed: false }
+  } catch (error) {
+    console.error(`[settings] platform mix not read for ${clientId}: ${(error as { message?: string }).message ?? String(error)}`)
+    return { mix: null, videos: null, failed: true }
   }
 }
 
@@ -383,6 +394,15 @@ export async function loadTrackingPage(
     updates: updates.updates,
     platformMix: mix.mix,
     monthVideos: mix.videos,
+    monthUnread: mix.failed,
+    // THE RULE, NOT THE ROW, AND THE MONTH IN HAND IS ALWAYS THE CURRENT ONE.
+    // `month_denominators.status` is the commit marker the guards enforce, but
+    // the windowed read is an aggregate over a span and carries no status
+    // column, and `censusMonth` is this month — which the 30-day rule and the
+    // row always agree on. A second query to read a status that cannot yet
+    // differ would spend a production read to answer a question nobody can
+    // ask; the day this page reads a month that has closed, it has to read the
+    // row (m3).
     monthStatus: freezeStateFor(censusMonth, new Date().toISOString()),
     railCounts,
   }

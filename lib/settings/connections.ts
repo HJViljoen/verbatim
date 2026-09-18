@@ -101,7 +101,11 @@ export function platformShareBasis(args: {
   status: MonthStatus
   videos: number | null
   audience: string
+  /** True where the READ failed. A different answer from "not read yet", and
+   *  the only one of the two that is about us rather than about the month. */
+  unread?: boolean
 }): string {
+  if (args.unread) return PLATFORM_SHARE_UNREAD
   if (args.videos === null) return PLATFORM_SHARE_ABSENT
   const when = longMonth(args.month)
   const state = args.status === 'frozen' ? 'closed' : 'still filling'
@@ -112,6 +116,13 @@ export function platformShareBasis(args: {
  *  not a share computed some other way. */
 export const PLATFORM_SHARE_ABSENT =
   'We cannot say how this month splits across the platforms yet — the month has not been read.'
+
+/** And what stands there when the read itself failed. "The month has not been
+ *  read" is a claim about the record; this is a claim about the last ten
+ *  seconds, and printing the first for the second tells a client something
+ *  about their data that nobody checked. */
+export const PLATFORM_SHARE_UNREAD =
+  'We could not read how this month splits across the platforms just now. Refresh the page, and tell us if it keeps happening.'
 
 // ---- What the form has changed and not yet saved -----------------------------
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { communitiesMeta, type CommunityRow } from './communities'
-import { platformRows, platformShareBasis, PLATFORM_SHARE_ABSENT, trackingPending, type TrackingFormState } from './connections'
+import { platformRows, platformShareBasis, PLATFORM_SHARE_ABSENT, PLATFORM_SHARE_UNREAD, trackingPending, type TrackingFormState } from './connections'
 import { isNewRival, rivalRefusalNote, rivalsMeta, type RivalRow } from './rivals-view'
 import { removeTerm, termDateShort, termsMeta } from './terms'
 
@@ -169,8 +169,29 @@ describe('taking a term off a list', () => {
   })
 
   it('takes one term, not every term that folds the same way', () => {
-    const out = removeTerm({ brand_keywords: ['bag', 'BAG'] }, 'brand_keywords', 'bag')
+    const out = removeTerm({ ...lists, brand_keywords: ['bag', 'BAG'] }, 'brand_keywords', 'bag')
     expect(out.terms.brand_keywords).toEqual(['BAG'])
+  })
+})
+
+describe('the platform share’s basis sentence', () => {
+  it('tells a failed read apart from a month nobody has read', () => {
+    // m2: loadWindowReading already swallows "the monthly reading is not
+    // applied" and rethrows everything else, so the loader's blanket catch
+    // absorbed only real failures — and printed them as a fact about the
+    // record.
+    expect(platformShareBasis({ month: '2026-09-01', status: 'filling', videos: null, audience: 'Your own brand', unread: true }))
+      .toBe(PLATFORM_SHARE_UNREAD)
+    expect(platformShareBasis({ month: '2026-09-01', status: 'filling', videos: null, audience: 'Your own brand' }))
+      .toBe(PLATFORM_SHARE_ABSENT)
+  })
+
+  it('names the freeze state a closed month is in', () => {
+    // m3: the status this page passes is the 30-day RULE, and the month in
+    // hand is always the current one, so this arm is the one a real closed
+    // month would take.
+    expect(platformShareBasis({ month: '2026-07-01', status: 'frozen', videos: 412, audience: 'Your own brand' }))
+      .toMatch(/July.* is closed/)
   })
 })
 

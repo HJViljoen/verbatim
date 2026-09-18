@@ -115,14 +115,15 @@ export function termDateShort(date: TermDate | undefined): string {
  */
 export function removeTerm<B extends string>(
   terms: Readonly<Record<B, readonly string[]>>,
-  bucket: B,
+  /** Where the caller thinks it is. A plain string, so the record's own keys
+   *  are what fixes `B` — a literal here would narrow the whole shape to it. */
+  bucket: string,
   term: string,
 ): { terms: Record<B, string[]>; removed: boolean } {
   const want = fold(term)
-  const out = Object.fromEntries(
-    (Object.keys(terms) as B[]).map((k) => [k, [...terms[k]]]),
-  ) as Record<B, string[]>
-  const order: B[] = [bucket, ...(Object.keys(terms) as B[]).filter((k) => k !== bucket)]
+  const keys = Object.keys(terms) as B[]
+  const out = Object.fromEntries(keys.map((k) => [k, [...terms[k]]])) as Record<B, string[]>
+  const order: B[] = [...keys.filter((k) => k === bucket), ...keys.filter((k) => k !== bucket)]
   for (const k of order) {
     const i = out[k].findIndex((t) => fold(t) === want)
     if (i >= 0) {

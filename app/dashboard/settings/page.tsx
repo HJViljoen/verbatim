@@ -166,6 +166,7 @@ export default async function SettingsTrackingPage() {
                 month: inputs.censusMonth,
                 status: inputs.monthStatus,
                 videos: inputs.monthVideos,
+                unread: inputs.monthUnread,
                 audience: audienceLabel('client'),
               })}
               ownAccounts={ownHandles}
