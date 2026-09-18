@@ -57,9 +57,12 @@ export function CadenceSection({
   period, day, storedPeriod, onPeriod, onDay, canEdit, updatesThisMonth, month, lastUpdate, showStudio,
 }: CadenceSectionProps) {
   const paused = storedPeriod === 'paused'
+  // The hour belongs to the row that sets the day, and it is said ONCE: the
+  // head carried the whole of SLOT_NOTE as well, which is the same sentence
+  // twice on one screen.
   const meta = [
     paused ? 'paused' : period,
-    `${cap(day)} ${SLOT_NOTE}`,
+    cap(day),
     lastUpdate ? `last ${shortDate(`${lastUpdate}T00:00:00.000Z`)}` : 'no update on record',
   ].join(' · ')
 
@@ -115,8 +118,12 @@ export function CadenceSection({
             >
               {DAYS.map((d) => <option key={d} value={d}>{cap(d)}</option>)}
             </select>
-            <span className="inline-flex h-11 items-center rounded-[4px] bg-inner px-3 font-mono text-[11px] text-muted-foreground">{SLOT_NOTE}</span>
-            <MonoNote>{FREEZE_NOTE}</MonoNote>
+            {/* A FACT, DRAWN AS ONE. It was an h-11 `bg-inner` box at the
+                FIELD's own height and radius, beside the FIELD — which is the
+                single appearance the brief says the hour had to avoid, because
+                it reads as a greyed-out dropdown of one value. There is no
+                per-tenant hour column to grey out. */}
+            <MonoNote className="max-w-[420px]">{SLOT_NOTE} · {FREEZE_NOTE}</MonoNote>
           </div>
           <span className="text-[11.5px] text-muted-foreground">
             {showStudio ? (

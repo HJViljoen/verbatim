@@ -316,6 +316,9 @@ describe('the cadence section', () => {
     expect(words).not.toContain('next')
     expect(words).toContain(FREEZE_NOTE)
     expect(words).not.toContain('28th')
+    // M2: once, and not dressed as the disabled twin of the select beside it.
+    expect(words.split(SLOT_NOTE).length - 1).toBe(1)
+    expect(render(section)).not.toMatch(/h-11 items-center rounded-\[4px\] bg-inner[^"]*">06:00/)
   })
 
   it('evidences the cadence with the updates that actually landed', () => {
