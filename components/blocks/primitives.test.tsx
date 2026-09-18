@@ -95,6 +95,30 @@ describe('BlockFrame', () => {
     expect(screen).toContain('text-[12.5px]')
   })
 
+  // `heading={false}` (Block D wave 2, E-content) — ADDITIVE, default
+  // unchanged. A borrowed block on a brief sits under the slide's own
+  // `<h1>`, so its `<h2>` prints the section's idea a second time; a block
+  // that knows it is inside a titled sheet turns its own heading off and keeps
+  // the meta, the footer and the footer note, which are the block's.
+  it('draws its own heading by default and drops it only when asked', () => {
+    const withHeading = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September"><span>x</span></BlockFrame>)
+    expect(markupText(withHeading)).toContain('Rivals')
+    expect(markupText(withHeading)).toContain('Who holds it?')
+
+    const without = render(<BlockFrame mode="print" title="Rivals" question="Who holds it?" meta="September" footerNote="all-time"><span>x</span></BlockFrame>)
+    expect(markupText(without)).toContain('Rivals')
+
+    const dropped = render(<BlockFrame mode="print" heading={false} title="Rivals" question="Who holds it?" meta="September" footerNote="all-time"><span>x</span></BlockFrame>)
+    const text = markupText(dropped)
+    expect(text).not.toContain('Rivals')
+    expect(text).not.toContain('Who holds it?')
+    // THE META SURVIVES. It is the block's own note about what it is a reading
+    // of ("September · still filling"), not the section's title, and dropping
+    // it with the heading would take a basis off the page.
+    expect(text).toContain('September')
+    expect(text).toContain('all-time')
+  })
+
   it('prints the empty state as a line rather than leaving a hole', () => {
     for (const mode of MODES) {
       expect(renderText(<BlockEmpty mode={mode}>Counted with the first update.</BlockEmpty>))

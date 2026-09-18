@@ -37,11 +37,25 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, children, className, heading = true,
 }: {
   title: string
   question?: string
   mode?: RenderMode
+  /**
+   * Draw the block's own heading row (Block D wave 2, E-content — ADDITIVE,
+   * default unchanged).
+   *
+   * A BORROWED BLOCK ON A BRIEF ALREADY HAS A HEADING: the slide's `<h1>` is
+   * the section's title (components/print/slide.tsx) and the block's own
+   * `<h2>` prints the same idea again, in caps, one line under it — two
+   * headings for one section, which the artboards draw once. A block that
+   * knows it is inside a titled sheet passes `heading={false}` and keeps the
+   * meta, the footer and the footer note, which are the block's and not the
+   * section's. Nothing else changes: the default is true and every existing
+   * call site is untouched.
+   */
+  heading?: boolean
   /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
   /** The line along the bottom, RIGHT: the artboard's quiet mono note — the
@@ -112,11 +126,15 @@ export function BlockFrame({
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
-        {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
-      </header>
-      {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      {heading ? (
+        <header className="flex items-baseline justify-between gap-2">
+          <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
+          {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+        </header>
+      ) : meta ? (
+        <p className="m-0 text-right font-mono text-[11px] text-muted-foreground">{meta}</p>
+      ) : null}
+      {heading && question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
       {children}
       {footer || footerNote ? (
         <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">

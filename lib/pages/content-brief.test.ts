@@ -13,6 +13,7 @@ import {
   instrumentRow,
   languageRow,
   numberRows,
+  recordParagraphs,
   sourcesRow,
   videosRow,
 } from './content-brief'
@@ -90,6 +91,23 @@ describe('the record slide', () => {
     const slide = buildRecordSlide({ month: '2026-09-18', monthStatus: 'filling', record, delivery: null, readings: 1 })
     expect(slide.month).toBe('2026-09-01')
     expect(slide.monthLabel).toBe('September')
+  })
+})
+
+describe('the record\u2019s paragraphs', () => {
+  it('loses no sentence \u2014 only line breaks', () => {
+    const lines = ['a.', 'b.', 'c.', 'd.', 'e.', 'f.', 'g.']
+    const out = recordParagraphs(lines)
+    expect(out.length).toBeLessThanOrEqual(4)
+    expect(out.join(' ')).toBe(lines.join(' '))
+  })
+
+  it('is empty for an empty record rather than one empty paragraph', () => {
+    expect(recordParagraphs([])).toEqual([])
+  })
+
+  it('keeps the record\u2019s own order', () => {
+    expect(recordParagraphs(['one.', 'two.', 'three.', 'four.'], 2)).toEqual(['one. two.', 'three. four.'])
   })
 })
 

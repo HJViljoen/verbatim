@@ -65,6 +65,30 @@ export interface NumberRow {
   figure: boolean
 }
 
+/**
+ * The record's sentences, grouped into paragraphs.
+ *
+ * `recordLines` returns THIRTEEN complete sentences — delivery, coverage, read
+ * depth, language, what was set aside, the instrument, the change log, the
+ * refusals, the reading instant, the freeze — and a brief slide set one per
+ * line ran off the bottom of a 1123 × 631 sheet with four of them unread. The
+ * artboard's method page is four paragraphs, so the sentences are grouped into
+ * four rather than shortened: nothing the record says is dropped, and the one
+ * thing a reader loses is a line break.
+ *
+ * Grouped by COUNT and not by meaning, deliberately. Every line is a complete
+ * sentence about how the reading was made, the order is `recordLines`' own, and
+ * a hand-written grouping here would be a second place that has to be updated
+ * when a line is added to that function.
+ */
+export function recordParagraphs(lines: readonly string[], paragraphs = 4): string[] {
+  if (lines.length === 0) return []
+  const per = Math.ceil(lines.length / Math.max(1, paragraphs))
+  const out: string[] = []
+  for (let i = 0; i < lines.length; i += per) out.push(lines.slice(i, i + per).join(' '))
+  return out
+}
+
 export interface RecordSlide {
   /** The month this brief is a reading of, `YYYY-MM-01`. */
   month: string
@@ -76,6 +100,8 @@ export interface RecordSlide {
   /** The record's own sentences — delivery, coverage, read depth, language,
    *  what was set aside, themes per video, tracking changes, refusals. */
   lines: string[]
+  /** The same sentences, grouped into the artboard's four paragraphs. */
+  paragraphs: string[]
   /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026". */
   delivery: string | null
   /** "your 3rd monthly reading · the quarter view needs 6". Null where the
@@ -207,6 +233,7 @@ export function buildRecordSlide(input: {
     monthStatus: input.monthStatus,
     method: input.record ? methodLines(input.record) : null,
     lines: input.record ? recordLines(input.record) : [],
+    paragraphs: input.record ? recordParagraphs(recordLines(input.record)) : [],
     delivery: input.delivery,
     counter: input.readings == null ? null : readingsCounter(input.readings),
     numbers: numberRows(input.record),

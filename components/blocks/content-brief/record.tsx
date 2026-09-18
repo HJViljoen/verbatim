@@ -56,9 +56,9 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
     )
   }
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-tile px-5 py-4">
+    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
       <Eyebrow>This brief in numbers</Eyebrow>
-      <dl className="m-0 grid grid-cols-[130px_1fr] gap-x-4 gap-y-2">
+      <dl className="m-0 grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5">
         {rows.map((r) => (
           <div key={r.label} className="contents">
             <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{r.label}</dt>
@@ -68,7 +68,7 @@ function Numbers({ rows, mode }: { rows: readonly NumberRow[]; mode: RenderMode 
                 would not find in "27% of what was said on camera". The figures
                 this block publishes are in `figures()`, where a model may name
                 them and a budget can count them. */}
-            <dd className="m-0 text-[14.5px] leading-[1.4] text-foreground">{r.value}</dd>
+            <dd className="m-0 text-[13.5px] leading-[1.35] text-foreground">{r.value}</dd>
           </div>
         ))}
       </dl>
@@ -114,17 +114,18 @@ export const contentRecord: Block<ContentBriefData> = {
         title={contentRecord.title}
         question={contentRecord.question}
         mode={mode}
+        heading={mode !== 'print'}
         meta={r.monthStatus === 'frozen' ? `${r.monthLabel} · frozen` : `${r.monthLabel} · still filling`}
         footerNote={r.method?.preparedBy}
       >
         <div className="grid min-w-0 gap-x-12 gap-y-4 md:grid-cols-[7fr_5fr]">
-          <div className="flex min-w-0 flex-col gap-2.5">
+          <div className="flex min-w-0 flex-col gap-2">
             <Eyebrow>How this brief was made</Eyebrow>
-            {r.lines.map((l, i) => (
-              <p key={i} className="m-0 max-w-[66ch] text-[13px] leading-[1.5] text-foreground">{l}</p>
+            {r.paragraphs.map((l, i) => (
+              <p key={i} className="m-0 max-w-[70ch] text-[12.5px] leading-[1.45] text-foreground">{l}</p>
             ))}
-            <p className="m-0 max-w-[66ch] text-[12.5px] leading-[1.5] text-muted-foreground">{r.labels}</p>
-            <p className="m-0 max-w-[66ch] text-[12.5px] leading-[1.5] text-muted-foreground">{r.reddit}</p>
+            <p className="m-0 max-w-[70ch] text-[12px] leading-[1.4] text-muted-foreground">{r.labels}</p>
+            <p className="m-0 max-w-[70ch] text-[12px] leading-[1.4] text-muted-foreground">{r.reddit}</p>
             {tail.length > 0 ? (
               <div className="mt-auto flex flex-col gap-0.5">
                 {tail.map((l, i) => (

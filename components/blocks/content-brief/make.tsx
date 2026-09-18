@@ -76,15 +76,29 @@ export function toStop(rows: readonly AdviceRow[]): AdviceRow | null {
   )[0]
 }
 
-/** "First raised July · advised in 2 months · Dismissed 28 Jul" — the card's
- *  mono provenance line, every clause a field. */
+/**
+ * "First raised July · advised in 2 months · Dismissed 28 Jul · grounded in 3
+ * videos" — the card's mono provenance line, every clause a field.
+ *
+ * THE GROUNDING IS A COUNT HERE AND A SENTENCE ONCE, UNDER THE ROW.
+ * `Grounding.line` states its own basis in full ("counted over everything we
+ * have read for you up to September, not over one month"), which is right on a
+ * table with one row per line and is four lines of a card at 1123 × 631 —
+ * printed four times, once per card, saying the same thing. `GROUNDING_BASIS`
+ * is that sentence, said once; a row whose evidence was PRUNED still gets its
+ * own words, because that is a fact about the row and not about the basis.
+ */
 export function provenance(row: AdviceRow): string {
   const parts = [`First raised ${madeInMonth(row.firstMade)}`]
   if (row.monthsRepeated > 1) parts.push(`advised in ${fmtInt(row.monthsRepeated)} months`)
   else if (row.repeatedWithinMonth) parts.push('advised twice, in one month')
   if (row.status !== 'new') parts.push(row.decidedAt ? `${row.statusLabel} ${fullDate(row.decidedAt)}` : row.statusLabel)
+  if (row.grounded && !row.grounded.pruned) parts.push(`grounded in ${fmtInt(row.grounded.videos)} ${row.grounded.videos === 1 ? 'video' : 'videos'}`)
   return parts.join(' · ')
 }
+
+export const GROUNDING_BASIS =
+  'A card’s grounding is counted over everything we have read for you, not over one month.'
 
 function Chip({ tone, children }: { tone: 'new' | 'done' | 'plain' | 'stop'; children: ReactNode }) {
   const cls =
@@ -109,15 +123,17 @@ function Reading({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode 
   const { k, n } = verdict.value
   return (
     <span className="flex flex-wrap items-baseline gap-2.5">
-      <FigureCell mode={mode} value={n > 0 ? fmtPct((k / n) * 100) : fmtInt(k)} of={`${fmtInt(k)} of ${fmtInt(n)} videos`} />
+      <span className="flex-none">
+        <FigureCell mode={mode} value={n > 0 ? fmtPct((k / n) * 100) : fmtInt(k)} of={`${fmtInt(k)} of ${fmtInt(n)} videos`} />
+      </span>
       <BlockMovement verdict={verdict} unit="pts" mode={mode} />
     </span>
   )
 }
 
-function Card({ row, n, mode, stop }: { row: AdviceRow; n: number | null; mode: RenderMode; stop?: boolean }) {
+function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-md border border-border bg-tile px-[18px] py-4">
+    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-tile px-4 py-3">
       <div className="flex items-center justify-between gap-2">
         {n == null
           ? <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">What not to make</span>
@@ -130,23 +146,28 @@ function Card({ row, n, mode, stop }: { row: AdviceRow; n: number | null; mode: 
       <h3
         data-copy="stored"
         data-slot="pass_d_b_recommendation"
-        className={`m-0 font-semibold leading-[1.2] tracking-[-0.01em] text-foreground ${stop ? 'text-[19px]' : 'text-[17px]'}`}
+        className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
       >
         {row.title}
       </h3>
-      <p className="m-0 font-mono text-[11px] leading-[1.4] text-muted-foreground">{provenance(row)}</p>
-      {row.grounded ? <p className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">{row.grounded.line}</p> : null}
-      <div className="flex flex-col gap-1.5 rounded-md bg-inner px-3.5 py-3">
+      <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
+      {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
+      <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
         <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
         <Reading verdict={row.afterwards.verdict} mode={mode} />
-        <p className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+        <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
       </div>
+      {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
+          SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
+          thing in it is what a long row clips; the model's argument is also on
+          the ledger section two slides earlier, and a commenter's own words are
+          on this page or nowhere. */}
+      {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
       {row.why ? (
-        <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[12.5px] leading-[1.45] text-secondary-foreground">
+        <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
           {row.why}
         </p>
       ) : null}
-      {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
     </div>
   )
 }
@@ -201,18 +222,22 @@ export const contentMake: Block<MarketSurfaceData> = {
         title={contentMake.title}
         question={contentMake.question}
         mode={mode}
+        heading={mode !== 'print'}
         meta={meta}
         footer={data.advice.actedLine}
-        footerNote={longMonth(data.month)}
+        footerNote={`${longMonth(data.month)} \u00b7 ${GROUNDING_BASIS}`}
       >
         <div className="flex min-w-0 flex-col gap-3">
-          <p className="m-0 font-serif text-[12.5px] italic leading-[18px] text-secondary-foreground">
-            Each one is something the conversation asked for, with what was decided and what the conversation did after.
-          </p>
-          <div className="grid min-w-0 gap-[18px] md:grid-cols-3">
+          {/* ONE ROW, AND THE STOP CARD IS THE LAST COLUMN. The artboard puts
+              the three make cards on page 2 and the one stop card in page 4's
+              right pane; folded into one section they have to share a slide,
+              and a full-width stop card under three columns runs off the
+              sheet. Four columns keeps every card on the page at the mock's
+              own density, and the stop card keeps its own eyebrow. */}
+          <div className={`grid min-w-0 gap-[18px] ${stop ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             {make.map((r, i) => <Card key={r.lineageId} row={r} n={i + 1} mode={mode} />)}
+            {stop ? <Card key={stop.lineageId} row={stop} n={null} mode={mode} /> : null}
           </div>
-          {stop ? <Card row={stop} n={null} mode={mode} stop /> : null}
           {!data.advice.recorded ? (
             <p className="m-0 text-[11.5px] leading-[1.4] text-muted-foreground">{data.advice.unlock}</p>
           ) : null}

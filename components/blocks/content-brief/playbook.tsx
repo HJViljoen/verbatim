@@ -49,6 +49,17 @@ const COLOUR: Record<string, string> = {
 
 const sideColour = (side: FormatMatrixSide): string => COLOUR[side.audience] ?? 'var(--comp)'
 
+/** What the two tables left off, said ONCE. Every key dropped is still counted
+ *  in every "of N" above it, so the shares stay shares of the same thing. */
+function moreLine(p: { formats: FormatMatrix; hooks: FormatMatrix }): string {
+  const f = Math.max(0, p.formats.keys.length - (SHOWN['What gets made'] ?? 0))
+  const h = Math.max(0, p.hooks.keys.length - (SHOWN['How they open'] ?? 0))
+  const parts: string[] = []
+  if (f > 0) parts.push(`${f} more ${f === 1 ? 'format' : 'formats'}`)
+  if (h > 0) parts.push(`${h} more ${h === 1 ? 'hook' : 'hooks'}`)
+  return parts.length === 0 ? '' : `${parts.join(' and ')} not drawn, counted in every denominator`
+}
+
 const pctOf = (row: FormatRow | null): number | null => (row ? row.pct : null)
 
 /** The widest share in a column, so one column's bars are scaled against each
@@ -115,18 +126,32 @@ function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
   )
 }
 
-function Matrix({ matrix, heading, mode }: { matrix: FormatMatrix; heading: string; mode: RenderMode }) {
-  const { keys, sides } = matrix
+/**
+ * How many rows each table prints before the tail is left to the "of N".
+ *
+ * A DISPLAY DECISION, AND IT SAYS SO ON THE PAGE. `formatMatrix` already keeps
+ * the whole reading and shortens only the key list a column PRINTS, and every
+ * key dropped here is still counted in every `of` above it — so the shares stay
+ * shares of the same thing. The counts are the artboard's own (five formats,
+ * three hooks), and they are what fits a 1123 × 631 sheet beside the engagement
+ * card; the line under the table names what was left off.
+ */
+const SHOWN: Record<string, number> = { 'What gets made': 4, 'How they open': 3 }
+
+function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix; heading: string; mode: RenderMode; legend?: boolean }) {
+  const { sides } = matrix
+  const limit = SHOWN[heading] ?? matrix.keys.length
+  const keys = matrix.keys.slice(0, limit)
   if (keys.length === 0 || sides.length === 0) return null
   const maxes = sides.map((s) => columnMax(s, keys))
   const cols = `168px repeat(${sides.length}, minmax(0, 1fr))`
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Eyebrow>{heading}</Eyebrow>
-        <Legend sides={sides} />
+        {legend ? <Legend sides={sides} /> : null}
       </div>
-      <div className="grid items-center gap-x-5 gap-y-[7px]" style={{ gridTemplateColumns: cols }}>
+      <div className="grid items-center gap-x-5 gap-y-[3px]" style={{ gridTemplateColumns: cols }}>
         <ColumnHead>{heading === 'What gets made' ? 'Format' : 'Hook'}</ColumnHead>
         {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
         {keys.map((k) => (
@@ -155,13 +180,18 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function Engagement({ rows, mode, of, basisLine }: { rows: readonly FormatRow[]; mode: RenderMode; of: number; basisLine: string }) {
+/** The artboard's four rows. Best MEDIAN first, which is `PlaybookBlock
+ *  .engagement`'s own order and not the count order of the table beside it. */
+const ENGAGEMENT_SHOWN = 3
+
+function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatRow[]; mode: RenderMode; of: number; basisLine: string }) {
+  const rows = all.slice(0, ENGAGEMENT_SHOWN)
   if (rows.length === 0) return null
   const max = Math.max(...rows.map((r) => r.engagement.median ?? 0), 1)
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-tile px-5 py-4">
+    <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
       <Eyebrow>Median engagement per format</Eyebrow>
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         {rows.map((r) => (
           <div key={r.key} className="flex items-center gap-2.5">
             <span className="w-[118px] flex-none truncate text-[13px] text-foreground">{r.label}</span>
@@ -236,39 +266,41 @@ export const contentPlaybook: Block<ContentBriefData> = {
         title={contentPlaybook.title}
         question={contentPlaybook.question}
         mode={mode}
+        heading={mode !== 'print'}
         meta={data.monthLabel}
         footerNote={p.basisLine}
-        footer={p.coverageLine}
+        footer={moreLine(p) ? `${p.coverageLine} ${moreLine(p)}.` : p.coverageLine}
       >
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-2.5">
           <Matrix matrix={p.formats} heading="What gets made" mode={mode} />
-          <div className="grid gap-x-12 gap-y-4 md:grid-cols-[7fr_5fr]">
-            <Matrix matrix={p.hooks} heading="How they open" mode={mode} />
-            <Engagement rows={p.engagement} mode={mode} of={category?.of ?? 0} basisLine={p.basisLine} />
-          </div>
+          {/* THE TAKEAWAY, COMPOSED IN CODE FROM THE TWO MEDIANS (D5). Two
+              formats at one moment, each with the videos its median was read
+              over, and not a word about direction. */}
           {p.formats.conclusion ? (
-            <p className="m-0 flex items-start gap-2.5 rounded-md bg-inner px-4 py-3 text-[13.5px] leading-[1.45] text-foreground">
+            <p className="m-0 flex items-start gap-2.5 text-[12.5px] leading-[1.4] text-foreground">
               <span className="mt-[7px] inline-block h-[6px] w-[6px] flex-none rounded-full bg-primary" aria-hidden />
               <span>{p.formats.conclusion}</span>
             </p>
           ) : null}
+          <div className="grid gap-x-10 gap-y-3 md:grid-cols-[7fr_5fr]">
+            <Matrix matrix={p.hooks} heading="How they open" mode={mode} legend={false} />
+            <Engagement rows={p.engagement} mode={mode} of={category?.of ?? 0} basisLine={p.basisLine} />
+          </div>
           {slide.below.length > 0 ? (
-            <div className="flex flex-col gap-1.5">
-              <Eyebrow>Under your own median video</Eyebrow>
-              <ul className="m-0 flex flex-wrap gap-x-5 gap-y-1 p-0">
-                {slide.below.map((r) => (
-                  <li key={r.key} className="flex items-baseline gap-2 text-[12.5px] text-secondary-foreground">
-                    <span>{r.label}</span>
-                    <FigureCell mode={mode} value={`${r.engagement.median}%`} of={`of ${fmtInt(r.engagement.n)} rated`} />
-                  </li>
-                ))}
-              </ul>
-              <p className="m-0 text-[11.5px] leading-[1.4] text-muted-foreground">
-                Each of these ran under {slide.brand}&rsquo;s own median video this month. That is what the numbers say; what to make of it is yours.
-              </p>
-            </div>
+            /* "WHAT NOT TO MAKE", AS THE INVERSE OF THE PLAYBOOK RATHER THAN AS
+               AN INSTRUCTION (`belowMedian`). Every row carries the videos its
+               median was read over, and the sentence stops at what the numbers
+               say. */
+            <p className="m-0 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
+              <span>Under {slide.brand}&rsquo;s own median video this month:</span>
+              {slide.below.map((r) => (
+                <span key={r.key} className="flex items-baseline gap-1.5 text-secondary-foreground">
+                  <span>{r.label}</span>
+                  <FigureCell mode={mode} value={`${r.engagement.median}%`} of={`of ${fmtInt(r.engagement.n)} rated`} />
+                </span>
+              ))}
+            </p>
           ) : null}
-          <p className="m-0 text-[11.5px] leading-[1.4] text-muted-foreground">{p.excludedNote}</p>
         </div>
       </BlockFrame>
     )
