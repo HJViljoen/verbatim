@@ -816,10 +816,21 @@ async function lastHeardMonths(
  * The five to print: the most recently heard first, and a stable order under
  * them.
  *
- * NULLS LAST AND THE LABEL BREAKS EVERY TIE, because the five a reader sees
- * must not change between a render and its re-render. The first implementation
- * ordered on a column whose fifty rows held one identical value, which is not
- * an order at all.
+ * SILENCE WE HEARD, NOT SILENCE WE NEVER DID — Voice's rule, in Voice's own
+ * words (`lib/pages/voice-surface.ts`): "a theme with no rows at all is
+ * silence we never heard; a dormant entry that carried a reading on this axis
+ * is silence we did." Voice takes its list off the page's month series, so a
+ * dormant entry the series never held is not in it; this list is taken off the
+ * register, so the same rule has to be applied here. Measured read-only
+ * 2026-09-18: all 50 dormant entries on the larger tenant carry NO
+ * `month_theme_readings` row at all, so "gone quiet" about any of them is a
+ * claim the comment-dated axis cannot support, and the page's own sentence —
+ * "Nothing this artefact follows has gone quiet" — is the true one.
+ *
+ * AND THE ORDER IS STABLE, because the five a reader sees must not change
+ * between a render and its re-render: most recent first, ties broken by label.
+ * The first implementation ordered on a column whose fifty rows held one
+ * identical value, which is not an order at all.
  */
 export function quietRows(
   dormant: readonly { id: string; label: string }[],
@@ -828,14 +839,8 @@ export function quietRows(
 ): QuarterQuiet[] {
   return [...dormant]
     .map((d) => ({ id: d.id, label: d.label, lastHeard: heard.get(d.id) ?? null }))
-    .sort((a, b) => {
-      if (a.lastHeard !== b.lastHeard) {
-        if (a.lastHeard == null) return 1
-        if (b.lastHeard == null) return -1
-        return b.lastHeard.localeCompare(a.lastHeard)
-      }
-      return a.label.localeCompare(b.label)
-    })
+    .filter((d) => d.lastHeard != null)
+    .sort((a, b) => (a.lastHeard === b.lastHeard ? a.label.localeCompare(b.label) : (b.lastHeard ?? '').localeCompare(a.lastHeard ?? '')))
     .slice(0, limit)
 }
 
