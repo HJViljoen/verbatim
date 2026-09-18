@@ -18,25 +18,29 @@ import { marketingDeckFixture, refusedDeckFixture } from './fixture'
 const sheets = (data = marketingDeckFixture()) => documentSlides(data)
 
 describe('the sheets', () => {
-  it('cuts four grid sheets out of what used to be seven single ones', () => {
+  it('cuts the one sheet the blocks fit on, and leaves the rest as they were', () => {
     const titles = sheets().map((s) => `${s.layout}:${s.title}`)
     expect(titles).toEqual([
       'single:In short',
       'grid:Your subjects',
-      'grid:The month and the rivals',
-      'grid:What changed this month',
+      'single:The month',
+      'single:What changed this month',
+      'single:Rivals',
       'single:A finding',
       'single:A finding',
-      'grid:Your moves',
+      'single:Your moves',
       'single:How this was read',
     ])
   })
 
-  it('puts two borrowed blocks on one sheet, each at its own span', () => {
+  // MEASURED, NOT PREFERRED. A borrowed block draws at the app's scale inside
+  // the zoomed slide body, so two full-width blocks on one sheet overflow and
+  // the second is cut off at the footer (shot at 1123 × 631, 2026-09-18). The
+  // subjects table, its monthly line and the gap card fit; the month sentence
+  // above the standings did not.
+  it('puts the subjects table, its line and the gap card on one sheet', () => {
     const subjects = sheets().find((s) => s.title === 'Your subjects')!
     expect(subjects.keys).toEqual(['section:mk.subjects', 'section:mk.subjectline'])
-    const moves = sheets().find((s) => s.title === 'Your moves')!
-    expect(moves.keys).toEqual(['section:mk.moves', 'section:mk.ways'])
   })
 
   // `.vb-print-grid` and `Slide.layout: 'grid'` have been in the codebase since
@@ -46,8 +50,7 @@ describe('the sheets', () => {
     const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
     expect(html).toContain('vb-print-grid')
     expect(html).toContain('data-col="12"')
-    expect(html).toContain('data-col="7"')
-    expect(html).toContain('data-col="5"')
+    expect(html).toContain('data-col="6"')
   })
 
   // `mkt.p1.title`: the artboard opens on content with a page title and one
@@ -59,7 +62,7 @@ describe('the sheets', () => {
     const html = render(<DocumentDeck data={data} date="28 Sep 2026" />)
     expect(html).not.toContain('text-[58px]')
     expect(html).toContain('Marketing brief')
-    expect(html).toContain('1 / 8')
+    expect(html).toContain('1 / 9')
   })
 
   // A sheet of two blocks where both refuse is still a sheet: five of the

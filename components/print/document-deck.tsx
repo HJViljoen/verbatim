@@ -6,7 +6,7 @@ import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
 import { FigureCell } from '@/components/blocks/frame'
-import { gapBasisLine, gapLine, sidePct, type Gap } from '@/lib/reading/gap'
+import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
 import { fullDate, round1 } from '@/lib/format'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
@@ -20,7 +20,7 @@ import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { findingHeadlines, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { concludedBasisLine, findingHeadlines, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -210,7 +210,15 @@ function StatTile({ value, label, word }: { value: string; label: string; word?:
           reads as a measurement (mock-gap §6 D2). */}
       <p className={word
         ? 'text-[19px] font-medium leading-[1.2] tracking-[-0.01em] text-secondary-foreground'
-        : 'font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground'}>{value}</p>
+        : 'font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground'}>
+        {/* The arrow is set in the SANS face at two thirds the numeral's size:
+            IBM Plex Mono draws ▲ at the full advance width of a digit, so a
+            38px mono arrow is twice the artboard's and drags the figure beside
+            it off the tile. */}
+        {!word && /^[\u25b2\u25bc]/.test(value)
+          ? <><span className="font-sans text-[24px] align-[0.06em]">{value.slice(0, 1)}</span>{value.slice(1)}</>
+          : value}
+      </p>
       <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
     </div>
   )
@@ -990,7 +998,7 @@ function PageBody({ page, data, title, pages }: { page: DocPage; data: DocumentS
  * prints its one line instead: the block's own empty state, or the
  * missing-input sentence naming the input and who closes it.
  */
-function SectionBody({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
+function SectionBody({ section, data, framing = true }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean }) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
@@ -1003,7 +1011,7 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
   return (
     <div className="flex flex-col gap-3">
-      {section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
+      {framing && section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
       {body}
     </div>
   )
@@ -1030,7 +1038,7 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
  * that the sentence above it was not measured against.
  */
 export function GapCard({ gap }: { gap: Gap }) {
-  const basis = gapBasisLine(gap)
+  const basis = concludedBasisLine(gap)
   const sides = [gap.a, gap.b]
   const pcts = sides.map((s) => sidePct(s))
   const max = Math.max(...pcts.map((p) => p ?? 0), 1)
@@ -1109,9 +1117,12 @@ function sheetExtras(sheet: string, data: DocumentSnapshotData): ReactNode {
  */
 function SheetSection({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
   return (
-    <div data-col={String(Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col gap-2">
-      <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">{section.title}</p>
-      <SectionBody section={section} data={data} />
+    // NO SECTION TITLE AND NO FRAMING LINE HERE. `BlockFrame` prints the
+    // block's own title and its question, so a wrapper heading printed "YOUR
+    // SUBJECTS" twice, four lines apart; and the sheet's framing is hoisted to
+    // the Slide's serif note, once, which is where the artboard puts it.
+    <div data-col={String(Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col">
+      <SectionBody section={section} data={data} framing={false} />
     </div>
   )
 }
@@ -1136,7 +1147,16 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         const sections = s.keys.map((k) => sectionOfSlide(data, k)).filter(Boolean) as DocBriefSection[]
         if (sections.length > 1 || (sections.length === 1 && s.layout === 'grid')) {
           return (
-            <Slide key={sections[0].id} title={s.title} chrome={chrome(s.title)} page={n(i)} pages={pages} layout="grid">
+            <Slide
+              key={sections[0].id}
+              title={s.title}
+              chrome={chrome(s.title)}
+              page={n(i)}
+              pages={pages}
+              layout="grid"
+              flow
+              note={sections[0].framing}
+            >
               {sections.map((sec) => <SheetSection key={sec.id} section={sec} data={data} />)}
               {sheetExtras(s.title, data)}
             </Slide>
@@ -1154,9 +1174,18 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={n(i)} pages={pages} layout="single">
+          <Slide
+            key={page.id}
+            title={title}
+            chrome={chrome(page.title)}
+            page={n(i)}
+            pages={pages}
+            layout="single"
+            header={cover || page.kind !== 'in_short'}
+          >
             {/* The brief's own title rides the first sheet of content when the
-                cover was folded away — never on a second one. */}
+                cover was folded away — never on a second one, and never under
+                a section line saying the same words. */}
             <PageBody page={page} data={data} title={!cover && page.kind === 'in_short'} pages={pages} />
           </Slide>
         )

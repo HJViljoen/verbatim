@@ -1,4 +1,4 @@
-import { GAP_WORDS, gapBasisLine, gapLine, type Gap } from '../../reading/gap'
+import { GAP_WORDS, gapBasisLine, gapLine, sidePct, type Gap } from '../../reading/gap'
 import { fmtInt, round1 } from '../../format'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
@@ -44,14 +44,47 @@ export function leadGap(gaps: readonly Gap[] | undefined): Gap | null {
   return [...gaps].sort((a, b) => rank(a) - rank(b))[0] ?? null
 }
 
-/** The gap tile's face: the magnitude where one was earned, the state's own
- *  word where it was not. Never a magnitude beside a refusal (D2). */
+/**
+ * The gap tile's face: the magnitude where one was earned, the state's own
+ * word where it was not. Never a magnitude beside a refusal (D2).
+ *
+ * AND THE WORD IS SAID ONCE. `gapLine` ends in the state's phrase and the
+ * tile's own value IS that phrase, so the obvious composition printed "too few
+ * to compare — you 31% of 84 · Freitag 44% of 142 · too few to compare. too
+ * few to compare in August" — the same four words three times on one tile. The
+ * label under a word-valued tile therefore carries the LEVELS alone, which is
+ * the half of `gapLine` that still says something, and the earlier reading is
+ * printed only where it CONCLUDED something: a second refusal beside the first
+ * is a sentence about our bookkeeping twice over.
+ */
+/**
+ * The earlier gap, printed ONLY where it concluded something.
+ *
+ * `gapBasisLine` answers for every state, which is right for a caller that
+ * wants the earlier reading whatever it was. A brief prints the current
+ * reading's own refusal already, and a second refusal beside it ("too few to
+ * compare. too few to compare in August") is a sentence about our bookkeeping
+ * said twice — it tells a reader nothing about August that the line above it
+ * has not told them about September.
+ */
+export function concludedBasisLine(gap: Gap): string | null {
+  return gap.basis && (gap.basis.state === 'apart' || gap.basis.state === 'level') ? gapBasisLine(gap) : null
+}
+
 export function gapTile(gap: Gap): OverviewTile {
-  const basis = gapBasisLine(gap)
-  const label = `${gap.objectLabel} — ${gapLine(gap)}${basis ? `. ${basis}` : ''}`
-  return gap.state === 'apart' && gap.gapPts != null
-    ? { value: `${round1(Math.abs(gap.gapPts))} pts`, label }
-    : { value: GAP_WORDS[gap.state], label, word: true }
+  const basis = concludedBasisLine(gap)
+  if (gap.state === 'apart' && gap.gapPts != null) {
+    return { value: `${round1(Math.abs(gap.gapPts))} pts`, label: `${gap.objectLabel} — ${gapLine(gap)}${basis ? `. ${basis}` : ''}` }
+  }
+  const levels = [gap.a, gap.b]
+    .map((side) => {
+      const pct = sidePct(side)
+      return side.observed && pct != null
+        ? `${side.label} ${round1(pct)}% of ${fmtInt(side.value.n)}`
+        : `${side.label} — not tracked`
+    })
+    .join(' · ')
+  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel} — ${levels}${basis ? `. ${basis}` : ''}`, word: true }
 }
 
 /**

@@ -378,6 +378,13 @@
 .vb-print [data-row="5"]  { grid-row: span 5; }
 .vb-print [data-row="6"]  { grid-row: span 6; }
 /* A single tile rendered for a PNG: the app grid's column width, no page. */
+/* A BRIEF'S SHEET COMPOSES VARIABLE-HEIGHT BLOCKS on the same twelve columns
+   (package E-marketing). `.vb-print-grid`'s 116px row unit is the app's TILE
+   grid, which is right for a report's tiles — every one of them is a whole
+   number of rows tall — and wrong for a borrowed page block: a subjects table
+   and its monthly line are whatever height their data makes them, and a fixed
+   row unit drew the second one straight through the first. */
+.vb-print-sheet { grid-auto-rows: min-content; }
 .vb-print-tile { --vb-col: calc((var(--vb-grid-w) - 11 * 16px) / 12); display: grid; grid-auto-rows: var(--vb-row); }
 .vb-print-tile > [data-tile] { width: calc(var(--vb-col) * var(--vb-span, 12) + 16px * (var(--vb-span, 12) - 1)); }
 

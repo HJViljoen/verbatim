@@ -68,10 +68,9 @@ describe('the four section maps', () => {
   it('surfacesOf names only the surfaces a map borrows from', () => {
     expect(surfacesOf(briefMap('leadership_brief'))).toEqual(['overview', 'competitive'])
     expect(surfacesOf(briefMap('content_brief'))).toEqual(['subjects', 'market'])
-    // E-marketing: the artboard's slide 2 carries the monthly line
-    // (`subjects.line`) and its slide 6 carries say-and-hear (`market.ways`),
-    // so the marketing brief now pays for three loaders and says which.
-    expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview', 'subjects', 'market'])
+    // E-marketing: the artboard's slide 2 carries the monthly line, which is
+    // `subjects.line`, so the marketing brief now pays for a second loader.
+    expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview', 'subjects'])
   })
 
   it('pageKindsOf is what the writer is still asked for', () => {
@@ -81,7 +80,7 @@ describe('the four section maps', () => {
 
   it('the marketing map is RP1\'s own list: subjects, category, rivals, moves, method', () => {
     const titles = sectionsOf(briefMap('market_brief')).map((s) => s.title)
-    expect(titles).toEqual(['Your subjects', 'Month by month', 'The month', 'Rivals', 'What changed this month', 'Your moves', 'Say and hear'])
+    expect(titles).toEqual(['Your subjects', 'Month by month', 'The month', 'What changed this month', 'Rivals', 'Your moves'])
     expect(pageKindsOf(briefMap('market_brief'))).toContain('method')
   })
 
@@ -90,15 +89,11 @@ describe('the four section maps', () => {
   // every section had a sheet of its own. The sheets are the assertion, not the
   // section count: a section may be added to a sheet, and the day one is given
   // a sheet of its own again is the day this line has to be argued for.
-  it('the marketing map cuts four sheets, and every sheeted section states its span', () => {
+  it('the marketing map cuts one sheet, and every sheeted section states its span', () => {
     const sections = sectionsOf(briefMap('market_brief'))
-    expect(sections.map((s) => s.sheet)).toEqual([
-      'Your subjects', 'Your subjects',
-      'The month and the rivals', 'The month and the rivals',
-      'What changed this month',
-      'Your moves', 'Your moves',
-    ])
+    expect(sections.filter((s) => s.sheet).map((s) => s.id)).toEqual(['mk.subjects', 'mk.subjectline'])
     for (const s of sections) {
+      if (!s.sheet) { expect(s.span, s.id).toBeUndefined(); continue }
       expect(s.span, s.id).toBeGreaterThan(0)
       expect(s.span!, s.id).toBeLessThanOrEqual(12)
     }

@@ -131,18 +131,30 @@ const page = (p: DocPageKind): BriefEntry => ({ kind: 'page', page: p })
 // page". Five blocks and the written pages that argue from them.
 
 /**
- * THE SHEETS ARE THE ARTBOARD'S (package E-marketing, 2026-09-18).
+ * THE SHEETS ARE THE ARTBOARD'S, AS FAR AS THE BLOCKS FIT (package
+ * E-marketing, 2026-09-18).
  *
- * The map used to be seven entries that paginated to twelve landscape sheets —
- * a cover, five borrowed blocks one to a sheet, four findings and the method
- * page — against an artboard that spends seven on the same month. `sheet`
- * groups the neighbours that belong together, so the subjects table now shares
- * its sheet with its monthly line and the gap card the deck draws beside them,
- * and the moves block shares its sheet with what the company claims and what
- * comes back. The month sentence and the standings keep a sheet between them:
- * neither is on the artboard, and both are what mock-gap §7 calls the
- * product's own honesty machinery (the anomaly line with its band, the top
- * recommendation with its ledger meta, the dual-mention caveat).
+ * The map used to paginate to twelve landscape sheets for a month the artboard
+ * spends seven on, because every section had a sheet of its own and
+ * `Slide.layout: 'grid'` / `.vb-print-grid` had been sitting unused since the
+ * deck was written. `sheet` groups the neighbours that belong together.
+ *
+ * ONE SHEET IS GROUPED AND THE REST ARE NOT, AND THE REASON IS MEASURED, NOT
+ * PREFERRED. The borrowed blocks draw at the APP's scale inside the zoomed
+ * slide body — `BlockFrame` in `print` lifts its title from 10.5px to 12px and
+ * nothing else moves — so a sheet holding two full-width blocks OVERFLOWS and
+ * the second is cut off at the footer. Shot at 1123 × 631 on 2026-09-18: the
+ * month sentence above the standings lost the whole standings table; the moves
+ * block beside `market.ways` lost half the claims. The subjects table, its
+ * monthly line and the gap card DO fit, so that sheet is grouped and the
+ * others keep the sheet they had. Grouping the rest needs a print-density pass
+ * on `components/blocks/frame.tsx`, which is P0's and which this package may
+ * not change (E-marketing status note, "NOT done").
+ *
+ * The month sentence and the standings are on no artboard sheet at all, and
+ * both are what mock-gap §7 calls the product's own honesty machinery — the
+ * anomaly line with its band, the top recommendation with its ledger meta, the
+ * dual-mention caveat. They are kept.
  */
 export const MARKETING_MAP: readonly BriefEntry[] = [
   page('in_short'),
@@ -154,7 +166,8 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
   }),
   // The artboard's own chart, built since Block B and never borrowed by a
   // brief: the calendar line per side, with the tracking-change rule, the
-  // back-read band and a below-floor month drawn as a gutter mark.
+  // back-read band and a below-floor month drawn as a gutter mark. Six columns,
+  // beside the gap card the deck draws.
   block({
     id: 'mk.subjectline', block: 'subjects.line', surface: 'subjects',
     title: 'Month by month', framing: 'The same subjects month by month, on the axis each side was read on.',
@@ -165,35 +178,22 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
     id: 'mk.month', block: 'overview.sentence', surface: 'overview',
     title: 'The month', framing: 'Where the month stands, with the band it cleared and the count behind it.',
     needs: ['months-of-history'],
-    sheet: 'The month and the rivals', span: 12,
-  }),
-  block({
-    id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
-    title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
-    needs: ['months-of-history'],
-    sheet: 'The month and the rivals', span: 12,
   }),
   block({
     id: 'mk.category', block: 'overview.category', surface: 'overview',
     title: 'What changed this month', framing: 'What the wider conversation was about this month.',
     needs: ['months-of-history'],
-    sheet: 'What changed this month', span: 12,
+  }),
+  block({
+    id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
+    title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
+    needs: ['months-of-history'],
   }),
   page('finding'),
   block({
     id: 'mk.moves', block: 'overview.moves', surface: 'overview',
     title: 'Your moves', framing: 'What you said you would do, and the reading it will show up in.',
     needs: ['decisions'],
-    sheet: 'Your moves', span: 7,
-  }),
-  // `mkt.p6.sayhear`. The artboard prints a stable "echoed 14 / pushed back 3";
-  // the block prints the latest update's reading AND its own caveat that six of
-  // the eight recurring claims have flipped a verdict. The caveat travels.
-  block({
-    id: 'mk.ways', block: 'market.ways', surface: 'market',
-    title: 'Say and hear', framing: 'Your own claims, and what the conversation does with each one.',
-    needs: [],
-    sheet: 'Your moves', span: 5,
   }),
   page('method'),
 ]
