@@ -3,7 +3,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { fullDate } from '@/lib/format'
 import { appBaseUrl } from '@/lib/site'
 import { periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
-import type { WeeklySnapshotData } from '@/lib/reports/weekly-build'
+import { staleWeeklySnapshot, type WeeklySnapshotData } from '@/lib/reports/weekly-build'
 import { weeklyBlocksFor } from '@/components/blocks/weekly'
 import { Slide } from './slide'
 
@@ -32,14 +32,16 @@ const fmtDate = (d: Date) => fullDate(d.toISOString())
 
 export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklySnapshotData; date?: string }) {
   const ctx = blockContext(appBaseUrl(), EMAIL)
-  const blocks = weeklyBlocksFor(data.keys)
+  // Asked before anything dereferences `data.reading` (`WEEKLY_SNAPSHOT_VERSION`).
+  const stale = staleWeeklySnapshot(data)
+  const blocks = stale ? [] : weeklyBlocksFor(data.keys)
   // THE RULE ON EVERY SHEET. A reader of a PDF has no masthead to scroll back
   // to, which is the same reason the method note is on every slide of a report.
   const chrome = {
     context: `${data.company} · ${data.period} · reading as at ${fullDate(data.readingAt)}`,
     footer: (
       <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-        <span className="text-secondary-foreground">{weeklyRuleFor(periodNounFor(data.reading.window))}</span>
+        <span className="text-secondary-foreground">{stale ? '' : weeklyRuleFor(periodNounFor(data.reading.window))}</span>
         <span aria-hidden> · </span>
         <span>{date}</span>
       </p>
@@ -48,7 +50,7 @@ export function WeeklyDeck({ data, date = fmtDate(new Date()) }: { data: WeeklyS
   if (blocks.length === 0) {
     return (
       <Slide title={data.subject} chrome={chrome} page={1} pages={1} layout="single">
-        <p className="m-0 text-[13px] text-muted-foreground">This report names no section this build knows how to draw.</p>
+        <p className="m-0 text-[13px] text-muted-foreground">{stale ?? 'This report names no section this build knows how to draw.'}</p>
       </Slide>
     )
   }

@@ -2077,7 +2077,11 @@ const SALES_CATEGORIES = ['objection', 'praise', 'switching_signal'] as const
 const SALES_UNREAD_NO_WINDOW =
   'This update covered no window, so there is nothing to read a week of objections out of.'
 
-async function buildSales(input: {
+/** EXPORTED FOR THE WEEKLY REPORT (block D wave 2). WR4 and This week's §7 are
+ *  the same reading of the same window, and the weekly artefact had its own
+ *  month-scoped loader producing a different shape — two reads, two shapes and
+ *  two things to tell a salesperson about one week. One loader, called twice. */
+export async function buildSales(input: {
   supabase: SupabaseClient
   clientId: string
   window: WeekWindow | null
@@ -2095,6 +2099,7 @@ async function buildSales(input: {
     videos: input.windowVideos,
     grouping,
     objections: [],
+    objectionsTotal: null,
     praise: [],
     switching: [],
     switchingTotal: null,
@@ -2127,6 +2132,8 @@ async function buildSales(input: {
   return {
     ...base,
     objections: objections.slice(0, SALES_GROUPS_SHOWN),
+    // COUNTED BEFORE IT IS CAPPED, so "N more objections" can name a real N.
+    objectionsTotal: objections.length,
     praise: cited.filter((c) => c.category === 'praise').slice(0, SALES_PRAISE_SHOWN).map(toSalesQuote),
     switching: switching.slice(0, SALES_SWITCHING_SHOWN).map(toSalesQuote),
     switchingTotal: switchingComments,

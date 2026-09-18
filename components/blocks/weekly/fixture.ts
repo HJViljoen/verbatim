@@ -46,6 +46,9 @@ function base(overview = overviewFixture()): WeeklyData {
     readingAt: NOW,
     runId: 'run-1',
     window: WINDOW,
+    // The masthead's two dates: this update, and the one behind it.
+    update: { date: '2026-09-13T06:00:00.000Z', previous: '2026-09-05T06:00:00.000Z' },
+    method: overview.method,
     section1: {
       month: MONTH,
       daysIn: 18,
@@ -75,7 +78,15 @@ function base(overview = overviewFixture()): WeeklyData {
         { platform: 'reddit', videos: 7 },
       ],
       monthVideos: 2359,
-      newThemes: [{ label: 'Zips failing after a year', videos: 12 }],
+      // FIVE HEARD, THREE SHOWN — the shape the count printed off the slice
+      // made invisible. The stat row prints `newThemesTotal`; the cards below
+      // are the largest few.
+      newThemes: [
+        { label: 'Zips failing after a year', videos: 12 },
+        { label: 'Laptop sleeve sizing', videos: 6 },
+        { label: 'Strap hardware rattle', videos: 4 },
+      ],
+      newThemesTotal: 5,
       newThemesNote: null,
       rivalPosts: [
         { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, commentsRead: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
@@ -86,36 +97,58 @@ function base(overview = overviewFixture()): WeeklyData {
       // block has to print honestly.
       quotes: [
         { subject: 'Durability', quote: { ref: quoteRef.evidence('ev-w1'), text: 'Third winter on mine and the strap has not given at all' }, cite: 'YouTube · 9 Sep', href: 'https://www.youtube.com/watch?v=w1' },
-        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Rode through an hour of rain and the laptop came out dry', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
+        // A REAL DUTCH QUOTE WITH A REAL TRANSLATION. The `english` was a copy of
+        // the `text`, so the render printed the same sentence twice under
+        // "Dutch · machine translation" and the evidence read as a duplication
+        // bug that is not one.
+        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Een uur door de regen gereden en de laptop kwam er droog uit', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
         { subject: 'Repair and warranty', quote: { ref: quoteRef.evidence('ev-w3'), text: 'They fixed the zip for free eighteen months in' }, cite: 'TikTok · 11 Sep', href: 'https://www.tiktok.com/@x/video/w3' },
       ],
       quotesTotal: 41,
       quotesNote: null,
     },
+    // §4 IS `ForSalesData` — the counted shape This week's loader produces,
+    // which this artefact now calls rather than reading the month a second
+    // time (block D wave 2).
     sales: {
-      rows: [
+      window: WINDOW,
+      // VIDEOS DATED IN THE WINDOW, not videos gathered. `incoming.gathered`
+      // is 271 — what this update LOOKED at — and this is
+      // `window_denominators` over the same days, dated by the comment. They
+      // are different measures and the fixture keeps them different numbers,
+      // because a fixture in which they agree teaches a reviewer that they
+      // are one thing. 205 is the n the flag's own week side rests on.
+      videos: 205,
+      grouping: 'theme',
+      objections: [
         {
-          kind: 'objection',
-          kindLabel: 'Objection',
-          label: 'Price',
-          rival: 'Freitag',
-          quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null },
-          cite: 'TikTok · 12 Sep · under a video we read',
-          href: 'https://www.tiktok.com/@x/video/1',
+          id: 't-price',
+          label: 'Price against longevity',
+          videos: 96,
+          quotes: [
+            { quote: { ref: 'e:2', text: 'Beautiful, but I cannot justify that for a bag.', lang: 'en', english: null }, cite: 'TikTok · 12 Sep · under a category video', href: 'https://www.tiktok.com/@x/video/1' },
+          ],
         },
-        {
-          kind: 'praise',
-          kindLabel: 'Selling point',
-          label: 'Durability',
-          rival: null,
-          quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' },
-          cite: 'tiktok · 11 Sep · under a video we read',
-          href: null,
-        },
+        { id: 't-recycled', label: 'Is it really recycled', videos: 41, quotes: [] },
+        { id: 't-zips', label: 'Zips', videos: 22, quotes: [] },
       ],
-      hasMore: true,
-      note: null,
-      briefHref: '/dashboard/reports',
+      // SEVEN GROUPS, THREE SHOWN — the shape `objections.slice(1).length`
+      // made invisible by always answering "2 more objections".
+      objectionsTotal: 7,
+      praise: [
+        { quote: { ref: 'e:3', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under a category video', href: null },
+      ],
+      // Two shown of twelve counted — the shape a slice-then-count made
+      // invisible, and the reason `switchingTotal` is taken before the cap.
+      switching: [
+        { quote: { ref: 'e:9', text: 'Moving off Freitag after the strap went', lang: 'en', english: null }, cite: 'Reddit · 12 Sep · under a Freitag video', href: null },
+      ],
+      switchingTotal: 12,
+      rivalComplaints: [
+        { id: 'competitor:Freitag', label: 'Freitag', videos: 41, quotes: [] },
+      ],
+      brief: { href: '/dashboard/reports', label: 'Open the sales brief →' },
+      unread: null,
     },
     content: {
       worthAReply: [
@@ -130,9 +163,19 @@ function base(overview = overviewFixture()): WeeklyData {
         },
       ],
       worthAReplyNote: null,
+      // WHAT THE QUEUE SURFACED, and the split by intent. Both are bounded by
+      // `rankEngageCandidates` (three a kind, twelve in all, plus three
+      // flagged), which is why the row is headed "Surfaced" and says so.
+      surfaced: 12,
+      surfacedCounts: [
+        { label: 'question', count: 7 },
+        { label: 'objection', count: 3 },
+        { label: 'buying signal', count: 2 },
+      ],
       rising: overview.category.growing,
       risingNote: null,
       format: { label: 'Talking head', multiple: 2.4, videos: 31, of: 402 },
+      runnerUp: { label: 'Commute POV', multiple: 1.8, videos: 24 },
       weekHref: '/dashboard/week',
       briefHref: '/dashboard/reports',
     },
@@ -187,6 +230,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       ...data.incoming,
       analysed: null,
       newThemes: [],
+      newThemesTotal: 0,
       newThemesNote: 'No theme was heard for the first time in this update.',
       rivalPosts: [],
       rivalPostsNote: 'No tracked rival posted in this update’s window.',
@@ -194,14 +238,30 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       quotesTotal: null,
       quotesNote: 'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.',
     },
-    sales: { rows: [], hasMore: false, note: 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.', briefHref: '/dashboard/reports' },
+    // The degraded arm: the window was read and nothing in it was an
+    // objection, a switch or a piece of praise — and `videos` is null, so
+    // `forSalesEmpty` says which of those two facts is the reason.
+    sales: {
+      ...data.sales,
+      videos: null,
+      grouping: 'theme',
+      objections: [],
+      objectionsTotal: 0,
+      praise: [],
+      switching: [],
+      switchingTotal: null,
+      rivalComplaints: [],
+    },
     content: {
       ...data.content,
       worthAReply: [],
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
+      surfaced: null,
+      surfacedCounts: [],
       rising: overview.category.growing,
       risingNote: overview.category.moversNote,
       format: null,
+      runnerUp: null,
     },
     coverage: { line: overview.record.line, lines: overview.record.lines, href: '/dashboard/settings' },
     ...over,
@@ -225,6 +285,11 @@ export function thinFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       }),
     },
     incoming: { ...data.incoming, gathered: 38, analysed: 34, platforms: [{ platform: 'tiktok', videos: 38 }] },
+    // THE WHOLE UPDATE IS THIN, NOT HALF OF IT. The thin state overrode
+    // `incoming` alone and left §4 on the base window's 205, so one email said
+    // "38 videos gathered" in WR3 and "of 205 videos dated in the window"
+    // twice in WR4, five inches apart. A fixture state is a whole reading.
+    sales: { ...data.sales, videos: 31 },
     ...over,
   }
 }

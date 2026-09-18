@@ -1,6 +1,7 @@
 import { MAX_FLAGS, baselineLabel, type ThinUpdateReason } from '../reading/anomaly'
-import { fmtInt, fmtPct, shortDate } from '../format'
+import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { longMonth } from '../format'
+import { PRIVACY_LINE, platformShareLine } from '../reading/method'
 import { prevMonth } from '../reading/month-key'
 import { mergeFigures } from '../blocks/types'
 import type { FigureTable } from '../reading/verdicts'
@@ -304,6 +305,31 @@ export const NOTHING_UNUSUAL = 'Nothing unusual this week.'
 export const nothingUnusualLine = (noun: PeriodNoun): string =>
   noun === 'week' ? NOTHING_UNUSUAL : 'Nothing unusual in this update.'
 
+/** The coda after a flag: it was the only one. The same line the quiet state
+ *  prints, in the position the artboard puts it — after the card, not instead
+ *  of it. */
+export const nothingElseUnusual = (noun: PeriodNoun): string =>
+  noun === 'week' ? 'Nothing else unusual this week.' : 'Nothing else unusual in this update.'
+
+/**
+ * "271 videos this update · 2,359 in September so far" — WR1's meta.
+ *
+ * THE MOCK'S "n = 312 videos this week", WITH THE CONTRIBUTION RESTATEMENT
+ * (mock-gap §6 D6). A week-only n at the top of the first screen is the
+ * run-indexed reading in one clause; the month beside it is what stops a
+ * reader taking the update for a period. Where the month is not recorded the
+ * half that is true is printed alone, and the clause that would have been a
+ * zero is simply absent.
+ *
+ * NOT A NEW FIGURE. Both counts are WR3's `update_videos` / `month_videos`,
+ * declared there and restated here; nothing on the first screen declares a
+ * thirteenth token against the budget.
+ */
+export function updateMeta(gathered: number, monthVideos: number | null, month: string): string {
+  const head = `${fmtInt(gathered)} ${gathered === 1 ? 'video' : 'videos'} this update`
+  return monthVideos == null ? head : `${head} · ${fmtInt(monthVideos)} in ${longMonth(month)} so far`
+}
+
 export const CHECK_NOT_RECORDED =
   'The weekly check is not recorded for this workspace yet.'
 
@@ -467,12 +493,217 @@ export function withinFirstScreenBudget(s: Section1): boolean {
   return firstScreenCount(s) <= FIRST_SCREEN_BUDGET
 }
 
+// ---- Section 2's lead ---------------------------------------------------------
+
+/**
+ * What the subject table adds up to, said before a reader reads any row
+ * (`weekly.s2.lead`).
+ *
+ * THE MOCK'S LINE IS A WEEK COUNT AGAINST A TYPICAL WEEK — "Three of the six
+ * ran above a typical week — durability, waterproofing and repair & warranty"
+ * — and nothing in this product computes a typical week (the same refusal the
+ * block already makes about the artboard's typical-week tick; mock-gap §6 D6).
+ * The brief names the honest substitute in as many words: "Under D6 the honest
+ * lead counts subjects whose MONTH reading cleared its band; write that, or
+ * leave the slot empty and say why." This writes that. It was neither written
+ * nor refused, which is how a named MISSING item came to read as an oversight.
+ *
+ * WHAT "CLEARED ITS BAND" MEANS HERE is `Verdict.state === 'moved'` on the
+ * CATEGORY side — the only one of the three sides with the n to carry a
+ * comparison on today's corpus (`SubjectRow.categoryAtLastMonth`'s own
+ * docblock) — and `moved` is the one state that asserts both gates passed.
+ *
+ * A SUBJECT THAT COULD NOT BE COMPARED IS NOT A SUBJECT THAT DID NOT MOVE.
+ * `refused` and `baseline_forming` are claims about our own bookkeeping, and
+ * counting them among the still ones would turn a gap in the record into a
+ * finding about the conversation. So the line tells "none of the six moved"
+ * apart from "none of the six could be compared".
+ *
+ * NO DIRECTION WORD, ON PURPOSE. "moved beyond its band" is a magnitude and a
+ * threshold; "ran above", "rose" or "grew" would be a direction claim made in
+ * a lead before any row below it has earned one (rule (c)).
+ */
+export interface SubjectsLead {
+  /** The count and its "of N", for the block's level node. Null where the
+   *  sentence states no count. */
+  level: string | null
+  /** The rest of the sentence, which follows the level directly. */
+  body: string
+}
+
+export function subjectsLead(
+  rows: readonly { label: string; category: { verdict: { state: string } | null } }[],
+): SubjectsLead | null {
+  if (rows.length === 0) return null
+  const comparable = (state: string | undefined) => state != null && state !== 'baseline_forming' && state !== 'refused'
+  const compared = rows.filter((r) => comparable(r.category.verdict?.state))
+  const moved = rows.filter((r) => r.category.verdict?.state === 'moved')
+  const noun = rows.length === 1 ? 'subject' : 'subjects'
+  if (compared.length === 0) {
+    return {
+      level: null,
+      body: `No ${rows.length === 1 ? 'subject' : 'subject'} carried a comparison this month — the readings are here, the months to read them against are not.`,
+    }
+  }
+  if (moved.length === 0) {
+    return {
+      level: `0 of ${fmtInt(rows.length)}`,
+      body: ` ${noun} moved beyond their band this month — every change is inside the margin of the measurement.`,
+    }
+  }
+  return {
+    level: `${fmtInt(moved.length)} of ${fmtInt(rows.length)}`,
+    body: ` ${noun} moved beyond their band this month — ${nameList(moved.map((r) => r.label.toLowerCase()))}.`,
+  }
+}
+
+/** "a, b and c". No serial comma: a subject's own label may carry one, and the
+ *  list would then read as an item longer than it is. */
+function nameList(names: readonly string[]): string {
+  if (names.length === 1) return names[0]
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
+
 // ---- The masthead -------------------------------------------------------------
 
 /** "6 – 13 Sep", or the month so far where the update records no window. */
 export function weeklyPeriod(window: { from: string; to: string } | null, month: string): string {
   if (!window) return `${longMonth(month)} so far`
   return `${shortDate(window.from)} – ${shortDate(window.to)}`
+}
+
+/**
+ * "Verbatim · weekly · update of 27 Sep" — the artboard's eyebrow
+ * (`weekly.eyebrow`, block D wave 2).
+ *
+ * THE ARTEFACT IS NAMED AND THE UPDATE IS DATED, which is what the mock puts
+ * here and what the built eyebrow did not: it printed the tenant and the
+ * product category (`Sealand · consumer intelligence`), so a reader with three
+ * Verbatim emails open could not tell which artefact or which week they were
+ * in. The TENANT moves to the right end of the date line, where the mock has
+ * it.
+ *
+ * "weekly" IS THE ARTEFACT'S NAME, NOT A CLAIM ABOUT THE WINDOW. Sealand's
+ * window is thirty days and every line that describes the window takes
+ * `periodNounFor`; this one names the report a reader subscribed to, and the
+ * update's own date sits beside it so the two cannot be confused.
+ *
+ * `27 September` in the mock, `27 Sep` here: the product has ONE short date
+ * form (`shortDate`), and a second one invented for a single line is how
+ * "16 Sept" came to sit under "Sep" in the deck footer.
+ */
+export function weeklyEyebrow(updateDate: string | null): string {
+  return updateDate ? `Verbatim · weekly · update of ${shortDate(updateDate)}` : 'Verbatim · weekly'
+}
+
+/**
+ * "6 – 13 Sep · previous update 30 Aug" — the left half of the masthead's
+ * two-ended row (`weekly.daterange`).
+ *
+ * THE PREVIOUS UPDATE IS BOUND RATHER THAN DROPPED. The mock prints it and the
+ * gap note recorded "no field on this artefact" — but `latestRuns` already
+ * reads this tenant's last nine delivered runs for the thin gate, so the one
+ * behind this one costs no query at all. It is the same expression This week's
+ * `WeekUpdate.previous` uses, and a first update SAYS it is one rather than
+ * leaving the clause off: "no previous update" is the reason such a report has
+ * nothing behind it to be read against.
+ */
+export function weeklyDateLine(period: string, previous: string | null): string {
+  return `${period} · ${previous ? `previous update ${shortDate(previous)}` : 'no previous update'}`
+}
+
+/**
+ * One link per section, at the foot of the artefact (`weekly.s6.links`).
+ *
+ * THE MOCK LISTS SIX AND THIS PRODUCT HAS FOUR SURFACES BEHIND THEM. §1, §3
+ * and §5 all open This week, and printing one destination three times under
+ * three names teaches a reader there are three places to go. So the list is
+ * DEDUPED BY HREF and the label that survives is the first section that
+ * pointed there.
+ *
+ * IT NAMES ONLY THE SECTIONS THIS ARTEFACT DREW. A stored arrangement may name
+ * fewer (`WeeklySnapshotData.keys`), and a link to a section the reader never
+ * saw is a promise about a report that was not sent.
+ *
+ * DOCUMENT CHROME, NOT WR6's. The mock draws it inside §6, immediately above
+ * the buttons — which are the document's — and it is a map OF the artefact, so
+ * it is composed where the arrangement is known and rendered by the document.
+ */
+export function weeklyLinks(input: {
+  noun: PeriodNoun
+  keys: readonly string[]
+  /** Where the flag's own "see the week" points, when there is a flag. */
+  flagHref: string | null
+  weekHref: string
+  subjectsHref: string
+  briefHref: string
+  recordHref: string
+}): { key: WeeklyBlockKey; label: string; href: string }[] {
+  const wanted: { key: WeeklyBlockKey; label: string; href: string }[] = [
+    { key: 'weekly.week', label: `Unusual ${inPeriod(input.noun)}`, href: input.flagHref ?? input.weekHref },
+    { key: 'weekly.subjects', label: 'Your subjects', href: input.subjectsHref },
+    { key: 'weekly.incoming', label: 'What came in', href: input.weekHref },
+    { key: 'weekly.sales', label: 'For sales', href: input.briefHref },
+    { key: 'weekly.content', label: 'For content', href: input.weekHref },
+    { key: 'weekly.coverage', label: 'The record', href: input.recordHref },
+  ]
+  const seen = new Set<string>()
+  return wanted.filter((l) => {
+    if (!input.keys.includes(l.key)) return false
+    if (seen.has(l.href)) return false
+    seen.add(l.href)
+    return true
+  })
+}
+
+/**
+ * The three mono lines at the foot (`weekly.footer`).
+ *
+ * WHAT THE MOCK ASKS FOR, MINUS ONE CLAUSE. Prepared-by · the update's date ·
+ * the platform mix · the privacy sentence. "next update 4 Oct" is NOT here:
+ * nothing in this product computes a next update date — a schedule's cadence
+ * is not a promise about when a run will land — and a date printed in an email
+ * a client can hold up is a promise.
+ *
+ * "PREPARED FOR", NOT "BY", and that is argued in `components/email/weekly.tsx`:
+ * this artefact is sent to the client's own staff, and only a share link is a
+ * document the client forwards under their own name.
+ *
+ * THE MIX IS THIS UPDATE'S OWN AND SAYS SO. The mock prints a bare
+ * "TikTok 38% · YouTube 29% …" under a footer whose other line is dated by the
+ * update; the record's mix (WR6) is the MONTH's, and two mixes with no label
+ * between them is how one share comes to mean two things (D15). The line is
+ * composed by `platformShareLine`, the one renderer of a mix as percentages.
+ */
+export interface WeeklyFooterLines {
+  prepared: string
+  /** Null where this update gathered nothing, or recorded no platform. */
+  mix: string | null
+  privacy: string
+}
+
+export function weeklyFooterLines(input: {
+  company: string
+  updateDate: string | null
+  readingAt: string
+  platforms: readonly { platform: string; videos: number }[]
+}): WeeklyFooterLines {
+  const mixOf: Record<string, number> = {}
+  let videos = 0
+  for (const p of input.platforms) {
+    mixOf[p.platform] = (mixOf[p.platform] ?? 0) + p.videos
+    videos += p.videos
+  }
+  const share = platformShareLine(mixOf)
+  return {
+    prepared: [
+      `Prepared for ${input.company} · with Verbatim`,
+      input.updateDate ? `update of ${fullDate(input.updateDate)}` : null,
+      `read ${fullDate(input.readingAt)}`,
+    ].filter((s): s is string => s != null).join(' · '),
+    mix: share ? `${share} — this update’s ${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'}` : null,
+    privacy: PRIVACY_LINE,
+  }
 }
 
 /**
@@ -498,16 +729,51 @@ export function weeklyPeriod(window: { from: string; to: string } | null, month:
  * workspace being told its week was quiet.
  */
 export function weeklySubject(company: string, check: WeekCheck): string {
-  const head = `${company}: your update`
+  return `${company}: ${weeklyHeadline(check)}`
+}
+
+/**
+ * The same sentence WITHOUT the tenant's name — what the artefact prints as its
+ * own heading (`weekly.headline`).
+ *
+ * THE TENANT BELONGS IN AN INBOX, NOT IN A HEADLINE. `weeklySubject` is read
+ * in a mail list where "Sealand:" is how a reader tells one client's report
+ * from another's, and it keeps it. The email's `h1` and the share page's
+ * heading are INSIDE the artefact, where the artboard puts the tenant at the
+ * right end of the date row and again in the footer — and the built masthead
+ * printed it a third time, as the first word of the headline, which the
+ * artboard's headline does not do.
+ *
+ * SIX STATES, SIX SENTENCES, and that is the whole point of the six — see
+ * `weeklySubject` above.
+ */
+export function weeklyHeadline(check: WeekCheck): string {
+  const head = 'Your update'
   switch (check.state) {
     case 'flagged': {
       // A flagged check with nothing printable is not "nothing unusual": the
       // check fired and the detail did not survive the read. Say that much.
       if (check.flags.length === 0) return `${head} — something ${inPeriod(check.noun)} is unusual`
-      const first = check.flags[0].label
+      const flag = check.flags[0]
+      // THE OBJECT, AND THE COUNT IT RESTS ON (weekly.headline, block D wave 2).
+      // The mock's subject is "Zip failures 3× usual this week, under Freitag
+      // content": a multiple with no denominator, read before any of the
+      // apparatus that makes a number mean something, and a "where" clause no
+      // field supplies. A k OF n is the opposite case — it carries its own
+      // denominator, which is the whole of what rule (b) asks — so the subject
+      // may state it, and a reader can weigh the claim from the inbox.
+      //
+      // AND ONLY WHERE ONE FLAG IS NAMED. The level is `flags[0]`'s, so on a
+      // multi-flag check it read "Objections and 1 more are unusual this week
+      // — 29 of 205 videos": a count belonging to one of two named things,
+      // with the sentence not saying which. Two flags get the objects and no
+      // count, and the artefact's own §1 carries both flags in full.
+      const level = check.flags.length === 1 && flag.weekN > 0
+        ? ` — ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos`
+        : ''
       return check.flags.length === 1
-        ? `${company}: ${first} is unusual ${inPeriod(check.noun)}`
-        : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
+        ? `${flag.label} is unusual ${inPeriod(check.noun)}${level}`
+        : `${flag.label} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
     }
     case 'nothing_unusual':
       return `${head} — nothing unusual ${inPeriod(check.noun)}`

@@ -5,17 +5,16 @@ import type { MonthStatus } from '../reading/types'
 import { selectAll } from '../supabase-admin'
 import { rows } from './read'
 import { isMissingMonthlyReading, readDenominators } from '../reading/monthly'
-import type { ReadingHandle } from '../reading/read'
-import { cleanQuote, fetchQuoteCitationsByAudience, fetchQuoteResolutionsByRefs, readsAsHeroQuote, type QuoteCitation } from '../quotes'
-import { quoteRef } from '../renderables/quotes-freeze'
-import { citationLink } from '../evidence-cite'
-import { platformLabel, shortDate } from '../format'
-import { monthStartOf, nextMonth, prevMonth } from '../reading/month-key'
+import { loadWindowReading, type ReadingHandle } from '../reading/read'
+import { fetchQuoteResolutionsByRefs } from '../quotes'
+import { monthStartOf, prevMonth } from '../reading/month-key'
 import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } from '../reading/anomaly'
 import { INDUSTRY_AUDIENCE } from '../rivals'
+import type { ForSalesData } from '../blocks/for-sales'
+import type { MethodLines } from '../reading/method'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
-import { loadSubjectQuotes, loadSubjects, workedLabel } from './week'
+import { buildSales, loadSubjectQuotes, loadSubjects, workedLabel } from './week'
 import {
   periodNounFor,
   weekCheck,
@@ -55,8 +54,13 @@ export interface IncomingBlock {
   platforms: { platform: string; videos: number }[]
   /** The month's videos so far, which the counts above are a contribution to. */
   monthVideos: number | null
-  /** Themes this update heard for the first time. */
+  /** Themes this update heard for the first time — the few that get a card.
+   *  `newThemesTotal` is how many there were, and the stat row prints THAT:
+   *  counting this array printed a display slice as a measurement. */
   newThemes: { label: string; videos: number }[]
+  /** How many themes this update heard for the first time, counted before the
+   *  slice above. Never null: the read either answers or the block is empty. */
+  newThemesTotal: number
   newThemesNote: string | null
   rivalPosts: RivalPost[]
   rivalPostsNote: string | null
@@ -102,49 +106,66 @@ export interface RivalPost {
   href: string | null
 }
 
-/** Section 4 — for sales. The customers' words, grouped by rival where they
- *  named one. */
-export interface SalesRow {
-  /** The insight kind, as the pipeline wrote it. */
-  kind: string
-  /** The kind in the reader's words. */
-  kindLabel: string
-  /** What it was about, in plain words. */
-  label: string
-  /** The rival the video belonged to, where it belonged to one. */
-  rival: string | null
-  quote: Quote
-  cite: string
-  href: string | null
-}
-
-export interface ForSalesBlock {
-  rows: SalesRow[]
-  /**
-   * Whether the month holds more of these than the four printed.
-   *
-   * A BOOLEAN, NOT A COUNT, and deliberately. The count printed here was
-   * `insights.length - rows.length` over a query capped at 120, so both tenants
-   * printed the identical "116 more in their own words" while the real numbers
-   * of qualifying rows were 838 and 1,486 — two workspaces of very different
-   * size printing the same number is the tell. An exact count means counting
-   * every quoted comment of the month, which is a read this artefact does not
-   * need in order to draw one link.
-   */
-  hasMore: boolean
-  note: string | null
-  briefHref: string
-}
-
 /** Section 5 — for content. */
 export interface ForContentBlock {
   worthAReply: { ref: string; text: string; lang?: string | null; english?: string | null; context: string; intentLabel: string; href: string | null }[]
   worthAReplyNote: string | null
+  /**
+   * How many comments the reply queue SURFACED for this update, and of what
+   * kinds — the mock's "Worth a reply this week · 12 · questions 7 ·
+   * complaints 3 · wanting to buy 2" (`weekly.s5.reply`).
+   *
+   * IT IS NOT A COUNT OF WHAT IS WAITING, AND THE FIELD'S NAME SAYS SO NOW.
+   * This was `worthAReplyTotal`, over a docblock claiming it was "the inbox's
+   * own total, taken before the cap". It is `ContentData.inbox.total`, which
+   * is `inboxRows.length` (lib/pages/content.ts) over
+   * `shapeInbox([...digest.engage, ...digest.flagged])` — and both of those
+   * arrays are the output of `rankEngageCandidates`, which is CAPPED:
+   * `perCategoryCap` 3 and `totalCap` 12 for `engage`, `totalCap` 3 for
+   * `flagged` (lib/engage.ts). So the number is bounded at fifteen for every
+   * tenant forever and each kind's count at three, and the fixture's "12 ·
+   * question 7 · objection 3 · buying signal 2" is the cap's own shape rather
+   * than a reading of anyone's week.
+   *
+   * Printing that as a measurement is the `switching.length` defect one
+   * section up (lib/blocks/for-sales.ts, "NEVER COUNT THIS ARRAY AND PRINT THE
+   * ANSWER") one level higher: this artefact correctly refused
+   * `WORTH_A_REPLY` = 3 and landed on 12 of 15 instead.
+   * `lib/pages/content.ts` already words the same number honestly in its own
+   * method note — "the reply inbox SURFACES N comments the analysis already
+   * cited" — so the block prints it under that verb, with the cap stated,
+   * rather than telling a content person that fifteen is how much of their
+   * week is waiting.
+   *
+   * A real head count of the window's reply-worthy comments would have to come
+   * off the candidate POOL, which lives inside the Content loader and is not
+   * returned; this artefact is the page's own reading and does not open a
+   * second one to get it.
+   *
+   * Null where the Content loader could not be read at all.
+   *
+   * The mock's second sub-line, "8 answered last week · 4 ignored", is not
+   * here and cannot be: nothing in this product records whether a comment was
+   * answered (mock-gap §6 D14).
+   */
+  surfaced: number | null
+  surfacedCounts: { label: string; count: number }[]
   rising: Mover[]
   risingNote: string | null
   /** `label` is the READER'S word for the format, through `workedLabel` — never
    *  the stored slug. `of` is the n the median was read against. */
   format: { label: string; multiple: number; videos: number; of: number } | null
+  /**
+   * The runner-up in the same family as `format`, so the block can print the
+   * mock's head-to-head with an n on EACH side rather than one figure alone
+   * (`weekly.s5.format`).
+   *
+   * THE SAME FAMILY, NEVER A MIXED PAIR. `format` is the best FORMAT where the
+   * update has one and the best HOOK otherwise; a runner-up taken from the
+   * other list would put a hook beside a format under a heading that says one
+   * outperformed the other.
+   */
+  runnerUp: { label: string; multiple: number; videos: number } | null
   weekHref: string
   briefHref: string
 }
@@ -166,6 +187,25 @@ export interface WeeklyData {
   runId: string | null
   /** The update's frozen window (`pipeline_runs.window_start/_end`). */
   window: { from: string; to: string } | null
+  /**
+   * This update's own date and the one delivered before it — the masthead's
+   * two-ended row (`weekly.daterange`).
+   *
+   * BOTH OFF `latestRuns`, WHICH THIS LOADER ALREADY READS for the thin gate,
+   * so binding the mock's "previous update 20 Sep" costs no query. The same
+   * expression This week uses (`lib/pages/week.ts:WeekUpdate`): a run is dated
+   * by when it finished, and by when it started where it never recorded a
+   * finish.
+   */
+  update: { date: string | null; previous: string | null }
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * OVERVIEW ALREADY COMPOSED IT off the `RecordInputs` this report's §6 rests
+   * on, so the artefact and the page cannot word one basis two ways. Null where
+   * the record could not be read at all.
+   */
+  method: MethodLines | null
   section1: Section1
   /** OV2's own block, rendered at report width. */
   subjects: SubjectsBlock
@@ -174,25 +214,22 @@ export interface WeeklyData {
   contributions: Record<string, number> | null
   contributionsNote: string | null
   incoming: IncomingBlock
-  sales: ForSalesBlock
+  /**
+   * Section 4, THE COUNTED SHAPE (`lib/blocks/for-sales.ts`, block D wave 2).
+   *
+   * This was a flat list of four quotes over the MONTH with no count anywhere,
+   * beside This week's counted groups over the UPDATE'S WINDOW — two loaders,
+   * two shapes, two things to tell a salesperson about one week, and the file
+   * that carried it said so in its own header. `buildSales` is now called
+   * once per artefact: the same objection groups, the same denominator, the
+   * same switching total.
+   */
+  sales: ForSalesData
   content: ForContentBlock
   coverage: CoverageBlock
 }
 
 // ---- the pure half ------------------------------------------------------------
-
-const KIND_LABEL: Record<string, string> = {
-  objection: 'Objection',
-  pain_point: 'Complaint',
-  switching_signal: 'Switching signal',
-  praise: 'Selling point',
-}
-
-/** The four kinds section 4 is about, in the order the design lists them. */
-export const SALES_KINDS = ['objection', 'praise', 'switching_signal', 'pain_point'] as const
-
-/** How many of the customers' own words section 4 prints. */
-export const SALES_ROWS = 4
 
 /** How many comments section 5 names as worth a reply (design: "top three"). */
 export const WORTH_A_REPLY = 3
@@ -331,6 +368,7 @@ interface RunRow {
   videos_scraped: number | null
   window_start?: string | null
   window_end?: string | null
+  window_basis?: string | null
   stalled?: boolean | null
 }
 
@@ -426,9 +464,41 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
   }
 
   // ── sections 3, 4 ───────────────────────────────────────────────────────
+  //
+  // §4 IS THIS WEEK'S OWN LOADER, CALLED A SECOND TIME (block D wave 2). It
+  // reads THE UPDATE'S WINDOW and produces counted groups with a denominator;
+  // the month-scoped quote list this artefact had instead was the second
+  // implementation its own file warned about.
+  //
+  // AND `windowVideos` IS THE SAME READ THIS WEEK MAKES, NOT A HARDCODED NULL.
+  // It was passed `null` unconditionally, which meant the frame's
+  // "N videos this update" meta and both `denominatorOf` sub-lines could NEVER
+  // print on a real send — the arm that ships is the degraded one, and three
+  // of the four screenshots were of an artefact that cannot exist. The n is
+  // `window_denominators` summed over every audience, exactly as This week
+  // derives it (`lib/pages/week.ts`, `totalVideos(windowRead.denominators)`),
+  // so the page and the report state one denominator or neither. Where M3 is
+  // not applied `loadWindowReading` answers `denominators: null` by its own
+  // `isMissingMonthlyReading` guard, the sum is null, and `ForSalesData`
+  // carries that as a stated absence — which is what the degraded arm is for.
   const [incoming, sales] = await Promise.all([
     loadIncoming(supabase, clientId, run, overview, window),
-    loadSales(supabase, clientId, month, overview),
+    Promise.all([
+      loadSubjects(supabase, clientId),
+      windowVideosOf(scope.reading, clientId, window),
+    ]).then(([subjects, windowVideos]) =>
+      buildSales({
+        supabase,
+        clientId,
+        // `WeekWindow` carries the BASIS the window was frozen under
+        // (`pipeline_runs.window_basis`) — printed nowhere, carried so the
+        // record can say it. An older database that has no such column says
+        // so rather than having one invented for it.
+        window: window ? { ...window, basis: run?.window_basis ?? 'unrecorded' } : null,
+        windowVideos,
+        subjects,
+      }),
+    ),
   ])
 
   // ── section 5 ───────────────────────────────────────────────────────────
@@ -441,6 +511,12 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
     readingAt,
     runId: run?.id ?? null,
     window,
+    // THE MASTHEAD'S DATES, OFF THE RUNS ALREADY IN HAND (weekly.daterange).
+    update: {
+      date: run?.completed_at ?? run?.started_at ?? null,
+      previous: runsRaw[1]?.completed_at ?? runsRaw[1]?.started_at ?? null,
+    },
+    method: overview.method,
     section1,
     subjects: overview.subjects,
     // THE CONTRIBUTION PER SUBJECT NEEDS M4's WINDOW FUNCTION, which is not
@@ -464,7 +540,7 @@ async function latestRuns(supabase: SupabaseClient, clientId: string): Promise<R
   // and the read falls back.
   const full = await supabase
     .from('pipeline_runs')
-    .select('id, started_at, completed_at, status, videos_scraped, window_start, window_end, stalled')
+    .select('id, started_at, completed_at, status, videos_scraped, window_start, window_end, window_basis, stalled')
     .eq('client_id', clientId)
     .in('status', ['completed', 'partial'])
     .order('started_at', { ascending: false })
@@ -603,6 +679,48 @@ async function baselineMonths(
   }
 }
 
+/**
+ * Videos dated inside this update's window, every audience together — the n
+ * §4's counts are counts against (`ForSalesData.videos`).
+ *
+ * THE SAME READ THIS WEEK MAKES, AND THAT IS THE WHOLE POINT. This week takes
+ * `totalVideos(windowRead.denominators)` off `window_denominators`
+ * (lib/pages/week.ts); the weekly report passed `windowVideos: null` to
+ * `buildSales` unconditionally, so the denominator the block is built around
+ * could never print on a real send and the fixture showed a figure no tenant
+ * could receive. Two surfaces over one window now state one denominator, or
+ * neither of them does.
+ *
+ * DATED BY THE COMMENT, like every other reading (AGENTS.md). §4's citations
+ * are filtered on `comments.comment_date` inside the same window, so the
+ * numerator and this denominator are on one clock — and NOT on the clock
+ * `incoming.gathered` is on, which counts by when we LOOKED. The two are
+ * labelled differently by the blocks for exactly that reason.
+ *
+ * NULL IS A STATED ABSENCE, NEVER A ZERO. `loadWindowReading` swallows the
+ * missing-migration error by its own `isMissingMonthlyReading` guard and
+ * answers `denominators: null`; M3 unapplied then reaches the block as "the
+ * number of videos this update covered is not recorded", which is a claim
+ * about our bookkeeping rather than about the week.
+ */
+async function windowVideosOf(
+  reading: ReadingHandle,
+  clientId: string,
+  window: { from: string; to: string } | null,
+): Promise<number | null> {
+  if (!window) return null
+  try {
+    const read = await loadWindowReading(reading.client, clientId, { from: window.from, to: window.to })
+    if (read.denominators == null) return null
+    return read.denominators.reduce((total, d) => total + (d.videos ?? 0), 0)
+  } catch (error) {
+    if (!isMissingMonthlyReading(error)) {
+      console.error(`[pages] weekly.windowVideos: ${(error as { message?: string })?.message ?? String(error)}`)
+    }
+    return null
+  }
+}
+
 // ---- section 3 ----------------------------------------------------------------
 
 interface VideoRow {
@@ -640,6 +758,7 @@ async function loadIncoming(
     platforms: [],
     monthVideos: overview.bar.videos,
     newThemes: [],
+    newThemesTotal: 0,
     newThemesNote: 'No theme was heard for the first time in this update.',
     rivalPosts: [],
     rivalPostsNote: 'No tracked rival posted in this update’s window.',
@@ -649,7 +768,7 @@ async function loadIncoming(
   }
   if (!run) return { ...empty, newThemesNote: 'This workspace has no delivered update yet.', rivalPostsNote: null }
 
-  const [videoRes, themeRows, subjectQuotes] = await Promise.all([
+  const [videoRes, themes, subjectQuotes] = await Promise.all([
     selectAll<VideoRow>(() =>
       supabase
         .from('videos')
@@ -728,8 +847,9 @@ async function loadIncoming(
       .map(([platform, videos]) => ({ platform, videos }))
       .sort((a, b) => b.videos - a.videos),
     monthVideos: overview.bar.videos,
-    newThemes: themeRows,
-    newThemesNote: themeRows.length > 0 ? null : 'No theme was heard for the first time in this update.',
+    newThemes: themes.shown,
+    newThemesTotal: themes.total,
+    newThemesNote: themes.total > 0 ? null : 'No theme was heard for the first time in this update.',
     rivalPosts,
     rivalPostsNote: rivalPosts.length > 0 ? null : 'No tracked rival posted in this update’s window.',
     quotes: subjectQuotes.shown.slice(0, INCOMING_QUOTES),
@@ -795,225 +915,54 @@ async function commentsHeldFor(
  * the reading layer counts in videos. `theme_observations.evidence_count` is
  * evidence ROWS, a different unit, and printing it as videos is exactly the
  * mismatch the thirteen words exist to stop.
+ *
+ * COUNTED BEFORE IT IS CAPPED, and the two are returned separately. WR3 prints
+ * "N themes heard for the first time" at mono 21/600, and it printed
+ * `newThemes.length` — the DISPLAY slice, `.slice(0, NEW_THEMES_SHOWN)` on top
+ * of a `.limit(50)`. A workspace that heard fourteen new themes printed 3, in
+ * the artefact's largest type. `total` is the whole answer and `shown` is the
+ * few that get a card, exactly as `switchingTotal` / `switching` are one
+ * section over.
+ *
+ * NEITHER READ IS CAPPED ANY MORE. `theme_observations` for ONE RUN is a few
+ * dozen rows — the registry is two orders of magnitude smaller than
+ * `audience_insights` (AGENTS.md) — so the observations are read in full, and
+ * the membership is read as that run's `themes` rows rather than through an
+ * `.in()` over a list that now has no bound.
  */
-async function newThemesOf(supabase: SupabaseClient, clientId: string, runId: string): Promise<{ label: string; videos: number }[]> {
+const NEW_THEMES_SHOWN = 3
+
+async function newThemesOf(
+  supabase: SupabaseClient,
+  clientId: string,
+  runId: string,
+): Promise<{ shown: { label: string; videos: number }[]; total: number }> {
   const obsRes = await supabase
     .from('theme_observations')
     .select('theme_id, label')
     .eq('client_id', clientId)
     .eq('run_id', runId)
     .eq('match_kind', 'new')
-    .limit(50)
   const observed = rows<{ theme_id: string; label: string }>(obsRes, 'weekly.newThemes')
-  if (observed.length === 0) return []
+  if (observed.length === 0) return { shown: [], total: 0 }
   const videosRes = await supabase
     .from('themes')
     .select('registry_id, supporting_video_ids')
     .eq('client_id', clientId)
     .eq('run_id', runId)
-    .in('registry_id', observed.map((o) => o.theme_id))
   const byRegistry = new Map<string, number>()
   for (const t of rows<{ registry_id: string | null; supporting_video_ids: string[] | null }>(videosRes, 'weekly.newThemeVideos')) {
     if (t.registry_id) byRegistry.set(t.registry_id, (t.supporting_video_ids ?? []).length)
   }
-  return observed
+  const counted = observed
     .map((o) => ({ label: o.label, videos: byRegistry.get(o.theme_id) ?? 0 }))
     // A theme whose membership this run did not retain cannot be stated in
     // videos, and "heard for the first time, in 0 videos" is not a sentence.
+    // It is out of the TOTAL as well as out of the list, because the total is
+    // a count of the same things the cards are.
     .filter((t) => t.videos > 0)
     .sort((a, b) => b.videos - a.videos)
-    .slice(0, 3)
-}
-
-// ---- section 4 ----------------------------------------------------------------
-
-interface InsightRow {
-  id: string
-  category: string
-  theme: string
-  source_video_id: string | null
-  strength_score?: number | null
-}
-
-/**
- * How many of the month's quoted comments section 4 scans for words to print.
- *
- * One PostgREST page, newest first. The pool only has to be large enough to
- * find four quotes over four kinds, and an unbounded read here would make a
- * popular tenant's weekly build scan every comment anyone was ever quoted on. A
- * month that holds more than this is why the section links out rather than
- * counting.
- */
-export const SALES_SCAN = 1000
-
-/**
- * How a quoted comment is cited — "TikTok · 12 Sep · under a video we read".
- *
- * WHERE NEITHER HALF IS KNOWN, IT SAYS SOMETHING ELSE. The parts used to be
- * filtered and joined, so a comment row the lookup did not return collapsed to
- * the bare trailing phrase "under a video we read", which reads like a
- * truncation. It is also no longer the true sentence: every quote section 4
- * prints was found through the month's own comments, so the thing we can always
- * say is when it was said, even when the row behind it did not come back.
- */
-export function salesCite(platform: string | null, commentDate: string | null): string {
-  // THROUGH `platformLabel`, which exists so a client never sees the column
-  // value. The same email printed "TikTok 87 · Reddit 54" and "TikTok · 12 Sep
-  // · 95 comments read" from WR3, then "tiktok · 12 Sep · under a video we
-  // read" on all four of WR4's rows.
-  const parts = [platform ? platformLabel(platform) : null, commentDate ? shortDate(commentDate) : null].filter(Boolean)
-  return parts.length > 0 ? `${parts.join(' · ')} · under a video we read` : 'a comment we read this month'
-}
-
-/** Evidence rows chunked into `.in()` lists the database will accept. */
-const chunked = <T>(xs: readonly T[], size: number): T[][] => {
-  const out: T[][] = []
-  for (let i = 0; i < xs.length; i += size) out.push(xs.slice(i, i + size))
-  return out
-}
-
-async function loadSales(
-  supabase: SupabaseClient,
-  clientId: string,
-  month: string,
-  overview: OverviewData,
-): Promise<ForSalesBlock> {
-  const briefHref = '/dashboard/reports'
-  const empty: ForSalesBlock = {
-    rows: [],
-    hasMore: false,
-    note: 'Nothing a customer said this month was an objection, a complaint, a switching signal or a selling point we could quote.',
-    briefHref,
-  }
-  // A QUOTE IS DATED BY THE COMMENT, NEVER BY THE RUN (AGENTS.md).
-  //
-  // This read used to be `audience_insights_current … gte('created_at', month
-  // start)`, which is when the PIPELINE WROTE THE ROW. Verified on production:
-  // insights created in 2026-09 on Össur cite comments back to 2026-04, and
-  // those created in 2026-08 cite comments back to 2021 — so a masthead reading
-  // "Every number below is this month so far" sat over a quote cited "9 Mar",
-  // and the empty state's "Nothing a customer said this month" was a sentence
-  // the query could not support.
-  //
-  // So the read is driven from the side the date is on: the month's own
-  // COMMENTS, newest first, inner-joined to the evidence that quotes them. That
-  // is also the cheaper direction — `comments(client_id, …)` narrows first and
-  // `idx_insight_evidence_comment` does the join; driving from
-  // `insight_evidence` ordered by its primary key cost 3.1s on Össur and timed
-  // out once on Sealand.
-  const from = monthStartOf(month)
-  const to = nextMonth(month)
-  const evidenceRes = await supabase
-    .from('comments')
-    .select('id, insight_evidence!inner(audience_insight_id)')
-    .eq('client_id', clientId)
-    .gte('comment_date', from)
-    .lt('comment_date', to)
-    .eq('insight_evidence.redacted', false)
-    // Newest first, then by id, so two builds of the same minute scan the same
-    // pool: an unordered page is whatever the planner hands back.
-    .order('comment_date', { ascending: false })
-    .order('id')
-    .limit(SALES_SCAN)
-  const quoted = rows<{ id: string; insight_evidence: { audience_insight_id: string }[] }>(evidenceRes, 'weekly.salesEvidence')
-  if (quoted.length === 0) return empty
-  // The comments this month holds, so a citation quoting an OLDER comment of
-  // the same insight is not printed under a month heading either.
-  const thisMonth = new Set(quoted.map((c) => c.id))
-  const scanned = [...new Set(quoted.flatMap((c) => (c.insight_evidence ?? []).map((e) => e.audience_insight_id)))]
-
-  // Which of those are the four kinds sales reads, strongest first — through
-  // the CURRENT view, so an insight a later run superseded is not quoted as
-  // though it were still the video's analysis.
-  const found: InsightRow[] = []
-  for (const chunk of chunked(scanned, 200)) {
-    const res = await supabase
-      .from('audience_insights_current')
-      .select('id, category, theme, source_video_id, strength_score')
-      .eq('client_id', clientId)
-      .in('category', [...SALES_KINDS])
-      .in('id', chunk)
-    found.push(...rows<InsightRow>(res, 'weekly.salesInsights'))
-  }
-  const insights = found.sort((a, b) => (b.strength_score ?? 0) - (a.strength_score ?? 0)).slice(0, 120)
-  if (insights.length === 0) return empty
-
-  const videoIds = [...new Set(insights.map((i) => i.source_video_id).filter((v): v is string => Boolean(v)))]
-  const rivalByVideo = new Map<string, string>()
-  if (videoIds.length > 0) {
-    const vres = await supabase.from('videos').select('id, competitor_name, is_competitor').eq('client_id', clientId).in('id', videoIds)
-    for (const v of rows<{ id: string; competitor_name: string | null; is_competitor: boolean | null }>(vres, 'weekly.salesVideos')) {
-      if (v.is_competitor && v.competitor_name) rivalByVideo.set(v.id, v.competitor_name)
-    }
-  }
-
-  const citations = await fetchQuoteCitationsByAudience(supabase, insights.map((i) => i.id))
-  const commentIds: string[] = []
-  const picked: { insight: InsightRow; citation: QuoteCitation }[] = []
-  const seen = new Set<string>()
-  const usedKinds = new Set<string>()
-  // ONE PER KIND FIRST, then the rest. The design lists four kinds and a sales
-  // reader who gets four objections and no selling point has been handed half
-  // the brief.
-  for (const pass of [0, 1]) {
-    for (const insight of insights) {
-      if (picked.length >= SALES_ROWS) break
-      if (pass === 0 && usedKinds.has(insight.category)) continue
-      for (const c of (citations.get(insight.id) ?? []).sort((a, b) => a.rank - b.rank)) {
-        // AN INSIGHT MAY BE EVIDENCED FROM SEVERAL MONTHS. It reaches this loop
-        // because ONE of its comments was written this month; only that comment
-        // may be printed under a month heading.
-        if (!c.commentId || !thisMonth.has(c.commentId)) continue
-        const text = cleanQuote(c.quote)
-        const key = text.toLowerCase()
-        if (!text || seen.has(key) || !readsAsHeroQuote(text, c)) continue
-        seen.add(key)
-        usedKinds.add(insight.category)
-        picked.push({ insight, citation: { ...c, quote: text } })
-        if (c.commentId) commentIds.push(c.commentId)
-        break
-      }
-    }
-  }
-  if (picked.length === 0) return empty
-
-  const meta = new Map<string, { platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }>()
-  if (commentIds.length > 0) {
-    const res = await supabase.from('comments').select('id, platform, comment_date, video_id, comment_id').eq('client_id', clientId).in('id', commentIds)
-    for (const c of rows<{ id: string; platform: string | null; comment_date: string | null; video_id: string | null; comment_id: string | null }>(res, 'weekly.salesComments')) meta.set(c.id, c)
-  }
-  const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
-  const urlByKey = new Map<string, string>()
-  if (nativeIds.length > 0) {
-    const res = await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds)
-    for (const v of rows<{ platform: string | null; video_id: string | null; video_url: string | null }>(res, 'weekly.salesVideoUrls')) {
-      if (v.video_url && v.video_id) urlByKey.set(`${v.platform}::${v.video_id}`, v.video_url)
-    }
-  }
-
-  const out: SalesRow[] = picked.map(({ insight, citation }) => {
-    const m = citation.commentId ? meta.get(citation.commentId) : undefined
-    const url = m?.platform && m.video_id ? urlByKey.get(`${m.platform}::${m.video_id}`) ?? null : null
-    return {
-      kind: insight.category,
-      kindLabel: KIND_LABEL[insight.category] ?? humanTheme(insight.category),
-      label: humanTheme(insight.theme),
-      rival: insight.source_video_id ? rivalByVideo.get(insight.source_video_id) ?? null : null,
-      quote: {
-        ref: quoteRef.evidence(citation.evidenceId),
-        text: citation.quote,
-        ...(citation.lang != null ? { lang: citation.lang, english: citation.english ?? null } : {}),
-      },
-      cite: salesCite(m?.platform ?? null, m?.comment_date ?? null),
-      href: citationLink(m?.platform ?? null, url, m?.comment_id ?? null).href,
-    }
-  })
-  return {
-    rows: out,
-    hasMore: insights.length > out.length,
-    note: overview.subjects.state === 'not_recorded' ? 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.' : null,
-    briefHref,
-  }
+  return { shown: counted.slice(0, NEW_THEMES_SHOWN), total: counted.length }
 }
 
 // ---- section 5 ----------------------------------------------------------------
@@ -1037,16 +986,23 @@ function buildContent(
     return {
       worthAReply: [],
       worthAReplyNote: 'Nothing is waiting for a reply from this update.',
+      surfaced: null,
+      surfacedCounts: [],
       rising,
       risingNote,
       format: null,
+      runnerUp: null,
       weekHref,
       briefHref,
     }
   }
   const c = content as Exclude<Awaited<ReturnType<typeof loadContent>>, { empty: true }>
   const top: ContentInboxRow[] = c.inbox.rows.slice(0, WORTH_A_REPLY)
-  const format = c.works.formats[0] ?? c.works.hooks[0] ?? null
+  // THE FAMILY IS CHOSEN ONCE and the runner-up comes out of it, so the
+  // head-to-head never puts a hook beside a format.
+  const family = c.works.formats.length > 0 ? c.works.formats : c.works.hooks
+  const format = family[0] ?? null
+  const runner = family[1] ?? null
   return {
     worthAReply: top.map((r) => ({
       ref: r.ref,
@@ -1060,6 +1016,11 @@ function buildContent(
     // inbox's own sentence, so the artefact keeps the same shape every week
     // rather than dropping the section.
     worthAReplyNote: top.length > 0 ? null : 'Nothing is waiting for a reply from this update.',
+    // THE QUEUE'S SURFACED COUNT, NOT A COUNT OF THE WEEK (see `surfaced`).
+    surfaced: c.inbox.total,
+    surfacedCounts: c.inbox.counts
+      .filter((i) => i.count > 0)
+      .map((i) => ({ label: (INTENT_LABEL[i.intent] ?? 'Worth a reply').toLowerCase(), count: i.count })),
     rising,
     risingNote,
     // THROUGH `workedLabel`, WHICH EXISTS FOR THIS. Its docblock says why the
@@ -1074,6 +1035,7 @@ function buildContent(
     // would have been emailed "trend-riding — 4.5× the median…"; workedLabel
     // renders it "Riding what is current".
     format: format ? { label: workedLabel(format.k), multiple: format.multiple, videos: format.count, of: c.works.rated } : null,
+    runnerUp: runner ? { label: workedLabel(runner.k), multiple: runner.multiple, videos: runner.count } : null,
     weekHref,
     briefHref,
   }

@@ -62,8 +62,18 @@ export interface ForSalesData {
    *  audience together. Null when the windowed read is not available here. */
   videos: number | null
   grouping: SalesGrouping
-  /** Largest first. */
+  /** Largest first, capped at `SALES_GROUPS_SHOWN`. */
   objections: SalesGroup[]
+  /**
+   * How many objection groups there were, counted BEFORE the cap above.
+   *
+   * THE SAME RULE AS `switchingTotal`, AND FOR THE SAME REASON. WR4's link
+   * says "N more objections" and computed N as `objections.slice(1).length` —
+   * the length of a display cap — so every tenant with three or more groups
+   * was told there were exactly two more, whatever the real number was. Null
+   * where the section could not be read.
+   */
+  objectionsTotal: number | null
   /** The strongest thing said in the client's favour — one quote, or none.
    *  A display cap of `SALES_PRAISE_SHOWN`, and no count is printed off it. */
   praise: SalesQuote[]

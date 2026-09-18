@@ -82,12 +82,22 @@ export function TokenProse({
    * MASTER.md gains "and the one hero sentence a surface is about", or this
    * arm goes back to the sans and the artboards lose their lead. Nothing
    * outside `size="hero"` is affected; `body` is the sans it always was.
+   *
+   * AND A NUMBER IS THE EMAIL ARM'S SIZE IN PX (merge, Block D wave 2:
+   * E-weekly asked for the same thing one size down). A client reads no
+   * stylesheet, so every rule on the email arm is inline and nothing inherits
+   * past an explicit one — an email caller that wants a scale of its own has
+   * no way to ask for it from outside. A number means the sans at that size,
+   * which is the WeeklyReport artboard's 17.5px lead; `hero` means the serif
+   * at 23, which is the MonthlyReport's. Both are hero conditions, so both
+   * take the hero's figure face; the app and print arms take `className`, as
+   * they already did.
    */
-  size?: 'body' | 'hero'
+  size?: 'body' | 'hero' | number
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
-  const hero = size === 'hero'
+  const hero = size === 'hero' || typeof size === 'number'
   const face = figureFace ?? (hero ? 'inherit' : 'mono')
   // A FIGURE IN A HERO SENTENCE TAKES THE SENTENCE'S FACE. Mono inside 13.5px
   // sans is a deliberate signal — code's number, in code's typeface — and at
@@ -103,7 +113,15 @@ export function TokenProse({
           key={i}
           data-copy="figure"
           style={mode === 'email'
-            ? (face === 'mono' ? { fontFamily: FONT.mono, color: EMAIL.ink } : { fontWeight: 600, color: EMAIL.ink })
+            ? (face === 'mono'
+              ? { fontFamily: FONT.mono, color: EMAIL.ink }
+              // THE INHERITED FACE, WRITTEN OUT (merge, Block D wave 2). An
+              // email inherits nothing it is not told: Outlook lays out with
+              // Word, and a span with no family of its own falls back to the
+              // client's default rather than to the sentence it sits in. So
+              // the sentence's own face is stated here — the serif where the
+              // sentence is the serif hero, the sans otherwise.
+              : { fontFamily: size === 'hero' ? FONT.serif : FONT.sans, fontWeight: 600, color: EMAIL.ink })
             : undefined}
           className={mode === 'email' ? undefined : (face === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums')}
         >
@@ -115,9 +133,9 @@ export function TokenProse({
     return (
       <div
         {...(model ? { 'data-copy': 'prose' } : {})}
-        style={hero
+        style={size === 'hero'
           ? { fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: 1.34, letterSpacing: '-.01em', color: EMAIL.ink }
-          : { fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}
+          : { fontFamily: FONT.sans, fontSize: typeof size === 'number' ? size : 13.5, lineHeight: 1.5, color: EMAIL.ink }}
       >
         {children}
       </div>

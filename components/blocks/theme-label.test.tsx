@@ -94,7 +94,10 @@ describe('a theme label never fails rule (c)', () => {
 
   it('WR4 · the weekly report’s for-sales rows — a SENT artefact', () => {
     const data = weeklyFixture()
-    data.sales.rows = data.sales.rows.map((r) => ({ ...r, label: LABEL }))
+    // §4's groups are `ForSalesData.objections` since block D wave 2 — the
+    // counted shape both artefacts read. The label under test is the same one:
+    // a theme a model named, printed in a heading.
+    data.sales.objections = data.sales.objections.map((g) => ({ ...g, label: LABEL }))
     for (const mode of MODES) {
       expect(directionWords(render(forSales.render(data, mode, ctx)))).toEqual([])
     }
