@@ -82,9 +82,18 @@ describe('OV6 · how sound is this month', () => {
     }
   })
 
-  it('prints the page bar’s own line and the record behind it', () => {
+  it('prints the record BEHIND the band’s sentence, and not the sentence again', () => {
+    // CHANGED BY THE FIX PASS (design review Blocker 2 / High 3, code review
+    // I3 and I7). The block passed `record.line` — ~180 characters — as
+    // `BlockFrame`'s `meta`, which renders `whitespace-nowrap` inside an
+    // `overflow-hidden` tile: it was cut mid-clause on the live page ("…27% of
+    // what was said on camera"), and it squeezed the h2 beside it into five
+    // stacked words. It is the soundness band's sentence, it wraps there, and
+    // this block prints the record it rests on.
+    const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
     const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('3 updates · 2,359 videos')
+    expect(text).not.toContain('27% of what was said on camera was not in English · 1 tracking change')
+    expect(markup).not.toContain('whitespace-nowrap')
     expect(text).toContain('2,359 videos carried conversation in this window')
   })
 

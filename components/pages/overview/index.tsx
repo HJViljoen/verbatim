@@ -153,7 +153,13 @@ export function OverviewPage({
             // moved, or where the month had already closed when it went out.
             sent: sentLineForToken(data.sent, 'month_videos', data.bar.videos),
           }}
-          record={{ line: data.record.line, lines: data.record.lines }}
+          // THE RAMP COUNTER LEADS THE BAND (`main.bar.soundness`), and this
+          // is the ONE place on the app surface it is printed. It used to be
+          // glued to `record.line` in the loader, which fed the band and the
+          // record block's header meta both — so the same sentence appeared
+          // three times down one page (design review High 4, code review I7).
+          // Composed here because the page is what holds both halves.
+          record={{ line: `${data.bar.counter} · ${data.record.line}`, lines: data.record.lines }}
         >
           {/* THE TWO CONTROLS THE ARTBOARD PUTS AT THE RIGHT-HAND END, and the
               two `/dashboard` has never had (`main.bar.howtoread`,

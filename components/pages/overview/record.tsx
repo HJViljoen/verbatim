@@ -74,7 +74,20 @@ export const overviewRecord: Block<OverviewData> = {
         title={overviewRecord.title}
         question={overviewRecord.question}
         mode={mode}
-        meta={r.line}
+        // NO META HERE, AND THAT IS THE FIX (design review Blocker 2 / High 3,
+        // code review I3). This passed `r.line` — the ~180-character soundness
+        // sentence — and `BlockFrame` renders meta as `flex-none
+        // whitespace-nowrap` inside a tile that is `overflow-hidden`: it can
+        // neither wrap nor shrink, so it overran the tile and was CUT
+        // mid-clause ("…27% of what was said on camera" at 1440, "…(TikTok 38%
+        // · YouTube 29%" at 1024), and the h2 beside it was squeezed into five
+        // stacked words down the tile's left edge. A coverage line truncated
+        // mid-clause is the exact failure this block exists to prevent.
+        //
+        // The sentence is not lost: it leads the soundness band at the top of
+        // the page, where it wraps, and `lines` below is the record BEHIND it —
+        // the same facts at length. Printing it here as well was the second of
+        // its two appearances (High 4).
         // "the record →" BESIDE THE EYEBROW, which is where the artboard puts
         // it (`main.coverage.header`): this block has no onward page of its own
         // — it IS the record — so the link belongs in the header rather than in
@@ -85,6 +98,15 @@ export const overviewRecord: Block<OverviewData> = {
             sets them at 9.5px, which is the smallest type on the page and
             deliberately so: this is the block a reader consults rather than
             reads, and it has to fit beside the reading it is about. */}
+        {/* THE SOUNDNESS SENTENCE, ON PAPER ONLY. In the app it leads the
+            band at the top of the page and printing it again here was the
+            second of three appearances; a print sheet and a PNG carry no page
+            bar, so there it leads this block instead — in the BODY, where it
+            wraps, and never as the `whitespace-nowrap` meta that was cut
+            mid-clause. */}
+        {mode === 'print' ? (
+          <p className="m-0 font-mono text-[10px] leading-[1.45] text-secondary-foreground">How sound is this: {r.line}</p>
+        ) : null}
         <TileColumns of={2}>
           <p className="m-0 font-mono text-[9.5px] leading-[1.45] tabular-nums text-muted-foreground">
             <span className="text-secondary-foreground">What was read: </span>{read.join(' ')}

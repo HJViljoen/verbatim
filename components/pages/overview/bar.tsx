@@ -78,11 +78,24 @@ export const overviewBar: Block<OverviewData> = {
             base={b.updateDates.join(' · ') || 'none yet this month'}
           />
         </div>
-        <p className="m-0 text-[12px] text-muted-foreground">{b.line}</p>
-        {/* THE ONE COUNTER (design §3 OV0). Where this tenant is in the ramp,
-            and the only place the page says it: not the delivery record, which
-            is OV6's, and not a second month label. */}
-        <p className="m-0 text-[11.5px] text-muted-foreground">{b.counter}</p>
+        {/* WHAT THE STATS DO NOT SAY, AND NOTHING ELSE (design review High 5).
+            This printed `b.line`, which restates the videos, the same point
+            last month and the update count in prose directly under the three
+            stats that had just drawn them — so the tile held no fact of its
+            own and the page's real lead, "In one sentence", began four hundred
+            pixels below the fold. `b.note` is the residual: the trailing
+            median, and the gate that suppresses every change below.
+
+            AND THE RAMP COUNTER IS GONE FROM HERE. It leads the soundness band
+            at the top of the page (`main.bar.soundness`), which is where the
+            artboard puts it and where the brief asked for it; printing it here
+            as well put the same sentence on the page twice. The email arm keeps
+            both, because an email has no band above it. */}
+        {b.note ? <p className="m-0 text-[12px] text-secondary-foreground">{b.note}</p> : null}
+        {/* A PRINT SHEET HAS NO BAND ABOVE IT. `SurfacePageBar` is the app
+            shell's and does not travel into a PDF or a PNG, so on paper the
+            ramp counter has nowhere else to be printed and leads here. */}
+        {mode === 'print' ? <p className="m-0 text-[11.5px] text-secondary-foreground">{b.counter}</p> : null}
         {sentLine ? <p className="m-0 text-[11.5px] text-muted-foreground">{sentLine}</p> : null}
       </BlockFrame>
     )

@@ -4,7 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
 import {
   actedTally,
   buildMoveCandidate,
@@ -366,10 +366,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     atLastMonthKnown: true,
     thin: false,
     line: '',
+    note: null as string | null,
     readings: 3,
     counter: readingsCounter(3),
   }
   bar.line = fillingLine(bar)
+  bar.note = fillingNote(bar)
 
   // D1 · the rows are hoisted so the gaps below are built FROM them. A gap
   // that disagrees with the two levels printed beside it is the one error
@@ -601,9 +603,11 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       acted: actedTally(1, 64),
     },
     record: {
-      // AS `loadOverview` COMPOSES IT (Block D wave 2, `main.bar.soundness`):
-      // the ramp counter leads, then `howSoundLine`'s own sentence.
-      line: `${readingsCounter(3)} · 3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change`,
+      // AS `loadOverview` COMPOSES IT: `howSoundLine`'s sentence and nothing
+      // prefixed to it. The ramp counter is `bar.counter` and leads the
+      // SOUNDNESS BAND at the page's own `SurfacePageBar` call — it used to be
+      // glued on here too, which printed it three times on one page.
+      line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
       lines: [
         // AS `recordLines` COMPOSES IT. The fixture held the raw ISO form this
         // line used to produce, so the one artefact render that would have
@@ -633,8 +637,10 @@ export function refusedFixture(): OverviewData {
     atLastMonth: null,
     atLastMonthKnown: false,
     line: '',
+    note: null as string | null,
   }
   bar.line = fillingLine(bar)
+  bar.note = fillingNote(bar)
   return {
     ...base,
     bar,

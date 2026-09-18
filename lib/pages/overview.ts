@@ -526,8 +526,22 @@ export interface BarBlock {
   atLastMonth: number | null
   atLastMonthKnown: boolean
   thin: boolean
-  /** The still-filling line, composed once. */
+  /** The still-filling line, composed once. Printed whole where there are no
+   *  stats beside it — the email arm — and never beside them. */
   line: string
+  /** What `line` says that the tile's three stats do NOT: the trailing median,
+   *  and the gate that suppresses every change below. Null where the line adds
+   *  nothing to the stats.
+   *
+   *  WHY A SECOND FIELD AND NOT STRING SURGERY (design review High 5). The app
+   *  tile draws the month's videos, the same point last month and the update
+   *  count as `BlockStat`s and then printed `line`, which restates all three in
+   *  prose — so the tile's whole first screen said nothing the stats had not
+   *  said, and the page's actual lead started four hundred pixels down. The
+   *  residual is composed from the same inputs rather than cut out of the
+   *  finished sentence, because a sentence parsed for its own clauses is a
+   *  sentence that breaks the day a clause is re-worded. */
+  note: string | null
   /** "your 3rd monthly reading" — the months of the GATHERED era that carry a
    *  reading. Not every stored month: Össur holds 119 denominator months and
    *  has been gathered for six, and "your 119th monthly reading" is a count of
@@ -729,6 +743,32 @@ export function fillingLine(input: FillingLineInput): string {
   if (input.thin) parts.push('thin month — every change below is suppressed')
   else if (input.early) parts.push('early in the month — every change below is suppressed')
   return parts.join(' · ')
+}
+
+/**
+ * The half of `fillingLine` the tile's stats do not already print.
+ *
+ * The stats carry the month, the days in, the videos, the same point last
+ * month and the updates. What they cannot carry is the trailing median (a
+ * comparison, not a count of this month) and the gate — thin, or early —
+ * that suppresses every change below. Those two, and nothing else.
+ */
+export function fillingNote(input: FillingLineInput): string | null {
+  const parts: string[] = []
+  if (input.videos == null) parts.push('nothing read into this month yet')
+  else if (input.expected != null && input.expected > 0) parts.push(`trailing median ${fmtInt(Math.round(input.expected))}`)
+  // THE ABSENT COMPARISON IS STILL NAMED. The tile draws "last month at this
+  // point" as a stat only where the comparison EXISTS — an em dash under it
+  // would be a stat that says nothing — so where it does not, the sentence is
+  // the only thing that says why, and it stays here in `fillingLine`'s own
+  // words. Where the stat is drawn, this clause would be the same figure
+  // twice, and is dropped.
+  if (input.status === 'filling' && (!input.atLastMonthKnown || input.atLastMonth == null)) {
+    parts.push(!input.atLastMonthKnown ? 'last month at this point: not recorded yet' : 'no reading of last month at this point')
+  }
+  if (input.thin) parts.push('thin month — every change below is suppressed')
+  else if (input.early) parts.push('early in the month — every change below is suppressed')
+  return parts.length > 0 ? parts.join(' · ') : null
 }
 
 /** How much of a month has to be gone before a band may be drawn over it
@@ -1483,6 +1523,18 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     }),
     readings: readingsSoFar,
     counter: readingsCounter(readingsSoFar),
+    note: fillingNote({
+      month,
+      status: monthStatus,
+      daysIn,
+      updates: updatesByMonth[month] ?? 0,
+      videos: monthVideos,
+      expected,
+      atLastMonth: lastMonthSoFar.videos,
+      atLastMonthKnown: lastMonthSoFar.known,
+      thin,
+      early,
+    }),
   }
 
   // ── OV2 · your subjects ────────────────────────────────────────────────
@@ -1615,17 +1667,15 @@ export async function loadOverview(scope: Scope): Promise<OverviewData | null> {
     refusals: refusals(pageVerdicts),
   }
   const record: RecordBlock = {
-    // THE RAMP LEADS (Block D wave 2, `main.bar.soundness`). The artboard's
-    // band opens "How sound is this: your 3rd monthly reading · 4 updates · …"
-    // and `howSoundLine` opens with the update count, because where a tenant IS
-    // in the ramp was printed on the OV0 tile instead — the one fact a reader
-    // meeting this page for the third time needs before any figure in it.
-    //
-    // COMPOSED HERE AND NOT IN `howSoundLine`, which is `lib/reading/record.ts`
-    // and belongs to the record package: `RecordInputs` carries no reading
-    // count, so leading with the counter there would mean widening a shared
-    // input shape from a page port. The page holds both halves already.
-    line: `${readingsCounter(readingsSoFar)} · ${howSoundLine(recordInputs)}`,
+    // THE SOUNDNESS SENTENCE, AND ONLY IT. `main.bar.soundness` asks for the
+    // ramp counter to LEAD THE BAND, and this line fed the band AND the record
+    // block's header meta — so prefixing it here printed "your 3rd monthly
+    // reading · the quarter view needs 6" verbatim three times on one page
+    // (design review High 4, code review I7): in the band, on the OV0 tile, and
+    // again at the foot. The counter is `bar.counter`, it leads the band at the
+    // page's own `SurfacePageBar` call, and it is printed nowhere else on the
+    // app surface.
+    line: howSoundLine(recordInputs),
     lines: recordLines(recordInputs),
     href: '/dashboard/settings',
     freezesOn: freezesOn(month),
