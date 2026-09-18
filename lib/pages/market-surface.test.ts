@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest'
 
+import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
+import { afterwardsFor } from '../reading/afterwards'
 import {
   acceptableRow, actedLine, adviceAnchor, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
-  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, repeatLine, unlockRows,
-  waysOfMoving, type AdviceRow, type RecCopy,
+  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, registryIdsByInsight, repeatLine,
+  unlockRows, waysOfMoving, type AdviceRow, type RecCopy,
 } from './market-surface'
 
 const copy = (over: Partial<RecCopy> = {}): RecCopy => ({
@@ -158,15 +160,28 @@ describe('a move’s line', () => {
 })
 
 describe('the five ways', () => {
-  it('has five, two of them live when there is advice to accept', () => {
-    const ways = waysOfMoving({ lineageId: 'L', recommendationId: 'r', title: 'x' })
+  // THREE LIVE, NOT TWO, SINCE D4. "Upload a plan" was listed as not built
+  // while `plan_checks` was written by Ask, re-tested by every update and read
+  // by the thread page — the page naming as absent a feature the product had.
+  // What D4 added is Market reading the result back; the way in was always
+  // there, so the row is live and links to Ask.
+  it('has five, three of them live when there is advice to accept', () => {
+    const ways = waysOfMoving({ lineageId: 'L', recommendationId: 'r', title: 'x' }, 1)
     expect(ways).toHaveLength(5)
-    expect(ways.filter((w) => w.live).map((w) => w.key)).toEqual(['track', 'advice'])
+    expect(ways.filter((w) => w.live).map((w) => w.key)).toEqual(['track', 'advice', 'plan'])
+  })
+
+  it('keeps "upload a plan" live with nothing uploaded, and says nothing is', () => {
+    const ways = waysOfMoving(null, 0)
+    const plan = ways.find((w) => w.key === 'plan')
+    expect(plan?.live).toBe(true)
+    expect(plan?.href).toBe('/dashboard/agent')
+    expect(plan?.unlock).toBe('Nothing has been uploaded for this workspace yet.')
   })
 
   it('drops "accept this advice" to not-live when the ledger is empty, and says why', () => {
     const ways = waysOfMoving(null)
-    expect(ways.filter((w) => w.live).map((w) => w.key)).toEqual(['track'])
+    expect(ways.filter((w) => w.live).map((w) => w.key)).toEqual(['track', 'plan'])
     expect(ways.find((w) => w.key === 'advice')?.unlock).toBe('Advice lands with your next update.')
   })
 
@@ -188,8 +203,16 @@ describe('the five ways', () => {
 })
 
 describe('what is not built', () => {
+  // MK6 LEAVES THE LIST WHEN THE WORKSPACE HAS A PLAN (D4). It is still named
+  // for a workspace with none, because for them the feature really is absent —
+  // but "not built yet · Verbatim engineering" beside a card printing three
+  // claims and their verdicts would be the page arguing with itself.
+  it('drops MK6 once a plan has been checked, and keeps MK3', () => {
+    expect(unlockRows(1).map((r) => r.section)).toEqual(['MK3'])
+  })
+
   it('names MK3 and MK6, each with an owner and no invented date', () => {
-    const rows = unlockRows()
+    const rows = unlockRows(0)
     expect(rows.map((r) => r.section)).toEqual(['MK3', 'MK6'])
     for (const r of rows) {
       expect(r.owner).toBeTruthy()
@@ -224,6 +247,12 @@ describe('ledgerRowsShown — the row a deep link named', () => {
     status: 'new',
     statusLabel: 'New',
     decidedAt: null,
+    number: n + 1,
+    basedOn: [],
+    grounded: null,
+    afterwards: afterwardsFor({ decidedAt: null, targetIds: [], series: [], audience: 'client' }),
+    why: null,
+    quote: null,
   })
   const rows = Array.from({ length: 20 }, (_, i) => rowAt(i)).sort((a, b) => a.firstMade.localeCompare(b.firstMade))
 
@@ -265,5 +294,194 @@ describe('ledgerRowsShown — the row a deep link named', () => {
   it('gives every row an anchor a link can land on', () => {
     expect(adviceAnchor('L3')).toBe('advice-L3')
     expect(marketSurfaceHref('L3', { horizon: 'last_3', rec: 'r3' })).toBe('/dashboard/market?horizon=last_3&item=L3')
+  })
+})
+
+
+describe('D4 · the ledger\u2019s number, its why and its quote', () => {
+  it('numbers identities off the ledger\u2019s own order, oldest first', () => {
+    const rows = buildAdviceRows(
+      [
+        copy({ id: 'c', lineage_id: 'c', created_at: '2026-08-01T00:00:00.000Z' }),
+        copy({ id: 'a', lineage_id: 'a', created_at: '2026-06-01T00:00:00.000Z' }),
+        copy({ id: 'b', lineage_id: 'b', created_at: '2026-07-01T00:00:00.000Z' }),
+      ],
+      [],
+    )
+    expect(rows.map((r) => r.lineageId)).toEqual(['a', 'b', 'c'])
+    expect(rows.map((r) => r.number)).toEqual([1, 2, 3])
+    // Not a row id and not a rank: the number is the place in the order the
+    // block's own meta line promises ("oldest first").
+    expect(rows[0].number).not.toBe(rows[0].recommendationId)
+  })
+
+  it('numbers over EVERY identity, so a deep-linked row keeps its real place', () => {
+    const rows = buildAdviceRows(
+      Array.from({ length: 20 }, (_, i) =>
+        copy({ id: `r${i}`, lineage_id: `L${i}`, created_at: `2026-0${(i % 9) + 1}-0${(i % 9) + 1}T00:00:00.000Z` }),
+      ),
+      [],
+    )
+    expect(rows[rows.length - 1].number).toBe(20)
+    const shown = ledgerRowsShown(rows, rows[rows.length - 1].lineageId, 12)
+    expect(shown[shown.length - 1].number).toBe(20)
+  })
+
+  it('drops the SENTENCE a model typed a figure in, and keeps the rest of the argument', () => {
+    // The leak this rule is for, verbatim off production (2026-08-09): a
+    // model-typed figure with no denominator, naming an internal bucket string.
+    const reasoning =
+      'Answer the wet-commute question on the product page. Industry-other holds 81. ' +
+      'Nobody in the category answers it on camera.'
+    const [row] = buildAdviceRows([copy({ reasoning })], [])
+    expect(row.why).toContain('Answer the wet-commute question')
+    expect(row.why).toContain('Nobody in the category answers it on camera.')
+    expect(row.why).not.toContain('81')
+    expect(row.why).not.toContain('Industry-other holds')
+  })
+
+  it('keeps a reasoning with no figure whole, and says null for none at all', () => {
+    const whole = 'Lead with the repair path, because that is what your audience already asks about.'
+    expect(buildAdviceRows([copy({ reasoning: whole })], [])[0].why).toBe(whole)
+    expect(buildAdviceRows([copy({ reasoning: null })], [])[0].why).toBeNull()
+    expect(buildAdviceRows([copy({ reasoning: '   ' })], [])[0].why).toBeNull()
+  })
+
+  it('never puts the hero quote inside the why — two fields, two nodes', () => {
+    const hero = 'What happens when a seam goes? Nobody says.'
+    const [row] = buildAdviceRows([copy({ reasoning: 'Lead with the repair path.', hero_quote: hero })], [])
+    // A number inside a quotation is still refused (AGENTS.md), so a quote
+    // spliced into scrubbed prose would either lose the speaker's own figure or
+    // smuggle it past the rule. `quote` is resolved by the loader, against the
+    // evidence, into its own field.
+    expect(row.why).not.toContain(hero)
+    expect(row.quote).toBeNull()
+  })
+
+  it('carries the newest copy\u2019s based_on, deduplicated', () => {
+    const [row] = buildAdviceRows(
+      [
+        copy({ id: 'old', lineage_id: 'L', created_at: '2026-06-01T00:00:00.000Z', based_on: { insight_ids: ['x'] } }),
+        copy({ id: 'new', lineage_id: 'L', created_at: '2026-09-01T00:00:00.000Z', based_on: { insight_ids: ['mi-1', 'mi-1', 'mi-2'] } }),
+      ],
+      [],
+    )
+    expect(row.basedOn).toEqual(['mi-1', 'mi-2'])
+  })
+
+  it('defaults a row nothing was read for to a state and a sentence, never a dash', () => {
+    // `too_soon`, not `no_target`: the row has not been decided on, and that
+    // is the silence that resolves on the calendar. See `afterwardsFor`.
+    const [row] = buildAdviceRows([copy()], [])
+    expect(row.afterwards.state).toBe('too_soon')
+    expect(row.afterwards.line.length).toBeGreaterThan(0)
+    expect(row.afterwards.line).not.toBe('\u2014')
+    expect(row.grounded).toBeNull()
+  })
+})
+
+describe('registryIdsByInsight \u2014 the join a recommendation never had', () => {
+  it('maps a cited insight to every registry identity carrying it', () => {
+    const map = registryIdsByInsight([
+      { supporting_insight_ids: ['ai-1', 'ai-2'], registry_id: 'reg-a' },
+      { supporting_insight_ids: ['ai-2'], registry_id: 'reg-b' },
+    ])
+    expect(map.get('ai-1')).toEqual(['reg-a'])
+    expect(map.get('ai-2')).toEqual(['reg-a', 'reg-b'])
+  })
+
+  it('contributes nothing for a theme with no registry identity — never a label', () => {
+    const map = registryIdsByInsight([
+      { supporting_insight_ids: ['ai-1'], registry_id: null },
+      { supporting_insight_ids: ['ai-1'], registry_id: undefined },
+      { supporting_insight_ids: null, registry_id: 'reg-a' },
+    ])
+    expect(map.size).toBe(0)
+  })
+})
+
+describe('orderedTargets — one ledger row, one identity', () => {
+  const reg = new Map<string, string[]>([
+    ['ai-1', ['reg-a']],
+    ['ai-2', ['reg-a', 'reg-b']],
+    ['ai-3', ['reg-b']],
+    ['ai-4', ['reg-a']],
+  ])
+
+  it('leads with the identity most of the row’s own evidence points at', () => {
+    expect(orderedTargets(['ai-1', 'ai-2', 'ai-3', 'ai-4'], reg)).toEqual(['reg-a', 'reg-b'])
+  })
+
+  it('breaks a tie on the id, so the object is the same between renders', () => {
+    expect(orderedTargets(['ai-2'], reg)).toEqual(['reg-a', 'reg-b'])
+    expect(orderedTargets(['ai-3', 'ai-1'], reg)).toEqual(['reg-a', 'reg-b'])
+  })
+
+  it('contributes nothing for evidence no theme carries', () => {
+    expect(orderedTargets(['ai-9'], reg)).toEqual([])
+    expect(orderedTargets([], reg)).toEqual([])
+  })
+
+  it('never pools two identities’ months into one comparison', () => {
+    // The defect this ordering exists for: target A carries Jul–Sep and target
+    // B Jan–Jun, so a concatenation takes the "after" month from A and the
+    // "before" month from B and bands one theme's rise against another's.
+    const aOnly = [
+      { month: '2026-07-01', k: 11, n: 118 },
+      { month: '2026-09-01', k: 21, n: 130 },
+    ]
+    const bOnly = [{ month: '2026-01-01', k: 40, n: 100 }]
+    const points = new Map([['reg-a', aOnly], ['reg-b', bOnly]])
+    const [target] = orderedTargets(['ai-1', 'ai-2', 'ai-4'], reg)
+    const out = afterwardsFor({
+      decidedAt: '2026-06-02T00:00:00.000Z',
+      targetIds: [target],
+      series: points.get(target) ?? [],
+      audience: 'client',
+      objectLabel: 'Repair & warranty',
+    })
+    expect(target).toBe('reg-a')
+    // Both sides after the decision, so there is no "before" month of A's to
+    // read — and the answer is that, not B's January.
+    expect(out.state).toBe('too_soon')
+    expect(out.line).not.toContain('January')
+  })
+})
+
+describe('the ledger’s hero quote burns nothing it does not print', () => {
+  // The contract `HERO_ONLY` rests on: the picker takes its lead quote before
+  // it checks n, so asking for zero returns a vouched hero and consumes
+  // nothing otherwise. Asserted against the picker itself — this is about the
+  // picker's order, not about a comment in the loader.
+  const rows = [
+    { quote: 'Wat gebeur as ’n naat gee?', rank: 1, evidenceId: 'e1' },
+    { quote: 'Die rits het na ’n maand gebreek.', rank: 2, evidenceId: 'e2' },
+  ]
+  const byAudience = new Map([['ai-1', rows]])
+
+  it('returns the hero when the evidence carries the same words', () => {
+    const pick = createCitedQuotePicker(byAudience, new Map())
+    const out = pick(['ai-1'], 0, 'a title', 'Wat gebeur as ’n naat gee?')
+    expect(out).toHaveLength(1)
+    expect(out[0].ref).toBe('e:e1')
+  })
+
+  it('takes NOTHING from the pool when the hero cannot be vouched, so a later row keeps its own', () => {
+    const pick = createCitedQuotePicker(byAudience, new Map())
+    expect(pick(['ai-1'], 0, 'a title', 'a sentence nobody in the evidence said')).toEqual([])
+    // The row that really owns e2 can still be vouched for it.
+    expect(pick(['ai-1'], 0, 'another title', 'Die rits het na ’n maand gebreek.')[0]?.ref).toBe('e:e2')
+  })
+
+  it('is exactly what asking for ONE would have broken', () => {
+    const english = new Map([['ai-1', [
+      { quote: 'What happens when a seam goes? Nobody says.', rank: 1, evidenceId: 'e1' },
+      { quote: 'The zip broke after a month of commuting.', rank: 2, evidenceId: 'e2' },
+    ]]])
+    const pick = createCitedQuotePicker(english, new Map())
+    // n = 1 falls through to the heuristic path and marks a candidate used…
+    expect(pick(['ai-1'], 1, 'the zip broke after a month', 'a sentence nobody said').length).toBe(1)
+    // …and that candidate is now unavailable to the row whose hero it is.
+    expect(pick(['ai-1'], 0, 'another title', 'The zip broke after a month of commuting.')).toEqual([])
   })
 })

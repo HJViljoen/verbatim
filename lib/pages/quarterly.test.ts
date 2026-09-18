@@ -329,3 +329,28 @@ describe('the window pair', () => {
     expect(reading.themes).toBeNull()
   })
 })
+
+describe('qr.p6.plan \u2014 the re-checked plan on the quarterly review (D4)', () => {
+  it('carries Market\u2019s newest plan through, and null where there is none', async () => {
+    const { quarterlyFixture, formingFixture } = await import('@/components/blocks/quarterly/fixture')
+    // ONE READING OF ONE PLAN. `buildMoves` takes `market.plans[0]`; it does
+    // not build a second card beside Market's, so the two surfaces cannot come
+    // to say different things about one document.
+    const plan = quarterlyFixture().moves.plan
+    expect(plan?.planId).toBe('pc-1')
+    expect(plan?.claims.map((c) => c.verdictLabel)).toEqual(['Contradicted', 'Supported', 'Untested'])
+    // Every count carries its denominator and names what it is counted over.
+    expect(plan?.claims[0].value).toEqual({ k: 41, n: 2359 })
+    // The basis names the population AND the retrieval bound that makes the
+    // share a floor — a claim's count is drawn from the themes closest to it,
+    // not swept over the corpus.
+    expect(plan?.basis).toContain('not out of one month')
+    expect(plan?.basis).toContain('floor')
+    // The move is dated and counted in READINGS, never held for N updates.
+    expect(plan?.moved[0].on).toMatch(/moved \d+ \w+ \u00b7 \d+ reading/)
+    expect(plan?.moved[0].on).not.toMatch(/update/i)
+
+    // The workspace with nothing uploaded gets null, not an empty card.
+    expect(formingFixture().moves.plan).toBeNull()
+  })
+})

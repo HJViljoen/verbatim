@@ -117,7 +117,7 @@ describe('MK2 · the ledger', () => {
     expect(text).toContain('First made')
     expect(text).toContain('28 Jun')
     expect(text).toContain('Done')
-    expect(text).toContain('2 Sep')
+    expect(text).toContain('2 Sep')  // the row decided this month
   })
 
   it('prints the status word on a row still marked New, where the parked page prints nothing', () => {
@@ -127,7 +127,9 @@ describe('MK2 · the ledger', () => {
 
   it('says how many of the whole ledger have been acted on, and never claims a quarter', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('acted on 1 of 64')
+    // TWO, matching the two rows the fixture draws as Done. The count is over
+    // all 64 identities, and it may not be smaller than what the table shows.
+    expect(text).toContain('acted on 2 of 64')
     expect(text).not.toMatch(/quarter/i)
   })
 
@@ -172,7 +174,32 @@ describe('MK2 · the ledger', () => {
 
   it('counts the rows it did not draw', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('62 newer pieces of advice')
+    expect(text).toContain('61 newer pieces of advice')
+  })
+})
+
+describe('the handover fixture does not argue with itself', () => {
+  // Rule 6 of the brief makes this fixture wave 2's handover, and wave 2 will
+  // render these blocks side by side from it. Two numbers in it are read off
+  // the rows rather than typed, because both had come to disagree with the
+  // table beside them.
+  it('counts the comparisons its own ledger refused', () => {
+    const data = marketFixture()
+    const drawn = data.advice.rows.map((r) => r.afterwards.verdict).filter((v) => v != null)
+    // One comparison drawn, and it could not be answered: the baseline is
+    // 9 of 104 and SHARE_BAND's floor is 10, so `proportionDelta` reads thin.
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]!.state).toBe('too_little_data')
+    expect(data.record.lines.join(' ')).toContain('1 comparison was refused')
+    expect(data.record.lines.join(' ')).not.toContain('Nothing was refused')
+  })
+
+  it('never says fewer have been acted on than the table shows as Done', () => {
+    const data = marketFixture()
+    const done = data.advice.rows.filter((r) => r.statusLabel === 'Done').length
+    expect(done).toBe(2)
+    expect(data.advice.acted).toBeGreaterThanOrEqual(done)
+    expect(data.advice.actedLine).toContain('2 of 64')
   })
 })
 
@@ -199,9 +226,12 @@ describe('MK4 · declared moves', () => {
 })
 
 describe('MK5 · how a move is made', () => {
+  // THREE OF FIVE SINCE D4 — "Upload a plan" was named as not built while the
+  // feature ran on Ask; Market now reads the result back and the row links to
+  // where a document is uploaded.
   it('lists five ways and says how many work today', () => {
     const text = renderText(marketWays.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('2 of 5 ways work today')
+    expect(text).toContain('3 of 5 ways work today')
     expect(text).toContain('Confirm this month’s card')
     expect(text).toContain('Track this')
     expect(text).toContain('Accept a piece of advice')
@@ -229,14 +259,23 @@ describe('MK5 · how a move is made', () => {
 })
 
 describe('the sections that are not built', () => {
-  it('names MK3 and MK6 with an owner and no invented date', () => {
+  it('names MK3 with an owner and no invented date', () => {
     const text = renderText(marketUnlocks.render(marketFixture(), 'app', ctx))
     // THE CARD IS BUILT; THE PRESS IS NOT — so the row that is listed here as
-    // missing names the confirming, not the card (Phase 1 D2 fix pass).
+    // missing names the confirming, not the card (Phase 1 D2 fix pass). MK6 is
+    // not asserted here: this fixture now carries a checked plan, so D4 drops
+    // that row — the test below owns it.
     expect(text).toContain('Confirming this month’s card')
     expect(text).toContain('The card is read above')
-    expect(text).toContain('Plans re-checked')
     expect(text).toContain('Verbatim engineering')
     expect(text).not.toMatch(/by \d{1,2} \w+/)
+  })
+
+  // MK6 IS NAMED ONLY WHERE IT IS ABSENT (D4). A workspace with a checked plan
+  // sees the card; one with none still sees the row, now owned by the reader
+  // rather than by engineering, because uploading is the thing that is missing.
+  it('names MK6 for a workspace with no plan, and drops it once there is one', () => {
+    expect(renderText(marketUnlocks.render(unrecordedFixture(), 'app', ctx))).toContain('Plans re-checked')
+    expect(renderText(marketUnlocks.render(marketFixture(), 'app', ctx))).not.toContain('Plans re-checked')
   })
 })

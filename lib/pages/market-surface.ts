@@ -5,11 +5,16 @@ import { gateTier, type GateTier } from '../curation'
 import { fmtInt, monthName, shortDate } from '../format'
 import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, themeChips, tierCounts, type GroundingThemeRow, type ThemeChip } from '../market-tiles'
 import type { SayVsHearEntry } from '../pipeline/schemas'
-import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
+import { cleanQuote, createCitedQuotePicker, fetchInsightsByIds, fetchQuotesByAudience, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
 import { methodLines, type MethodLines } from '../reading/method'
+import { PLAN_EMPTY, loadPlanChecks, type PlanCheckCard } from '../ask/plan-cards'
+import { scrubProse } from '../prose/scrub'
+import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
-import type { ReadingHandle } from '../reading/read'
+import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import type { Verdict } from '../reading/verdicts'
+import type { Quote } from '../renderables/types'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import type { MonthStatus } from '../reading/types'
 import type { Scope } from '../renderables/types'
@@ -127,6 +132,33 @@ export interface AdviceRow {
   statusLabel: string
   /** When the client set it, from `rec_decisions`. Null when they have not. */
   decidedAt: string | null
+  /**
+   * The identity's place in the ledger's own order, 1-based (D4, the mock's
+   * `#` column).
+   *
+   * NOT A RANK AND NOT A ROW ID. The ledger is sorted oldest-first and the
+   * number is read off THAT order, so "number 3" said out loud names the same
+   * row for as long as the order holds — which is what the mock's "# is the
+   * identity, kept for life" is reaching for. A `recommendations.id` changes
+   * every update (Pass D-b deletes and reinserts), and a lineage uuid is not
+   * something a person says. It is counted over every identity, not over the
+   * twelve drawn, so the number on a deep-linked row is its real place.
+   */
+  number: number
+  /** The evidence ids the advice follows from — `based_on.insight_ids` of the
+   *  newest copy. What "Grounded in" is counted from, and what a quote is
+   *  vouched for against. */
+  basedOn: string[]
+  /** Distinct videos behind the advice. Null where nothing was recorded, which
+   *  is not the same as zero. */
+  grounded: Grounding | null
+  /** What the conversation did after the client decided. Never blank and never
+   *  a dash — the four states each carry a sentence. */
+  afterwards: Afterwards
+  /** Pass D-b's argument, scrubbed. Null where the row carries none. */
+  why: string | null
+  /** The advice's one real comment, as its own node with its own ref. */
+  quote: Quote | null
 }
 
 export interface AdviceBlock {
@@ -247,6 +279,11 @@ export interface MarketSurfaceData {
    * record behind it could not be read. See lib/reading/method.ts.
    */
   method: MethodLines | null
+  /** MK6 · the plans this workspace has had re-checked, newest first. */
+  plans: PlanCheckCard[]
+  /** What MK6 says when there is no plan to show. Null when there is one — an
+   *  absence this page names rather than draws as a hole. */
+  plansEmpty: string | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -270,6 +307,17 @@ export interface RecCopy {
   status: string | null
   created_at: string | null
   run_id: string | null
+  /** The market and competitive insights this advice follows from. The ledger's
+   *  "Grounded in" column is counted from these (D4). */
+  based_on?: { insight_ids?: string[] } | null
+  /** Pass D-b's own argument for the advice. Model prose; see `buildAdviceRows`
+   *  for what happens to it on the way to a page. */
+  reasoning?: string | null
+  /** One real comment, validated at write time against the quotes the model was
+   *  shown (`validateQuote`, lib/pipeline/pass-d.ts). It is never rendered
+   *  inside the reasoning: a number inside a quotation is still refused, so a
+   *  quote is a sibling node with its own ref. */
+  hero_quote?: string | null
 }
 
 export const lineageKey = (r: Pick<RecCopy, 'id' | 'lineage_id'>): string => r.lineage_id ?? r.id
@@ -288,7 +336,26 @@ export function monthsMadeIn(copies: readonly RecCopy[]): string[] {
  * SORTED BY AGE, which is the design's word and not `orderAgenda`'s. The parked
  * page sorts by evidence tier and priority, which is the right order for "what
  * should we do next"; a ledger answers "what has been sitting here", and the
- * answer to that is the oldest thing first.
+ * answer to that is the oldest thing first. `number` is read off that order
+ * once the sort has happened — see `AdviceRow.number`.
+ *
+ * THE REASONING IS SCRUBBED AGAIN HERE, AND THE COST IS REAL. Pass D-b already
+ * runs this slot's policy at write time WITH the run's allow-list, so a second
+ * pass with no allow-list can only remove more. It is still run, because the
+ * first pass has not always been there: 26 of the 121 stored reasonings on
+ * production carry a digit (measured 2026-09-18), and they are two different
+ * kinds of sentence. Most are prescriptions — "scheduled 30/60/90-day
+ * check-ins", "first-90-days guides" — which are instructions to the reader and
+ * not claims about the conversation, and those sentences are lost. One is a
+ * genuine leak: *"Industry-other holds 81."*, a model-typed figure with no
+ * denominator, naming an internal bucket string, written on 2026-08-09 and
+ * still in the table. A ledger row that prints that is the defect the rule
+ * exists for, and the rule drops the SENTENCE rather than the paragraph, so the
+ * rest of a 436-character argument survives either way.
+ *
+ * AN EMPTY FIGURE TABLE IS THE RIGHT ONE. The model was never handed figures
+ * for this slot, so there is no `[[key]]` for it to have used; the grounding
+ * count is printed by the table's own column, not named in the prose.
  */
 export function buildAdviceRows(
   copies: readonly RecCopy[],
@@ -317,6 +384,8 @@ export function buildAdviceRows(
       : null
     const inherited = decisions ? inheritedStatus(lineageId, decisions) : null
     const status = recStatus(inherited ?? newest.status)
+    const decidedAt = decided?.decided_at ?? null
+    const why = scrubProse('pass_d_b_recommendation', newest.reasoning ?? '').text
     rows.push({
       lineageId,
       recommendationId: newest.id,
@@ -328,10 +397,22 @@ export function buildAdviceRows(
       repeatedWithinMonth: runs > 1 && months.length <= 1,
       status,
       statusLabel: REC_STATUS_LABEL[status],
-      decidedAt: decided?.decided_at ?? null,
+      decidedAt,
+      // Overwritten by the sort below, which is where the order is decided.
+      number: 0,
+      basedOn: [...new Set(newest.based_on?.insight_ids ?? [])],
+      grounded: null,
+      // The honest default for a row nothing has been read for. The loader
+      // replaces it on the rows the ledger draws; a row it does not draw keeps
+      // a state and a sentence rather than an undefined.
+      afterwards: afterwardsFor({ decidedAt, targetIds: [], series: [], audience: 'client' }),
+      why: why || null,
+      quote: null,
     })
   }
-  return rows.sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+  return rows
+    .sort((a, b) => a.firstMade.localeCompare(b.firstMade) || a.lineageId.localeCompare(b.lineageId))
+    .map((r, i) => ({ ...r, number: i + 1 }))
 }
 
 /**
@@ -499,7 +580,7 @@ export const MOVES_UNRECORDED =
  * row's LINEAGE rather than against a recommendation id, because the id is
  * deleted and reinserted every update.
  */
-export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
+export function waysOfMoving(acceptable: WaysBlock['acceptable'], plansChecked = 0): WayRow[] {
   return [
     {
       key: 'card',
@@ -541,12 +622,18 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
       unlock: 'Registering a claim, and a claim’s identity across updates, are not built yet.',
     },
     {
+      // LIVE SINCE D4, AND THE SENTENCE CHANGED WITH IT. This row said "Plans
+      // re-checked are not built yet" while three checks and eight
+      // re-evaluations sat in the database and Ask read them — the page naming
+      // as absent a feature the product had. The way in is Ask, which is where
+      // a document is uploaded; what is new here is that Market reads the
+      // result back.
       key: 'plan',
       title: 'Upload a plan',
-      how: 'A campaign brief, re-checked against the conversation each month.',
-      href: null,
-      live: false,
-      unlock: 'Plans re-checked are not built yet.',
+      how: 'A campaign brief, re-read against the conversation with every update — each claim supported, contradicted or untested.',
+      href: '/dashboard/agent',
+      live: true,
+      unlock: plansChecked > 0 ? null : 'Nothing has been uploaded for this workspace yet.',
     },
   ]
 }
@@ -568,8 +655,8 @@ export const CLAIMS_CAVEAT =
  *  naming what it waits for and who owns it. Neither invents a date — a
  *  delivery date computed from the calendar is wrong the first time it is read
  *  (the defect OV5's unlock had). */
-export function unlockRows(): UnlockRow[] {
-  return [
+export function unlockRows(plansChecked = 0): UnlockRow[] {
+  const rows: UnlockRow[] = [
     {
       // WHAT IS NOT BUILT IS THE PRESS. The card itself is read on this page
       // now (Phase 1 D2) and the renderer prints "— not built yet" under every
@@ -579,13 +666,24 @@ export function unlockRows(): UnlockRow[] {
       line: 'The card is read above — everything you published this month, how much of it drew enough comment to read, and the claims you made in it. Turning it into a move in one press is what is missing.',
       owner: 'Verbatim engineering',
     },
-    {
+  ]
+  // MK6 LEAVES THIS LIST WHEN IT HAS SOMETHING TO SHOW. The row's own sentence
+  // promised a verdict "held for two consecutive updates", which D4 measured
+  // and refused: claims flip between readings often enough that holding one
+  // back for two would print almost nothing. What the block prints instead is
+  // the current reading, the date each verdict last moved and how many readings
+  // have carried it — with `PLAN_HOLD_CAVEAT` saying the hold is not there. A
+  // workspace with no uploaded plan keeps the row, because for them it really
+  // is absent.
+  if (plansChecked === 0) {
+    rows.push({
       section: 'MK6',
       title: 'Plans re-checked',
-      line: 'An uploaded plan, its claims with their current verdicts, and what moved since — printed only where a verdict has held for two consecutive updates.',
-      owner: 'Verbatim engineering',
-    },
-  ]
+      line: 'Upload a campaign brief on Ask and it is re-read against every update — each claim supported, contradicted or untested, with what moved since you uploaded it.',
+      owner: 'You, on Ask',
+    })
+  }
+  return rows
 }
 
 // ---- the loader ---------------------------------------------------------------
@@ -655,22 +753,32 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     // silently (AGENTS.md) and 121 rows today is not the reason to obey that
     // rule, the read is.
     selectAll<RecCopy>(() =>
-      // NO `reasoning`. It was selected, typed onto `AdviceRow` and rendered by
-      // nothing: the mock's expanded ledger row with its "why" is not in this
-      // package's plan, and a column carried into a page bundle for a field
-      // nobody draws is weight with no reader. It comes back with the row that
-      // draws it.
+      // `reasoning`, `hero_quote` AND `based_on` COME BACK (D4). They were
+      // dropped in WP14 with the reason written here — "a column carried into a
+      // page bundle for a field nobody draws is weight with no reader… it comes
+      // back with the row that draws it" — and this is that row: the expanded
+      // "Why" line, its quote, and the "Grounded in" column are what D4 builds.
+      // Three text columns over 121 rows is the weight; the ledger is what
+      // reads them.
       supabase.from('recommendations')
-        .select('id, lineage_id, title, type, status, created_at, run_id')
+        .select('id, lineage_id, title, type, status, created_at, run_id, based_on, reasoning, hero_quote')
         .eq('client_id', clientId)
         .order('created_at', { ascending: true })
         .order('id', { ascending: true }),
     ),
     loadDecisions(supabase, clientId),
     supabase.from('run_summary').select('say_vs_hear').eq('client_id', clientId).eq('run_id', runId).maybeSingle(),
-    selectAll<ThemeBucketRow & GroundingThemeRow>(() =>
+    // `registry_id` JOINS THE SELECT (D4). It is the only bridge there is from
+    // a piece of advice to the monthly reading: a recommendation cites
+    // `audience_insights` ids, the month tables are keyed on `theme_registry`
+    // ids, and `themes.supporting_insight_ids` is what connects the two. The
+    // gap document recorded "nothing joins a recommendation to a theme_registry
+    // id"; this column is the join, and `afterwardsFor` is what it is for.
+    // NO `embedding` — `themes.embedding` is readable in bulk (AGENTS.md) but
+    // this read wants an id, not a vector.
+    selectAll<ThemeBucketRow & GroundingThemeRow & { registry_id?: string | null }>(() =>
       supabase.from('themes')
-        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, video_evidence_count, rank_score')
+        .select('bucket, supporting_insight_ids, label, member_themes, evidence_count, video_evidence_count, rank_score, registry_id')
         .eq('client_id', clientId).eq('run_id', themedRunId ?? runId).order('id'),
     ),
     loadMoves(supabase, clientId),
@@ -682,12 +790,65 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const insights = (insightRes.data ?? []) as InsightRow[]
   const summary = row<{ say_vs_hear: SayVsHearEntry[] | null }>(summaryRes, 'market-surface.runSummary')
 
+  // ── MK6 · the plans, started here and awaited at the end ───────────────
+  // It depends on nothing above except the corpus count (the denominator every
+  // claim's count is a count of), so it runs BESIDE the two evidence waves
+  // below rather than after them — round trips are the cost on this database,
+  // not rows. A failure loses the card and keeps the page.
+  const plansAhead = loadPlanChecks(scope, corpusVideos).catch((error: unknown) => {
+    console.error(`[pages] market-surface.plans: ${error instanceof Error ? error.message : String(error)}`)
+    return [] as PlanCheckCard[]
+  })
+
+  // ── the ledger's rows, decided BEFORE the evidence is fetched ──────────
+  //
+  // THE ORDER IS THE POINT. MK2's rows are pure (`buildAdviceRows`,
+  // `ledgerRowsShown`) and are computed here, ahead of MK1's evidence read, so
+  // that the two new reads below are bounded by the TWELVE ROWS THE LEDGER
+  // DRAWS rather than by 64 identities: a ledger row that is not on the page
+  // needs no grounding, no quote and no month series. The deep link is resolved
+  // here for the same reason — it adds one row to the twelve, and that row's
+  // evidence has to be in the same fetch.
+  const adviceRows = buildAdviceRows(recRows, decisions)
+  const acted = adviceRows.filter((r) => r.status !== 'new').length
+  // The legacy deep link, resolved once and read by both blocks below. `?rec=`
+  // names a recommendation ROW id, which is deleted and reinserted every
+  // update; the lineage it belongs to is what survives, and is what the ledger
+  // and the accept button are both keyed on.
+  const requested = params.rec ?? params.item
+  const requestedRow = requested
+    ? adviceRows.find((r) => r.recommendationId === requested || r.lineageId === requested) ?? null
+    : null
+  const shownRows = ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null)
+
+  // The market insights the drawn rows follow from. BY ID, not by run: a piece
+  // of advice first made in June cites June's insights, and reading only the
+  // latest update's would leave eleven of the twelve oldest rows with no
+  // grounding at all. Measured on production 2026-09-18: every recommendation
+  // carrying any `based_on` keeps at least one id that still resolves, on both
+  // tenants, so every drawn row can state a grounding.
+  const adviceInsightIds = [...new Set(shownRows.flatMap((r) => r.basedOn))]
+  const known = new Set(insights.map((i) => i.id))
+  const missing = adviceInsightIds.filter((id) => !known.has(id))
+  const olderInsights = await fetchOlderInsights(supabase, clientId, missing)
+  const evidenceByInsight = new Map<string, string[]>([
+    ...insights.map((mi) => [mi.id, mi.evidence?.supporting_theme_ids ?? []] as const),
+    ...olderInsights.map((mi) => [mi.id, mi.evidence?.supporting_theme_ids ?? []] as const),
+  ])
+
   // ── MK1 · what we concluded ────────────────────────────────────────────
+  //
+  // ONE FETCH FOR TWO BLOCKS. The conclusions' cited ids and the ledger rows'
+  // are unioned before the read: both want `id, theme, source_video_id` off the
+  // same table, and two waves would be two round trips for one answer.
   const citedIds = new Set<string>()
   for (const mi of insights) for (const id of mi.evidence?.supporting_theme_ids ?? []) citedIds.add(id)
-  const audienceRows = citedIds.size > 0
+  const adviceCitedIds = new Set<string>()
+  for (const id of adviceInsightIds) for (const a of evidenceByInsight.get(id) ?? []) adviceCitedIds.add(a)
+  const allCitedIds = new Set<string>([...citedIds, ...adviceCitedIds])
+  const audienceRows = allCitedIds.size > 0
     ? await fetchInsightsByIds<{ id: string; theme: string; source_video_id: string | null }>(
-        supabase, [...citedIds], 'id, theme, source_video_id',
+        supabase, [...allCitedIds], 'id, theme, source_video_id',
       )
     : []
   const themeSlugById = new Map(audienceRows.map((a) => [a.id, a.theme]))
@@ -738,18 +899,38 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   }
 
   // ── MK2 · the advice, and what you decided ─────────────────────────────
-  const adviceRows = buildAdviceRows(recRows, decisions)
-  const acted = adviceRows.filter((r) => r.status !== 'new').length
-  // The legacy deep link, resolved once and read by both blocks below. `?rec=`
-  // names a recommendation ROW id, which is deleted and reinserted every
-  // update; the lineage it belongs to is what survives, and is what the ledger
-  // and the accept button are both keyed on.
-  const requested = params.rec ?? params.item
-  const requestedRow = requested
-    ? adviceRows.find((r) => r.recommendationId === requested || r.lineageId === requested) ?? null
-    : null
+  //
+  // The rows were built above; this is the three columns they did not have.
+  const registryByInsight = registryIdsByInsight(bucketRows)
+  const groundedRows = shownRows.map((r) => {
+    const cited = r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? [])
+    return {
+      ...r,
+      grounded: groundingFor({
+        basedOn: [...new Set(cited)],
+        videoByInsight,
+        themeIds: cited.map((a) => themeSlugById.get(a)).filter((s): s is string => Boolean(s)),
+        audience: LEDGER_AUDIENCE,
+        month,
+        // What the ROW recorded, before anything was resolved — so a row whose
+        // market insights are themselves gone reads as pruned rather than as
+        // never having written its evidence down.
+        cited: r.basedOn.length,
+      }),
+      targetIds: orderedTargets(cited, registryByInsight),
+    }
+  })
+  const withAfterwards = await readAfterwards(reading, clientId, month, groundedRows, themeLabels)
+  // The NEWEST copy's hero quote per identity — the ledger prints the current
+  // wording of a piece of advice, so it prints the current copy's quote. Kept
+  // off `AdviceRow` on purpose: an unvouched hero quote must not ride into the
+  // page bundle beside the `quote` field that refused it.
+  const heroByLineage = new Map<string, string>()
+  for (const c of [...recRows].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '') || a.id.localeCompare(b.id))) {
+    heroByLineage.set(lineageKey(c), c.hero_quote ?? '')
+  }
   const advice: AdviceBlock = {
-    rows: ledgerRowsShown(adviceRows, requestedRow?.lineageId ?? null),
+    rows: await attachQuotes(supabase, withAfterwards, heroByLineage, evidenceByInsight, themeSlugById),
     highlight: requestedRow?.lineageId ?? null,
     requestedLine: !requested ? null : requestedRow ? ADVICE_REQUESTED_LINE : ADVICE_REQUESTED_GONE,
     total: adviceRows.length,
@@ -804,8 +985,12 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   }))
   // What the button acts on — see `acceptableRow`.
   const acceptable = acceptableRow(adviceRows, requestedRow)
+  const plans = await plansAhead
   const ways: WaysBlock = {
-    ways: waysOfMoving(acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null),
+    ways: waysOfMoving(
+      acceptable ? { lineageId: acceptable.lineageId, recommendationId: acceptable.recommendationId, title: acceptable.title } : null,
+      plans.length,
+    ),
     claims,
     claimsLine: claims.length === 0
       ? 'Nothing you have said in your own posts has been read against the conversation this update.'
@@ -816,14 +1001,23 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   }
 
   // ── the record ─────────────────────────────────────────────────────────
-  // NO VERDICTS TO REFUSE. Nothing on this surface is a banded comparison — the
-  // conclusions are the model's, the ledger's dates are dates, and a move with
-  // one reading prints a month rather than a direction — so the refusal counter
-  // is zero honestly rather than unset.
+  // THIS SURFACE NOW HAS VERDICTS, AND THE RECORD COUNTS THEM. It used to say
+  // "nothing on this surface is a banded comparison" and pass an empty list on
+  // purpose — the conclusions are the model's and the ledger's dates are dates.
+  // D4's "Afterwards" column changed that: every drawn row that has been
+  // decided on and has months either side of the decision produces a `Verdict`,
+  // and one that comes back `too_little_data` is a comparison this page drew
+  // and could not answer. A refusal counter that stayed at zero while the table
+  // above it printed unanswered comparisons would be the method note
+  // disagreeing with the page — mock-gap's deviation 8 in reverse. The states
+  // that produce NO verdict (`too_soon`, `no_target`, `refused`) are not
+  // counted here, because nothing was compared: they say their own sentence in
+  // their own cell.
+  const ledgerVerdicts = advice.rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
   const recordInputs: RecordInputs = {
     ...(await recordAhead),
-    comparisonsRefused: countRefused([]),
-    refusals: refusals([]),
+    comparisonsRefused: countRefused(ledgerVerdicts),
+    refusals: refusals(ledgerVerdicts),
   }
 
   return {
@@ -836,10 +1030,268 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     advice,
     moves: movesBlock,
     ways,
-    unlocks: { rows: unlockRows() },
+    unlocks: { rows: unlockRows(plans.length) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
     method: methodLines(recordInputs, { brand }),
+    plans,
+    plansEmpty: plans.length === 0 ? PLAN_EMPTY : null,
   }
+}
+
+/**
+ * The market insights an older ledger row follows from.
+ *
+ * BY ID, AND ONLY THE ONES THE LATEST RUN DOES NOT ALREADY HOLD. The loader
+ * reads this update's `market_insights` anyway for MK1; a piece of advice first
+ * made in June cites June's, which that read does not contain. One `.in()` over
+ * the difference, bounded by the twelve rows the ledger draws — never a read
+ * per row and never the whole table.
+ *
+ * Failure is degradation, not an error: a row whose evidence cannot be read
+ * prints no grounding, which is what an unrecorded grounding prints too.
+ */
+async function fetchOlderInsights(
+  supabase: SupabaseClient,
+  clientId: string,
+  ids: readonly string[],
+): Promise<{ id: string; evidence: InsightRow['evidence'] }[]> {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from('market_insights')
+    .select('id, evidence')
+    .eq('client_id', clientId)
+    .in('id', [...ids])
+  if (error) {
+    console.error(`[pages] market-surface.olderInsights: ${error.message}`)
+    return []
+  }
+  return (data ?? []) as { id: string; evidence: InsightRow['evidence'] }[]
+}
+
+/**
+ * The bridge from a cited `audience_insights` id to the `theme_registry`
+ * identities the monthly reading is keyed on.
+ *
+ * THIS IS THE JOIN THE GAP DOCUMENT SAID DID NOT EXIST — "nothing joins a
+ * recommendation to a `theme_registry` id or a subject id". It exists in one
+ * direction only, through this run's `themes` rows: a theme lists the insights
+ * it was built from (`supporting_insight_ids`) and carries the stable identity
+ * (`registry_id`). An insight can feed more than one theme, so the map is
+ * one-to-many and `afterwardsFor` takes the first as its object.
+ *
+ * NEVER BY LABEL. Labels churn ~88% run to run (AGENTS.md); `registry_id` is
+ * the identity and a null one contributes nothing rather than a guess.
+ */
+export function registryIdsByInsight(
+  themes: readonly { supporting_insight_ids?: string[] | null; registry_id?: string | null }[],
+): Map<string, string[]> {
+  const out = new Map<string, string[]>()
+  for (const t of themes) {
+    if (!t.registry_id) continue
+    for (const id of t.supporting_insight_ids ?? []) {
+      const arr = out.get(id) ?? []
+      if (!arr.includes(t.registry_id)) arr.push(t.registry_id)
+      out.set(id, arr)
+    }
+  }
+  return out
+}
+
+/**
+ * The identities a ledger row is about, MOST-CITED FIRST.
+ *
+ * ONE ROW, ONE OBJECT. `registryIdsByInsight` is one-to-many — an insight
+ * feeds every theme built from it — so a row routinely names several
+ * identities, and the reading can only be about one of them: "the newest month
+ * after against the newest month before" over a concatenation of two themes'
+ * series takes the after side from whichever theme happened to have a recent
+ * month and the before side from the other, bands two different objects
+ * against each other, and labels the result with the first one. A rise in
+ * Durability printed as Zips, with a band beside it to make it look checkable.
+ *
+ * SO THE ORDER IS THE ANSWER AND IT IS MEASURED, NOT ARBITRARY: the identity
+ * the most of this row's own cited insights point at leads, ties broken by id
+ * so the choice is stable between renders. `afterwardsFor` reads
+ * `targetIds[0]` as its object and the loader reads that one identity's
+ * series; the rest stay on the row so a `no_target` state still knows the
+ * difference between "several" and "none".
+ */
+export function orderedTargets(
+  citedInsightIds: readonly string[],
+  registryByInsight: Map<string, string[]>,
+): string[] {
+  const weight = new Map<string, number>()
+  for (const id of citedInsightIds) {
+    for (const reg of registryByInsight.get(id) ?? []) weight.set(reg, (weight.get(reg) ?? 0) + 1)
+  }
+  return [...weight.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id]) => id)
+}
+
+/** The audience the ledger's afterwards reading is taken in. The advice is
+ *  addressed to the client, so what it did afterwards is a reading of the
+ *  CLIENT's own audience — not the category's. Named once rather than typed
+ *  into three calls. */
+export const LEDGER_AUDIENCE = 'client'
+
+/** How far back the afterwards reading looks for a "before" month. */
+export const LEDGER_MONTHS_BACK = 13
+
+/** A month start N months before another. Month starts are day 01, so there is
+ *  no day-of-month overflow to guard against. */
+function monthsBack(month: string, n: number): string {
+  const d = new Date(`${monthStartOf(month)}T00:00:00.000Z`)
+  d.setUTCMonth(d.getUTCMonth() - n)
+  return d.toISOString().slice(0, 10)
+}
+
+type RowWithTargets = AdviceRow & { targetIds: string[] }
+
+/**
+ * "Afterwards", for the rows that can have one.
+ *
+ * ONE MONTH-SERIES READ FOR THE WHOLE LEDGER, over the union of the drawn rows'
+ * target identities, and only where a row has actually been decided on: an
+ * undecided row's answer is a sentence, not a reading, and reading months for
+ * it would spend the query to print the same words.
+ *
+ * `loadMonthSeries` is the only way in (AGENTS.md: a reader reads the series,
+ * it never sums videos across months). Where the numerator table is not applied
+ * — `substrate` / `numeratorSubstrate` `missing`, which is how a fresh database
+ * and a tenant mid-migration both look — the series is empty, every row falls
+ * to `too_soon`, and the ledger says so in words.
+ */
+async function readAfterwards(
+  reading: ReadingHandle,
+  clientId: string,
+  month: string,
+  rows: readonly RowWithTargets[],
+  themeLabels: Map<string, string>,
+): Promise<AdviceRow[]> {
+  const readable = rows.filter((r) => r.decidedAt && r.targetIds.length > 0)
+  // ONE IDENTITY PER ROW, so the read asks for the objects the page will
+  // actually print rather than every theme the evidence touches.
+  const targets = [...new Set(readable.map((r) => r.targetIds[0]))]
+  if (targets.length === 0) {
+    return rows.map(({ targetIds, ...r }) => ({
+      ...r,
+      afterwards: afterwardsFor({ decidedAt: r.decidedAt, targetIds, series: [], audience: LEDGER_AUDIENCE }),
+    }))
+  }
+
+  // THE CLUSTERING KEY AND THE AUDIENCE TRAVEL WITH THE POINT. Dropping them
+  // here would hand `afterwardsFor` two months it cannot tell apart — see
+  // `AfterwardsInput.series`.
+  const points = new Map<string, { month: string; k: number; n: number; clusteringKey: string | null; audience: string | null }[]>()
+  try {
+    const set = await loadMonthSeries(reading.client, clientId, {
+      audiences: [LEDGER_AUDIENCE],
+      objectKind: 'theme',
+      objectIds: targets,
+      from: monthsBack(month, LEDGER_MONTHS_BACK),
+      to: month,
+    })
+    for (const series of set.series) {
+      if (!series.objectId) continue
+      points.set(
+        series.objectId,
+        series.points
+          .filter((p) => p.k != null && p.videos != null)
+          .map((p) => ({
+            month: p.month,
+            k: p.k as number,
+            n: p.videos as number,
+            clusteringKey: p.clusteringKey,
+            audience: p.audience,
+          })),
+      )
+    }
+  } catch (error) {
+    // The month tables arrive with a migration and a deploy can land first.
+    // Every row then reads `too_soon`, which is the honest answer for "we have
+    // no months to read", and the page keeps its other four blocks.
+    console.error(`[pages] market-surface.afterwards: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  return rows.map(({ targetIds, ...r }) => {
+    // THE SERIES IS ONE OBJECT'S, and it is the object the verdict is labelled
+    // with. See `orderedTargets`: pooling every target's months takes the two
+    // sides of the comparison from two different themes.
+    const target = targetIds[0] ?? null
+    return {
+      ...r,
+      afterwards: afterwardsFor({
+        decidedAt: r.decidedAt,
+        targetIds,
+        objectLabel: target ? themeLabels.get(target) ?? target : undefined,
+        series: target ? points.get(target) ?? [] : [],
+        audience: LEDGER_AUDIENCE,
+      }),
+    }
+  })
+}
+
+/**
+ * Ask the cited-quote picker for the hero quote AND NOTHING ELSE.
+ *
+ * The picker takes its lead quote before it checks how many were asked for, so
+ * zero means "return the hero if the evidence can vouch for it, and take
+ * nothing from the pool if it cannot". Any other number lets the heuristic path
+ * consume a candidate for a row that will not print it — and the picker's
+ * `used` set is shared across every row on the page, so the candidate it burns
+ * is one another row could have been vouched by. Pinned in
+ * `market-surface.test.ts` against the picker itself, because it rests on the
+ * picker's order and not on a comment.
+ */
+const HERO_ONLY = 0
+
+/**
+ * Each drawn row's one real comment, as its own node with its own ref.
+ *
+ * A HERO QUOTE IS ONLY SHOWN WHERE THE EVIDENCE CAN VOUCH FOR IT.
+ * `recommendations.hero_quote` is validated against the quotes the model was
+ * shown at write time (`validateQuote`), but it is stored as a COPY of the
+ * words with no evidence id, and a quote with no ref cannot be frozen into a
+ * snapshot or erased when the comment behind it is (lib/renderables/quotes-
+ * freeze.ts). So the picker is asked to find the evidence row carrying the same
+ * words; where it cannot, the row shows no quote rather than an unfreezable
+ * one.
+ *
+ * AND IT IS A SIBLING OF THE "WHY", NEVER A SPAN INSIDE IT. A digit inside a
+ * quotation is still refused (AGENTS.md), so a quote spliced into scrubbed
+ * prose would either lose the speaker's own number or smuggle it past the rule.
+ * Two fields, two nodes.
+ */
+async function attachQuotes(
+  supabase: SupabaseClient,
+  rows: readonly AdviceRow[],
+  heroByLineage: Map<string, string>,
+  evidenceByInsight: Map<string, string[]>,
+  themeSlugById: Map<string, string>,
+): Promise<AdviceRow[]> {
+  const audienceIdsFor = (r: AdviceRow) => [...new Set(r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? []))]
+  const heroOf = (r: AdviceRow) => (heroByLineage.get(r.lineageId) ?? '').trim()
+  const ids = [...new Set(rows.filter((r) => heroOf(r).length > 0).flatMap(audienceIdsFor))]
+  if (ids.length === 0) return [...rows]
+
+  const byAudience = await fetchQuotesByAudience(supabase, ids).catch((error: unknown) => {
+    console.error(`[pages] market-surface.adviceQuotes: ${error instanceof Error ? error.message : String(error)}`)
+    return new Map()
+  })
+  const pick = createCitedQuotePicker(byAudience, themeSlugById)
+  return rows.map((r) => {
+    const hero = heroOf(r)
+    if (!hero) return r
+    // THE HERO AND NOTHING ELSE — see `HERO_ONLY`. Asking for one quote made
+    // the picker fall through to its heuristic path whenever the hero could
+    // not be vouched, and `take` marks what it picks as used: the row threw the
+    // result away, and a later row whose own hero was that same sentence could
+    // no longer be vouched for it and lost a quote it had earned.
+    const picked = pick(audienceIdsFor(r), HERO_ONLY, r.title, hero)[0]
+    const vouched = picked != null && cleanQuote(picked.text).toLowerCase() === cleanQuote(hero).toLowerCase()
+    return { ...r, quote: vouched ? picked : null }
+  })
 }
 
 /** The decision ledger. NULL — never [] — when `rec_decisions` is not applied
