@@ -6,6 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { ADVICE_REQUESTED_GONE } from '@/lib/pages/market-surface'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
+import { pageModule } from '@/components/pages/registry'
 import { MARKET_BLOCKS } from './index'
 import { marketConclusions } from './conclusions'
 import { marketAdvice } from './advice'
@@ -65,6 +66,21 @@ describe('Market · every block, every mode, every state', () => {
     const conclusions = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(conclusions).toContain('Showcase Innovations in 3D Printed Prosthetics')
     expect(conclusions).toContain('data-slot="pass_d_a_insight"')
+  })
+
+  it('mounts no export control, because no page module owns these block keys', () => {
+    // THE TRIPWIRE FOR THE EXPORT CONTROL. The port mounted `ExportScope
+    // page="market"`, and the page KEY `market` resolves to the LEGACY module:
+    // every tile export answered "Unknown tile." and the page export handed
+    // back a PDF of Market Intelligence. The control is off until a block
+    // surface has an export path of its own — and the day these keys resolve,
+    // this test fails and `components/pages/market-surface/index.tsx` says
+    // what to re-mount.
+    const legacy = pageModule('market')
+    expect(legacy).not.toBeNull()
+    for (const block of MARKET_BLOCKS) {
+      expect(Object.hasOwn(legacy!.renderables, block.key)).toBe(false)
+    }
   })
 
   it('declares no figures — nothing on this surface is a reading of a month', () => {

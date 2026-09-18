@@ -1,7 +1,6 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
@@ -44,6 +43,26 @@ import { marketUnlocks } from './unlocks'
 // it at 12px, wholly muted, in the sans. It is a bare paragraph rather than a
 // `Tile variant="hero"` because the artboard draws no card around it: it sits
 // between the page bar and the first section, on the page's own ground.
+//
+// THERE IS NO EXPORT CONTROL ON THIS SURFACE, AND THAT IS THE HONEST STATE.
+// The port mounted `ExportScope page="market"` with every new block key on it,
+// and the page KEY `market` resolves to the LEGACY module
+// (`components/pages/registry.ts` → `components/pages/market/index.tsx`, parked
+// at /dashboard/market-intel), whose renderables are `market.shortRead ·
+// market.news · market.rail · market.list · market.detail`. So "Export this
+// tile" answered 400 "Unknown tile." on all eight of this page's tiles, and
+// "Export this page" quietly rendered a PDF of Market Intelligence — a
+// different page's content, under its own title. A silent wrong artefact is
+// worse than the error beside it.
+//
+// The control comes back the day a block surface has an export path of its own:
+// a `PageModule` over `MARKET_BLOCKS` under its own `PageKey`, which is
+// `lib/renderables/types.ts` + `components/pages/registry.ts` — the record
+// package's files, and a stored contract (`report_snapshots.ref.page`) that no
+// port may spend on its own. Every other Phase 1 block surface (Overview,
+// Subjects, Voice, Competitive, This week) mounts none either, so this is the
+// surfaces agreeing rather than Market alone. `index.test.tsx` holds the
+// tripwire: the day those keys resolve, the test fails and says to re-mount it.
 //
 // THE METHOD FOOTNOTE IS THE PAGE'S LAST LINE (`MarketSurfaceData.method`,
 // `methodLines`), in mono at the artboard's 9.5px. It states what the reading
@@ -134,7 +153,6 @@ export function MarketSurfacePage({
       key={block.key}
       col={COLS[block.key] ?? 12}
       row={ROWS[block.key] ?? 2}
-      exportKey={block.key}
       distribute="between"
     >
       {block.render(data, 'app', ctx)}
@@ -144,32 +162,29 @@ export function MarketSurfacePage({
   const [promise, ...rest] = data.masthead.split(/(?<=\.)\s+/)
 
   return (
-    <ExportScope page="market" params={params} tiles={MARKET_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}>
-      <PageFrame>
-        <SurfacePageBar
-          nav="market"
-          params={params}
-          context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-          record={{ line: data.record.line, lines: data.record.lines }}
-        >
-          <ExportMenu />
-          <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
-        </SurfacePageBar>
+    <PageFrame>
+      <SurfacePageBar
+        nav="market"
+        params={params}
+        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
+        record={{ line: data.record.line, lines: data.record.lines }}
+      >
+        <HowToRead items={LEGEND} basePath="/dashboard/market" anchor="market" />
+      </SurfacePageBar>
 
-        <p className="m-0 max-w-[86ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">
-          {promise}{rest.length > 0 ? <> <span className="text-muted-foreground">{rest.join(' ')}</span></> : null}
+      <p className="m-0 max-w-[86ch] font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">
+        {promise}{rest.length > 0 ? <> <span className="text-muted-foreground">{rest.join(' ')}</span></> : null}
+      </p>
+
+      <PageGrid>{READINGS.map(tile)}</PageGrid>
+
+      <PageGrid>{MOVES.map(tile)}</PageGrid>
+
+      {data.method ? (
+        <p className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          {data.method.lines.map((line) => <span key={line}>{line}</span>)}
         </p>
-
-        <PageGrid>{READINGS.map(tile)}</PageGrid>
-
-        <PageGrid>{MOVES.map(tile)}</PageGrid>
-
-        {data.method ? (
-          <p className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
-            {data.method.lines.map((line) => <span key={line}>{line}</span>)}
-          </p>
-        ) : null}
-      </PageFrame>
-    </ExportScope>
+      ) : null}
+    </PageFrame>
   )
 }
