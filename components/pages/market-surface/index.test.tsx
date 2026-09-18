@@ -165,7 +165,10 @@ describe('MK1 · what we concluded', () => {
     // chip, because an absent record is not a new theme.
     const markup = render(marketConclusions.render(marketFixture(), 'app', ctx))
     expect(markup.match(/>New</g) ?? []).toHaveLength(1)
-    expect(renderText(markup)).toContain('New means we have no earlier month')
+    // The sentence says what the query asks for: mentioned, in the client's
+    // audience or the category — never the wider "read" it used to promise
+    // (`recurrenceForTarget` counts `k > 0` over `MARKET_AUDIENCES`).
+    expect(renderText(markup)).toContain('New means no earlier month in which the theme behind it was mentioned, in your audience or in the category')
   })
 
   it('dates the conclusions by the update that reached them, with the word update on it', () => {

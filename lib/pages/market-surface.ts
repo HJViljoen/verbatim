@@ -81,11 +81,23 @@ export const CONCLUSIONS_SHOWN = 8
 export const CONCLUSIONS_CORPUS_LINE =
   'The videos behind a conclusion are counted over everything we have read for you, not over this month alone.'
 
-/** What the "New" chip on a conclusion means — a statement about OUR RECORD,
- *  said once under the rows because every chip means the same thing. See
- *  `ConclusionRow.recurrence`. */
+/**
+ * What the "New" chip on a conclusion means — a statement about OUR RECORD,
+ * said once under the rows because every chip means the same thing. See
+ * `ConclusionRow.recurrence`.
+ *
+ * THE SENTENCE SAYS WHAT IS COUNTED, NOT MORE. It read "no earlier month in
+ * which the theme behind it was READ", and `recurrenceForTarget` counts
+ * something narrower in two ways: a month counts only where the theme was
+ * actually MENTIONED (`k > 0`), and the read covers `MARKET_AUDIENCES` — the
+ * client's and the category's — not a rival's. A theme whose earlier months
+ * were read and in which nobody said anything, or which was heard only inside
+ * a rival's audience, therefore wore the chip under a sentence promising more
+ * than the query asked. Narrowing the sentence is the honest half of that
+ * choice; widening the read is a second query and a product decision.
+ */
 export const CONCLUSIONS_NEW_LINE =
-  'New means we have no earlier month in which the theme behind it was read — a fact about our record, not a direction.'
+  'New means no earlier month in which the theme behind it was mentioned, in your audience or in the category — a fact about our record, not a direction.'
 
 /** What the ledger's "Grounded in" column counts, said once under the table
  *  because every row's cell is counted the same way (D8, and the same shape as
@@ -1315,13 +1327,17 @@ async function loadTargetPoints(
  * Which months a conclusion's leading theme was heard in — the mock's "New"
  * chip, as a fact about the record.
  *
- * ANY AUDIENCE WE READ, because a conclusion is not scoped to one: "Durability
- * is the category's rising subject" is about the category and "Freitag's
- * audience discusses smell" is about a rival's, and the block states that basis
- * once beneath the rows rather than pretending the chip means one bucket. A
- * month counts as heard only where the theme actually carried a reading in it
- * (`k > 0`); a month whose denominator we read and whose theme nobody mentioned
- * is not a month it was heard in.
+ * THE TWO AUDIENCES THIS PAGE READS, AND THE SENTENCE UNDER THE ROWS SAYS SO.
+ * A conclusion is not scoped to one audience — "Durability is the category's
+ * rising subject" is about the category and "Freitag's audience discusses
+ * smell" is about a rival's — but `loadTargetPoints` asks for
+ * `MARKET_AUDIENCES` (the client's and the category's) and a rival's months
+ * are not in the map at all. So the chip means "not heard in YOUR audience or
+ * the category before", `CONCLUSIONS_NEW_LINE` prints exactly that, and
+ * widening the read to every tracked rival is a bigger query and a product
+ * decision, not a silent one. A month counts as heard only where the theme
+ * actually carried a reading in it (`k > 0`); a month whose denominator we
+ * read and whose theme nobody mentioned is not a month it was heard in.
  *
  * Pure.
  */
