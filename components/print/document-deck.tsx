@@ -107,11 +107,17 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
  * when the quarterly's and the leadership one-pager's charts land.
  */
-export function DeckSpark({ values, months, color = 'var(--primary)' }: {
+export function DeckSpark({ values, months, color = 'var(--primary)', width = 104, height = 22 }: {
   values: (number | null)[]
   /** The months these points are, in order — the printed page's only axis. */
   months: string[]
   color?: string
+  /** The drawn size. 104 × 22 is a sparkline inside a row of text; a chart
+   *  that IS the element gets the artboard's size, which is about 300 × 120 in
+   *  the 5fr pane (Block D wave 2, `sales.p2.chart`). Optional, so nothing
+   *  that already draws one moves. */
+  width?: number
+  height?: number
 }) {
   // The months that carried a reading, in order. A slot with no reading is not
   // a month this line can name.
@@ -137,7 +143,7 @@ export function DeckSpark({ values, months, color = 'var(--primary)' }: {
   }
   return (
     <span className="flex flex-col gap-1">
-      <Sparkline values={values} color={color} width={104} height={22} animate={false} endDot />
+      <Sparkline values={values} color={color} width={width} height={height} animate={false} endDot />
       <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
         <span>{months[0]}</span>
         <span>{months[months.length - 1]}</span>
@@ -1002,27 +1008,37 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
             <span className="block h-full rounded-r-full bg-negative" style={{ width: `${pct(f.away.k)}%` }} />
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+            {/* THE LEGEND IS NOT A DOTTED FIGURE. The artboard's dotted rule
+                marks a number whose denominator is spelled out beside it; in a
+                legend the "of 12" IS the sentence, and underlining it twice
+                reads as two devices for one idea. It is still a level node, so
+                rule (b) reads it. */}
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
-              <span>Toward {data.company} <Counted k={fmtCount(f.toward.k)} n={fmtCount(f.pool)} of="" /></span>
+              <span data-copy="level">Toward {data.company} <span className="font-mono tabular-nums text-foreground">{fmtCount(f.toward.k)}</span> of <span className="font-mono tabular-nums text-foreground">{fmtCount(f.pool)}</span></span>
             </span>
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 shrink-0 rounded-full bg-negative" aria-hidden />
-              <span>Away from {data.company} <Counted k={fmtCount(f.away.k)} n={fmtCount(f.pool)} of="" /></span>
+              <span data-copy="level">Away from {data.company} <span className="font-mono tabular-nums text-foreground">{fmtCount(f.away.k)}</span> of <span className="font-mono tabular-nums text-foreground">{fmtCount(f.pool)}</span></span>
             </span>
           </div>
           {f.unread && <p className="text-[12.5px] leading-[1.45] text-muted-foreground">{f.unread}</p>}
         </div>
 
-        <p className="border-t border-border/70 pt-3 text-[12.5px] leading-[1.45] text-muted-foreground">
+        {/* THE BASIS SITS AT THE FOOT, where the artboard's confidence rail
+            does (P0 item 2's `distribute="between"`, applied to a sheet). The
+            column packs to the top and this block takes the slack, rather than
+            the whole column spreading and opening a hole between the figure
+            and its own bar. */}
+        <div className="mt-auto flex flex-col gap-2 border-t border-border/70 pt-3">
           {/* THE BASIS, BESIDE THE NUMBER. A third clock on a month-stamped
               sheet, and a reader who is not told will read it as the month's. */}
-          Counted over {f.audienceLabel}, {f.basis}.
-        </p>
-        {/* The one thing the artboard asks for that nothing measured. */}
-        <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
-          Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
-        </p>
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">Counted over {f.audienceLabel}, {f.basis}.</p>
+          {/* The one thing the artboard asks for that nothing measured. */}
+          <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+            Which way a video leaned is read from what was stored about the video, not from any one comment under it, so no quote on this sheet is labelled toward or away.
+          </p>
+        </div>
       </div>
 
       <div className={`${CARD} flex min-h-0 flex-col gap-3.5 px-6 py-5`}>
@@ -1120,7 +1136,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
         </div>
       ))}
       {lines.length < 3 && (
-        <div className="flex min-h-0 flex-col justify-end gap-2 self-stretch">
+        <div className="flex min-h-0 flex-col justify-end gap-2 self-stretch" style={{ gridColumn: `span ${3 - Math.min(lines.length, 3)}` }}>
           <Eyebrow>Why there is one of these</Eyebrow>
           <p className={BODY_SM}>
             An objection is counted as a kind of thing said, and the register that names themes carries no kind. So this sheet has one row per month rather than one per objection, and it will have more the day a theme can be an objection.
@@ -1283,6 +1299,21 @@ function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData 
 
 // ── deck ───────────────────────────────────────────────────────────────────
 
+/**
+ * The serif line under a sheet's title, for the sheets that have no section
+ * map entry to carry one.
+ *
+ * A BORROWED SECTION HAS `framing`, and the artboard draws one on every sheet
+ * that is not the cover. These two are page kinds, so the line lives here —
+ * the same slot (`Slide.note`), the same 12.5px serif italic, the artboard's
+ * own words. The other page kinds keep no note, because each already opens
+ * with its own lead paragraph.
+ */
+const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
+  switching: 'The videos that name both you and a rival, and which way each of them leaned — a small number, printed as it stands.',
+  scripted: 'The sentence to say is a writer\u2019s; every figure under it is counted.',
+}
+
 /** The lens the document was written under. Older snapshots (before
  *  2026-09-02) carry none: they are all Sales briefs. */
 const lensOf = (data: DocumentSnapshotData): DocLens => data.lens ?? { means: 'What it means for a sale', short: 'for a sale' }
@@ -1354,7 +1385,7 @@ function SectionPane({ section, data }: { section: DocBriefSection; data: Docume
           <div className="flex flex-col gap-2.5">
             {line.series.map((serie) => (
               <div key={serie.label} className="flex flex-col gap-1.5">
-                <DeckSpark values={serie.points} months={line.months.map(monthLabel)} />
+                <DeckSpark values={serie.points} months={line.months.map(monthLabel)} width={300} height={120} />
                 <p className="text-[11px] leading-[1.35] text-muted-foreground">{serie.label}</p>
               </div>
             ))}
@@ -1443,7 +1474,16 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
   // numbers are a month's has to name the month on the page they are read on.
   const stamp = data.reading?.stamp ?? data.period
-  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} /> })
+  // THE HEADER NAMES THE SHEET'S PLACE; THE FOOTER CARRIES THE STAMP. The
+  // artboard's header reads "Objections · September 2026" — two words and a
+  // month in a 10.5px mono slot that has to fit on one line beside a title.
+  // The deck put the whole 60-character reading stamp there, on every sheet,
+  // beside a title it repeated, and the stamp then appeared nowhere else. It
+  // now rides `BriefFooter` on every sheet including the cover, which is where
+  // the artboard puts it.
+  const short = data.reading?.monthLabel ?? data.period
+  const footer = <BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} />
+  const chrome = (title: string) => ({ context: `${title} · ${short}`, footer })
   return (
     <>
       <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: i + 2, title: s.title }))} />
@@ -1453,12 +1493,12 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
           // "Objections · September 2026", not the title repeated beside itself
           // under a 60-character stamp in a 10.5px mono slot. The stamp rides
           // the footer of every sheet.
-          const context = section.context ? `${section.context} · ${data.reading?.monthLabel ?? data.period}` : `${section.title} · ${stamp}`
+          const context = `${section.context ?? section.title} · ${short}`
           return (
             <Slide
               key={section.id}
               title={section.title}
-              chrome={{ context, footer: chrome(section.title).footer }}
+              chrome={{ context, footer }}
               page={i + 2}
               pages={pages}
               layout="single"
@@ -1472,7 +1512,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={i + 2} pages={pages} layout="single">
+          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={i + 2} pages={pages} layout="single" note={PAGE_NOTE[page.kind] ?? null}>
             <PageBody page={page} data={data} />
           </Slide>
         )
