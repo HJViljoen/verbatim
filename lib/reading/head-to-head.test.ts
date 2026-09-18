@@ -185,6 +185,33 @@ describe('headToHead · the five measures', () => {
     expect(videos.why).toContain('Sealand')
   })
 
+  it('marks a level read off too few videos, so the refusal sits beside the figure', () => {
+    // Össur's September positive share is 5 of 5 judged videos. The level reads
+    // "100%" and the only refusal was in `verdictWhy`, which is the ROW's — so
+    // a tile could print "100%" in full confidence beside a footnote nobody
+    // ties to it.
+    const thin = (s: HeadToHeadSide): HeadToHeadSide => ({
+      ...s,
+      month: { videos: 4, comments: 20 },
+      previous: { videos: 3, comments: 18 },
+      sentiment: { positive: 5, judged: 5 },
+      sentimentPrev: { positive: 4, judged: 9 },
+    })
+    const r = h2h({ you: thin(SEALAND), them: FREITAG, readThisMonth: 200, readPreviousMonth: 190 })
+    const sentiment = r.measures.find((m) => m.key === 'sentiment')!
+    expect(sentiment.you!.text).toBe('100%')
+    expect(sentiment.you!.belowFloor).toBe(true)
+    expect(sentiment.you!.prev!.belowFloor).toBe(true)
+    expect(sentiment.them!.belowFloor).toBe(false)
+    expect(r.measures.find((m) => m.key === 'videos')!.you!.belowFloor).toBe(true)
+
+    // A floor applies to the two BANDED measures and to nothing else: a rate,
+    // a median and a count are refused a band for a reason that is not the n.
+    for (const key of ['comments_per_video', 'engagement', 'posts'] as const) {
+      expect(r.measures.find((m) => m.key === key)!.you!.belowFloor).toBeNull()
+    }
+  })
+
   it('leaves an unobserved side null with a sentence, never a zero', () => {
     const r = h2h({ them: side({ audience: 'competitor:Rareform', label: 'Rareform' }) })
     const videos = r.measures.find((m) => m.key === 'videos')!

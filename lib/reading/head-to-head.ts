@@ -82,6 +82,19 @@ export interface FaceOffLevel {
    *  it. Null on every measure whose headline figure is `pct` or a bare count,
    *  and on comments per video — see `commentsMeasure`. */
   figure: FaceOffFigure | null
+  /**
+   * Whether this level's own figure is read off fewer than the floor, so no
+   * band could be drawn over it whatever the other month holds. NULL on a
+   * measure no floor applies to — a rate, a median and a count are refused a
+   * band for a reason that is not the n (`verdictWhy`).
+   *
+   * It exists because the refusal was only ever in `verdictWhy`, which is the
+   * ROW's. Össur's September positive share is 5 of 5 judged videos: the level
+   * reads "100%" and every honest way to print that row says so beside the
+   * figure, not in a footnote under the table. Whether it reads as a refusal is
+   * the tile's decision; this is what the tile decides on.
+   */
+  belowFloor: boolean | null
 }
 
 export interface FaceOffSide extends FaceOffLevel {
@@ -254,21 +267,34 @@ function shareSide(
   side: HeadToHeadSide,
   readNow: number,
   readPrev: number,
+  floor: number,
 ): FaceOffSide | null {
   if (!side.month) return null
   const value: Counted = { k: side.month.videos, n: readNow }
   const pct = readNow > 0 ? round1((value.k / readNow) * 100) : null
-  const level: FaceOffSide = { value, pct, text: pct === null ? '—' : fmtPct(pct), figure: null }
+  const level: FaceOffSide = {
+    value,
+    pct,
+    text: pct === null ? '—' : fmtPct(pct),
+    figure: null,
+    belowFloor: value.k < floor,
+  }
   if (side.previous && readPrev > 0) {
     const prevPct = round1((side.previous.videos / readPrev) * 100)
-    level.prev = { value: { k: side.previous.videos, n: readPrev }, pct: prevPct, text: fmtPct(prevPct), figure: null }
+    level.prev = {
+      value: { k: side.previous.videos, n: readPrev },
+      pct: prevPct,
+      text: fmtPct(prevPct),
+      figure: null,
+      belowFloor: side.previous.videos < floor,
+    }
   }
   return level
 }
 
 function videosMeasure(input: HeadToHeadInput, month: string, floor: number, basisLine: string): FaceOffMeasure {
-  const you = shareSide(input.you, input.readThisMonth, input.readPreviousMonth)
-  const them = shareSide(input.them, input.readThisMonth, input.readPreviousMonth)
+  const you = shareSide(input.you, input.readThisMonth, input.readPreviousMonth, floor)
+  const them = shareSide(input.them, input.readThisMonth, input.readPreviousMonth, floor)
   const verdictFor = (side: HeadToHeadSide, level: FaceOffSide | null): Verdict | null => {
     if (!level || !level.prev) return null
     if (level.value.k < floor || level.prev.value.k < floor) return null
@@ -307,6 +333,7 @@ function rateSide(side: HeadToHeadSide): FaceOffSide | null {
     pct: null,
     text: `${per} per video`,
     figure: null,
+    belowFloor: null,
   }
   if (side.previous && side.previous.videos > 0) {
     const prev = round1(side.previous.comments / side.previous.videos)
@@ -315,6 +342,7 @@ function rateSide(side: HeadToHeadSide): FaceOffSide | null {
       pct: null,
       text: `${prev} per video`,
       figure: null,
+      belowFloor: null,
     }
   }
   return level
@@ -355,6 +383,7 @@ function engagementSide(side: HeadToHeadSide): FaceOffSide | null {
     pct: null,
     text: `${fmtPct(side.engagement.median)} median`,
     figure: { value: side.engagement.median, unit: 'pct', token: 'median' },
+    belowFloor: null,
   }
   const prev = side.engagementPrev
   if (prev && prev.median !== null) {
@@ -363,6 +392,7 @@ function engagementSide(side: HeadToHeadSide): FaceOffSide | null {
       pct: null,
       text: `${fmtPct(prev.median)} median`,
       figure: { value: prev.median, unit: 'pct', token: 'median_prev' },
+      belowFloor: null,
     }
   }
   return level
@@ -391,22 +421,34 @@ function engagementMeasure(input: HeadToHeadInput, basisLine: string): FaceOffMe
   }
 }
 
-function sentimentSide(side: HeadToHeadSide): FaceOffSide | null {
+function sentimentSide(side: HeadToHeadSide, floor: number): FaceOffSide | null {
   const { positive, judged } = side.sentiment
   if (judged <= 0) return null
   const pct = round1((positive / judged) * 100)
-  const level: FaceOffSide = { value: { k: positive, n: judged }, pct, text: fmtPct(pct, 0), figure: null }
+  const level: FaceOffSide = {
+    value: { k: positive, n: judged },
+    pct,
+    text: fmtPct(pct, 0),
+    figure: null,
+    belowFloor: judged < floor,
+  }
   const prev = side.sentimentPrev
   if (prev && prev.judged > 0) {
     const prevPct = round1((prev.positive / prev.judged) * 100)
-    level.prev = { value: { k: prev.positive, n: prev.judged }, pct: prevPct, text: fmtPct(prevPct, 0), figure: null }
+    level.prev = {
+      value: { k: prev.positive, n: prev.judged },
+      pct: prevPct,
+      text: fmtPct(prevPct, 0),
+      figure: null,
+      belowFloor: prev.judged < floor,
+    }
   }
   return level
 }
 
 function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, basisLine: string): FaceOffMeasure {
-  const you = sentimentSide(input.you)
-  const them = sentimentSide(input.them)
+  const you = sentimentSide(input.you, floor)
+  const them = sentimentSide(input.them, floor)
   const verdictFor = (side: HeadToHeadSide, level: FaceOffSide | null): Verdict | null => {
     if (!level || !level.prev) return null
     if (level.value.n < floor || level.prev.value.n < floor) return null
@@ -440,9 +482,21 @@ function sentimentMeasure(input: HeadToHeadInput, month: string, floor: number, 
 
 function postsSide(side: HeadToHeadSide): FaceOffSide | null {
   if (side.ownPosts === null) return null
-  const level: FaceOffSide = { value: { k: side.ownPosts, n: 0 }, pct: null, text: fmtInt(side.ownPosts), figure: null }
+  const level: FaceOffSide = {
+    value: { k: side.ownPosts, n: 0 },
+    pct: null,
+    text: fmtInt(side.ownPosts),
+    figure: null,
+    belowFloor: null,
+  }
   if (side.ownPostsPrev != null) {
-    level.prev = { value: { k: side.ownPostsPrev, n: 0 }, pct: null, text: fmtInt(side.ownPostsPrev), figure: null }
+    level.prev = {
+      value: { k: side.ownPostsPrev, n: 0 },
+      pct: null,
+      text: fmtInt(side.ownPostsPrev),
+      figure: null,
+      belowFloor: null,
+    }
   }
   return level
 }
