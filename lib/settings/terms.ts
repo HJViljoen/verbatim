@@ -1,3 +1,4 @@
+import { shortDate } from '../format'
 import type { ConfigChange } from '../config-log'
 
 /**
@@ -75,6 +76,47 @@ export function termDates(changes: readonly ConfigChange[]): Map<string, TermDat
 export function termDateWords(date: TermDate | undefined): string {
   if (!date) return 'in the set before we kept a record'
   return date.source === 'recorded' ? `added ${date.on}` : `in use by ${date.on}, not recorded`
+}
+
+/**
+ * The same sentence at the artboard's scale: "added 6 Apr".
+ *
+ * A chip is 12px of text carrying a term and its date, and an ISO stamp spends
+ * ten characters of it, four of which say nothing a reader of a settings page
+ * needs — the year is this year. `shortDate` is the app's own short form and
+ * the artboard's.
+ *
+ * THE SECOND GRADE SURVIVES THE SHORTENING, because it is the part that is not
+ * decoration: "in use by 6 Apr, not recorded" is a different claim from "added
+ * 6 Apr", and a chip that dropped the difference to fit would be printing the
+ * stronger claim for free.
+ */
+export function termDateShort(date: TermDate | undefined): string {
+  if (!date) return 'in the set before we kept a record'
+  const on = shortDate(`${date.on}T00:00:00.000Z`)
+  return date.source === 'recorded' ? `added ${on}` : `in use by ${on}, not recorded`
+}
+
+/** The terms section's mono meta: "21 terms · brand 4 · competitor 5 ·
+ *  category 12 · not this 3". Every count is the length of the list it names,
+ *  so the head cannot disagree with the rows under it. */
+export function termsMeta(buckets: {
+  brand: readonly string[]
+  competitor: readonly string[]
+  category: readonly string[]
+  exclusions: readonly string[]
+}): string {
+  const total = buckets.brand.length + buckets.competitor.length + buckets.category.length
+  const parts = [
+    `${total} term${total === 1 ? '' : 's'}`,
+    `brand ${buckets.brand.length}`,
+    `competitor ${buckets.competitor.length}`,
+    `category ${buckets.category.length}`,
+  ]
+  // The exclusions are not search terms and are not in the total: an exclusion
+  // subtracts, and adding it to "21 terms" would say we search for it.
+  if (buckets.exclusions.length > 0) parts.push(`not this ${buckets.exclusions.length}`)
+  return parts.join(' · ')
 }
 
 // ---- The per-term yield, month by month -------------------------------------

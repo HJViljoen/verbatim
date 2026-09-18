@@ -30,6 +30,29 @@ export interface SuggestState {
 const csv = (v: FormDataEntryValue | null) =>
   String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
 
+/**
+ * The tracked rival list, however the form spelled it.
+ *
+ * The rivals table posts ONE HIDDEN INPUT PER NAME (the artboard's table is the
+ * list, and a name carrying a comma has to survive the round trip); the old
+ * settings form posted one comma-separated box. Both shapes are read here, so
+ * an older client, a cached page or a hand-made POST cannot silently truncate
+ * the list to its first name. De-duplicated case-insensitively, keeping the
+ * spelling the reader typed first — `rivalSlug` folds them downstream anyway,
+ * and two rows reading "Freitag" and "freitag" would each claim the other's
+ * months.
+ */
+const trackedNames = (formData: FormData): string[] => {
+  const all = formData.getAll('competitor_names').flatMap((v) => csv(v))
+  const seen = new Set<string>()
+  return all.filter((n) => {
+    const key = n.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 // Facts vs knobs (Redesign Spec §9): this action accepts ONLY the client-
 // editable facts. Keywords, platforms, and scrape depth are operator levers —
 // deliberately absent here so a crafted POST can't move cost/quality knobs
@@ -71,7 +94,7 @@ export async function updateTrackingConfig(
   const isPaused = current?.report_period === 'paused'
 
   const parsed = schema.safeParse({
-    competitor_names: csv(formData.get('competitor_names')),
+    competitor_names: trackedNames(formData),
     report_period: isPaused ? 'weekly' : formData.get('report_period'),
     report_day: formData.get('report_day'),
   })
@@ -418,4 +441,34 @@ export async function updateCommunity(
       ? 'Saved. Your next update reads that community too.'
       : 'Saved. Your next update stops reading that community — what we already read stays.',
   }
+}
+
+/**
+ * The page's ONE save (Block D wave 2, `settings.save`).
+ *
+ * THE ARTBOARD HAS ONE SAVE ROW AND THE BUILT PAGE HAD TWO BUTTONS, in two
+ * cards, each writing a different subset and each reporting its own "Saved."
+ * A reader who changed a term and a rival had to notice that two different
+ * buttons existed and press both; whichever they missed was silently discarded
+ * on the next navigation.
+ *
+ * TWO WRITES, STILL, AND DELIBERATELY. The terms go out on the admin client
+ * (three of the four columns are REVOKEd from `authenticated`, T0-2) and carry
+ * their own actor stamp; the cadence and the tracked rivals go out on the
+ * session client, derive the competitor search terms and give every name an
+ * identity. Merging them into one statement would mean merging two different
+ * privilege paths and two different stamps to save a round trip. What the
+ * reader needs is ONE outcome, and that is what this composes: the first
+ * failure wins the message, because a save that half-landed must not read as a
+ * save.
+ */
+export async function saveTracking(
+  prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const terms = await updateSearchTerms(prev, formData)
+  if (!terms.ok) return terms
+  const config = await updateTrackingConfig(prev, formData)
+  if (!config.ok) return config
+  return { ok: true, message: 'Saved. Your next update searches these terms.' }
 }

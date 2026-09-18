@@ -1,7 +1,7 @@
 import { platformLabel } from '@/lib/format'
 import { glossaryRule } from '@/lib/calibration'
 import { EnhancedTable } from '@/components/shell/enhanced-table'
-import { SettingsCard } from '@/components/settings-frame'
+import { LabelRow } from '@/components/settings/chrome'
 import type { TermSummary } from '@/lib/keywords/value'
 import { TERM_YIELD_BASIS, type TermYield } from '@/lib/settings/terms'
 
@@ -76,8 +76,11 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
     ? 'Nothing to show yet — this fills in after your first update.'
     : `Pooled over your last ${updates} update${updates === 1 ? '' : 's'}. Found = posts the term surfaced · kept = the ones about your market · with comments = the ones worth reading · insights = findings they led to.${flagged > 0 ? ` ${flagged} term${flagged === 1 ? '' : 's'} worth a look.` : ''}`
 
+  // Inside the terms section rather than in a filled card of its own (the
+  // artboard port): the label gutter is the page's, so the record lines up
+  // under the lists it is the record OF.
   return (
-    <SettingsCard title="How your search terms are doing" description={description}>
+    <LabelRow label="How they are doing" meta={description}>
       {rows.length === 0 ? (
         <p className="text-[12px] text-muted-foreground">
           We have not gathered anything yet, so no term has a record. Come back after your first update.
@@ -107,7 +110,7 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
           </table>
         </EnhancedTable>
       )}
-      {rows.length > 0 && <p className="mt-2 text-[11px] text-muted-foreground">{TERM_YIELD_BASIS}</p>}
-    </SettingsCard>
+      {rows.length > 0 && <p className="mt-2 font-mono text-[10.5px] leading-[1.4] text-cat">{TERM_YIELD_BASIS}</p>}
+    </LabelRow>
   )
 }

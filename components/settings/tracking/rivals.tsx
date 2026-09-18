@@ -1,0 +1,193 @@
+'use client'
+
+import { useState } from 'react'
+import { X } from 'lucide-react'
+import { RivalRename } from '@/app/dashboard/settings/rival-rename'
+import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { monthName, platformLabel, shortDate } from '@/lib/format'
+import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
+import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, type RivalRow } from '@/lib/settings/rivals-view'
+import { cn } from '@/lib/utils'
+
+// `settings.rivals.*` — the rivals table at the artboard's five columns, and
+// the add control the artboard puts under it.
+//
+// THE LIST IS FORM STATE, WHICH IS WHY ADDING AND REMOVING ARE HERE. A rival is
+// one string in `tracking_configs.competitor_names`; the built page edited that
+// list as a comma-separated box at the foot of the page, beside the cadence
+// card, where nothing connected it to the table above. Here the table IS the
+// list: a name goes in through the field under it, comes out through the × on
+// its row, and the page's one save writes the whole list through
+// `updateTrackingConfig` — which already derives the search terms, gives every
+// name an identity (`ensureRivals`) and stamps an actor on the write.
+//
+// THE MOCK'S COLUMN IS "Own posts with a claim"; OURS IS "Own posts". A rival's
+// claims are `video_claims` rows in their bucket and no tenant session may read
+// them (M8). What they PUBLISHED is readable, is most of what that number was,
+// and is dated by `videos.upload_date` — a third clock, so the head names the
+// month and the note under the table names the clock (D9).
+//
+// "Tracked since" IS EARLIEST EVIDENCE. `competitors.first_seen_at` is the
+// first day our own data shows we were reading the name, not the day anybody
+// asked for it; the footnote says so, and until M1 is applied there is no
+// identity at all and the cell says that instead of a date.
+
+const COLS = '180px minmax(0,1fr) 112px 132px 150px'
+
+export interface RivalsSectionProps {
+  rows: readonly RivalRow[]
+  /** The tracked list as the form holds it. */
+  names: readonly string[]
+  onAdd: (name: string) => string | null
+  onRemove: (name: string) => void
+  canEdit: boolean
+  /** The month the own-posts column is headed by, as a month start. */
+  month: string
+}
+
+export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: RivalsSectionProps) {
+  const [draft, setDraft] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const head = ['Rival', 'Accounts we read', 'Tracked since', `Own posts · ${monthName(month)}`, ''] as const
+  const refusal = rivalRefusalNote(rows, month)
+
+  function add() {
+    const problem = onAdd(draft)
+    setError(problem)
+    if (problem === null) setDraft('')
+  }
+
+  // A name the reader has just typed has no row of its own yet: nothing is
+  // captured, no identity exists, and saying "0 posts" about it would be a
+  // measurement of a rival we have not looked at once.
+  const known = new Set(rows.map((r) => r.name))
+  const added = names.filter((n) => !known.has(n))
+
+  return (
+    <Section>
+      <SectionHead title="Rivals" meta={rivalsMeta(rows)} rule={RIVAL_BREAK_RULE} />
+
+      {rows.length === 0 && added.length === 0 ? (
+        <p className="text-[12.5px] text-muted-foreground">No rival is named. Naming one is how the category gets a shape.</p>
+      ) : (
+        <GridTable cols={COLS} min={860} head={head}>
+          {rows.map((r) => (
+            <GridRow
+              key={r.identity?.id ?? r.name}
+              cols={COLS}
+              minHeight={52}
+              cells={[
+                <span key="n" className="flex items-center gap-2">
+                  {names.includes(r.name) && canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(r.name)}
+                      aria-label={`Stop tracking ${r.name}`}
+                      className="cursor-pointer rounded-full p-0.5 text-cat transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                      <X className="size-3" aria-hidden />
+                    </button>
+                  )}
+                  <span className="min-w-0 truncate text-[12.5px] font-medium">{r.name}</span>
+                  {isNewRival(r, month) && (
+                    <span className="shrink-0 rounded-full bg-warning/20 px-2 py-px text-[10.5px] font-semibold">New</span>
+                  )}
+                  {/* The tracked list is the form's; one hidden input per name
+                      so a name carrying a comma survives the round trip. */}
+                  {names.includes(r.name) && <input type="hidden" name="competitor_names" value={r.name} />}
+                </span>,
+                <span key="h" className="block text-left">
+                  <span className="inline-flex items-center gap-1.5 text-[12.5px] text-secondary-foreground">
+                    <Dot tone={r.retiredAt ? 'none' : r.noAccounts ? 'watch' : r.read > 0 ? 'good' : 'watch'} />
+                    {rivalState(r)}
+                  </span>
+                  {r.perPlatform.length > 0 && (
+                    <span className="mt-0.5 block font-mono text-[10.5px] text-cat">
+                      {r.perPlatform.map((p) => (
+                        <span key={p.platform} className="mr-2 inline-block">
+                          {/* No `@` on YouTube: it is read by CHANNEL ID and an
+                              @name reads nothing at all, so printing one as a
+                              handle teaches a client the wrong shape to paste. */}
+                          {platformLabel(p.platform)} {p.handle ? (p.platform === 'youtube' ? p.handle : `@${p.handle}`) : '— not tracked'}
+                          {p.captured > 0 ? ` · ${p.captured} captured, ${p.read} read` : ''}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </span>,
+                <span key="t" className="block text-right font-mono text-[11.5px] text-muted-foreground">
+                  {r.trackedSince ? shortDate(`${r.trackedSince.slice(0, 10)}T00:00:00.000Z`) : 'not recorded'}
+                </span>,
+                r.ownPosts
+                  ? <Figure key="o" value={r.ownPosts.value.k.toLocaleString('en-GB')} muted={r.ownPosts.value.k === 0} />
+                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">{r.ownPostsWhy ?? '— not tracked'}</span>,
+                r.identity && !r.retiredAt && canEdit
+                  ? <RivalRename key="r" id={r.identity.id} name={r.name} />
+                  : <span key="r" className="block text-right text-[11.5px] text-cat">{r.retiredAt ? 'no longer tracked' : RENAME_UNAVAILABLE}</span>,
+              ]}
+            />
+          ))}
+          {added.map((name) => (
+            <GridRow
+              key={`new-${name}`}
+              cols={COLS}
+              minHeight={52}
+              cells={[
+                <span key="n" className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onRemove(name)}
+                    aria-label={`Remove ${name}`}
+                    className="cursor-pointer rounded-full p-0.5 text-cat transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <X className="size-3" aria-hidden />
+                  </button>
+                  <span className="min-w-0 truncate text-[12.5px] font-medium">{name}</span>
+                  <input type="hidden" name="competitor_names" value={name} />
+                </span>,
+                <span key="h" className="block text-left text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
+                <span key="t" className="block text-right font-mono text-[11.5px] text-cat">—</span>,
+                <span key="o" className="block text-right text-[11.5px] text-cat">—</span>,
+                <span key="r" />,
+              ]}
+            />
+          ))}
+        </GridTable>
+      )}
+
+      <div className="flex flex-col gap-1.5 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={draft}
+            onChange={(e) => { setDraft(e.target.value); setError(null) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+            disabled={!canEdit}
+            placeholder="Add a rival by name"
+            aria-label="Add a rival by name"
+            className={cn(FIELD, 'w-[280px] max-w-full')}
+          />
+          <button type="button" onClick={add} disabled={!canEdit || draft.trim() === ''} className={CONTROL}>Add a rival</button>
+          {refusal && <MonoNote className="max-w-[420px]">{refusal}</MonoNote>}
+        </div>
+        {error && <span className="text-[11.5px] text-negative">{error}</span>}
+      </div>
+
+      <MonoNote className="max-w-[820px]">{HANDLE_FORMAT_CAVEAT}</MonoNote>
+      <MonoNote className="max-w-[820px]">{TRACKED_SINCE_NOTE}</MonoNote>
+      {rows.some((r) => r.ownPosts) && (
+        <MonoNote className="max-w-[820px]">
+          Own posts are dated by the day the post went up, which is a different clock from everything else on this
+          page — {rows.find((r) => r.ownPosts)?.ownPosts?.basis}.
+        </MonoNote>
+      )}
+    </Section>
+  )
+}
+
+/** What the action cell says where there is no identity to rename. Before M1
+ *  every cell on the page is this one, and an empty cell would read as a
+ *  missing control rather than an unshipped one. */
+export const RENAME_UNAVAILABLE = 'renaming needs their identity, which has not shipped here yet'
+
+export const TRACKED_SINCE_NOTE =
+  '“Tracked since” is the earliest evidence in our own data that we were reading the name — not the day you asked for it, which nothing recorded until now.'

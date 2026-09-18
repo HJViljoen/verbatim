@@ -5,12 +5,18 @@ import { passAMinComments } from '../config'
 import { parseSubreddits } from '../gather/subreddits'
 import type { SubredditEntry } from '../gather/types'
 import { computeSubredditRoi, type SubredditRoiRow } from '../pipeline/subreddit-roi'
+import { freezeStateFor } from '../reading/monthly'
 import { monthStartOf } from '../reading/month-key'
-import { loadCompetitors, type Competitor } from '../rivals'
+import { loadWindowReading } from '../reading/read'
+import type { MonthStatus, PlatformMix } from '../reading/types'
+import { CLIENT_AUDIENCE, loadCompetitors, type Competitor } from '../rivals'
 import { selectAll } from '../supabase-admin'
 import { loadTermPerformance } from '../keywords/performance'
 import type { TermSummary } from '../keywords/value'
 import { isMissingAffects } from './change-log'
+import { loadUpdates } from './record-load'
+import type { LastChange } from './save-state'
+import type { UpdateInput } from '../readiness/types'
 import { GATE_SAMPLE, keptByCommunity, type KeptRate } from './reject-log'
 import type { RivalCensusRow } from './rivals-view'
 import { termDates, termYieldByMonth, type KeywordRunRow, type TermDate, type TermYield } from './terms'
@@ -66,6 +72,36 @@ export interface TrackingPageInputs {
   /** The month the census's `publishedThisMonth` counts in, as a month start —
    *  what the rivals table's own-posts column is headed by. */
   censusMonth: string
+  /** The newest logged configuration change of ANY surface — what the
+   *  save-state strip's "last save" half reads. Null where nothing has been
+   *  changed, or where the log itself is not applied here. */
+  lastChange: LastChange | null
+  /** That change's own note, where it wrote one ("Poler was added…"). */
+  lastChangeNote: string | null
+  /** False where M1's `affects_*` columns are not applied: then the strip's
+   *  "what it broke" half is an absence with its own sentence, never a blank
+   *  and never a cheerful "nothing". */
+  affectsRecorded: boolean
+  /** Every update on record, newest first — the rail's count, the cadence
+   *  meta's "last 27 Sep", the evidence line under the chosen cadence and the
+   *  page bar's earliest evidence, off ONE read.
+   *
+   *  THROUGH `loadUpdates`, NOT A SECOND READER. `lib/settings/record-load.ts`
+   *  owns the one reading of `pipeline_runs` for the settings area, and its own
+   *  docblock forbids a second: two readers of that table are two answers to
+   *  "how many updates have you had", and the record page and this one print
+   *  the same number in two places. */
+  updates: UpdateInput[]
+  /** `month_denominators.platform_mix` for the client's own audience in
+   *  `censusMonth`, and the population it is a mix of. Null where the monthly
+   *  reading is not applied or the month has no row: the share column is then
+   *  blank, never zero. */
+  platformMix: PlatformMix | null
+  monthVideos: number | null
+  monthStatus: MonthStatus
+  /** What the rail prints beside the other sub-pages. A key that could not be
+   *  counted is absent rather than zero. */
+  railCounts: { subjects: number | null; schedules: number | null }
 }
 
 /** The term-yield window: a quarter of weekly updates, the same number the
@@ -207,6 +243,93 @@ async function loadCensus(client: SupabaseClient, clientId: string, month: strin
   return [...acc.values()]
 }
 
+/**
+ * The newest logged change of any surface, for the save-state strip.
+ *
+ * ONE ROW, NOT THE LOG. `loadChangeLog` above reads every `terms` row because a
+ * term's date is worked out by walking them; the strip needs the latest change
+ * of ANY surface and nothing else, so it asks for one. The M1 fallback is the
+ * same one the wide read makes, and it is what sets `affectsRecorded` false:
+ * "we did not write down what that save broke" is a different sentence from
+ * "that save broke nothing", and the strip prints whichever is true.
+ */
+async function loadLastChange(
+  client: SupabaseClient,
+  clientId: string,
+): Promise<{ change: LastChange | null; affectsRecorded: boolean; note: string | null }> {
+  const wide = await client.from(CONFIG_CHANGES_TABLE)
+    .select('changed_at, source, note, affects_audiences, affects_months')
+    .eq('client_id', clientId)
+    .order('changed_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (!wide.error) {
+    const row = wide.data as (LastChange & { note: string | null }) | null
+    return { change: row, affectsRecorded: true, note: row?.note ?? null }
+  }
+  if (isMissingConfigLog(wide.error)) return { change: null, affectsRecorded: false, note: null }
+  if (!isMissingAffects(wide.error)) throw wide.error
+  const narrow = await client.from(CONFIG_CHANGES_TABLE)
+    .select('changed_at, source, note')
+    .eq('client_id', clientId)
+    .order('changed_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (narrow.error) throw narrow.error
+  const row = narrow.data as { changed_at: string; source: string | null; note: string | null } | null
+  return {
+    change: row ? { ...row, affects_audiences: null, affects_months: null } as LastChange : null,
+    affectsRecorded: false,
+    note: row?.note ?? null,
+  }
+}
+
+/**
+ * This month's platform mix, for the platforms block's share column.
+ *
+ * THROUGH THE READING LAYER, not off `videos`. A share computed by counting
+ * videos over a date span is the re-derivation AGENTS.md forbids; the windowed
+ * denominators answer the same question from the comment-dated months, and
+ * where the functions are not applied the answer is null — which the column
+ * prints as a dash and the basis sentence explains.
+ */
+async function loadPlatformMix(
+  client: SupabaseClient,
+  clientId: string,
+  month: string,
+): Promise<{ mix: PlatformMix | null; videos: number | null }> {
+  const next = new Date(`${month}T00:00:00.000Z`)
+  next.setUTCMonth(next.getUTCMonth() + 1)
+  try {
+    const reading = await loadWindowReading(client, clientId, {
+      from: month,
+      to: next.toISOString().slice(0, 10),
+      audiences: [CLIENT_AUDIENCE],
+    })
+    const own = reading.denominators?.find((d) => d.audience === CLIENT_AUDIENCE) ?? null
+    if (!own) return { mix: null, videos: null }
+    return { mix: own.platform_mix ?? {}, videos: own.videos }
+  } catch {
+    return { mix: null, videos: null }
+  }
+}
+
+/** The two counts the rail prints for its other sub-pages. Each is a head
+ *  count and each degrades to null on its own — a count nobody could take is
+ *  absent from the rail, never a zero (lib/settings/rail.ts states the rule). */
+async function loadRailCounts(client: SupabaseClient, clientId: string): Promise<{ subjects: number | null; schedules: number | null }> {
+  const [subjects, schedules] = await Promise.all([
+    client.from('subjects').select('id', { count: 'exact', head: true }).eq('client_id', clientId).eq('status', 'active'),
+    client.from('report_schedules').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
+  ])
+  return {
+    subjects: subjects.error ? null : subjects.count ?? null,
+    schedules: schedules.error ? null : schedules.count ?? null,
+  }
+}
+
 export async function loadTrackingPage(
   client: SupabaseClient,
   clientId: string,
@@ -225,7 +348,7 @@ export async function loadTrackingPage(
   ])
 
   const config = (configRead.data ?? null) as Record<string, unknown> | null
-  const [changes, yieldRows, performance, roi, communityKept, rivals, census] = await Promise.all([
+  const [changes, yieldRows, performance, roi, communityKept, rivals, census, lastChange, updates, mix, railCounts] = await Promise.all([
     loadChangeLog(client, clientId),
     loadTermYield(client, clientId),
     loadTermPerformance(client, clientId, TRACKING_GATHERS),
@@ -233,6 +356,10 @@ export async function loadTrackingPage(
     loadCommunityKept(admin, clientId),
     loadCompetitors(client, clientId),
     loadCensus(client, clientId, censusMonth),
+    loadLastChange(client, clientId),
+    loadUpdates(client, clientId),
+    loadPlatformMix(client, clientId, censusMonth),
+    loadRailCounts(client, clientId),
   ])
 
   return {
@@ -250,5 +377,13 @@ export async function loadTrackingPage(
     rivals,
     census,
     censusMonth,
+    lastChange: lastChange.change,
+    affectsRecorded: lastChange.affectsRecorded,
+    lastChangeNote: lastChange.note,
+    updates: updates.updates,
+    platformMix: mix.mix,
+    monthVideos: mix.videos,
+    monthStatus: freezeStateFor(censusMonth, new Date().toISOString()),
+    railCounts,
   }
 }

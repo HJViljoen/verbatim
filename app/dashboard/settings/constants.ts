@@ -18,7 +18,7 @@ export const SELECTABLE_PLATFORMS = PLATFORMS.filter((p) => p !== 'reddit')
 // carry it) that this list deliberately excludes: pausing is an operator lever.
 // Because the select could not represent it, the form rendered 'paused' as
 // 'weekly' and the next save silently re-armed the scheduler on a tenant that
-// was meant to be quiet — see settings-form.tsx and the T0-7 guard in the
+// was meant to be quiet — see the cadence section and the T0-7 guard in the
 // action, which refuses to move a paused tenant rather than rewriting it.
 export const PERIODS = ['weekly', 'monthly'] as const
 /** Every value the pipeline understands, including operator-only ones. */
