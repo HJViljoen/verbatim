@@ -4,6 +4,7 @@ import { composeQuarterly } from '@/lib/pages/quarterly'
 import type { WindowReading } from '@/lib/reading/read'
 import type { RecordInputs } from '@/lib/reading/record'
 import type { SubjectWindowReading } from '@/lib/subjects/types'
+import { searchPlanView, type DeckChangeLog, type SearchPlan } from '@/lib/settings/deck-record'
 import type { QuarterlySnapshotData } from '@/lib/reports/quarterly-build'
 import { QUARTERLY_BLOCK_KEYS, previousQuarter, quarterFor, quarterlySubject, quarterlyTitle } from '@/lib/reports/quarterly'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -98,6 +99,40 @@ const checksRan: QuarterChecks = {
 const checksNotRecorded: QuarterChecks = { recorded: false, ran: 0, flaggedRuns: 0, flags: [] }
 
 /**
+ * `qr.p8.searchplan` and `qr.p8.changelog` — what the deck's last page now
+ * draws, and what nothing in this fixture carried.
+ *
+ * BOTH GO THROUGH THEIR OWN PURE VIEW (`searchPlanView`, `deckChangeLogView`),
+ * so the fixture exercises the cut the loader takes rather than a shape typed
+ * beside it — including `noYield`, which is the row worth reading (a term that
+ * found something and kept nothing is a term costing money to gather), and the
+ * change log's RECORDED-only rule.
+ */
+const SEARCH_PLAN: SearchPlan = searchPlanView([
+  { keyword: 'recycled sails', months: [], found: 412, kept: 388, keptPct: 94.2 },
+  { keyword: 'sail bag', months: [], found: 260, kept: 221, keptPct: 85 },
+  { keyword: 'eco bag', months: [], found: 410, kept: 12, keptPct: 2.9 },
+  { keyword: 'upcycled backpack', months: [], found: 96, kept: 0, keptPct: 0 },
+])
+
+const CHANGE_LOG: DeckChangeLog = {
+  rows: [
+    {
+      id: 'cc-1', on: '2026-09-03', date: '3 Sep 2026', surface: 'rivals', what: 'Rival added',
+      said: 'Poler was added to the tracked set.', who: 'an operator', breaks: 'the standings and the attention panel',
+      before: null, after: null, rowsAffected: null, reconstructed: false,
+    },
+    {
+      id: 'cc-2', on: '2026-08-19', date: '19 Aug 2026', surface: 'subjects', what: 'Subjects named',
+      said: 'Six subjects were named and confirmed.', who: 'a member of your workspace', breaks: 'nothing that had been read',
+      before: null, after: null, rowsAffected: 6, reconstructed: false,
+    },
+  ],
+  showing: null,
+  affectsRecorded: true,
+}
+
+/**
  * The quarter's record — NO CAST.
  *
  * The first cut wrote five of these eight blocks in shapes `RecordInputs` does
@@ -144,6 +179,8 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
       checks: checksRan,
       record: record(13),
       quiet: QUIET,
+      searchPlan: SEARCH_PLAN,
+      changeLog: CHANGE_LOG,
     }),
     ...over,
   }
@@ -183,6 +220,8 @@ export function subjectLeadFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
@@ -223,6 +262,8 @@ export function closedFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13, '2026-11-02T09:00:00.000Z'),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 
@@ -267,6 +308,8 @@ export function afterQuarterFixture(): QuarterlyData {
     checks: checksRan,
     record: record(13, AFTER),
     quiet: QUIET,
+    searchPlan: SEARCH_PLAN,
+    changeLog: CHANGE_LOG,
   })
 }
 

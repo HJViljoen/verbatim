@@ -1171,7 +1171,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     changeLog: a.changeLog ?? null,
   })
   const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, readings, draft: a.draft ?? null })
-  const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
+  const unsettled = buildUnsettled({ verdicts, readings, overview, method, subjects, moves, category, windowApplied, subjectsRead })
 
   return {
     brand: overview.brand,
@@ -2113,7 +2113,7 @@ export function methodNumbers(
   if (inputs.discard.readable && inputs.discard.judged > 0) {
     out.push({
       label: 'Held back',
-      value: `${fmtPct((inputs.discard.setAside / inputs.discard.judged) * 100, 0)} set aside`,
+      value: `${fmtPct((inputs.discard.setAside / inputs.discard.judged) * 100, 0)} set aside by the relevance gate`,
       // THE GATE'S OWN CLOCK, NAMED. `recordedFrom` is the day the gate started
       // recording what it discarded, and no month before it can show this.
       note: `${fmtInt(inputs.discard.setAside)} of ${fmtInt(inputs.discard.judged)} looked at${
@@ -2193,18 +2193,56 @@ function buildUnsettled(a: {
   readings: number
   overview: OverviewData
   method: MethodPage
+  /** The two pages whose own rows are what a reader is waiting on. */
+  subjects: SubjectsPage
+  moves: MovesPage
+  category: CategoryPage
   /** Whether the quarter's own window read could be taken at all, and whether
    *  the subject half of it could. A comparison never attempted is not a
    *  comparison drawn, and this is the page that has to say which it was. */
   windowApplied: boolean
   subjectsRead: boolean
 }): UnsettledPage {
+  // `qr.p8.waiting` · THE SUBJECT-LEVEL WAITS, NOT THE OVERVIEW'S SERIES NOTES.
+  // The section listed three `MonthLabel`s — clustering changes and unlogged
+  // eras, which are facts about our bookkeeping and are already the METHOD
+  // page's subject. What a reader of page 8 is waiting on is a named thing:
+  // a subject whose quarter column could not be drawn, a move with one reading
+  // behind it, a theme the register has marked dormant. The series notes stay,
+  // at the end, because they are true — they are simply not the answer to the
+  // question this heading asks.
   const waiting: string[] = []
   if (!quarterUnlocked(a.readings)) {
     waiting.push(quarterGateSentence(a.readings))
   }
+  for (const row of a.subjects.rows) {
+    if (row.categoryQuarter || row.youQuarter) continue
+    waiting.push(`${row.label}, quarter on quarter: neither side carried a reading on both sides of this quarter, so no verdict is printed for it.`)
+  }
+  for (const move of a.moves.moves) {
+    if (a.moves.readings.some((r) => r.moveId === move.id && r.verdict)) continue
+    waiting.push(`${move.title}, ${move.on} — ${move.line}`)
+  }
+  for (const q of a.category.quiet ?? []) {
+    waiting.push(`${q.label} has not been read since ${q.lastHeard ? monthName(q.lastHeard) : 'the months on this axis'}; a theme is never called dead, only dormant.`)
+  }
   for (const note of a.overview.notes.slice(0, 3)) waiting.push(note.text)
+
+  // `qr.p8.heldback` · THE GATE'S SHARE, ON THIS PAGE. The figure is the record
+  // page's own (`methodNumbers`' "Held back" row), read off it rather than
+  // computed again, so the two pages of one artefact cannot disagree about how
+  // much was set aside.
   const heldBack: string[] = []
+  const gate = a.method.numbers.find((r) => r.label === 'Held back')
+  if (gate) {
+    heldBack.push(`${gate.value[0].toUpperCase()}${gate.value.slice(1)} of what the search plan gathered — read, but not counted into a subject (${gate.note}).`)
+    // AND WHY THE MOCK'S THREE-ROW SAMPLE IS NOT UNDER IT. M8 withholds
+    // `gate_verdicts.reason` from an authenticated reader, so the reasons a
+    // sample would carry cannot be selected on a tenant session at all. Saying
+    // so is the honest form; a sample with the reasons blanked would read as
+    // three videos nobody could explain.
+    heldBack.push('What each discarded video was set aside FOR is not readable on this workspace’s own session, so the share is stated and no sample is drawn.')
+  }
   if (a.method.checks.recorded && a.method.checks.ran === 0) {
     heldBack.push('No unusual-week check ran inside this quarter, so nothing here rests on one.')
   }
