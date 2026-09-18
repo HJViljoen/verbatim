@@ -3,7 +3,7 @@ import { bandVerdict } from '@/lib/reading/verdicts'
 import { buildUpdateSeries, monthsOfWindow, type UpdateSeries } from '@/lib/reading/updates'
 import { quoteRef } from '@/lib/renderables/quotes-freeze'
 
-// Two fixtures for This week's blocks (Phase 1 WP15).
+// Three fixtures for This week's blocks (Phase 1 WP15).
 //
 // SHAPED ON PRODUCTION, NOT INVENTED. Every count below was measured read-only
 // against the live database on 2026-09-16 and is named where it came from, so a
@@ -23,6 +23,11 @@ import { quoteRef } from '@/lib/renderables/quotes-freeze'
 //   September, and 592 first-heard themes of which none clears the floor. It is
 //   the state most of this page spends most of its life in, which is why it is
 //   a fixture and not an afterthought.
+//
+//   `absentReadingFixture()` is Sealand with M3 UNAPPLIED, which is what both
+//   tenants render today (measured read-only 2026-09-18): every figure off the
+//   windowed read absent together. It is the arm a port has to survive, and
+//   until it existed the only fixtures said the opposite.
 
 const OSSUR_WINDOW: WeekWindow = {
   from: '2026-09-06T04:06:38.483Z',
@@ -84,6 +89,10 @@ function seriesOf(input: {
   newestSpans?: Record<string, { videos: number; comments: number }>
   windowless?: number
   requested?: number
+  /** What the windowed read DID. `absent` is production on both tenants today:
+   *  M3 is not applied, so no span answers and every point's contribution is
+   *  empty with its comments null. */
+  windowRead?: 'read' | 'absent' | 'failed'
 }): UpdateSeries {
   const end = new Date(input.endsAt).getTime()
   const dayList = typeof input.days === 'number' ? input.counts.map(() => input.days as number) : input.days
@@ -117,14 +126,17 @@ function seriesOf(input: {
     }
   })
 
+  const windowRead = input.windowRead ?? 'read'
   return buildUpdateSeries({
     runs,
     videosByRun,
-    spans,
+    // A read that did not answer has NO spans, which is what makes the
+    // contribution and the comments go silent together rather than as zeroes.
+    spans: windowRead === 'read' ? spans : new Map(),
     monthOf: new Map(Object.entries(input.monthOf)),
     windowless: input.windowless ?? 0,
     requested: input.requested ?? 13,
-    windowRead: 'read',
+    windowRead,
   })
 }
 
@@ -398,6 +410,31 @@ export function weekFixture(): WeekData {
   }
 }
 
+/**
+ * Sealand's thirteen, as a builder rather than a literal, because the same
+ * thirteen have to be drawn twice: once where the windowed read answers and
+ * once where it does not (`absentReadingFixture`, which is production today).
+ */
+function sealandSeries(windowRead: 'read' | 'absent' | 'failed' = 'read'): UpdateSeries {
+  return seriesOf({
+    counts: [0, 288, 0, 0, 425, 0, 0, 197, 560, 0, 0, 176, 1098],
+    endsAt: '2026-09-10T07:02:10.201Z',
+    days: [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 30],
+    monthOf: { '2026-06-01': 402, '2026-07-01': 466, '2026-08-01': 512, '2026-09-01': 475 },
+    windowShare: 655 / 1098,
+    // A CROSSING WINDOW CARRIES BOTH MONTHS, each with its own clipped
+    // numerator: 394 of September is what §4 prints, and 260 of August is the
+    // part §4's crossing line says it is leaving out. The two comment counts
+    // add to the 9,331 §4 states, because comments do add across disjoint
+    // spans and videos do not.
+    newestSpans: {
+      '2026-08-01': { videos: 260, comments: 5900 },
+      '2026-09-01': { videos: 394, comments: 3431 },
+    },
+    windowRead,
+  })
+}
+
 export function thinFixture(): WeekData {
   const baseline = {
     denominator: 'every audience together',
@@ -442,22 +479,7 @@ export function thinFixture(): WeekData {
       // five points and the legend says so. The newest window is thirty days —
       // which is why nothing on this page may call it "a week" — and the
       // twelve behind it are seven.
-      series: seriesOf({
-        counts: [0, 288, 0, 0, 425, 0, 0, 197, 560, 0, 0, 176, 1098],
-        endsAt: '2026-09-10T07:02:10.201Z',
-        days: [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 30],
-        monthOf: { '2026-06-01': 402, '2026-07-01': 466, '2026-08-01': 512, '2026-09-01': 475 },
-        windowShare: 655 / 1098,
-        // A CROSSING WINDOW CARRIES BOTH MONTHS, each with its own clipped
-        // numerator: 394 of September is what §4 prints, and 260 of August is
-        // the part §4's crossing line says it is leaving out. The two comment
-        // counts add to the 9,331 §4 states, because comments do add across
-        // disjoint spans and videos do not.
-        newestSpans: {
-          '2026-08-01': { videos: 260, comments: 5900 },
-          '2026-09-01': { videos: 394, comments: 3431 },
-        },
-      }),
+      series: sealandSeries(),
     },
     subjects: {
       month: '2026-09-01',
@@ -481,9 +503,16 @@ export function thinFixture(): WeekData {
     cameIn: {
       window: SEALAND_WINDOW,
       rows: [
-        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: null, share: { k: 150, n: 253 }, comments: 6000 },
-        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: null, share: { k: 71, n: 253 }, comments: 2400 },
-        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: null, share: { k: 32, n: 253 }, comments: 931 },
+        // CONTRIBUTION AND COMMENTS ARE ABSENT TOGETHER OR PRESENT TOGETHER.
+        // Both come off `loadWindowReading`, and `buildCameIn` sets both to
+        // null on the one arm where its denominators are null — so a row with
+        // a comment count and no contribution is a state no run of the loader
+        // produces. The absent arm is `absentReadingFixture()` below, whole.
+        // The three contributions add to the 394 the block states, and their
+        // denominators to its 475.
+        { audience: 'industry-other', label: 'The category', gathered: 933, analysed: 150, platformMix: { youtube: 80, instagram: 40, tiktok: 25, reddit: 5 }, contribution: { videos: 300, of: 350 }, share: { k: 150, n: 253 }, comments: 6000 },
+        { audience: 'competitor:Freitag', label: 'Freitag', gathered: 138, analysed: 71, platformMix: { instagram: 45, tiktok: 20, youtube: 6 }, contribution: { videos: 60, of: 80 }, share: { k: 71, n: 253 }, comments: 2400 },
+        { audience: 'competitor:Cotopaxi', label: 'Cotopaxi', gathered: 27, analysed: 32, platformMix: { instagram: 20, tiktok: 12 }, contribution: { videos: 34, of: 45 }, share: { k: 32, n: 253 }, comments: 931 },
       ],
       gathered: 1098,
       analysed: 253,
@@ -574,5 +603,52 @@ export function thinFixture(): WeekData {
       months: ['2026-06-01', '2026-07-01', '2026-08-01'],
     }],
     laterLine: LATER_LINE,
+  }
+}
+
+/**
+ * PRODUCTION TODAY, ON BOTH PAYING TENANTS: the windowed reading is not
+ * installed, so every figure that comes off it is absent — together.
+ *
+ * WHY THIS IS A FIXTURE AND NOT AN OVERRIDE IN ONE TEST. M3
+ * (`window_denominators` / `window_theme_readings`) is applied by hand and is
+ * applied nowhere, measured read-only 2026-09-18. So this — not
+ * `thinFixture()` — is what This week renders for Össur and Sealand right now,
+ * and a wave-2 port designed against the two fixtures above would build a
+ * comments column, a per-point contribution and a page-bar video count that
+ * render nothing on either account.
+ *
+ * ABSENT TOGETHER IS THE WHOLE POINT. `windowVideos`, `cameIn.windowComments`,
+ * `cameIn.contribution`, every row's `contribution` and `comments`,
+ * `sales.videos` and the coverage line's two figures all come off
+ * `loadWindowReading`; `buildCameIn` and `loadWeek` null them on the one arm
+ * where its denominators are null. A fixture carrying any one of them beside
+ * another that is null is a state no run of the loader produces.
+ */
+export function absentReadingFixture(): WeekData {
+  const d = thinFixture()
+  return {
+    ...d,
+    windowVideos: null,
+    unusual: { ...d.unusual, series: sealandSeries('absent') },
+    cameIn: {
+      ...d.cameIn,
+      windowComments: null,
+      contribution: null,
+      rows: d.cameIn.rows.map((r) => ({ ...r, contribution: null, comments: null })),
+    },
+    sales: { ...d.sales, videos: null },
+    coverage: {
+      ...d.coverage,
+      line: coverageLine({
+        brand: 'Sealand',
+        update: '2026-09-10T07:02:10.201Z',
+        previous: '2026-09-09T12:08:47.213Z',
+        window: SEALAND_WINDOW,
+        platformMix: { youtube: 426, instagram: 317, tiktok: 158, reddit: 61 },
+        videos: null,
+        comments: null,
+      }),
+    },
   }
 }

@@ -302,7 +302,7 @@ function Series({ series, mode }: { series: UpdateSeries | null; mode: 'app' | '
         ))
         : (
           <Line mode={mode}>
-            This update’s contribution to the month it falls in cannot be stated here, so every figure above is of the delivery’s own days alone.
+            This update’s contribution to its own month cannot be stated here, so every figure above is of the delivery’s own days alone.
           </Line>
         )}
       {series.note ? <Line mode={mode}>{series.note}</Line> : null}

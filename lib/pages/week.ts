@@ -642,6 +642,18 @@ export function crossingLine(month: string, crossesInto: string): string {
   return `This update also covered days of ${longMonth(crossesInto)}; the contribution above counts only its ${longMonth(month)} days.`
 }
 
+/** The same fact where NO contribution was printed above it — production today,
+ *  with the windowed reading unapplied.
+ *
+ *  `crossingLine` exists to qualify a contribution, and a sentence saying "the
+ *  contribution above counts only its September days" printed under "this
+ *  update's contribution to it cannot be stated" points a reader at a figure
+ *  that is not on the page and contradicts the line before it. The crossing is
+ *  still a fact about the window, so it is still said — alone. */
+export function crossedIntoLine(crossesInto: string): string {
+  return `This update also covered days of ${longMonth(crossesInto)}.`
+}
+
 /** "baseline forming — 1 of 3 months; the check starts with the November
  *  reading." — the design's wording, plus the one thing it leaves out: WHEN.
  *

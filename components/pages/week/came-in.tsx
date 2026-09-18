@@ -8,6 +8,7 @@ import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import { platformMixLine } from '@/lib/reading/record'
 import {
   contributionLine,
+  crossedIntoLine,
   crossingLine,
   newThemesLine,
   windowDays,
@@ -106,7 +107,15 @@ export const weekCameIn: Block<WeekData> = {
                 The rows below account for <span data-copy="figure">{fmtInt(rowedComments)}</span> of those comments; the rest were written in these days under videos an earlier update found, in audiences this update read no video of.
               </Note>
             ) : null}
-            {c.crossesInto ? <Note mode={mode}>{crossingLine(data.month, c.crossesInto)}</Note> : null}
+            {/* THE CROSSING QUALIFIES THE CONTRIBUTION, so where there is no
+                contribution it is said alone: "the contribution above counts
+                only its September days" under "this update's contribution to
+                it cannot be stated" is the block contradicting itself. */}
+            {c.crossesInto ? (
+              <Note mode={mode}>
+                {c.contribution ? crossingLine(data.month, c.crossesInto) : crossedIntoLine(c.crossesInto)}
+              </Note>
+            ) : null}
             <Audiences rows={c.rows} mode={mode} month={data.month} />
           </>
         ) : null}

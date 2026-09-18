@@ -6,7 +6,7 @@ import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import type { WeekData } from '@/lib/pages/week'
 import { weekUnusual } from './unusual'
-import { thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
@@ -21,6 +21,7 @@ describe('WK1 · unusual this week', () => {
     const states: WeekData[] = [
       weekFixture(),
       thinFixture(),
+      absentReadingFixture(),
       withState('nothing_unusual'),
       withState('refused', { note: 'This update read well under its usual number of videos, so this week is not compared with the months behind it.' }),
       withState('not_checked', { setSize: null, tested: null }),
@@ -218,6 +219,16 @@ describe('WK1 · unusual this week', () => {
     const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
     expect(text).toContain('this update’s contribution to August so far: 260 of 512')
     expect(text).toContain('this update’s contribution to September so far: 394 of 475')
+  })
+
+  it('draws the series on the arm production is in, with no contribution to state', () => {
+    // M3 unapplied on both tenants: thirteen points, their windows and their
+    // counts are all still true, and the contribution is a sentence.
+    const text = renderText(weekUnusual.render(absentReadingFixture(), 'app', ctx))
+    expect(text).toContain('1,098 videos this update found')
+    expect(text).toContain('cannot be stated here, so every figure above is of the delivery’s own days alone')
+    expect(text).toContain('The windowed reading is not installed for this workspace')
+    expect(text).not.toContain('contribution to September so far')
   })
 
   it('says so rather than leaving four window counts standing alone', () => {

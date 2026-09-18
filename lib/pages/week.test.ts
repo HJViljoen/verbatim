@@ -7,6 +7,7 @@ import {
   baselineFormingLine,
   baselineStartsWith,
   contributionLine,
+  crossedIntoLine,
   coverageLine,
   crossingLine,
   flagFigures,
@@ -63,6 +64,14 @@ describe('the contribution line', () => {
   it('says so when the window reached back past the month', () => {
     expect(crossingLine('2026-09-01', '2026-08-01')).toContain('also covered days of August')
     expect(crossingLine('2026-09-01', '2026-08-01')).toContain('counts only its September days')
+  })
+
+  it('says the crossing alone where no contribution was printed above it', () => {
+    // Production today. "The contribution above counts only its September
+    // days" under "this update's contribution to it cannot be stated" points a
+    // reader at a figure that is not on the page.
+    expect(crossedIntoLine('2026-08-01')).toBe('This update also covered days of August.')
+    expect(crossedIntoLine('2026-08-01')).not.toContain('contribution')
   })
 })
 

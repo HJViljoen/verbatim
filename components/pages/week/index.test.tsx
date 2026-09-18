@@ -12,11 +12,15 @@ import { weekCameIn } from './came-in'
 import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
-import { thinFixture, weekFixture } from './fixture'
+import { absentReadingFixture, thinFixture, weekFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
 const ctx = blockContext('https://app.verbatimintel.com', EMAIL)
-const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture]
+// THREE, and the third is what production renders today: M3 is not applied on
+// either tenant, so every figure off the windowed read is absent. A port
+// designed against the first two alone builds columns that render nothing on
+// both paying accounts.
+const FIXTURES: (() => WeekData)[] = [weekFixture, thinFixture, absentReadingFixture]
 
 describe('every block on This week', () => {
   it('renders in all three modes on both tenants and keeps the copy contract', () => {
@@ -228,9 +232,33 @@ describe('WK §4 · what came in', () => {
     const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
     expect(text).toContain('this update’s contribution to September so far: 14 of 96')
     expect(text).toContain('this update’s contribution to September so far: 47 of 118')
-    // And says nothing per row where the windowed read is not available.
+    // And says nothing per row where the windowed read is not available —
+    // which is production on both tenants today, not a hypothetical.
+    const absent = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
+    expect(absent).not.toContain('this update’s contribution to September so far')
+    expect(absent).toContain('The month’s own reading is not available here')
+  })
+
+  it('renders the arm production is actually in: every windowed figure absent', () => {
+    // M3 is unapplied on both tenants, so the comments column, the total above
+    // it and every contribution go silent TOGETHER. Each absence is a sentence.
+    const text = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
+    expect(text).toContain('comments in these days are not recorded for this workspace yet')
+    expect(text).not.toContain('comments written in these days')
+    expect(text).not.toContain('The rows below account for')
+    // The shares are NOT windowed and still print with both sides.
+    expect(text).toContain('150 of 253 videos this update analysed')
+  })
+
+  it('does not point at a contribution it did not print', () => {
+    // Sealand's window crosses from August. `crossingLine` qualifies a
+    // contribution; with none printed, the crossing is said alone.
+    const absent = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
+    expect(absent).toContain('This update also covered days of August.')
+    expect(absent).not.toContain('counts only its September days')
+    // And where the contribution IS printed, it is still qualified.
     expect(renderText(weekCameIn.render(thinFixture(), 'app', ctx)))
-      .not.toContain('this update’s contribution to September so far: 0 of')
+      .toContain('counts only its September days')
   })
 
   it('says when the window reached back into an earlier month', () => {
