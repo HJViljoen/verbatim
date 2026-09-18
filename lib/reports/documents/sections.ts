@@ -283,9 +283,29 @@ export const LEADERSHIP_MAP: readonly BriefEntry[] = [
     title: 'The month', framing: 'The month in one reading, with the band and the count behind it.',
     needs: ['months-of-history'],
   }),
+  block({
+    // THE ATTENTION READING, AT LAST ON THIS BRIEF (Block D wave 2, E-leadership).
+    // `lead.fig2` is the one-pager's second figure card, and everything it
+    // needs — the panel's monthly comment levels, the panel's SIZE and the
+    // latest banded step — is on `overview.category`, which no map borrowed.
+    // Overview is always loaded, so this entry costs no read; what it adds is
+    // the resolved section, which is what makes the block reachable.
+    id: 'ld.category', block: 'overview.category', surface: 'overview',
+    title: 'The category', framing: 'What the wider conversation was about this month, and how much attention it held.',
+    needs: ['months-of-history'],
+  }),
   page('finding'),
   block({
-    id: 'ld.standing', block: 'competitive.rivals', surface: 'competitive',
+    // `competitive.months` AND NOT `competitive.rivals`. The framing promises
+    // "your own share of the month beside every tracked rival", which is the
+    // STANDINGS table (components/pages/competitive-surface/standings.tsx);
+    // `competitive.rivals` is the rival SELECTOR — a row of names with "read
+    // this window · 319 of their videos read" — so this section printed a
+    // picker under a heading that promised a measurement
+    // (status/mock-gap/LeadershipBrief.md: "likely a wrong block key, worth
+    // fixing before a port"). `sections.test.ts` pins the key by name so it
+    // cannot drift back.
+    id: 'ld.standing', block: 'competitive.months', surface: 'competitive',
     title: 'Where you stand', framing: 'Your own share of the month beside every tracked rival.',
     needs: ['months-of-history'],
   }),

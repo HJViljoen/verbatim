@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react'
 import { MACHINE_TRANSLATION_STAMP, QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
+import { LeadershipSheet, leadershipSheetData } from '@/components/print/leadership-sheet'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
@@ -2095,6 +2096,30 @@ function SheetSection({ section, data, framing = false }: { section: DocBriefSec
 }
 
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
+  // THE LEADERSHIP ONE-PAGER TAKES THE COVER'S PLACE, AND NOTHING ELSE'S
+  // (Block D wave 2, E-leadership). The artboard is one sheet with no cover, so
+  // where the sheet can be drawn it REPLACES the 58px cover — a page a director
+  // had to turn past — and leads the document as a SUMMARY of it.
+  //
+  // IT ABSORBS NO SECTION. It packs a fragment of four borrowed blocks (the
+  // gap and one attention level and the subjects table and two move readings)
+  // and those blocks carry more than the fragment: `overview.sentence` is also
+  // the month's own reading, the anomaly line and the voices;
+  // `overview.category` is also the kinds, the mood, Reddit and the register's
+  // quiet flags; `overview.moves` is also every row past the second. A sheet
+  // that dropped their slides would delete that substance from the document
+  // silently — and with it each section's `empty` sentence, which is the one
+  // line that names the missing input and who closes it, exactly when the
+  // reading is blocked. A one-pager is a summary of the pages behind it, which
+  // is what a one-pager usually is.
+  //
+  // So the pagination is untouched: one slide per layout entry plus the lead
+  // sheet, which is `documentSlides(data).length + 1` — the same arithmetic
+  // `documentViewerPages` (lib/reports/viewer.ts) does for the viewer header
+  // and the Studio bar, so the count the client reads and the count the deck
+  // prints cannot diverge. Null for every other template and for any snapshot
+  // with no readable frozen Overview, where the deck is exactly as it was.
+  const sheet = leadershipSheetData(data)
   const slides = documentSlides(data)
   // THE COVER FOLDS WHERE ITS MAP SAYS SO (E-marketing). The artboards open on
   // the In-short sheet, not on a 58px title sheet; a brief composed from a map
@@ -2119,7 +2144,15 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   const n = (i: number) => i + (cover ? 2 : 1)
   return (
     <>
-      {cover && <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: n(i), title: s.title }))} />}
+      {/* THE FIRST SHEET IS ONE OF THREE THINGS (merge, Block D wave 2): the
+          leadership one-pager where the template has one (E-leadership), the
+          cover where the map keeps one, and nothing at all where the map folds
+          its cover onto the In-short sheet (E-marketing). */}
+      {sheet
+        ? <LeadershipSheet data={data} overview={sheet} date={date} page={1} pages={pages} />
+        : cover
+          ? <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: n(i), title: s.title }))} />
+          : null}
       {slides.map((s, i) => {
         const sections = s.keys.map((k) => sectionOfSlide(data, k)).filter(Boolean) as DocBriefSection[]
         // A SHEET THAT CARRIES SEVERAL SECTIONS (E-marketing). Its note is the

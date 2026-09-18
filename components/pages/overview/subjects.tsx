@@ -118,7 +118,13 @@ function AtLastMonth({ at, mode = 'app' }: { at: SubjectRow['categoryAtLastMonth
  */
 export function leadGap(s: OverviewData['subjects']): Gap | null {
   for (const row of s.rows) {
-    const gap = s.gaps[row.id]
+    // OPTIONAL-CHAINED BECAUSE A STORED ARTEFACT MAY PREDATE THE FIELD (merge,
+    // Block D wave 2). `gaps` is wave 1's, and the leadership brief borrows
+    // this block onto a sheet rendered from a FROZEN snapshot — one built
+    // before the field existed has no `gaps` at all, and a bare index threw
+    // inside a server component, which takes down the share link, the viewer,
+    // the Studio preview and the PDF route rather than one tile.
+    const gap = s.gaps?.[row.id]
     if (gap) return gap
   }
   return null

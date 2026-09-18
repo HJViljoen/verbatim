@@ -262,7 +262,10 @@ export const marketMoves: Block<MarketSurfaceData> = {
     // A READING PER MOVE WHERE THERE IS ONE, and the dated line for a move the
     // reading layer holds nothing for yet — two states of one move, and the
     // block prints whichever it has rather than one sentence for both.
-    const scored = new Set(m.readings.map((r) => r.moveId))
+    // `?? []` for a snapshot frozen before the field — see
+    // components/pages/overview/moves.tsx for the reason.
+    const readings = m.readings ?? []
+    const scored = new Set(readings.map((r) => r.moveId))
     const unscored = m.rows.filter((row) => !scored.has(row.id))
 
     return (
@@ -274,12 +277,12 @@ export const marketMoves: Block<MarketSurfaceData> = {
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>
           : <Link href={href} className="hover:underline">Open Subjects →</Link>}
-        footerNote={m.readings.length > 0 ? `${fmtInt(m.readings.length)} read against a month` : undefined}
+        footerNote={readings.length > 0 ? `${fmtInt(readings.length)} read against a month` : undefined}
       >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        {m.readings.length > 0 ? (
+        {readings.length > 0 ? (
           <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
-            {m.readings.map((r, i) => <Move key={r.moveId} reading={r} index={i + 1} mode={mode} />)}
+            {readings.map((r, i) => <Move key={r.moveId} reading={r} index={i + 1} mode={mode} />)}
           </div>
         ) : null}
         {unscored.length > 0 ? (
@@ -313,7 +316,7 @@ export const marketMoves: Block<MarketSurfaceData> = {
   // an audience the move did not touch, and a brief folding this block has to
   // know it was stated beside the move and never subtracted from it.
   verdicts(data): Verdict[] {
-    return data.moves.readings.flatMap((r) => [...(r.verdict ? [r.verdict] : []), ...r.control])
+    return (data.moves.readings ?? []).flatMap((r) => [...(r.verdict ? [r.verdict] : []), ...r.control])
   },
 
   emptyState(data) {

@@ -1,6 +1,6 @@
 import type { RenderMode } from '@/lib/blocks/types'
-import type { Good } from '@/components/charts/stat'
 import { CountBadge, MovementBadge, MOVEMENT_WORDS } from '@/components/delta-badge'
+import { favourability, type Good } from '@/components/charts/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { Verdict } from '@/lib/reading/verdicts'
@@ -62,6 +62,20 @@ export function BlockMovement({
   verdict: Verdict | DeltaVerdict | null | undefined
   unit?: string
   mode?: RenderMode
+  /**
+   * The favourability axis, forwarded to `MovementBadge` (Block D wave 2,
+   * E-leadership and E-weekly, which asked for it a day apart). UP IS NOT ALWAYS GOOD — a rival's share, a negative-mood
+   * share and a standing all move the wrong way when they rise, and the
+   * CATEGORY's movement is not the client's news at all — so the axis is the
+   * caller's to state, exactly as `<Delta>` and `MovementBadge` have always
+   * taken it. `neutral` prints the movement in muted ink: it moved, and we are
+   * not saying whether that is good.
+   *
+   * This wrapper did not forward it, so every Phase 1 block that reached for
+   * the primitive got the default `up` whether it meant it or not, and the
+   * leadership one-pager printed a rise in the category's attention to Price in
+   * red. The default stays `up`, which is what every existing call site got.
+   */
   good?: Good
 }) {
   if (!verdict) return null
@@ -77,8 +91,19 @@ export function BlockMovement({
   // email has no way to show and paper has none either; this arm dropped it
   // altogether. A change without the band it cleared is a number a reader
   // cannot weigh.
+  // THE EMAIL ARM TAKES THE AXIS TOO. The screen's colour and the email's chip
+  // tint are the same judgement in two media, so a caller that says "this
+  // movement is not good or bad" must not have it tinted green in an inbox.
+  // `favourability` returns null for a neutral axis, which is the muted chip.
+  const fav = favourability(change, good)
+  // A NEUTRAL AXIS IS `noted`, NOT `neutral` (merge, Block D wave 2).
+  // `favourability` answers null for a neutral axis and both packages reached
+  // for a chip; grey is the NON-ANSWER's tint ("no clear change", "too few to
+  // compare"), so a movement that really did clear its band may not borrow it,
+  // or a measured change would read as a refusal. `noted` is the artboards'
+  // own attention tint.
   return (
-    <span data-copy="verdict" style={chip(good === 'neutral' ? 'noted' : (change > 0) === (good === 'up') ? 'up' : 'down')}>
+    <span data-copy="verdict" style={chip(fav === null ? 'noted' : fav ? 'up' : 'down')}>
       {change > 0 ? '+' : '−'}{Math.abs(change).toLocaleString('en-US')}{unit ? ` ${unit}` : ''}
       {band != null ? ` · band ${Math.abs(band).toLocaleString('en-US')}` : ''}
     </span>

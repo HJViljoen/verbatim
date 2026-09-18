@@ -383,7 +383,13 @@ export const overviewMoves: Block<OverviewData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/market`
     const empty = overviewMoves.emptyState(data)
-    const readingFor = (id: string) => m.readings.find((r) => r.moveId === id) ?? null
+    // `?? []` BECAUSE A FROZEN ARTEFACT MAY PREDATE THE FIELD (merge, Block D
+    // wave 2). `MovesBlock.readings` is wave 1's, the briefs borrow this block
+    // onto their sheets, and a snapshot built before the field has none — a
+    // bare `.find` threw inside a server component, which takes the share
+    // link, the viewer, the Studio preview and the PDF route down with it.
+    const readings = m.readings ?? []
+    const readingFor = (id: string) => readings.find((r) => r.moveId === id) ?? null
 
     const declared: ReactNode = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
@@ -454,7 +460,7 @@ export const overviewMoves: Block<OverviewData> = {
   verdicts(data): Verdict[] {
     const card = data.moves.card
     return [
-      ...data.moves.readings.flatMap((r) => [r.verdict, ...r.control].filter((v): v is Verdict => v != null)),
+      ...(data.moves.readings ?? []).flatMap((r) => [r.verdict, ...r.control].filter((v): v is Verdict => v != null)),
       ...(card ? [card.movement.yours, card.movement.category].filter((v): v is Verdict => v != null) : []),
     ]
   },

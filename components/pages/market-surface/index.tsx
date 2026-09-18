@@ -185,7 +185,7 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
   // A read move is a chart, its legend and one line per side; a declared move
   // with nothing read yet is a sentence.
   'market.moves': (d) => {
-    const read = d.moves.readings
+    const read = d.moves.readings ?? []
     const sides = read.reduce((n, r) => n + (r.verdict ? 1 : 0) + r.control.length, 0)
     const charts = read.filter((r) => r.chartNote == null && r.months.length > 0).length
     const unscored = d.moves.rows.length - read.length
