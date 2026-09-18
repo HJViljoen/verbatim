@@ -114,6 +114,22 @@ describe('the leadership one-pager', () => {
     }
   })
 
+  // AGENTS.md: a chart is a direction claim too. The line on the gap card is
+  // `SubjectRow.spark` — the CATEGORY's share of the subject, the only
+  // per-month series a subject row carries — inside a card whose hero and
+  // caption are the gap between you and the named rival. Auto-scaled so a
+  // four-point rise fills 44px, with two bare month names under it, it made
+  // exactly the claim the card's three lines of copy were spending themselves
+  // refusing, on the quantity a reader takes for the gap. Both ends now carry
+  // their value and the series names itself in the card's own voice.
+  it('names the gap card’s line, and values both its ends', () => {
+    const words = renderText(sheet())
+    expect(words).toContain('May 18%')
+    expect(words).toContain('Sep 22%')
+    expect(words).toContain('not the gap')
+    expect(words).toMatch(/the line is durability across .*of 1,388 videos/)
+  })
+
   // mock-gap §6 D7. The mock's "−18% since June" and "▼ 9,100 comments" are a
   // percentage change and a delta of a RAW COMMENT COUNT: no denominator, so no
   // band, and June→September crosses the 3 September re-freeze. The level, the

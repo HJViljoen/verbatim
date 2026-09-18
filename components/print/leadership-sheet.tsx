@@ -177,17 +177,25 @@ function MonthLine({ spark, months, width = 200, height = 44, color = 'var(--cat
 }) {
   const refusal = monthlyLineLabel(spark, months)
   if (refusal) return <p className={TRAIL}>{refusal}</p>
-  // THE DRAWN PATH NAMES ITS OWN ENDS. A printed line has no hover, so the two
-  // months it was plotted between are the only axis it can have — the artboard
-  // draws exactly that ("May · Apr below the floor" left, "Sep" right), and
-  // the deck's own `DeckSpark` makes the same argument at length.
-  const read = months.filter((_, i) => spark[i] != null)
+  // THE DRAWN PATH NAMES ITS OWN ENDS, AND NAMES THEIR VALUES. A printed line
+  // has no hover, so the two ends are the only axis it can have — the artboard
+  // draws exactly that, and the deck's own `DeckSpark` makes the same argument
+  // at length. The artboard also labels every series with its END VALUE
+  // ("Freitag 44%", "You 31%", "Category 22%") and this did not: a line
+  // auto-scaled so a four-point rise fills 44px, with two bare month names
+  // under it, is a shape a reader has no way to weigh — and a shape is a
+  // direction claim (AGENTS.md). With both ends valued the reader can see that
+  // the climb is four points and judge it.
+  const read = months
+    .map((m, i) => ({ month: m, pct: spark[i] }))
+    .filter((p): p is { month: string; pct: number } => p.pct != null)
+  const end = (p: { month: string; pct: number }) => `${axisMonth(p.month)} ${fmtPct(p.pct, 0)}`
   return (
     <span className="flex flex-col gap-0.5">
       <Sparkline values={spark} color={color} width={width} height={height} animate={false} endDot />
       <span className="flex justify-between font-mono text-[9px] text-muted-foreground" style={{ width }}>
-        <span>{axisMonth(read[0])}</span>
-        <span>{axisMonth(read[read.length - 1])}</span>
+        <span>{end(read[0])}</span>
+        <span>{end(read[read.length - 1])}</span>
       </span>
     </span>
   )
@@ -269,7 +277,7 @@ export function leadSubject(rows: readonly SubjectRow[], exceptId?: string | nul
  * dated, with its own band — `gapBasisLine`, which is exactly what D1 argued
  * for: a reader can see the gap was wider and decide for themselves.
  */
-function GapCard({ gap, row }: { gap: Gap | null; row: SubjectRow | null }) {
+function GapCard({ gap, row, categoryLabel }: { gap: Gap | null; row: SubjectRow | null; categoryLabel: string }) {
   if (!gap) {
     return (
       <div className={`${CARD} flex flex-col justify-center gap-1.5`}>
@@ -295,8 +303,20 @@ function GapCard({ gap, row }: { gap: Gap | null; row: SubjectRow | null }) {
         {row ? (
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <MonthLine spark={row.spark} months={row.sparkMonths} />
-            <span className="flex items-center gap-2 font-mono text-[9px] text-muted-foreground">
-              <span className="flex items-center gap-1"><Dot tone="cat" />the category</span>
+            {/* THE LINE SAYS WHOSE IT IS, IN THE CARD'S OWN VOICE AND NOT IN A
+                9px LEGEND. `SubjectRow.spark` is the CATEGORY's share of this
+                subject — the only per-month series a subject row carries — and
+                the card's hero and caption are the gap between you and the
+                named rival. A rising grey line with a dot on the end, beside
+                three lines of copy refusing a comparison, is the one claim the
+                copy was spending itself refusing, made silently in ink, on the
+                quantity a reader will take for the gap. So it is named, at the
+                card's own 10.5px, with the denominator it is a share of. */}
+            <span data-copy="level" className="flex items-start gap-1.5 text-[10.5px] leading-[1.3] text-muted-foreground">
+              <Dot tone="cat" />
+              <span className="min-w-0">
+                the line is {gap.objectLabel.toLowerCase()} across {categoryLabel.toLowerCase()}, of {fmtInt(row.category.n ?? 0)} videos — not the gap
+              </span>
             </span>
           </div>
         ) : null}
@@ -738,7 +758,7 @@ export function LeadershipSheet({
     >
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="grid shrink-0 grid-cols-[5fr_3.5fr_3.5fr] gap-4">
-          <GapCard gap={gap} row={gapRow} />
+          <GapCard gap={gap} row={gapRow} categoryLabel={overview.subjects.categoryLabel} />
           <AttentionCard attention={overview.category.attention} note={overview.category.attentionNote} />
           <SubjectCard row={subject} categoryLabel={overview.subjects.categoryLabel} />
         </div>
