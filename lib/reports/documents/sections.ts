@@ -99,6 +99,21 @@ export interface BriefBlockSection {
    *  a section that has a sheet to itself. */
   span?: number
   /**
+   * An element the DECK draws on this section's sheet, beside the blocks.
+   *
+   * ONE TODAY: `'gap'`, the artboard's "The gap that matters" card. It is not a
+   * block because no surface owns it — `overview.subjects` publishes the two
+   * levels and deliberately publishes no gap figure — and the gap itself is
+   * frozen onto the reading.
+   *
+   * A FLAG AND NOT THE SHEET'S NAME (fix pass). The deck keyed this on
+   * `sheet === 'Your subjects'`, so renaming the sheet in a map silently
+   * dropped the card with no test failing, and any second map that happened to
+   * name a sheet "Your subjects" inherited it. The flag makes both directions
+   * loud: the card follows the section that asked for it.
+   */
+  extras?: 'gap'
+  /**
    * Inputs this section READS BETTER WITH and draws fine without — printed as
    * a line beside it, never as a refusal (`sales.p4.untracked`).
    *
@@ -162,7 +177,7 @@ export const MARKETING_MAP: readonly BriefEntry[] = [
     id: 'mk.subjects', block: 'overview.subjects', surface: 'overview',
     title: 'Your subjects', framing: 'Each subject this month, against the month before and against the category.',
     needs: ['subject-set', 'months-of-history'],
-    sheet: 'Your subjects', span: 12,
+    sheet: 'Your subjects', span: 12, extras: 'gap',
   }),
   // The artboard's own chart, built since Block B and never borrowed by a
   // brief: the calendar line per side, with the tracking-change rule, the

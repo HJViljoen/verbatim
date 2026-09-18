@@ -1171,15 +1171,19 @@ export function GapCard({ gap }: { gap: Gap }) {
 /**
  * What the deck draws on a sheet BESIDE its blocks.
  *
- * One element today: the gap card on the subjects sheet. It is here rather
- * than in a block because no surface owns it — `overview.subjects` publishes
- * the two levels and deliberately publishes no gap figure, and the gap itself
- * is frozen onto the reading. Keyed by the sheet's name, which is the section
- * map's own string, so a map that does not cut that sheet gets nothing extra
- * rather than an element in a layout that has no room for it.
+ * One element today: the gap card. It is here rather than in a block because
+ * no surface owns it — `overview.subjects` publishes the two levels and
+ * deliberately publishes no gap figure — and the gap itself is frozen onto the
+ * reading.
+ *
+ * KEYED ON THE SECTION'S OWN FLAG (fix pass), not on the sheet's title. It read
+ * `if (sheet !== 'Your subjects') return null`, so renaming that sheet in the
+ * map dropped the card silently with no test failing, and a second map naming a
+ * sheet "Your subjects" inherited it. `extras: 'gap'` travels on the section,
+ * frozen, so the card follows the section that asked for it and nothing else.
  */
-function sheetExtras(sheet: string, data: DocumentSnapshotData): ReactNode {
-  if (sheet !== 'Your subjects') return null
+function sheetExtras(sections: readonly DocBriefSection[], data: DocumentSnapshotData): ReactNode {
+  if (!sections.some((s) => s.extras === 'gap')) return null
   const gap = leadGap(data.reading?.gaps)
   if (!gap) return null
   return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} /></div>
@@ -1248,7 +1252,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               note={s.title === UNFILLED_SHEET ? UNFILLED_FRAMING : sections[0].framing}
             >
               {sections.map((sec) => <SheetSection key={sec.id} section={sec} data={data} />)}
-              {sheetExtras(s.title, data)}
+              {sheetExtras(sections, data)}
             </Slide>
           )
         }

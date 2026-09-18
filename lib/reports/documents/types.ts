@@ -255,6 +255,10 @@ export interface DocBriefSection {
   sheet?: string
   /** Columns of twelve this section takes on a shared sheet. */
   span?: number
+  /** An element the deck draws on this section's sheet beside the blocks —
+   *  `'gap'` is the gap card. Frozen, like `sheet` and `span`, because what a
+   *  sheet carries is the artefact's and not today's map's. */
+  extras?: 'gap'
 }
 
 /** The brief's order: written pages and borrowed blocks, interleaved. */

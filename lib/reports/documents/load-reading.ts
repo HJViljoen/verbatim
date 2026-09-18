@@ -476,6 +476,7 @@ export function briefSections(
       id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
       ...(s.sheet ? { sheet: s.sheet } : {}),
       ...(s.span ? { span: s.span } : {}),
+      ...(s.extras ? { extras: s.extras } : {}),
     }
   })
 }

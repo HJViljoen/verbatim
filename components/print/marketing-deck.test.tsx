@@ -159,6 +159,30 @@ describe('nothing on paper asks the reader to press something', () => {
   })
 })
 
+// THE GAP CARD FOLLOWS ITS SECTION, NOT A SHEET NAME (fix pass). The deck read
+// `if (sheet !== 'Your subjects') return null`, so renaming the sheet in the map
+// dropped the artboard's own headline element with nothing failing.
+describe('the gap card is keyed on the section that asked for it', () => {
+  const withSheet = (name: string) => {
+    const data = marketingDeckFixture()
+    return {
+      ...data,
+      sections: data.sections!.map((x) => (x.sheet ? { ...x, sheet: name } : x)),
+    }
+  }
+
+  it('draws on a renamed sheet, because the flag travels with the section', () => {
+    const text = markupText(render(<DocumentDeck data={withSheet('Where we stand on our subjects')} date="28 Sep 2026" />))
+    expect(text).toContain('The gap that matters')
+  })
+
+  it('draws on no sheet whose sections did not ask for it', () => {
+    const data = marketingDeckFixture()
+    const stripped = { ...data, sections: data.sections!.map(({ extras: _extras, ...rest }) => rest) }
+    expect(markupText(render(<DocumentDeck data={stripped} date="28 Sep 2026" />))).not.toContain('The gap that matters')
+  })
+})
+
 describe('the In-short sheet', () => {
   // `mkt.p1.stats`. `documentFigures` fills client_share_pct / positive_pct
   // only on the branch with NO reading, so a brief WITH one printed exactly one
