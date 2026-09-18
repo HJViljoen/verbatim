@@ -193,6 +193,7 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
     const email = mode === 'email'
     const empty = voiceMovers.emptyState(data)
     const banded = m.growing.length + m.fading.length
+    const both = m.growing.length > 0 && m.fading.length > 0
     const coda = moversCoda({ growing: m.growing.length, fading: m.fading.length, shown: m.shown, any: banded > 0 })
     const of = data.audience.videos != null
       // NOT "share of 1,388 the category videos": an audience's prose label
@@ -225,11 +226,16 @@ export const voiceMovers: Block<VoiceSurfaceData> = {
             {/* NOT "Growing" and "Fading" as headings — see the file header.
                 The arm names what was done to the number; the row carries the
                 word, inside the node that holds the band. */}
-            {email ? (
-              <>
+            {/* TWO COLUMNS ONLY WHERE THERE ARE TWO ARMS. With one of them
+                empty — which is the state Össur's September is in — the grid
+                drew an empty half and ruled a hairline down the middle of it,
+                against nothing. An arm with no rows is absent, and the arm that
+                is left keeps the column width it would have had. */}
+            {email || !both ? (
+              <div className={email ? undefined : 'xl:w-1/2 xl:pr-6'}>
                 <Arm label="Cleared their band · a larger share than last month" rows={arm(m.growing, m.shown)} mode={mode} ctx={ctx} />
                 <Arm label="Cleared their band · a smaller share than last month" rows={arm(m.fading, m.shown)} mode={mode} ctx={ctx} />
-              </>
+              </div>
             ) : (
               <TileColumns of={2}>
                 <div className="min-w-0 xl:pr-6">

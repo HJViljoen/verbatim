@@ -35,6 +35,13 @@ describe('voiceMovers', () => {
     expect(text).not.toMatch(/Growing · /)
   })
 
+  it('does not draw a second column when only one arm has rows', () => {
+    // Össur's September is that state. The grid drew an empty half and ruled a
+    // hairline down the middle of it, against nothing.
+    const markup = render(voiceMovers.render(refusedVoiceFixture(), 'app', ctx))
+    expect(markup).not.toContain('xl:grid-cols-2')
+  })
+
   it('sets the two banded arms side by side, the way the artboard does', () => {
     // PORTED (wave 2): growing and fading are two readings of ONE axis, so
     // they are two ruled columns rather than two stacked lists — the fading

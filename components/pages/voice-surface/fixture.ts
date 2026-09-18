@@ -344,6 +344,16 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
       n: 388,
       pct: 8.8,
       direction: null,
+      // THE OPEN THEME IS THE ONE MOVER THIS MONTH HAS, so it carries that
+      // row's verdict and that row's months. It inherited t1's — a +2.6 on the
+      // page's only theme, two blocks under the same theme's −5.1, over a
+      // baseline of 1,200 videos in an audience of 388.
+      verdict: verdict({
+        objectId: 'r1', objectLabel: 'Admiration for personal resilience',
+        value: { k: 34, n: 388 }, baseline: { k: 56, n: 402 },
+        changePts: -5.1, bandPts: 4,
+      }),
+      points: [point('2026-07-01', 21, 380), point(PREV, 56, 402), point(MONTH, 34, 388)],
       tone: null,
       toneNote: 'How this audience’s month was received is not recorded month by month for this workspace yet.',
       onCamera: null,
