@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 import { communitiesMeta, type CommunityRow } from './communities'
@@ -132,5 +133,55 @@ describe('a term’s date at the artboard’s scale', () => {
     expect(termDateShort({ on: '2026-04-06', source: 'recorded' })).toBe('added 6 Apr')
     expect(termDateShort({ on: '2026-04-06', source: 'reconstructed' })).toBe('in use by 6 Apr, not recorded')
     expect(termDateShort(undefined)).toBe('in the set before we kept a record')
+  })
+})
+
+describe('every configuration write on this page carries an actor', () => {
+  // AGENTS.md: `tracking_configs` UPDATEs go through `updateWithActor` /
+  // `withActor` so the audit trigger logs a PERSON instead of a role, and a
+  // surface the trigger cannot see calls `recordConfigChange`. The artboard
+  // port rewrote every control on the page — one save row, two Reddit
+  // controls, a rivals table that is itself the list — so this reads the two
+  // action modules and checks the rule survived the rewrite. Nothing else
+  // would notice a bare `.update()` slipping back in.
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const actions = source('../../app/dashboard/settings/actions.ts')
+  const rivals = source('../../app/dashboard/settings/rivals-actions.ts')
+
+  it('has no bare UPDATE on tracking_configs anywhere in the actions', () => {
+    // Every write to the table is the callback `updateWithActor` hands its
+    // stamped payload to, so every `.update()` on it takes `payload` and
+    // nothing else. An `.update({ … })` with an object literal would be a
+    // write the audit trigger sees as a role rather than a person.
+    for (const [name, text] of [['actions.ts', actions], ['rivals-actions.ts', rivals]] as const) {
+      const writes = [...text.matchAll(/\.from\('tracking_configs'\)[\s\S]{0,40}?\.update\(\s*([A-Za-z{])/g)]
+      for (const w of writes) {
+        expect(w[1], `${name} writes tracking_configs without updateWithActor`).toBe('p')
+      }
+    }
+  })
+
+  it('stamps each of the three writes, and logs the one the trigger cannot see', () => {
+    // updateWithActor: the terms, the derived competitor terms, the exclusions,
+    // the cadence and the community edit.
+    expect([...actions.matchAll(/updateWithActor\(/g)].length).toBeGreaterThanOrEqual(5)
+    expect([...actions.matchAll(/actorStamp\(session/g)].length).toBeGreaterThanOrEqual(5)
+    // `subreddits` is a JSON column the audit trigger does not watch, so the
+    // community control writes its own row naming what the edit breaks.
+    expect(actions).toContain('recordConfigChange(')
+    expect(actions).toContain("surface: 'subreddits'")
+  })
+
+  it('renames a rival through the one logged RPC, never a hand UPDATE', () => {
+    expect(rivals).toContain('renameRival(')
+    expect(rivals).not.toMatch(/\.from\('competitors'\)\s*\n?\s*\.update\(/)
+  })
+
+  it('keeps the one save row on the two existing write paths', () => {
+    // `saveTracking` composes; it does not open a third path to the columns.
+    const save = actions.slice(actions.indexOf('export async function saveTracking'))
+    expect(save).toContain('updateSearchTerms(prev, formData)')
+    expect(save).toContain('updateTrackingConfig(prev, formData)')
+    expect(save).not.toContain('.update(')
   })
 })

@@ -120,7 +120,12 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                 </span>,
                 r.ownPosts
                   ? <Figure key="o" value={r.ownPosts.value.k.toLocaleString('en-GB')} muted={r.ownPosts.value.k === 0} />
-                  : <span key="o" className="block text-right text-[11.5px] text-muted-foreground">{r.ownPostsWhy ?? '— not tracked'}</span>,
+                  // THE CELL IS SHORT AND THE REASON IS A FOOTNOTE. Every
+                  // rival with no account configured carries the same sentence,
+                  // and five copies of it down a 132px column is five rows of
+                  // three-line text saying one thing. The dash says there is no
+                  // census; the note under the table says why, once.
+                  : <span key="o" className="block text-right text-[11.5px] text-cat">— not read</span>,
                 r.identity && !r.retiredAt && canEdit
                   ? <RivalRename key="r" id={r.identity.id} name={r.name} />
                   : <span key="r" className="block text-right text-[11.5px] text-cat">{r.retiredAt ? 'no longer tracked' : RENAME_UNAVAILABLE}</span>,
@@ -180,6 +185,9 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
           page — {rows.find((r) => r.ownPosts)?.ownPosts?.basis}.
         </MonoNote>
       )}
+      {[...new Set(rows.map((r) => r.ownPostsWhy).filter((w): w is string => w != null))].map((why) => (
+        <MonoNote key={why} className="max-w-[820px]">{why}</MonoNote>
+      ))}
     </Section>
   )
 }

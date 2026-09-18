@@ -31,7 +31,7 @@ import { CommunityAction, CommunityAdd } from './community-controls'
 // never a `0`. A zero is a measurement; a dash is "nothing came back", which is
 // what a community with no stored posts actually tells you.
 
-const COLS = '200px 96px 176px 96px 104px 76px 84px minmax(112px,1fr)'
+const COLS = '188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)'
 const HEAD = ['Community', 'Found', 'State', 'Posts · all time', 'Comments · all time', 'Kept', 'Findings', ''] as const
 
 export function CommunitiesSection({

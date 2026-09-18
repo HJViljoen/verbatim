@@ -80,7 +80,8 @@ export function TermPerformance({ rows, updates, months = [] }: { rows: TermSumm
   // artboard port): the label gutter is the page's, so the record lines up
   // under the lists it is the record OF.
   return (
-    <LabelRow label="How they are doing" meta={description}>
+    <LabelRow label="How they are doing" meta={`pooled over ${updates} update${updates === 1 ? '' : 's'}`}>
+      <p className="mb-2 text-[11.5px] text-muted-foreground">{description}</p>
       {rows.length === 0 ? (
         <p className="text-[12px] text-muted-foreground">
           We have not gathered anything yet, so no term has a record. Come back after your first update.
