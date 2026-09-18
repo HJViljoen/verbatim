@@ -21,6 +21,7 @@ import tailwind from '@tailwindcss/postcss'
 import { withBrowser } from '../lib/render/chromium'
 import { OverviewPage } from '../components/pages/overview'
 import { overviewFixture, refusedFixture } from '../components/pages/overview/fixture'
+import { SidebarTenant } from '../components/sidebar-tenant-loader'
 
 const args = process.argv.slice(2)
 const flag = (n: string, d: string) => { const i = args.indexOf(`--${n}`); return i >= 0 && args[i + 1] ? args[i + 1] : d }
@@ -33,7 +34,17 @@ const FONTS = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;5
  *  exactly as `app/dashboard/layout.tsx` sets them. The sidebar's rows are
  *  static here — `components/app-sidebar.tsx` is a client component wired to
  *  the router — but the WIDTH, the groups and the footer are the shipped ones,
- *  because the artboard's proportions only mean anything against them. */
+ *  because the artboard's proportions only mean anything against them.
+ *
+ *  THE TENANT FOOTER IS THE REAL COMPONENT. It was a hand-written pair of spans
+ *  until 2026-09-18, which meant the one element this package owns for the
+ *  whole wave (`main.shell.sidebar.tenant`) was evidenced by a picture of a
+ *  copy of itself. `SidebarTenant` is a pure sync component — only its LOADER
+ *  is async — so it renders here exactly as it renders in the app, and
+ *  `components/sidebar-tenant.test.tsx` pins that the role word comes from the
+ *  `Role` union and never from a job title. */
+const TENANT = renderToStaticMarkup(SidebarTenant({ brand: 'Sealand', role: 'admin' }))
+
 const SIDEBAR = `
 <aside style="width:224px;flex:none;display:flex;flex-direction:column;background:var(--sidebar);box-shadow:var(--shadow-tile)">
   <div style="display:flex;align-items:baseline;gap:8px;padding:20px 16px 4px">
@@ -54,10 +65,7 @@ const SIDEBAR = `
     </div>
   </nav>
   <div style="margin-top:auto;padding:0 14px 16px">
-    <div style="display:flex;flex-direction:column;gap:1px;padding:0 10px 10px">
-      <span style="font-size:12.5px;font-weight:500;color:var(--sidebar-foreground)">Sealand</span>
-      <span style="font-family:var(--font-mono);font-size:10.5px;color:var(--muted-foreground)">admin</span>
-    </div>
+    ${TENANT}
     <div style="display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-size:14px;color:var(--sidebar-foreground)"><span style="width:16px;height:16px;border-radius:3px;background:var(--muted)"></span><span>Logout</span></div>
   </div>
 </aside>`
@@ -71,8 +79,17 @@ async function css(): Promise<string> {
 function doc(style: string, body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${FONTS}"><style>${style}
 html,body{margin:0;padding:0}
-/* next/font sets these on <html>; this harness has no next/font. */
-:root{--font-sans:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;--font-serif:'IBM Plex Serif',Georgia,serif;--font-mono:'IBM Plex Mono',monospace}
+/* next/font sets these on <html>; this harness has no next/font. THE NAMES
+   THAT MATTER ARE THE THREE --font-plex-*: app/globals.css assigns
+   --font-sans: var(--font-plex-sans) (and serif, and mono) inside @theme, and
+   Tailwind INLINES the theme value — it emits
+   .font-serif { font-family: var(--font-plex-serif) }, never
+   var(--font-sans). Defining only the three aliases (which is what this line
+   did until 2026-09-18) left .font-serif and .font-mono resolving to nothing,
+   so the hero sentence and all ninety monospace lines rendered as body sans in
+   every shot taken before then, and two layout breaks hid behind it. The
+   aliases stay for any rule that reads them directly. */
+:root{--font-plex-sans:'IBM Plex Sans',-apple-system,'Segoe UI',sans-serif;--font-plex-serif:'IBM Plex Serif',Georgia,serif;--font-plex-mono:'IBM Plex Mono',ui-monospace,monospace;--font-emoji:'Apple Color Emoji','Segoe UI Emoji',sans-serif;--font-sans:var(--font-plex-sans);--font-serif:var(--font-plex-serif);--font-mono:var(--font-plex-mono)}
 body{font-family:var(--font-sans);-webkit-font-smoothing:antialiased}
 </style></head><body><div style="display:flex;width:1440px;background:var(--background)">${SIDEBAR}
 <main style="flex:1;min-width:0;padding:24px">${body}</main></div></body></html>`
