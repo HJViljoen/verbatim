@@ -680,9 +680,13 @@ describe('the artboard port (Block D wave 2)', () => {
     // entire argument at 22px on every state this branch can render.
     for (const state of STATES) {
       const markup = render(QUARTERLY_BLOCKS['quarterly.read'].render(state, 'app', ctx))
-      const headline = markup.match(/text-\[27px\][^>]*>([\s\S]*?)<\/div>/)
-      if (!headline) continue
-      const words = headline[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+      // AND THE SIZE IS ON THE PARAGRAPH. `TokenProse` renders its own `<p>`
+      // with a 13.5px default unless a className is passed, so a size set on
+      // a wrapper around it did nothing at all: the "headline" was body size
+      // on every sheet this branch rendered.
+      const headline = markup.match(/<p[^>]*text-\[27px\][^>]*>([\s\S]*?)<\/p>/)
+      expect(headline).not.toBeNull()
+      const words = headline![1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
       expect(words.replace(/\.$/, '')).not.toContain('. ')
     }
   })

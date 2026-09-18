@@ -101,14 +101,32 @@ export const quarterlyRead: Block<QuarterlyData> = {
             The rest of the deck keeps the nominal scale, and that is a
             recorded deviation, not an oversight: every other sheet spends the
             difference on rows, and page 2 is the one with room. */}
+        {/* THE SIZE GOES ON THE `<p>`, NOT ON A WRAPPER AROUND IT.
+            `TokenProse` renders `className ?? 'm-0 text-[13.5px]
+            leading-relaxed'`, so a size set on a parent div was overridden by
+            the paragraph's own default and the "headline" has been 13.5px on
+            every sheet this branch ever rendered — the same size as the body
+            beside it. It is the artboard's own 24px divided by the deck's
+            0.902 zoom, which is what makes it the drawing's size on paper. */}
         {headline ? (
-          <div className={email ? undefined : 'max-w-[30ch] text-[27px] font-semibold leading-[1.15] tracking-[-0.02em] [text-wrap:balance]'}>
-            <TokenProse body={headline} figures={r.figures} mode={mode} model={!i.fallback} />
-          </div>
+          <TokenProse
+            body={headline}
+            figures={r.figures}
+            mode={mode}
+            model={!i.fallback}
+            className={email ? undefined : 'm-0 max-w-[30ch] text-[27px] font-semibold leading-[1.15] tracking-[-0.02em] [text-wrap:balance]'}
+          />
         ) : null}
-        <div className={email ? undefined : 'flex max-w-[66ch] flex-col gap-2 text-[15px] leading-[1.5]'}>
+        <div className={email ? undefined : 'flex max-w-[66ch] flex-col gap-2'}>
           {body.map((sentence, n) => (
-            <TokenProse key={n} body={sentence} figures={r.figures} mode={mode} model={!i.fallback} />
+            <TokenProse
+              key={n}
+              body={sentence}
+              figures={r.figures}
+              mode={mode}
+              model={!i.fallback}
+              className={email ? undefined : 'm-0 text-[15px] leading-[1.5]'}
+            />
           ))}
         </div>
 
@@ -148,9 +166,13 @@ export const quarterlyRead: Block<QuarterlyData> = {
           {means ? (
             <div className={email ? undefined : 'flex flex-col gap-2'}>
               <Eyebrow mode={mode}>What it means</Eyebrow>
-              <div className={email ? undefined : 'text-[13px] leading-[1.45]'}>
-                <TokenProse body={means} figures={r.figures} mode={mode} model={!i.fallback} />
-              </div>
+              <TokenProse
+                body={means}
+                figures={r.figures}
+                mode={mode}
+                model={!i.fallback}
+                className={email ? undefined : 'm-0 text-[13px] leading-[1.45]'}
+              />
             </div>
           ) : null}
           {i.note ? <Note mode={mode}>{i.note}</Note> : null}
