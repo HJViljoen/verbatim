@@ -5,30 +5,77 @@ import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
-import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
 import { applySubredditEdit } from '@/lib/settings/save-state'
 import type { SubredditEntry } from '@/lib/gather/types'
 import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
-import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
-import { PERIODS, DAYS } from './constants'
+import { savedMessage } from '@/lib/settings/connections'
+import { PERIODS, DAYS, RIVALS_PRESENT, SAVED_FIELDS } from './constants'
 
+// "SUGGEST MORE TERMS" IS GONE FROM THIS PAGE, AND SO IS ITS ACTION (C7).
+// The artboard's terms section is one field with a category selector and no
+// model button, and the port dropped the control — but left
+// `suggestMoreTerms` exported, which in a 'use server' module means a live,
+// POST-reachable endpoint that spends OpenAI money with no UI to reach it
+// from and nothing in the product that names it. An endpoint like that is not
+// a dormant feature, it is a hole with a bill attached, so it goes with the
+// button. Onboarding keeps its own suggester (`app/onboarding/*`, a different
+// action on the same metered counter), which is where a workspace's first
+// terms come from; if this page wants the control back it is a UI to design
+// against the artboard's density and a deliberate spend to re-open, not two
+// lines of restore.
 export interface SettingsFormState {
   ok: boolean
   message: string
 }
 
-export interface SuggestState {
-  ok: boolean
-  message: string
-  /** Candidates only — nothing is stored until the client keeps them and saves. */
-  suggestions: { brand: string[]; competitors: string[]; category: string[] } | null
-}
-
 // Comma-separated text field -> trimmed, de-blanked string[].
 const csv = (v: FormDataEntryValue | null) =>
   String(v ?? '').split(',').map((x) => x.trim()).filter(Boolean)
+
+/**
+ * The tracked rival list, however the form spelled it — or null where the POST
+ * did not carry one at all (see `RIVALS_PRESENT`).
+ *
+ * The rivals table posts ONE HIDDEN INPUT PER NAME (the artboard's table is the
+ * list, and a name carrying a comma has to survive the round trip); the old
+ * settings form posted ONE comma-separated box. Both shapes are read here, so
+ * an older client, a cached page or a hand-made POST cannot silently truncate
+ * the list to its first name.
+ *
+ * THE COMMA SPLIT BELONGS TO THE OLD SHAPE ALONE, AND THE MARKER IS WHAT SAYS
+ * WHICH SHAPE THIS IS. A POST carrying `RIVALS_PRESENT` came from the table,
+ * where every name is its own value and a comma inside one is part of the name;
+ * a POST without it is the old box, where a comma is the separator and nothing
+ * else. Counting the values cannot tell them apart — a workspace tracking one
+ * rival posts exactly one value too, which is the case that matters, because
+ * `addRival` lets a comma through (2–80 characters). Split there and "Smith,
+ * Wesson & Co" saves as TWO rivals: two `competitor_keywords`, two
+ * `ensureRivals` identities, and two `competitor:<name>` audiences whose frozen
+ * months can never be re-keyed, because `audience` is in the primary key. The
+ * terms path already round-trips losslessly (`getAll(name).map(String)`); this
+ * is the one list that did not.
+ *
+ * De-duplicated case-insensitively, keeping the spelling the reader typed
+ * first — `rivalSlug` folds them downstream anyway, and two rows reading
+ * "Freitag" and "freitag" would each claim the other's months.
+ */
+const trackedNames = (formData: FormData): string[] | null => {
+  const fromTable = formData.get(RIVALS_PRESENT) != null
+  const raw = formData.getAll('competitor_names')
+  if (raw.length === 0) return fromTable ? [] : null
+  const all = fromTable
+    ? raw.map((v) => String(v).trim().replace(/\s+/g, ' ')).filter(Boolean)
+    : raw.flatMap((v) => csv(v))
+  const seen = new Set<string>()
+  return all.filter((n) => {
+    const key = n.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 // Facts vs knobs (Redesign Spec §9): this action accepts ONLY the client-
 // editable facts. Keywords, platforms, and scrape depth are operator levers —
@@ -36,8 +83,17 @@ const csv = (v: FormDataEntryValue | null) =>
 // even though the row-level UPDATE policy would allow the write.
 // Caps mirror the tracking_configs CHECK constraints (T0-2) so the limit
 // arrives as a sentence rather than as a raw Postgres constraint name.
+//
+// NO FLOOR ON THE RIVAL LIST, AS OF THE ARTBOARD PORT. `min(1)` was written
+// when the rivals box was its own form with its own button: the only thing it
+// could block was a rival edit. The page now has ONE save, so the same rule
+// refused a save whose terms half had already been written — a reader who took
+// the last rival off and changed a term saw "Invalid competitor_names: add at
+// least one competitor" over a save that had half landed, and pressing Save
+// again repeated it. A workspace with no rival is a real state (it is what
+// every tenant starts as), and the ceiling is the one that bounds cost.
 const schema = z.object({
-  competitor_names: z.array(z.string()).min(1, 'add at least one competitor').max(15, 'track at most 15 competitors'),
+  competitor_names: z.array(z.string()).max(15, 'track at most 15 competitors'),
   report_period: z.enum(PERIODS),
   report_day: z.enum(DAYS),
 })
@@ -70,8 +126,14 @@ export async function updateTrackingConfig(
   // among them.
   const isPaused = current?.report_period === 'paused'
 
+  // The rival list as posted, or the stored one where the POST carried none.
+  // A list nobody sent is not an empty list, and the difference decides both
+  // what is validated and whether the column is written at all.
+  const posted = trackedNames(formData)
+  const stored = (current?.competitor_names ?? []) as string[]
+
   const parsed = schema.safeParse({
-    competitor_names: csv(formData.get('competitor_names')),
+    competitor_names: posted ?? stored,
     report_period: isPaused ? 'weekly' : formData.get('report_period'),
     report_day: formData.get('report_day'),
   })
@@ -90,8 +152,9 @@ export async function updateTrackingConfig(
   const { error } = await updateWithActor(
     (payload) => supabase.from('tracking_configs').update(payload).eq('client_id', clientId),
     {
-      ...parsed.data,
-      ...(isPaused ? { report_period: 'paused' } : {}),
+      report_period: isPaused ? 'paused' : parsed.data.report_period,
+      report_day: parsed.data.report_day,
+      ...(posted ? { competitor_names: parsed.data.competitor_names } : {}),
       updated_at: new Date().toISOString(),
     },
     actorStamp(session, 'settings'),
@@ -277,45 +340,6 @@ function isMissingColumn(err: { code?: string | null; message?: string | null },
   return (code === '42703' || code === 'PGRST204') && (err.message ?? '').includes(column)
 }
 
-/** Ask the model for more terms. Offers only — nothing is written here. */
-export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData): Promise<SuggestState> {
-  const { supabase, clientId, role, userId } = await getSessionContext()
-  if (!canManageTenant(role)) {
-    return { ok: false, message: 'You don’t have permission to change search terms.', suggestions: null }
-  }
-
-  const [{ data: client }, { data: cfg }] = await Promise.all([
-    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    supabase.from('tracking_configs').select('competitor_names, industry_keywords').eq('client_id', clientId).maybeSingle(),
-  ])
-  const companyName = (client?.company_name as string | undefined) ?? ''
-  if (!companyName) {
-    return { ok: false, message: 'We need your company name first.', suggestions: null }
-  }
-
-  // Metered per user, on the same counter as the onboarding suggester. This
-  // one's inputs come from the tenant's own row rather than a POST, so it was
-  // never the cost hole — but a limiter with a way around it is not one.
-  const slot = await takeSuggestionSlot(userId, clientId)
-  if (!slot.ok) return { ok: false, message: slot.message, suggestions: null }
-
-  try {
-    const s = await suggestSearchTerms({
-      company_name: companyName,
-      competitor_names: (cfg?.competitor_names ?? []) as string[],
-      industry_keywords: (cfg?.industry_keywords ?? []) as string[],
-    })
-    console.log(`[settings] search-term suggestions for ${clientId}: $${s.costUsd.toFixed(4)}`)
-    const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
-    const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
-    if (total === 0) {
-      return { ok: false, message: 'Nothing worth suggesting — add a competitor or a category word and try again.', suggestions: null }
-    }
-    return { ok: true, message: `${total} to consider. Keep the ones that sound like your buyers.`, suggestions }
-  } catch (e) {
-    return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
-  }
-}
 
 /**
  * Stop watching a community, or add one (block D, D9 — `settings.reddit.add`
@@ -418,4 +442,38 @@ export async function updateCommunity(
       ? 'Saved. Your next update reads that community too.'
       : 'Saved. Your next update stops reading that community — what we already read stays.',
   }
+}
+
+/**
+ * The page's ONE save (Block D wave 2, `settings.save`).
+ *
+ * THE ARTBOARD HAS ONE SAVE ROW AND THE BUILT PAGE HAD TWO BUTTONS, in two
+ * cards, each writing a different subset and each reporting its own "Saved."
+ * A reader who changed a term and a rival had to notice that two different
+ * buttons existed and press both; whichever they missed was silently discarded
+ * on the next navigation.
+ *
+ * TWO WRITES, STILL, AND DELIBERATELY. The terms go out on the admin client
+ * (three of the four columns are REVOKEd from `authenticated`, T0-2) and carry
+ * their own actor stamp; the cadence and the tracked rivals go out on the
+ * session client, derive the competitor search terms and give every name an
+ * identity. Merging them into one statement would mean merging two different
+ * privilege paths and two different stamps to save a round trip. What the
+ * reader needs is ONE outcome, and that is what this composes: the first
+ * failure wins the message, because a save that half-landed must not read as a
+ * save.
+ */
+export async function saveTracking(
+  prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const terms = await updateSearchTerms(prev, formData)
+  if (!terms.ok) return terms
+  const config = await updateTrackingConfig(prev, formData)
+  if (!config.ok) return config
+  // What it wrote, not what a third of it wrote: the form posts one
+  // `saved_fields` value per pending edit and `savedMessage` reads them against
+  // its own allowlist, so the sentence names the cadence and the rival list
+  // when those are what moved.
+  return { ok: true, message: savedMessage(formData.getAll(SAVED_FIELDS).map(String)) }
 }

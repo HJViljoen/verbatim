@@ -151,3 +151,38 @@ export function communityWords(row: CommunityRow): string {
   if (row.status === 'candidate') return row.probe ? 'proposed, and measured' : 'proposed, not yet sampled'
   return row.probe ? 'watched' : 'watched by hand, never sampled'
 }
+
+/**
+ * The section's mono meta — and it says ALL TIME out loud.
+ *
+ * The artboard reads "12 subreddits · 214 threads · 1,880 comments this month",
+ * and the second half of that is not a figure this product holds: the only
+ * per-community counts are `computeSubredditRoi` over every stored Reddit post,
+ * which is lifetime, and the monthly reading has no community dimension at all
+ * (there is no `month_community_readings`). Scoping them to September would
+ * mean counting `videos` over a date span, which is the re-derivation
+ * `lib/reading` exists to stop. So the counts keep their true scope and the
+ * meta names it — D9's rule, applied to a head instead of a column.
+ */
+export function communitiesMeta(rows: readonly CommunityRow[]): string {
+  const configured = rows.filter((r) => !r.unconfigured)
+  const posts = rows.reduce((n, r) => n + r.posts, 0)
+  const comments = rows.reduce((n, r) => n + r.comments, 0)
+  return [
+    `${configured.length} communit${configured.length === 1 ? 'y' : 'ies'}`,
+    `${posts.toLocaleString('en-GB')} post${posts === 1 ? '' : 's'}`,
+    `${comments.toLocaleString('en-GB')} comment${comments === 1 ? '' : 's'} stored, all time`,
+  ].join(' · ')
+}
+
+/**
+ * The rule beside that meta.
+ *
+ * NOT the artboard's "active ≥ 10 threads · probe 1–9 · no yield 0", which
+ * derives a community's STATE from a month's gather count — so a week we did
+ * not run demotes a healthy community, and a claim about our own cadence gets
+ * printed as a claim about the community. What the column actually holds is a
+ * decision someone made (`subreddits[].status`, plus the paid relevance probe),
+ * and `communityWords` says which decision in the client's own words.
+ */
+export const COMMUNITY_STATE_RULE = 'a state is what was decided, never a count of what it brought'

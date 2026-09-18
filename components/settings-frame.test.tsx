@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { render, renderText } from '@/lib/test/render'
-import { SettingsFrame, SettingsTable, SettingsRow, FactRow } from '@/components/settings-frame'
+import { SettingsFrame, SettingsTable, SettingsRow, SettingsCard, FactRow } from '@/components/settings-frame'
 import { ReadinessTable } from '@/components/ops/readiness-table'
 import { SETTINGS_SUBPAGES } from '@/lib/settings/rail'
 import type { ReadinessRow } from '@/lib/readiness/types'
@@ -26,12 +26,21 @@ describe('the settings rail', () => {
     expect(parked.match(/aria-current="page"/g)).toBeNull()
   })
 
-  it('prints a rail count only where one was supplied', () => {
+  it('prints a rail count only where one was supplied, and never at the label’s expense', () => {
     const markup = render(
-      <SettingsFrame active="tracking" title="Settings" counts={{ tracking: '21 terms' }}>x</SettingsFrame>,
+      <SettingsFrame
+        active="tracking"
+        title="Settings"
+        counts={{ tracking: { value: '21', unit: 'search terms' }, reports: { value: '5', unit: 'schedules' } }}
+      >x</SettingsFrame>,
     )
-    expect(markup).toContain('21 terms')
-    // Nothing invented for the six with no count — a count nobody loaded must
+    // M4: the figure is what the 224px rail has room for; the unit travels as
+    // the accessible name, because "5 schedules" beside "Reports and
+    // recipients" truncated the label rather than the count.
+    expect(markup).toContain('>21<')
+    expect(markup).toContain('aria-label="5 schedules"')
+    expect(markup).toContain('Reports and recipients')
+    // Nothing invented for the five with no count — a count nobody loaded must
     // not become a zero.
     expect(markup).not.toContain('>0<')
   })
@@ -44,15 +53,61 @@ describe('the settings rail', () => {
 })
 
 describe('the settings vocabulary', () => {
-  it('is forms, not tiles: no elevated card ground inside a sub-page', () => {
+  // CHANGED BY THE ARTBOARD PORT (Block D wave 2, E-settings). This used to
+  // assert exactly TWO elevated grounds — the rail's card and the content
+  // card — and the artboard has neither: the settings area is a bare nav
+  // beside a flat column on white, so the two nesting levels the system allows
+  // (tile → flat inner block) are spent inside a sub-page rather than on its
+  // furniture. The rule the test is about is unchanged and is now stronger:
+  // nothing in the frame draws an elevated card at all.
+  it('is forms, not tiles: the frame draws no elevated card ground', () => {
     const markup = render(
-      <SettingsFrame active="tracking" title="Settings">
+      <SettingsFrame active="tracking" title="Settings" contentTitle="Tracking" contentMeta="21 terms" contentRule="What we look for.">
         <FactRow label="Platforms">TikTok · YouTube</FactRow>
       </SettingsFrame>,
     )
-    // The two tile grounds belong to the frame's own two panes and to nothing
-    // a sub-page draws.
-    expect(markup.match(/bg-tile shadow-tile/g)).toHaveLength(2)
+    expect(markup).not.toContain('shadow-tile')
+    // The sub-page header is the artboard's: a title, a mono meta and one
+    // sentence of rule — not a PaneHeader eyebrow, which is what a SECTION
+    // inside the page uses.
+    expect(markup).toContain('Tracking')
+    expect(markup).toContain('21 terms')
+    expect(markup).toContain('What we look for.')
+  })
+
+  it('draws a sub-page that passes no rule and no counts — the other eight routes’ shape', () => {
+    // C6: this frame is shared by nine routes (the seven sub-pages plus Team
+    // and Billing) and the artboard port rewrote its rail, its header and both
+    // panes. Eight of them pass exactly `active` + `title` + `context` +
+    // `contentTitle` + `contentMeta` and nothing else, and none of them can be
+    // rendered in this tier (each needs a session and a read). This is that
+    // prop shape, asserted: a header, its meta, no empty rule paragraph, the
+    // rail beside it, and the page's own content.
+    const markup = render(
+      <SettingsFrame
+        active="readiness"
+        title="Settings"
+        context="Sealand · read-only"
+        contentTitle="Readiness"
+        contentMeta="13 inputs · 6 missing"
+      >
+        <SettingsCard title="What we still need">…</SettingsCard>
+      </SettingsFrame>,
+    )
+    expect(markup).toContain('Readiness')
+    expect(markup).toContain('13 inputs · 6 missing')
+    expect(markup).toContain('What we still need')
+    expect(markup).toContain('aria-current="page"')
+    // No rule, no strip, no counts — and nothing drawn in their place.
+    expect(markup.match(/<p class="text-\[12\.5px\] text-muted-foreground">/g)).toBeNull()
+    expect(markup).not.toContain('aria-label="0')
+  })
+
+  it('hangs the save-state strip under the rail when a page has one', () => {
+    const markup = render(
+      <SettingsFrame active="tracking" title="Settings" railFooter={<p>Last save 3 Sep</p>}>x</SettingsFrame>,
+    )
+    expect(markup).toContain('Last save 3 Sep')
   })
 
   it('says a table is empty in words rather than drawing an empty table', () => {

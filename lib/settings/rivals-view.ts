@@ -1,3 +1,4 @@
+import { monthName } from '../format'
 import { rivalSlug, type Competitor } from '../rivals'
 import { ownPostBasis, OWN_POSTS_NO_ACCOUNTS } from '../reading/own-posts'
 import type { Counted } from '../reading/verdicts'
@@ -159,4 +160,73 @@ export function rivalState(row: RivalRow): string {
   if (row.captured === 0) return 'accounts configured, nothing captured from them yet'
   if (row.read === 0) return `${row.captured} of their posts captured, none read — worth checking the handles are the right accounts`
   return `${row.captured} of their posts captured, ${row.read} read`
+}
+
+/** The section's mono meta: "5 tracked · 2 with accounts · 3 on search terms
+ *  only". All three are lengths of the rows below, so the head cannot disagree
+ *  with the table; a rival that is no longer tracked is counted separately,
+ *  because its months still render and its row is still drawn.
+ *
+ *  AND THE HEAD FOLLOWS THE FORM, NOT THE SERVER'S ROWS. `rows` is what the
+ *  page loaded; `edits` is what the reader has done since and not yet saved. A
+ *  head that went on counting a rival the reader had just taken off would be
+ *  the one figure on this page contradicting the table directly under it. The
+ *  two pending counts are said as pending, never folded into "tracked". */
+export function rivalsMeta(
+  rows: readonly RivalRow[],
+  edits?: { names?: readonly string[]; added?: number },
+): string {
+  const named = edits?.names ? new Set(edits.names.map((n) => n.toLowerCase())) : null
+  const kept = named ? rows.filter((r) => named.has(r.name.toLowerCase())) : rows
+  const live = kept.filter((r) => !r.retiredAt)
+  const withAccounts = live.filter((r) => !r.noAccounts).length
+  const added = edits?.added ?? 0
+  const parts = [
+    `${live.length + added} tracked`,
+    `${withAccounts} with account${withAccounts === 1 ? '' : 's'}`,
+    `${live.length - withAccounts + added} on search terms only`,
+  ]
+  const gone = rows.filter((r) => r.retiredAt).length
+  if (gone > 0) parts.push(`${gone} no longer tracked`)
+  const removed = named ? rows.filter((r) => !r.retiredAt && !named.has(r.name.toLowerCase())).length : 0
+  if (removed > 0) parts.push(`${removed} waiting to be taken off`)
+  if (added > 0) parts.push(`${added} added, not yet saved`)
+  return parts.join(' · ')
+}
+
+/** What a row says where the reader has taken it off the list and not yet
+ *  saved. The mirror of the added row's sentence: a removal that only removed
+ *  its own `x` was the one edit on this page with no visible consequence. */
+export const RIVAL_REMOVED_PENDING =
+  'taken off here, not yet saved — their months stay under this name and the line ends when you save'
+
+/** The rule beside it. Taking a rival off the list does not zero their
+ *  standing — it ends the line, and the months already counted stay where they
+ *  are (the frozen guard refuses to re-key them, and `retireRival` never
+ *  deletes). */
+export const RIVAL_BREAK_RULE = 'removing one is a break, not a zero'
+
+/** A rival first seen inside the month the table is headed by — the artboard's
+ *  "New" badge. Before M1 there is no `competitors` row and no `first_seen_at`,
+ *  so nothing is new rather than everything being new. */
+export function isNewRival(row: RivalRow, month: string): boolean {
+  return row.trackedSince != null && row.trackedSince.slice(0, 7) === month.slice(0, 7)
+}
+
+/**
+ * The note under the rivals table: which comparisons this month refuses, and
+ * why.
+ *
+ * NOT DECORATION AND NOT A GUESS. A rival that arrived mid-month has been
+ * tracked for part of it, so a comparison involving them is `refused` with
+ * reason `tracking_change` (lib/reading/verdicts.ts) — the reading layer
+ * already models exactly this, and Settings is where the reader can see the
+ * cause of it. One sentence, naming the rivals and the month.
+ */
+export function rivalRefusalNote(rows: readonly RivalRow[], month: string): string | null {
+  const fresh = rows.filter((r) => isNewRival(r, month))
+  if (fresh.length === 0) return null
+  const names = fresh.map((r) => r.name)
+  const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+  return `${who} ${names.length === 1 ? 'was' : 'were'} added this month, so comparisons involving ${names.length === 1 ? 'it' : 'them'} are refused for ${monthName(month)}.`
 }

@@ -1,7 +1,8 @@
+import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { PageFrame, PageBar } from '@/components/shell/page-grid'
-import { PaneHeader, PaneBody, RailGroup, RailLink } from '@/components/shell/master-list'
 import { SETTINGS_SUBPAGES, type RailCounts, type SettingsSection } from '@/lib/settings/rail'
+import { cn } from '@/lib/utils'
 
 // The settings area (Phase 1 WP16, design item 29, revision 3): a rail of
 // seven sub-pages and a content pane, shared by everything under
@@ -18,11 +19,41 @@ import { SETTINGS_SUBPAGES, type RailCounts, type SettingsSection } from '@/lib/
 // FactRow is label-left value-right, ConnectionRow is name · what · status.
 // None of them is the elevated `bg-tile shadow-tile` card the reading pages
 // use, and nothing in a sub-page should introduce one.
+//
+// NEITHER IS THE FRAME ITSELF, AS OF THE ARTBOARD PORT (Block D wave 2,
+// E-settings). The rail and the content pane were each an elevated
+// `bg-tile shadow-tile` card with a `PaneHeader` eyebrow, and that spent the
+// system's two nesting levels — tile, then flat inner block — on the furniture,
+// leaving every `SettingsCard` on a third and every field on a fourth. The
+// artboard draws a BARE 224px nav on white beside a flat column: no card, no
+// eyebrow over the rail, 40px rail items at 13.5px, and a sub-page header that
+// is a 15px/600 `h2` with a mono meta beside it and one sentence of rule under
+// it. That header is deliberately NOT `PaneHeader`: `PaneHeader`'s 10.5px
+// uppercase eyebrow is what the artboard uses for a SECTION head inside the
+// page (components/settings/chrome.tsx SectionHead), and one component cannot
+// hold both type scales without one of them being wrong.
+//
+// NINE ROUTES SHARE THIS FILE AND EIGHT OF THEM WERE NOT IN THE PORT'S SHOTS
+// (C6). The seven sub-pages plus Team and Billing all pass the same five props
+// — active, title, context, contentTitle, contentMeta — and nothing else, so
+// the new ones (contentRule, counts, railFooter) are additive for them and the
+// header and pane changes below are what actually reaches them: a 15px h2
+// where a PaneHeader eyebrow was, and flat white where two elevated cards
+// were. That is the artboard's settings area, applied to the area rather than
+// to one page of it, which is the point; the test file renders that exact prop
+// shape, because none of the eight can be rendered in the static tier (each
+// needs a session and a read). E-record re-ports /dashboard/settings/record
+// against this same file in this wave.
+//
+// The pane no longer scrolls inside a fixed height either. The artboard's
+// Tracking page is 2,460px tall and the shell's <main> already scrolls; an
+// inner scroller here meant the rail scrolled away from its own save-state
+// strip and the page had two scrollbars.
 
 export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, children, controls, counts,
+  active, title, context, contentTitle, contentMeta, contentRule, children, controls, counts, railFooter,
 }: {
   /** Which rail entry is lit. `null` lights none — the parked Initiatives
    *  page is inside this frame and is not one of the seven, and lighting
@@ -32,31 +63,63 @@ export function SettingsFrame({
   context?: ReactNode
   contentTitle?: ReactNode
   contentMeta?: ReactNode
+  /** The one sentence under the sub-page title: what this page is for, and
+   *  what changing it costs. */
+  contentRule?: ReactNode
   controls?: ReactNode
   /** Rail counts, where the page that drew the rail happens to know them. A
    *  key that is absent prints nothing rather than a zero. */
   counts?: RailCounts
+  /** Under the rail: the save-state strip, on the pages that have one. */
+  railFooter?: ReactNode
   children: ReactNode
 }) {
   return (
     <PageFrame className="min-h-0 flex-1">
       <PageBar title={title} context={context}>{controls}</PageBar>
-      <div className="flex min-h-0 flex-col gap-3 md:h-[calc(100dvh_-_6.75rem)] md:flex-none md:flex-row">
-        <section className="flex shrink-0 flex-col overflow-hidden rounded-lg bg-tile shadow-tile md:w-[220px]">
-          <PaneHeader title="Settings" />
-          <PaneBody>
-            <RailGroup>
-              {SETTINGS_SUBPAGES.map((s) => (
-                <RailLink key={s.key} href={s.href} active={active === s.key} count={counts?.[s.key] ?? null}>
-                  {s.label}
-                </RailLink>
-              ))}
-            </RailGroup>
-          </PaneBody>
-        </section>
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-tile shadow-tile">
-          {contentTitle && <PaneHeader title={contentTitle} meta={contentMeta} />}
-          <PaneBody className="px-5 py-4">{children}</PaneBody>
+      <div className="flex min-h-0 flex-col items-start gap-6 md:flex-row md:gap-8">
+        <nav aria-label="Settings" className="flex w-full shrink-0 flex-col gap-0.5 md:w-[224px]">
+          <p className="flex h-[26px] items-center px-3 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground/80">Settings</p>
+          {SETTINGS_SUBPAGES.map((s) => {
+            const count = counts?.[s.key] ?? null
+            return (
+              <Link
+                key={s.key}
+                href={s.href}
+                aria-current={active === s.key ? 'page' : undefined}
+                className={cn(
+                  'flex min-h-10 items-center gap-2 rounded-[4px] px-3 text-[13.5px] transition-colors',
+                  active === s.key
+                    ? 'bg-inner font-semibold text-foreground'
+                    : 'text-secondary-foreground hover:bg-inner hover:text-foreground',
+                )}
+              >
+                <span className="min-w-0 flex-1 truncate">{s.label}</span>
+                {count != null && (
+                  <span
+                    className="shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground"
+                    aria-label={`${count.value} ${count.unit}`}
+                    title={`${count.value} ${count.unit}`}
+                  >
+                    {count.value}
+                  </span>
+                )}
+              </Link>
+            )
+          })}
+          {railFooter && <div className="mt-4">{railFooter}</div>}
+        </nav>
+        <section className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
+          {contentTitle && (
+            <header className="flex flex-col gap-1 pb-4">
+              <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <h2 className="shrink-0 text-[15px] font-semibold">{contentTitle}</h2>
+                {contentMeta && <span className="min-w-0 font-mono text-[11px] text-muted-foreground">{contentMeta}</span>}
+              </div>
+              {contentRule && <p className="text-[12.5px] text-muted-foreground">{contentRule}</p>}
+            </header>
+          )}
+          {children}
         </section>
       </div>
     </PageFrame>

@@ -18,7 +18,7 @@ export const SELECTABLE_PLATFORMS = PLATFORMS.filter((p) => p !== 'reddit')
 // carry it) that this list deliberately excludes: pausing is an operator lever.
 // Because the select could not represent it, the form rendered 'paused' as
 // 'weekly' and the next save silently re-armed the scheduler on a tenant that
-// was meant to be quiet — see settings-form.tsx and the T0-7 guard in the
+// was meant to be quiet — see the cadence section and the T0-7 guard in the
 // action, which refuses to move a paused tenant rather than rewriting it.
 export const PERIODS = ['weekly', 'monthly'] as const
 /** Every value the pipeline understands, including operator-only ones. */
@@ -28,3 +28,25 @@ export const DAYS = [
 ] as const
 
 export type Platform = (typeof PLATFORMS)[number]
+
+/**
+ * The marker the rivals table posts beside its names: "this POST carried the
+ * rival list, and what it carried is the whole of it".
+ *
+ * Now that the table IS the list, ZERO rivals is a state a reader reaches by
+ * taking the last one off, and the section's own empty state presents it as
+ * legal — so the save may not refuse it. But "zero names" and "this form had no
+ * rivals section" arrive as the same absent field, and reading the second as
+ * the first would let a cached page or a hand-made POST erase a tracked list
+ * nobody touched. The marker tells them apart: present, the list is written as
+ * posted; absent, `competitor_names` is not written at all.
+ *
+ * Here rather than in `actions.ts` because a 'use server' module may export
+ * nothing but async functions.
+ */
+export const RIVALS_PRESENT = 'competitor_names_present'
+
+/** The field the form posts once per pending edit, so the one save row can say
+ *  what it wrote rather than what a third of it wrote. Read against
+ *  `TRACKING_FIELDS` (lib/settings/connections.ts) and never echoed raw. */
+export const SAVED_FIELDS = 'saved_fields'
