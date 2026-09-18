@@ -5,6 +5,8 @@ import {
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
+import { refusals, refusedSentence } from '@/lib/reading/record'
+import type { Verdict } from '@/lib/reading/verdicts'
 import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
 
@@ -20,6 +22,12 @@ import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
 // the reading a client meets first.
 
 const NOW = '2026-09-18T09:00:00.000Z'
+
+/** The verdicts the ledger's own rows produced — the same list the loader
+ *  hands the record, so the fixture's method note cannot say something the
+ *  table beside it disproves. */
+const ledgerVerdicts = (rows: readonly AdviceRow[]): Verdict[] =>
+  rows.map((r) => r.afterwards.verdict).filter((v): v is Verdict => v != null)
 
 export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurfaceData {
   const adviceRows: AdviceRow[] = [
@@ -176,8 +184,12 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       highlight: null,
       requestedLine: null,
       total: 64,
-      acted: 1,
-      actedLine: actedLine(1, 64),
+      // TWO, because the table below prints two rows labelled Done. `acted` is
+      // counted over all 64 identities by the loader, so the fixture's number
+      // has to be at least the number of Done rows it draws — "you have acted
+      // on 1 of 64" over a table showing two is an of-N the page disproves.
+      acted: 2,
+      actedLine: actedLine(2, 64),
       repeatLine: repeatLine(adviceRows),
       recorded: true,
       unlock: ADVICE_UNLOCK,
@@ -214,7 +226,13 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
     unlocks: { rows: unlockRows(1) },
     record: {
       line: 'your 3rd monthly reading · 3 updates · 2,359 videos · 27% of what was said on camera was not in English',
-      lines: ['3 updates delivered in this month.', 'Nothing was refused this reading.'],
+      // THE REFUSAL LINE IS READ OFF THE ROWS BESIDE IT, never typed. The full
+      // ledger row's afterwards verdict is `too_little_data` (9 of 104 is under
+      // SHARE_BAND's floor of 10), and the loader feeds exactly those verdicts
+      // to `countRefused` — so a fixture saying "nothing was refused" is the
+      // method note disagreeing with the table above it, in the artefact wave 2
+      // is reviewed in.
+      lines: ['3 updates delivered in this month.', refusedSentence(refusals(ledgerVerdicts(adviceRows)))],
       href: '/dashboard/settings',
     },
     plans: [PLAN_CARD],

@@ -126,7 +126,9 @@ describe('MK2 · the ledger', () => {
 
   it('says how many of the whole ledger have been acted on, and never claims a quarter', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
-    expect(text).toContain('acted on 1 of 64')
+    // TWO, matching the two rows the fixture draws as Done. The count is over
+    // all 64 identities, and it may not be smaller than what the table shows.
+    expect(text).toContain('acted on 2 of 64')
     expect(text).not.toMatch(/quarter/i)
   })
 
@@ -172,6 +174,31 @@ describe('MK2 · the ledger', () => {
   it('counts the rows it did not draw', () => {
     const text = renderText(marketAdvice.render(marketFixture(), 'app', ctx))
     expect(text).toContain('61 newer pieces of advice')
+  })
+})
+
+describe('the handover fixture does not argue with itself', () => {
+  // Rule 6 of the brief makes this fixture wave 2's handover, and wave 2 will
+  // render these blocks side by side from it. Two numbers in it are read off
+  // the rows rather than typed, because both had come to disagree with the
+  // table beside them.
+  it('counts the comparisons its own ledger refused', () => {
+    const data = marketFixture()
+    const drawn = data.advice.rows.map((r) => r.afterwards.verdict).filter((v) => v != null)
+    // One comparison drawn, and it could not be answered: the baseline is
+    // 9 of 104 and SHARE_BAND's floor is 10, so `proportionDelta` reads thin.
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]!.state).toBe('too_little_data')
+    expect(data.record.lines.join(' ')).toContain('1 comparison was refused')
+    expect(data.record.lines.join(' ')).not.toContain('Nothing was refused')
+  })
+
+  it('never says fewer have been acted on than the table shows as Done', () => {
+    const data = marketFixture()
+    const done = data.advice.rows.filter((r) => r.statusLabel === 'Done').length
+    expect(done).toBe(2)
+    expect(data.advice.acted).toBeGreaterThanOrEqual(done)
+    expect(data.advice.actedLine).toContain('2 of 64')
   })
 })
 
