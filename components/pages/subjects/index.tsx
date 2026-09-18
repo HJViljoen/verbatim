@@ -70,16 +70,19 @@ const LAYOUT: Record<string, { col: number; row: number }> = {
 }
 
 /** The mock's own minimum heights, so a tile spreads to the shape it was drawn
- *  at instead of collapsing onto its shortest reading. */
+ *  at instead of collapsing onto its shortest reading.
+ *
+ *  `lg:`, NOT `xl:` — they apply wherever the rail-and-column composition
+ *  does, and that is 1024 up (see the grid below). */
 const MIN_H: Record<string, string> = {
-  'subjects.list': 'xl:min-h-[380px]',
-  'subjects.ownposts': 'xl:min-h-[265px]',
-  'subjects.sayhear': 'xl:min-h-[183px]',
-  'subjects.subject': 'xl:min-h-[216px]',
-  'subjects.line': 'xl:min-h-[340px]',
-  'subjects.kinds': 'xl:min-h-[280px]',
-  'subjects.unanswered': 'xl:min-h-[280px]',
-  'subjects.voices': 'xl:min-h-[300px]',
+  'subjects.list': 'lg:min-h-[380px]',
+  'subjects.ownposts': 'lg:min-h-[265px]',
+  'subjects.sayhear': 'lg:min-h-[183px]',
+  'subjects.subject': 'lg:min-h-[216px]',
+  'subjects.line': 'lg:min-h-[340px]',
+  'subjects.kinds': 'lg:min-h-[280px]',
+  'subjects.unanswered': 'lg:min-h-[280px]',
+  'subjects.voices': 'lg:min-h-[300px]',
 }
 
 /**
@@ -224,7 +227,15 @@ export function SubjectsPage({
 
         {data.selected ? (
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start">
+          {/* THE RAIL STARTS AT 1024, NOT AT 1280. The composition was `xl:`
+              throughout, so at 1152 — an ordinary laptop width — and at 1024,
+              which is the standard gate's second width, the whole page was one
+              stacked column of full-width tiles and the rail-plus-detail idea
+              was simply gone. A 240px rail leaves ~740px of main column at
+              1024, which is more than the chart's own 880-unit viewBox needs.
+              The kind mix / questions PAIR stays `xl:`: at 1024 the two halves
+              would be ~370px each, and three rows of bars do not read at 370. */}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[240px_minmax(0,1fr)] lg:items-start">
             <div className="flex flex-col gap-4">
               {tile(subjectsList)}
               {tile(subjectsOwnPosts)}
