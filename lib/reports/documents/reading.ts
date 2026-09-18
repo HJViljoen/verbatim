@@ -5,6 +5,7 @@ import { freezeBoundary } from '../../reading/monthly'
 import type { HorizonWindow } from '../../reading/horizon'
 import type { MonthStatus, PlatformMix } from '../../reading/types'
 import type { FigureTable as ReadingFigures, Verdict } from '../../reading/verdicts'
+import type { Gap } from '../../reading/gap'
 import { proseFigures } from '../../prose/figures'
 import type { FigureTable } from '../types'
 import type { CoverageRecord } from '../../reading/record'
@@ -61,6 +62,23 @@ export interface BriefReading {
   figures: FigureTable
   /** Every banded comparison the blocks drew. */
   verdicts: Verdict[]
+  /**
+   * Every two-audience gap the blocks drew (D1) — what `lead.fig1` and the
+   * monthly's headline are written from.
+   *
+   * A SECOND LIST BESIDE `verdicts`, NOT A MEMBER OF IT. A `Verdict` is a claim
+   * that something MOVED and every reader of that list treats it as one —
+   * `countedLines`, `confidenceOf`, `countRefused` and the cover's own prompt
+   * all argue from "did it move". A gap is a claim that two audiences DIFFER in
+   * one window; dropping it into `verdicts` would have it counted as a movement
+   * comparison by four callers that never asked for one.
+   *
+   * The figure tokens a document may name come from `gapFigures(gap, prefix)`,
+   * called by the surface that prints it — deliberately not merged into
+   * `measured` here, because a token's prefix belongs to the sentence that
+   * names it and this module holds no sentence.
+   */
+  gaps: Gap[]
   denominators: BriefDenominator[]
   platformMix: PlatformMix
   /** The reading layer's own caveats, said once (collapsed upstream). */

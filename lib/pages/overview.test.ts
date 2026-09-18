@@ -4,6 +4,7 @@ import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../read
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Move, Subject } from '../subjects/types'
 import { actedTally } from '../reading/moves'
+import { gapLine, type Gap } from '../reading/gap'
 import { cardFixture, moveReadingFixture } from '../../components/pages/overview/fixture'
 import { buildAdviceRows } from './market-surface'
 import {
@@ -488,6 +489,67 @@ describe('buildSubjects', () => {
     })
     expect(b.rows[0].category.verdict).toBeNull()
     expect(b.rows[0].direction).toBeNull()
+  })
+
+  // ---- D1 · the two-audience gap ----------------------------------------------
+
+  const gapMonths = [
+    { month: '2026-08-01', audience: CLIENT_AUDIENCE, subject_id: 's1', videos: 23, comments: 0 },
+    { month: '2026-08-01', audience: rivalKey('Freitag'), subject_id: 's1', videos: 60, comments: 0 },
+    { month: '2026-09-01', audience: CLIENT_AUDIENCE, subject_id: 's1', videos: 26, comments: 0 },
+    { month: '2026-09-01', audience: rivalKey('Freitag'), subject_id: 's1', videos: 62, comments: 0 },
+  ]
+  const gapAudiences = () => {
+    const m = new Map(perAudience)
+    m.set(`2026-09-01|${rivalKey('Freitag')}`, 142)
+    m.set(`2026-08-01|${rivalKey('Freitag')}`, 140)
+    return m
+  }
+  const withGap = (over: Partial<Parameters<typeof buildSubjects>[0]> = {}) =>
+    buildSubjects({
+      subjects: [subject('s1', 'Durability')], months: gapMonths, denominators: new Map(),
+      perAudience: gapAudiences(), axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01',
+      leadRival: 'Freitag', atLastMonth: null, thin: false, ...over,
+    })
+
+  it('takes the gap off the same rows the two levels come from, so it cannot disagree with them', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.a.value).toEqual({ k: 26, n: 84 })
+    expect(gap.b.value).toEqual({ k: 62, n: 142 })
+    expect(gap.a.pct).toBe(withGap().rows[0].you.pct)
+    expect(gap.b.pct).toBe(withGap().rows[0].rival?.pct)
+  })
+
+  it('refuses the difference on Sealand’s own numbers — 84 videos is under the floor', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.state).toBe('too_little_data')
+    expect(gapLine(gap)).toContain('too few to compare')
+  })
+
+  it('prints the earlier gap as LAST MONTH, not as the month that tells the best story', () => {
+    const gap = withGap().gaps.s1 as Gap
+    expect(gap.basis?.window.from).toBe('2026-08-01')
+    expect(gap.basis?.window.to).toBe('2026-09-01')
+  })
+
+  it('claims no direction — no reader’s flag is true in wave 1', () => {
+    expect((withGap().gaps.s1 as Gap).direction).toBeNull()
+  })
+
+  it('has no gap where no rival is tracked', () => {
+    expect(withGap({ leadRival: null }).gaps.s1).toBeNull()
+  })
+
+  it('withholds the gap in a thin month, as it withholds the verdicts', () => {
+    expect(withGap({ thin: true }).gaps.s1).toBeNull()
+  })
+
+  it('carries no gaps at all where the reading is not recorded', () => {
+    const b = buildSubjects({
+      subjects: null, months: null, denominators: new Map(), perAudience,
+      axis: AXIS, month: '2026-09-01', prevMonth: '2026-08-01', leadRival: 'Freitag', atLastMonth: null, thin: false,
+    })
+    expect(b.gaps).toEqual({})
   })
 })
 

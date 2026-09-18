@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
-import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
+import { assertCopyContract, copyViolations, directionRe } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { QUARTERLY_BLOCK_KEYS, QUARTERLY_CLAIMS_CAVEAT, QUARTERLY_RULE, quarterGateSentence } from '@/lib/reports/quarterly'
 import { CLAIMS_CAVEAT } from '@/lib/pages/market-surface'
 import { unsettledItems } from '@/lib/pages/quarterly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { gapBasisLine, gapLine } from '@/lib/reading/gap'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
 import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
@@ -466,5 +467,58 @@ describe('the model’s words are marked and the product’s are not', () => {
     for (const mode of MODES) {
       expect(copyViolations(render(QUARTERLY_BLOCKS['quarterly.moves'].render(laden, mode, ctx)))).toEqual([])
     }
+  })
+})
+
+// ---- D1 · the quarter gap on page 3 -------------------------------------------
+
+describe('the two-audience gap the quarter can actually carry', () => {
+  const row = () => quarterlyFixture().subjects.rows.find((r) => r.id === 's1')!
+
+  it('is drawn between the two columns the table prints, at the quarter’s own n', () => {
+    const gap = row().gap!
+    expect(gap.window.kind).toBe('quarter')
+    expect(gap.a.audience).toBe(CLIENT_AUDIENCE)
+    expect(gap.b.audience).toBe(INDUSTRY_AUDIENCE)
+    // The same counts the two quarter columns are drawn from — one reading of
+    // one pair of numbers, never a second measurement.
+    expect(gap.a.value).toEqual(row().youQuarter!.value)
+    expect(gap.b.value).toEqual(row().categoryQuarter!.value)
+  })
+
+  it('clears its band where a month could not — which is the honest scale for this claim', () => {
+    const gap = row().gap!
+    expect(gap.state).toBe('apart')
+    expect(gapLine(gap)).toBe('you 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)')
+  })
+
+  it('prints the prior quarter as its own dated reading with its own band, never as "narrowed"', () => {
+    const line = gapBasisLine(row().gap!) as string
+    expect(line).toMatch(/^7\.8 points apart in the quarter from April \(band /)
+    expect(line).not.toContain('narrowed')
+    expect(line.match(directionRe())).toBeNull()
+  })
+
+  it('names its own quarter, because the row’s body prints the MONTH’s levels', () => {
+    const data = quarterlyFixture()
+    const body = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'app', ctx))
+    // The row prints your month beside the category's month …
+    expect(body).toContain('31% 26 of 84')
+    // … and the gap is of the quarter, so the line wave 2 binds says so.
+    const labelled = gapLine(row().gap!, { period: true })
+    expect(labelled).toBe(
+      'The quarter from July 2026 · you 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)',
+    )
+    expect(labelled.match(directionRe())).toBeNull()
+  })
+
+  it('claims no direction — no reader’s flag is true in wave 1', () => {
+    expect(row().gap!.direction).toBeNull()
+  })
+
+  it('draws no gap where a column could not be drawn, and none at all with M3 unapplied', () => {
+    const price = quarterlyFixture().subjects.rows.find((r) => r.id === 's2')
+    expect(price?.gap ?? null).toBeNull()
+    expect(formingFixture().subjects.rows.every((r) => r.gap == null)).toBe(true)
   })
 })

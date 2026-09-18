@@ -27,6 +27,7 @@ import {
   type AttentionRow,
 } from '../reading/attention'
 import { directionWord, monthChange, QUARTER_UNLOCKS_AT, thinMonth, type Direction, type SeriesPoint } from '../reading/bands'
+import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { horizonWindow, parseHorizon, sinceStart, type Horizon, type HorizonWindow } from '../reading/horizon'
 import { kindShares, redditRead, kindChange, type KindShare, type RedditRead } from '../reading/kinds'
 import { freezeBoundary, freezeStateFor, isMissingMonthlyReading, isMissingMonthTable } from '../reading/monthly'
@@ -176,6 +177,20 @@ export interface SubjectsBlock {
   categoryLabel: string
   /** The line under the table about which column carries the month. */
   note: string | null
+  /**
+   * The two-audience gap per row — you against the lead rival, banded — keyed
+   * by `SubjectRow.id` (D1). Null for a row with no rival side, and `{}` where
+   * the block is not `ready`.
+   *
+   * IT IS NOT A CHANGE AND IT IS NOT A DIRECTION. `Gap` carries both levels'
+   * k and n, the difference, the band beside it and one of four words
+   * (`apart` · `level` · `too few to compare` · `comparison refused`);
+   * `Gap.direction` is null on every surface in wave 1, because only
+   * `gapDirection` may fill it and no reader's flag is true. The mock's
+   * "narrowed from 19 in June" is `Gap.basis` — a second dated reading with
+   * its own band, printed beside the first.
+   */
+  gaps: Record<string, Gap | null>
 }
 
 export interface Mover {
@@ -2294,7 +2309,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
   const categoryLabel = audienceLabel(INDUSTRY_AUDIENCE)
   const rivalLabel = input.leadRival
   if (input.subjects == null || input.months == null) {
-    return { state: 'not_recorded', rows: [], candidates: [], rivalLabel, categoryLabel, note: null }
+    return { state: 'not_recorded', rows: [], candidates: [], rivalLabel, categoryLabel, note: null, gaps: {} }
   }
   const active = input.subjects.filter((s) => s.status === 'active')
   const proposed = input.subjects.filter((s) => s.status === 'proposed')
@@ -2316,6 +2331,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
       rivalLabel,
       categoryLabel,
       note: candidateLine(candidates),
+      gaps: {},
     }
   }
 
@@ -2342,6 +2358,58 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     const n = input.perAudience.get(`${month}|${audience}`) ?? null
     const k = n == null ? null : kOf(subjectId, audience, month)
     return { k, n, pct: pctOf(k, n), verdict: null, observed: n != null && k != null }
+  }
+
+  // THE TWO-AUDIENCE GAP (D1). Both sides come off the SAME month rows the
+  // levels come from and carry the share the row PRINTS, so the difference can
+  // never disagree with the two figures beside it — which is the whole reason
+  // `gapBetween` takes a side's `pct` rather than recomputing one.
+  //
+  // THE EARLIER READING IS LAST MONTH'S, NOT THE MOCK'S JUNE. "narrowed from
+  // 19 in June" reaches past two months nobody looked at to the month that
+  // makes the sentence best; the page's basis is the same one every other
+  // comparison on it uses, so a reader comparing the gap's basis with the
+  // column beside it is comparing two readings of one pair of months.
+  //
+  // NO REFUSAL IS RAISED HERE. A gap is refused across a rename or a tracking
+  // change on either side, and this loader holds neither record — `leadRival`
+  // arrives as a bare name. The refusal is set where the record IS in hand
+  // (the Subjects pane has `TrackedRival.retiredAt`; the quarterly page has
+  // the rival rows), and `gapBetween` is the one place it is applied.
+  const gapSide = (audience: string, label: string, reading: SideReading): GapSide => ({
+    audience,
+    label,
+    value: { k: reading.k ?? 0, n: reading.n ?? 0 },
+    pct: reading.pct,
+    observed: reading.observed,
+  })
+  const gapFor = (subjectId: string, label: string, you: SideReading, rival: SideReading | null): Gap | null => {
+    // A THIN MONTH WITHHOLDS THE GAP AS IT WITHHOLDS THE VERDICTS. The month
+    // carried too little conversation for its shares to be worth reading; a
+    // difference of two of them is worth less, not more.
+    if (input.thin || !rival || !rivalAudience || !rivalLabel) return null
+    const basisMonth = input.prevMonth || null
+    return gapBetween({
+      objectKind: 'subject',
+      objectId: subjectId,
+      objectLabel: label,
+      a: gapSide(CLIENT_AUDIENCE, 'you', you),
+      b: gapSide(rivalAudience, rivalLabel, rival),
+      window: { kind: 'month', from: monthStartOf(input.month), to: nextMonth(input.month) },
+      ...(basisMonth
+        ? {
+            basis: {
+              a: gapSide(CLIENT_AUDIENCE, 'you', side(subjectId, CLIENT_AUDIENCE, basisMonth)),
+              b: gapSide(rivalAudience, rivalLabel, side(subjectId, rivalAudience, basisMonth)),
+              window: { kind: 'month', from: monthStartOf(basisMonth), to: nextMonth(basisMonth) },
+            },
+          }
+        : {}),
+      // A subject's membership is not a clustering artefact, so its months are
+      // comparable across a boundary a theme's are not — the same declaration
+      // `point()` makes below (lib/subjects/read.ts).
+      regime: 'n/a',
+    })
   }
 
   const rows: SubjectRow[] = active.map((s) => {
@@ -2385,6 +2453,9 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     }
   })
 
+  const gaps: Record<string, Gap | null> = {}
+  for (const row of rows) gaps[row.id] = gapFor(row.id, row.label, row.you, row.rival)
+
   return {
     state: 'ready',
     rows,
@@ -2392,6 +2463,7 @@ export function buildSubjects(input: SubjectsInput): SubjectsBlock {
     rivalLabel,
     categoryLabel,
     note: subjectsNote(rows),
+    gaps,
   }
 }
 

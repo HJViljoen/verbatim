@@ -14,12 +14,13 @@ import { horizonWindow, HORIZON_LABEL, parseHorizon, sinceStart, type Horizon } 
 import { kindShares, redditRead, type KindShare, type RedditRead } from '../reading/kinds'
 import { isMissingKindMoodAttention } from '../reading/attention'
 import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
-import { monthStartOf } from '../reading/month-key'
+import { monthStartOf, nextMonth } from '../reading/month-key'
+import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
-import type { FigureTable, Verdict } from '../reading/verdicts'
+import type { FigureTable, RefusedReason, Verdict } from '../reading/verdicts'
 import {
   isMissingSubjects,
   subjectCalibration,
@@ -277,6 +278,18 @@ export interface SubjectPane {
   move: { id: string; title: string; declaredAt: string; status: Move['status'] } | null
   /** The videos behind YOUR figure, as a link and a count. */
   behind: { videos: number; href: string } | null
+  /**
+   * You against the lead rival on this subject, as a banded difference (D1) —
+   * the field `subjects.detail.gapline` binds. Null where no rival is tracked,
+   * where the month is thin, or where the reading is not recorded.
+   *
+   * The mock writes "gap 13 points, narrowed from 19 in June". `Gap` carries
+   * the difference, its band and one of four words; `Gap.basis` is the earlier
+   * reading printed beside it with its own band; and `Gap.direction` — the
+   * only place "narrowed" could ever come from — is null, because it is filled
+   * by `gapDirection` alone and no reader's flag is true.
+   */
+  gap: Gap | null
   /** The sentence above the axis about which lines carry an n. */
   axisNote: string | null
   /** Said where the numerator table is not applied here. */
@@ -955,6 +968,39 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
 
     const move = (moveRows ?? []).find((m) => m.subject_id === subject.id) ?? null
     const own = sides.find((s) => s.kind === 'you') ?? null
+
+    // D1 · the gap. The lead rival is the one the rail names; a rival that has
+    // been retired is a TRACKING CHANGE, so the difference is refused and the
+    // two levels print alone — the frozen months still render, which is why
+    // `retireRival` never deletes.
+    const leadSide = leadRival ? sides.find((s) => s.audience === rivalKey(leadRival.name)) ?? null : null
+    const basisSide = (audience: string, label: string): GapSide => {
+      const series = seriesFor(subject.id, audience)
+      const point = series ? pointsByMonth(series).get(prevMonth) ?? null : null
+      const n = perAudience.get(`${prevMonth}|${audience}`) ?? null
+      const k = point?.k ?? null
+      return {
+        audience,
+        label,
+        value: { k: k ?? 0, n: n ?? 0 },
+        pct: pctOf(k, n),
+        observed: n != null && k != null,
+      }
+    }
+    const gap = paneGap({
+      subject: { id: subject.id, name: subject.name },
+      a: own ? gapSideOf(own) : null,
+      b: leadSide ? gapSideOf(leadSide) : null,
+      basis:
+        own && leadSide
+          ? { a: basisSide(own.audience, own.label), b: basisSide(leadSide.audience, leadSide.label) }
+          : null,
+      month,
+      prevMonth,
+      ...(leadRival?.retiredAt ? { refused: 'tracking_change' as const } : {}),
+      thin,
+    })
+
     selected = {
       id: subject.id,
       name: subject.name,
@@ -976,6 +1022,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       behind: own && own.k != null && own.k > 0
         ? { videos: own.k, href: `/dashboard/videos?subject=${encodeURIComponent(subject.id)}` }
         : null,
+      gap,
       axisNote: axisNote(sides, FLOOR_N),
       notRecorded: subjectSet?.numeratorSubstrate === 'missing'
         ? 'This subject has no monthly reading recorded for this workspace yet.'
@@ -1007,6 +1054,72 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       lines: recordLines(recordInputs),
     },
   }
+}
+
+// ---- D1 · the two-audience gap -------------------------------------------------
+
+/** A pane side as a gap side. The share is the one the PANE PRINTS, so the
+ *  difference and the two figures beside it are one reading of one pair of
+ *  numbers (lib/reading/gap.ts `GapSide.pct`). */
+export function gapSideOf(side: SubjectSide): GapSide {
+  return {
+    audience: side.audience,
+    label: side.label,
+    value: { k: side.k ?? 0, n: side.n ?? 0 },
+    pct: side.pct,
+    observed: side.observed,
+  }
+}
+
+export interface PaneGapInput {
+  subject: { id: string; name: string }
+  /** Your side and the lead rival's, this month. Either may be absent. */
+  a: GapSide | null
+  b: GapSide | null
+  /** The same pair a month earlier — the mock's "from 19 in June", dated by
+   *  the month the page's other comparisons use. */
+  basis: { a: GapSide; b: GapSide } | null
+  month: string
+  prevMonth: string
+  /** A rename or a tracking change on either side. A retired rival is a
+   *  tracking change: the set we track moved inside the window, so the
+   *  difference is partly a difference in our own bookkeeping. */
+  refused?: RefusedReason
+  thin: boolean
+}
+
+/**
+ * You against the lead rival on this subject, banded — the one place this page
+ * builds a gap.
+ *
+ * A THIN MONTH WITHHOLDS IT, as it withholds every verdict on the page: the
+ * month carried too little conversation for its shares to be worth reading,
+ * and a difference of two of them is worth less rather than more.
+ */
+export function paneGap(input: PaneGapInput): Gap | null {
+  if (input.thin || !input.a || !input.b) return null
+  return gapBetween({
+    objectKind: 'subject',
+    objectId: input.subject.id,
+    objectLabel: input.subject.name,
+    a: input.a,
+    b: input.b,
+    window: { kind: 'month', from: monthStartOf(input.month), to: nextMonth(input.month) },
+    ...(input.basis
+      ? {
+          basis: {
+            a: input.basis.a,
+            b: input.basis.b,
+            window: { kind: 'month', from: monthStartOf(input.prevMonth), to: nextMonth(input.prevMonth) },
+          },
+        }
+      : {}),
+    ...(input.refused ? { refused: input.refused } : {}),
+    // A subject's membership is not a clustering artefact, so its months are
+    // comparable across a boundary a theme's are not — the same declaration
+    // `buildSides` makes on its own points.
+    regime: 'n/a',
+  })
 }
 
 /** The denominator floor a side is called hollow against: the band's own, so

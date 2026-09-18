@@ -157,6 +157,7 @@ export function formingMonthlyFixture(over: Partial<MonthlyData> = {}): MonthlyD
       state: 'not_recorded',
       rows: [],
       candidates: [],
+      gaps: {},
       rivalLabel: null,
       categoryLabel: 'The category',
       note: 'Your subjects are not recorded for this workspace yet.',

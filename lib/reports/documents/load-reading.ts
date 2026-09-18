@@ -18,6 +18,7 @@ import { DEFAULT_HORIZON } from '../../reading/horizon'
 import type { Scope } from '../../renderables/types'
 import type { Block } from '../../blocks/types'
 import { blockReading, denominatorsOf, mergeReadings, monthAndYear, type BriefReading } from './reading'
+import type { Gap } from '../../reading/gap'
 import { briefMap, missingInputs, missingSentence, sectionsOf, surfacesOf, type BriefEntry, type BriefSurface, type MissingInput, type ReadinessLike } from './sections'
 import type { DocBriefSection, DocumentRole } from './types'
 
@@ -146,6 +147,11 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     measured: merged.measured,
     figures: merged.figures,
     verdicts: merged.verdicts,
+    // D1 · the two-audience gaps, off Overview's own subject rows. The brief
+    // borrows the page's reading rather than taking a second one, which is the
+    // rule this module exists to keep: a brief's numbers are the numbers the
+    // reader saw.
+    gaps: Object.values(overview.subjects.gaps).filter((g): g is Gap => g != null),
     denominators: denominatorsOf(record?.coverage ?? null, audienceInLabel),
     platformMix: record?.coverage ? totalPlatformMix(record.coverage) : {},
     notes: overview.notes.map((n) => n.text).filter(Boolean),

@@ -12,9 +12,12 @@ import {
   unansweredLead,
   periodPhrase,
   buildSides,
+  gapSideOf,
+  paneGap,
   type StoredKindRow,
   type SubjectsData,
 } from '@/lib/pages/subjects'
+import type { RefusedReason } from '@/lib/reading/verdicts'
 import type { Subject } from '@/lib/subjects/types'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
@@ -99,8 +102,39 @@ function sidesAndSeries() {
   return { sides, series, per, kindRows }
 }
 
+// D1 · the gap, built rather than typed. On the mock's own numbers — 26 of
+// your 84 videos against 62 of Freitag's 142 — it reads "too few to compare":
+// 84 is under the 100-video floor, which is the same refusal the mock prints
+// one cell away in its own change column. Both levels, both denominators and
+// the earlier month still print.
+//
+// `refused` is what `retiredRivalFixture` passes, so the fourth state of the
+// gapline — the one a wave-2 port has a branch for — is a real artefact rather
+// than a branch nothing exercises.
+function paneGapFor(sides: ReturnType<typeof sidesAndSeries>['sides'], refused?: RefusedReason) {
+  const gapYou = sides.find((s) => s.kind === 'you') ?? null
+  const gapRival = sides.find((s) => s.kind === 'rival') ?? null
+  return paneGap({
+    subject: { id: 's1', name: 'Durability' },
+    a: gapYou ? gapSideOf(gapYou) : null,
+    b: gapRival ? gapSideOf(gapRival) : null,
+    basis:
+      gapYou && gapRival
+        ? {
+            a: { audience: gapYou.audience, label: gapYou.label, value: { k: 26, n: 84 }, pct: 31, observed: true },
+            b: { audience: gapRival.audience, label: gapRival.label, value: { k: 62, n: 142 }, pct: 43.7, observed: true },
+          }
+        : null,
+    month: MONTH,
+    prevMonth: '2026-08-01',
+    ...(refused ? { refused } : {}),
+    thin: false,
+  })
+}
+
 export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const { sides, series } = sidesAndSeries()
+  const gap = paneGapFor(sides)
   const rows = [
     { id: 's1', name: 'Durability', pct: 31, k: 26 },
     { id: 's2', name: 'Recycled materials', pct: 46, k: 39 },
@@ -179,6 +213,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       },
       move: null,
       behind: { videos: 26, href: '/dashboard/videos?subject=s1' },
+      gap,
       axisNote: axisNote(sides, 100),
       notRecorded: null,
     },
@@ -245,4 +280,23 @@ export function fixtureKindShares() {
     per.get(`${MONTH}|${INDUSTRY_AUDIENCE}`) ?? 0,
   )
   return { shares, reddit: redditRead(shares) }
+}
+
+/**
+ * The same pane, with the lead rival RETIRED — the fourth state of the gapline
+ * (D1), and the one `refusedFixture()` cannot carry because its pane is null.
+ *
+ * A retired rival is a tracking change: the set we track moved inside the
+ * window, so a difference across it is partly a difference in our own
+ * bookkeeping. The two levels and both denominators still print — `retireRival`
+ * never deletes, precisely so the frozen months still render — and only the
+ * difference is withheld, as "comparison refused".
+ */
+export function retiredRivalFixture(): SubjectsData {
+  const base = subjectsFixture()
+  const { sides } = sidesAndSeries()
+  return {
+    ...base,
+    selected: base.selected ? { ...base.selected, gap: paneGapFor(sides, 'tracking_change') } : null,
+  }
 }

@@ -17,6 +17,7 @@ import {
 } from '../reading/record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict } from '../reading/verdicts'
+import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
@@ -159,6 +160,34 @@ export interface SubjectQuarterRow {
   /** The quarter columns. `baseline_forming` below six readings. */
   youQuarter: Verdict | null
   categoryQuarter: Verdict | null
+  /**
+   * The two-audience gap over the QUARTER — the field `qr.p3.gapline` binds
+   * (D1). Null where either quarter column could not be drawn.
+   *
+   * IT IS YOU AGAINST THE CATEGORY, NOT AGAINST THE RIVAL, and that is a
+   * deliberate departure from the mock. This page carries no rival side at all
+   * — `buildQuarterVerdicts` restricts a subject's quarter to the two columns
+   * the table prints, on the recorded ground that "a subject's reading under a
+   * single rival's videos is a different question and has its own page" — so a
+   * gap to the rival here would need a read this page does not take, and would
+   * print a difference beside two columns neither of whose numbers it used.
+   * The gap is between the two columns the reader can see.
+   *
+   * IT IS NOT GATED BY THE SIX READINGS. `baseline_forming` says there is no
+   * PRIOR quarter to compare against; a gap is a difference inside one window
+   * and needs no baseline, so it is drawn whenever both sides carry a reading.
+   * The earlier gap (`Gap.basis`) is the prior quarter's pair, and that one
+   * does disappear with the baseline.
+   *
+   * THE PORT MUST PRINT IT AS `gapLine(row.gap, { period: true })`. The row's
+   * own body prints the MONTH's levels ("you 31% of 84 · the category 22% of
+   * 1,388") and this gap is the QUARTER's (30.1% of 249 · 22% of 4,147), so
+   * the bare sentence would put two different "you …% of N" in one row with
+   * nothing to tell them apart. The labelled form names the quarter in front
+   * of its own figures. This is the one surface in the product that needs it,
+   * which is why the option exists and why it is off by default.
+   */
+  gap: Gap | null
 }
 
 export interface SubjectsPage {
@@ -1127,7 +1156,49 @@ function buildSubjects(a: {
   subjectsRead: boolean
 }): SubjectsPage {
   const block = a.overview.subjects
+  const categoryLabel = a.overview.category.label
   const byObject = new Map(a.quarterVerdicts.map((v) => [`${v.objectKind}:${v.objectId}:${v.audience}`, v]))
+
+  // D1 · THE QUARTER GAP, off the two verdicts the two columns are drawn from.
+  // Both sides come from one `WindowReading` — the month bodies minus the month
+  // GROUP BY, never a sum of month rows — so the difference, the two levels and
+  // the band are one reading of one pair of numbers.
+  const gapSide = (v: Verdict, label: string, counted: 'value' | 'baseline'): GapSide | null => {
+    const side = counted === 'value' ? v.value : v.baseline
+    if (!side) return null
+    return { audience: v.audience, label, value: side, pct: null, observed: side.n > 0 }
+  }
+  const quarterGap = (row: { id: string; label: string }, you: Verdict | null, category: Verdict | null): Gap | null => {
+    if (!you || !category) return null
+    const a1 = gapSide(you, 'you', 'value')
+    const b1 = gapSide(category, categoryLabel, 'value')
+    if (!a1 || !b1) return null
+    const a0 = gapSide(you, 'you', 'baseline')
+    const b0 = gapSide(category, categoryLabel, 'baseline')
+    // A refusal on EITHER column refuses the difference: if the product will
+    // not say whether one side moved, it will not say how far apart they are
+    // either, because both refusals are about the same break in the record.
+    // A refused column that recorded no reason draws NO gap rather than a
+    // difference beside it (`inheritRefusal`, lib/reading/gap.ts).
+    const inherited = inheritRefusal([you, category])
+    if (inherited.refused && !inherited.reason) return null
+    const refused = inherited.reason ?? undefined
+    return gapBetween({
+      objectKind: 'subject',
+      objectId: row.id,
+      objectLabel: row.label,
+      a: a1,
+      b: b1,
+      window: you.window,
+      ...(a0 && b0 && you.basis && category.basis
+        ? { basis: { a: a0, b: b0, window: { kind: 'quarter' as const, from: you.basis.from, to: you.basis.to } } }
+        : {}),
+      ...(refused ? { refused } : {}),
+      // A subject's membership is not a clustering artefact.
+      regime: 'n/a',
+    })
+  }
+
   const rows: SubjectQuarterRow[] = block.rows.map((row) => ({
     id: row.id,
     label: row.label,
@@ -1145,6 +1216,11 @@ function buildSubjects(a: {
     // existed, which none did.
     youQuarter: byObject.get(`subject:${row.id}:${CLIENT_AUDIENCE}`) ?? null,
     categoryQuarter: byObject.get(`subject:${row.id}:${a.overview.category.audience}`) ?? null,
+    gap: quarterGap(
+      row,
+      byObject.get(`subject:${row.id}:${CLIENT_AUDIENCE}`) ?? null,
+      byObject.get(`subject:${row.id}:${a.overview.category.audience}`) ?? null,
+    ),
   }))
   const drawn = rows.some((r) => r.youQuarter || r.categoryQuarter)
   return {

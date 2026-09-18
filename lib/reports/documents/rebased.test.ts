@@ -20,6 +20,7 @@ const reading = (over: Partial<BriefReading> = {}): BriefReading => ({
   measured: { category_videos: { value: 388, unit: 'videos', label: 'videos read for the category this month' } },
   figures: { category_videos: { label: 'videos read for the category this month', value: '388', kind: 'count' } },
   verdicts: [],
+  gaps: [],
   denominators: [
     { audience: 'industry-other', label: 'the category', videos: 388, comments: 1406 },
     { audience: 'client', label: 'your own brand', videos: 158, comments: 198 },
