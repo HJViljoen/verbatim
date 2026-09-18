@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { markupText, render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import type { OverviewData } from '@/lib/pages/overview'
 import type { Gap } from '@/lib/reading/gap'
 import { documentSlides } from '@/lib/reports/documents/compose'
@@ -417,6 +418,26 @@ describe('the sheet inside the deck', () => {
     for (const junk of [null, undefined, 'overview', 42, [], {}]) {
       expect(isLeadershipOverview(junk)).toBe(false)
     }
+  })
+
+  // THE FIX-FIRST SWAP, RENDERED. `ld.standing`'s framing promises "your own
+  // share of the month beside every tracked rival" and the section named
+  // `competitive.rivals`, the rival SELECTOR. `sections.test.ts` pins the key;
+  // this asserts the block it now names actually DRAWS on a `layout="single"`
+  // slide with `overflow: hidden`, which no test had seen — the same trap the
+  // sheet's own height budget exists for. Measured through
+  // `lib/render/chromium`: 0px over a 563px body.
+  it('draws the standings table on its own slide, not the rival picker', () => {
+    const standing: DocumentSnapshotData = {
+      ...LEAD,
+      surfaces: { ...LEAD.surfaces, competitive: competitiveFixture() },
+    }
+    const words = markupText(render(<DocumentDeck data={standing} date="18 Sep 2026" />))
+    expect(words).toContain('Where you stand')
+    // The standings block's own denominator line — the measurement the framing
+    // promised — and not the selector's "N of their videos read".
+    expect(words).toContain(competitiveFixture().standings.denominatorLine)
+    expect(words).not.toMatch(/of their videos read/)
   })
 
   // The section's own readiness sentence — "we have not recorded X, and here is
