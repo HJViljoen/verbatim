@@ -37,11 +37,31 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, heading = false, lead, actions, children, className,
 }: {
   title: string
   question?: string
   mode?: RenderMode
+  /**
+   * Set the title as the block's own HEADING rather than as the tile eyebrow —
+   * sans 20px/600 at `-0.01em`, in sentence case (Block D wave 2, additive).
+   *
+   * ONE BLOCK ON A PAGE MAY BE THE PAGE'S SUBJECT, and on the artboards that
+   * block prints its name at heading scale while every other tile prints a
+   * 10.5px uppercase eyebrow. Subjects' detail pane is the first: it is named
+   * for the thing the whole page is about, and at eyebrow scale "DURABILITY"
+   * read as one more tile label instead of as the answer to the rail the reader
+   * just clicked. Default false, so every existing caller is unchanged.
+   */
+  heading?: boolean
+  /** The block's one sentence, under the heading — serif 17px/500 at
+   *  `1.35`/`-0.005em`, the mock's §1 hero lead. Drawn only with `heading`,
+   *  which is why the two are tested together. */
+  lead?: ReactNode
+  /** Controls at the header's right-hand end — the app's buttons. A caller
+   *  passing these on a print or email arm is passing a picture of a button,
+   *  so it is the caller that branches, not this. */
+  actions?: ReactNode
   /** The line along the bottom, LEFT: a link deeper. */
   footer?: ReactNode
   /** The line along the bottom, RIGHT: the artboard's quiet mono note — the
@@ -112,15 +132,33 @@ export function BlockFrame({
   const big = mode === 'print'
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
-      <header className="flex items-baseline justify-between gap-2">
-        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
-        {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+      <header className={cn('flex gap-2', heading ? 'items-center justify-between gap-4' : 'items-baseline justify-between')}>
+        {heading ? (
+          <span className="flex min-w-0 items-baseline gap-2.5">
+            <h2 className="m-0 whitespace-nowrap text-[20px] font-semibold tracking-[-0.01em] text-foreground">{title}</h2>
+            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+          </span>
+        ) : (
+          <>
+            <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
+            {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
+          </>
+        )}
+        {actions ? <span className="flex flex-none items-center gap-2">{actions}</span> : null}
       </header>
       {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
+      {heading && lead ? (
+        <p className="m-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]">{lead}</p>
+      ) : null}
       {children}
       {footer || footerNote ? (
         <footer className="mt-auto flex items-center justify-between gap-2 border-t border-border/70 pt-2 text-[12px] font-medium text-foreground">
-          <span className="min-w-0">{footer}</span>
+          {/* TRUNCATE, AS `Tile`'s OWN FOOTER HAS SINCE THE REDESIGN. The note
+              on the right is `shrink-0`, so with `min-w-0` alone the link on
+              the left broke onto four lines the moment a block had a long
+              basis to state — "Open the content brief →" set one word per
+              line. A footer link is one line or it is not a footer link. */}
+          <span className="min-w-0 truncate">{footer}</span>
           {footerNote ? <span className="shrink-0 font-mono text-[11px] font-normal text-muted-foreground">{footerNote}</span> : null}
         </footer>
       ) : null}

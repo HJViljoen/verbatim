@@ -2,8 +2,8 @@ import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { shortDate, monthName } from '@/lib/format'
 import {
-  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendStates,
-  lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL, valueScale,
+  axisLabels, calendarGeometry, chartId, collapseRules, columnTitle, lastReading, legendMonths,
+  legendStates, lineSegments, monthColumns, spanOf, spreadLabels, STATE_LABEL, valueScale,
   type CalendarBand, type CalendarPoint, type CalendarRule, type CalendarSeries,
 } from '@/lib/charts/calendar'
 
@@ -82,7 +82,7 @@ export function CalendarLine({
   axis, series, rules = [], bands = [], format = (v) => `${v}`,
   width = 880, height = 210, padL = 56, padR = 180,
   zeroBase = true, legend = true, maxLabels = 12,
-  caption, label, id, className,
+  annotate = null, caption, label, id, className,
 }: {
   /** Every month to draw, ascending — `monthAxis(from, to)`. */
   axis: readonly string[]
@@ -100,6 +100,19 @@ export function CalendarLine({
    *  explain. Identity is never colour-alone (MASTER.md). */
   legend?: boolean
   maxLabels?: number
+  /**
+   * A bracket between two series at the newest month, with a word for the
+   * distance — the artboard's "gap 13 pts" (Block D wave 2, D1).
+   *
+   * THE CALLER DECIDES WHETHER THERE IS ONE, AND NOTHING HERE COMPUTES IT. A
+   * difference between two lines is a banded reading with its own floors
+   * (`lib/reading/gap.ts`), and a chart that subtracted two plotted values
+   * would draw a number the product refuses to print one tile above. So this
+   * takes a LABEL and two series names, and a caller with nothing the band
+   * would let it say passes nothing — which on today's corpus is the normal
+   * case, because your own audience is under the 100-video floor.
+   */
+  annotate?: { from: string; to: string; label: string } | null
   /** The line under the chart, in the caller's words — a `MonthLabel.text`
    *  from lib/reading/series.ts, never a sentence invented here. */
   caption?: ReactNode
@@ -163,16 +176,20 @@ export function CalendarLine({
           {series.map((s) => (
             <span key={s.label} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="size-2 rounded-full" style={{ background: s.color }} aria-hidden />
-              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.label}</span> : s.label}
+              {s.labelSlot ? <span data-copy="subject" data-slot={s.labelSlot}>{s.legendLabel ?? s.label}</span> : (s.legendLabel ?? s.label)}
               {s.excludes ? <span className="text-[10.5px]">— {s.excludes}</span> : null}
             </span>
           ))}
-          {states.map((state) => (
-            <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <LegendToken state={state} color={tokenColor} />
-              {STATE_LABEL[state]}
-            </span>
-          ))}
+          {states.map((state) => {
+            const months = legendMonths(series, state)
+            return (
+              <span key={state} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <LegendToken state={state} color={tokenColor} />
+                {STATE_LABEL[state]}
+                {months.length > 0 ? ` (${months.map(shortMonth).join(', ')})` : ''}
+              </span>
+            )
+          })}
         </div>
       )}
 
@@ -254,6 +271,32 @@ export function CalendarLine({
             labelY={labelYs[i]}
           />
         ))}
+
+        {/* The bracket between two lines at the newest month, where the caller
+            has a banded difference it is allowed to name. Dashed and grey —
+            axis furniture, not a series (the same token a dated rule uses). */}
+        {(() => {
+          if (!annotate) return null
+          const iFrom = series.findIndex((s) => s.label === annotate.from)
+          const iTo = series.findIndex((s) => s.label === annotate.to)
+          if (iFrom < 0 || iTo < 0) return null
+          const a = lastReading(series[iFrom].points)
+          const b = lastReading(series[iTo].points)
+          if (a?.value == null || b?.value == null || a.month !== b.month) return null
+          const x = g.x(a.month)
+          if (x == null) return null
+          const y1 = scale.y(Math.max(a.value, b.value))
+          const y2 = scale.y(Math.min(a.value, b.value))
+          if (y2 - y1 < 14) return null
+          return (
+            <g>
+              <line x1={x} y1={y1 + 4} x2={x} y2={y2 - 4} stroke="var(--cat)" strokeWidth={1} strokeDasharray="3 3" />
+              <text data-copy="figure" x={x - 10} y={(y1 + y2) / 2 + 3} textAnchor="end" fontSize={10} fontFamily="var(--font-plex-mono), monospace" fill="var(--muted-foreground)">
+                {annotate.label}
+              </text>
+            </g>
+          )
+        })()}
 
         {/* Month labels, thinned so a 68-month axis is still readable. */}
         {months.map((m, i) =>

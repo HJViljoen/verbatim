@@ -72,6 +72,19 @@ export interface CalendarSeries {
    * with that slot. Omitted means code's words.
    */
   labelSlot?: string
+  /**
+   * The LEGEND's own wording for this series, where it differs from the label.
+   *
+   * THE END LABEL AND THE KEY ARE TWO DIFFERENT JOBS. The end label sits inside
+   * the plot's right-hand gutter beside the value and its denominator, and it
+   * is read alongside three others at 11px — it wants the shortest true name.
+   * The key is read once, away from the data, and is where a reader learns that
+   * one of these lines is theirs and one is a rival ("Freitag — rival"). Putting
+   * the qualified name in both ran the end labels off the 180px gutter and
+   * clipped the denominator, which is the one thing on that label that may not
+   * be lost. Omitted means the two are the same string.
+   */
+  legendLabel?: string
   /** CSS colour or literal hex — the entity's, never the rank's. */
   color: string
   /** One entry per axis month, in axis order. A caller that hands a shorter
@@ -503,6 +516,27 @@ export function legendStates(series: readonly CalendarSeries[]): CalendarPointSt
   const present = new Set<CalendarPointState>()
   for (const s of series) for (const p of s.points) present.add(p.state)
   return wanted.filter((state) => present.has(state))
+}
+
+/**
+ * The months a gutter token actually marks, per state — "(Apr)".
+ *
+ * WHY THE LEGEND NAMES THEM. "below the floor" in a key tells a reader that
+ * SOME month on this axis could not be read and leaves them to find it; the
+ * artboard writes "below the floor (Apr)" and the reader knows before they
+ * look. Named only while the list is short — past two months the key becomes a
+ * list of months instead of a key, and the axis's own hollow marks are then the
+ * better answer.
+ */
+export function legendMonths(
+  series: readonly CalendarSeries[],
+  state: CalendarPointState,
+  max = 2,
+): readonly string[] {
+  const months = new Set<string>()
+  for (const s of series) for (const p of s.points) if (p.state === state) months.add(p.month)
+  const sorted = [...months].sort()
+  return sorted.length > 0 && sorted.length <= max ? sorted : []
 }
 
 /** The gutter token's word, for the legend. */

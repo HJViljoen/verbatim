@@ -37,7 +37,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
-  caption, label, mode = 'app', ctx, emailMonths = 6, height,
+  annotate = null, caption, label, mode = 'app', ctx, emailMonths = 6, height,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -46,6 +46,12 @@ export function BlockCalendar({
   rules?: readonly CalendarRule[]
   bands?: readonly CalendarBand[]
   format?: (v: number) => string
+  /** ADDITIVE (Block D wave 2, subjects). Forwarded to `CalendarLine` — the
+   *  bracket between two lines with a word for the distance, which only a
+   *  caller holding a banded `Gap` may pass. Nothing in the email arm draws it:
+   *  the picture is rendered from this same component in the browser session,
+   *  and the table arm is the months, not the difference. */
+  annotate?: { from: string; to: string; label: string } | null
   caption?: ReactNode
   label?: string
   mode?: RenderMode
@@ -64,6 +70,7 @@ export function BlockCalendar({
         rules={rules}
         bands={bands}
         format={format}
+        annotate={annotate}
         caption={caption}
         label={label}
         height={height}
