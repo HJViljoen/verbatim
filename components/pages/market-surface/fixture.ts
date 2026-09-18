@@ -255,10 +255,13 @@ export function unrecordedFixture(): MarketSurfaceData {
     ...base,
     moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: false, empty: MOVES_UNRECORDED },
     ways: { ...base.ways, ways: waysOfMoving(null, 0), acceptable: null, claims: [], claimsLine: 'Nothing you have said in your own posts has been read against the conversation this update.' },
-    // NO PLAN, NO MONTH TABLES, NO EVIDENCE — production on the day this
-    // shipped. Every D4 cell falls back to its own sentence: no grounding
-    // recorded, nothing decided to read afterwards, no quote the evidence can
-    // vouch for. This is the state wave 2 is reviewed in.
+    // NO PLAN, NO MONTH TABLES, NO LIVE EVIDENCE — production on the day this
+    // shipped, measured rather than imagined. Sealand's twelve drawn ledger
+    // rows were all first made on 28 June and every `audience_insights` row
+    // they cite has since been pruned, so "Grounded in" says the evidence is
+    // gone rather than printing "0 videos" twelve times; nothing is marked Done
+    // with months either side of it, so "Afterwards" is a sentence; and no
+    // hero quote can be vouched for. This is the state wave 2 is reviewed in.
     unlocks: { rows: unlockRows(0) },
     plans: [],
     plansEmpty: PLAN_EMPTY,
@@ -266,7 +269,9 @@ export function unrecordedFixture(): MarketSurfaceData {
       ...base.advice,
       rows: base.advice.rows.map((r) => ({
         ...r,
-        grounded: null,
+        grounded: r.basedOn.length > 0
+          ? groundingFor({ basedOn: ['pruned-1'], videoByInsight: new Map(), themeIds: [], audience: LEDGER_AUDIENCE, month: '2026-09-01' })
+          : null,
         afterwards: afterwardsFor({ decidedAt: r.decidedAt, targetIds: [], series: [], audience: LEDGER_AUDIENCE }),
         quote: null,
       })),

@@ -35,7 +35,7 @@ describe('groundingFor', () => {
     ).toBeNull()
   })
 
-  it('degrades to a smaller count when an insight has been pruned away', () => {
+  it('degrades to a smaller count when SOME of the evidence has been pruned away', () => {
     const g = groundingFor({
       basedOn: ['i1', 'gone'],
       videoByInsight: videoMap([['i1', 'v1']]),
@@ -44,6 +44,26 @@ describe('groundingFor', () => {
       month: '2026-09-01',
     })
     expect(g?.videos).toBe(1)
+    expect(g?.pruned).toBe(false)
+  })
+
+  it('says the evidence is gone rather than printing "0 videos" (the whole of production today)', () => {
+    // Sealand's twelve drawn ledger rows, measured 2026-09-18: every one cites
+    // between one and eight audience_insights ids and every one of those rows
+    // has been pruned. "0 videos behind it" down a whole page is a claim about
+    // the evidence; the truth is a later update replaced it.
+    const g = groundingFor({
+      basedOn: ['gone-1', 'gone-2'],
+      videoByInsight: videoMap([]),
+      themeIds: [],
+      audience: 'industry-other',
+      month: '2026-09-01',
+    })
+    expect(g).not.toBeNull()
+    expect(g?.videos).toBe(0)
+    expect(g?.pruned).toBe(true)
+    expect(g?.line).toContain('no longer on record')
+    expect(g?.line).not.toMatch(/\b0 videos\b/)
   })
 
   it('names the population as the whole corpus and never as one month (D8)', () => {
@@ -57,6 +77,7 @@ describe('groundingFor', () => {
     // The count is all-time. The line must not read as a share of a month or
     // of an audience — the mock's "41 videos in the category, September" is
     // two populations in one sentence.
+    expect(g?.pruned).toBe(false)
     expect(g?.line).toContain('everything we have read for you')
     expect(g?.line).not.toContain('in the category')
     expect(g?.line).toContain('not over one month')

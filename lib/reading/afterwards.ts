@@ -72,6 +72,20 @@ export interface Grounding {
    *  beside it reads the same bucket. Deliberately NOT in `line`; see
    *  `groundingFor`. */
   audience: string
+  /**
+   * True where the advice cited evidence and NONE of it is still on record.
+   *
+   * MEASURED, NOT DEFENSIVE. On Sealand 2026-09-18, all twelve of the rows the
+   * ledger draws were first made on 28 June, every one of them cites between
+   * one and eight `audience_insights` ids, and `prune-stale-analysis` has since
+   * removed every single one — so the chain resolves to zero videos on all
+   * twelve. Without this flag the ledger's brand-new column would read
+   * "0 videos behind it" down the whole page, which is a claim about the
+   * evidence where the truth is that a later update replaced it. `line` says
+   * the true thing; the flag is so a surface can draw it as an absence rather
+   * than as a number.
+   */
+  pruned: boolean
   /** The count with the population it is a count of, named. */
   line: string
 }
@@ -116,15 +130,17 @@ export interface GroundingInput {
  * is a claim about the evidence where the truth is that we did not write the
  * evidence down. The ledger prints the absence.
  *
- * THE COUNT DEGRADES HONESTLY. `prune-stale-analysis` removes
- * `audience_insights` rows an update has superseded, and Pass D-a replaces its
- * own run's `market_insights`, so an id behind an old piece of advice can
- * resolve to nothing. Measured on production the same day: 211 of 334 stored
- * refs across both tenants still resolve to a market insight, and every
- * recommendation that carries any `based_on` at all keeps at least one — so
- * every ledger row on both tenants can state a grounding today, and a row whose
- * evidence has been pruned states a smaller one rather than a wrong one. That
- * is the same degradation `recEvidenceTier` already lives with.
+ * AND ZERO IS NOT A COUNT EITHER, WHEN THE EVIDENCE WAS PRUNED. This is the
+ * case production is entirely in and it was found by looking rather than by
+ * reasoning. `prune-stale-analysis` removes `audience_insights` rows a later
+ * update has superseded, and Pass D-a replaces its own run's `market_insights`.
+ * Measured 2026-09-18: 211 of 334 stored `based_on` refs across both tenants
+ * still resolve to a market insight — but on the twelve rows Sealand's ledger
+ * actually draws, all first made on 28 June, every cited `audience_insights`
+ * row has been pruned, so the chain resolves to zero videos on all twelve. A
+ * column reading "0 videos behind it" down a whole page is a claim about the
+ * evidence; the truth is that the evidence has been replaced. `pruned` carries
+ * that fact and `line` says it.
  */
 export function groundingFor(input: GroundingInput): Grounding | null {
   const based = [...new Set(input.basedOn)]
@@ -137,10 +153,12 @@ export function groundingFor(input: GroundingInput): Grounding | null {
   }
   const themes = new Set(input.themeIds).size
   const videos = videoIds.size
-  const line =
-    `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it, ` +
-    `counted over everything we have read for you up to ${monthName(monthStartOf(input.month))} — not over one month.`
-  return { videos, themes, audience: input.audience, line }
+  const pruned = videos === 0
+  const line = pruned
+    ? 'The evidence this was written from is no longer on record — a later update replaced it, so we cannot count the videos behind it.'
+    : `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it, ` +
+      `counted over everything we have read for you up to ${monthName(monthStartOf(input.month))} — not over one month.`
+  return { videos, themes, audience: input.audience, pruned, line }
 }
 
 // ── afterwards ────────────────────────────────────────────────────────────────
