@@ -32,7 +32,23 @@ import { MonthFlag, RecordSection } from './frame'
  * table, where it read as a footnote to the last row.
  */
 
-const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border/70 py-3 md:min-h-[52px] md:grid-cols-[100px_minmax(0,1fr)_300px_150px] md:items-center md:py-0'
+// THE TRACKS ARE PROPORTIONAL, AND THE TABLE ONLY GOES WIDE WHERE THERE IS
+// ROOM. The artboard's `100px │ 1fr │ 300px │ 150px` was ported literally at
+// `md:` — and inside SettingsFrame the content pane is the viewport less the
+// 220px rail, less the shell's own 24px each side, so at a 768px viewport the
+// pane is about 496px and four fixed tracks asking for 586px cannot fit. The
+// grid did not scroll: `minmax` maxima starved the one `1fr` track to ZERO and
+// the columns painted over each other (design review finding 1, measured at
+// 768 and still colliding at 900).
+//
+// So two changes, and both are about never being able to overflow again: every
+// track's MINIMUM is 0 and the three wide ones are FRACTIONS, so they divide
+// whatever is there instead of demanding a width; and the breakpoint is `lg`
+// (1024px viewport, a pane of about 744px), under which the row stacks. The
+// fractions are the artboard's own widths at 1440: a 1160px pane less the
+// 100px date and three 12px gaps leaves 1024px, and 1.9 : 1 : 0.5 of it is
+// 570 │ 300 │ 150 — the mock's three columns to the pixel.
+const ROW = 'grid grid-cols-1 gap-x-3 gap-y-1 border-t border-border/70 py-3 lg:min-h-[52px] lg:grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] lg:items-center lg:py-0'
 
 export function ChangeLogBlock({
   log, rows, meta, boundary, showing, now, unavailable,
@@ -64,7 +80,7 @@ export function ChangeLogBlock({
         <p className="m-0 text-[12.5px] text-muted-foreground">No change has been recorded yet.</p>
       ) : (
         <div className="flex flex-col">
-          <div className="hidden grid-cols-[100px_minmax(0,1fr)_300px_150px] gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[100px_minmax(0,1.9fr)_minmax(0,1fr)_minmax(0,0.5fr)] gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground lg:grid">
             <span>Date</span>
             <span>What changed</span>
             <span>What it breaks</span>

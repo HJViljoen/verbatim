@@ -30,6 +30,21 @@ import { RecordSection } from './frame'
  * column it sits in.
  */
 
+/**
+ * The artboard's `1fr │ 260px │ 230px`, as fractions that cannot overflow.
+ *
+ * Ported literally at `md:`, the two fixed tracks starved the caption column
+ * and the two headers overprinted each other from 768px to about 950px (design
+ * review finding 1). The pane at 1440 is about 1160px and the gaps take 24, so
+ * 2.8 : 1.13 : 1 of the remaining 1136 is 645 │ 260 │ 230 — the mock's own
+ * widths — and at every narrower width the same ratio divides whatever is
+ * there. The control column keeps a 200px FLOOR because a 44px button whose
+ * label is "This should have been kept" is the one cell here that has a real
+ * minimum; every other track's minimum is 0, so the row can never be wider
+ * than the pane.
+ */
+const TRACKS = 'lg:grid-cols-[minmax(0,2.8fr)_minmax(0,1.13fr)_minmax(200px,1fr)]'
+
 export function RejectLogBlock({
   rows, summary, unavailable, unjudged, byTerm, byPlatform, basis, withheld, control,
 }: {
@@ -64,7 +79,7 @@ export function RejectLogBlock({
         <p className="m-0 text-[12.5px] text-muted-foreground">Nothing has been set aside yet.</p>
       ) : (
         <div className="flex flex-col">
-          <div className="hidden grid-cols-[minmax(0,1fr)_260px_230px] gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground md:grid">
+          <div className={`hidden gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground lg:grid ${TRACKS}`}>
             <span>Thrown away</span>
             <span>The rule that fired</span>
             <span />
@@ -72,7 +87,7 @@ export function RejectLogBlock({
           {rows.map((r) => (
             <div
               key={`${r.runId}-${r.platform}-${r.videoId}`}
-              className="grid grid-cols-1 items-center gap-x-3 gap-y-2 border-t border-border/70 py-3 md:min-h-[60px] md:grid-cols-[minmax(0,1fr)_260px_230px] md:py-2"
+              className={`grid grid-cols-1 items-center gap-x-3 gap-y-2 border-t border-border/70 py-3 lg:min-h-[60px] lg:py-2 ${TRACKS}`}
             >
               <span className="min-w-0 text-[12.5px]">
                 {/* The stranger's own words, and rule (c) may not police them
@@ -91,7 +106,7 @@ export function RejectLogBlock({
                   {r.reason ?? (r.source === 'default' ? 'Nobody judged this one.' : 'No reason was recorded.')}
                 </span>
               </span>
-              <span className="md:justify-self-end">{control?.(r)}</span>
+              <span className="lg:justify-self-end">{control?.(r)}</span>
             </div>
           ))}
         </div>
