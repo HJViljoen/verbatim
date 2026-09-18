@@ -3,7 +3,7 @@ import type { BlockContext } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { overviewRecord } from '@/components/pages/overview/record'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fullDate } from '@/lib/format'
+import { freezeSentence } from '@/lib/reading/record'
 import type { OverviewData } from '@/lib/pages/overview'
 
 /**
@@ -35,10 +35,14 @@ export function monthlySoundEmail(data: OverviewData, ctx: BlockContext): ReactN
   const method = data.method
   const href = `${ctx.appUrl}${r.href}`
   const empty = overviewRecord.emptyState(data)
-  const lines = [
-    ...r.lines,
-    `This month stops moving on ${fullDate(r.freezesOn)}; until then every figure above may still change.`,
-  ]
+  // THE FREEZE SENTENCE IS CALLED, NOT COPIED (the fix pass, review finding
+  // [Minor]). It was the same template string written out again here, so the
+  // first time Overview re-worded its own line the page and the artefact would
+  // have stated one reading two ways — silently, which is the one thing
+  // `fromOverview` exists to prevent. `freezeSentence` is the composer both
+  // read, and the test below asserts this arm's text against Overview's own
+  // rendered text.
+  const lines = [...r.lines, freezeSentence(r.freezesOn)]
   // THE BASIS TRAVELS WITH THE FIGURE, so these three are a SEPARATE paragraph
   // from the month's own record and not appended to it: one is about the month
   // and three are not, and a five-fact line with only one of them dated is the

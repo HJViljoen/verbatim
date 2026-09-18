@@ -8,7 +8,8 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
-import { REFUSAL_WHY } from '@/lib/reading/record'
+import { freezeSentence, REFUSAL_WHY } from '@/lib/reading/record'
+import { overviewRecord } from '@/components/pages/overview/record'
 import { gapLine, type Gap } from '@/lib/reading/gap'
 import { OWN_POSTS_UNREADABLE_OUTSIDE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
@@ -403,6 +404,23 @@ describe('the five sections that are Overview’s', () => {
     // the record joins the report and the page on one key.
     const subjects = blockAnswers(MONTHLY_BLOCKS['monthly.subjects'], data).figures
     expect(Object.keys(subjects).length).toBeGreaterThan(0)
+  })
+
+  // THE RECORD PARAGRAPH IS OVERVIEW'S, AND A TEST SAYS SO (the fix pass,
+  // review finding [Minor]). Section 8's header claims the paragraph is
+  // Overview's "word for word", and it was a COPY of Overview's composition —
+  // the same template string in two files, so the first re-wording on the page
+  // would have left the artefact stating one reading two ways, silently. The
+  // freeze sentence is one composer now; this asserts the whole paragraph
+  // against what the page itself renders.
+  it('state the record in Overview’s own words, not in a copy of them', () => {
+    const data = monthlyFixture()
+    const page = renderText(overviewRecord.render(data.overview, 'email', ctx))
+    const artefact = renderText(MONTHLY_BLOCKS['monthly.sound'].render(data, 'email', ctx))
+    const freeze = freezeSentence(data.overview.record.freezesOn)
+    expect(page).toContain(freeze)
+    expect(artefact).toContain(freeze)
+    for (const line of data.overview.record.lines) expect(artefact).toContain(line)
   })
 
   // A Block renders its own heading inside its own frame, so an adapter that
