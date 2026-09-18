@@ -2237,13 +2237,39 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     protected at all: it carries no OTHER citation path, but a stored export
  *     names its rows by id.
  *
- *     The other ref kinds are deliberately NOT here. `c:`, `v:` and `m:` do not
- *     name a row — they resolve by SEARCHING `insight_evidence` for any live
- *     excerpt on that comment or video, so a re-read that produced fresh
- *     evidence on the same comment keeps them resolving (possibly to a
- *     different excerpt, which is a separate question and not this one).
- *     `k:`, `h:` and `b:` read `video_claims`, a hero row and `run_summary`,
+ * WHAT IS DELIBERATELY NOT PROTECTED — read this before treating the four above
+ * as all of them. Each exclusion is a judgement, and an unrecorded judgement
+ * reads as an oversight to whoever finds the path next:
+ *
+ *  a. THEME MEMBERS. `theme_observations.member_insight_ids` is a fifth
+ *     id-exact path into `audience_insights`: `monthly_theme_readings` walks it
+ *     to `insight_evidence` to `comments`
+ *     (supabase/migrations/20260915092000_monthly_reading.sql). It is NOT
+ *     protected and should not be — a run's themes name most of that run's
+ *     corpus, so protecting members would retain nearly everything and the
+ *     prune would stop being a prune. The monthly reading is built for this
+ *     already: its own header measures 18.2% of stored member references
+ *     dangling, 20260918091000_theme_key.sql:87 measures 20.2% at one run old,
+ *     and that is the stated reason `member_video_ids` became the PRIMARY
+ *     matching key — a video id survives a re-read, an insight id does not.
+ *
+ *  b. `c:` / `v:` / `m:` SNAPSHOT REFS, and the comment ids stored beside a
+ *     saved answer's insight ids. These name no row at all: they resolve by
+ *     SEARCHING `insight_evidence` for a live excerpt on that comment or video.
+ *     So they keep resolving IF the re-read produced evidence on that comment —
+ *     a Pass A re-read is free to quote different comments entirely, and
+ *     nothing guarantees it did. The honest reading is "usually still resolves,
+ *     possibly to a DIFFERENT excerpt, sometimes to nothing", and whether a
+ *     frozen export may change its quoted words is a real and separate
+ *     question. They cannot be added to the protected set by id; they have no
+ *     id. What class 3 protects is the insight ids stored ALONGSIDE them, which
+ *     is what makes a saved answer's quotes hold.
+ *
+ *  c. `k:` / `h:` / `b:` refs read `video_claims`, a hero row and `run_summary`,
  *     none of which this step touches.
+ *
+ * A FIFTH protected class means re-opening this list and AGENTS.md, not
+ * appending a set union to the code.
  */
 async function citedEvidenceIds(
   admin: ReturnType<typeof createAdminClient>,
