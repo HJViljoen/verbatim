@@ -1890,10 +1890,25 @@ export const runPipeline = inngest.createFunction(
     //    step id, same position, one function body — see the note in
     //    citedEvidenceIds for the four classes it protects, the two it
     //    deliberately does not, and why each is resolved the way it is.
+    //
+    //    ITS FAILURE SURFACE GREW WITH THAT, AND THE FAILURE IS QUIET. The step
+    //    now does seven table reads before it deletes anything, and any one of
+    //    them throwing — a schema-cache miss, a malformed stored id, a
+    //    PostgREST hiccup — takes it here. Non-fatal and uncounted is still the
+    //    right trade (fail-closed costs storage; the alternative costs
+    //    evidence, which is unrecoverable), but the shape of the failure is
+    //    "prunes nothing, on this run and every later one, until someone reads
+    //    the log". Deliberately not noteError'd — the keyword-discovery
+    //    precedent: a record kept alongside the report must not make a clean
+    //    run read 'partial'. The log line below is the only surface that says
+    //    so, so it says it plainly.
     const pruned = await step
       .run('prune-stale-analysis', () => pruneStaleAnalysis(clientId))
       .catch((e) => {
-        console.error(`[prune-stale-analysis] out of retries: ${e instanceof Error ? e.message : String(e)}`)
+        console.error(
+          `[prune-stale-analysis] out of retries — NOTHING was pruned this run, and nothing will be ` +
+          `on any later run until this succeeds: ${e instanceof Error ? e.message : String(e)}`,
+        )
         return { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0, failed: true }
       })
 
