@@ -212,8 +212,13 @@ export const marketCard: Block<MarketSurfaceData> = {
                         full. Two lines, and the whole claim in the tooltip for
                         a mouse — the words are the CLIENT'S OWN, not a
                         measurement basis, so a tooltip is a convenience here
-                        rather than the only route to a number. */}
-                    <span data-copy="quote" title={c.claim} className="line-clamp-2 min-w-0 text-[12.5px]">“{c.claim}”</span>
+                        rather than the only route to a number. THREE lines and
+                        not two: Sealand's two longest claims agree for their
+                        first 150 characters and diverge only in the third
+                        ("…gear that is good for people" against "…gear that
+                        benefits people"), so at two lines they still printed
+                        as one row twice. */}
+                    <span data-copy="quote" title={c.claim} className="line-clamp-3 min-w-0 text-[12.5px]">“{c.claim}”</span>
                     <span data-copy="level" className="shrink-0 whitespace-nowrap font-mono text-[11.5px] tabular-nums text-secondary-foreground">
                       {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
                     </span>
@@ -254,7 +259,11 @@ export const marketCard: Block<MarketSurfaceData> = {
                   className="flex min-w-0 flex-wrap justify-end gap-x-2 gap-y-0.5 text-right font-mono text-[11.5px] leading-[1.35] tabular-nums text-secondary-foreground"
                 >
                   <span className="whitespace-nowrap">of {fmtInt(posts)} posts:</span>
-                  {hooks.map((h) => <span key={h.label} className="whitespace-nowrap">{h.label} {fmtInt(h.value.k)}</span>)}
+                  {hooks.map((h, i) => (
+                    <span key={h.label} className="whitespace-nowrap">
+                      {i > 0 ? '· ' : ''}{h.label} {fmtInt(h.value.k)}
+                    </span>
+                  ))}
                 </span>
               )}
             </div>

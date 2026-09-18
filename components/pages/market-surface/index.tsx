@@ -173,14 +173,14 @@ const HEIGHT: Record<string, (d: MarketSurfaceData) => number> = {
     return 120 + rows.length * 80 + verdicts * 45 + expanded
   },
   // The card's parts, each counted: the lead figure and the floor, the claims
-  // at two lines each, the hooks row, the subjects row and its basis, and a
+  // at up to three lines each, the hooks row, the subjects row and its basis, and a
   // movement row per side.
   'market.card': (d) => {
     const card = d.moves.card
     if (!card) return 150
     const claims = Math.min(card.claimRows.length, CARD_CLAIMS_SHOWN)
     const movements = [card.movement.yours, card.movement.category].filter(Boolean).length
-    return 289 + claims * 40 + (card.hooks.some((h) => h.value.k > 0) ? 26 : 0) + 60 + movements * 62
+    return 289 + claims * 56 + (card.hooks.some((h) => h.value.k > 0) ? 26 : 0) + 60 + movements * 62
   },
   // A read move is a chart, its legend and one line per side; a declared move
   // with nothing read yet is a sentence.

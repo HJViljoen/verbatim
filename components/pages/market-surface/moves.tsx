@@ -173,7 +173,11 @@ function Move({ reading, index, mode }: { reading: MoveReading; index: number; m
           width={630}
           height={200}
           padL={44}
-          padR={120}
+          // The end labels live in the right-hand pad and the tile clips what
+          // runs past it: at 120 "The category 11% of 1,388" lost its
+          // denominator to the tile's edge, which is the one thing a level may
+          // not lose.
+          padR={158}
           // THE DECLARATION IS ON THE CHART. The verdict under it says "before
           // it was declared" and the line carried no mark for where "before"
           // ended; `MoveReading.declaredAt` was in hand and printed two lines

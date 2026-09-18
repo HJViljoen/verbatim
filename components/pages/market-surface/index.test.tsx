@@ -657,7 +657,7 @@ describe('MK3 · this month\u2019s card', () => {
     // The claims are not one truncated line: two claims that share an opening
     // print as two distinguishable rows, each reaching its own second line.
     expect(markup).not.toContain('truncate text-[12.5px]')
-    expect(markup).toContain('line-clamp-2')
+    expect(markup).toContain('line-clamp-3')
     // The email arm keeps both halves on one line, where they cannot break.
     const email = renderText(marketCard.render(marketFixture(), 'email', ctx))
     expect(email).toContain('26 of 84 videos')
