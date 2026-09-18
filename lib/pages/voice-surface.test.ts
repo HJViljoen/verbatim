@@ -6,6 +6,7 @@ import {
   PERSONA_VIDEO_FLOOR,
   THIN_AUDIENCE_VIDEOS,
   audienceFigures,
+  audiencePillLabel,
   audienceThin,
   castMasthead,
   DEEP_LINK_EMPTY,
@@ -13,6 +14,7 @@ import {
   flatMovers,
   heardLine,
   largestRead,
+  moversCoda,
   moversNote,
   newMovers,
   onCameraReach,
@@ -20,12 +22,14 @@ import {
   openRefusal,
   pickAudience,
   platformShares,
+  reachAxisMax,
   repliesNote,
   searchRegistry,
   voiceSurfaceHref,
   type AudienceBlock,
   type CastBlock,
 } from './voice-surface'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
 import type { Mover } from './overview'
 import type { Verdict } from '../reading/verdicts'
 
@@ -478,5 +482,53 @@ describe('castMasthead', () => {
 
   it('says nothing where no profile has ever been written', () => {
     expect(castMasthead(cast({ profileDate: null }))).toBeNull()
+  })
+})
+
+// ---- the artboard port's own pure halves (Block D wave 2, E-voice) ---------
+
+describe('audiencePillLabel', () => {
+  it('shortens the two labels that are code’s own words', () => {
+    expect(audiencePillLabel(CLIENT_AUDIENCE, 'Your own brand')).toBe('Yours')
+    expect(audiencePillLabel(INDUSTRY_AUDIENCE, 'The category')).toBe('Category')
+  })
+
+  it('never touches a rival’s name, which is the client’s own string', () => {
+    expect(audiencePillLabel(rivalKey('Topo Designs'), 'Topo Designs')).toBe('Topo Designs')
+    expect(audiencePillLabel(rivalKey('Yours Truly Bags'), 'Yours Truly Bags')).toBe('Yours Truly Bags')
+  })
+})
+
+describe('reachAxisMax', () => {
+  it('leaves headroom above the largest reading and steps, so the axis does not jitter', () => {
+    expect(reachAxisMax([9.4, 6.8])).toBe(15)
+    expect(reachAxisMax([9.6, 6.8])).toBe(15)
+  })
+
+  it('never draws a reading past the end of its own bar', () => {
+    for (const v of [0.4, 3, 12, 33, 49, 70, 99.9]) {
+      expect(reachAxisMax([v])).toBeGreaterThanOrEqual(v)
+      expect(reachAxisMax([v])).toBeLessThanOrEqual(100)
+    }
+  })
+
+  it('is zero where there is nothing to draw, so the bar renders nothing', () => {
+    expect(reachAxisMax([])).toBe(0)
+    expect(reachAxisMax([null, undefined, 0])).toBe(0)
+  })
+})
+
+describe('moversCoda', () => {
+  it('closes a complete list', () => {
+    expect(moversCoda({ growing: 2, fading: 1, shown: 6, any: true })).toBe('Nothing else moved clearly this month.')
+  })
+
+  it('says nothing when an arm was cut — the rows below the cut moved too', () => {
+    expect(moversCoda({ growing: 9, fading: 1, shown: 6, any: true })).toBeNull()
+    expect(moversCoda({ growing: 1, fading: 9, shown: 6, any: true })).toBeNull()
+  })
+
+  it('leaves an empty list to the block’s own empty state', () => {
+    expect(moversCoda({ growing: 0, fading: 0, shown: 6, any: false })).toBeNull()
   })
 })

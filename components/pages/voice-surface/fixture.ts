@@ -90,12 +90,17 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
   const window = horizonWindow('last_3', NOW, '2026-06-01')
   const axis = window.months
   const params = { audience: INDUSTRY_AUDIENCE }
+  // EVERY ROW CARRIES ITS OWN BASELINE, since wave 2 renders it. The default
+  // in `verdict()` is t1's, and three rows sharing one baseline printed "Aug
+  // 6.8% of 1,200" under four different September readings — a fixture saying
+  // the same thing about four themes. The k's are the artboard's own August
+  // shares over that month's 1,200 category videos.
   const growing = [
     mover({ id: 't1', label: 'Will it survive a wet commute', k: 130, pct: 9.4, direction: 'growing' }),
-    mover({ id: 't2', label: 'Zips failing after a year', k: 71, pct: 5.1, verdict: { changePts: 1.9 } }),
+    mover({ id: 't2', label: 'Zips failing after a year', k: 71, pct: 5.1, verdict: { changePts: 1.9, baseline: { k: 38, n: 1200 } } }),
   ]
   const fading = [
-    mover({ id: 't3', label: 'Made from truck tarps', k: 99, pct: 7.1, verdict: { changePts: -2.5 } }),
+    mover({ id: 't3', label: 'Made from truck tarps', k: 99, pct: 7.1, verdict: { changePts: -2.5, baseline: { k: 115, n: 1200 } } }),
   ]
 
   return {
@@ -141,7 +146,7 @@ export function voiceFixture(over: Partial<VoiceSurfaceData> = {}): VoiceSurface
     movers: {
       growing,
       fading,
-      flat: [mover({ id: 't4', label: 'Airline carry-on fit', k: 42, pct: 3, verdict: { state: 'no_clear_change', changePts: 0.3 } })],
+      flat: [mover({ id: 't4', label: 'Airline carry-on fit', k: 42, pct: 3, verdict: { state: 'no_clear_change', changePts: 0.3, baseline: { k: 32, n: 1200 } } })],
       newcomers: [mover({ id: 't5', label: 'Second-hand resale value', k: 26, pct: 1.9, isNew: true, verdict: { state: 'too_little_data', changePts: null, bandPts: null } })],
       goneQuiet: [{ id: 't6', label: 'Festival season packs', lastHeard: '2026-06-01' }],
       shown: 6,
@@ -263,8 +268,13 @@ export function refusedVoiceFixture(over: Partial<VoiceSurfaceData> = {}): Voice
     },
     movers: {
       ...base.movers,
-      growing: [mover({ id: 'r1', label: 'Admiration for personal resilience', k: 34, n: 388, pct: 8.8, verdict: { changePts: -5.1, bandPts: 4 } })],
-      fading: [],
+      // A NEGATIVE CHANGE BELONGS IN THE ARM THAT SAYS SO. This row sat under
+      // "a larger share than last month" printing "▼ 5.1 pts" — the exact
+      // failure movers.tsx's header says the one-axis rule ended, preserved in
+      // the fixture that is supposed to catch it. Its baseline is its own
+      // audience's August, not t1's category month.
+      growing: [],
+      fading: [mover({ id: 'r1', label: 'Admiration for personal resilience', k: 34, n: 388, pct: 8.8, verdict: { changePts: -5.1, bandPts: 4, baseline: { k: 56, n: 402 } } })],
       flat: [],
       newcomers: [],
       goneQuiet: [],
