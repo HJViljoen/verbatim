@@ -478,8 +478,13 @@ export interface Voice {
    * Null where the OCR pass has not run, found no image, or read nothing — and
    * null, not an empty string, so the render draws nothing rather than an
    * empty label.
+   *
+   * A QUOTE, NOT A STRING, so a stored export carries the REF and not the
+   * words (`t:<videos.id>`, code review C1). The text is the whole line; the
+   * cut to one clause happens at render (`onScreenText`), so a snapshot that
+   * re-resolves the full line cuts it in the same place the app did.
    */
-  onScreen: string | null
+  onScreen: Quote | null
   /** Where to go and read it. Null where the video carries no public URL —
    *  the cite is then printed without a link rather than with a dead one. */
   href: string | null
@@ -1850,7 +1855,7 @@ async function loadOwnClaims(
   supabase: SupabaseClient,
   clientId: string,
   videoIds: readonly string[],
-): Promise<{ source_video_id: string; claim: string; entity: string }[]> {
+): Promise<{ id: string; source_video_id: string; claim: string; quote: string; entity: string }[]> {
   if (videoIds.length === 0) return []
   try {
     // THROUGH `mapWithLimit`, like every other chunked read here. The id set is
@@ -1858,10 +1863,15 @@ async function loadOwnClaims(
     // ceiling is the convention (lib/chunk.ts `READ_CONCURRENCY`) and the
     // convention is what keeps a read bounded when the corpus is not.
     const pages = await mapWithLimit(chunk([...videoIds], UUID_IN_CHUNK), READ_CONCURRENCY, (ids) =>
-      selectAll<{ source_video_id: string; claim: string; entity: string }>(() =>
+      // `id` AND `quote` ARE WHAT MAKE THE CARD'S CLAIM ROW FREEZABLE (code
+      // review C1). The row prints the speaker's own words, and it prints them
+      // under `k:<video_claims.id>` — so the id is not optional decoration: a
+      // row that arrives without one carries no quote at all rather than
+      // carrying the words into a stored export.
+      selectAll<{ id: string; source_video_id: string; claim: string; quote: string; entity: string }>(() =>
         supabase
           .from('video_claims')
-          .select('source_video_id, claim, entity')
+          .select('id, source_video_id, claim, quote, entity')
           .eq('client_id', clientId)
           .eq('entity', 'client')
           .in('source_video_id', ids)
@@ -1972,7 +1982,7 @@ async function loadOwnSubjectMatches(
  *  absences, and the card says which. */
 export interface CardInputs {
   videos: ClientPost[] | null
-  claims: { source_video_id: string; claim: string; entity: string }[]
+  claims: { id: string; source_video_id: string; claim: string; quote: string; entity: string }[]
   matches: Map<string, string[]> | null
   matchesFailed: boolean
 }
@@ -2577,11 +2587,22 @@ export function citeWhere(v: { is_client?: boolean | null; is_competitor?: boole
 }
 
 /** The on-screen line, trimmed to one clause — or null, which is what a video
- *  the OCR pass has not read, could not read, or read nothing from all give. */
+ *  the OCR pass has not read, could not read, or read nothing from all give.
+ *  Applied at RENDER, so it trims a line the snapshot re-resolved in full
+ *  exactly as it trimmed the live one. */
 export function onScreenText(text: string | null | undefined): string | null {
   const t = (text ?? '').replace(/\s+/g, ' ').trim()
   if (!t) return null
   return t.length <= ON_SCREEN_MAX ? t : `${t.slice(0, ON_SCREEN_MAX - 1).trimEnd()}\u2026`
+}
+
+/** The on-screen line as a freezable quote. Null without a video uuid to
+ *  build the ref from — the narrow fallback's case — because a line with no
+ *  ref is a line a stored export would have to carry as words. */
+export function onScreenQuote(videoId: string | null | undefined, text: string | null | undefined): Quote | null {
+  const t = (text ?? '').replace(/\s+/g, ' ').trim()
+  if (!videoId || !t) return null
+  return { ref: quoteRef.onScreen(videoId), text: t }
 }
 
 async function loadVoices(
@@ -2648,6 +2669,9 @@ async function loadVoices(
   // the post. A video with no stored URL gets no link rather than a dead one.
   const nativeIds = [...new Set([...meta.values()].map((m) => m.video_id).filter((v): v is string => Boolean(v)))]
   type VideoMeta = {
+    /** The row's uuid — what `t:<videos.id>` is built from. Absent on the
+     *  narrow fallback, where the on-screen line is not read at all. */
+    id?: string | null
     platform: string | null
     video_id: string | null
     video_url: string | null
@@ -2669,23 +2693,29 @@ async function loadVoices(
     //
     // AND IT DEGRADES WHERE THE OCR MIGRATION IS NOT APPLIED.
     // `20260912100000_ocr_text.sql` adds `ocr_text`; on a database without it
-    // PostgREST fails the whole select, which would have cost the LINK as well
-    // as the line. So the narrow select is the fallback and the quote simply
-    // has no on-screen text — the same shape as a video the OCR pass never
-    // read.
-    const columns = 'platform, video_id, video_url, ocr_text, is_client, is_competitor, competitor_name'
-    let videoRows: VideoMeta[]
-    try {
-      videoRows = rows<VideoMeta>(
-        await supabase.from('videos').select(columns).eq('client_id', clientId).in('video_id', nativeIds),
-        'overview.voiceVideos',
-      )
-    } catch {
-      videoRows = rows<VideoMeta>(
-        await supabase.from('videos').select('platform, video_id, video_url').eq('client_id', clientId).in('video_id', nativeIds),
-        'overview.voiceVideos',
-      )
-    }
+    // PostgREST fails the whole select, which would cost the LINK and the cite
+    // tail as well as the line. So the narrow select is the fallback and the
+    // quote simply has no on-screen text — the same shape as a video the OCR
+    // pass never read.
+    //
+    // THE GUARD READS `error`, NOT A THROW (code review I2). `rows()` does not
+    // throw on a PostgREST error: it logs and returns [] (lib/pages/read.ts,
+    // and nothing in this path calls `throwOnError`). Under the try/catch this
+    // was written as, the catch could never fire — so on a database without the
+    // migration `videoByKey` came back EMPTY and every voice lost its cite tail
+    // and its link, which is precisely the loss the fallback exists to prevent.
+    const columns = 'id, platform, video_id, video_url, ocr_text, is_client, is_competitor, competitor_name'
+    const wide = await supabase.from('videos').select(columns).eq('client_id', clientId).in('video_id', nativeIds)
+    const videoRows: VideoMeta[] = wide.error
+      ? rows<VideoMeta>(
+          await supabase
+            .from('videos')
+            .select('id, platform, video_id, video_url, is_client, is_competitor, competitor_name')
+            .eq('client_id', clientId)
+            .in('video_id', nativeIds),
+          'overview.voiceVideos',
+        )
+      : rows<VideoMeta>(wide, 'overview.voiceVideos')
     for (const v of videoRows) if (v.video_id) videoByKey.set(`${v.platform}::${v.video_id}`, v)
   }
   const voices = shown.map((c) => {
@@ -2703,7 +2733,15 @@ async function loadVoices(
         ...(c.lang != null ? { lang: c.lang, english: c.english ?? null } : {}),
       },
       cite,
-      onScreen: onScreenText(v?.ocr_text ?? null),
+      // THE ON-SCREEN LINE TRAVELS AS A REF (code review C1). It is the
+      // creator's own words burnt into the frame, and Overview is now a
+      // registered export module — so as a bare string it would land verbatim
+      // in `report_snapshots.data`, be served by `/r/<token>`, and be invisible
+      // to the erasure sweep because it contributes no ref. `t:<videos.id>`
+      // freezes it like every other voice on the page. The text is carried in
+      // FULL and cut at render, so the app and a re-rendered export cut the
+      // same sentence in the same place.
+      onScreen: onScreenQuote(v?.id ?? null, v?.ocr_text ?? null),
       href: citationLink(m?.platform ?? null, v?.video_url ?? null, m?.comment_id ?? null).href,
     }
   })

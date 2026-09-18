@@ -92,35 +92,51 @@ export function cardFixture(): MoveCandidate {
     // on the two posts that carry them. Note the third and fourth rows: two
     // claims that differ by three words ("benefits people" against "good for
     // people") and are two distinct rows, on two distinct posts.
+    //
+    // TWO COLUMNS, AND THE CARD PRINTS THE SECOND. `claim` is the model's
+    // paraphrase — 93 to 197 characters of it, which is what made the row need
+    // a cap — and `quote` is what the founder actually said on camera, which
+    // is shorter, is the client's own words, and is the only one of the two
+    // that may be printed inside quotation marks (code review C1 / I6).
     claims: [
       {
+        id: 'c1a11111-1111-4111-8111-111111111111',
         source_video_id: 'p1',
         claim:
           'Sealand positions its products as acts of defiance against an industry characterized by overconsumption, fast fashion, and waste, emphasizing responsible production and great design as inseparable.',
+        quote: 'Every bag we make is a small act of defiance against an industry built on throwing things away.',
         entity: 'client',
       },
       {
+        id: 'c1a22222-2222-4222-8222-222222222222',
         source_video_id: 'p4',
         claim:
           'Sealand products represent a small act of defiance against an industry that treats materials and resources as disposable waste, promoting great design and responsible production.',
+        quote: 'Great design and responsible production are not two different jobs.',
         entity: 'client',
       },
       {
+        id: 'c1a33333-3333-4333-8333-333333333333',
         source_video_id: 'p4',
         claim:
           'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that is good for people and the planet.',
+        quote: 'We are a B Corp, and we had to earn that.',
         entity: 'client',
       },
       {
+        id: 'c1a44444-4444-4444-8444-444444444444',
         source_video_id: 'p1',
         claim:
           'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that benefits people and the planet.',
+        quote: 'Good gear that is good for the people who make it.',
         entity: 'client',
       },
       {
+        id: 'c1a55555-5555-4555-8555-555555555555',
         source_video_id: 'p1',
         claim:
           'Sealand acknowledges ongoing challenges and setbacks but commits to continuous improvement year over year, with a roadmap for the next decade.',
+        quote: 'We get things wrong, and we say so, and then we do better the next year.',
         entity: 'client',
       },
     ],
@@ -464,7 +480,7 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       // speaker — the brand's words under the audience's.
       voices: [
         { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a category video', onScreen: null, href: 'https://www.tiktok.com/@x/video/1' },
-        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under your own video', onScreen: '1 bag. 3 years. 0 regrets', href: null },
+        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under your own video', onScreen: { ref: 't:11111111-1111-4111-8111-111111111111', text: '1 bag. 3 years. 0 regrets' }, href: null },
       ],
       voicesFrom: 37,
       verdicts: [lead],

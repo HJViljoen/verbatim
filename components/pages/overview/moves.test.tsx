@@ -138,13 +138,40 @@ describe('OV5, ported to the artboard', () => {
     expect(text).toContain('This month’s card · pre-filled from your own posts')
   })
 
-  it('names the clock every own-post figure is on, beside the figure', () => {
+  it('names the clock every own-post figure is on — ONCE for the rows that share it', () => {
     // D9: own posts are dated by `upload_date` — a third clock — and the card
-    // says so on every counted row rather than letting a reader assume the
-    // month is the comment's.
+    // says so rather than letting a reader assume the month is the comment's.
+    //
+    // CHANGED BY THE FIX PASS (design review High 8). The basis printed on each
+    // counted row, which made the first row read "posts published · posts
+    // published in September" — the label and the basis in the same four words
+    // — and repeated the same clause three more times in one 240px card. The
+    // rows that share a clock now name it once, under them; the row on a
+    // DIFFERENT clock still carries its own, which is the assertion below this
+    // one and the whole point of the rule.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('posts published · posts published in September')
-    expect(text).toContain('cleared the comment floor · posts published in September')
+    expect(text).toContain('17 posts published')
+    expect(text).toContain('8 of 17 cleared the comment floor')
+    expect(text).toContain('every count above is dated by the post itself — posts published in September')
+    // Said once, not four times.
+    expect(text.split('posts published in September').length - 1).toBe(1)
+    expect(text).not.toContain('posts published · posts published in September')
+  })
+
+  it('prints what the speaker SAID, never the model’s paraphrase of it', () => {
+    // Code review C1 / I6. `video_claims` holds two columns: `claim` is the
+    // model's 93-to-197-character summary and `quote` is the sentence on the
+    // transcript. The card printed the summary inside quotation marks under
+    // `data-copy="quote"` — the one exemption reserved for words a model did
+    // not write — and carried it as a bare string into every stored export.
+    const data = overviewFixture()
+    const markup = render(overviewMoves.render(data, 'app', ctx))
+    const text = renderText(overviewMoves.render(data, 'app', ctx))
+    expect(text).toContain('“We get things wrong, and we say so, and then we do better the next year.”')
+    expect(text).not.toContain('Sealand acknowledges ongoing challenges')
+    expect(text).not.toContain('award-winning B Corp certified brand')
+    // The quotation mark on this row is now truthful, so the marker stays.
+    expect(markup).toContain('data-copy="quote"')
   })
 
   it('denominates the subject rows on posts READ, not posts published', () => {

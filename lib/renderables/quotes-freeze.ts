@@ -33,9 +33,18 @@ import type { Quote, QuoteResolution } from './types'
  * COMMENTER's excerpt on that video, so freezing a claim under one would empty
  * the brand's words and hand back a stranger's in their place, attributed to
  * the brand, inside a stored artefact.
+ * `t:<videos.id>` is the TEXT ON SCREEN in a video — a title card, a price, a
+ * hashtag stack, read by the OCR pass into `videos.ocr_text`. It is the
+ * creator's own words like `k:` and `b:`, and it cannot ride on `v:` for
+ * exactly `k:`'s reason: `v:` resolves through insight_evidence to a
+ * COMMENTER's excerpt on that video, so a frozen on-screen line would come
+ * back as a stranger's comment printed as what the video said. Added Block D
+ * wave 2, when Overview's voices began printing the line and a registered
+ * export module would otherwise have stored the words themselves; it resolves
+ * off the video row, so a video the retention sweep removes stops resolving.
  */
 
-const REF_RE = /^([ecvmpk]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
+const REF_RE = /^([ecvmpkt]:.+|h:[a-z_]+:.+|b:[^:]+:\d+)$/
 
 export function isQuote(v: unknown): v is Quote {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false
@@ -52,18 +61,19 @@ export const quoteRef = {
   message: (commentId: string) => `m:${commentId}`,
   phrase: (sampleId: string) => `p:${sampleId}`,
   claim: (claimId: string) => `k:${claimId}`,
+  onScreen: (videoId: string) => `t:${videoId}`,
   hero: (table: HeroTable, id: string) => `h:${table}:${id}`,
   brandVoice: (runId: string, index: number) => `b:${runId}:${index}`,
 }
 
 /** Split a ref into its kind, bare id and (for heroes) table. */
-export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p' | 'k'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
+export function parseRef(ref: string): { kind: 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't'; id: string } | { kind: 'h'; table: string; id: string } | { kind: 'b'; runId: string; index: number } | null {
   const h = /^h:([a-z_]+):(.+)$/.exec(ref)
   if (h) return { kind: 'h', table: h[1], id: h[2] }
   const b = /^b:([^:]+):(\d+)$/.exec(ref)
   if (b) return { kind: 'b', runId: b[1], index: Number(b[2]) }
-  const m = /^([ecvmpk]):(.+)$/.exec(ref)
-  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k', id: m[2] } : null
+  const m = /^([ecvmpkt]):(.+)$/.exec(ref)
+  return m ? { kind: m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't', id: m[2] } : null
 }
 
 function walk(node: unknown, fn: (q: Quote) => Quote | null): unknown {

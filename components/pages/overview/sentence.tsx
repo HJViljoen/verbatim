@@ -11,6 +11,7 @@ import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { fmtInt, longMonth, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import { onScreenText } from '@/lib/pages/overview'
 import type { AnomalyLine, LedgerRow, OverviewData, Voice } from '@/lib/pages/overview'
 import { TokenProse } from '@/components/blocks/prose'
 
@@ -122,10 +123,18 @@ function VoiceRow({ voice, mode }: { voice: Voice; mode: RenderMode }) {
   // frame — and folding it into the blockquote would attribute it to the
   // commenter. It carries no `data-copy` mark of its own, so rule (c) applies
   // to it as it applies to any unmarked markup on the block.
-  const onScreen = voice.onScreen ? (
+  //
+  // IT IS A QUOTE AND IT CARRIES ITS OWN REF (`t:<videos.id>`, code review C1),
+  // so a stored export holds the ref and re-resolves the words at render, and
+  // a video the retention sweep removes takes its line with it. `data-copy`
+  // says `quote` for the reason the kind exists: these are somebody's actual
+  // words and not model prose — "1 bag. 3 years. 0 regrets" is a digit rule (a)
+  // may not police, exactly as a commenter's "three winters" is.
+  const onScreenLine = onScreenText(voice.onScreen?.text ?? null)
+  const onScreen = onScreenLine ? (
     mode === 'email'
-      ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2, marginTop: 3 }}>on-screen text on the same video: “{voice.onScreen}”</div>
-      : <span className="block font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{voice.onScreen}”</span>
+      ? <div data-copy="quote" style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2, marginTop: 3 }}>on-screen text on the same video: “{onScreenLine}”</div>
+      : <span data-copy="quote" className="block font-mono text-[10.5px] text-secondary-foreground">on-screen text on the same video: “{onScreenLine}”</span>
   ) : null
   if (mode === 'email') {
     return <div><BlockQuote quote={voice.quote} cite={cite} mode={mode} />{onScreen}</div>

@@ -58,6 +58,11 @@ export function claimText(claim: string): string {
   return t.length <= CARD_CLAIM_MAX ? t : `${t.slice(0, CARD_CLAIM_MAX - 1).trimEnd()}…`
 }
 
+/** What a claim row says when the count is real and the wording is not on
+ *  record — `video_claims` carried the row and no transcribed words with it.
+ *  Never a blank cell, and never the model's paraphrase in the words' place. */
+export const CARD_CLAIM_UNQUOTED = 'said on these posts; the wording is not on record'
+
 /**
  * "2 declared · 1 card waiting for you" (`main.moves.header`).
  *
@@ -77,7 +82,7 @@ export function movesMeta(m: OverviewData['moves']): string | undefined {
  *  in. `CardCount.basis` is the artboard's "posts published in September" — and
  *  on the own-post rows that is `upload_date`, a THIRD clock (D9), which is why
  *  the basis prints beside the figure and is never assumed. */
-function Count({ count, mode }: { count: CardCount; mode: RenderMode }) {
+function Count({ count, mode, basis = true }: { count: CardCount; mode: RenderMode; basis?: boolean }) {
   return (
     <span className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
       <FigureCell
@@ -86,13 +91,27 @@ function Count({ count, mode }: { count: CardCount; mode: RenderMode }) {
         of={count.value.n > 0 && count.value.n !== count.value.k ? `of ${fmtInt(count.value.n)}` : undefined}
       />
       <span
-        className={mode === 'email' ? undefined : 'text-[11px] leading-[1.35] text-muted-foreground'}
-        style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+        className={mode === 'email' ? undefined : 'text-[11px] leading-[1.35] text-secondary-foreground'}
+        style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.ink2 } : undefined}
       >
-        {count.label} · {count.basis}
+        {basis ? `${count.label} · ${count.basis}` : count.label}
       </span>
     </span>
   )
+}
+
+/** The one basis the card's own-post rows share, said once under them.
+ *
+ *  D9 ASKS FOR THE BASIS BESIDE THE FIGURE, NOT FOUR TIMES IN ONE CARD (design
+ *  review High 8). `buildMoveCandidate` gives `posts`, `overFloor` and `claims`
+ *  the same basis string, so the first row printed "posts published · posts
+ *  published in September" — the label and the basis in the same four words —
+ *  and three later rows repeated it unchanged in a 240px card. The rows that
+ *  share a clock name it once, together; the rows on a DIFFERENT clock
+ *  (`subjectsBasis`, which is posts READ) still carry their own beside them,
+ *  because that is the difference the rule exists to keep visible. */
+export function cardBasisLine(card: MoveCandidate): string {
+  return `every count above is dated by the post itself — ${card.posts.basis}`
 }
 
 /** The pre-filled card — the artboard's left column. */
@@ -110,34 +129,50 @@ function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
       </span>
 
       <span className={email ? undefined : 'flex flex-wrap items-start gap-x-6 gap-y-2'}>
-        <Count count={card.posts} mode={mode} />
-        <Count count={card.overFloor} mode={mode} />
+        <Count count={card.posts} mode={mode} basis={false} />
+        <Count count={card.overFloor} mode={mode} basis={false} />
+      </span>
+      <span
+        className={email ? undefined : 'font-mono text-[10.5px] text-secondary-foreground'}
+        style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2 } : undefined}
+      >
+        {cardBasisLine(card)}
       </span>
 
-      {/* CLAIMS YOU MADE (`main.moves.card.claims`). The claim text is the
-          client's own words lifted off its own transcript, so it is a QUOTATION
-          — several real ones carry a digit ("Made from 100% recycled sails")
-          and rule (a) may not police a quotation. Capped and cut rather than
-          re-worded, because the data is long machine paraphrase and not the
-          mock's slogans. */}
+      {/* CLAIMS YOU MADE (`main.moves.card.claims`), IN THE SPEAKER'S OWN WORDS.
+          `video_claims` holds the model's PARAPHRASE in `claim` and what was
+          actually said in `quote`; this row printed the paraphrase inside
+          quotation marks under `data-copy="quote"` — a model-written string
+          taking the one exemption reserved for words a model did not write
+          (code review I6) — and carried it as a bare string into every stored
+          export (C1). It prints `CardClaim.quote` now: the founder's own
+          sentence, carried as `k:<video_claims.id>` so a snapshot holds the ref
+          and re-resolves the words, and marked `quote` truthfully. Cut here
+          rather than in the data, so a re-resolved export cuts in the same
+          place. A row whose wording was never transcribed keeps its count and
+          says so. */}
       {claims.length > 0 ? (
         <span className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
           <span
-            className={email ? undefined : 'text-[11px] text-muted-foreground'}
-            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+            className={email ? undefined : 'text-[11px] text-secondary-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.ink2 } : undefined}
           >
-            Claims you made · {card.claims.basis}
+            Claims you made
           </span>
-          {claims.map((c) => (
-            <span key={c.claim} className={email ? undefined : 'flex min-w-0 items-baseline gap-2 text-[12px]'}>
-              <span data-copy="quote" className={email ? undefined : 'min-w-0 flex-1'}>“{claimText(c.claim)}”</span>
-              <span data-copy="level" className={email ? undefined : 'shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+          {claims.map((c, i) => (
+            <span key={c.quote?.ref ?? `claim-${i}`} className={email ? undefined : 'flex min-w-0 items-baseline gap-2 text-[12px]'}>
+              {c.quote && c.quote.text.trim() ? (
+                <span data-copy="quote" className={email ? undefined : 'min-w-0 flex-1'}>“{claimText(c.quote.text)}”</span>
+              ) : (
+                <span className={email ? undefined : 'min-w-0 flex-1 text-secondary-foreground'}>{CARD_CLAIM_UNQUOTED}</span>
+              )}
+              <span data-copy="level" className={email ? undefined : 'shrink-0 font-mono text-[10.5px] tabular-nums text-secondary-foreground'}>
                 {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
               </span>
             </span>
           ))}
           {moreClaims > 0 ? (
-            <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+            <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-secondary-foreground'}>
               and {fmtInt(moreClaims)} more, each said on its own post
             </span>
           ) : null}

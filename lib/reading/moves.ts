@@ -4,6 +4,8 @@ import { monthChange } from './bands'
 import { monthStartOf, nextMonth } from './month-key'
 import type { Counted, FigureTable, Verdict, VerdictWindow } from './verdicts'
 import type { DeclareMoveInput } from '../subjects/moves'
+import { quoteRef } from '../renderables/quotes-freeze'
+import type { Quote } from '../renderables/types'
 
 // What a move proposes, and what a move did (Phase 1 Block D, package D2).
 //
@@ -60,12 +62,30 @@ export interface CardCount {
  *
  *  ADDITIVE TO THE PINNED SHAPE, and named here because the brief's
  *  `claimTopics: string[]` cannot carry the mock's per-claim count
- *  ("Built to last a decade" · 3 posts). The claim TEXT is the client's own
- *  words lifted off its own transcript, so a surface prints it as a quotation
- *  and never inside scrubbed prose — several real claims carry a digit
- *  ("Made from 100% recycled sails") and rule (a) may not police a quotation. */
+ *  ("Built to last a decade" · 3 posts).
+ *
+ *  THE ROW PRINTS THE SPEAKER'S WORDS, AND CARRIES THEM AS A REF (code review
+ *  C1 and I6). `video_claims` holds two columns: `claim`, which is the model's
+ *  paraphrase of what was said, and `quote`, which is what was actually said.
+ *  The card printed the PARAPHRASE inside quotation marks under
+ *  `data-copy="quote"` — a model-written string taking the one exemption
+ *  reserved for words a model did not write. And it carried it as a bare
+ *  string, so with Overview registered as an export module the paraphrase
+ *  landed verbatim in `report_snapshots.data`, was served by `/r/<token>`, and
+ *  was invisible to the erasure sweep because it contributed no ref.
+ *
+ *  So the row carries `quote`: the speaker's own words under
+ *  `k:<video_claims.id>`, which is the ref kind that exists for exactly this
+ *  row and which `fetchQuoteTextsByRefs` resolves off `video_claims.quote`.
+ *  The paraphrase is the grouping key inside this function and leaves it in no
+ *  field. Null where the row carried no id or no words — the count is still
+ *  real and the card says the wording is not on record, which is the one thing
+ *  a bare "3 posts" could not say.
+ *
+ *  The text is carried in FULL and cut at render, so the app and a re-rendered
+ *  export cut the same sentence in the same place. */
 export interface CardClaim {
-  claim: string
+  quote: Quote | null
   posts: Counted
 }
 
@@ -77,8 +97,14 @@ export interface MoveCandidate {
   commentFloor: number
   /** Claims made on your own posts this month (video_claims → your videos). */
   claims: CardCount
-  claimTopics: string[]
-  /** The same claims with the posts each was made on — see `CardClaim`. */
+  /** The claims, with the posts each was made on and the speaker's own words
+   *  as a ref — see `CardClaim`.
+   *
+   *  `claimTopics: string[]` STOOD HERE AND IS GONE. It was the brief's pinned
+   *  shape, it was read by nothing, and every string in it was a machine
+   *  paraphrase that a registered export module would have frozen into
+   *  `report_snapshots.data` with no ref behind it (code review C1). A field
+   *  whose only reader is a snapshot is a leak with a type. */
   claimRows: CardClaim[]
   /** The hook split of those posts. */
   hooks: CardCount[]
@@ -138,7 +164,7 @@ export interface MoveCandidate {
 export interface MoveCandidateInput {
   month: string
   clientVideos: readonly { id: string; upload_date: string | null; comments_count: number; hook_style: string | null; classified_type: string | null }[]
-  claims: readonly { source_video_id: string; claim: string; entity: string }[]
+  claims: readonly { id: string; source_video_id: string; claim: string; quote: string; entity: string }[]
   membership: readonly { subjectId: string; label: string; videoIds: readonly string[] }[]
   yours: Verdict | null
   category: Verdict | null
@@ -247,17 +273,32 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
   // video is not something you said, and the id filter alone would not catch
   // one filed against a video of yours.
   const mine = input.claims.filter((c) => c.entity === 'client' && ids.has(c.source_video_id))
-  const postsByClaim = new Map<string, Set<string>>()
+  // GROUPED ON THE PARAPHRASE, PRINTED AS THE QUOTE. `video_claims.claim` is
+  // the model's summary of what was said and is what a reader would call "one
+  // claim", so it is the key two posts making the same claim collapse on; the
+  // words themselves are the FIRST row's, on the same rule `own-posts.ts` uses
+  // — a claim is dated and quoted by the earliest post that made it, and the
+  // rows arrive ordered by `source_video_id`. The key never leaves this scope
+  // (see `CardClaim`).
+  const postsByClaim = new Map<string, { first: { id: string; quote: string }; posts: Set<string> }>()
   for (const c of mine) {
     const claim = c.claim.trim()
     if (!claim) continue
-    const set = postsByClaim.get(claim) ?? new Set<string>()
-    set.add(c.source_video_id)
-    postsByClaim.set(claim, set)
+    const seen = postsByClaim.get(claim)
+    if (seen) seen.posts.add(c.source_video_id)
+    else postsByClaim.set(claim, { first: { id: c.id, quote: c.quote ?? '' }, posts: new Set([c.source_video_id]) })
   }
   const claimRows: CardClaim[] = [...postsByClaim.entries()]
-    .map(([claim, posts]) => ({ claim, posts: counted(posts.size, n) }))
+    .map(([claim, row]) => ({
+      claim,
+      quote:
+        row.first.id && row.first.quote.trim()
+          ? { ref: quoteRef.claim(row.first.id), text: row.first.quote.replace(/\s+/g, ' ').trim() }
+          : null,
+      posts: counted(row.posts.size, n),
+    }))
     .sort((a, b) => b.posts.k - a.posts.k || a.claim.localeCompare(b.claim))
+    .map(({ quote, posts }) => ({ quote, posts }))
   const postsWithAClaim = new Set(mine.map((c) => c.source_video_id))
 
   const byHook = new Map<string, number>()
@@ -318,7 +359,6 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
     overFloor: { label: 'cleared the comment floor', value: counted(overFloor, n), basis },
     commentFloor: floor,
     claims: { label: 'carried a claim of yours', value: counted(postsWithAClaim.size, n), basis },
-    claimTopics: claimRows.map((c) => c.claim),
     claimRows,
     hooks,
     readPosts: { label: 'we have read', value: counted(read, n), basis },
