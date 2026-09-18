@@ -1,4 +1,5 @@
 import { LATER_LINE, PRIVACY_LINE, coverageLine, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
 import { quoteRef } from '@/lib/renderables/quotes-freeze'
 
@@ -40,6 +41,53 @@ const quote = (ref: string, text: string, cite: string, extra: { lang?: string; 
   cite,
   href: 'https://www.youtube.com/watch?v=abc',
 })
+
+
+// ---- §6's own side (Phase 1 Block D, D6) ---------------------------------------
+//
+// ÖSSUR'S OWN SEPTEMBER, read read-only on 2026-09-18: 109 videos published on
+// their own accounts, 84 of them carrying a `classified_type` and 81 a
+// `hook_style`, 77 with an engagement rate on a platform the rate is comparable
+// across. The gap between 109 and 84 is the whole reason this column prints
+// two numbers — the artboard prints one, and it is the larger.
+
+const OWN_FORMATS: [string, number, number][] = [
+  ['story', 28, 2.4], ['testimonial', 21, 1.6], ['promotional', 18, 1.1], ['tutorial', 6, 1.8],
+  ['educational', 3, 1.3], ['entertainment', 3, 7.6], ['behind-the-scenes', 2, 10.3],
+  ['how-to', 1, 15.2], ['comparison', 1, 2.3], ['review', 1, 2.1],
+]
+const OWN_HOOKS: [string, number][] = [
+  ['personal-story', 45], ['bold-claim', 21], ['before-after', 5], ['question', 5],
+  ['demonstration', 2], ['shock-value', 2], ['trend-riding', 1],
+]
+
+const OWN_PUBLISHED: PlaybookVideo[] = (() => {
+  const out: PlaybookVideo[] = Array.from({ length: 109 }, (_, i) => ({
+    id: `ossur-own-${i}`,
+    upload_date: `2026-09-${String((i % 27) + 1).padStart(2, '0')}`,
+    platform: i % 4 === 3 ? 'youtube' : 'tiktok',
+    classified_type: null,
+    hook_style: null,
+    engagement_rate: null,
+    is_client: true,
+    is_competitor: false,
+    competitor_name: null,
+    source: 'owned',
+    sentiment: null,
+    sentiment_source: null,
+    analyzed_lane: 'full',
+  }))
+  let at = 0
+  for (const [key, k, med] of OWN_FORMATS) {
+    for (let i = 0; i < k; i++, at++) {
+      out[at].classified_type = key
+      out[at].engagement_rate = med
+    }
+  }
+  let hookAt = 0
+  for (const [key, k] of OWN_HOOKS) for (let i = 0; i < k; i++, hookAt++) out[hookAt].hook_style = key
+  return out
+})()
 
 export function weekFixture(): WeekData {
   const risingVerdict = bandVerdict({
@@ -218,6 +266,11 @@ export function weekFixture(): WeekData {
       ],
       rated: 331,
       excluded: ['Reddit'],
+      // YOUR OWN SIDE, MONTH TO DATE — Össur's real September: 84 of the 109
+      // videos on their own accounts carry a format, 81 carry a hook. The
+      // pooled rows above are the update's; these are the month's, on the
+      // published clock, and the two are not the same figure.
+      sides: ownSides({ month: '2026-09-01', brand: 'Össur', videos: OWN_PUBLISHED }),
       unread: null,
     },
     coverage: {
@@ -332,6 +385,10 @@ export function thinFixture(): WeekData {
       hooks: [],
       rated: 41,
       excluded: ['Reddit'],
+      // Sealand published 17 videos of their own in September and FIVE of them
+      // have been classified, which is the degraded arm wave 2 is reviewed in:
+      // the column exists, the cells are thin, and the coverage line says so.
+      sides: null,
       unread: 'Too few of this update’s videos carry an engagement figure to read a format or a hook against the rest.',
     },
     coverage: {

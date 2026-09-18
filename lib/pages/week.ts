@@ -30,6 +30,8 @@ import { selectAll } from '../supabase-admin'
 import { row, rows } from './read'
 import { fetchRunningRunIds } from './latest-video-run'
 import { fetchThemedRunId } from './themed-run'
+import { loadOwnPublishedVideos, ownSides, type PlaybookVideo } from './playbook'
+import type { FormatMatrix } from '../reading/formats'
 
 // This week — "what needs attention this week?" (Phase 1 WP15, decision P,
 // the mock's ThisWeek.dc.html).
@@ -390,6 +392,21 @@ export interface WorkedBlock {
   rated: number
   /** Platforms excluded from the reading, by name. */
   excluded: string[]
+  /**
+   * YOUR OWN SIDE, MONTH TO DATE (Phase 1 Block D, D6 — `week.worked.yourhooks`).
+   *
+   * Everything above is the update's videos with no audience split at all —
+   * yours, your rivals' and the category's pooled — so a client cannot see
+   * their own hooks separately from the field's. This is the client half of
+   * CO7 over the month the rest of this page is stated against, on the
+   * PUBLISHED clock (`videos.upload_date`), which is why it carries its own
+   * basis line: "5 of the 9 you published in September" is a different figure
+   * from anything dated by a gather, and printing the two under one heading
+   * without saying so is decision D9's defect.
+   *
+   * Null where the month's own posts were not read.
+   */
+  sides: { formats: FormatMatrix; hooks: FormatMatrix; coverageLine: string; basisLine: string } | null
   unread: string | null
 }
 
@@ -759,7 +776,12 @@ export async function loadWeek(scope: Scope): Promise<WeekData | null> {
   ])
 
   // ── §6 · what worked ───────────────────────────────────────────────────
-  const worked = buildWorked(videos)
+  // §6'S OWN SIDE — ONE NARROW READ, AFTER THE WAVE. The client's own posts in
+  // the month are tens of rows on every tenant we have, and §6 is the only
+  // section that wants them; a failure here leaves the pooled reading intact
+  // and the split absent, which is the honest degradation.
+  const ownPublished = await loadOwnPublishedVideos(supabase, clientId, month).catch(() => null)
+  const worked = buildWorked(videos, ownPublished ? { month, brand, videos: ownPublished } : null)
 
   const coverage: CoverageBlock = {
     line: coverageLine({
@@ -1489,7 +1511,10 @@ const ENGAGEMENT_EXCLUDED = ['reddit']
 const WORKED_UNREAD =
   'Too few of this update’s videos carry an engagement figure to read a format or a hook against the rest.'
 
-function buildWorked(videos: readonly VideoRow[]): WorkedBlock {
+function buildWorked(
+  videos: readonly VideoRow[],
+  own: { month: string; brand: string; videos: readonly PlaybookVideo[] } | null,
+): WorkedBlock {
   const rated = videos.filter((v) => !ENGAGEMENT_EXCLUDED.includes(v.platform) && Number(v.engagement_rate) > 0)
   const perf = rated.map((v) => ({
     engagement_rate: Number(v.engagement_rate),
@@ -1503,6 +1528,7 @@ function buildWorked(videos: readonly VideoRow[]): WorkedBlock {
     hooks,
     rated: rated.length,
     excluded: ENGAGEMENT_EXCLUDED.map(platformLabel),
+    sides: own ? ownSides(own) : null,
     unread: formats.length === 0 && hooks.length === 0 ? WORKED_UNREAD : null,
   }
 }

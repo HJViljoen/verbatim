@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
-import { buildHeadToHead, buildPlaybook, coverageLine, type PlaybookVideo } from './playbook'
+import { buildHeadToHead, buildPlaybook, coverageLine, ownSides, type PlaybookVideo } from './playbook'
 
 // CO3 and CO7's two builders, over the rows the loader reads.
 //
@@ -199,5 +199,36 @@ describe('coverageLine', () => {
     expect(coverageLine([{ audienceLabel: 'The category', of: 569, published: 1388 }], '2026-09-01')).toBe(
       'Read from 569 of The category’s 1,388 videos published in September.',
     )
+  })
+})
+
+describe('ownSides · week.worked.yourhooks', () => {
+  it('keeps your column alone, with the month’s own denominator and its basis', () => {
+    const sides = ownSides({
+      month: '2026-09-01',
+      brand: 'Össur',
+      videos: [
+        ...run('client', 6, { classified_type: 'story', hook_style: 'personal-story', engagement_rate: 2.4, source: 'owned' }),
+        ...run('client', 3, { classified_type: null, source: 'owned' }),
+        ...run('category', 40, { classified_type: 'story', engagement_rate: 3.4 }),
+      ],
+    })
+    expect(sides.formats.sides.map((s) => s.audience)).toEqual(['client'])
+    expect(sides.formats.sides[0].of).toBe(6)
+    expect(sides.formats.sides[0].published).toBe(9)
+    expect(sides.basisLine).toBe('videos published in September')
+    expect(sides.coverageLine).toBe('Read from 6 of Össur’s 9 videos published in September.')
+  })
+
+  it('states the month, not the update — the two are different figures', () => {
+    const sides = ownSides({
+      month: '2026-09-01',
+      brand: 'Össur',
+      videos: [
+        ...run('client', 4, { classified_type: 'story', engagement_rate: 2 }),
+        ...run('client', 9, { classified_type: 'story', engagement_rate: 2 }, '08'),
+      ],
+    })
+    expect(sides.formats.sides[0].of).toBe(4)
   })
 })

@@ -235,6 +235,56 @@ function moodOf(videos: readonly PlaybookVideo[]): { positive: number; judged: n
   return { positive, judged }
 }
 
+/**
+ * §6's own side of the same reading — your posts, month to date.
+ *
+ * `week.worked` today reads every video of the UPDATE with no audience split at
+ * all, so a client cannot see their own hooks separately from the category's.
+ * This is the client half of CO7 over the same month the rest of This week is
+ * stated against, on the published clock, so the figure reads "5 of the 9 you
+ * published in September" rather than a share of a gather.
+ */
+export function ownSides(input: { month: string; brand: string; videos: readonly PlaybookVideo[] }): {
+  formats: FormatMatrix
+  hooks: FormatMatrix
+  coverageLine: string
+  basisLine: string
+} {
+  const built = buildPlaybook({ month: input.month, brand: input.brand, rival: null, videos: input.videos })
+  const mine = (m: FormatMatrix): FormatMatrix => ({ ...m, sides: m.sides.filter((s) => s.audience === CLIENT_AUDIENCE) })
+  return {
+    formats: mine(built.formats),
+    hooks: mine(built.hooks),
+    coverageLine: coverageLine(
+      built.formats.sides.filter((s) => s.audience === CLIENT_AUDIENCE).map((s) => ({ audienceLabel: s.label, of: s.of, published: s.published })),
+      input.month,
+    ),
+    basisLine: built.basisLine,
+  }
+}
+
+/** The client's own published videos for one month — the narrow read §6 needs,
+ *  which is tens of rows on every tenant we have rather than the two-month
+ *  corpus CO3 and CO7 share. */
+export async function loadOwnPublishedVideos(
+  supabase: SupabaseClient,
+  clientId: string,
+  month: string,
+): Promise<PlaybookVideo[]> {
+  const from = monthStartOf(month)
+  const to = nextMonth(from)
+  return selectAll<PlaybookVideo>(() =>
+    supabase
+      .from('videos')
+      .select(PLAYBOOK_COLUMNS)
+      .eq('client_id', clientId)
+      .eq('is_client', true)
+      .gte('upload_date', from)
+      .lt('upload_date', to)
+      .order('upload_date', { ascending: true }),
+  )
+}
+
 /** The columns CO3 and CO7 need, and no more. Two months of videos by upload
  *  date, tenant-scoped; `selectAll` because a bare `.select()` caps at 1000 and
  *  a category month is bigger than that on every tenant we have. */
