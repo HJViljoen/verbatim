@@ -254,6 +254,29 @@ describe('gapLine', () => {
     expect(level.state).toBe('level')
   })
 
+  it('names its window where the figures beside it are of another period', () => {
+    const quarter = gapBetween({
+      ...durability,
+      a: side({ value: { k: 78, n: 252 }, pct: 31 }),
+      b: them({ value: { k: 186, n: 426 }, pct: 43.7 }),
+      window: { kind: 'quarter', from: '2026-07-01', to: '2026-10-01' },
+    })
+    expect(gapLine(quarter, { period: true })).toBe(
+      'The quarter from July 2026 · you 31% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)',
+    )
+    // And it is opt-in: a surface whose other figures are of the same window
+    // prints the bare sentence, exactly as before.
+    expect(gapLine(quarter)).toBe('you 31% of 252 · Freitag 43.7% of 426 · 12.7 points apart (band 7.6)')
+    expect(gapLine(quarter, {})).toBe(gapLine(quarter))
+  })
+
+  it('names a month window the same way', () => {
+    const thin = gapBetween({ ...durability, a: side(), b: them(), window: SEP })
+    expect(gapLine(thin, { period: true })).toBe(
+      'September 2026 · you 31% of 84 · Freitag 43.7% of 142 · too few to compare',
+    )
+  })
+
   it('carries no direction word anywhere in any state — the copy contract’s rule (c)', () => {
     const gaps = [
       gapBetween({ ...durability, a: side({ value: { k: 78, n: 252 } }), b: them({ value: { k: 186, n: 426 } }), window: SEP, basis: { a: side({ value: { k: 60, n: 273 } }), b: them({ value: { k: 175, n: 427 } }), window: JUN } }),

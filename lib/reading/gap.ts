@@ -294,9 +294,25 @@ function levelOf(side: GapSide): string {
 /** A magnitude in points, trailing `.0` dropped: 19 → "19", 12.7 → "12.7". */
 const pts = (n: number): string => `${round1(n)}`
 
+export interface GapLineOptions {
+  /**
+   * Name the window the gap was read over, before the two levels.
+   *
+   * A GAPLINE PRINTED BESIDE FIGURES OF A DIFFERENT PERIOD MUST SAY SO. The
+   * quarterly subjects row prints the MONTH's levels in its body ("you 31% of
+   * 84 · the category 22% of 1,388") and binds this line for the QUARTER's, so
+   * unlabelled it puts two different "you …% of N" in one row and a reader has
+   * no way to tell which is which. The Overview and the Subjects pane print a
+   * gap of the same month as the figures around it and pass nothing.
+   */
+  period?: boolean
+}
+
 /**
  * The reader's sentence: both levels, the difference, the band, the state —
- * "you 31% of 84 · Freitag 43.7% of 142 · 12.7 points apart (band 13.1)".
+ * "you 31% of 84 · Freitag 43.7% of 142 · 12.7 points apart (band 13.1)", and
+ * with `period` the window in front of it: "The quarter from July 2026 · you
+ * 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)".
  *
  * THE MAGNITUDE PRINTS ONLY WHERE THE GAP IS `apart`. This is D2's rule, the
  * mock's single most load-bearing error and the one `MovementBadge` has always
@@ -305,15 +321,17 @@ const pts = (n: number): string => `${round1(n)}`
  * away. `level` prints its band — the band is the evidence for "they read the
  * same" — and the two refusals print neither.
  */
-export function gapLine(gap: Gap): string {
+export function gapLine(gap: Gap, options: GapLineOptions = {}): string {
   const sides = `${levelOf(gap.a)} · ${levelOf(gap.b)}`
-  if (gap.state === 'apart' && gap.gapPts != null && gap.bandPts != null) {
-    return `${sides} · ${pts(Math.abs(gap.gapPts))} points ${GAP_WORDS.apart} (band ${pts(gap.bandPts)})`
-  }
-  if (gap.state === 'level' && gap.bandPts != null) {
-    return `${sides} · ${GAP_WORDS.level} (band ${pts(gap.bandPts)})`
-  }
-  return `${sides} · ${GAP_WORDS[gap.state]}`
+  const body =
+    gap.state === 'apart' && gap.gapPts != null && gap.bandPts != null
+      ? `${sides} · ${pts(Math.abs(gap.gapPts))} points ${GAP_WORDS.apart} (band ${pts(gap.bandPts)})`
+      : gap.state === 'level' && gap.bandPts != null
+        ? `${sides} · ${GAP_WORDS.level} (band ${pts(gap.bandPts)})`
+        : `${sides} · ${GAP_WORDS[gap.state]}`
+  if (!options.period) return body
+  const when = periodLabel(gap.window)
+  return `${when.charAt(0).toUpperCase()}${when.slice(1)} · ${body}`
 }
 
 /**

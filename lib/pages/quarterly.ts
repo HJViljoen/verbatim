@@ -178,6 +178,14 @@ export interface SubjectQuarterRow {
    * and needs no baseline, so it is drawn whenever both sides carry a reading.
    * The earlier gap (`Gap.basis`) is the prior quarter's pair, and that one
    * does disappear with the baseline.
+   *
+   * THE PORT MUST PRINT IT AS `gapLine(row.gap, { period: true })`. The row's
+   * own body prints the MONTH's levels ("you 31% of 84 · the category 22% of
+   * 1,388") and this gap is the QUARTER's (30.1% of 249 · 22% of 4,147), so
+   * the bare sentence would put two different "you …% of N" in one row with
+   * nothing to tell them apart. The labelled form names the quarter in front
+   * of its own figures. This is the one surface in the product that needs it,
+   * which is why the option exists and why it is off by default.
    */
   gap: Gap | null
 }

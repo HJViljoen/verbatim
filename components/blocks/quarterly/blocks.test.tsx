@@ -499,6 +499,19 @@ describe('the two-audience gap the quarter can actually carry', () => {
     expect(line.match(directionRe())).toBeNull()
   })
 
+  it('names its own quarter, because the row’s body prints the MONTH’s levels', () => {
+    const data = quarterlyFixture()
+    const body = renderText(QUARTERLY_BLOCKS['quarterly.subjects'].render(data, 'app', ctx))
+    // The row prints your month beside the category's month …
+    expect(body).toContain('31% 26 of 84')
+    // … and the gap is of the quarter, so the line wave 2 binds says so.
+    const labelled = gapLine(row().gap!, { period: true })
+    expect(labelled).toBe(
+      'The quarter from July 2026 · you 30.1% of 249 · The category 22% of 4,147 · 8.1 points apart (band 6)',
+    )
+    expect(labelled.match(directionRe())).toBeNull()
+  })
+
   it('claims no direction — no reader’s flag is true in wave 1', () => {
     expect(row().gap!.direction).toBeNull()
   })
