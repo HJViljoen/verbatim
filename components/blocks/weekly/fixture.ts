@@ -2,6 +2,7 @@ import type { WeeklyData } from '@/lib/pages/weekly'
 import type { WeekFlag } from '@/lib/reports/weekly'
 import { weekCheck, weekSentence } from '@/lib/reports/weekly'
 import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import { quoteRef } from '@/lib/renderables/quotes-freeze'
 
 // The weekly report's fixtures (Phase 1 WP17).
 //
@@ -80,6 +81,16 @@ function base(overview = overviewFixture()): WeeklyData {
         { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, commentsRead: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
       ],
       rivalPostsNote: null,
+      // NEW ON YOUR SUBJECTS — the mock's three quotes, which this artefact
+      // printed none of. Three shown of 41 counted, which is the shape the
+      // block has to print honestly.
+      quotes: [
+        { subject: 'Durability', quote: { ref: quoteRef.evidence('ev-w1'), text: 'Third winter on mine and the strap has not given at all' }, cite: 'YouTube · 9 Sep', href: 'https://www.youtube.com/watch?v=w1' },
+        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Rode through an hour of rain and the laptop came out dry', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
+        { subject: 'Repair and warranty', quote: { ref: quoteRef.evidence('ev-w3'), text: 'They fixed the zip for free eighteen months in' }, cite: 'TikTok · 11 Sep', href: 'https://www.tiktok.com/@x/video/w3' },
+      ],
+      quotesTotal: 41,
+      quotesNote: null,
     },
     sales: {
       rows: [
@@ -169,7 +180,20 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       }),
       check: weekCheck({ state: 'baseline_forming', flags: [], monthsClearing: 1 }),
     },
-    incoming: { ...data.incoming, analysed: null, newThemes: [], newThemesNote: 'No theme was heard for the first time in this update.', rivalPosts: [], rivalPostsNote: 'No tracked rival posted in this update’s window.' },
+    // SEALAND TODAY: subjects are not recorded, so there are no quotes to be
+    // new ON — and the section says which of those two things is true rather
+    // than printing nothing.
+    incoming: {
+      ...data.incoming,
+      analysed: null,
+      newThemes: [],
+      newThemesNote: 'No theme was heard for the first time in this update.',
+      rivalPosts: [],
+      rivalPostsNote: 'No tracked rival posted in this update’s window.',
+      quotes: [],
+      quotesTotal: null,
+      quotesNote: 'Quotes are counted against your subjects once subjects are recorded for this workspace. Until then this update’s comments are read, grouped and counted — they are simply not yours to name.',
+    },
     sales: { rows: [], hasMore: false, note: 'Grouped by what customers raised; your subjects are not recorded for this workspace yet.', briefHref: '/dashboard/reports' },
     content: {
       ...data.content,

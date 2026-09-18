@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockQuote } from '@/components/blocks/quote'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, platformLabel, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -116,6 +117,24 @@ export const weeklyIncoming: Block<WeeklyData> = {
         ) : (
           <Note mode={mode}>{i.rivalPostsNote}</Note>
         )}
+
+        {/* NEW ON YOUR SUBJECTS. The mock prints three quotes here and the
+            artefact printed none — the words exist one surface over (This
+            week's §4) and reach this one through the same loader, so the two
+            cannot disagree about which comments were new. The count line is the
+            real total; the quotes below it are the shown few. */}
+        {i.quotes.length > 0 ? (
+          <div style={mode === 'email' ? { marginTop: 10 } : undefined} className={mode === 'email' ? undefined : 'mt-2 flex min-w-0 flex-col gap-2'}>
+            {i.quotesTotal != null ? (
+              <Note mode={mode}>
+                <span data-copy="figure">{fmtInt(i.quotesTotal)}</span> {i.quotesTotal === 1 ? 'comment' : 'comments'} on your subjects {i.quotesTotal === 1 ? 'was' : 'were'} written in these days; {i.quotes.length === 1 ? 'one is' : <><span data-copy="figure">{fmtInt(i.quotes.length)}</span> are</>} below in full.
+              </Note>
+            ) : null}
+            {i.quotes.map((q, n) => <BlockQuote key={n} quote={q.quote} cite={`${q.subject} · ${q.cite}`} mode={mode} />)}
+          </div>
+        ) : i.quotesNote ? (
+          <Note mode={mode}>{i.quotesNote}</Note>
+        ) : null}
       </div>,
     )
   },
@@ -131,6 +150,13 @@ export const weeklyIncoming: Block<WeeklyData> = {
       out.month_videos = { value: data.incoming.monthVideos, unit: 'videos', label: 'videos in the month so far' }
     }
     return out
+  },
+
+  quotes(data) {
+    // REFS ALONE, never the words. A snapshot freezes ids here and resolves
+    // the text at render, so an erasure reaches a stored artefact (decision H)
+    // and nothing under lib/reports/ ever holds a comment's text.
+    return data.incoming.quotes.map((q) => q.quote.ref)
   },
 
   emptyState(data) {

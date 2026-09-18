@@ -1616,11 +1616,11 @@ const QUOTES_NO_WINDOW =
  * built to stop. Absent the table, the honest answer is that the instrument is
  * not installed — not that the week was quiet.
  */
-async function loadSubjectQuotes(
+export async function loadSubjectQuotes(
   supabase: SupabaseClient,
   clientId: string,
   subjects: Subject[] | null,
-  window: WeekWindow,
+  window: { from: string; to: string },
 ): Promise<{ shown: { subject: string; quote: Quote; cite: string; href: string | null }[]; total: number | null; unread: string | null }> {
   if (!subjects || subjects.length === 0) return { shown: [], total: null, unread: QUOTES_UNREAD }
   const nameById = new Map(subjects.map((s) => [s.id, s.name]))
@@ -1996,8 +1996,12 @@ export function isMissingAnomalyRecord(error: unknown): boolean {
   return /in the schema cache/i.test(text) || /does not exist/i.test(text)
 }
 
-/** The tenant's subjects, or null where M4 has not landed. */
-async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
+/** The tenant's subjects, or null where M4 has not landed.
+ *
+ *  Exported because the weekly report's §3 reads the SAME quotes off the SAME
+ *  subjects: two readers of one figure is how an artefact comes to say
+ *  something the page it is a copy of cannot. */
+export async function loadSubjects(supabase: SupabaseClient, clientId: string): Promise<Subject[] | null> {
   try {
     return await selectAll<Subject>(() =>
       supabase.from(TABLE_SUBJECTS).select('*').eq('client_id', clientId).order('named_at', { ascending: true }),

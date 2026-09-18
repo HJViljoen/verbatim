@@ -15,7 +15,7 @@ import { BASELINE_MONTHS, baselineStateOf, thinUpdate, type ThinUpdateVerdict } 
 import { INDUSTRY_AUDIENCE } from '../rivals'
 import { loadOverview, audienceInLabel, daysInto, isMissingAnomalyFlags, type Mover, type OverviewData, type SubjectsBlock } from './overview'
 import { loadContent, isContentEmpty, type ContentInboxRow } from './content'
-import { workedLabel } from './week'
+import { loadSubjectQuotes, loadSubjects, workedLabel } from './week'
 import {
   periodNounFor,
   weekCheck,
@@ -60,6 +60,22 @@ export interface IncomingBlock {
   newThemesNote: string | null
   rivalPosts: RivalPost[]
   rivalPostsNote: string | null
+  /**
+   * New comments on the client's subjects, written inside this update's window
+   * (`weekly.s3.quotes`).
+   *
+   * THE SAME QUOTES THIS WEEK PRINTS, OFF THE SAME LOADER. The artefact is the
+   * page's own reading and not a second one, so §3's quotes come through
+   * `loadSubjectQuotes` (lib/pages/week.ts) rather than through a second query
+   * that could disagree with it. The words are carried for RENDER only; the
+   * block hands back refs alone, and a snapshot freezes those (decision H).
+   */
+  quotes: { subject: string; quote: Quote; cite: string; href: string | null }[]
+  /** How many there were in all, of which the above are the shown few. Null
+   *  where nobody counted — never 0, which is a measurement. */
+  quotesTotal: number | null
+  /** Why there are none, when the reason is the instrument and not the week. */
+  quotesNote: string | null
 }
 
 export interface RivalPost {
@@ -411,7 +427,7 @@ export async function loadWeekly(scope: Scope): Promise<WeeklyData | null> {
 
   // ── sections 3, 4 ───────────────────────────────────────────────────────
   const [incoming, sales] = await Promise.all([
-    loadIncoming(supabase, clientId, run, overview),
+    loadIncoming(supabase, clientId, run, overview, window),
     loadSales(supabase, clientId, month, overview),
   ])
 
@@ -605,11 +621,18 @@ interface VideoRow {
 /** How many rival posts section 3 names. */
 export const RIVAL_POSTS = 3
 
+/** How many quotes section 3 prints — the mock's three, which is one fewer
+ *  than This week's four. The COUNT beside them is the real total either way,
+ *  so the two surfaces never disagree about how many there were. */
+export const INCOMING_QUOTES = 3
+
 async function loadIncoming(
   supabase: SupabaseClient,
   clientId: string,
   run: RunRow | null,
   overview: OverviewData,
+  /** The update's own frozen window, for the quotes §3 dates by the COMMENT. */
+  window: { from: string; to: string } | null,
 ): Promise<IncomingBlock> {
   const empty: IncomingBlock = {
     gathered: 0,
@@ -620,10 +643,13 @@ async function loadIncoming(
     newThemesNote: 'No theme was heard for the first time in this update.',
     rivalPosts: [],
     rivalPostsNote: 'No tracked rival posted in this update’s window.',
+    quotes: [],
+    quotesTotal: null,
+    quotesNote: 'This update covered no window, so there are no days for a new comment on your subjects to have been written in.',
   }
   if (!run) return { ...empty, newThemesNote: 'This workspace has no delivered update yet.', rivalPostsNote: null }
 
-  const [videoRes, themeRows] = await Promise.all([
+  const [videoRes, themeRows, subjectQuotes] = await Promise.all([
     selectAll<VideoRow>(() =>
       supabase
         .from('videos')
@@ -640,6 +666,18 @@ async function loadIncoming(
       ),
     ),
     newThemesOf(supabase, clientId, run.id),
+    // THE WINDOW IS THE COMMENT'S CLOCK, NOT THE RUN'S. "New quotes on your
+    // subjects" means comments WRITTEN in the days this update covered — an
+    // insight this update wrote out of a March comment is March's. With no
+    // window there are no days for one to have been written in, and the
+    // section says that rather than showing none.
+    window
+      ? loadSubjects(supabase, clientId).then((subjects) => loadSubjectQuotes(supabase, clientId, subjects, window))
+      : Promise.resolve({
+        shown: [] as { subject: string; quote: Quote; cite: string; href: string | null }[],
+        total: null as number | null,
+        unread: 'This update covered no window, so there are no days for a new comment on your subjects to have been written in.',
+      }),
   ])
 
   const byPlatform = new Map<string, number>()
@@ -694,6 +732,9 @@ async function loadIncoming(
     newThemesNote: themeRows.length > 0 ? null : 'No theme was heard for the first time in this update.',
     rivalPosts,
     rivalPostsNote: rivalPosts.length > 0 ? null : 'No tracked rival posted in this update’s window.',
+    quotes: subjectQuotes.shown.slice(0, INCOMING_QUOTES),
+    quotesTotal: subjectQuotes.total,
+    quotesNote: subjectQuotes.unread,
   }
 }
 
