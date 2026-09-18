@@ -1,5 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { MovementBadge } from '@/components/delta-badge'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -88,24 +88,40 @@ function Count({ count, mode, hero = false }: { count: CardCount; mode: RenderMo
 function Movement({ verdict, mode }: { verdict: Verdict; mode: RenderMode }) {
   const v = verdict
   const where = audiencePhrase(v.audience)
-  const now = <>{fmtInt(v.value.k)} of {fmtInt(v.value.n)}</>
-  const then = v.baseline ? <>{fmtInt(v.baseline.k)} of {fmtInt(v.baseline.n)}</> : null
+  // The numerators alone: the "of N" is the cell's own second line in the app
+  // arm, and the email arm (no flex, Outlook lays out with Word) keeps them on
+  // one line where they cannot break apart anyway.
+  const now = fmtInt(v.value.k)
+  const then = v.baseline ? fmtInt(v.baseline.k) : null
   if (mode === 'email') {
     return (
       <div data-copy="verdict" style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2, padding: '2px 0' }}>
-        {v.objectLabel} in {where}: <span data-copy="level" style={{ fontFamily: FONT.mono }}>{now} videos</span>
-        {then ? <> against <span data-copy="level" style={{ fontFamily: FONT.mono }}>{then}</span></> : null}
+        {v.objectLabel} in {where}: <span data-copy="level" style={{ fontFamily: FONT.mono }}>{now} of {fmtInt(v.value.n)} videos</span>
+        {then ? <> against <span data-copy="level" style={{ fontFamily: FONT.mono }}>{then} of {fmtInt(v.baseline!.n)}</span></> : null}
       </div>
     )
   }
+  // THE LEVEL AND ITS "of N" ARE ONE CELL, WHICH IS WHAT `FigureCell` IS FOR.
+  // Run as one sentence in a `justify-between` row, this printed "Durability in
+  // your audience 26 of 84 videos against 23 / of 85" with the badge sitting in
+  // the gap — a level whose denominator has wrapped to the next line, which is
+  // the reading rule (b) exists to prevent. The label and the badge take the
+  // first line; the two sides sit under them, each stacked and unbreakable.
   return (
-    <span data-copy="verdict" className="flex items-baseline justify-between gap-3">
-      <span className="min-w-0 text-[12px] text-secondary-foreground">
-        {v.objectLabel} in {where}{' '}
-        <span data-copy="level" className="font-mono text-[11.5px] tabular-nums text-foreground">{now} videos</span>
-        {then ? <> against <span data-copy="level" className="font-mono text-[11.5px] tabular-nums">{then}</span></> : null}
+    <span data-copy="verdict" className="flex min-w-0 flex-col gap-1">
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 text-[12px] text-secondary-foreground">{v.objectLabel} in {where}</span>
+        <MovementBadge verdict={v} unit="pts" good="neutral" />
       </span>
-      <MovementBadge verdict={v} unit="pts" good="neutral" />
+      <span className="flex flex-wrap items-end gap-x-3 gap-y-1">
+        <FigureCell value={now} of={<>of {fmtInt(v.value.n)} videos</>} />
+        {then ? (
+          <>
+            <span className="text-[11px] leading-[1.6] text-muted-foreground">against</span>
+            <FigureCell value={then} of={<>of {fmtInt(v.baseline!.n)}</>} />
+          </>
+        ) : null}
+      </span>
     </span>
   )
 }
@@ -178,7 +194,15 @@ export const marketCard: Block<MarketSurfaceData> = {
                 <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Claims you made</span>
                 {claims.map((c) => (
                   <span key={c.claim} className="flex items-baseline justify-between gap-3">
-                    <span data-copy="quote" className="min-w-0 truncate text-[12.5px]">“{c.claim}”</span>
+                    {/* TWO CLAIMS SHARING THEIR FIRST FORTY-FIVE CHARACTERS
+                        PRINTED AS THE SAME ROW. `truncate` is one line and the
+                        card is five columns wide, so Sealand's two longest
+                        claims rendered identically with no way to see either in
+                        full. Two lines, and the whole claim in the tooltip for
+                        a mouse — the words are the CLIENT'S OWN, not a
+                        measurement basis, so a tooltip is a convenience here
+                        rather than the only route to a number. */}
+                    <span data-copy="quote" title={c.claim} className="line-clamp-2 min-w-0 text-[12.5px]">“{c.claim}”</span>
                     <span data-copy="level" className="shrink-0 whitespace-nowrap font-mono text-[11.5px] tabular-nums text-secondary-foreground">
                       {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
                     </span>

@@ -497,6 +497,25 @@ describe('MK3 · this month\u2019s card', () => {
     expect(text).toContain(MOVES_UNLOCK)
   })
 
+  it('keeps every level and its "of N" in one cell, and prints two claims as two rows', () => {
+    // The movement rows ran as one sentence in a justify-between row and broke
+    // as "26 of 84 videos against 23 / of 85" with the badge in the gap — the
+    // reading rule (b) exists to prevent. `FigureCell` (wave 1) holds the pair
+    // as one unit and stamps its own markers.
+    const markup = render(marketCard.render(marketFixture(), 'app', ctx))
+    const text = renderText(marketCard.render(marketFixture(), 'app', ctx))
+    expect(text).toMatch(/26 of 84 videos/)
+    expect(text).toMatch(/23\s*of 85/)
+    // The claims are not one truncated line: two claims that share an opening
+    // print as two distinguishable rows, each reaching its own second line.
+    expect(markup).not.toContain('truncate text-[12.5px]')
+    expect(markup).toContain('line-clamp-2')
+    // The email arm keeps both halves on one line, where they cannot break.
+    const email = renderText(marketCard.render(marketFixture(), 'email', ctx))
+    expect(email).toContain('26 of 84 videos')
+    expect(email).toContain('23 of 85')
+  })
+
   it('prints the two movement rows as verdicts, with no magnitude beside a refusal', () => {
     const markup = render(marketCard.render(marketFixture(), 'app', ctx))
     // D2: a verdict carries the change and the band together or neither.

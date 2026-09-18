@@ -117,7 +117,10 @@ function Side({ verdict, mode, control = false }: { verdict: Verdict; mode: Rend
   const v = verdict
   const email = mode === 'email'
   const pct = (k: number, n: number) => (n > 0 ? fmtPct((k / n) * 100, 0) : '—')
-  const mono = email ? undefined : 'font-mono text-[11.5px] tabular-nums text-foreground'
+  // `whitespace-nowrap`: a level and its "of N" are one unbreakable unit —
+  // this sentence is long enough to wrap in a 7-column tile and rule (b) is
+  // about what the reader SEES, not about what the markup holds.
+  const mono = email ? undefined : 'whitespace-nowrap font-mono text-[11.5px] tabular-nums text-foreground'
   const monoStyle = email ? { fontFamily: FONT.mono } : undefined
   const body = (
     <>
