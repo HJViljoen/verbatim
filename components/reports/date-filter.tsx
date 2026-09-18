@@ -5,6 +5,13 @@ import type { DateFilter } from '@/lib/reports/archive'
 // RP4's date filter. A GET form, so it works without JavaScript, keeps the
 // reader's group and selection in the URL, and is shareable — the same rule
 // the horizon control follows.
+//
+// THE CONTROLS ARE 32px, NOT 20px (Block D wave 2 fix pass). Two date inputs
+// and a submit button at `py-0.5` were the smallest targets on the page — a
+// 20px tap target inside a form a reader is expected to USE, next to 26px
+// chips and 44px buttons. 32px is the archive's own density rather than the
+// Studio's 44px pill; the gap to 44 is a system-wide one this package did not
+// introduce and does not close on its own.
 
 export function ArchiveDateFilter({
   filter,
@@ -26,16 +33,16 @@ export function ArchiveDateFilter({
         <label className="font-mono text-[10.5px] text-muted-foreground" htmlFor="from">From</label>
         <input
           id="from" name="from" type="date" defaultValue={filter.from ?? ''}
-          className="rounded-[4px] bg-background px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-border"
+          className="h-[32px] rounded-[4px] bg-background px-2 font-mono text-[11px] ring-1 ring-border"
         />
         <label className="font-mono text-[10.5px] text-muted-foreground" htmlFor="to">To</label>
         <input
           id="to" name="to" type="date" defaultValue={filter.to ?? ''}
-          className="rounded-[4px] bg-background px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-border"
+          className="h-[32px] rounded-[4px] bg-background px-2 font-mono text-[11px] ring-1 ring-border"
         />
-        <button type="submit" className="rounded-[4px] px-2 py-0.5 font-mono text-[10.5px] ring-1 ring-border hover:bg-tile">Filter</button>
+        <button type="submit" className="h-[32px] rounded-[4px] px-3 font-mono text-[10.5px] ring-1 ring-border hover:bg-tile">Filter</button>
         {(filter.from || filter.to) && (
-          <Link href={clearHref} className="font-mono text-[10.5px] text-muted-foreground underline underline-offset-2">Clear</Link>
+          <Link href={clearHref} className="inline-flex h-[32px] items-center px-1 font-mono text-[10.5px] text-muted-foreground underline underline-offset-2">Clear</Link>
         )}
       </div>
       {line && <p className="font-mono text-[10.5px] text-muted-foreground">{line}</p>}
