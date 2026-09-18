@@ -256,6 +256,22 @@ const ENGAGEMENT_SHOWN = 3
 // "21.8%" down the category column; that is the product's one rounding rule and
 // a second one here to make a column look even would be the defect over again.
 /**
+ * The bar's axis: a round rate above the best one, and NOT the best one.
+ *
+ * SCALED TO THE MAXIMUM, THREE MEDIANS OF 3.7 · 3.4 · 3.1 DREW 100% · 92% · 84%
+ * — three visually identical bars implying a comparison they cannot show
+ * (design review 14). The artboard does not do that: its 5.2 · 3.8 · 3.1 · 2.4
+ * are drawn at 86.7% · 63.3% · 51.7% · 40%, which is every bar against a fixed
+ * 6% axis, from zero. A bar read from zero is the only bar that means its
+ * length; this is the artboard's own rule, restated as a function so the axis
+ * moves with the data instead of being typed into a mock.
+ */
+export function engagementAxis(rows: readonly FormatRow[]): number {
+  const best = Math.max(...rows.map((r) => r.engagement.median ?? 0), 0)
+  return Math.max(1, Math.ceil(best + 0.001))
+}
+
+/**
  * The card's rows, with the ones a finding may rest on first.
  *
  * `PlaybookBlock.engagement` is ordered by median alone, so the top row of the
@@ -272,7 +288,7 @@ export function engagementOrder(rows: readonly FormatRow[], floor: number): Form
 function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatRow[]; mode: RenderMode; of: number; basisLine: string }) {
   const rows = engagementOrder(all, LEAD_MIN_RATED).slice(0, ENGAGEMENT_SHOWN)
   if (rows.length === 0) return null
-  const max = Math.max(...rows.map((r) => r.engagement.median ?? 0), 1)
+  const axis = engagementAxis(rows)
   return (
     <div className="flex flex-col gap-2.5 rounded-md border border-border bg-tile px-4 py-3">
       <Eyebrow>Median engagement per format</Eyebrow>
@@ -281,7 +297,7 @@ function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatR
           <div key={r.key} className="flex items-center gap-2.5">
             <span className="w-[118px] flex-none truncate text-[13px] text-foreground">{r.label}</span>
             <span className="h-[11px] flex-1 overflow-hidden rounded-[3px] bg-inner">
-              <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((r.engagement.median ?? 0) / max) * 100)}%`, background: 'var(--cat)' }} />
+              <span className="block h-full rounded-[3px]" style={{ width: `${Math.max(3, ((r.engagement.median ?? 0) / axis) * 100)}%`, background: 'var(--cat)' }} />
             </span>
             <span className="w-[92px] flex-none">
               <FigureCell mode={mode} align="right" value={fmtPct(r.engagement.median ?? 0)} of={`of ${fmtInt(r.engagement.n)} rated`} />

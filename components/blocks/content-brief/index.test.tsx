@@ -11,7 +11,7 @@ import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { toMake } from './make'
-import { cellFigure, engagementOrder, unreadNotes } from './playbook'
+import { cellFigure, engagementAxis, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
@@ -189,6 +189,21 @@ describe('content.playbook — the mock’s page 3', () => {
     expect(engagementOrder(p.engagement, LEAD_MIN_RATED)[0].engagement.n).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
     const figures = blockAnswers(contentPlaybook, data).figures
     expect(figures.content_best_format_videos?.value ?? 0).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
+  })
+
+  // A BAR IS READ FROM ZERO (design review 14). Scaled to the best row, three
+  // medians of 3.7 · 3.4 · 3.1 drew 100% · 92% · 84%.
+  it('draws the engagement bars against a round axis above the best rate', () => {
+    const rows = engagementOrder(data.playbook.playbook!.engagement, LEAD_MIN_RATED).slice(0, 3)
+    const axis = engagementAxis(rows)
+    expect(axis).toBeGreaterThan(rows[0].engagement.median ?? 0)
+    expect(Number.isInteger(axis)).toBe(true)
+    // The best row is drawn short of the bar's full width, because the axis is
+    // above it: `3.4 of 4` is 85%, not 100%.
+    const width = `width:${((rows[0].engagement.median ?? 0) / axis) * 100}%`
+    expect(markup).toContain(width)
+    expect(width).not.toContain('width:100%')
+    expect(engagementAxis([])).toBe(1)
   })
 
   it('publishes its figures by token, prefixed so nothing collides', () => {
