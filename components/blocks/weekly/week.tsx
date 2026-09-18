@@ -161,7 +161,7 @@ function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: numb
     ? (
         <>
           <div
-            style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: EMAIL.faint } : undefined}
+            style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', color: EMAIL.muted } : undefined}
             className={mode === 'email' ? undefined : 'font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground'}
           >
             {INTERPRETATION_LABEL}
@@ -183,7 +183,7 @@ function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: numb
           </tbody>
         </table>
         {bars}
-        <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.4, color: EMAIL.faint, marginTop: 8 }}>{caption}</div>
+        <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.4, color: EMAIL.muted, marginTop: 8 }}>{caption}</div>
         {interpretation ? <><div style={{ height: 1, background: EMAIL.border, margin: '14px 0', fontSize: 1, lineHeight: '1px' }}>&nbsp;</div>{interpretation}</> : null}
         <FlagQuotes quotes={flag.quotes} mode={mode} />
         <div style={{ marginTop: 8 }}><a href={href} style={{ color: EMAIL.link, fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, textDecoration: 'none' }}>See the week →</a></div>

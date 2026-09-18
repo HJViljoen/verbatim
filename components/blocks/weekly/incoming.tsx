@@ -61,7 +61,7 @@ function StatRow({
             </td>
             <td style={{ padding: '9px 0', verticalAlign: 'top' }}>
               <div style={{ fontFamily: FONT.sans, fontSize: 14, color: EMAIL.ink2 }}>{label}</div>
-              {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.4, color: EMAIL.faint, marginTop: 3 }}>{note}</div> : null}
+              {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.4, color: EMAIL.muted, marginTop: 3 }}>{note}</div> : null}
             </td>
           </tr>
         </tbody>

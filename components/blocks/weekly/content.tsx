@@ -64,7 +64,7 @@ function CountedRow({ title, value, note, mode, children }: {
             </tr>
           </tbody>
         </table>
-        {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.5, color: EMAIL.faint, marginTop: 5 }}>{note}</div> : null}
+        {note ? <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: 1.5, color: EMAIL.muted, marginTop: 5 }}>{note}</div> : null}
         {children}
       </div>
     )
@@ -87,7 +87,7 @@ const multipleOf = (m: number): string => `${(Math.round(m * 10) / 10).toFixed(1
 
 function Eyebrow({ mode, children }: { mode: RenderMode; children: ReactNode }) {
   return mode === 'email'
-    ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: EMAIL.faint }}>{children}</div>
+    ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.5px', color: EMAIL.muted }}>{children}</div>
     : <div className="font-mono text-[10.5px] uppercase tracking-[0.05em] text-muted-foreground">{children}</div>
 }
 

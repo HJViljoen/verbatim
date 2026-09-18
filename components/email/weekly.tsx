@@ -89,7 +89,7 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                           <tbody>
                             <tr>
                               <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{weeklyDateLine(data.period, data.reading.update.previous)}</td>
-                              <td align="right" style={{ ...text.mono, color: EMAIL.faint, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
+                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
                             </tr>
                           </tbody>
                         </table>
@@ -154,7 +154,7 @@ export function WeeklyEmail({ data, shareUrl, appUrl, attached, ctx, preheader }
                             leave it belongs on the artefact that arrives
                             uninvited. The attachment clause is the same kind of
                             fact about this send. */}
-                        <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.faint }}>
+                        <div style={{ ...text.small, fontSize: 11, marginTop: 10, color: EMAIL.muted }}>
                           {attached ? 'The PDF is attached. ' : ''}You are receiving this because you are on {data.company}’s update list; an owner or admin changes it in Verbatim, in Settings.
                         </div>
                       </td>

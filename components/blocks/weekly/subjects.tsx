@@ -54,7 +54,7 @@ import { subjectsLead } from '@/lib/reports/weekly'
 function Side({ side, mode }: { side: SideReading | null; mode: RenderMode }): ReactNode {
   if (!side || !side.observed || side.pct == null) {
     return mode === 'email'
-      ? <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.faint }}>— not tracked</span>
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted }}>— not tracked</span>
       : <span className="text-[11px] text-muted-foreground">— not tracked</span>
   }
   const body = <><span data-copy="figure">{fmtPct(side.pct)}</span>{' '}<span data-copy="figure">{fmtInt(side.k ?? 0)} of {fmtInt(side.n ?? 0)}</span></>
@@ -67,13 +67,24 @@ function Contribution({ videos, mode }: { videos: number | undefined; mode: Rend
   if (videos == null) return null
   const body = `+${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} since the last update`
   return mode === 'email'
-    ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint, marginTop: 3 }}>{body}</div>
+    ? <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 3 }}>{body}</div>
     : <div className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">{body}</div>
 }
 
-/** The bar, scaled against the largest share in the table — a ranked list is
- *  about order and relative size, and scaling six subjects against 100% of the
- *  category draws six stubs. The mock's own bars are scaled the same way. */
+/**
+ * The bar, scaled against the largest share in the table — a ranked list is
+ * about order and relative size, and scaling six subjects against 100% of the
+ * category draws six stubs. The mock's own bars are scaled the same way, and
+ * the legend under the table says so.
+ *
+ * ACHROMATIC ON PURPOSE, AND LEGIBLE BECAUSE OF IT. The artboard encodes state
+ * in the FILL — amber above a typical week, grey about typical — and nothing
+ * in this product computes a typical week (the same refusal as the tick). A
+ * bar that carries no state has exactly one job left, which is to be seen: the
+ * fill was `EMAIL.cat` #9AA1A9 on a #EBEDF0 track, well under the 3:1 a
+ * graphic needs, so a row's only picture was nearly invisible in print and on
+ * a phone. It is the muted ink now, which reads at ~3.9:1 against the track.
+ */
 function Bar({ share, mode }: { share: number; mode: RenderMode }) {
   const w = Math.max(2, Math.min(100, Math.round(share)))
   if (mode === 'email') {
@@ -81,7 +92,7 @@ function Bar({ share, mode }: { share: number; mode: RenderMode }) {
       <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
         <tbody>
           <tr>
-            <td width={`${w}%`} height={10} style={{ background: EMAIL.cat, height: 10, fontSize: 1, lineHeight: '10px', borderRadius: 10 }}>&nbsp;</td>
+            <td width={`${w}%`} height={10} style={{ background: EMAIL.muted, height: 10, fontSize: 1, lineHeight: '10px', borderRadius: 10 }}>&nbsp;</td>
             {w < 100 ? <td style={{ background: EMAIL.hairline, height: 10, fontSize: 1, lineHeight: '10px', borderRadius: 10 }}>&nbsp;</td> : null}
           </tr>
         </tbody>
@@ -90,7 +101,7 @@ function Bar({ share, mode }: { share: number; mode: RenderMode }) {
   }
   return (
     <span className="block h-[10px] w-full overflow-hidden rounded-full bg-border/60">
-      <span className="block h-full rounded-full bg-cat" style={{ width: `${w}%` }} />
+      <span className="block h-full rounded-full bg-muted-foreground" style={{ width: `${w}%` }} />
     </span>
   )
 }
@@ -250,7 +261,7 @@ export const weeklySubjects: Block<WeeklyData> = {
           />
         ))}
         <div
-          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint, marginTop: 14 } : undefined}
+          style={mode === 'email' ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted, marginTop: 14 } : undefined}
           className={mode === 'email' ? undefined : 'mt-3.5 font-mono text-[10.5px] text-muted-foreground'}
         >
           {BAR_LEGEND}
