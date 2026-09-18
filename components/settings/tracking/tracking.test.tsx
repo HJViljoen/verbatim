@@ -390,6 +390,65 @@ describe('the cadence section', () => {
   })
 })
 
+describe('the arms nobody had rendered', () => {
+  // M6: every render above passes `canEdit`, and nothing asserted an empty
+  // list. The empty states are what a new workspace sees on its first visit,
+  // and the read-only arm is what a member sees on every visit.
+
+  it('says an empty list is empty, in each of the three places', () => {
+    const noCommunity = renderText(
+      <CommunitiesSection rows={[]} hidden={0} hiddenPosts={0}
+        unconfigured={{ posts: 0, fromUnconfigured: 0, pct: 0 }} canEdit keptClosed={false} />,
+    )
+    expect(noCommunity).toContain('No community is watched for this workspace.')
+    // The add row survives the empty table — it is the way out of the state.
+    expect(noCommunity).toContain('Watch this community')
+
+    const noRival = renderText(
+      <RivalsSection rows={[]} names={[]} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}} />,
+    )
+    expect(noRival).toContain('No rival is named. Naming one is how the category gets a shape.')
+    expect(noRival).toContain('Add a rival')
+
+    const noTerms = renderText(
+      <TermsSection terms={{ brand_keywords: [], competitor_keywords: [], industry_keywords: [], exclude_terms: [] }}
+        dates={{}} review={[]} canEdit onAdd={() => null} onRemove={() => {}} />,
+    )
+    expect(noTerms.split('none yet').length - 1).toBe(4)
+    expect(noTerms).toContain('0 terms')
+  })
+
+  it('draws a read-only session every control as unpressable, and none as missing', () => {
+    const readOnly = render(
+      <RivalsSection rows={[rival({ name: 'Freitag' })]} names={['Freitag']} month="2026-09-01"
+        canEdit={false} onAdd={() => null} onRemove={() => {}} />,
+    )
+    // No x on a row a reader may not change — and the tracked list still
+    // posts, so a read-only render cannot silently empty it.
+    expect(readOnly).not.toContain('aria-label="Stop tracking Freitag"')
+    expect(readOnly).toContain('name="competitor_names"')
+    expect(readOnly).toContain('disabled=""')
+
+    const terms = render(
+      <TermsSection terms={{ ...TERMS }} dates={{}} review={[term()]} canEdit={false}
+        onAdd={() => null} onRemove={() => {}} />,
+    )
+    expect(terms.match(/disabled=""/g)?.length ?? 0).toBeGreaterThan(3)
+  })
+
+  it('prints dashes and says why where the kept rate is closed to this reader', () => {
+    // The column M8 withholds from a tenant session: a dash is "we are not
+    // showing you this", and the sentence under the table says which.
+    const closed = renderText(
+      <CommunitiesSection rows={[community({ keptPct: null })]} hidden={0} hiddenPosts={0}
+        unconfigured={{ posts: 0, fromUnconfigured: 0, pct: 0 }} canEdit={false} keptClosed />,
+    )
+    expect(closed).toContain('shown to owners and admins only')
+    expect(closed).toContain('—')
+    expect(closed).not.toMatch(/\b0%/)
+  })
+})
+
 describe('the page’s faint text', () => {
   it('never uses the data-bucket grey as a text colour', () => {
     // H3/m5: --cat (#9AA1A9) is the CATEGORY SERIES colour and reads 2.61:1 on
