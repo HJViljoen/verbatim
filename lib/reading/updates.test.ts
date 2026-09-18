@@ -212,7 +212,10 @@ describe('buildUpdateSeries', () => {
     expect(series.note).toContain('not 13')
   })
 
-  it('refuses the band below three updates and says so', () => {
+  it('refuses the band below three updates and says THAT, not that they found nothing', () => {
+    // Both of these updates found videos. The note used to say "fewer than
+    // three updates found anything", which is a false claim about our reading —
+    // and it is the note every new workspace sees on the first page it opens.
     const { runs, videosByRun } = weeklyRuns([11, 12])
     const series = buildUpdateSeries({
       runs, videosByRun, spans: new Map(), monthOf: new Map(),
@@ -220,7 +223,21 @@ describe('buildUpdateSeries', () => {
     })
     expect(series.band).toBeNull()
     expect(series.median).toBeNull()
-    expect(series.note).toContain('Fewer than three updates found anything')
+    expect(series.note).toContain('Fewer than 3 updates of this workspace carry a window')
+    expect(series.note).not.toContain('found anything')
+  })
+
+  it('refuses the band when the updates behind this one found nothing, and says THAT', () => {
+    // Three updates, and the two behind the newest both found nothing: the
+    // other refusal, and the one the old single sentence was written for.
+    const { runs, videosByRun } = weeklyRuns([0, 0, 12])
+    const series = buildUpdateSeries({
+      runs, videosByRun, spans: new Map(), monthOf: new Map(),
+      windowless: 0, requested: 13, windowReadAvailable: true,
+    })
+    expect(series.band).toBeNull()
+    expect(series.note).toContain('Fewer than 2 of the updates behind this one found anything')
+    expect(series.note).not.toContain('carry a window,')
   })
 
   it('says the windowed reading is missing rather than printing a contribution of zero', () => {

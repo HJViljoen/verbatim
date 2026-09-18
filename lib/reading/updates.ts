@@ -323,7 +323,19 @@ export function buildUpdateSeries(input: {
     )
   }
   if (points.length > 0 && band == null) {
-    notes.push('Fewer than three updates found anything, so there is no typical for this one to be read against.')
+    // TWO DIFFERENT REFUSALS, AND PRINTING THE WRONG ONE IS A FALSE CLAIM ABOUT
+    // OUR READING. `updateBand` withholds the band on either of two conditions
+    // — fewer than three points at all, or fewer than two of the points behind
+    // the newest that found anything — and one sentence for both told a
+    // workspace with two deliveries that each found videos that "fewer than
+    // three updates found anything", which is not true of it. Neither paying
+    // tenant can reach it (both carry thirteen windowed updates); every new
+    // workspace's first two deliveries do, on the first page it opens.
+    notes.push(
+      points.length < UPDATE_BAND_MINIMUM
+        ? `Fewer than ${fmtInt(UPDATE_BAND_MINIMUM)} updates of this workspace carry a window, so there is no typical for this one to be read against.`
+        : `Fewer than ${fmtInt(UPDATE_BAND_MINIMUM - 1)} of the updates behind this one found anything, so there is no typical for this one to be read against.`,
+    )
   }
   if (!input.windowReadAvailable) {
     notes.push('The windowed reading is not installed for this workspace, so no update’s contribution to its month can be stated.')
