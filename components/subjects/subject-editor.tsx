@@ -15,7 +15,7 @@ import {
 } from '@/lib/actions/subjects'
 import { MovementBadge } from '@/components/delta-badge'
 import { fmtInt, fmtPct, fullDate } from '@/lib/format'
-import { SUPERSEDE_RULE } from '@/lib/pages/subjects'
+import { SUBJECTS_UNREADABLE_WHY, SUPERSEDE_RULE } from '@/lib/pages/subjects'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { SUBJECT_WRITE_REFUSED, SUBJECTS_MAX, SUBJECTS_MIN } from '@/lib/subjects/types'
 
@@ -130,6 +130,11 @@ export function SubjectEditor({ rows, setLine, notRecorded = null, variant = 'ra
     return (
       <div className="flex flex-col gap-2">
         <p className="m-0 text-[12px] text-muted-foreground">{notRecorded}</p>
+        {/* THE MISSING BUTTON, EXPLAINED. The tile drops "Add a subject →" in
+            this state because a write would fail, and an absent control with
+            no sentence beside it reads as "you have not named any" — which is
+            the opposite of what happened. */}
+        <p className="m-0 text-[11.5px] text-muted-foreground">{SUBJECTS_UNREADABLE_WHY}</p>
         <p className="m-0 text-[11px] text-muted-foreground">{SUPERSEDE_RULE}</p>
       </div>
     )

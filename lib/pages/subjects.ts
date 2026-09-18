@@ -173,6 +173,20 @@ export const SAY_HEAR_CLAIMS_UNREADABLE_OUTSIDE =
 export const REDDIT_THREAD_CAP =
   'Reddit threads are the densest source of questions and are counted; we read up to 40 comments on each.'
 
+/**
+ * Why the set cannot be ADDED TO while it cannot be READ.
+ *
+ * "Your subjects are not recorded for this workspace yet" is the product's
+ * shared sentence for this state (Overview, the weekly and the monthly report
+ * all print it) and it reads, on its own, as *you have not named any* — while
+ * the tile that prints it removes the only control that would fix that. It is
+ * not the client's inaction: the set cannot be read here, so a write from here
+ * would fail. The tile says so where the button would have been, rather than
+ * leaving an absence to be read as a task.
+ */
+export const SUBJECTS_UNREADABLE_WHY =
+  'Nothing has been lost. We cannot read the set from this page yet, so it cannot be added to or changed here.'
+
 /** SU1's sentence. The whole identity model in twelve words, printed where the
  *  editing happens rather than inside a help page nobody opens. */
 export const SUPERSEDE_RULE = 'Renaming or adding a subject starts a new line. The old line is kept.'

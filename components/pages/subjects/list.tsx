@@ -4,7 +4,7 @@ import { AddSubjectFooter, SubjectEditor } from '@/components/subjects/subject-e
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct, fullDate, shortDate } from '@/lib/format'
-import { originLine, type SubjectsData } from '@/lib/pages/subjects'
+import { originLine, SUBJECTS_UNREADABLE_WHY, type SubjectsData } from '@/lib/pages/subjects'
 
 // SU1 · The subjects, and editing them (design §3 SU1; the mock's first rail
 // tile).
@@ -91,7 +91,13 @@ export const subjectsList: Block<SubjectsData> = {
     return (
       <BlockFrame title={subjectsList.title} question={subjectsList.question} mode={mode} meta={l.setLine}>
         {empty ? (
-          <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+          <>
+            <BlockEmpty mode={mode}>{empty}</BlockEmpty>
+            {/* The same sentence the app arm prints where the button would be:
+                the set cannot be READ here, which is not the same event as a
+                client who has named nothing. */}
+            {l.notRecorded ? <BlockEmpty mode={mode}>{SUBJECTS_UNREADABLE_WHY}</BlockEmpty> : null}
+          </>
         ) : (
           <div>
             {l.rows.map((r) => (

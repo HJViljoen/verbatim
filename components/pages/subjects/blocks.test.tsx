@@ -98,6 +98,18 @@ describe('SU1 · the subjects list', () => {
     expect(subjectsList.emptyState(refusedFixture())).toBe('Your subjects are not recorded for this workspace yet.')
   })
 
+  // AN ABSENT BUTTON IS NOT A SENTENCE. The tile drops "Add a subject →" in
+  // this state because a write from here would fail; without the reason beside
+  // it, "not recorded yet" reads as "you have not named any" on a tile that has
+  // just deleted the control that would fix it.
+  it('says WHY the add control is gone when the set cannot be read', () => {
+    for (const mode of MODES) {
+      const text = renderText(subjectsList.render(refusedFixture(), mode, ctx))
+      expect(text, mode).toContain('We cannot read the set from this page yet')
+      expect(render(subjectsList.render(refusedFixture(), mode, ctx)), mode).not.toContain('Add a subject')
+    }
+  })
+
   it('offers the proposed set rather than an empty list, and says nothing is counted', () => {
     const data = candidatesFixture()
     expect(subjectsList.emptyState(data)).toContain('Confirm the set')
