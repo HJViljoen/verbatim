@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ConfigChange } from '../config-log'
 import { DECK_CHANGES_ROWS, SEARCH_PLAN_ROWS, deckChangeLogView, searchPlanView } from './deck-record'
-import { termYieldByMonth } from './terms'
+import { TERM_YIELD_BASIS, termYieldByMonth } from './terms'
 
 // What the quarterly deck may print about the search plan and the change log
 // (block D, D9). Both already exist on Settings and neither has ever reached
@@ -44,6 +44,19 @@ describe('searchPlanView', () => {
     // videos at a cost, the other is a term nobody is using.
     expect(searchPlanView(rows).noYield).toBe(1)
     expect(searchPlanView(termYieldByMonth([term('quiet', 0, 0)])).noYield).toBe(0)
+  })
+
+  it('is a real, empty plan when no search ran inside the window', () => {
+    // "No search ran in this quarter" is a fact about the quarter; "we hold no
+    // search record" is a fact about us, and only the LOADER may say the second
+    // (by returning null). A view over zero rows is the first, and it still
+    // carries the basis sentence, because an empty table on the wrong clock is
+    // still on the wrong clock.
+    const plan = searchPlanView([])
+    expect(plan.rows).toEqual([])
+    expect(plan.showing).toBeNull()
+    expect(plan.noYield).toBe(0)
+    expect(plan.basis).toBe(TERM_YIELD_BASIS)
   })
 
   it('names what it hides when there are more terms than rows', () => {

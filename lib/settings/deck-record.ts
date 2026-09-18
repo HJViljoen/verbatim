@@ -86,9 +86,16 @@ export function deckChangeLogView(
 }
 
 /**
- * The gathers inside a window, per term. Null — never [] — where the table
- * cannot be read, so the deck can say "not recorded" rather than "no term
- * found anything".
+ * The gathers inside a window, per term.
+ *
+ * Null — never [] — where the table CANNOT BE READ, so the deck can say "not
+ * recorded" rather than "no term found anything". An empty window is the other
+ * sentence and gets the other answer: a plan with no rows, because "no search
+ * ran inside this quarter" is a fact about the quarter and "we do not hold a
+ * search record" is a fact about us, and a client reading a quarterly deck has
+ * to be able to tell which one page 8 is showing them. `loadDeckChangeLog`
+ * beside this keeps the same two apart, and this used to collapse them by
+ * returning null on a zero-row read.
  */
 export async function loadSearchPlan(
   client: SupabaseClient,
@@ -105,7 +112,6 @@ export async function loadSearchPlan(
         .lte('created_at', `${window.to}T23:59:59.999Z`)
         .order('id', { ascending: false }),
     )
-    if (rows.length === 0) return null
     return searchPlanView(termYieldByMonth(rows))
   } catch (error) {
     console.error(`[settings] deck search plan: ${(error as { message?: string })?.message ?? String(error)}`)
