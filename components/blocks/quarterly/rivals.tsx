@@ -105,36 +105,51 @@ function Months({ values, mode }: { values: (number | null)[]; mode: RenderMode 
  *  and the badge only where the measure is a proportion. */
 function FaceOff({ m, mode }: { m: FaceOffMeasure; mode: RenderMode }) {
   const email = mode === 'email'
+  // WHAT k AND n COUNT IS THE MEASURE'S, NOT THE LOOP'S. Comments per video is
+  // 151 COMMENTS over 19 VIDEOS, and a cell that prints "151 of 19" has told the
+  // reader nothing except that the product cannot count. `countUnit` is on the
+  // measure for exactly this; the units are printed only where the two differ,
+  // because "19 of 449 videos of videos" is the other way to be wrong.
+  const of = (s: NonNullable<FaceOffMeasure['you']>): string | undefined => {
+    if (s.value.n <= 0) return undefined
+    const { k, n } = m.countUnit
+    return k === n
+      ? `${fmtInt(s.value.k)} of ${fmtInt(s.value.n)} ${n}`
+      : `${fmtInt(s.value.k)} ${k} of ${fmtInt(s.value.n)} ${n}`
+  }
   const side = (s: FaceOffMeasure['you']) =>
     s == null
       ? <NotDrawn mode={mode}>— not read</NotDrawn>
-      : (
-        <FigureCell
-          mode={mode}
-          value={s.text}
-          of={s.value.n > 0 ? `${fmtInt(s.value.k)} of ${fmtInt(s.value.n)}` : undefined}
-        />
-      )
+      : <FigureCell mode={mode} value={s.text} of={of(s)} />
+  // THE ARTBOARD'S OWN ROW: the measure on the left with its clock under it,
+  // the two sides beside each other, and the badge with the row. Stacked, five
+  // of these cost 749px on a slide body of 561; laid out they cost about 280.
   return (
     <div
-      className={email ? undefined : 'flex flex-col gap-1 border-b border-border/70 py-1.5'}
+      className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] items-start gap-x-2 border-b border-border/70 py-[3px]'}
       style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` } : undefined}
     >
-      <span className={email ? undefined : 'text-[12px] font-medium'}>{m.label}</span>
-      <span className={email ? undefined : 'font-mono text-[10px] text-muted-foreground'}>{m.basisLine}</span>
-      <div className={email ? undefined : 'flex items-start gap-4'}>
-        <span className={email ? undefined : 'min-w-0 flex-1'}>{side(m.you)}</span>
-        <span className={email ? undefined : 'min-w-0 flex-1'}>{side(m.them)}</span>
-      </div>
-      <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
+      <span className={email ? undefined : 'flex min-w-0 flex-col'}>
+        <span className={email ? undefined : 'text-[11.5px] font-medium leading-[1.3]'}>{m.label}</span>
+        <span className={email ? undefined : 'font-mono text-[9.5px] leading-[1.35] text-muted-foreground'}>{m.basisLine}</span>
+        {/* WHY A ROW DREW NO BAND IS SAID ONCE, UNDER THE TABLE, AND NOT
+            FOUR TIMES INSIDE IT. Three of the five measures never can carry one
+            — a rate, a median and a count are not proportions — and the three
+            sentences that say so cost 228px of a 561px slide when each sits in
+            a cell 150px wide. They are printed below, one per distinct reason,
+            where they read as the rule they are. `m.why` stays in the row: it
+            is about THIS side being absent, which is not a fact about the
+            measure. */}
+
+      </span>
+      <span className={email ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
+        {side(m.you)}
         <BlockMovement verdict={m.verdict} unit="pts" mode={mode} />
-        {/* WHY A ROW DREW NO BAND, IN THE ROW. Three of the five never can —
-            a rate, a median and a count are not proportions — and a blank cell
-            there would read as "nothing happened" rather than "this measure
-            takes no band". */}
-        {!m.verdict && m.verdictWhy ? <Note mode={mode}>{m.verdictWhy}</Note> : null}
-        {m.why ? <Note mode={mode}>{m.why}</Note> : null}
-      </div>
+      </span>
+      <span className={email ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
+        {side(m.them)}
+        <BlockMovement verdict={m.rivalVerdict} unit="pts" mode={mode} />
+      </span>
     </div>
   )
 }
@@ -227,10 +242,7 @@ export const quarterlyRivals: Block<QuarterlyData> = {
         ))}
         <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
           {months.length > 0 ? (
-            <Note mode={mode}>
-              The newest month is the bold column. Each cell is that brand’s share of the month’s tracked set. The two
-              shares are read over two different denominators, named under this page.
-            </Note>
+            <Note mode={mode}>The newest month is the bold column; both shares are of the month’s tracked set.</Note>
           ) : null}
           {/* `qr.p5.standings.note` · the two denominators as figures, and the
               per-month tracking rules with their dates. Both were carried on
@@ -251,41 +263,13 @@ export const quarterlyRivals: Block<QuarterlyData> = {
           {r.standings?.caveat ? <Note mode={mode}>{r.standings.caveat}</Note> : null}
           {r.dualMention != null ? (
             <Note mode={mode}>
-              <span data-copy="figure">{fmtInt(r.dualMention)}</span> of your own videos also named a tracked rival in{' '}
-              {r.monthLabel}; each is counted once, in one audience.
+              <span data-copy="figure">{fmtInt(r.dualMention)}</span> of your own videos also named a tracked rival;
+              each is counted once, in one audience.
             </Note>
           ) : null}
         </div>
-      </Column>
-    )
 
-    const h2h = (
-      <Column mode={mode} gap={10}>
-        <div className={email ? undefined : 'flex flex-col gap-1'}>
-          <Eyebrow mode={mode}>Head to head, then and now</Eyebrow>
-          {r.headToHead ? (
-            <>
-              <Note mode={mode}>
-                {data.brand} against {r.headToHead.rivalLabel}, {monthName(r.headToHead.month)}. Each side is printed
-                with what it is out of; a badge is that side against its own month before, never one side against the other.
-              </Note>
-              <div className={email ? undefined : 'flex items-baseline gap-4 border-b border-border pb-1'}>
-                <span className={email ? undefined : 'min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
-                <span className={email ? undefined : 'min-w-0 flex-1 text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
-              </div>
-              {r.headToHead.measures.map((m) => <FaceOff key={m.key} m={m} mode={mode} />)}
-              <Note mode={mode}>{r.headToHead.footerLine}</Note>
-              <Note mode={mode}>{r.headToHead.excludedNote}</Note>
-              {r.headToHead.unread ? <Note mode={mode}>{r.headToHead.unread}</Note> : null}
-            </>
-          ) : (
-            <Note mode={mode}>
-              Head to head needs a rival selected and a month read on both sides; neither is recorded for this workspace yet.
-            </Note>
-          )}
-        </div>
-
-        <div className={email ? undefined : 'flex flex-col gap-1'}>
+        <div className={email ? undefined : 'mt-2 flex flex-col gap-1'}>
           <Eyebrow mode={mode}>Said about them, by others</Eyebrow>
           {r.rows.filter((row) => row.raisedMost).map((row) => (
             <Row key={`raised-${row.audience}`} mode={mode} label={row.label}>
@@ -312,6 +296,41 @@ export const quarterlyRivals: Block<QuarterlyData> = {
           {r.saidAbout.length === 0 && !r.rows.some((row) => row.raisedMost) ? (
             <Note mode={mode}>What is said about a tracked rival is not readable on this workspace’s own session.</Note>
           ) : null}
+        </div>
+      </Column>
+    )
+
+    const h2h = (
+      <Column mode={mode} gap={10}>
+        <div className={email ? undefined : 'flex flex-col gap-1'}>
+          <Eyebrow mode={mode}>Head to head, then and now</Eyebrow>
+          {r.headToHead ? (
+            <>
+              <Note mode={mode}>
+                {data.brand} against {r.headToHead.rivalLabel}, {monthName(r.headToHead.month)} — a badge is that side
+                against its own month before, never one side against the other.
+              </Note>
+              <div className={email ? undefined : 'grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] gap-x-2 border-b border-border pb-1'}>
+                <span />
+                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>You</span>
+                <span className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}>{r.headToHead.rivalLabel}</span>
+              </div>
+              {r.headToHead.measures.map((m) => <FaceOff key={m.key} m={m} mode={mode} />)}
+              {/* ONE LINE PER DISTINCT REASON A BAND WAS NOT DRAWN, over the
+                  measures that actually carry that reason — composed from the
+                  rows rather than typed, so a measure that gains a band drops
+                  its sentence with it. */}
+              {[...new Set(r.headToHead.measures.flatMap((m) => [m.why, !m.verdict ? m.verdictWhy : null]).filter((w): w is string => !!w))]
+                .map((why) => <Note key={why} mode={mode}>{why}</Note>)}
+              <Note mode={mode}>{r.headToHead.footerLine}</Note>
+              <Note mode={mode}>{r.headToHead.excludedNote}</Note>
+              {r.headToHead.unread ? <Note mode={mode}>{r.headToHead.unread}</Note> : null}
+            </>
+          ) : (
+            <Note mode={mode}>
+              Head to head needs a rival selected and a month read on both sides; neither is recorded for this workspace yet.
+            </Note>
+          )}
         </div>
       </Column>
     )

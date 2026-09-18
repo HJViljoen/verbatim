@@ -27,7 +27,7 @@ export function Note({ children, mode = 'app', tone = 'muted' }: { children: Rea
       </div>
     )
   }
-  return <p className={`m-0 mt-1 text-[11.5px] leading-relaxed ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
+  return <p className={`m-0 mt-0.5 text-[10.5px] leading-[1.45] ${tone === 'body' ? 'text-secondary-foreground' : 'text-muted-foreground'}`}>{children}</p>
 }
 
 /** A measured number, with what it is out of beside it. The "of N" is REQUIRED
@@ -91,10 +91,54 @@ export function Row({ label, children, aside, mode = 'app' }: { label?: ReactNod
     )
   }
   return (
-    <div className="border-t border-border/70 py-1.5 text-[12.5px]">
+    <div className="border-t border-border/70 py-1 text-[12px] leading-[1.35]">
       {label ? <span className="font-medium">{label}</span> : null}
-      <div className="mt-0.5">{children}</div>
-      {aside ? <div className="mt-0.5 flex flex-wrap items-center gap-1.5">{aside}</div> : null}
+      <div>{children}</div>
+      {aside ? <div className="flex flex-wrap items-center gap-1.5">{aside}</div> : null}
+    </div>
+  )
+}
+
+/**
+ * ONE LINE: a label, its figure and its badge, on a single row.
+ *
+ * WHY, AND IT IS NOT TASTE. `Row` stacks its three parts, which is right for a
+ * row whose body is a sentence and wrong for a row whose body is a figure — and
+ * the deck is full of the second kind: the kind mix, the mood shares, the
+ * quarter's own readings, a move's control audiences. Stacked, each of those
+ * costs about 70px on a slide whose whole body is 561; the artboard draws them
+ * at about 30 and fits three sections in a column where the build fitted one.
+ * Measured on this artefact: pages 4, 5 and 6 clipped by 631, 434 and 325px
+ * before these rows were flattened.
+ *
+ * It marks nothing. The label is the caller's, the figure marks itself
+ * (`FigureCell`) and the badge marks itself (`BlockMovement`).
+ */
+export function Line({ label, figure, badge, note, mode = 'app' }: {
+  label: ReactNode
+  figure?: ReactNode
+  badge?: ReactNode
+  note?: ReactNode
+  mode?: RenderMode
+}) {
+  if (mode === 'email') {
+    return (
+      <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '3px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
+        <strong>{label}</strong>
+        {figure ? <> — {figure}</> : null}
+        {badge ? <> {badge}</> : null}
+        {note ? <div style={{ fontSize: 10.5, color: EMAIL.muted }}>{note}</div> : null}
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col border-t border-border/70 py-[3px]">
+      <div className="flex min-w-0 items-baseline justify-between gap-2 text-[12px] leading-[1.3]">
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {figure ? <span className="flex-none">{figure}</span> : null}
+        {badge ? <span className="flex-none">{badge}</span> : null}
+      </div>
+      {note ? <span className="text-[10px] text-muted-foreground">{note}</span> : null}
     </div>
   )
 }
@@ -120,7 +164,7 @@ export function Rule({ children, mode = 'app' }: { children: ReactNode; mode?: R
   if (mode === 'email') {
     return <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 10 }}>{children}</div>
   }
-  return <p className="m-0 mt-2.5 text-[11.5px] italic text-muted-foreground">{children}</p>
+  return <p className="m-0 mt-1.5 text-[10.5px] italic text-muted-foreground">{children}</p>
 }
 
 // ---- the artboard's own furniture (Block D wave 2, E-quarterly) ----------------
@@ -166,7 +210,7 @@ export function Card({ children, mode = 'app', className }: { children: ReactNod
       </table>
     )
   }
-  return <div className={`flex min-w-0 flex-col gap-2 rounded-md border border-border bg-tile px-4 py-3 ${className ?? ''}`}>{children}</div>
+  return <div className={`flex min-w-0 flex-col gap-1.5 rounded-md border border-border bg-tile px-3 py-2 text-[12px] leading-[1.35] ${className ?? ''}`}>{children}</div>
 }
 
 /**
@@ -210,7 +254,7 @@ export function Columns({ weights, gap = 48, children, mode = 'app' }: {
 
 /** One column of a `Columns`, as a flex stack — the artboard's inner
  *  `display:flex;flex-direction:column;gap:…`. */
-export function Column({ gap = 10, children, mode = 'app', className }: { gap?: number; children: ReactNode; mode?: RenderMode; className?: string }) {
+export function Column({ gap = 6, children, mode = 'app', className }: { gap?: number; children: ReactNode; mode?: RenderMode; className?: string }) {
   if (mode === 'email') return <div>{children}</div>
   return <div className={`flex min-w-0 flex-col text-[12.5px] leading-[1.4] ${className ?? ''}`} style={{ gap }}>{children}</div>
 }
@@ -253,7 +297,7 @@ export function TableRow({ template, cells, mode = 'app' }: { template: string; 
   }
   return (
     <div
-      className="grid grid-cols-1 items-start gap-x-2 gap-y-1 border-b border-border/70 py-[7px] lg:gap-y-0 lg:[grid-template-columns:var(--qr-tab)]"
+      className="grid grid-cols-1 items-start gap-x-2 gap-y-1 border-b border-border/70 py-[5px] lg:gap-y-0 lg:[grid-template-columns:var(--qr-tab)]"
       style={{ ['--qr-tab' as string]: template }}
     >
       {cells.map((c, i) => (
@@ -294,8 +338,8 @@ export function Bullet({ children, mode = 'app' }: { children: ReactNode; mode?:
     return <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: 1.45, color: EMAIL.ink, marginTop: 6 }}>· {children}</div>
   }
   return (
-    <p className="m-0 flex items-start gap-2 text-[13.5px] leading-[1.45]">
-      <span aria-hidden className="mt-[9px] inline-block size-[6px] flex-none rounded-full bg-primary" />
+    <p className="m-0 flex items-start gap-2 text-[12px] leading-[1.4]">
+      <span aria-hidden className="mt-[7px] inline-block size-[6px] flex-none rounded-full bg-primary" />
       <span className="min-w-0">{children}</span>
     </p>
   )
@@ -328,7 +372,7 @@ export function Pull({ children, mode = 'app' }: { children: ReactNode; mode?: R
   if (mode === 'email') {
     return <div style={{ fontFamily: FONT.serif, fontSize: 13, fontStyle: 'italic', lineHeight: 1.45, color: EMAIL.ink2, background: EMAIL.inner, padding: '11px 16px', borderRadius: 6, marginTop: 8 }}>{children}</div>
   }
-  return <div className="max-w-[66ch] rounded-md bg-inner px-4 py-[11px] font-serif text-[13px] italic leading-[1.45] text-secondary-foreground">{children}</div>
+  return <div className="max-w-[66ch] rounded-md bg-inner px-3 py-2 font-serif text-[12px] italic leading-[1.4] text-secondary-foreground">{children}</div>
 }
 
 /** A `<dl>` of label → value, the artboard's method table (design-system §5
@@ -347,11 +391,11 @@ export function DefList({ rows, mode = 'app' }: { rows: readonly { label: ReactN
     )
   }
   return (
-    <dl className="m-0 grid grid-cols-1 gap-x-4 gap-y-[9px] lg:grid-cols-[112px_1fr]">
+    <dl className="m-0 grid grid-cols-1 gap-x-3 gap-y-[5px] lg:grid-cols-[100px_1fr]">
       {rows.map((r, i) => (
         <Fragment key={i}>
-          <dt className="pt-[3px] font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{r.label}</dt>
-          <dd className="m-0 text-[12.5px] leading-[1.4]">{r.value}</dd>
+          <dt className="pt-[2px] font-mono text-[9.5px] uppercase tracking-[0.06em] text-muted-foreground">{r.label}</dt>
+          <dd className="m-0 text-[11.5px] leading-[1.35]">{r.value}</dd>
         </Fragment>
       ))}
     </dl>

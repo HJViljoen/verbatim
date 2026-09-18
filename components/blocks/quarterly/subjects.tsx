@@ -178,7 +178,10 @@ export const quarterlySubjects: Block<QuarterlyData> = {
                 axis={s.line.months}
                 series={series}
                 mode={mode}
-                height={170}
+                height={150}
+                width={340}
+                padL={34}
+                padR={92}
                 format={(v) => fmtPct(v)}
                 label="the subject's share of the audience's videos, month by month"
                 caption={s.line.label ?? undefined}
@@ -202,8 +205,10 @@ export const quarterlySubjects: Block<QuarterlyData> = {
             ) : null}
           </Card>
         ) : null}
+        {/* ONE QUOTE, WHICH IS WHAT THE ARTBOARD DRAWS. `quotes()` still
+            declares every ref this page is entitled to. */}
         {voices.length > 0 ? (
-          <BlockQuotes mode={mode} quotes={voices.map((q) => ({ quote: q.quote, cite: q.cite }))} />
+          <BlockQuotes mode={mode} quotes={voices.slice(0, 1).map((q) => ({ quote: q.quote, cite: q.cite }))} />
         ) : null}
       </Column>
     )

@@ -290,16 +290,24 @@ describe('what each page owes the reader', () => {
     expect(text).toMatch(/Movers and the mix are \w+ against \w+\./)
   })
 
-  it('draws the quarter’s own reading where the window pair was taken', () => {
+  it('draws the quarter’s own volume here and its object rows on page 2', () => {
     const text = renderText(QUARTERLY_BLOCKS['quarterly.category'].render(data, 'app', ctx))
-    expect(text).toContain('The quarter against the quarter before it')
-    // The theme half — unreachable until the window read asked for it.
-    expect(text).toContain('Will it survive a wet commute')
-    // And the volume as two counts, never as a share of itself. The defect
-    // this replaces printed "4,147 of 4,147 · no clear change".
-    expect(text).toContain('4,147 videos')
+    // THE VOLUME, as two counts and never as a share of itself. The defect this
+    // replaces printed "4,147 of 4,147 · no clear change" for every audience.
+    expect(text).toContain('Videos read this quarter')
+    expect(text).toContain('4,147')
     expect(text).toContain('against 3,810 in the quarter before it')
     expect(text).not.toContain('4,147 of 4,147')
+    // THE QUARTER'S OBJECT ROWS MOVED TO PAGE 2 (Block D wave 2). `countedLines`
+    // prints the three largest quarter readings off the SAME list, with both
+    // sides' k of n, under the paragraph that argues from them — so a second
+    // copy on this page was one artefact stating one comparison twice, and it
+    // cost 279px of a 561px slide body.
+    expect(text).not.toContain('Will it survive a wet commute 871')
+    const read = renderText(QUARTERLY_BLOCKS['quarterly.read'].render(data, 'app', ctx))
+    expect(read).toContain('What is counted under it')
+    expect(read).toContain('912 of 4,147')
+    expect(text).toContain('the three largest quarter readings are on page 2')
   })
 
   it('never counts a comparison that cannot fail as an answered one', () => {
@@ -740,7 +748,7 @@ describe('the artboard port (Block D wave 2)', () => {
 
   it('qr.p6.sayhear · the counts are named as not recorded, never printed as zero', () => {
     const t = text('quarterly.moves')
-    expect(t).toContain('how many pushed back is not counted for this workspace yet')
+    expect(t).toContain('how many pushed back is not counted yet')
     expect(t).not.toMatch(/echoed 0/)
   })
 

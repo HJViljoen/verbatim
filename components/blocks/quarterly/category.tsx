@@ -13,7 +13,7 @@ import { monthlyLineLabel, type Mover } from '@/lib/pages/overview'
 import { hasQuote } from '@/lib/renderables/quotes-freeze'
 import type { CategoryPage, QuarterlyData, QuarterMover } from '@/lib/pages/quarterly'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE } from '@/lib/reports/quarterly'
-import { Card, Chip, Column, Columns, Eyebrow, Note, Row } from './parts'
+import { Card, Chip, Column, Columns, Eyebrow, Line, Note } from './parts'
 
 // QR4 · What the category talked about (mock page 4).
 //
@@ -78,7 +78,10 @@ function seriesLine(mover: Mover): string | null {
   const read = months
     .map((m, i) => (spark[i] == null ? null : `${monthName(m).split(' ')[0]} ${spark[i]}`))
     .filter((v): v is string => v != null)
-  return read.length ? read.join(' · ') : null
+  // THE LAST FOUR, WHICH IS WHAT THE ARTBOARD DRAWS. A six-month line wraps to
+  // two rows on a column this narrow and the older half is already in the
+  // sparkline beside it; `firstHeard` says how far back the object goes.
+  return read.length ? read.slice(-4).join(' · ') : null
 }
 
 /**
@@ -106,7 +109,7 @@ function MoverRow({ mover, mode }: { mover: QuarterMover; mode: RenderMode }) {
           value={mover.pct == null ? '—' : fmtPct(mover.pct)}
           of={`${fmtInt(mover.k)} of ${fmtInt(mover.n)}`}
         />
-        {!email && drawn ? <Sparkline values={mover.spark as (number | null)[]} color="var(--cat)" animate={false} /> : null}
+        {!email && drawn ? <Sparkline values={mover.spark as (number | null)[]} color="var(--cat)" animate={false} width={72} height={22} /> : null}
       </div>
       <div className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
         <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} />
@@ -227,8 +230,35 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           {c.moversNote ? <Note mode={mode}>{c.moversNote}</Note> : null}
         </div>
 
+
+        {/* THE QUARTER'S OWN VOLUME, AND NOT ITS OBJECT ROWS.
+            `countedLines` on page 2 already prints the three largest quarter
+            readings with both sides' k of n, off the SAME list, under the
+            paragraph that argues from them — so a second copy here was one
+            artefact stating one comparison twice, and it cost 279px of a 561px
+            slide. What is only here is the volume, which is a pair of counts
+            and belongs to the page that names the audience.
+
+            TWO COUNTS, NOT A BADGE, and no `of` on the cell. A volume is not a
+            share of anything, which is what omitting `of` says; rule (b) reads
+            a level node for an "of N" this figure cannot have. The first cut
+            banded it against itself and printed "4,147 of 4,147 · no clear
+            change" for every audience on the page. */}
+        {c.quarterVolume ? (
+          <Line
+            mode={mode}
+            label="Videos read this quarter"
+            figure={<FigureCell mode={mode} value={fmtInt(c.quarterVolume.videos)} align="right" />}
+            note={`against ${fmtInt(c.quarterVolume.before)} in the quarter before it · the three largest quarter readings are on page 2`}
+          />
+        ) : null}
+        {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}
+
+        {/* ONE QUOTE, WHICH IS WHAT THE ARTBOARD DRAWS. `quotes()` still
+            declares every ref the page is entitled to — a snapshot freezes the
+            ids, and which of them a layout SHOWS is the layout's business. */}
         {voices.length > 0 ? (
-          <BlockQuotes mode={mode} quotes={voices.map((q) => ({ quote: q.quote, cite: q.cite }))} />
+          <BlockQuotes mode={mode} quotes={voices.slice(0, 1).map((q) => ({ quote: q.quote, cite: q.cite }))} />
         ) : null}
       </Column>
     )
@@ -240,25 +270,27 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           {c.kinds.length > 0 ? (
             <>
               {c.kinds.map((k) => (
-                <Row
+                <Line
                   key={k.kind}
                   mode={mode}
                   label={k.label}
-                  aside={<BlockMovement verdict={c.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} />}
-                >
-                  <FigureCell
-                    mode={mode}
-                    value={k.pct == null ? '—' : fmtPct(k.pct)}
-                    of={`${fmtInt(k.videos)} of ${fmtInt(k.denominator)}`}
-                  />
-                </Row>
+                  figure={
+                    <FigureCell
+                      mode={mode}
+                      value={k.pct == null ? '—' : fmtPct(k.pct)}
+                      of={`${fmtInt(k.videos)} of ${fmtInt(k.denominator)}`}
+                      align="right"
+                    />
+                  }
+                  badge={<BlockMovement verdict={c.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} />}
+                />
               ))}
               {/* D4 · WHY THERE IS NO BAR HERE. Said once, under the rows. */}
               <Note mode={mode}>
-                One comment is one kind and a video can carry several, so these are independent shares of the same{' '}
-                <span data-copy="figure">{fmtInt(c.kinds[0].denominator)}</span> videos and do not add up to them.
+                Independent shares of the same <span data-copy="figure">{fmtInt(c.kinds[0].denominator)}</span> videos;
+                they do not add up to them.
                 {c.reddit && c.reddit.pct != null ? (
-                  <> Reddit carried <span data-copy="figure">{fmtInt(c.reddit.reddit)} of {fmtInt(c.reddit.videos)}</span> of the question-and-objection videos{c.reddit.exact ? '' : ' (a video carrying both is counted in each)'}.</>
+                  <> Reddit carried <span data-copy="figure">{fmtInt(c.reddit.reddit)} of {fmtInt(c.reddit.videos)}</span> of the question-and-objection videos{c.reddit.exact ? '' : ', a video carrying both counted in each'}.</>
                 ) : null}
               </Note>
             </>
@@ -277,7 +309,10 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 series={panel}
                 rules={panelRule(c)}
                 mode={mode}
-                height={160}
+                height={92}
+                width={330}
+                padL={40}
+                padR={96}
                 format={(v) => fmtInt(v)}
                 label="comments under the panel's videos, month by month"
               />
@@ -285,9 +320,9 @@ export const quarterlyCategory: Block<QuarterlyData> = {
                 <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
                 <Note mode={mode}>
                   {c.attention?.accountCount != null
-                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts.</>
-                    : 'Comments under a fixed panel of accounts.'}
-                  {' '}The panel is re-frozen when what we track changes, and the rule on the line marks where.
+                    ? <>Comments under a fixed panel of <span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts;</>
+                    : 'Comments under a fixed panel of accounts;'}
+                  {' '}the rule marks where it was re-frozen.
                 </Note>
               </div>
             </Card>
@@ -301,20 +336,25 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           {c.mood ? (
             <>
               {c.mood.shares.map((m) => (
-                <Row key={m.mood} mode={mode} label={m.label}>
-                  <FigureCell
-                    mode={mode}
-                    value={m.pct == null ? '—' : fmtPct(m.pct)}
-                    of={`${fmtInt(m.videos)} of ${fmtInt(m.judged)} judged`}
-                  />
-                </Row>
+                <Line
+                  key={m.mood}
+                  mode={mode}
+                  label={m.label}
+                  figure={
+                    <FigureCell
+                      mode={mode}
+                      value={m.pct == null ? '—' : fmtPct(m.pct)}
+                      of={`${fmtInt(m.videos)} of ${fmtInt(m.judged)} judged`}
+                      align="right"
+                    />
+                  }
+                />
               ))}
               <div className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
                 <BlockMovement verdict={c.mood.verdict} unit="pts" mode={mode} />
                 {c.mood.framingPct != null ? (
                   <Note mode={mode}>
-                    <span data-copy="figure">{fmtPct(c.mood.framingPct)}</span> of the judged videos were read from how the
-                    video framed them rather than from a comment.
+                    <span data-copy="figure">{fmtPct(c.mood.framingPct)}</span> judged on the video’s own framing, not a comment.
                   </Note>
                 ) : null}
               </div>
@@ -334,42 +374,6 @@ export const quarterlyCategory: Block<QuarterlyData> = {
           {aside}
         </Columns>
 
-        {c.quarterVolume || c.quarter.length > 0 ? (
-          <div className={email ? undefined : 'mt-2'}>
-            <Eyebrow mode={mode}>The quarter against the quarter before it</Eyebrow>
-            {/* TWO COUNTS, NOT A BADGE. How much was read is a volume and not
-                a share of anything, so it is stated and never banded — the
-                first cut compared it with itself and printed "4,147 of 4,147 ·
-                no clear change" for every audience on the page. */}
-            {c.quarterVolume ? (
-              <Row mode={mode} label="How much was read">
-                {/* NO `of`, AND THAT IS THE STATEMENT. `FigureCell` marks the
-                    pair as a LEVEL, and rule (b) reads a level node for its
-                    "of N" — which a volume does not have, because a volume is
-                    not a share of anything. Omitting `of` is the primitive's
-                    own way of saying so; "against 3,810 in the quarter before
-                    it" is a second count and sits beside the cell, not inside
-                    it. The first cut of this row banded the volume against
-                    itself and printed "4,147 of 4,147 · no clear change". */}
-                <FigureCell mode={mode} value={`${fmtInt(c.quarterVolume.videos)} videos`} />
-                <Note mode={mode}>against {fmtInt(c.quarterVolume.before)} in the quarter before it</Note>
-              </Row>
-            ) : null}
-            {c.quarter.map((v) => (
-              <Row
-                key={`${v.objectKind}:${v.objectId}`}
-                mode={mode}
-                label={<ObjectLabel label={v.objectLabel} model={v.objectKind === 'theme'} mode={mode} />}
-                aside={<BlockMovement verdict={v} unit="pts" mode={mode} />}
-              >
-                <FigureCell mode={mode} value={fmtInt(v.value.k)} of={`of ${fmtInt(v.value.n)}`} />
-              </Row>
-            ))}
-            {c.quarterNote ? <Note mode={mode}>{c.quarterNote}</Note> : null}
-          </div>
-        ) : c.quarterNote ? (
-          <Note mode={mode}>{c.quarterNote}</Note>
-        ) : null}
       </div>,
     )
   },

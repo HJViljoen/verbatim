@@ -37,7 +37,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
-  caption, label, mode = 'app', ctx, emailMonths = 6, height,
+  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padL, padR,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -53,6 +53,19 @@ export function BlockCalendar({
   ctx?: BlockContext
   emailMonths?: number
   height?: number
+  /**
+   * The viewBox's own width and pads, forwarded to `CalendarLine` (Block D
+   * wave 2 — additive; every existing caller keeps the 880-wide default).
+   *
+   * The SVG scales UNIFORMLY (see CalendarLine: the two gutter tokens differ
+   * by shape, so `preserveAspectRatio="none"` would turn a circle into an
+   * ellipse), which means a chart drawn at 880 × 150 inside a 300px column
+   * renders about 51px tall. A deck column is narrow by construction, so the
+   * caller states the box it actually has.
+   */
+  width?: number
+  padL?: number
+  padR?: number
 }) {
   if (!axis.length || !series.length) return null
 
@@ -67,6 +80,9 @@ export function BlockCalendar({
         caption={caption}
         label={label}
         height={height}
+        width={width}
+        padL={padL}
+        padR={padR}
         // The block key alone is not an identity: it is stripped of its
         // punctuation (so `overview.line` and `overview-line` collide) and WP12
         // draws one calendar per audience under ONE key, which is exactly the

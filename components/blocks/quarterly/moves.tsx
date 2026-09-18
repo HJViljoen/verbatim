@@ -10,7 +10,7 @@ import type { MoveReading } from '@/lib/reading/moves'
 import type { QuarterlyData } from '@/lib/pages/quarterly'
 import type { MoveRow } from '@/lib/pages/market-surface'
 import { QUARTER_PAGE_QUESTION, QUARTER_PAGE_TITLE, quarterLabel } from '@/lib/reports/quarterly'
-import { Card, Chip, Column, Columns, Eyebrow, Note, Row, Stored } from './parts'
+import { Card, Chip, Column, Columns, Eyebrow, Line, Note, Stored } from './parts'
 
 // QR6 · Your moves, and what happened after (mock page 6).
 //
@@ -109,7 +109,10 @@ function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading
           axis={reading!.months}
           series={series}
           mode={mode}
-          height={150}
+          height={124}
+          width={330}
+          padL={34}
+          padR={92}
           format={(v) => fmtPct(v)}
           label={`${move.title}, month by month`}
         />
@@ -126,9 +129,13 @@ function MoveCard({ move, reading, mode }: { move: MoveRow; reading: MoveReading
               They are the reason this page may report what happened after a
               move without claiming the move caused it. */}
           {reading.control.map((v) => (
-            <Row key={`${v.objectKind}:${v.objectId}:${v.audience}`} mode={mode} label={v.objectLabel} aside={<BlockMovement verdict={v} unit="pts" mode={mode} />}>
-              <FigureCell mode={mode} value={fmtInt(v.value.k)} of={`of ${fmtInt(v.value.n)}`} />
-            </Row>
+            <Line
+              key={`${v.objectKind}:${v.objectId}:${v.audience}`}
+              mode={mode}
+              label={v.objectLabel}
+              figure={<FigureCell mode={mode} value={fmtInt(v.value.k)} of={`of ${fmtInt(v.value.n)}`} align="right" />}
+              badge={<BlockMovement verdict={v} unit="pts" mode={mode} />}
+            />
           ))}
           <Note mode={mode}>{reading.line}</Note>
         </>
@@ -193,11 +200,11 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                 >
                   {a.number}
                 </span>
-                <span className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+                <span className={email ? undefined : 'flex min-w-0 flex-col'}>
                   <Stored slot="pass_d_b_recommendation">{a.title}</Stored>
                   <span className={email ? undefined : 'flex flex-wrap items-center gap-1.5'}>
                     <Chip tone="plain" mode={mode}>{a.statusLabel}{a.decidedAt ? ` · ${fullDate(a.decidedAt)}` : ''}</Chip>
-                    <span className={email ? undefined : 'font-mono text-[10px] text-muted-foreground'}>
+                    <span className={email ? undefined : 'font-mono text-[9.5px] text-muted-foreground'}>
                       {monthName(`${a.firstMade.slice(0, 7)}-01`)} · {a.monthsRepeated === 1 ? '1 month' : `${a.monthsRepeated} months`} ·{' '}
                       {a.timesMade === 1 ? '1 update' : `${a.timesMade} updates`}
                     </span>
@@ -224,15 +231,13 @@ export const quarterlyMoves: Block<QuarterlyData> = {
           {m.claims.length > 0 ? (
             <>
               {m.claims.map((c) => (
-                <Row
+                <Line
                   key={c.id}
                   mode={mode}
                   label={<Stored slot="pass_d_a_say_vs_hear">{c.youSay}</Stored>}
-                  aside={<Chip tone="plain" mode={mode}>{c.verdictLabel}</Chip>}
-                >
-                  <Stored slot="pass_d_a_say_vs_hear">{c.gap}</Stored>
-                  <Note mode={mode}>{c.audience}</Note>
-                </Row>
+                  badge={<Chip tone="plain" mode={mode}>{c.verdictLabel}</Chip>}
+                  note={<Stored slot="pass_d_a_say_vs_hear">{c.gap}</Stored>}
+                />
               ))}
               {/* THE MOCK'S "echoed 14 · pushed back 3" HAS NO FIELD.
                   `ClaimRow.gap` is the model's sentence about what came back,
@@ -240,8 +245,8 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                   the class of claim this whole layer refuses. Said once, under
                   the rows, so a reader does not take the silence for a zero. */}
               <Note mode={mode}>
-                How many videos echoed a claim and how many pushed back is not counted for this workspace yet, so each
-                row carries the verdict word and the audience it was read in. {m.claimsLine} {m.claimsCaveat}
+                How many videos echoed a claim and how many pushed back is not counted yet, so each row carries the
+                verdict word alone. {m.claimsLine} {m.claimsCaveat}
               </Note>
             </>
           ) : (
@@ -259,24 +264,28 @@ export const quarterlyMoves: Block<QuarterlyData> = {
                 {m.plan.checkedOn ? ` · re-checked ${fullDate(m.plan.checkedOn)}` : ' · not re-checked since it was uploaded'}
               </Note>
               {m.plan.claims.map((claim, i) => (
-                <Row key={i} mode={mode} aside={<Chip tone="plain" mode={mode}>{claim.verdictLabel}</Chip>}>
-                  {/* A PLAN'S CLAIM IS THE READER'S OWN DOCUMENT, quoted back —
-                      not a model's prose about it — so it carries no slot and
-                      is swept by rule (c) like any other unmarked copy. */}
-                  {claim.claim}
-                  {claim.value.n > 0 ? (
-                    <FigureCell mode={mode} value={fmtInt(claim.value.k)} of={`of ${fmtInt(claim.value.n)}`} />
-                  ) : (
-                    <FigureCell mode={mode} value={fmtInt(claim.value.k)} />
-                  )}
-                </Row>
+                // A PLAN'S CLAIM IS THE READER'S OWN DOCUMENT, quoted back —
+                // not a model's prose about it — so it carries no slot and is
+                // swept by rule (c) like any other unmarked copy.
+                <Line
+                  key={i}
+                  mode={mode}
+                  label={claim.claim}
+                  figure={
+                    claim.value.n > 0
+                      ? <FigureCell mode={mode} value={fmtInt(claim.value.k)} of={`of ${fmtInt(claim.value.n)}`} align="right" />
+                      : <FigureCell mode={mode} value={fmtInt(claim.value.k)} align="right" />
+                  }
+                  badge={<Chip tone="plain" mode={mode}>{claim.verdictLabel}</Chip>}
+                />
               ))}
-              {m.plan.moved.map((row, i) => (
+              {m.plan.moved.slice(0, 2).map((row, i) => (
                 <Note key={`moved-${i}`} mode={mode}>{row.claim} — {row.from} → {row.to} · {row.on}</Note>
               ))}
-              <Note mode={mode}>{m.plan.basis}</Note>
-              <Note mode={mode}>{m.plan.floorLine}</Note>
-              <Note mode={mode}>{m.plan.caveat}</Note>
+              {/* THE THREE SENTENCES THAT MUST TRAVEL WITH THESE COUNTS, as one
+                  note rather than three: what the counts are of (D15), the floor
+                  a verdict is drawn at, and the hold this card does not have. */}
+              <Note mode={mode}>{m.plan.basis} {m.plan.floorLine} {m.plan.caveat}</Note>
               {m.plan.notice ? <Note mode={mode}>{m.plan.notice}</Note> : null}
             </Card>
           ) : (
