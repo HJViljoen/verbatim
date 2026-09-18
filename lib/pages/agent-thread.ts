@@ -306,6 +306,19 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+  // The workspace's newest re-evaluation, BESIDE the plan read rather than
+  // after it. `ask-reevaluate` writes a row per plan per run, so on a tenant
+  // with one plan — every tenant today — the newest row in the workspace IS the
+  // newest row for the newest plan, and the round trip is saved. Where it is
+  // not (several plans written in one batch), the chip asks for its own plan's
+  // row below: correct first, parallel where it can be.
+  const newestEvalP = supabase
+    .from('plan_check_evaluations')
+    .select('plan_check_id, moved')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
   const notAnsweredP = loadNotAnswered(scope).catch(() => null)
 
   const storedRegistryIds = [
@@ -507,21 +520,25 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
   })
 
   const plan = row<{ id: string; title: string | null; source_filename: string | null }>(await planP, 'agentThread.plan')
+  const newestEval = row<{ plan_check_id: string; moved: unknown }>(await newestEvalP, 'agentThread.planEval')
   let planChip: AgentThreadData['planChip'] = null
   if (plan) {
     // `plan_check_evaluations.moved` is written by the pipeline's
     // `ask-reevaluate` step and has never been read by anything (grep, 2026-09).
     // A failed read is `false` rather than a thrown page: the chip is an
     // affordance, and a plan whose re-check we cannot see is still a plan.
-    const { data: evalRow } = await supabase
-      .from('plan_check_evaluations')
-      .select('moved')
-      .eq('plan_check_id', plan.id)
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    const moved = (evalRow as { moved?: unknown } | null)?.moved
+    let moved: unknown = newestEval?.plan_check_id === plan.id ? newestEval.moved : undefined
+    if (moved === undefined) {
+      const own = await supabase
+        .from('plan_check_evaluations')
+        .select('moved')
+        .eq('plan_check_id', plan.id)
+        .eq('client_id', clientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      moved = row<{ moved: unknown }>(own, 'agentThread.planEval.own')?.moved
+    }
     planChip = {
       planId: plan.id,
       title: plan.title ?? plan.source_filename ?? 'A plan you checked',
