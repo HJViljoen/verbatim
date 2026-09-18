@@ -288,11 +288,17 @@ export function freshRecordInputsFixture(): RecordInputs {
 export function coverageRowsFixture(): RecordRow[] {
   const readings = readingsFixture()
   const floor = readings.belowFloor[0]
-  return recordRows(recordInputsFixture(), {
+  const inputs = recordInputsFixture()
+  // COMPOSED THE WAY THE PAGE COMPOSES IT, both arguments included: the clause
+  // is handed the count it will sit beside, and the remainder is off
+  // `belowFloorTotal` and not the truncated list. A fixture that composes its
+  // rows differently from the route is a review surface for a page nobody
+  // ships.
+  return recordRows(inputs, {
     trailingMedian: readings.trailingMedian,
-    changeNote: changeNote(changeLogFixture(), { from: '2026-09-01', to: '2026-09-28' }),
+    changeNote: changeNote(changeLogFixture(), { from: '2026-09-01', to: '2026-09-28' }, { counted: inputs.changes.inWindow }),
     belowFloor: floor
-      ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloor.length - 1 }
+      ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloorTotal - 1 }
       : null,
   })
 }

@@ -334,6 +334,9 @@ describe('the coverage grid', () => {
     expect(text).toContain('trailing median')
     expect(text).toContain('Poler added as a rival, 3 Sep')
     expect(text).toContain('under the 100 a banded reading needs')
+    // Off `belowFloorTotal`, the way the route composes it: four months are
+    // under the floor and three are listed (code review finding 2).
+    expect(text).toContain('and 3 other months are under it too')
   })
 
   it('prints the one-line summary this page never carried', () => {
