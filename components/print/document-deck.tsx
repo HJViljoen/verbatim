@@ -42,10 +42,20 @@ const CARD = 'rounded-lg border border-border bg-tile'
 // a 1168px body zoomed to .902 is about 12pt on a 297mm sheet — a large-print
 // research report. Measured across the four brief artboards, the body runs
 // 12.5–13px, and it is why the mock fits a finding, its quote, its card and
-// its practice list on one slide where the build clips at twenty rows. The
-// page LEADS are untouched (the "In short" summary at 17px, the section
-// intros at 15–16px): §5 names those sizes and a lead is supposed to sit
-// above its body. Only the body moved.
+// its practice list on one slide where the build clips at twenty rows.
+//
+// §5 AND ITS OWN ARTBOARDS DISAGREE, AND THE ARTBOARDS WON. The spec's prose
+// names this size explicitly — "prose at 15.5px/1.55 (BODY; small variant
+// 14px/1.5)", design-system.md §5 — which is exactly what stood here. Its
+// four brief artboards then draw the body at 12–13px throughout (SalesBrief
+// 12.5px ×32 and 13px ×27; MarketingBrief 13px ×37 and 12.5px ×35;
+// ContentBrief 12px ×43 and 13px ×17; LeadershipBrief 12px ×18 and 12.5px
+// ×12). A drawing is a measurement and a sentence about it is not, so the
+// drawings were followed. The page LEADS are untouched (the "In short"
+// summary at 17px, the section intros at 15–16px) — §5 names those too, and
+// the 15–17px nodes those artboards do carry are few and are the leads
+// themselves (SalesBrief: 11 at 15.5px, 9 at 15px, 3 at 17px, against 59 at
+// 12.5–13px). Only the body moved.
 const BODY = 'text-[13px] leading-[1.5] text-foreground'
 const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
 
