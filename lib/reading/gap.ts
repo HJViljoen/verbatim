@@ -329,7 +329,7 @@ export function gapLine(gap: Gap): string {
 export function gapBasisLine(gap: Gap): string | null {
   const basis = gap.basis
   if (!basis) return null
-  const when = basis.window.kind === 'month' ? longMonth(basis.window.from) : periodOf(basis.window)
+  const when = periodLabel(basis.window, gap.window)
   if (basis.state === 'apart' && basis.gapPts != null && basis.bandPts != null) {
     return `${pts(Math.abs(basis.gapPts))} points ${GAP_WORDS.apart} in ${when} (band ${pts(basis.bandPts)})`
   }
@@ -339,11 +339,27 @@ export function gapBasisLine(gap: Gap): string | null {
   return `${GAP_WORDS[basis.state]} in ${when}`
 }
 
-/** A non-month window in the reader's words, for a basis that is a quarter or
- *  the whole record rather than a month. */
-function periodOf(window: VerdictWindow): string {
+/**
+ * A window in the reader's words, dated AGAINST the reading it is printed
+ * beside.
+ *
+ * THE YEAR APPEARS EXACTLY WHEN IT MATTERS. House convention prints a bare
+ * month ("in June") and that is right while both readings sit in one year; the
+ * basis on every wave-1 surface is the immediately preceding period, and the
+ * period immediately before January is December OF THE YEAR BEFORE. A January
+ * gap printing "19 points apart in December" beside its own month dates the
+ * earlier reading to a December a reader will read as this one's — the one
+ * thing this product's month rule exists to stop. So the year is printed when
+ * the two windows disagree about it, and withheld when they do not.
+ *
+ * `since` names no month at all, so it carries no year either.
+ */
+export function periodLabel(window: VerdictWindow, beside?: VerdictWindow | null): string {
   if (window.kind === 'since') return 'the record before this'
-  return `the ${window.kind} from ${longMonth(window.from)}`
+  const year = window.from.slice(0, 4)
+  const suffix = beside && beside.from.slice(0, 4) === year ? '' : ` ${year}`
+  if (window.kind === 'month') return `${longMonth(window.from)}${suffix}`
+  return `the ${window.kind} from ${longMonth(window.from)}${suffix}`
 }
 
 /**

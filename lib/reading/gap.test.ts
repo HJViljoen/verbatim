@@ -381,3 +381,40 @@ describe('gapDirection', () => {
     expect(gapDirection(quarters, true)).toBeNull()
   })
 })
+
+describe('the basis names its year only when it is not the reading’s own', () => {
+  const DEC = monthWindow('2025-12-01', '2026-01-01')
+  const JAN = monthWindow('2026-01-01', '2026-02-01')
+
+  const across = () =>
+    gapBetween({
+      ...durability,
+      a: side({ value: { k: 78, n: 252 }, pct: 31 }),
+      b: them({ value: { k: 186, n: 426 }, pct: 43.7 }),
+      window: JAN,
+      basis: {
+        a: side({ value: { k: 60, n: 273 }, pct: 22 }),
+        b: them({ value: { k: 175, n: 427 }, pct: 41 }),
+        window: DEC,
+      },
+    })
+
+  it('prints the year where the basis is in another one — December is not this January’s December', () => {
+    expect(gapBasisLine(across())).toBe('19 points apart in December 2025 (band 6.9)')
+  })
+
+  it('leaves the year off where both readings sit in one, as the house does', () => {
+    const inYear = gapBetween({
+      ...durability,
+      a: side({ value: { k: 78, n: 252 }, pct: 31 }),
+      b: them({ value: { k: 186, n: 426 }, pct: 43.7 }),
+      window: SEP,
+      basis: {
+        a: side({ value: { k: 60, n: 273 }, pct: 22 }),
+        b: them({ value: { k: 175, n: 427 }, pct: 41 }),
+        window: JUN,
+      },
+    })
+    expect(gapBasisLine(inYear)).toMatch(/^19 points apart in June \(band /)
+  })
+})
