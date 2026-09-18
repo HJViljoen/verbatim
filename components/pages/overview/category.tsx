@@ -120,7 +120,7 @@ function attentionSeries(c: CategoryBlock, month: string): CalendarSeries | null
  * drawn before it. A rule on the first month of the axis marks a break with
  * nothing on the other side of it.
  */
-export function panelRule(c: CategoryBlock): CalendarRule[] {
+export function panelRule(c: Pick<CategoryBlock, 'attention'>): CalendarRule[] {
   const at = c.attention?.panel?.frozen_at
   if (!at || !c.attention) return []
   const month = `${at.slice(0, 7)}-01`

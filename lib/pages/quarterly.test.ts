@@ -425,7 +425,12 @@ describe('what the quarterly pages now carry (package D7)', () => {
     expect(formingFixture().category.quiet).toBeNull()
     expect(formingFixture().category.quietNote).toContain('could not be read')
     expect(thinMonthFixture().category.quiet).toEqual([])
-    expect(thinMonthFixture().category.quietNote).toContain('has gone quiet')
+    // NOT "has gone quiet" ANY MORE, AND THE REASON IS THAT IT IS PRINTED NOW.
+    // Both sentences were written with the flag's own words in them and neither
+    // was ever rendered; wave 2 renders them, and rule (c) sweeps a direction
+    // word outside a verdict node — which is what the flag is marked as, and a
+    // sentence ABOUT the register is not one.
+    expect(thinMonthFixture().category.quietNote).toContain('has stopped being said')
     expect(quarterlyFixture().category.quiet).toHaveLength(2)
     expect(quarterlyFixture().category.quietNote).toBeNull()
   })

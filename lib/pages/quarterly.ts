@@ -336,6 +336,17 @@ export interface CategoryPage {
   kinds: CategoryBlock['kinds']
   kindVerdicts: CategoryBlock['kindVerdicts']
   kindsNote: string | null
+  /**
+   * `qr.p4.kinds`' basis note — how much of the question-and-objection talk
+   * arrives as a Reddit thread.
+   *
+   * `CategoryBlock.reddit` has been built since Block B and this page dropped
+   * it, so the mock's "Reddit 38% of question videos" had a field and no
+   * renderer. It travels with the kind rows because it is what those rows are
+   * a reading OF: a kind mix that is materially one platform's is a different
+   * finding from one spread across four (D15 — a figure without its basis).
+   */
+  reddit: CategoryBlock['reddit']
   attention: CategoryBlock['attention']
   attentionNote: string | null
   mood: CategoryBlock['mood']
@@ -1771,16 +1782,23 @@ function buildCategory(a: {
     // read is a failure of ours; a register with nothing dormant in it is a
     // reading. The mock's "gone quiet" column would say the same thing for
     // both, and a reader would take the first for the second.
+    // AND NEITHER SENTENCE MAY SAY THE FLAG'S OWN WORDS. Both were written
+    // with "gone quiet" in them and neither was ever rendered; wave 2 renders
+    // them, and rule (c) sweeps a direction word outside a verdict node —
+    // which is what the FLAG is marked as, and a sentence about the register
+    // is not. Overview's own wording is the precedent ("Nothing this page has
+    // drawn has stopped being said").
     quietNote:
       a.quiet == null
-        ? 'The register of what has gone quiet could not be read for this workspace.'
+        ? 'The register of dormant themes could not be read for this workspace.'
         : a.quiet.length === 0
-          ? 'Nothing this artefact follows has gone quiet.'
+          ? 'Nothing this artefact follows has stopped being said.'
           : null,
     quotes: a.quotes,
     kinds: c.kinds,
     kindVerdicts: c.kindVerdicts,
     kindsNote: c.kindsNote,
+    reddit: c.reddit,
     attention: c.attention,
     attentionNote: c.attentionNote,
     mood: c.mood,

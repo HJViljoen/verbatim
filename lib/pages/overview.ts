@@ -204,6 +204,24 @@ export interface Mover {
   direction: Direction | null
   /** First month this object has a reading in, when it is this month. */
   isNew: boolean
+  /**
+   * The last months of this object's own series, and the months they sit on —
+   * the same pair `SubjectRow` has carried since WP11, added here for the
+   * quarterly review's mover sparkline (`qr.p4.movers`, Block D wave 2).
+   *
+   * OPTIONAL, AND ADDITIVE. Every existing reader of a `Mover` is unchanged;
+   * a renderer that wants the line reads it and refuses below three readings
+   * (`monthlyLineLabel`), because a chart is a direction claim too.
+   */
+  spark?: (number | null)[]
+  /** The months `spark` is indexed by, same length. */
+  sparkMonths?: string[]
+  /**
+   * The oldest month on THIS AXIS that carried a reading for this object —
+   * earliest evidence, never a start date (D14). Null where the axis does not
+   * reach one.
+   */
+  firstHeard?: string | null
 }
 
 /** A theme the register has marked dormant, with the last month it was heard
@@ -2748,6 +2766,9 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       prev,
     })
     const readable = s.points.filter((p) => p.k != null && p.k > 0)
+    // THE PAGE'S OWN AXIS, not the series' own order: a month with no row is a
+    // gap and is never closed up (lib/charts/calendar.ts).
+    const onAxis = input.axis.map((m) => byMonth.get(m) ?? null)
     movers.push({
       id: s.objectId as string,
       label: s.objectLabel ?? (s.objectId as string),
@@ -2756,6 +2777,16 @@ export function buildCategory(input: CategoryInput): CategoryBlock {
       pct: curr.pct,
       verdict,
       direction: input.thin ? null : directionWord(s.points),
+      // THE LAST MONTHS OF THIS OBJECT'S OWN SERIES, on the page's own axis —
+      // the same slice `SubjectRow.spark` takes, so the two lines on one
+      // artefact cannot be drawn over two different windows. Read by the
+      // quarterly review's mover rows; nothing else reads it yet.
+      spark: onAxis.slice(-SPARK_MONTHS).map((p) => (p ? pctOf(p.k, p.videos) : null)),
+      sparkMonths: input.axis.slice(-SPARK_MONTHS),
+      // EARLIEST EVIDENCE ON THIS AXIS, NEVER A START DATE. The axis may not
+      // reach back to the first month this was ever said in, so the word the
+      // surface prints is "first read in", not "first heard".
+      firstHeard: readable[0]?.month ?? null,
       isNew: firstHeardThisMonth({
         axisFrom: input.axis[0] ?? input.month,
         recordFrom: input.recordFrom,
