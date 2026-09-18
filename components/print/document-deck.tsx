@@ -112,6 +112,16 @@ export function DeckSpark({ values, months, color = 'var(--primary)' }: {
       </p>
     )
   }
+  // THE DRAWN PATH DEFENDS ITS AXIS. The labels are `months[0]` and the last
+  // month, so one month per slot is what makes them the ends of the line that
+  // was actually plotted; a list of a different length labels the wrong end,
+  // silently, on a sheet of paper with no hover to check it against. The
+  // comment above says a printed line without its axis cannot happen, and this
+  // is what makes that true rather than intended. Unreachable from a caller
+  // that hands over a series and its own months — which is the point.
+  if (months.length !== values.length) {
+    return <p className="font-mono text-[10.5px] text-muted-foreground">the months and the readings do not line up</p>
+  }
   return (
     <span className="flex flex-col gap-1">
       <Sparkline values={values} color={color} width={104} height={22} animate={false} endDot />

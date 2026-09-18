@@ -53,6 +53,16 @@ describe('DeckSpark', () => {
   it('prints nothing about an axis it was given none of', () => {
     expect(renderText(<DeckSpark values={[1]} months={[]} />)).toBe('no month reads')
   })
+
+  // A printed line whose labels are the wrong ends is worse than no line: the
+  // reader has no hover to check it with. Three readings and four months used
+  // to draw, labelled "Jun" to "Sep" with nothing read in September.
+  it('draws no line whose axis does not line up with its readings', () => {
+    const markup = render(<DeckSpark values={[18, 22, 19]} months={MONTHS} />)
+    expect(markup).not.toContain('<svg')
+    expect(markupText(markup)).toBe('the months and the readings do not line up')
+    expect(render(<DeckSpark values={[18, 22, 19]} months={['Jun', 'Jul', 'Aug']} />)).toContain('<svg')
+  })
 })
 
 const verdict = (state: DeltaVerdict['state'], change: number): DeltaVerdict =>
