@@ -418,7 +418,14 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
             <div className="mt-1"><QuoteBlock quote={saw.quote} mode="print" /></div>
           )}
         </div>
-        <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
+        {/* SIZED TO ITS CONTENT, NOT TO THE SHEET (fix pass). The card filled
+            the column's height and pinned CONFIDENCE to its foot, so a finding
+            with one practice bullet drew about 380px of empty bordered white
+            between the bullet and the rule — a hole in the middle of the
+            sheet's most prominent card. `distribute="between"` is right for a
+            card whose content fills it; the artboard's card is sized to its
+            content and lets the SHEET carry the slack. */}
+        <div className={`${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`}>
           <p className="font-mono text-[12px] text-muted-foreground">
             <span className="text-foreground">{fmtCount(conversations)}</span> conversations · <span className="text-foreground">{strands}</span> strands of the research
           </p>
@@ -443,7 +450,7 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
               </BlockSlot>
             </div>
           )}
-          <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+          <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
             <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               Confidence <ConfidenceDots sure={sureWord} /> <span className="normal-case tracking-normal text-foreground">{sureWord}</span>
             </p>
