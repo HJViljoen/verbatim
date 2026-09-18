@@ -454,11 +454,17 @@ describe('the sheet’s chrome', () => {
   // THE SHEET SAID ITS OWN NAME THREE TIMES (fix pass): the slide's h1, the
   // mono context line and the block's own `BlockFrame` heading, in three type
   // styles across one 1123px line.
-  it('does not repeat a borrowed sheet’s title in its context line', () => {
-    const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
-    const sheet = markupText(html).split('2 / 9')[0].split('1 / 9')[1]
+  it('does not repeat a sheet’s title in its context line', () => {
+    const text = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />))
+    const sheet = text.split('2 / 9')[0].split('1 / 9')[1]
     expect(sheet).toContain('Your subjects')
     expect(sheet).not.toContain('Your subjects · September 2026')
+    // And a WRITTEN page whose slide title is its page name, for the same
+    // reason — the method sheet said "How this was read" at both ends of one
+    // line. A finding keeps its page name there, because the slide is titled
+    // "Finding 1" and the two say different things.
+    expect(text).not.toContain('How this was read · September 2026')
+    expect(text).toContain('A finding · September 2026')
   })
 
   // The artboard's footer names what the sheet was read from; the deck printed

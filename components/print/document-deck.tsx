@@ -1335,7 +1335,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
           <Slide
             key={page.id}
             title={title}
-            chrome={chrome(page.title)}
+            chrome={chrome(page.title, title === page.title)}
             page={n(i)}
             pages={pages}
             layout="single"
