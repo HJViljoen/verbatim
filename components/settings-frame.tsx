@@ -33,6 +33,18 @@ import { cn } from '@/lib/utils'
 // page (components/settings/chrome.tsx SectionHead), and one component cannot
 // hold both type scales without one of them being wrong.
 //
+// NINE ROUTES SHARE THIS FILE AND EIGHT OF THEM WERE NOT IN THE PORT'S SHOTS
+// (C6). The seven sub-pages plus Team and Billing all pass the same five props
+// — active, title, context, contentTitle, contentMeta — and nothing else, so
+// the new ones (contentRule, counts, railFooter) are additive for them and the
+// header and pane changes below are what actually reaches them: a 15px h2
+// where a PaneHeader eyebrow was, and flat white where two elevated cards
+// were. That is the artboard's settings area, applied to the area rather than
+// to one page of it, which is the point; the test file renders that exact prop
+// shape, because none of the eight can be rendered in the static tier (each
+// needs a session and a read). E-record re-ports /dashboard/settings/record
+// against this same file in this wave.
+//
 // The pane no longer scrolls inside a fixed height either. The artboard's
 // Tracking page is 2,460px tall and the shell's <main> already scrolls; an
 // inner scroller here meant the rail scrolled away from its own save-state
