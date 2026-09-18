@@ -1093,11 +1093,19 @@ export function recordLines(input: RecordInputs): string[] {
 // READ, where a reader scanning fifteen labelled figures can LOOK. The gap
 // mapping calls this the largest single gap on the page.
 //
-// SAME FACTS, SAME BASES, SAME REFUSALS. Nothing here computes a figure
-// `recordLines` does not already state, and every row that carries a basis
-// carries the same one in the same words. Where the two differ is only that a
-// row can put the figure in one node and its basis in another, which is what
-// lets the figure be set in mono and the basis be set quietly beside it.
+// SAME FACTS, SAME BASES, SAME REFUSALS — WITH ONE FIGURE MORE, NAMED HERE.
+// Every row that carries a basis carries the same one in the same words, and
+// where the two differ is mostly that a row can put the figure in one node and
+// its basis in another, which is what lets the figure be set in mono and the
+// basis be set quietly beside it.
+//
+// THE EXCEPTION IS "COMMENTS READ", and a later reader deciding whether these
+// two may drift needs to know it: `recordLines` prints videos, the mix,
+// dual-mention and undated comments and never a pooled comment total, and this
+// grid does (code review finding 6). It is defensible — `CoverageRecord
+// .comments` is comment-dated and the row names that clock — but it is one
+// figure this module states in rows and not in lines, and "nothing new here"
+// would have been the wrong thing to have written down.
 //
 // AND FOUR OF THE ARTBOARD'S ROWS ARE NOT WHAT THEY LOOK LIKE. They are kept in
 // the artboard's POSITION with the honest figure in their place:
