@@ -22,6 +22,7 @@ import { loadWindowReading, readingClient, type WindowReading } from '../reading
 import { isMissingMonthTable } from '../reading/monthly'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { gapBasisLine, gapBetween, gapLine, inheritRefusal, GAP_WORDS, type Gap, type GapSide } from '../reading/gap'
+import type { Grounding } from '../reading/afterwards'
 import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
@@ -163,10 +164,33 @@ export interface StandingAdvice {
   age: string
   status: string
   decidedAt: string | null
+  /**
+   * `qr.p2.standingadvice` · "grounded in 412 videos", and the PRUNED sentence
+   * beside it.
+   *
+   * The ledger has carried this since wave 1 (`AdviceRow.grounded`) and the
+   * deck dropped it. `Grounding.line` is the count with the population it is a
+   * count of, named; `Grounding.pruned` is the case the mock has no slot for —
+   * the advice cited evidence and a later update replaced every row of it, so
+   * "0 videos behind it" would be a claim about the evidence where the truth
+   * is about our own re-analysis. Null where nothing was recorded, which is
+   * not the same as zero.
+   */
+  grounded: Grounding | null
 }
 
 export interface ReadPage {
   interpretation: Interpretation
+  /**
+   * `qr.p2.meta` · the card's three facts in one mono line — "7,059 videos
+   * this quarter · 13 updates · 3 monthly readings of 6".
+   *
+   * All three existed and were split across pages 1 and 7; page 2's own meta
+   * was the quarter's label and nothing else. They are on this page because
+   * this is the page that ARGUES, and the size of the corpus an argument rests
+   * on belongs beside the argument.
+   */
+  meta: string
   figures: ReadingFigures
   /** Everything the interpretation may argue from. */
   verdicts: Verdict[]
@@ -1106,7 +1130,7 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     searchPlan: a.searchPlan ?? null,
     changeLog: a.changeLog ?? null,
   })
-  const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
+  const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, readings, draft: a.draft ?? null })
   const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
 
   return {
@@ -1460,6 +1484,7 @@ function buildRead(a: {
   quarterVerdicts: Verdict[]
   unlocked: boolean
   cover: CoverPage
+  readings: number
   draft: string | null
 }): ReadPage {
   const quotes = a.overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
@@ -1486,9 +1511,14 @@ function buildRead(a: {
         : `new in ${longMonth(`${row.firstMade.slice(0, 7)}-01`)}`,
     status: row.statusLabel,
     decidedAt: row.decidedAt,
+    grounded: row.grounded,
   }))
   return {
     interpretation,
+    meta: [
+      a.cover.corpus,
+      readingCounter(a.readings),
+    ].join(' · '),
     figures: a.cover.figures,
     verdicts: a.verdicts,
     quotes,
