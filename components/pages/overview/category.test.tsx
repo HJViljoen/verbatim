@@ -128,9 +128,12 @@ describe('OV3 · what the category is saying', () => {
 
   it('draws the axis rule where the panel re-froze, and nowhere else', () => {
     const data = overviewFixture()
+    // ONE WORD FOR ONE EVENT: the rule's kind is the refusal reason the verdict
+    // on the same card carries, not a second vocabulary for the same re-freeze.
     expect(panelRule(data.category)).toEqual([
-      { month: '2026-09-01', kind: 'clustering_changed', label: 'panel re-frozen', at: '2026-09-03' },
+      { month: '2026-09-01', kind: 'tracking_change', label: 'panel re-frozen', at: '2026-09-03' },
     ])
+    expect(panelRule(data.category)[0].kind).toBe(data.category.attention?.verdict?.refusedReason)
     // A rule on the first month of the axis marks a break with nothing on the
     // other side of it, so it is not drawn.
     const first = overviewFixture({

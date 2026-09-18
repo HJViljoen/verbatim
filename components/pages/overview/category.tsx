@@ -126,7 +126,12 @@ export function panelRule(c: CategoryBlock): CalendarRule[] {
   const month = `${at.slice(0, 7)}-01`
   const i = c.attention.axis.indexOf(month)
   if (i <= 0) return []
-  return [{ month, kind: 'clustering_changed', label: 'panel re-frozen', at: at.slice(0, 10) }]
+  // `tracking_change`, WHICH IS THE WORD THE VERDICT BESIDE IT CARRIES. A panel
+  // re-freeze is what `buildStandings` calls a tracking change, and the refusal
+  // printed on the same card says `tracking_change` — so the rule drawing the
+  // same event must not call it something else. `RULE_STROKE` draws the two
+  // identically today, which is exactly why the drift would have gone unseen.
+  return [{ month, kind: 'tracking_change', label: 'panel re-frozen', at: at.slice(0, 10) }]
 }
 
 export const overviewCategory: Block<OverviewData> = {
