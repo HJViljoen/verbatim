@@ -56,10 +56,18 @@ export const monthlyMonth: Block<MonthlyData> = {
       </div>
     )
 
+    // THE MONTH'S SENTENCE IS THE ARTEFACT'S HERO (Block D wave 2, E-monthly).
+    // The artboard sets it in serif at 23px — it is the one sentence the whole
+    // report is about, and at 13.5px sans it read as the first of eight
+    // paragraphs. The badge goes UNDER it rather than beside it: a chip on the
+    // baseline of a 23px serif line sits in the middle of the sentence when the
+    // line wraps, which it does at 600px.
     const head = (
-      <div className={email ? undefined : 'flex flex-wrap items-baseline gap-x-2 gap-y-1'}>
-        <TokenProse body={s.body} figures={s.figures} mode={mode} />
-        {s.lead ? <BlockMovement verdict={s.lead} unit="pts" mode={mode} /> : null}
+      <div className={email ? undefined : 'flex flex-col items-start gap-1.5'}>
+        <TokenProse body={s.body} figures={s.figures} mode={mode} size="hero" />
+        {s.lead ? (
+          <div style={email ? { marginTop: 8 } : undefined}><BlockMovement verdict={s.lead} unit="pts" mode={mode} /></div>
+        ) : null}
       </div>
     )
 

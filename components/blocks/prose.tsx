@@ -22,7 +22,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 // missing figure can never reach a reader as an empty gap.
 
 export function TokenProse({
-  body, figures, mode = 'app', model = false, className,
+  body, figures, mode = 'app', model = false, className, size = 'body',
 }: {
   /** The sentence(s), with `[[key]]` placeholders. */
   body: string
@@ -35,6 +35,19 @@ export function TokenProse({
    *  would claim a provenance they do not have. */
   model?: boolean
   className?: string
+  /**
+   * How loud the sentence is (Block D wave 2, E-monthly — ADDITIVE, default
+   * unchanged).
+   *
+   * `body` is 13.5px sans, which is what every caller gets today. `hero` is
+   * the SERIF lead: the one sentence a surface is about, at the design
+   * system's hero size (17px on a page, 23px in the 600px email, where the
+   * MonthlyReport artboard sets it). P0 item 2 is that the pages' biggest
+   * sentences must print at hero scale and none of them does; this is the
+   * knob for the sentences that reach the reader through `TokenProse` rather
+   * than through a `Tile`.
+   */
+  size?: 'body' | 'hero'
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
@@ -43,15 +56,24 @@ export function TokenProse({
       ? <span key={i}>{p.text}</span>
       : <span key={i} data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{p.figure}</span>,
   )
+  const hero = size === 'hero'
   if (mode === 'email') {
     return (
-      <div {...(model ? { 'data-copy': 'prose' } : {})} style={{ fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}>
+      <div
+        {...(model ? { 'data-copy': 'prose' } : {})}
+        style={hero
+          ? { fontFamily: FONT.serif, fontSize: 23, fontWeight: 500, lineHeight: 1.34, letterSpacing: '-.01em', color: EMAIL.ink }
+          : { fontFamily: FONT.sans, fontSize: 13.5, lineHeight: 1.5, color: EMAIL.ink }}
+      >
         {children}
       </div>
     )
   }
   return (
-    <p {...(model ? { 'data-copy': 'prose' } : {})} className={className ?? 'm-0 text-[13.5px] leading-relaxed'}>
+    <p
+      {...(model ? { 'data-copy': 'prose' } : {})}
+      className={className ?? (hero ? 'm-0 font-serif text-[17px] font-medium leading-[1.35] tracking-[-0.005em]' : 'm-0 text-[13.5px] leading-relaxed')}
+    >
       {children}
     </p>
   )

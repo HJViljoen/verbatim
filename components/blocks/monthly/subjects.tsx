@@ -5,6 +5,7 @@ import { BlockMovement } from '@/components/blocks/movement'
 import { DirectionWord, overviewSubjects } from '@/components/pages/overview/subjects'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, fmtPct } from '@/lib/format'
+import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
 import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { sentLineFor } from '@/lib/pages/overview'
 import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
@@ -83,8 +84,40 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
     { label: s.categoryLabel, colour: EMAIL.cat },
   ]
 
+  // THE GAP HEADLINE (D1). The artboard leads section 2 with "Durability — you
+  // 31% · Freitag 44% · gap 13 points, narrowed from 19 in June". "Narrowed" is
+  // a direction word for an object nothing earned a verdict for, so `gapLine`
+  // prints both sides with their k-of-n and the banded difference, and
+  // `gapBasisLine` prints the EARLIER gap as its own dated, banded reading —
+  // which lets a reader see it was larger and decide for themselves. Below the
+  // floor the line says "too few to compare"; across a rename, "comparison
+  // refused". The row it leads with is the first the block prints, because the
+  // block's own order is the reading's; nothing here picks a largest.
+  const leadGap = s.rows.map((r) => s.gaps[r.id]).find((g): g is Gap => g != null) ?? null
+  const leadBasis = leadGap ? gapBasisLine(leadGap) : null
+
   return frame(
     <div>
+      {leadGap ? (
+        <div style={{ marginTop: 6, marginBottom: 4 }}>
+          <div style={{ fontFamily: FONT.sans, fontSize: 15, lineHeight: '1.5', color: EMAIL.ink }}>
+            {leadGap.objectLabel} — <GapLevel line={gapLine(leadGap)} />
+          </div>
+          {/* THE BASIS LINE IS NOT MARKED AS A LEVEL, and that is the point of
+              it. "19 points apart in June (band 8.1)" is a dated, banded
+              COMPARISON: it carries no share and no denominator of its own,
+              because the difference of two shares is not a share of anything
+              (`gapBasisLine`'s own header). Marking it `level` would fail rule
+              (b) on a string that has nothing to print an "of N" for, and its
+              refused arms — "too few to compare in August", "comparison refused
+              in August" — are exactly the case. Rule (c) still reaches it, as
+              it reaches all unmarked markup, and it carries no direction word:
+              "narrowed" is the word this line exists to refuse. */}
+          {leadBasis ? (
+            <div style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.muted, marginTop: 3 }}>{leadBasis}</div>
+          ) : null}
+        </div>
+      ) : null}
       {/* THE LEGEND ROW, with the artboard's own three dots. It is a table and
           not a flex row, and the dot is a 7px cell rather than a glyph: a
           bullet character in a client that has dropped the font is a box. */}
@@ -110,6 +143,20 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       {s.note ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 10 }}>{s.note}</div> : null}
     </div>,
   )
+}
+
+/**
+ * The gap line, marked as the level it sometimes is.
+ *
+ * `gapLine` prints both sides as levels — "you 31% of 84 · Freitag 44% of 142"
+ * — and then the banded difference. Where a side was never tracked it says
+ * "Freitag — not tracked" instead, and where NEITHER side was, the string holds
+ * no level at all and there is nothing for rule (b) to check the evidence of.
+ * So the marker goes on exactly when a denominator was printed, which is the
+ * condition the rule is about.
+ */
+function GapLevel({ line }: { line: string }) {
+  return /\bof\s\d/.test(line) ? <span data-copy="level">{line}</span> : <span>{line}</span>
 }
 
 /** One subject: the name and both change badges, then the three sides in

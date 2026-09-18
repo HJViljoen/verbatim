@@ -9,6 +9,7 @@ import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
 import type { Mover } from '@/lib/pages/overview'
 import type { MonthlyData, MoverRow } from '@/lib/pages/monthly'
+import { presentation, T } from './email-table'
 
 /**
  * MR3 · What grew and faded this month (Phase 1 WP18; the mock's section 3).
@@ -70,22 +71,57 @@ export const monthlyMovers: Block<MonthlyData> = {
     if (empty) return frame(<BlockEmpty mode={mode}>{empty}</BlockEmpty>)
 
     const notes = [m.note, m.rereadNote].filter(Boolean).join(' ')
-    return frame(
-      <div className={email ? undefined : 'flex flex-col gap-4'}>
-        {/* THE ARM NAMES WHAT WAS DONE TO THE NUMBER; the row carries the
-            word, inside the node that holds the band. VO2's own wording, so a
-            reader who has seen the page reads the same two arms here. */}
-        <Side heading="Cleared their band · a larger share than last month" rows={m.growing} mode={mode} audience={m.audienceLabel} arm="larger" />
-        <Side heading="Cleared their band · a smaller share than last month" rows={m.fading} mode={mode} audience={m.audienceLabel} arm="smaller" />
+    // THE ARM NAMES WHAT WAS DONE TO THE NUMBER; the row carries the word,
+    // inside the node that holds the band. VO2's own wording, so a reader who
+    // has seen the page reads the same two arms here.
+    const larger = <Side heading="Cleared their band · a larger share than last month" rows={m.growing} mode={mode} audience={m.audienceLabel} arm="larger" />
+    const smaller = <Side heading="Cleared their band · a smaller share than last month" rows={m.fading} mode={mode} audience={m.audienceLabel} arm="smaller" />
+    const flags = (
+      <>
         {m.newcomers.length > 0 ? <Flags heading="First heard this month" rows={m.newcomers} mode={mode} /> : null}
-        {m.goneQuiet.length > 0 ? (
-          <Quiet rows={m.goneQuiet} mode={mode} />
-        ) : null}
+        {m.goneQuiet.length > 0 ? <Quiet rows={m.goneQuiet} mode={mode} /> : null}
         {notes
           ? email
-            ? <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 }}>{notes}</div>
-            : <p className="m-0 text-[11.5px] text-muted-foreground">{notes}</p>
+            ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.faint, marginTop: 8 }}>{notes}</div>
+            : <p className="m-0 font-mono text-[11px] text-muted-foreground">{notes}</p>
           : null}
+      </>
+    )
+
+    // TWO COLUMNS, WHICH IS THE ARTBOARD'S WHOLE POINT FOR THIS SECTION
+    // (Block D wave 2, E-monthly). A larger share and a smaller share are the
+    // two halves of one question, and stacked one under the other — ten rows
+    // deep each — the second half is a page away from the first. Side by side
+    // they are one reading. The email arm is a two-cell table because an email
+    // has no grid; the app and print arms are the same two columns, and fall
+    // back to one at phone width.
+    //
+    // THE FLAGS PANEL STAYS FULL WIDTH: "first heard this month" and "no
+    // longer being said" are not a third and fourth arm of the same comparison
+    // — neither carries a change at all — and the artboard draws them as one
+    // shaded band under both columns.
+    if (email) {
+      return frame(
+        <div>
+          <table width="100%" {...presentation} style={{ ...T, tableLayout: 'fixed' }}>
+            <tbody>
+              <tr>
+                <td width="50%" style={{ verticalAlign: 'top', paddingRight: 12 }}>{larger}</td>
+                <td width="50%" style={{ verticalAlign: 'top', paddingLeft: 12 }}>{smaller}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '14px 16px', marginTop: 14 }}>{flags}</div>
+        </div>,
+      )
+    }
+    return frame(
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">{larger}</div>
+          <div className="flex min-w-0 flex-col gap-2">{smaller}</div>
+        </div>
+        <div className="flex flex-col gap-2 rounded-md bg-inner px-4 py-3.5">{flags}</div>
       </div>,
     )
   },
@@ -197,8 +233,8 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
 
   if (email) {
     return (
-      <div style={{ marginTop: 8 }}>
-        <div style={{ fontFamily: FONT.sans, fontSize: 13, color: EMAIL.ink }}>
+      <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '11px 0' }}>
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink }}>
           {/* The label is a MODEL's words read back out of a column — the
               `subject` kind, the exemption VO2 and OV3 already claim for a
               theme label (PROSE_POLICY gives pass_b_theme 'none'). */}
@@ -213,16 +249,24 @@ function Row({ row, mode }: { row: MoverRow; mode: RenderMode }) {
     )
   }
 
+  // THE ROW IS A COLUMN'S ROW NOW, not a full-width one: the label and its
+  // badge on the first line, the artboard's 72 x 24 line and the level on the
+  // second, the trail under both. At 104 wide beside a wrapped label in a
+  // half-width column the sparkline pushed the badge onto a third line.
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-      <span className="min-w-0 flex-1 text-[13px]">
-        <span data-copy="subject" data-slot="pass_b_theme">{row.label}</span>
+    <div className="flex min-w-0 flex-col gap-1 border-t border-border/60 py-2">
+      <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+        <span className="min-w-0 flex-1 text-[14.5px] font-semibold">
+          <span data-copy="subject" data-slot="pass_b_theme">{row.label}</span>
+        </span>
+        <BlockMovement verdict={row.verdict} unit="pts" mode={mode} />
       </span>
-      <Sparkline values={row.spark} width={104} height={22} animate={false} />
-      <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">{level}</span>
-      <BlockMovement verdict={row.verdict} unit="pts" mode={mode} />
+      <span className="flex min-w-0 items-center gap-2">
+        <Sparkline values={row.spark} width={72} height={24} animate={false} />
+        <span className="font-mono text-[11.5px] tabular-nums text-muted-foreground">{level}</span>
+      </span>
       {row.trail ? (
-        <span data-copy="level" className="w-full font-mono text-[10.5px] tabular-nums text-muted-foreground">{row.trail}</span>
+        <span data-copy="level" className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{row.trail}</span>
       ) : null}
     </div>
   )
