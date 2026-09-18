@@ -1212,17 +1212,23 @@ function sheetExtras(sections: readonly DocBriefSection[], data: DocumentSnapsho
  * is deliberate: the block renders itself and must not be asked to know what
  * width it was given.
  */
-function SheetSection({ section, data }: { section: DocBriefSection; data: DocumentSnapshotData }) {
-  // NO SECTION TITLE AND NO FRAMING LINE FOR A FILLED BLOCK. `BlockFrame`
-  // prints the block's own title and its question, so a wrapper heading printed
-  // "YOUR SUBJECTS" twice, four lines apart; and the sheet's framing is hoisted
-  // to the Slide's serif note, once, which is where the artboard puts it. An
-  // UNFILLED section draws no frame of its own, so on the shared sheet it takes
-  // both: the title says which section, the framing says what it was for.
+function SheetSection({ section, data, framing = false }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean }) {
+  // NO SECTION TITLE HERE FOR A FILLED BLOCK. `BlockFrame` prints the block's
+  // own title and its question, so a wrapper heading printed "YOUR SUBJECTS"
+  // twice, four lines apart. An UNFILLED section draws no frame of its own, so
+  // on the shared sheet it takes both: the title says which section, the
+  // framing says what it was for.
+  //
+  // AND THE SECOND SECTION'S FRAMING IS NOT DROPPED (fix pass). Only the FIRST
+  // section's framing is hoisted to the Slide's serif note — which is the one
+  // line the artboard draws under a sheet's title — and every section after it
+  // was rendered with `framing={false}`, so `mk.subjectline`'s "The same
+  // subjects month by month, on the axis each side was read on." was composed,
+  // frozen onto the snapshot and printed nowhere. It prints in its own column.
   const unfilled = section.empty != null
   return (
     <div data-col={String(unfilled ? 6 : Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col">
-      <SectionBody section={section} data={data} framing={unfilled} title={unfilled} />
+      <SectionBody section={section} data={data} framing={framing || unfilled} title={unfilled} />
     </div>
   )
 }
@@ -1259,7 +1265,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
               flow
               note={s.title === UNFILLED_SHEET ? UNFILLED_FRAMING : sections[0].framing}
             >
-              {sections.map((sec) => <SheetSection key={sec.id} section={sec} data={data} />)}
+              {sections.map((sec, i) => <SheetSection key={sec.id} section={sec} data={data} framing={i > 0} />)}
               {sheetExtras(sections, data)}
             </Slide>
           )

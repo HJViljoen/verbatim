@@ -57,6 +57,17 @@ describe('the sheets', () => {
     expect(html).toContain('data-col="6"')
   })
 
+  // EVERY SECTION'S FRAMING REACHES THE SHEET (fix pass). Only the first
+  // section's framing is hoisted to the Slide's serif note — the one line the
+  // artboard draws under a sheet's title — and every section after it was
+  // rendered with `framing={false}`, so its line was composed, frozen onto the
+  // snapshot and printed nowhere.
+  it('prints the framing of every section on a shared sheet', () => {
+    const text = markupText(render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />))
+    expect(text).toContain('Each subject this month, against the month before and against the category.')
+    expect(text).toContain('The same subjects month by month, on the axis each side was read on.')
+  })
+
   // `mkt.p1.title`: the artboard opens on content with a page title and one
   // mono context line, not on a landscape sheet carrying a 58px title.
   it('folds the cover onto the In-short sheet, and both paginators agree', () => {
