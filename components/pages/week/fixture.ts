@@ -301,6 +301,7 @@ export function weekFixture(): WeekData {
         // rival's whole week, which nothing here counted.
         comments: 998,
         postsTotal: 92,
+        postsConsidered: 6,
         // A POST HAS NO TITLE COLUMN, so this is what a post IS: the platform,
         // the account, the day it went up, the caption cut to a line, the link.
         // Össur captures none of Ottobock's own posts, so both of these are
@@ -471,6 +472,7 @@ export function thinFixture(): WeekData {
           aboutThem: 94,
           comments: 1130,
           postsTotal: 138,
+          postsConsidered: 6,
           posts: [
             { platform: 'instagram', account: 'freitag', postedOn: '2026-08-29', caption: 'F41 Hawaii Five-0 — every bag cut from a different truck', href: 'https://www.instagram.com/p/fre1', comments: 742 },
             { platform: 'tiktok', account: 'freitag', postedOn: '2026-09-02', caption: 'Cutting the tarp: how one bag becomes another', href: 'https://www.tiktok.com/@freitag/video/fre2', comments: 388 },
@@ -484,6 +486,7 @@ export function thinFixture(): WeekData {
           aboutThem: 9,
           comments: 120,
           postsTotal: 27,
+          postsConsidered: 6,
           // A POST WITH NO CAPTION IS AN EMPTY STRING, not a made-up title:
           // `videos` has no title column and a row that invented one would be
           // the only fabricated field on the page.
@@ -496,7 +499,7 @@ export function thinFixture(): WeekData {
         // is how "Rareform went quiet" reached a reader as silence rather than
         // as a zero — and with no post to name, the table is empty rather than
         // absent.
-        { audience: 'competitor:Rareform', label: 'Rareform', byThem: 0, aboutThem: 0, comments: 0, postsTotal: 0, posts: [], ownPostsUnread: false },
+        { audience: 'competitor:Rareform', label: 'Rareform', byThem: 0, aboutThem: 0, comments: 0, postsTotal: 0, postsConsidered: 0, posts: [], ownPostsUnread: false },
       ],
       quotes: [],
       quotesTotal: null,

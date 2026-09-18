@@ -284,7 +284,10 @@ function Rivals({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
           {r.posts.length > 0 ? (
             <>
               <span className={mode === 'email' ? undefined : 'block text-[11.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-                <span data-copy="figure">{fmtInt(r.posts.length)}</span> of <span data-copy="figure">{fmtInt(r.postsTotal)}</span> shown, by reach; <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} under those {r.posts.length === 1 ? 'one' : r.posts.length === 2 ? 'two' : 'few'} in these days
+                {/* THE RULE, NOT JUST THE RATIO. The pick is two stages — the
+                    widest-reaching few, then the most-commented of those — and
+                    "3 of 94" alone would describe a rule this did not follow. */}
+                <span data-copy="figure">{fmtInt(r.posts.length)}</span> shown: the most commented on in these days of the <span data-copy="figure">{fmtInt(r.postsConsidered)}</span> widest-reaching of <span data-copy="figure">{fmtInt(r.postsTotal)}</span>; <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} under them in these days
               </span>
               {r.posts.map((post, i) => <Post key={`${post.platform}:${post.href ?? i}`} post={post} mode={mode} />)}
             </>

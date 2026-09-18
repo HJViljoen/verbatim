@@ -125,6 +125,23 @@ export const NEW_QUOTES_SHOWN = 4
  */
 export const RIVAL_POSTS_SHOWN = 3
 
+/**
+ * How many of a rival's posts are WEIGHED before three are shown.
+ *
+ * SIX, AND THE TWO STAGES ARE DIFFERENT QUESTIONS. Nothing on `videos` says
+ * which post mattered, so the first cut is reach — `views`, the platform's own
+ * number — and reach is not the column the reader is looking at. Measured on
+ * production 2026-09-18: Freitag's two widest-reaching posts this update carry
+ * 2.2M and 2.16M views and ZERO comments dated in the window, while Cotopaxi's
+ * second-widest carries five. A table picked on reach alone would have printed
+ * a comments column of zeroes on the trial tenant's largest rival.
+ *
+ * So six are weighed on reach, their window comments are counted, and the three
+ * with the most are shown — and the block SAYS that is the rule, because "three
+ * of ninety-four" picked two ways is two different claims.
+ */
+export const RIVAL_POSTS_CONSIDERED = 6
+
 /** How much of a caption stands in for the title `videos` does not have. */
 export const RIVAL_CAPTION_CHARS = 90
 
@@ -485,6 +502,11 @@ export interface RivalPosts {
    *  are the shown few. `byThem + aboutThem`, carried so the block never has
    *  to add two numbers to say "3 of 94". */
   postsTotal: number
+  /** How many of those were WEIGHED — the widest-reaching `RIVAL_POSTS_CONSIDERED`,
+   *  whose window comments were counted so the three with the most could be
+   *  shown. The block prints it because a two-stage pick that says only "3 of
+   *  94" is describing a rule it did not follow. */
+  postsConsidered: number
   /** Present when the tenant has no handle for this rival, so `byThem` is 0
    *  because nothing is read and not because nothing was posted. */
   ownPostsUnread: boolean
@@ -1518,13 +1540,15 @@ async function buildCameIn(input: {
       return videos
         .filter((v) => v.run_id === runId && v.is_competitor && rivalKey(v.competitor_name) === audience)
         .sort((a, b) => (b.views ?? -1) - (a.views ?? -1) || (b.upload_date ?? '').localeCompare(a.upload_date ?? ''))
-        .slice(0, RIVAL_POSTS_SHOWN)
+        .slice(0, RIVAL_POSTS_CONSIDERED)
         .map((v) => ({ audience, video: v }))
     })
     : []
   const postComments = await windowCommentsPerVideo(supabase, clientId, candidates.map((c) => c.video), window)
+  const weighedBy = new Map<string, number>()
   const postsBy = new Map<string, RivalPost[]>()
   for (const c of candidates) {
+    weighedBy.set(c.audience, (weighedBy.get(c.audience) ?? 0) + 1)
     const list = postsBy.get(c.audience) ?? []
     list.push({
       platform: c.video.platform,
@@ -1535,6 +1559,11 @@ async function buildCameIn(input: {
       comments: postComments.get(`${c.video.platform}::${c.video.video_id}`) ?? 0,
     })
     postsBy.set(c.audience, list)
+  }
+  // STAGE TWO: the three the window actually carried conversation under. The
+  // order the candidates arrived in is reach, so a tie falls back to it.
+  for (const [audience, list] of postsBy) {
+    postsBy.set(audience, [...list].sort((a, b) => b.comments - a.comments).slice(0, RIVAL_POSTS_SHOWN))
   }
 
   const rivalRows: RivalPosts[] = rivals.map((r) => {
@@ -1552,6 +1581,7 @@ async function buildCameIn(input: {
       comments: posts.reduce((t, post) => t + post.comments, 0),
       posts,
       postsTotal: mine.length,
+      postsConsidered: weighedBy.get(audience) ?? 0,
       // NOT "IS A HANDLE CONFIGURED" — that is a setting, and a setting is not
       // evidence. A configured handle that has never yielded a post is exactly
       // the readiness gap Phase 0 names on the prosthetics tenant, and a row

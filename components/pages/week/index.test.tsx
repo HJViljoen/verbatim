@@ -253,7 +253,7 @@ describe('WK §4 · what came in', () => {
     // And one is a post, not "1 posts" — production has a rival with exactly
     // one (Sealand's Rareform).
     const one = thinFixture()
-    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, postsTotal: 2, posts: [], ownPostsUnread: false }]
+    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, postsTotal: 2, postsConsidered: 0, posts: [], ownPostsUnread: false }]
     expect(renderText(weekCameIn.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
   })
 
@@ -287,11 +287,14 @@ describe('WK §4 · what came in', () => {
       expect(text, mode).toContain('Testing the Ottobock C-Leg 4 on stairs')
       expect(text, mode).toContain('posted 8 Sep')
       expect(text, mode).toContain('610 comments under it in these days')
-      // THREE OF NINETY-TWO, SAID OUT LOUD. The rival's comment figure is the
-      // sum over the posts NAMED; a bare total would be a claim about their
-      // week that nothing here counted.
-      expect(text, mode).toContain('2 of 92 shown, by reach')
-      expect(text, mode).toContain('998 comments under those two in these days')
+      // THE RULE, SAID OUT LOUD. The pick is two stages — the widest-reaching
+      // few, then the most-commented of those — because on production the
+      // widest-reaching posts carry no window comments at all (Freitag's two
+      // 2.2M-view TikToks: zero). And the rival's comment figure is the sum
+      // over the posts NAMED; a bare total would be a claim about their week
+      // that nothing here counted.
+      expect(text, mode).toContain('2 shown: the most commented on in these days of the 6 widest-reaching of 92')
+      expect(text, mode).toContain('998 comments under them in these days')
     }
   })
 
