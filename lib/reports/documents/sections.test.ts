@@ -82,6 +82,27 @@ describe('the four section maps', () => {
     expect(pageKindsOf(briefMap('market_brief'))).toContain('method')
   })
 
+  // Block D wave 2, E-leadership · "Fix first". `ld.standing` named
+  // `competitive.rivals` — the rival SELECTOR — under a framing that promises a
+  // measurement ("Your own share of the month beside every tracked rival"). The
+  // block that answers that framing is `competitive.months`, the standings
+  // table. Named here so the key cannot drift back in silence: the generic
+  // "every section names a block that exists" test above passed on the wrong
+  // one, because both keys exist on the same surface.
+  it('“Where you stand” borrows the STANDINGS table, never the rival picker', () => {
+    const standing = sectionsOf(briefMap('leadership_brief')).find((s) => s.id === 'ld.standing')
+    expect(standing?.block).toBe('competitive.months')
+    expect(standing?.block).not.toBe('competitive.rivals')
+  })
+
+  // `lead.fig2`: the panel's monthly levels, its size and the latest banded
+  // step all live on `overview.category`, and no map borrowed it — so no
+  // attention reading has ever reached this document.
+  it('the leadership map borrows the category, so the attention reading reaches the brief', () => {
+    const category = sectionsOf(briefMap('leadership_brief')).find((s) => s.id === 'ld.category')
+    expect(category?.block).toBe('overview.category')
+  })
+
   it('no framing line carries a direction word or pipeline vocabulary', () => {
     for (const role of DOCUMENT_ROLES) {
       for (const s of sectionsOf(briefMap(role))) {
