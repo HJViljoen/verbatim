@@ -5,26 +5,29 @@ import { revalidatePath } from 'next/cache'
 import { getSessionContext, canManageTenant } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { mergeCompetitorKeywords, cleanTerms, MIN_KEYWORD_CHARS, MAX_TERM_CHARS, MAX_TERMS_PER_BUCKET } from '@/lib/onboarding-config'
-import { suggestSearchTerms, flattenCompetitorTerms } from '@/lib/keywords/suggest'
 import { actorStamp, recordConfigChange, updateWithActor } from '@/lib/config-log'
 import { applySubredditEdit } from '@/lib/settings/save-state'
 import type { SubredditEntry } from '@/lib/gather/types'
 import { subredditKey, subredditLabel } from '@/lib/gather/subreddits'
 import { ensureRivals } from '@/lib/rivals'
-import { takeSuggestionSlot } from '@/lib/keywords/suggest-guard'
 import { savedMessage } from '@/lib/settings/connections'
 import { PERIODS, DAYS, RIVALS_PRESENT, SAVED_FIELDS } from './constants'
 
+// "SUGGEST MORE TERMS" IS GONE FROM THIS PAGE, AND SO IS ITS ACTION (C7).
+// The artboard's terms section is one field with a category selector and no
+// model button, and the port dropped the control — but left
+// `suggestMoreTerms` exported, which in a 'use server' module means a live,
+// POST-reachable endpoint that spends OpenAI money with no UI to reach it
+// from and nothing in the product that names it. An endpoint like that is not
+// a dormant feature, it is a hole with a bill attached, so it goes with the
+// button. Onboarding keeps its own suggester (`app/onboarding/*`, a different
+// action on the same metered counter), which is where a workspace's first
+// terms come from; if this page wants the control back it is a UI to design
+// against the artboard's density and a deliberate spend to re-open, not two
+// lines of restore.
 export interface SettingsFormState {
   ok: boolean
   message: string
-}
-
-export interface SuggestState {
-  ok: boolean
-  message: string
-  /** Candidates only — nothing is stored until the client keeps them and saves. */
-  suggestions: { brand: string[]; competitors: string[]; category: string[] } | null
 }
 
 // Comma-separated text field -> trimmed, de-blanked string[].
@@ -337,45 +340,6 @@ function isMissingColumn(err: { code?: string | null; message?: string | null },
   return (code === '42703' || code === 'PGRST204') && (err.message ?? '').includes(column)
 }
 
-/** Ask the model for more terms. Offers only — nothing is written here. */
-export async function suggestMoreTerms(_prev: SuggestState, _formData: FormData): Promise<SuggestState> {
-  const { supabase, clientId, role, userId } = await getSessionContext()
-  if (!canManageTenant(role)) {
-    return { ok: false, message: 'You don’t have permission to change search terms.', suggestions: null }
-  }
-
-  const [{ data: client }, { data: cfg }] = await Promise.all([
-    supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle(),
-    supabase.from('tracking_configs').select('competitor_names, industry_keywords').eq('client_id', clientId).maybeSingle(),
-  ])
-  const companyName = (client?.company_name as string | undefined) ?? ''
-  if (!companyName) {
-    return { ok: false, message: 'We need your company name first.', suggestions: null }
-  }
-
-  // Metered per user, on the same counter as the onboarding suggester. This
-  // one's inputs come from the tenant's own row rather than a POST, so it was
-  // never the cost hole — but a limiter with a way around it is not one.
-  const slot = await takeSuggestionSlot(userId, clientId)
-  if (!slot.ok) return { ok: false, message: slot.message, suggestions: null }
-
-  try {
-    const s = await suggestSearchTerms({
-      company_name: companyName,
-      competitor_names: (cfg?.competitor_names ?? []) as string[],
-      industry_keywords: (cfg?.industry_keywords ?? []) as string[],
-    })
-    console.log(`[settings] search-term suggestions for ${clientId}: $${s.costUsd.toFixed(4)}`)
-    const suggestions = { brand: s.brand, competitors: flattenCompetitorTerms(s), category: s.category }
-    const total = suggestions.brand.length + suggestions.competitors.length + suggestions.category.length
-    if (total === 0) {
-      return { ok: false, message: 'Nothing worth suggesting — add a competitor or a category word and try again.', suggestions: null }
-    }
-    return { ok: true, message: `${total} to consider. Keep the ones that sound like your buyers.`, suggestions }
-  } catch (e) {
-    return { ok: false, message: `Could not suggest terms right now: ${e instanceof Error ? e.message : String(e)}`, suggestions: null }
-  }
-}
 
 /**
  * Stop watching a community, or add one (block D, D9 — `settings.reddit.add`

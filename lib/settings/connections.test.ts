@@ -301,6 +301,15 @@ describe('every configuration write on this page carries an actor', () => {
     expect(fn).toMatch(/:\s*raw\.flatMap\(\(v\) => csv\(v\)\)/)
   })
 
+  it('leaves no model-spending action on the page with no control for it', () => {
+    // C7: the port dropped the "Suggest more terms" button and left the
+    // action exported — a POST-reachable endpoint that spends OpenAI money
+    // with nothing in the product naming it. Onboarding keeps its own.
+    expect(actions).not.toMatch(/export async function suggestMoreTerms/)
+    expect(actions).not.toContain('suggestSearchTerms')
+    expect(actions).not.toContain('takeSuggestionSlot')
+  })
+
   it('keeps the one save row on the two existing write paths', () => {
     // `saveTracking` composes; it does not open a third path to the columns.
     const save = actions.slice(actions.indexOf('export async function saveTracking'))
