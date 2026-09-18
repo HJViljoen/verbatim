@@ -411,7 +411,15 @@ describe('the five sections that are Overview’s', () => {
     const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
     expect(text).toContain(MONTHLY_MOVES_UNLOCK)
     expect(text).toContain(data.overview.moves.masthead)
-    for (const row of data.overview.moves.rows) expect(text).toContain(row.line)
+    // BLOCK D WAVE 2: a move with a READING behind it prints the reading
+    // instead of its own fallback sentence (`main.moves.move1.*`), so the
+    // composed line is asserted only for the moves that have none — which is
+    // what `MoveRow.line` was always for.
+    const readMoves = new Set(data.overview.moves.readings.map((r) => r.moveId))
+    for (const row of data.overview.moves.rows) {
+      if (readMoves.has(row.id)) expect(text).toContain(row.title)
+      else expect(text).toContain(row.line)
+    }
   })
 
   it('merge into one figure table with no key printed two ways', () => {

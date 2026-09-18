@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
 import {
   CENSUS_EMPTY,
   ECHO_NOT_COUNTED,
@@ -325,8 +326,34 @@ describe('saidAbout', () => {
 })
 
 describe('the absence sentences', () => {
-  it('are character-identical to Overview’s, which is the copy this file admits to', () => {
+  // THE TEST THAT USED TO STAND HERE COMPARED A VALUE WITH ITSELF (code review
+  // m15). `lib/pages/overview.ts` re-EXPORTS these two constants now — the
+  // duplicated copy was merged into this leaf in Block D wave 2 — so
+  // `OWN_POSTS_UNREADABLE === OVERVIEW_UNREADABLE` is `x === x` and passes
+  // whatever either of them says. A tautology that reads like a pin is worse
+  // than a deleted test, so this asserts the two things that are actually true
+  // and could actually break: the leaf is the one definition, and the two
+  // sentences differ in exactly one way.
+  it('are the one definition — Overview re-exports this file’s constants, and does not copy them', () => {
+    // A copy would satisfy `toBe` on a string too, so the real pin is that the
+    // module object identity holds and the file declares them once.
     expect(OWN_POSTS_UNREADABLE).toBe(OVERVIEW_UNREADABLE)
     expect(OWN_POSTS_UNREADABLE_OUTSIDE).toBe(OVERVIEW_UNREADABLE_OUTSIDE)
+    const src = readFileSync(new URL('./own-posts.ts', import.meta.url), 'utf8')
+    expect(src.match(/export const OWN_POSTS_UNREADABLE =/g)).toHaveLength(1)
+    const overview = readFileSync(new URL('../pages/overview.ts', import.meta.url), 'utf8')
+    expect(overview).not.toMatch(/const OWN_POSTS_UNREADABLE\s*=/)
+    expect(overview).toContain("export { OWN_POSTS_UNREADABLE, OWN_POSTS_UNREADABLE_OUTSIDE } from '../reading/own-posts'")
+  })
+
+  it('differ only by the internal owner, and the tenant’s form says where to look', () => {
+    // Nit 25: "· Verbatim engineering" was a dangling internal label in the
+    // middle of a client's rivals table with nothing saying where a reader
+    // could go and see it. The owner is named on the Readiness page; the cell
+    // names the page.
+    expect(OWN_POSTS_UNREADABLE.startsWith(OWN_POSTS_UNREADABLE_OUTSIDE)).toBe(true)
+    expect(OWN_POSTS_UNREADABLE).toContain('Settings \u203a Readiness')
+    expect(OWN_POSTS_UNREADABLE_OUTSIDE).not.toContain('Settings')
+    expect(OWN_POSTS_UNREADABLE_OUTSIDE).not.toContain('Verbatim')
   })
 })

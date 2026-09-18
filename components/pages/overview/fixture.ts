@@ -4,7 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, fillingNote, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
 import {
   actedTally,
   buildMoveCandidate,
@@ -12,6 +12,7 @@ import {
   type MoveCandidate,
   type MoveReading,
 } from '@/lib/reading/moves'
+import { groundingFor } from '@/lib/reading/afterwards'
 import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // The Overview's block fixtures (Phase 1 WP11).
@@ -91,35 +92,51 @@ export function cardFixture(): MoveCandidate {
     // on the two posts that carry them. Note the third and fourth rows: two
     // claims that differ by three words ("benefits people" against "good for
     // people") and are two distinct rows, on two distinct posts.
+    //
+    // TWO COLUMNS, AND THE CARD PRINTS THE SECOND. `claim` is the model's
+    // paraphrase — 93 to 197 characters of it, which is what made the row need
+    // a cap — and `quote` is what the founder actually said on camera, which
+    // is shorter, is the client's own words, and is the only one of the two
+    // that may be printed inside quotation marks (code review C1 / I6).
     claims: [
       {
+        id: 'c1a11111-1111-4111-8111-111111111111',
         source_video_id: 'p1',
         claim:
           'Sealand positions its products as acts of defiance against an industry characterized by overconsumption, fast fashion, and waste, emphasizing responsible production and great design as inseparable.',
+        quote: 'Every bag we make is a small act of defiance against an industry built on throwing things away.',
         entity: 'client',
       },
       {
+        id: 'c1a22222-2222-4222-8222-222222222222',
         source_video_id: 'p4',
         claim:
           'Sealand products represent a small act of defiance against an industry that treats materials and resources as disposable waste, promoting great design and responsible production.',
+        quote: 'Great design and responsible production are not two different jobs.',
         entity: 'client',
       },
       {
+        id: 'c1a33333-3333-4333-8333-333333333333',
         source_video_id: 'p4',
         claim:
           'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that is good for people and the planet.',
+        quote: 'We are a B Corp, and we had to earn that.',
         entity: 'client',
       },
       {
+        id: 'c1a44444-4444-4444-8444-444444444444',
         source_video_id: 'p1',
         claim:
           'Sealand is an award-winning B Corp certified brand committed to proving that business can be a force for good by producing great gear that benefits people and the planet.',
+        quote: 'Good gear that is good for the people who make it.',
         entity: 'client',
       },
       {
+        id: 'c1a55555-5555-4555-8555-555555555555',
         source_video_id: 'p1',
         claim:
           'Sealand acknowledges ongoing challenges and setbacks but commits to continuous improvement year over year, with a roadmap for the next decade.',
+        quote: 'We get things wrong, and we say so, and then we do better the next year.',
         entity: 'client',
       },
     ],
@@ -349,10 +366,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     atLastMonthKnown: true,
     thin: false,
     line: '',
+    note: null as string | null,
     readings: 3,
     counter: readingsCounter(3),
   }
   bar.line = fillingLine(bar)
+  bar.note = fillingNote(bar)
 
   // D1 · the rows are hoisted so the gaps below are built FROM them. A gap
   // that disagrees with the two levels printed beside it is the one error
@@ -437,14 +456,33 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
         id: 'r1',
         title: 'Lead with repairability, not recycling, in the next campaign',
         monthsOld: 3,
+        // D9: run-indexed, and the render says "updates" rather than folding
+        // it into a month.
+        timesMade: 3,
+        // THE GROUNDED ARM. `refusedFixture` carries the PRUNED one, which is
+        // what all twelve of Sealand's live ledger rows actually are — the
+        // insights they cite have been removed since they were written, so the
+        // cell must say so rather than print "0 videos behind it".
+        grounding: groundingFor({
+          basedOn: ['ai-1', 'ai-2', 'ai-3'],
+          videoByInsight: new Map([['ai-1', 'v1'], ['ai-2', 'v2'], ['ai-3', 'v2']]),
+          themeIds: ['durability', 'repair'],
+          audience: INDUSTRY_AUDIENCE,
+          month: REAL_MONTH,
+          cited: 3,
+        }),
         status: 'in_progress',
         statusLabel: 'Working on it',
         decidedAt: '2026-09-02',
         href: '/dashboard/market',
       },
+      // THE ARTBOARD'S TWO VOICES, with the tail `loadVoices` now composes:
+      // platform · date · WHOSE video it was. The second carries the video's
+      // own on-screen text, which is the artboard's second line and a second
+      // speaker — the brand's words under the audience's.
       voices: [
-        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'tiktok · 14 Sep · under a video we read', href: 'https://www.tiktok.com/@x/video/1' },
-        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'tiktok · 11 Sep · under a video we read', href: null },
+        { quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect.', lang: 'en', english: null }, cite: 'TikTok · 14 Sep · under a category video', onScreen: null, href: 'https://www.tiktok.com/@x/video/1' },
+        { quote: { ref: 'e:2', text: 'Dit het twee winters gehou.', lang: 'af', english: 'It held through two winters.' }, cite: 'TikTok · 11 Sep · under your own video', onScreen: { ref: 't:11111111-1111-4111-8111-111111111111', text: '1 bag. 3 years. 0 regrets' }, href: null },
       ],
       voicesFrom: 37,
       verdicts: [lead],
@@ -456,6 +494,9 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
+      // The earliest `subjects.named_at` on the rows — the artboard's
+      // "six named 19 Aug".
+      namedAt: '2026-08-19',
       gaps: gapsFor(subjectRows),
     },
     category: {
@@ -543,8 +584,15 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     // fixtures that exercise "the report of {date} read X" set it themselves.
     sent: null,
     moves: {
+      // THE ARTBOARD'S TWO MOVES, and the first one's ID MATCHES THE READING.
+      // It did not: the row was `m1` and `moveReadingFixture()` is `mv-1`, so
+      // the one move with a banded comparison behind it rendered its fallback
+      // line and every wave-2 port would have designed the row against the
+      // empty arm. The second move is declared this month and has no reading
+      // yet, which is the artboard's own second row.
       rows: [
-        { id: 'm1', title: 'Advanced technology', kind: 'subject', declaredAt: '2026-09-14', line: 'Advanced technology · tracked 14 Sep · first scoring lands with the October reading.' },
+        { id: 'mv-1', title: 'Push repairability', kind: 'subject', declaredAt: '2026-08-12', line: moveLine({ title: 'Push repairability', declared_at: '2026-08-12' }) },
+        { id: 'mv-2', title: 'Track: Waterproofing', kind: 'subject', declaredAt: '2026-09-02', line: moveLine({ title: 'Track: Waterproofing', declared_at: '2026-09-02' }) },
       ],
       unlock: MOVES_UNLOCK,
       masthead: MOVES_MASTHEAD,
@@ -555,6 +603,10 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
       acted: actedTally(1, 64),
     },
     record: {
+      // AS `loadOverview` COMPOSES IT: `howSoundLine`'s sentence and nothing
+      // prefixed to it. The ramp counter is `bar.counter` and leads the
+      // SOUNDNESS BAND at the page's own `SurfacePageBar` call — it used to be
+      // glued on here too, which printed it three times on one page.
       line: '3 updates · 2,359 videos (TikTok 38% · YouTube 29% · Instagram 21% · Reddit 12%) · 27% of what was said on camera was not in English · 1 tracking change',
       lines: [
         // AS `recordLines` COMPOSES IT. The fixture held the raw ISO form this
@@ -585,8 +637,10 @@ export function refusedFixture(): OverviewData {
     atLastMonth: null,
     atLastMonthKnown: false,
     line: '',
+    note: null as string | null,
   }
   bar.line = fillingLine(bar)
+  bar.note = fillingNote(bar)
   return {
     ...base,
     bar,
@@ -603,6 +657,7 @@ export function refusedFixture(): OverviewData {
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: null,
+      namedAt: null,
       // M4 is not applied here, so neither side of a gap was ever read.
       gaps: {},
     },
@@ -666,6 +721,40 @@ export function refusedFixture(): OverviewData {
       acted: actedTally(1, 64),
     },
     method: methodRefusedFixture(),
+  }
+}
+
+/**
+ * The month with the ledger row PRUNED — the state every live Sealand
+ * recommendation is in (`main.sentence.rec.provenance`).
+ *
+ * All twelve rows the ledger draws were first made on 28 June, every one cites
+ * `audience_insights` ids, and `prune-stale-analysis` has since removed every
+ * one of them — so the chain resolves to zero videos. The cell must read as an
+ * absence and never as "0 videos behind it", which is a claim about the
+ * evidence where the truth is that a later update replaced it.
+ */
+export function prunedLedgerFixture(): OverviewData {
+  const base = overviewFixture()
+  const ledger = base.sentence.ledger!
+  return {
+    ...base,
+    sentence: {
+      ...base.sentence,
+      ledger: {
+        ...ledger,
+        monthsOld: null,
+        timesMade: 1,
+        grounding: groundingFor({
+          basedOn: [],
+          videoByInsight: new Map(),
+          themeIds: [],
+          audience: INDUSTRY_AUDIENCE,
+          month: REAL_MONTH,
+          cited: 4,
+        }),
+      },
+    },
   }
 }
 

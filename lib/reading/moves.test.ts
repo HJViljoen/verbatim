@@ -65,18 +65,22 @@ function card(over: Partial<MoveCandidateInput> = {}) {
       // Published in August: on the same table, off this card.
       video({ id: 'vA', upload_date: '2026-08-29', comments_count: 90, hook_style: 'question' }),
     ],
+    // `claim` is the model's paraphrase (the grouping key) and `quote` is what
+    // was said (what the card prints, under `k:<id>`). The last "recycled
+    // sails" row carries NO words, which is how a claim row with a count and
+    // no quotable wording is tested.
     claims: [
-      { source_video_id: 'v1', claim: 'Built to last a decade', entity: 'client' },
-      { source_video_id: 'v2', claim: 'Built to last a decade', entity: 'client' },
-      { source_video_id: 'v3', claim: 'Built to last a decade', entity: 'client' },
-      { source_video_id: 'v1', claim: 'Made from 100% recycled sails', entity: 'client' },
-      { source_video_id: 'v2', claim: 'Made from 100% recycled sails', entity: 'client' },
-      { source_video_id: 'v4', claim: 'Made from 100% recycled sails', entity: 'client' },
-      { source_video_id: 'v5', claim: 'Made from 100% recycled sails', entity: 'client' },
+      { id: 'k1', source_video_id: 'v1', claim: 'Built to last a decade', quote: 'These last a decade, easily.', entity: 'client' },
+      { id: 'k2', source_video_id: 'v2', claim: 'Built to last a decade', quote: 'Ten years of this, no problem.', entity: 'client' },
+      { id: 'k3', source_video_id: 'v3', claim: 'Built to last a decade', quote: 'Built for a decade.', entity: 'client' },
+      { id: 'k4', source_video_id: 'v1', claim: 'Made from 100% recycled sails', quote: 'Every one of these is 100% recycled sail.', entity: 'client' },
+      { id: 'k5', source_video_id: 'v2', claim: 'Made from 100% recycled sails', quote: 'Recycled sails, all of it.', entity: 'client' },
+      { id: 'k6', source_video_id: 'v4', claim: 'Made from 100% recycled sails', quote: 'Old sails, new bags.', entity: 'client' },
+      { id: 'k7', source_video_id: 'v5', claim: 'Made from 100% recycled sails', quote: '  ', entity: 'client' },
       // A rival's claim, filed against a rival's video, and a rival's claim
       // wrongly carrying one of ours.
-      { source_video_id: 'vR', claim: 'Cheapest in the category', entity: 'competitor' },
-      { source_video_id: 'v1', claim: 'Cheapest in the category', entity: 'competitor' },
+      { id: 'k8', source_video_id: 'vR', claim: 'Cheapest in the category', quote: 'Nobody is cheaper.', entity: 'competitor' },
+      { id: 'k9', source_video_id: 'v1', claim: 'Cheapest in the category', quote: 'Nobody is cheaper.', entity: 'competitor' },
     ],
     membership: [
       { subjectId: 's1', label: 'Durability', videoIds: ['v1', 'v2', 'v3', 'vA'] },
@@ -103,12 +107,33 @@ describe('buildMoveCandidate — the pre-filled card', () => {
     // Five posts carried a claim of ours; the competitor's row on v1 is not
     // something we said and does not add a sixth.
     expect(c.claims.value).toEqual({ k: 5, n: 9 })
-    expect(c.claimTopics).toEqual(['Made from 100% recycled sails', 'Built to last a decade'])
-    expect(c.claimRows.map((r) => [r.claim, r.posts.k, r.posts.n])).toEqual([
-      ['Made from 100% recycled sails', 4, 9],
-      ['Built to last a decade', 3, 9],
+    expect(c.claimRows.map((r) => [r.quote?.text ?? null, r.posts.k, r.posts.n])).toEqual([
+      ['Every one of these is 100% recycled sail.', 4, 9],
+      ['These last a decade, easily.', 3, 9],
     ])
-    expect(c.claimTopics).not.toContain('Cheapest in the category')
+    // The rival's claim is on neither row, and no row carries the model's
+    // paraphrase in any field: the card prints what was said.
+    expect(JSON.stringify(c.claimRows)).not.toContain('Cheapest in the category')
+    expect(JSON.stringify(c.claimRows)).not.toContain('Made from 100% recycled sails')
+  })
+
+  it('carries each claim as a ref, so no stored export holds the words (C1)', () => {
+    const c = card()
+    // `k:<video_claims.id>` — the claim's own kind, resolved off
+    // `video_claims.quote`, and the FIRST row of the group by id order.
+    expect(c.claimRows.map((r) => r.quote?.ref)).toEqual(['k:k4', 'k:k1'])
+  })
+
+  it('keeps a claim whose wording is not on record, and says so with a null quote', () => {
+    // v5's row carries a blank `quote`, so its group would have no words if it
+    // led. Give it its own paraphrase so it is a row of one.
+    const c = card({
+      claims: [
+        { id: 'k7', source_video_id: 'v5', claim: 'A claim nobody transcribed', quote: '   ', entity: 'client' },
+      ],
+    })
+    expect(c.claimRows).toEqual([{ quote: null, posts: { k: 1, n: 9 } }])
+    expect(c.claims.value).toEqual({ k: 1, n: 9 })
   })
 
   it('splits the hooks over the posts count and over nothing else', () => {

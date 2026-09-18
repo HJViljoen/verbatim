@@ -55,9 +55,33 @@ describe('OV0 · the month so far', () => {
     expect(overviewBar.emptyState({ ...data, bar: { ...data.bar, videos: null } })).toContain('Nothing has been read')
   })
 
-  it('prints the one counter the design asks OV0 for', () => {
-    for (const mode of MODES) {
+  it('prints the one counter where there is no band above it, and nowhere else', () => {
+    // CHANGED BY THE FIX PASS (design review High 4, code review I7). The
+    // counter is the soundness band's opening clause on the app surface
+    // (`main.bar.soundness`, composed at the page's `SurfacePageBar` call), so
+    // printing it on this tile as well said the same sentence twice down one
+    // page — three times, with the record block's header meta. An email and a
+    // print sheet have no band above them, so there it still leads.
+    const app = renderText(overviewBar.render(overviewFixture(), 'app', ctx))
+    expect(app).not.toContain('your 3rd monthly reading')
+    // `SurfacePageBar` is the app shell's and travels into neither a PDF nor an
+    // email, so on both of those this tile is where the counter leads.
+    for (const mode of ['email', 'print'] as const) {
       expect(renderText(overviewBar.render(overviewFixture(), mode, ctx)), mode).toContain('your 3rd monthly reading')
     }
+  })
+
+  it('states what the stats do not, and does not restate what they do', () => {
+    // Design review High 5: the tile drew three stats and then restated all
+    // three in prose, so nothing in it was new and the page's lead began below
+    // the fold. What is left is the residual — the trailing median, and the
+    // gate that suppresses every change below.
+    const app = renderText(overviewBar.render(overviewFixture(), 'app', ctx))
+    expect(app).toContain('trailing median 2,240')
+    expect(app).not.toContain('September, 18 days in · 3 updates')
+    expect(app).not.toContain('last month at this point: 2,044')
+    // The stats themselves are untouched.
+    expect(app).toContain('2,359')
+    expect(app).toContain('last month at this point')
   })
 })

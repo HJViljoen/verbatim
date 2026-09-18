@@ -13,8 +13,15 @@ import {
   buildSubjects,
   candidateLine,
   daysInto,
+  citeWhere,
+  earliestNamedAt,
   fillingLine,
+  fillingNote,
   firstScoringMonth,
+  monthsOnRecord,
+  onScreenQuote,
+  onScreenText,
+  ON_SCREEN_MAX,
   headline,
   medianOf,
   atThisPointWindow,
@@ -1005,5 +1012,140 @@ describe('ledgerTally — one "acted" rule for two surfaces', () => {
     const rows = [rec({ id: 'a', lineage_id: null }), rec({ id: 'b', lineage_id: null })]
     expect(ledgerTally(rows, []).of).toBe(2)
     expect(ledgerTally([rec({ id: 'a' }), rec({ id: 'b' })], []).of).toBe(1)
+  })
+})
+
+// ---- the fix pass: four exported pure functions, and the bar's residual -----
+//
+// Code review I8: `monthsOnRecord`, `citeWhere`, `onScreenText` and
+// `earliestNamedAt` were exported, pure, carrying real rules — the
+// `group.length < 2` refusal, the audience mapping, the `ON_SCREEN_MAX` cut,
+// the earliest-of — and tested nowhere. The component tier tests the component
+// helpers; these four fell between the two tiers. `fillingNote` and
+// `onScreenQuote` are the fix pass's own additions and are tested with them.
+
+describe('monthsOnRecord', () => {
+  const row = (created: string | null) => ({ created_at: created }) as Parameters<typeof monthsOnRecord>[0][number]
+
+  it('refuses a lineage of one, because one copy’s date is the newest update’s', () => {
+    expect(monthsOnRecord([row('2026-06-04T00:00:00Z')], '2026-09-18')).toBeNull()
+    expect(monthsOnRecord([], '2026-09-18')).toBeNull()
+  })
+
+  it('counts whole months from the OLDEST copy in the lineage', () => {
+    const group = [row('2026-09-01T00:00:00Z'), row('2026-06-04T00:00:00Z'), row('2026-07-02T00:00:00Z')]
+    expect(monthsOnRecord(group, '2026-09-18')).toBe(3)
+  })
+
+  it('says nothing rather than "0 months" inside the same month', () => {
+    expect(monthsOnRecord([row('2026-09-01T00:00:00Z'), row('2026-09-14T00:00:00Z')], '2026-09-18')).toBeNull()
+  })
+
+  it('survives a row with no date, and refuses when none of them can be parsed', () => {
+    // A copy with no `created_at` is skipped, not fatal: the lineage still has
+    // two copies, so the refusal does not apply and the oldest DATED one is
+    // what the count is from.
+    expect(monthsOnRecord([row(null), row('2026-06-04T00:00:00Z')], '2026-09-18')).toBe(3)
+    // Nothing datable at all, and nothing is claimed.
+    expect(monthsOnRecord([row(null), row(null)], '2026-09-18')).toBeNull()
+    expect(monthsOnRecord([row('2026-06-04T00:00:00Z'), row('2026-07-02T00:00:00Z')], 'not a date')).toBeNull()
+  })
+})
+
+describe('citeWhere', () => {
+  it('names the audience the video sits in, read live off its own tags', () => {
+    expect(citeWhere({ is_client: true })).toBe('under your own video')
+    expect(citeWhere({ is_competitor: true, competitor_name: 'Freitag' })).toBe('under Freitag’s video')
+    expect(citeWhere({})).toBe('under a category video')
+  })
+})
+
+describe('onScreenText', () => {
+  it('collapses whitespace and gives null for nothing at all', () => {
+    expect(onScreenText('  1 bag.\n3 years. ')).toBe('1 bag. 3 years.')
+    expect(onScreenText('   ')).toBeNull()
+    expect(onScreenText(null)).toBeNull()
+    expect(onScreenText(undefined)).toBeNull()
+  })
+
+  it('cuts a whole frame of words to one clause', () => {
+    const long = 'a'.repeat(ON_SCREEN_MAX + 40)
+    const cut = onScreenText(long)
+    expect(cut).not.toBeNull()
+    expect(cut!.length).toBe(ON_SCREEN_MAX)
+    expect(cut!.endsWith('…')).toBe(true)
+    // At the boundary it is printed whole.
+    expect(onScreenText('b'.repeat(ON_SCREEN_MAX))).toBe('b'.repeat(ON_SCREEN_MAX))
+  })
+})
+
+describe('onScreenQuote', () => {
+  it('carries the whole line under the video’s own ref', () => {
+    const q = onScreenQuote('vid-1', '  1 bag.  3 years. 0 regrets ')
+    expect(q).toEqual({ ref: 't:vid-1', text: '1 bag. 3 years. 0 regrets' })
+  })
+
+  it('is null without a uuid to build the ref from — a line with no ref is a line a snapshot would have to store', () => {
+    expect(onScreenQuote(null, 'words on the frame')).toBeNull()
+    expect(onScreenQuote('vid-1', '   ')).toBeNull()
+  })
+
+  it('does not cut: the cut happens at render, so an export cuts in the same place', () => {
+    const long = 'c'.repeat(ON_SCREEN_MAX + 40)
+    expect(onScreenQuote('vid-1', long)!.text.length).toBe(long.length)
+  })
+})
+
+describe('earliestNamedAt', () => {
+  it('is the first date any of them was named', () => {
+    expect(earliestNamedAt([{ named_at: '2026-09-02' }, { named_at: '2026-08-19' }])).toBe('2026-08-19')
+  })
+  it('ignores the ones with no date, and is null when none has one', () => {
+    expect(earliestNamedAt([{ named_at: null }, { named_at: '2026-08-19' }])).toBe('2026-08-19')
+    expect(earliestNamedAt([{ named_at: null }, {}])).toBeNull()
+    expect(earliestNamedAt([])).toBeNull()
+  })
+})
+
+describe('fillingNote', () => {
+  const base = {
+    month: '2026-09-01',
+    status: 'filling' as const,
+    daysIn: 18,
+    updates: 3,
+    videos: 271,
+    expected: 469,
+    atLastMonth: 244,
+    atLastMonthKnown: true,
+    thin: false,
+  }
+
+  it('says only what the tile’s three stats do not', () => {
+    // The stats draw the videos, the same point last month and the updates.
+    const note = fillingNote(base)
+    expect(note).toBe('trailing median 469')
+    expect(note).not.toContain('3 updates')
+    expect(note).not.toContain('271 videos')
+    expect(note).not.toContain('244')
+  })
+
+  it('names the comparison the tile cannot draw a stat for', () => {
+    expect(fillingNote({ ...base, atLastMonth: null, atLastMonthKnown: false })).toContain('last month at this point: not recorded yet')
+    expect(fillingNote({ ...base, atLastMonth: null })).toContain('no reading of last month at this point')
+  })
+
+  it('carries the gate, with a thin month winning over an early one', () => {
+    expect(fillingNote({ ...base, thin: true })).toContain('thin month — every change below is suppressed')
+    expect(fillingNote({ ...base, early: true })).toContain('early in the month — every change below is suppressed')
+    expect(fillingNote({ ...base, thin: true, early: true })).not.toContain('early in the month')
+  })
+
+  it('is null when it would only repeat the stats', () => {
+    expect(fillingNote({ ...base, expected: null })).toBeNull()
+    expect(fillingNote({ ...base, expected: null, status: 'frozen', daysIn: null })).toBeNull()
+  })
+
+  it('says nothing was read, where nothing was', () => {
+    expect(fillingNote({ ...base, videos: null })).toContain('nothing read into this month yet')
   })
 })

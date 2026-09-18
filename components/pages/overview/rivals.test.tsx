@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewRivals } from './rivals'
+import { brandLabel, caveatLine, overviewRivals } from './rivals'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -114,27 +114,62 @@ describe('OV4 · rivals', () => {
     const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
     // One rival row, one client row, in the fixture.
     expect((markup.match(/not readable yet/g) ?? []).length).toBe(1)
-    expect(markup).toContain('their own posts are not readable yet · Verbatim engineering')
+    expect(markup).toContain('their own posts are not readable yet · Settings › Readiness')
   })
 })
 
 // A BRIEF'S PRINT ARM IS READ BY SOMEBODY OUTSIDE THE WORKSPACE (WP19): the
-// PDF and the /r/<token> share page. "Verbatim engineering" is a readiness
-// owner, which is right where a reader can open Settings › Readiness and an
-// internal label where they cannot; and "Open Competitive →" resolves, for
-// such a reader, to a login wall.
+// PDF and the /r/<token> share page. The tenant's form of the absence points
+// at the page where the readiness of this is tracked — which such a reader has
+// no way to open — and "Open Competitive →" resolves, for them, to a login
+// wall. (The clause said "· Verbatim engineering" until the fix pass: a
+// readiness OWNER, dangling in the middle of a client's rivals table with
+// nothing saying where that owner could be seen. Design review nit 25.)
 describe('OV4 · rivals, read from outside the workspace', () => {
-  it('names the absence without naming our own owner', () => {
+  it('names the absence without pointing a stranger at a page they cannot open', () => {
     const print = renderText(overviewRivals.render(overviewFixture(), 'print', ctx))
     const app = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
     expect(app).toContain('their own posts are not readable yet')
-    expect(app).toContain('Verbatim engineering')
+    expect(app).toContain('Settings › Readiness')
     expect(print).toContain('their own posts are not readable yet')
+    expect(print).not.toContain('Settings')
     expect(print).not.toContain('Verbatim engineering')
   })
 
   it('draws no in-app affordance on paper', () => {
     expect(render(overviewRivals.render(overviewFixture(), 'print', ctx))).not.toContain('Open Competitive')
     expect(render(overviewRivals.render(overviewFixture(), 'app', ctx))).toContain('Open Competitive')
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §4 ------------------------------------
+
+describe('OV4, ported to the artboard', () => {
+  it('marks your own row, so a reader can find it', () => {
+    // `main.rivals.col.brand`. On a tenant whose name sorts between two rivals
+    // there was nothing at all marking which row was theirs.
+    const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Sealand (you)')
+    expect(text).toContain('The category')
+    const rows = overviewFixture().rivals.rows
+    expect(brandLabel(rows.find((r) => r.role === 'rival')!)).toBe('Freitag')
+  })
+
+  it('stacks every share over its two counts, never the percentage alone', () => {
+    // D10: the mock prints "39%" with no denominator anywhere, which is the
+    // score this product does not show.
+    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
+    const text = renderText(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="level"')
+    expect(text).toContain('6,200 of 41,200')
+  })
+
+  it('puts the dual-mention caveat in the footer note, with its count only where there is one', () => {
+    const r = overviewFixture().rivals
+    expect(caveatLine(r)).toBe(`${r.caveat} 41 did this month.`)
+    expect(caveatLine({ ...r, dualMention: 0 })).toBe(r.caveat)
+    expect(caveatLine({ ...r, dualMention: null })).toBe(r.caveat)
+    const markup = render(overviewRivals.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('font-normal text-muted-foreground">')
   })
 })

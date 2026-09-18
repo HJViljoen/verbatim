@@ -23,10 +23,17 @@ describe('studioCatalogue', () => {
     }
   })
 
-  it('skips a page key that has no module yet', () => {
-    // `overview`, `subjects` and `week` are keys WP11/WP12/WP15 register.
+  it('skips a page key that has no module yet, and offers one that has', () => {
+    // `overview`, `subjects` and `week` were all keys with no module behind
+    // them — `PAGE_KEYS` carries the contract and the registry says which still
+    // render. Block D wave 2 registers `overview`
+    // (components/pages/overview/page.tsx), so the Studio can offer it; the
+    // other two are still keys alone and must stay skipped until their own
+    // ports land.
     const pages = studioCatalogue().map((c) => c.page)
-    expect(pages).not.toContain('overview')
+    expect(pages).toContain('overview')
+    expect(pages).not.toContain('subjects')
+    expect(pages).not.toContain('week')
   })
 
   it('gives the dashboard section its tiles back', () => {

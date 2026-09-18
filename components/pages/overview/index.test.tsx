@@ -5,7 +5,11 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
-import { OVERVIEW_BLOCKS, OverviewPage } from './index'
+import { OVERVIEW_BLOCKS, OVERVIEW_LEGEND, OverviewPage, horizonRange } from './index'
+import { overviewPage } from './page'
+import { SidebarTenant } from '@/components/sidebar-tenant-loader'
+import { THIRTEEN_WORDS, READER_FLAGS } from '@/lib/calibration'
+import { PAGES } from '@/components/pages/registry'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -168,5 +172,74 @@ describe('the Overview page', () => {
     const notes = [{ kind: 'read_back_at_setup' as const, text: 'Read back at setup: 61 months.', months: ['2026-01-01', '2026-02-01'] }]
     const text = renderText(<OverviewPage data={{ ...data, notes }} />)
     expect((text.match(/Read back at setup/g) ?? []).length).toBe(1)
+  })
+})
+
+// ---- Block D wave 2 · the shell the artboard draws -------------------------
+
+describe('the page bar, ported', () => {
+  it('states what the selected horizon pill actually resolves to', () => {
+    // "This month" names no days. The range does, off the run count and the
+    // window the page was opened at — and the window is half-open, so the last
+    // day printed is the day before `to` rather than the first day of October.
+    expect(horizonRange(overviewFixture())).toBe('3 updates · 1 Sep → 30 Sep')
+  })
+
+  it('draws the range, the legend pill and Export on the page', () => {
+    const text = renderText(<OverviewPage data={overviewFixture()} />)
+    expect(text).toContain('3 updates · 1 Sep → 30 Sep')
+    expect(text).toContain('How to read this page')
+    expect(text).toContain('Export')
+  })
+
+  it('leads the soundness band with where this tenant is in the ramp', () => {
+    // `main.bar.soundness`: the artboard opens "your 3rd monthly reading", and
+    // the counter used to be printed on the OV0 tile instead.
+    const text = renderText(<OverviewPage data={overviewFixture()} />)
+    expect(text).toContain('How sound is this: your 3rd monthly reading')
+  })
+
+  it('draws its legend from the word list, not from a hand-picked subset', () => {
+    expect(OVERVIEW_LEGEND).toEqual([...THIRTEEN_WORDS, ...READER_FLAGS])
+  })
+})
+
+describe('the sidebar footer', () => {
+  it('prints the workspace and the member’s REAL role, never a job title', () => {
+    // D14: the artboard's "digital director" is a field the product does not
+    // hold. `users.role` is one of three words and is what prints.
+    const text = renderText(<SidebarTenant brand="Sealand" role="admin" />)
+    expect(text).toBe('Sealand admin')
+  })
+
+  it('prints the brand alone where no role resolves, and nothing where neither does', () => {
+    expect(renderText(<SidebarTenant brand="Sealand" role={null} />)).toBe('Sealand')
+    expect(render(<SidebarTenant brand={null} role={null} />)).toBe('')
+  })
+})
+
+describe('Overview as an exportable page', () => {
+  it('is registered, so the bar’s Export control is not a dead button', () => {
+    expect(PAGES.overview).toBe(overviewPage)
+  })
+
+  it('exposes every block as a renderable under its own stable key', () => {
+    expect(Object.keys(overviewPage.renderables)).toEqual(OVERVIEW_BLOCKS.map((b) => b.key))
+    for (const block of OVERVIEW_BLOCKS) {
+      expect(overviewPage.renderables[block.key].title).toBe(block.title)
+    }
+  })
+
+  it('places every renderable on exactly one slide', () => {
+    const keys = overviewPage.slides(overviewFixture(), 'default').flatMap((s) => s.keys)
+    expect([...keys].sort()).toEqual(OVERVIEW_BLOCKS.map((b) => b.key).sort())
+  })
+
+  it('renders a renderable in every mode without a page around it', () => {
+    for (const mode of MODES) {
+      for (const block of OVERVIEW_BLOCKS) {
+        assertCopyContract(render(overviewPage.renderables[block.key].render(overviewFixture(), mode)))
+      }
+    }
   })
 })

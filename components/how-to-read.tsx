@@ -15,8 +15,13 @@ import { Card, CardContent } from '@/components/ui/card'
 // URL is the truth either way. Drop into a page header row; pass the page's
 // own path as basePath.
 export function HowToRead({ items, basePath, anchor }: { items: GlossaryKey[]; open?: boolean; basePath: string; anchor?: NavKey }) {
+  // Optional chaining, exactly as HowSound does it and for the same reason: the
+  // hook returns null wherever there is no router — a static render in a test,
+  // a script, a `renderToStaticMarkup` of the whole page — and a page bar that
+  // throws outside Next is a page bar nothing can check. The legend is closed
+  // in that case, which is its own default.
   const sp = useSearchParams()
-  const isOpen = sp.get('detail') === 'legend'
+  const isOpen = sp?.get('detail') === 'legend'
   return (
     <>
       <DrawerLink

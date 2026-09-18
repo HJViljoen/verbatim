@@ -146,9 +146,11 @@ describe('OV2 · the subject rows', () => {
 describe('the page bar', () => {
   it('carries the clause where there is one, and reads unchanged where there is not', () => {
     const base = { brand: 'Sealand', month: '2026-09-01', status: 'filling' as const, readingAt: '2026-09-18T09:00:00.000Z' }
-    expect(contextLine(base)).toBe('Sealand · Sep 2026 · still filling · reading as at 18 Sep 2026')
+    // The artboard's wording (Block D wave 2, `main.bar.context`): long month,
+    // short stamp, no second "reading".
+    expect(contextLine(base)).toBe('Sealand · September 2026 · still filling · as at 18 Sep')
     expect(contextLine({ ...base, sent: 'the report of 1 Sep read 2,044 videos' }))
-      .toBe('Sealand · Sep 2026 · still filling · reading as at 18 Sep 2026 · the report of 1 Sep read 2,044 videos')
+      .toBe('Sealand · September 2026 · still filling · as at 18 Sep · the report of 1 Sep read 2,044 videos')
     expect(contextLine({ ...base, sent: null })).toBe(contextLine(base))
   })
 })

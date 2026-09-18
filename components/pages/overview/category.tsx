@@ -2,15 +2,17 @@ import type { ReactNode } from 'react'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockCalendar } from '@/components/blocks/calendar'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockProportion } from '@/components/blocks/bars'
 import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
-import { fmtInt, fmtPct, monthName } from '@/lib/format'
+import { TileBlock } from '@/components/shell/tile'
+import { TileColumns } from '@/components/shell/page-grid'
+import { fmtInt, fmtPct, monthName, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
-import type { CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
+import type { AttentionBlock, CategoryBlock, Mover, OverviewData, Voice } from '@/lib/pages/overview'
 import { DirectionWord } from './subjects'
 
 // OV3 · What the category is saying (design §3 OV3). Four lines: what kind of
@@ -69,9 +71,22 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
           should improve access". Rule (c) sweeps unmarked markup, so an
           unmarked label fails the contract on whichever theme happens to rank
           — the word is about the thing, not about a reading of it. */}
-      <span data-copy="subject" data-slot="pass_b_theme" className={mode === 'email' ? undefined : 'min-w-0 flex-1 truncate'}>{mover.label}</span>
-      <span data-copy="figure" className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>
-        {mover.pct == null ? '—' : fmtPct(mover.pct)} {fmtInt(mover.k)} of {fmtInt(mover.n)}
+      {/* A THEME'S LABEL IS A SENTENCE, NOT A WORD. Sealand's movers run to
+          "Will it survive a wet commute"; at a third of the tile with a figure
+          cell and two badges beside it, `truncate` cut them to one character in
+          the side-by-side. The row wraps instead, which is what the artboard's
+          own 470px column does not have to do and is the honest answer at a
+          third of the width. */}
+      <span data-copy="subject" data-slot="pass_b_theme" className={mode === 'email' ? undefined : 'min-w-[9rem] flex-1 basis-[9rem]'}>{mover.label}</span>
+      {/* THE SHARE OVER ITS COUNT, in the artboard's own two-line cell. The
+          mock prints "9.4%" and "130" in two separate fixed columns with the
+          denominator nowhere; a level without its "of N" is a score (D10). */}
+      <span className={mode === 'email' ? undefined : 'w-[86px] shrink-0'}>
+        <FigureCell
+          mode={mode}
+          value={mover.pct == null ? '—' : fmtPct(mover.pct)}
+          of={`${fmtInt(mover.k)} of ${fmtInt(mover.n)}`}
+        />
       </span>
       <BlockMovement verdict={mover.verdict} unit="pts" mode={mode} />
       <DirectionWord direction={mover.direction} mode={mode} />
@@ -84,7 +99,7 @@ function MoverRow({ mover, mode }: { mover: Mover; mode: RenderMode }) {
   )
   return mode === 'email'
     ? <div style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' }}>{body}</div>
-    : <div className="flex items-center gap-2 text-[12.5px]">{body}</div>
+    : <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12.5px]">{body}</div>
 }
 
 /** The attention line's chart: panel comments by month. Not a share — the panel
@@ -95,7 +110,13 @@ function attentionSeries(c: CategoryBlock, month: string): CalendarSeries | null
   return {
     label: c.label,
     color: 'var(--cat)',
-    excludes: PANEL_EXCLUDES_NOTE,
+    // THE EXCLUSION IS A SENTENCE, NOT A LEGEND ITEM (design review High 7c).
+    // `CalendarSeries.excludes` renders INSIDE the legend swatch's own row, so
+    // in this 380px column a two-item legend seated a forty-word paragraph on
+    // the same line as a 2px dot and wrapped "The category" onto two lines
+    // beside it — three different things reading as one caption. The note is
+    // printed under the chart in its own right (`PANEL_EXCLUDES_NOTE` below),
+    // where it is a sentence about the basis and is legible as one.
     points: c.attention.months.map((m) => ({
       month: m.month,
       value: m.comments,
@@ -144,6 +165,93 @@ export function categoryVoices(data: OverviewData): Voice[] {
   return data.sentence.voices
 }
 
+/**
+ * The panel's own facts, in one mono line (`main.category.attention.note`, D7).
+ *
+ * The artboard writes "a fixed panel of 214 creators first seen before 1 Apr ·
+ * 50,300 → 41,200 · panel re-frozen 3 Sep" — five facts, and the build printed
+ * one of them. Each clause is drawn only where the field behind it exists, so a
+ * workspace whose panel has no cutoff recorded loses that clause and keeps the
+ * rest.
+ *
+ * "ACCOUNTS", NOT "CREATORS". A panel row is an account we gather from; whether
+ * a person is behind it is a claim the product does not hold (D14), and
+ * `THIRTEEN_WORDS` has no word for one.
+ *
+ * AND THE SPAN IS NOT A CHANGE. "50,300 → 41,200" prints two levels and no
+ * magnitude: the mock's "−18% since June" compares two months read over two
+ * different sets of accounts, because the panel re-froze between them, and a
+ * raw comment count has no denominator to band anyway. The banded step beside
+ * it is `AttentionBlock.verdict`, which says `comparison refused` for exactly
+ * that reason.
+ */
+export function panelNote(a: AttentionBlock | null): string | null {
+  if (!a) return null
+  const parts: string[] = []
+  if (a.accountCount != null) {
+    parts.push(`a fixed panel of ${fmtInt(a.accountCount)} account${a.accountCount === 1 ? '' : 's'}`)
+  }
+  const cutoff = a.panel?.cutoff
+  if (cutoff) parts.push(`first seen before ${shortDate(cutoff)}`)
+  const months = a.months
+  if (months.length >= 2) {
+    const first = months[0]
+    const last = months[months.length - 1]
+    // AN ARROW IS SOMETHING A READER SUBTRACTS ACROSS (code review I5). The
+    // docblock above argues — correctly — that the mock's "−18% since June" is
+    // refused because the panel RE-FROZE between the two months, and then this
+    // line printed those same two numbers with an arrow between them, which
+    // invites exactly the subtraction the verdict beside it refuses. Where the
+    // re-freeze falls inside the span, the break is named between them; where
+    // it does not, they are still two levels and not a change, so they are
+    // printed as two dated levels and never as a run.
+    const frozenAt = a.panel?.frozen_at
+    const refrozenWithin =
+      frozenAt != null && `${frozenAt.slice(0, 7)}-01` > first.month && `${frozenAt.slice(0, 7)}-01` <= last.month
+    if (refrozenWithin) {
+      // The break carries its own date, so the trailing "panel frozen 3 Sep"
+      // clause would be the same fact a second time in the same line.
+      parts.push(`${monthName(first.month)} ${fmtInt(first.comments)} comments`)
+      parts.push(`panel re-frozen ${shortDate(frozenAt!)}`)
+      parts.push(`${monthName(last.month)} ${fmtInt(last.comments)} comments under the new panel`)
+      return parts.join(' · ')
+    }
+    parts.push(`${monthName(first.month)} ${fmtInt(first.comments)} comments`)
+    parts.push(`${monthName(last.month)} ${fmtInt(last.comments)} comments`)
+  }
+  const frozen = a.panel?.frozen_at
+  if (frozen) parts.push(`panel frozen ${shortDate(frozen)}`)
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/** "What moved most · Sep 2026 against Aug 2026", or the heading alone where
+ *  no printed row carries a basis. */
+export function moversLabel(c: CategoryBlock): string {
+  const basis = moversBasis(c)
+  return basis ? `What moved most · ${basis}` : 'What moved most'
+}
+
+/**
+ * "1,388 category videos this month · Sep vs Aug" (`main.category.header`).
+ *
+ * THE SECOND HALF IS THE BASIS AND IT WAS NOWHERE IN THE HEADER. Every change
+ * on this block is drawn against the month before, and the meta stated the
+ * denominator alone — so the one line that could have said what the block
+ * compares against said only how big it is. Taken off a printed row's own
+ * verdict (`moversBasis`), never computed here, so the header can never name a
+ * comparison the block did not draw.
+ */
+/** What a kind's change cell says when nothing compared it — never a blank,
+ *  and never a state word, because no comparison reached a state. */
+export const KIND_NOT_COMPARED = 'not compared'
+
+export function categoryMeta(c: CategoryBlock): string | undefined {
+  if (c.denominator == null) return undefined
+  const basis = moversBasis(c)
+  const videos = `${fmtInt(c.denominator)} category videos this month`
+  return basis ? `${videos} · ${basis}` : videos
+}
+
 export const overviewCategory: Block<OverviewData> = {
   key: 'overview.category',
   title: 'What the category is saying',
@@ -155,19 +263,56 @@ export const overviewCategory: Block<OverviewData> = {
     const href = `${ctx.appUrl}/dashboard/voice`
     const series = attentionSeries(c, data.month)
 
+    // ONE ROW PER KIND, EACH WITH ITS OWN DENOMINATOR (D4/D10). The artboard
+    // draws three rows — label, share, change — and the build wrapped them into
+    // a flowing line of inline items. What the artboard does NOT get is its
+    // "Other kinds" remainder or anything that reads as a partition: kinds
+    // overlap (measured 175%–228% across one denominator), so each row is an
+    // independent share of one population and never a slice of a whole.
     const kinds = c.kinds.length > 0 ? (
       <>
-        <div className={email ? undefined : 'flex flex-wrap items-center gap-x-5 gap-y-1.5'}>
+        <div className={email ? undefined : 'flex flex-col gap-1.5'}>
           {c.kinds.map((k) => (
-            <span key={k.kind} className={email ? undefined : 'flex items-center gap-1.5 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
-              {k.label}{' '}
-              <span data-copy="figure" className={email ? undefined : 'font-mono tabular-nums'}>
-                {k.pct == null ? '—' : fmtPct(k.pct)} {fmtInt(k.videos)} of {fmtInt(k.denominator)}
+            <span key={k.kind} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, marginRight: 10 } : undefined}>
+              <span className={email ? undefined : 'min-w-0 flex-1 truncate'}>{k.label}</span>
+              <span className={email ? undefined : 'w-[104px] shrink-0'}>
+                <FigureCell
+                  mode={mode}
+                  value={k.pct == null ? '—' : fmtPct(k.pct)}
+                  of={`${fmtInt(k.videos)} of ${fmtInt(k.denominator)}`}
+                />
               </span>
-              <BlockMovement verdict={c.kindVerdicts[k.kind] ?? null} unit="pts" mode={mode} />
+              {/* AN ABSENCE THAT SAYS WHAT IT IS (design review Medium 11).
+                  `BlockMovement` renders null for a null verdict, so a kind
+                  nothing compared left a BLANK cell between two siblings that
+                  had values — the one absence on this page that did not say
+                  what it was. A null verdict is not "no clear change" (that is
+                  a state a comparison reached); it is no comparison at all,
+                  and the words say exactly that. */}
+              {c.kindVerdicts[k.kind] ? (
+                <BlockMovement verdict={c.kindVerdicts[k.kind]} unit="pts" mode={mode} />
+              ) : (
+                <span
+                  className={email ? undefined : 'whitespace-nowrap text-[12px] text-muted-foreground'}
+                  style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}
+                >
+                  {KIND_NOT_COMPARED}
+                </span>
+              )}
             </span>
           ))}
         </div>
+        {/* "more — one click down →" (`main.category.kind.more`). There is no
+            field behind it and there does not need to be: one click down from
+            these rows IS Voice, which is where every kind can be filtered.
+            IT NO LONGER PICKS A KIND FOR THE READER (design review Medium 12,
+            code review I9). It hard-coded `c.kinds[0]?.kind`, so a control
+            sitting under three rows silently filtered Voice to whichever kind
+            happened to sort first — and the block's own test pinned that
+            behaviour rather than catching it. A control under N rows either
+            belongs on each row or belongs to none of them; this one goes to
+            the page unfiltered, and the reader chooses there. */}
+        {openLink(mode, `${ctx.appUrl}/dashboard/voice`, 'more — one click down →')}
         {c.reddit && c.reddit.pct != null ? (
           <p className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
             Reddit carried <span data-copy="figure">{fmtInt(c.reddit.reddit)} of {fmtInt(c.reddit.videos)}</span> of the question-and-objection videos
@@ -179,10 +324,28 @@ export const overviewCategory: Block<OverviewData> = {
       <BlockEmpty mode={mode}>{c.kindsNote ?? 'No kind carried a reading this month.'}</BlockEmpty>
     )
 
-    const movers = c.growing.length > 0 || c.fading.length > 0 ? (
+    // THE ARTBOARD'S TWO ARMS, WITH THE BUILD'S HEADINGS (`main.category
+    // .movers.growing` / `.fading`). The mock heads them "Growing" and
+    // "Fading"; rule (c) refuses a direction word outside a verdict node, and
+    // it is right to — a heading makes the claim before any row under it has
+    // earned it. "a larger share than last month" is code naming what was done
+    // to a number, and `DIRECTION_WORDS` leaves `larger`/`smaller` off the list
+    // for exactly this sentence (lib/calibration.ts). The LAYOUT is the mock's.
+    const arm = (label: string, rows: readonly Mover[]) => (
       <div className={email ? undefined : 'flex flex-col gap-1'}>
-        {c.growing.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
-        {c.fading.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
+        <span
+          className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
+        >
+          {label}
+        </span>
+        {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} />)}
+      </div>
+    )
+    const movers = c.growing.length > 0 || c.fading.length > 0 ? (
+      <div className={email ? undefined : 'flex flex-col gap-2.5'}>
+        {c.growing.length > 0 ? arm('Cleared their band · a larger share than last month', c.growing) : null}
+        {c.fading.length > 0 ? arm('Cleared their band · a smaller share than last month', c.fading) : null}
       </div>
     ) : (
       <BlockEmpty mode={mode}>{c.moversNote ?? 'Nothing moved clearly this month.'}</BlockEmpty>
@@ -220,7 +383,7 @@ export const overviewCategory: Block<OverviewData> = {
         {c.quiet.map((q) => (
           <div key={q.id} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' } : undefined}>
             <span data-copy="subject" data-slot="pass_b_theme" className={email ? undefined : 'min-w-0 flex-1 truncate'}>{q.label}</span>
-            <span data-copy="verdict" className={email ? undefined : 'text-[11px] text-muted-foreground'}>
+            <span data-copy="verdict" className={email ? undefined : 'text-[11px] text-secondary-foreground'}>
               gone quiet{q.lastHeard ? ` · last heard ${monthName(q.lastHeard)}` : ''}
             </span>
           </div>
@@ -249,7 +412,14 @@ export const overviewCategory: Block<OverviewData> = {
           ctx={ctx}
           format={(v) => fmtInt(v)}
           label={`${c.label}, comments under a fixed panel’s videos, by month`}
-          caption={c.attention?.panel ? `a fixed panel, frozen ${c.attention.panel.frozen_at.slice(0, 10)}` : undefined}
+          // ONE FACT, ONE PLACE, ONE FORMAT (design review High 7a / Medium
+          // 16). The caption said "a fixed panel, frozen 2026-09-03" and
+          // `panelNote` said "· panel frozen 3 Sep" on the next line — the same
+          // fact twice, in two date formats, and the ISO one appears nowhere
+          // else in this product's client-facing copy. The date lives in the
+          // note, in the reader's own format; the caption says what the axis is
+          // drawn over and stops there.
+          caption={c.attention?.panel ? 'a fixed panel of accounts' : undefined}
         />
         {/* THE PANEL'S SIZE AND THE BANDED STEP, which are the two things the
             line has never said. A comment count is a number about a SET, and a
@@ -259,10 +429,37 @@ export const overviewCategory: Block<OverviewData> = {
             declared since WP11 and the loader hard-coded null; where the two
             months sit either side of the re-freeze it prints the refusal, which
             is the honest form of the mock's "−18% since June". */}
-        <p className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}>
-          {c.attention?.accountCount != null ? (
-            <span><span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts in the panel</span>
-          ) : null}
+        {/* THE NOTE ON ITS OWN LINE, THE STEP ON ITS OWN LINE (design review
+            High 7b, code review m11). The two shared one `flex-wrap`
+            paragraph: the note wrapped to two lines in a 380px column, so the
+            verdict landed on a third as the orphan "comparison refused" with
+            nothing beside it naming what had been refused — while the comment
+            above it said it printed "beside" the note. And the whole
+            four-clause sentence was marked `data-copy="figure"`, a kind whose
+            meaning is "code's number inside model prose": the note is code's
+            own sentence end to end, so it takes no marker and rule (c) reaches
+            it as it reaches any unmarked markup on the block. */}
+        {/* WHAT THE LINE LEAVES OUT, under the line and not inside its legend.
+            See `attentionSeries`. */}
+        <p
+          className={email ? undefined : 'm-0 text-[10.5px] leading-[1.35] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+        >
+          {PANEL_EXCLUDES_NOTE}
+        </p>
+        {panelNote(c.attention) ? (
+          <p
+            className={email ? undefined : 'm-0 font-mono text-[10.5px] leading-[1.35] tabular-nums text-secondary-foreground'}
+            style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.ink2, marginTop: 4 } : undefined}
+          >
+            {panelNote(c.attention)}
+          </p>
+        ) : null}
+        <p
+          className={email ? undefined : 'm-0 flex flex-wrap items-baseline gap-2 text-[11.5px] text-secondary-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
+        >
+          <span>month on month</span>
           <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
         </p>
       </>
@@ -275,36 +472,85 @@ export const overviewCategory: Block<OverviewData> = {
         title={overviewCategory.title}
         question={overviewCategory.question}
         mode={mode}
-        meta={c.denominator != null ? `${fmtInt(c.denominator)} category videos this month` : undefined}
+        meta={categoryMeta(c)}
         footer={openLink(mode, href, 'Open Voice →')}
+        // "Nothing else moved clearly this month." into the footer note
+        // (`main.category.footer`). It is a statement about what the block
+        // DECLINED to say, which is metadata about the reading and not one of
+        // its findings — the mono slot is where the artboard puts it.
+        // THE NOTE BELONGS TO ONE OF THE TWO PLACES, NOT BOTH (code review
+        // m12). Where both mover arms are empty the note is the movers'
+        // EMPTY STATE, printed in the body; where they are not, it is the coda
+        // under a populated list. It used to be `moversNote ?? …`, so a loader
+        // that supplied a note while both arms were empty printed the same
+        // sentence in the body and again in the footer.
+        footerNote={c.growing.length + c.fading.length > 0 ? c.moversNote ?? 'Nothing else moved clearly this month.' : undefined}
       >
-        <div className={email ? undefined : 'flex flex-col gap-3'}>
-          <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
-          {/* NOT "Growing / fading", which the mock prints as two headings.
-              Both are direction words, and a heading is not a verdict: rule (c)
-              of the copy contract refuses them outside a node that carries a
-              band, and it is right to — a heading that says "growing" makes the
-              claim before any row has earned it. The rows say it, each inside
-              its own verdict node, where the reading is. */}
-          {/* AND WHAT IT MOVED AGAINST. Voice states its basis in the block
-              meta ("Sep 2026 against Aug 2026") and This week's §3 prints its
-              own; OV3 printed "▲ 5.3 pts" with nothing saying what the two
-              sides were, so a reader who opens Overview and This week in one
-              session sees one theme move by two different amounts with only
-              one page saying why. Taken off a printed row's own verdict, so
-              the heading can never describe a comparison the block did not
-              draw. */}
-          <Line label={`What moved most${moversBasis(c) ? ` · ${moversBasis(c)}` : ''}`} mode={mode}>{movers}</Line>
-          <Line label="Mood" mode={mode}>{mood}</Line>
-          <Line label="Attention" mode={mode}>{attention}</Line>
-          {/* "No longer being said", not "Gone quiet" — VO2's and the
-              monthly movers' own heading, for the reason they both give: the
-              FLAG is a direction word and rule (c) lets it appear only inside
-              a verdict node, which is right, because it is earned by the
-              register's own dormancy rule. A heading has no reading behind
-              it, so it carries no direction word at all. */}
-          <Line label="No longer being said" mode={mode}>{quiet}</Line>
-        </div>
+        {email ? (
+          <div>
+            <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
+            <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+            <Line label="Mood" mode={mode}>{mood}</Line>
+            <Line label="Attention" mode={mode}>{attention}</Line>
+            <Line label="No longer being said" mode={mode}>{quiet}</Line>
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-3">
+            {/* THE ARTBOARD'S THREE COLUMNS (mock-gap §Visual fidelity: "the
+                mood-beside-attention arrangement and the kind-rows-beside-more
+                control all collapse into one column"). The kinds and the mood
+                share the first column with a rule between them, exactly as the
+                artboard draws it; the movers take the second; the attention
+                line takes the third. `TileColumns` collapses all three to one
+                stacked column under `xl`. */}
+            <TileColumns of={3}>
+              <div className="flex min-w-0 flex-col gap-3">
+                <Line label="Kind of thing said" mode={mode}>{kinds}</Line>
+                <div className="border-t border-border/70 pt-2.5">
+                  <Line label="Mood" mode={mode}>{mood}</Line>
+                </div>
+              </div>
+              <div className="min-w-0 xl:pl-4">
+                {/* NOT "Growing / fading", which the mock prints as two
+                    headings. Both are direction words, and a heading is not a
+                    verdict: rule (c) refuses them outside a node that carries a
+                    band. The two arms below keep the mock's layout and take the
+                    build's banded headings instead.
+                    AND WHAT IT MOVED AGAINST. Voice states its basis in the
+                    block meta ("Sep 2026 against Aug 2026"); OV3 printed
+                    "▲ 5.3 pts" with nothing saying what the two sides
+                    were, so a reader who opens Overview and This week in one
+                    session sees one theme move by two different amounts with
+                    only one page saying why. Taken off a printed row's own
+                    verdict, so the heading can never describe a comparison the
+                    block did not draw. */}
+                <Line label={moversLabel(c)} mode={mode}>{movers}</Line>
+              </div>
+              <div className="min-w-0 xl:pl-4">
+                <Line label="Attention" mode={mode}>{attention}</Line>
+              </div>
+            </TileColumns>
+            {/* THE FLAG ROW ALONG THE BOTTOM (`main.category.flag.quiet` /
+                `.flag.new`). The artboard draws a tinted strip carrying the
+                month's flags; a flag is not a direction (lib/calibration.ts
+                READER_FLAGS), so it says an object was or was not there and
+                never which way it is going.
+                "No longer being said", not "Gone quiet" — VO2's own heading,
+                because the FLAG is a direction word and rule (c) lets it appear
+                only inside a verdict node. */}
+            {/* AND THE TYPE ON THIS GROUND IS `secondary-foreground`, NOT
+                `muted-foreground` (design review Medium 13). `--muted-
+                foreground` #6E7378 on the inner block's #F6F7F8 is 4.46:1,
+                under MASTER's own 4.5:1 floor — it passes on the white tile and
+                fails inside every tinted block on this page, which is exactly
+                where the k/n, the basis and the provenance live. The honesty
+                lines were the least legible text on the surface. */}
+            <TileBlock className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-1.5">
+              <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">No longer being said</span>
+              {quiet}
+            </TileBlock>
+          </div>
+        )}
       </BlockFrame>
     )
   },

@@ -647,7 +647,8 @@ function refReader(mode: QuoteRefReadErrors) {
 }
 
 /** Resolve quote TEXT for snapshot refs — 'e:<insight_evidence.id>',
- *  'c:<comments.id>', 'v:<videos.id>', 'k:<video_claims.id>', 'h:<table>:<row id>'
+ *  'c:<comments.id>', 'v:<videos.id>', 'k:<video_claims.id>', 't:<videos.id>',
+ *  'h:<table>:<row id>'
  *  (lib/renderables/quotes-freeze.ts). Same rule and same reason as
  *  fetchQuoteTextsByCommentId: through insight_evidence, redacted = false, so
  *  a stored export re-renders without any voice the erasure sweep has removed.
@@ -668,7 +669,7 @@ export async function fetchQuoteTextsByRefs(
   const c = client as EvidenceClient
   const { read, settle } = refReader(opts.onReadError ?? 'degrade')
   const out = new Map<string, string>()
-  const by = { e: [] as string[], c: [] as string[], v: [] as string[], m: [] as string[], p: [] as string[], k: [] as string[] }
+  const by = { e: [] as string[], c: [] as string[], v: [] as string[], m: [] as string[], p: [] as string[], k: [] as string[], t: [] as string[] }
   const heroes = new Map<string, string[]>()
   const brandVoice = new Map<string, number[]>()
   for (const ref of new Set(refs)) {
@@ -682,8 +683,8 @@ export async function fetchQuoteTextsByRefs(
       brandVoice.set(b[1], [...(brandVoice.get(b[1]) ?? []), Number(b[2])])
       continue
     }
-    const m = /^([ecvmpk]):(.+)$/.exec(ref)
-    if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k'].push(m[2])
+    const m = /^([ecvmpkt]):(.+)$/.exec(ref)
+    if (m) by[m[1] as 'e' | 'c' | 'v' | 'm' | 'p' | 'k' | 't'].push(m[2])
   }
   const heroReads = [...heroes.entries()].map(([table, ids]) =>
     read(`h:${table}`, ids.length, async () => {
@@ -740,6 +741,20 @@ export async function fetchQuoteTextsByRefs(
         for (const r of rows) if (r.quote) out.set(`k:${r.id}`, cleanQuote(r.quote))
       }, undefined)
     : Promise.resolve()
+  // t: the text ON SCREEN in a video — videos.ocr_text by the video's uuid. The
+  // creator's own words burnt into the frame, `k:`'s case and not a
+  // commenter's, so it resolves off the video row; a video the retention sweep
+  // removes stops resolving and the line disappears from a re-rendered export,
+  // which is the whole reason it travels as a ref.
+  const onScreenRead = by.t.length
+    ? read('t: (on-screen text)', by.t.length, async () => {
+        const rows = await fetchChunks<{ id: string; ocr_text: string | null }>(
+          by.t,
+          (chunk) => c.from('videos').select('id, ocr_text').in('id', chunk).order('id') as unknown as Rows,
+        )
+        for (const r of rows) if (r.ocr_text) out.set(`t:${r.id}`, cleanQuote(r.ocr_text))
+      }, undefined)
+    : Promise.resolve()
   // p: a customer phrase — language_samples by id (cascade-deleted with its comment).
   const phraseRead = by.p.length
     ? read('p: (customer phrase)', by.p.length, async () => {
@@ -764,7 +779,7 @@ export async function fetchQuoteTextsByRefs(
       (chunk) => c.from('insight_evidence').select('source_video_id, quote').in('source_video_id', chunk).eq('redacted', false).order('id'),
     ), []),
   ])
-  await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead, claimRead])
+  await Promise.all([...heroReads, brandVoiceRead, messageRead, phraseRead, claimRead, onScreenRead])
   // Every read has settled; under 'throw' this is where their failures arrive.
   settle()
   for (const r of byId) if (r.quote && !out.has(`e:${r.id}`)) out.set(`e:${r.id}`, r.quote)

@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { gapBasisLine, gapLine, type Gap } from '@/lib/reading/gap'
-import { overviewSubjects } from './subjects'
+import { leadGap, overviewSubjects, subjectsMeta } from './subjects'
 import { overviewFixture, refusedFixture, renamedRivalFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -95,7 +95,9 @@ describe('OV2 · your subjects', () => {
   it('prints "at this point last month" on the category side, in both drawn modes', () => {
     for (const mode of ['app', 'email'] as const) {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
-      expect(text, mode).toContain('at this point last month 20.5% 264 of 1,290')
+      // The two figures are separated (design review Medium 18): they ran
+      // together with no separator, which reads as one number gone wrong.
+      expect(text, mode).toContain('at this point last month 20.5% · 264 of 1,290')
     }
   })
 })
@@ -142,5 +144,55 @@ describe('the two-audience gap OV2 carries', () => {
     expect(text).toContain('44% 62 of 142')
     expect(line).toContain('Freitag 44% of 142')
     expect(line).toContain('you 31% of 84')
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §2 ------------------------------------
+
+describe('OV2, ported to the artboard', () => {
+  it('heads the block with the gap, both sides and the earlier month under it', () => {
+    // `main.subjects.gapline` / `.gapline.base` — D1. The mock's headline is
+    // "gap to Freitag narrowed to 13 points … from 19 in June"; what prints is
+    // both levels with their counts, the banded difference, and the earlier
+    // month as its own dated reading. "narrowed" is not built.
+    const data = overviewFixture()
+    const text = renderText(overviewSubjects.render(data, 'app', ctx))
+    expect(text).toContain('Durability — you 31% of 84 · Freitag 44% of 142 · too few to compare')
+    expect(text).toContain('in August')
+    expect(text).not.toContain('narrowed')
+  })
+
+  it('takes the headline gap off the row the table leads with, never a second ranking', () => {
+    const s = overviewFixture().subjects
+    expect(leadGap(s)).toBe(s.gaps[s.rows[0].id])
+    expect(leadGap({ ...s, gaps: {} })).toBeNull()
+  })
+
+  it('dates the named set in the header instead of printing a bare digit', () => {
+    const s = overviewFixture().subjects
+    expect(subjectsMeta(s)).toBe('2 named 19 Aug · share of videos where the subject came up')
+    // No date recorded is a shorter meta, never an invented one.
+    expect(subjectsMeta({ ...s, namedAt: null })).toBe('2 named · share of videos where the subject came up')
+    expect(subjectsMeta({ ...s, rows: [] })).toBeUndefined()
+  })
+
+  it('stacks each level over its "of N" through P0’s cell', () => {
+    const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    // FigureCell stamps the markers itself: the figure on top, the pair as the
+    // level. A hand-rolled cell loses the copy contract by construction.
+    expect(markup).toContain('data-copy="level"')
+    expect(markup).toContain('font-mono text-[13px] font-semibold leading-none tabular-nums')
+  })
+
+  it('puts the caveat in the footer note, not in the body', () => {
+    const markup = render(overviewSubjects.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('shrink-0 font-mono text-[11px] font-normal text-muted-foreground">Your side reads')
+  })
+
+  it('prints the refusal in the headline where the rival was renamed', () => {
+    const text = renderText(overviewSubjects.render(renamedRivalFixture(), 'app', ctx))
+    expect(text).toContain('comparison refused')
+    // …and the earlier month is refused with it, rather than printed beside it.
+    expect(text).toContain('comparison refused in August')
   })
 })

@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewCategory, panelRule } from './category'
+import { KIND_NOT_COMPARED, categoryMeta, overviewCategory, panelNote, panelRule } from './category'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -101,7 +101,7 @@ describe('OV3 · what the category is saying', () => {
     for (const f of Object.values(figures)) {
       expect(['videos', 'comments', 'pts', 'pct']).toContain(f.unit)
     }
-    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('214 accounts in the panel')
+    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('a fixed panel of 214 accounts')
   })
 
   it('carries the attention verdict — declared since WP11, and null in the loader until now', () => {
@@ -122,8 +122,22 @@ describe('OV3 · what the category is saying', () => {
   })
 
   it('names the panel’s size, which is the only denominator a comment count has', () => {
+    // BLOCK D WAVE 2 (`main.category.attention.note`, D7): the artboard's line
+    // carries five facts and the build printed one. The two levels print with
+    // no magnitude across them — the panel re-froze between the two months, so
+    // the mock's "−18% since June" compares two populations.
+    // AND NO ARROW ACROSS THE RE-FREEZE (code review I5, fix pass). The line
+    // argued that the mock's "−18% since June" is refused BECAUSE the panel
+    // re-froze between the two months, and then printed those same two numbers
+    // with an arrow between them — which is the subtraction the verdict beside
+    // it refuses, invited in the reader's own eye. The break is named between
+    // them now, with its date, and the second month says which panel it is on.
     const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('214 accounts in the panel')
+    expect(text).toContain(
+      'a fixed panel of 214 accounts · first seen before 1 Apr · Jul 2026 50,300 comments · panel re-frozen 3 Sep · Sep 2026 41,200 comments under the new panel',
+    )
+    expect(text).not.toContain('18% since June')
+    expect(text).not.toContain('50,300 → 41,200')
   })
 
   it('draws the axis rule where the panel re-froze, and nowhere else', () => {
@@ -182,5 +196,83 @@ describe('the quotes this block declares (mkt.p3.quote)', () => {
 
   it('claims none on a workspace whose month could not be read', () => {
     expect(blockAnswers(overviewCategory, refusedFixture()).quotes).toEqual([])
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §3 ------------------------------------
+
+describe('OV3, ported to the artboard', () => {
+  it('lays the four lines out in the artboard’s three columns', () => {
+    // mock-gap §Visual fidelity: the mood-beside-attention arrangement and the
+    // kind-rows-beside-more control all collapsed into one stacked column.
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('xl:grid-cols-3')
+  })
+
+  it('gives every kind row its own "of N" and draws no partition', () => {
+    // D4/D10: kinds overlap (175%–228% of one denominator), so each row is an
+    // independent share and there is no remainder slice to draw.
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Questions 33.9% 470 of 1,388')
+    expect(text).toContain('Praise 28% 389 of 1,388')
+    expect(text).not.toContain('Other kinds')
+  })
+
+  it('heads the two mover arms with a band, never with a direction word', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Cleared their band · a larger share than last month')
+    expect(text).toContain('Cleared their band · a smaller share than last month')
+    // The mock's own headings would have failed rule (c) outright.
+    expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
+  })
+
+  it('states the basis in the header as well as the denominator', () => {
+    const c = overviewFixture().category
+    expect(categoryMeta(c)).toBe('1,388 category videos this month · Sep 2026 against Aug 2026')
+    expect(categoryMeta({ ...c, denominator: null })).toBeUndefined()
+  })
+
+  it('drops a panel clause that has no field behind it rather than inventing one', () => {
+    const a = overviewFixture().category.attention!
+    // With no panel row there is no re-freeze to name, and the two months are
+    // still two dated levels rather than a run.
+    expect(panelNote({ ...a, accountCount: null, panel: null })).toBe('Jul 2026 50,300 comments · Sep 2026 41,200 comments')
+    expect(panelNote(null)).toBeNull()
+  })
+
+  it('prints the banded step on its own line, never orphaned beside a wrapped note', () => {
+    // Design review High 7b: the note and the verdict shared one flex-wrap
+    // paragraph, so in a 380px column the verdict landed alone on a third line
+    // as "comparison refused" with nothing naming what was refused.
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('month on month')
+    // And the panel's date is printed in ONE format, in one place (High 7a).
+    expect(text).not.toContain('2026-09-03')
+  })
+
+  it('offers the one click down without choosing a kind for the reader', () => {
+    // CHANGED BY THE FIX PASS (design review Medium 12, code review I9). The
+    // control hard-coded `c.kinds[0]?.kind`, so a link sitting under three rows
+    // silently filtered Voice to whichever kind sorted first — and this test
+    // pinned that rather than catching it. A control under N rows either
+    // belongs on each row or belongs to none of them.
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('more — one click down →')
+    expect(markup).not.toContain('/dashboard/voice?type=')
+  })
+
+  it('names the change cell a kind has no comparison for', () => {
+    // Design review Medium 11: "Complaints" had a BLANK cell between two
+    // siblings that carried values — the one absence on this page that did not
+    // say what it was. A null verdict is no comparison at all, which is not the
+    // same statement as "no clear change".
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain(`Complaints 19% 264 of 1,388 ${KIND_NOT_COMPARED}`)
+  })
+
+  it('puts "nothing else moved" in the footer note', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('font-normal text-muted-foreground">Nothing else moved clearly this month.')
   })
 })
