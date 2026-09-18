@@ -85,10 +85,23 @@ describe('OV3 · what the category is saying', () => {
   it('declares the block’s own figures and hands back every verdict behind them', () => {
     const { figures, verdicts } = blockAnswers(overviewCategory, overviewFixture())
     expect(Object.keys(figures).sort()).toEqual([
-      'attention_comments', 'attention_panel_accounts', 'attention_videos', 'category_videos',
+      'attention_comments', 'attention_videos', 'category_videos',
       'kind_pain_point_share', 'kind_praise_share', 'kind_question_share', 'mood_negative_share',
     ])
     expect(verdicts.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('does not publish the panel’s size as a figure — there is no unit for a count of accounts', () => {
+    const { figures } = blockAnswers(overviewCategory, overviewFixture())
+    // `sent-figures.ts` files anything that is not 'comments' as 'videos', and
+    // `sent_figures` has no UPDATE grant, so a count of accounts published here
+    // would be written down as a count of videos permanently. It is rendered
+    // beside the line instead, where the reader can see what it counts.
+    expect(figures.attention_panel_accounts).toBeUndefined()
+    for (const f of Object.values(figures)) {
+      expect(['videos', 'comments', 'pts', 'pct']).toContain(f.unit)
+    }
+    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('214 accounts in the panel')
   })
 
   it('carries the attention verdict — declared since WP11, and null in the loader until now', () => {

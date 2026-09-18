@@ -313,15 +313,24 @@ export const overviewCategory: Block<OverviewData> = {
       out.attention_comments = { value: last.comments, unit: 'comments', label: 'comments under the panel’s videos this month' }
       out.attention_videos = { value: last.videos, unit: 'videos', label: 'videos the panel posted this month' }
     }
-    // THE PANEL'S SIZE IS A FIGURE, and the one the mock puts in the headline
-    // ("a fixed panel of 214 creators"). A comment count with no set behind it
-    // is not something a sentence may name.
-    if (c.attention?.accountCount != null) {
-      out.attention_panel_accounts = { value: c.attention.accountCount, unit: 'videos', label: 'accounts in the frozen panel' }
-    }
+    // THE PANEL'S SIZE IS NOT PUBLISHED AS A FIGURE, and that is deliberate.
+    // It is a count of ACCOUNTS, and `FigureTable.unit` has four values, none
+    // of which is that (lib/reading/verdicts.ts). `sent-figures.ts` derives the
+    // permanent record's `measure` straight off the unit — anything that is not
+    // 'comments' is filed as 'videos' — and `sent_figures` has no UPDATE grant,
+    // so the moment this block joins an artefact's set, "214 videos" would be
+    // written down forever. The unit cannot simply be widened either: the
+    // column carries `check (measure in ('videos','comments'))`
+    // (20260918098000_sent_figures.sql), so a fifth unit is a migration, not an
+    // edit. The panel's size is RENDERED — it is the denominator the comment
+    // count needs and the reader sees it beside the line — and prose that wants
+    // to name it can take it from the verdict's own `n`, which carries its
+    // population in words.
+    //
     // The banded step, where one was drawn. `verdicts()` already declares the
     // verdict itself; this is the magnitude a sentence may substitute, and it
-    // exists only when the comparison ANSWERED — a refusal has no number.
+    // exists only where the comparison MOVED — `no_clear_change` answers too,
+    // and it answers with no magnitude to publish.
     if (c.attention?.verdict?.state === 'moved' && c.attention.verdict.changePts != null) {
       out.attention_change = { value: c.attention.verdict.changePts, unit: 'pts', label: 'the panel’s share of attention, against the month before' }
       if (c.attention.verdict.bandPts != null) {
