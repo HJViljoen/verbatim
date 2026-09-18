@@ -36,6 +36,9 @@ const COLS = '188px 84px 212px 92px 104px 72px 84px minmax(104px,1fr)'
  *  1,024px, and a hand-typed 980 left the "Stop watching" column hanging 44px
  *  past the end of every row rule at the page's real content width. */
 const COLS_MIN = gridIntrinsic(COLS)
+// Community, Found and State hold words; the five after them hold figures and
+// a control. The head reads the way its column does (design H1).
+const ALIGN = ['left', 'left', 'left', 'right', 'right', 'right', 'right', 'right'] as const
 const HEAD = ['Community', 'Found', 'State', 'Posts · all time', 'Comments · all time', 'Kept', 'Findings', ''] as const
 
 export function CommunitiesSection({
@@ -57,17 +60,18 @@ export function CommunitiesSection({
       {rows.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No community is watched for this workspace.</p>
       ) : (
-        <GridTable cols={COLS} min={COLS_MIN} head={HEAD}>
+        <GridTable cols={COLS} min={COLS_MIN} head={HEAD} align={ALIGN}>
           {rows.map((r) => (
             <GridRow
               key={r.key}
               cols={COLS}
+              align={ALIGN}
               cells={[
                 <span key="n" className="block truncate text-[12.5px] font-medium">{r.label}</span>,
-                <span key="d" className="block text-left font-mono text-[11.5px] text-muted-foreground">
+                <span key="d" className="block font-mono text-[11.5px] text-muted-foreground">
                   {r.discoveredAt ? shortDate(`${r.discoveredAt.slice(0, 10)}T00:00:00.000Z`) : ''}
                 </span>,
-                <span key="s" className="block text-left text-[12px] text-secondary-foreground">
+                <span key="s" className="block text-[12px] text-secondary-foreground">
                   <span className="inline-flex items-center gap-1.5">
                     <Dot tone={toneOf(r)} />
                     {communityWords(r)}

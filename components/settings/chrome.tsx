@@ -79,17 +79,32 @@ export function LabelRow({
  * unreadable stack.
  */
 export function GridTable({
-  cols, min, head, children,
-}: { cols: string; min: number; head: readonly ReactNode[]; children: ReactNode }) {
+  cols, min, head, align, children,
+}: { cols: string; min: number; head: readonly ReactNode[]; align?: GridAlign; children: ReactNode }) {
   return (
     <div className="-mx-1 overflow-x-auto px-1">
       <div style={{ minWidth: `${Math.max(min, gridIntrinsic(cols))}px` }}>
-        <GridHead cols={cols} cells={head} />
+        <GridHead cols={cols} cells={head} align={align} />
         {children}
       </div>
     </div>
   )
 }
+
+/**
+ * Which way each column reads, HEAD AND CELLS FROM ONE ARRAY.
+ *
+ * The default — first column left, the rest right — is the shape of a table of
+ * figures, and it was wrong for the three columns on this page that hold
+ * SENTENCES: the head sat at the far right of a column whose text starts at the
+ * left, so "ACCOUNTS WE READ" floated ~450px from the thing it named. Fixing it
+ * per cell was how it broke: a cell could set `text-left` and the head could
+ * not follow. One array, passed to `GridTable` and to every `GridRow` under it.
+ */
+export type GridAlign = readonly ('left' | 'right')[]
+
+const alignClass = (align: GridAlign | undefined, i: number): string =>
+  (align?.[i] ?? (i === 0 ? 'left' : 'right')) === 'left' ? 'text-left' : 'text-right'
 
 /** The gap `GridHead` and `GridRow` set between columns (`gap-x-3`), in px. */
 export const GRID_GAP = 12
@@ -120,30 +135,31 @@ export function gridIntrinsic(cols: string, gap: number = GRID_GAP): number {
   return tracks.reduce((n, t) => n + width(t), 0) + Math.max(0, tracks.length - 1) * gap
 }
 
-function GridHead({ cols, cells }: { cols: string; cells: readonly ReactNode[] }) {
+function GridHead({ cols, cells, align }: { cols: string; cells: readonly ReactNode[]; align?: GridAlign }) {
   return (
     <div
       className="grid items-center gap-x-3 pb-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground"
       style={{ gridTemplateColumns: cols } as CSSProperties}
     >
       {cells.map((c, i) => (
-        <span key={i} className={i === 0 ? '' : 'text-right'}>{c}</span>
+        <span key={i} className={alignClass(align, i)}>{c}</span>
       ))}
     </div>
   )
 }
 
-/** One row of a `GridTable`. The first cell reads left; the rest read right. */
+/** One row of a `GridTable`. Without an `align` the first cell reads left and
+ *  the rest read right; with one, head and cells read the same way. */
 export function GridRow({
-  cols, cells, minHeight = 44, className,
-}: { cols: string; cells: readonly ReactNode[]; minHeight?: number; className?: string }) {
+  cols, cells, align, minHeight = 44, className,
+}: { cols: string; cells: readonly ReactNode[]; align?: GridAlign; minHeight?: number; className?: string }) {
   return (
     <div
       className={cn('grid items-center gap-x-3 border-t border-border/70 py-1.5 last:border-b last:border-b-border/70', className)}
       style={{ gridTemplateColumns: cols, minHeight: `${minHeight}px` } as CSSProperties}
     >
       {cells.map((c, i) => (
-        <div key={i} className={cn('min-w-0', i === 0 ? '' : 'text-right')}>{c}</div>
+        <div key={i} className={cn('min-w-0', alignClass(align, i))}>{c}</div>
       ))}
     </div>
   )

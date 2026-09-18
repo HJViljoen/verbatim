@@ -34,6 +34,9 @@ import { cn } from '@/lib/utils'
 // identity at all and the cell says that instead of a date.
 
 const COLS = '180px minmax(0,1fr) 112px 132px 150px'
+// The rival and what we read of them are sentences; the two dates and figures
+// after them are not. One array, so the head cannot drift from its column.
+const ALIGN = ['left', 'left', 'right', 'right', 'right'] as const
 
 export interface RivalsSectionProps {
   rows: readonly RivalRow[]
@@ -77,7 +80,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
       {rows.length === 0 && added.length === 0 ? (
         <p className="text-[12.5px] text-muted-foreground">No rival is named. Naming one is how the category gets a shape.</p>
       ) : (
-        <GridTable cols={COLS} min={860} head={head}>
+        <GridTable cols={COLS} min={860} head={head} align={ALIGN}>
           {rows.map((r) => {
             // Taken off here and not yet saved. The row STAYS — its months are
             // frozen under this name and a reader still has to see them — but
@@ -89,6 +92,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
             <GridRow
               key={r.identity?.id ?? r.name}
               cols={COLS}
+              align={ALIGN}
               minHeight={52}
               className={dropped ? 'opacity-60' : undefined}
               cells={[
@@ -111,7 +115,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                       so a name carrying a comma survives the round trip. */}
                   {names.includes(r.name) && <input type="hidden" name="competitor_names" value={r.name} />}
                 </span>,
-                <span key="h" className="block text-left">
+                <span key="h" className="block">
                   <span className="inline-flex items-center gap-1.5 text-[12.5px] text-secondary-foreground">
                     <Dot tone={dropped || r.retiredAt ? 'none' : r.noAccounts ? 'watch' : r.read > 0 ? 'good' : 'watch'} />
                     {dropped ? RIVAL_REMOVED_PENDING : rivalState(r)}
@@ -158,6 +162,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
             <GridRow
               key={`new-${name}`}
               cols={COLS}
+              align={ALIGN}
               minHeight={52}
               cells={[
                 <span key="n" className="flex items-center gap-2">
@@ -172,7 +177,7 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   <span className="min-w-0 truncate text-[12.5px] font-medium">{name}</span>
                   <input type="hidden" name="competitor_names" value={name} />
                 </span>,
-                <span key="h" className="block text-left text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
+                <span key="h" className="block text-[12.5px] text-muted-foreground">added here, not yet saved — nothing of theirs is read until it is</span>,
                 <span key="t" className="block text-right font-mono text-[11.5px] text-cat">—</span>,
                 <span key="o" className="block text-right text-[11.5px] text-cat">—</span>,
                 <span key="r" />,

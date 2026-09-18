@@ -20,6 +20,8 @@ import type { PlatformRow } from '@/lib/settings/connections'
 
 const COLS = '200px minmax(0,1fr) 110px 110px'
 const HEAD = ['Platform', 'What we read', 'Share', ''] as const
+// "What we read" is a sentence and its head belongs over its first word.
+const ALIGN = ['left', 'left', 'right', 'right'] as const
 
 export function PlatformsSection({ rows, basis, ownAccounts }: {
   rows: readonly PlatformRow[]
@@ -35,18 +37,19 @@ export function PlatformsSection({ rows, basis, ownAccounts }: {
   return (
     <Section>
       <SectionHead title="Platforms" meta={`${on} on · ${basis}`} />
-      <GridTable cols={COLS} min={820} head={HEAD}>
+      <GridTable cols={COLS} min={820} head={HEAD} align={ALIGN}>
         {rows.map((r) => (
           <GridRow
             key={r.platform}
             cols={COLS}
+            align={ALIGN}
             minHeight={48}
             cells={[
               <span key="n" className="inline-flex items-center gap-2 text-[12.5px] font-medium">
                 <PlatformIcon platform={r.platform} size={14} className="text-secondary-foreground" />
                 {r.label}
               </span>,
-              <span key="w" className="block text-left text-[12.5px] text-muted-foreground">{r.reads}</span>,
+              <span key="w" className="block text-[12.5px] text-muted-foreground">{r.reads}</span>,
               <Figure key="s" value={r.share === null ? '—' : `${r.share.toFixed(0)}%`} muted={r.share === null} />,
               <span
                 key="c"

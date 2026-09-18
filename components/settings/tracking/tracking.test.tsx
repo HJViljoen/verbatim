@@ -136,6 +136,21 @@ describe('the communities section', () => {
     expect(words).toContain('capped at 40 per thread')
   })
 
+  it('heads a column of sentences over its first word, not its last', () => {
+    // H1: the grid head right-aligned every column but the first while the
+    // cells under three of them read left, so STATE sat ~330px right of its
+    // own dots. Head and cells now take one array.
+    const markup = render(section)
+    const head = markup.slice(markup.indexOf('min-width'), markup.indexOf('border-t border-border/70'))
+    for (const word of ['Community', 'Found', 'State']) {
+      const at = head.indexOf(`>${word}<`)
+      expect(at, `${word} is in the head`).toBeGreaterThan(-1)
+      // The span that opens immediately before the word carries its alignment.
+      expect(head.slice(head.lastIndexOf('<span', at), at)).toContain('text-left')
+    }
+    expect(head.slice(head.lastIndexOf('<span', head.indexOf('>Kept<')), head.indexOf('>Kept<'))).toContain('text-right')
+  })
+
   it('declares a minimum no narrower than its own columns', () => {
     // C5/B2: the row rule is painted on the row element, which takes the
     // wrapper's width; the cells keep their tracks. A minimum short of the
