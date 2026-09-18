@@ -3,6 +3,10 @@ import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
+import { Sparkline } from '@/components/charts/sparkline'
+import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import type { Good } from '@/components/charts/stat'
+import type { DeltaVerdict } from '@/lib/report-bands'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
@@ -33,8 +37,16 @@ const fmtCount = (n: number) => new Intl.NumberFormat('en-US').format(n)
 const PLATFORM: Record<string, string> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
 
 const CARD = 'rounded-lg border border-border bg-tile'
-const BODY = 'text-[15.5px] leading-[1.55] text-foreground'
-const BODY_SM = 'text-[14px] leading-[1.5] text-foreground'
+// THE DECK'S BODY TYPE (Block D wave 1, P0 item 7; mock-gap §8 P0). 15.5px on
+// a 1168px body zoomed to .902 is about 12pt on a 297mm sheet — a large-print
+// research report. Measured across the four brief artboards, the body runs
+// 12.5–13px, and it is why the mock fits a finding, its quote, its card and
+// its practice list on one slide where the build clips at twenty rows. The
+// page LEADS are untouched (the "In short" summary at 17px, the section
+// intros at 15–16px): §5 names those sizes and a lead is supposed to sit
+// above its body. Only the body moved.
+const BODY = 'text-[13px] leading-[1.5] text-foreground'
+const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
 
 export function Figured({ text, figures }: { text: string; figures: FigureTable }) {
   return (
@@ -51,6 +63,53 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
     <>
       {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} /></p>)}
     </>
+  )
+}
+
+/**
+ * A series on paper (Block D wave 1, P0 item 7).
+ *
+ * The deck could not draw one. `components/charts/sparkline.tsx` has drawn
+ * every in-app series since the redesign — gaps kept as gaps, one polyline per
+ * unbroken run, no fill under a broken line — and the deck reached for a bar
+ * or a sentence instead, so a printed brief said "up from June" where the page
+ * showed the shape. This is that component at the deck's scale, with the
+ * animation off: a slide is printed once by a headless browser and a draw-in
+ * that has not finished is a line that is not there.
+ *
+ * `months` is the axis in words, and it is REQUIRED because it is the only
+ * honest thing a printed sparkline has instead of a hover: a reader with a
+ * sheet of paper cannot ask what a point was. Under three readings nothing is
+ * drawn at all and the months are named instead — the rule
+ * `monthlyLineLabel` already applies on screen (mock-gap §6 D3: a chart is a
+ * direction claim too, and two points are not a direction).
+ *
+ * No document in the snapshot carries a series yet, so nothing on the four
+ * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
+ * when the quarterly's and the leadership one-pager's charts land.
+ */
+export function DeckSpark({ values, months, color = 'var(--primary)' }: {
+  values: (number | null)[]
+  /** The months these points are, in order — the printed page's only axis. */
+  months: string[]
+  color?: string
+}) {
+  const read = values.filter((v) => v != null).length
+  if (read < 3) {
+    return (
+      <p className="font-mono text-[10.5px] text-muted-foreground">
+        {months.length ? `${months.join(' · ')} — too few months to draw a line` : 'too few months to draw a line'}
+      </p>
+    )
+  }
+  return (
+    <span className="flex flex-col gap-1">
+      <Sparkline values={values} color={color} width={104} height={22} animate={false} endDot />
+      <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
+        <span>{months[0]}</span>
+        <span>{months[months.length - 1]}</span>
+      </span>
+    </span>
   )
 }
 
@@ -371,31 +430,56 @@ function StandingBars({ data, parties }: { data: DocumentSnapshotData; parties: 
 }
 
 /** What moved, in the delta's own verdicts. A metric the update could not
- *  judge says so rather than showing a number that means nothing. */
-function movementLines(data: DocumentSnapshotData): { label: string; value: string }[] {
+ *  judge says so rather than showing a number that means nothing.
+ *
+ *  THE LINE STATES THE LEVELS; THE BADGE STATES THE MOVEMENT (P0 item 7).
+ *  These sentences used to write their own — "Moved up, 23.4% to 27.1%
+ *  positive" — which is a direction word earned from ONE banded comparison,
+ *  mock-gap §6 D5's exact error, hand-rolled on paper where no badge could
+ *  contradict it. `MovementBadge` is what the rest of the product prints for
+ *  this: the arrow is the sign, the band travels beside it, and a non-answer
+ *  reads as a non-answer in the same words the app and the email use. So the
+ *  sentence keeps the two levels, which are real and measured, and hands the
+ *  claim about the difference to the one component allowed to make it.
+ *
+ *  `good` is the favourability axis: tone and share rising is good for the
+ *  client, and volume is our own gather cadence rather than anything about
+ *  them, so it is neutral. */
+export function movementLines(data: DocumentSnapshotData): {
+  label: string
+  value: string
+  verdict?: DeltaVerdict | null
+  count?: number | null
+  good?: Good
+}[] {
   const d = data.delta
   if (!d) return [{ label: 'Movement', value: 'No earlier update to compare with.' }]
-  const out: { label: string; value: string }[] = []
+  const out: { label: string; value: string; verdict?: DeltaVerdict | null; count?: number | null; good?: Good }[] = []
   if (d.sentiment) {
-    const dir = d.sentiment.now > d.sentiment.prev ? 'up' : d.sentiment.now < d.sentiment.prev ? 'down' : 'level'
     out.push({
       label: 'Tone',
-      value: d.sentiment.verdict.state === 'moved' ? `Moved ${dir}, ${Math.round(d.sentiment.prev * 10) / 10}% to ${Math.round(d.sentiment.now * 10) / 10}% positive`
-        : d.sentiment.verdict.state === 'too_little_data' ? 'Too few judged conversations to say'
-        : 'About where it was',
+      value: `${Math.round(d.sentiment.prev * 10) / 10}% to ${Math.round(d.sentiment.now * 10) / 10}% positive`,
+      verdict: d.sentiment.verdict,
+      good: 'up',
     })
   }
   if (d.share) {
-    const dir = d.share.now.client > d.share.prev.client ? 'up' : d.share.now.client < d.share.prev.client ? 'down' : 'level'
     out.push({
       label: 'Share',
-      value: d.share.verdict.state === 'moved' ? `Moved ${dir}, ${Math.round(d.share.prev.client * 10) / 10}% to ${Math.round(d.share.now.client * 10) / 10}%`
-        : d.share.verdict.state === 'too_little_data' ? 'Too few videos to say'
-        : 'About where it was',
+      value: `${Math.round(d.share.prev.client * 10) / 10}% to ${Math.round(d.share.now.client * 10) / 10}%`,
+      verdict: d.share.verdict,
+      good: 'up',
     })
   }
   if (d.newThemes) out.push({ label: 'New', value: d.newThemes.count ? `${fmtCount(d.newThemes.count)} new: ${d.newThemes.labels.slice(0, 3).join(', ')}` : 'Nothing confirmed new this update' })
-  if (d.conversations) out.push({ label: 'Volume', value: `${fmtCount(d.conversations.now)} conversations, against ${fmtCount(d.conversations.prev)} last update` })
+  if (d.conversations) {
+    out.push({
+      label: 'Volume',
+      value: `${fmtCount(d.conversations.now)} conversations, against ${fmtCount(d.conversations.prev)} last update`,
+      count: d.conversations.now - d.conversations.prev,
+      good: 'neutral',
+    })
+  }
   return out
 }
 
@@ -449,7 +533,11 @@ function StandingPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             {moved.map((m) => (
               <Fragment key={m.label}>
                 <dt className="pt-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{m.label}</dt>
-                <dd className="text-[13.5px] leading-[1.4] text-foreground">{m.value}</dd>
+                <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13.5px] leading-[1.4] text-foreground">
+                  <span>{m.value}</span>
+                  {m.verdict ? <MovementBadge verdict={m.verdict} unit="pts" good={m.good} /> : null}
+                  {m.count != null ? <CountBadge delta={m.count} good={m.good} /> : null}
+                </dd>
               </Fragment>
             ))}
           </dl>
