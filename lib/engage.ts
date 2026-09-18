@@ -107,16 +107,40 @@ const priority = (category: string) => {
 
 export function rankEngageCandidates(
   candidates: EngageCandidate[],
-  opts: { windowStart: string; perCategoryCap?: number; totalCap?: number; vocab?: Set<string> },
+  opts: {
+    windowStart: string
+    /**
+     * The window's END, exclusive — optional, and only a caller that STATES a
+     * closed window as the rows' basis passes it (Block D wave 2, code review
+     * C3).
+     *
+     * The digest has been bounded below only since 2026-08-10, which is right
+     * for the Content page: its cut is "since `Date.now() - report_period`" and
+     * it makes no claim about an upper end. This week does make one — its reply
+     * tile's footer says "written 6 Sep – 13 Sep", the block carries the run's
+     * frozen `[window_start, window_end)`, and the loader's own doc says a row
+     * is in the queue exactly when its comment was written inside those days.
+     * A run's window is frozen at `open-run` and gather runs after it, so a
+     * comment written between `window_end` and the run completing is gathered,
+     * cited, and would land in the queue carrying a date after the window the
+     * footer names. Half-open at both ends, exactly as the window is.
+     */
+    windowEnd?: string
+    perCategoryCap?: number
+    totalCap?: number
+    vocab?: Set<string>
+  },
 ): EngageCandidate[] {
   const perCategoryCap = opts.perCategoryCap ?? 3
   const totalCap = opts.totalCap ?? 12
   const windowStart = Date.parse(opts.windowStart)
+  const windowEnd = opts.windowEnd != null ? Date.parse(opts.windowEnd) : null
 
   const fresh = candidates.filter((c) => {
     if (!c.comment.commentDate) return false
     const t = Date.parse(c.comment.commentDate)
     if (!Number.isFinite(t) || t < windowStart) return false
+    if (windowEnd != null && Number.isFinite(windowEnd) && t >= windowEnd) return false
     if (opts.vocab && !isOnTopic(c, opts.vocab)) return false
     // A reply digest is only actionable in a language the client can answer
     // in: gate on READABILITY (quoteAvailability, lib/quotes.ts — the one

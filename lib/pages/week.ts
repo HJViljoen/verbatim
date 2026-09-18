@@ -1328,13 +1328,22 @@ async function buildReplies(input: {
       views: v.views,
     })))
 
+    // BOUNDED AT BOTH ENDS, because this block STATES a closed window as the
+    // rows' basis (code review C3). The rank has been bounded below only since
+    // the digest was written, which is right for Content — its cut is a moving
+    // clock and it claims no upper end. This page's footer says "written 6 Sep
+    // – 13 Sep" and the loader's own doc above says a row is in the queue
+    // exactly when its comment was written inside the days this update covered.
+    // A window is frozen at `open-run` and gather runs after it, so without the
+    // upper bound a comment written after `window_end` and gathered by this
+    // very run would be cited here carrying a date the footer does not cover.
     const worthReplying = rankEngageCandidates(
       candidates.filter((c) => c.category !== 'misinformation'),
-      { windowStart: window.from, vocab },
+      { windowStart: window.from, windowEnd: window.to, vocab },
     )
     const awareness = rankEngageCandidates(
       candidates.filter((c) => c.category === 'misinformation'),
-      { windowStart: window.from, perCategoryCap: FLAGGED_SHOWN, totalCap: FLAGGED_SHOWN, vocab },
+      { windowStart: window.from, windowEnd: window.to, perCategoryCap: FLAGGED_SHOWN, totalCap: FLAGGED_SHOWN, vocab },
     )
     // `now` is the window's END, not the clock: `shapeInbox` computes an age
     // from it and this page prints a date instead, but a shape whose unused
