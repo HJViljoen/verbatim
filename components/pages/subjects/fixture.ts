@@ -148,6 +148,10 @@ function ownPostsInput(): OwnPostInput {
       claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: { k: 9, n: 84 }, stance: 'contradicts' }),
       claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: { k: 0, n: 84 }, stance: 'silent' }),
     ],
+    // Three subjects named, four of the nine posts analysed — so the subject
+    // half is a real match here and carries no note. On production today the
+    // same field is zero analysed posts and the census says so instead.
+    subjectScope: { named: 3, analysedPosts: 4 },
   }
 }
 

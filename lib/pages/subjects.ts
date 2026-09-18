@@ -911,6 +911,12 @@ export async function loadOwnPosts(
   // than by the subject's whole membership, which runs to thousands.
   const postIds = videos.map((v) => v.id)
   let membership: OwnPostInput['membership'] = []
+  // How many of the month's own posts have been READ at all. It is what lets
+  // an empty subject list say which of three things happened, and on both
+  // tenants today it is zero — Sealand has no `audience_insights_current` row
+  // on any of its seventeen September posts, so without this the tile would
+  // read "about none of your subjects" when nothing has been analysed.
+  let analysedPosts = 0
   if (postIds.length > 0 && subjects.length > 0) {
     const insights = await readByIds<{ id: string; source_video_id: string | null }>(postIds, (part) =>
       supabase
@@ -921,6 +927,7 @@ export async function loadOwnPosts(
         .order('id', { ascending: true }),
     )
     const videoOf = new Map(insights.map((i) => [i.id, i.source_video_id]))
+    analysedPosts = new Set(insights.map((i) => i.source_video_id).filter((v): v is string => !!v)).size
     if (insights.length > 0) {
       const rows = await readByIds<{ subject_id: string; audience_insight_id: string }>(
         insights.map((i) => i.id),
@@ -962,6 +969,7 @@ export async function loadOwnPosts(
     claims: claims.map((c) => ({ ...c, entity: CLIENT_AUDIENCE, quote: '' })),
     membership,
     echoes,
+    subjectScope: { named: subjects.length, analysedPosts },
   }
   // `claims.length` is the ALL-TIME read, so "we read nothing at all" is what
   // marks the half as closed — never the month's own zero, which is a real

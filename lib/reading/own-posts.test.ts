@@ -10,6 +10,9 @@ import {
   OWN_POST_COMMENT_FLOOR,
   RIVAL_CLAIMS_WITHHELD,
   SAID_ABOUT_EMPTY,
+  SUBJECTS_MATCHED_NONE,
+  SUBJECTS_NONE_NAMED,
+  SUBJECTS_NOT_ANALYSED,
   claimEcho,
   ownCensusWithClaims,
   ownPostBasis,
@@ -106,6 +109,31 @@ describe('ownPostCensus', () => {
     // v4 is last month's post: Durability keeps two, and a subject whose only
     // post is outside the month is not a row of nothing.
     expect(c.subjects).toEqual([{ subjectId: 's1', label: 'Durability', value: { k: 2, n: 3 } }])
+  })
+
+  it('says WHY the subject half is empty, which is the half that is empty today', () => {
+    const named = (over: Partial<OwnPostInput>) => ownPostCensus(input(over)).subjectsNote
+    // Nothing named: the posts were matched against nothing.
+    expect(named({ subjectScope: { named: 0, analysedPosts: 0 } })).toBe(SUBJECTS_NONE_NAMED)
+    // Named, and nothing on the posts has been read — the production shape:
+    // Sealand has no insight on any of its seventeen September posts.
+    expect(named({ subjectScope: { named: 3, analysedPosts: 0 } })).toBe(SUBJECTS_NOT_ANALYSED)
+    // Read, matched, and none of them was about a named subject. A reading.
+    expect(named({ subjectScope: { named: 3, analysedPosts: 3 } })).toBe(SUBJECTS_MATCHED_NONE)
+    // A match needs no note, and neither does a caller who said nothing.
+    expect(
+      named({
+        subjectScope: { named: 3, analysedPosts: 3 },
+        membership: [{ subjectId: 's1', label: 'Durability', videoIds: ['v1'] }],
+      }),
+    ).toBeNull()
+    expect(named({})).toBeNull()
+  })
+
+  it('leaves the subject half unqualified when the whole census is unread', () => {
+    // `unread` already says no post was published; a second sentence about the
+    // subjects of posts that do not exist is noise, not honesty.
+    expect(ownPostCensus(input({ videos: [], subjectScope: { named: 3, analysedPosts: 0 } })).subjectsNote).toBeNull()
   })
 
   it('says the census is empty rather than printing three zeroes', () => {

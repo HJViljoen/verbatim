@@ -115,6 +115,19 @@ export interface OwnPostCensus {
   formats: { label: string; value: Counted }[]
   /** Subjects these posts matched. */
   subjects: { subjectId: string; label: string; value: Counted }[]
+  /** Why the SUBJECTS half is empty, when it is — null when it has rows, when
+   *  the whole census is unread, or when the caller said nothing about the
+   *  scope it matched in (a rival census matches no subject and takes no note).
+   *
+   *  ADDITIVE TO THE BRIEF'S PINNED SHAPE, for `claimsNote`'s reason applied to
+   *  the third half. A census has three halves off three different reads, and
+   *  on both tenants today it is THIS one that is empty: Sealand has zero
+   *  `audience_insights_current` rows on its seventeen September own posts and
+   *  Össur has four, so an unqualified empty list reads as "your posts were
+   *  about none of your subjects" when the truth is "nothing on them has been
+   *  analysed yet". Two halves out of three carried their own absence and the
+   *  one that is actually empty did not. */
+  subjectsNote: string | null
   claims: OwnClaimRow[]
   /** Why the census is empty, when it is. */
   unread: string | null
@@ -154,6 +167,13 @@ export interface OwnPostInput {
    *  never a bare `silent`. */
   echoes: readonly ClaimEcho[]
   commentFloor?: number
+  /** What the subject match was made AGAINST: how many subjects are named and
+   *  confirmed, and how many of the census's own posts have been read for what
+   *  their audience said. It is the only way an empty `subjects` list can say
+   *  which of three things happened — nothing named, nothing analysed, or
+   *  analysed and matched nothing. Absent means the caller did not say, and
+   *  then the census says nothing rather than guessing. */
+  subjectScope?: { named: number; analysedPosts: number } | null
   /** `tracking_configs.competitor_handles[name]` for a rival census: the
    *  accounts we read this entity's own posts from. An entity with none has no
    *  own-post read at all, which is `rivalRows`' `noAccounts` and the only way
@@ -214,6 +234,21 @@ export const RIVAL_CLAIMS_WITHHELD =
  *  beside one. */
 export const ECHO_NOT_COUNTED =
   'Nothing in this audience has been counted against this claim, so there is no reading to report.'
+
+/** No subject is named, so the posts were matched against nothing. The rail's
+ *  own empty state, said where the census prints its share of it. */
+export const SUBJECTS_NONE_NAMED =
+  'No subject is named yet, so these posts were matched against nothing — name one and this starts counting.'
+
+/** The posts are counted and none of them has been read for what its audience
+ *  said, so there is nothing for a subject to match. The failure this sentence
+ *  exists to stop is an empty list read as "about none of your subjects". */
+export const SUBJECTS_NOT_ANALYSED =
+  'None of these posts has been read for what its audience said yet, so none of them has been matched to a subject.'
+
+/** Read, matched, and none of them was about a named subject. A reading. */
+export const SUBJECTS_MATCHED_NONE =
+  'These posts were read and none of them was about a subject you have named.'
 
 /** Why an echo counted the audience and found nobody. A reading, not a gap. */
 export const ECHO_SILENT = 'The audience was read this month and nobody carried what this claim rests on.'
@@ -389,6 +424,17 @@ export function ownPostCensus(input: OwnPostInput): OwnPostCensus {
     .filter((s) => s.value.k > 0)
     .sort((a, b) => b.value.k - a.value.k || a.label.localeCompare(b.label))
 
+  const unread = noAccounts ? OWN_POSTS_NO_ACCOUNTS : published.k === 0 ? CENSUS_EMPTY(basis) : null
+  const scope = input.subjectScope
+  const subjectsNote =
+    subjects.length > 0 || unread != null || scope == null
+      ? null
+      : scope.named === 0
+        ? SUBJECTS_NONE_NAMED
+        : scope.analysedPosts === 0
+          ? SUBJECTS_NOT_ANALYSED
+          : SUBJECTS_MATCHED_NONE
+
   return {
     month,
     basis,
@@ -400,8 +446,9 @@ export function ownPostCensus(input: OwnPostInput): OwnPostCensus {
     hooks: countBy(posts, 'hook_style'),
     formats: countBy(posts, 'classified_type'),
     subjects,
+    subjectsNote,
     claims,
-    unread: noAccounts ? OWN_POSTS_NO_ACCOUNTS : published.k === 0 ? CENSUS_EMPTY(basis) : null,
+    unread,
     claimsNote: null,
   }
 }
