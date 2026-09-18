@@ -35,9 +35,11 @@ import { presentation, T } from './email-table'
  *     `BlockMovement` prints points ONLY on `state === 'moved'`, so a side
  *     that reads "too few to compare" gets the words and no magnitude beside
  *     them, and the mock's "Aug 27%" next to a refusal never appears;
- *   · the figure TIER — `FigureCell size="lg"` is the artboard's mono 17, with
- *     the count under it at 10.5, so the share is read first and the evidence
- *     second;
+ *   · the figure TIER — `FigureCell size="lg"` is the artboard's 17px figure
+ *     with the count under it at 10.5, so the share is read first and the
+ *     evidence second (the artboard sets it in mono; the primitive sets it in
+ *     the sans, tabular, because mono at that size parts "79.1%" into two
+ *     numbers — see `FigureCell`);
  *   · the artboard's per-row hairline, which is what makes a stack of rows
  *     read as a table at all.
  *
@@ -200,14 +202,14 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                         reading, and the row simply shows no comparison. */}
                     {row.you.verdict ? (
                       <span style={{ display: 'inline-block', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>you</span>
+                        <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.muted, marginRight: 4 }}>you</span>
                         <BlockMovement verdict={row.you.verdict} unit="pts" mode="email" />
                       </span>
                     ) : null}
                     {row.category.verdict ? (
                       <>
                         <span style={{ display: 'inline-block', whiteSpace: 'nowrap', marginLeft: row.you.verdict ? 8 : 0 }}>
-                          <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>the category</span>
+                          <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.muted, marginRight: 4 }}>the category</span>
                           <BlockMovement verdict={row.category.verdict} unit="pts" mode="email" />
                         </span>{' '}
                         {/* THE DIRECTION WORD IS ITS OWN GROUP. It belongs to
@@ -242,7 +244,7 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                         </span>
                       </div>
                     ) : null}
-                    {sentLine ? <div style={{ fontFamily: FONT.sans, fontSize: 10.5, lineHeight: '1.4', color: EMAIL.faint, marginTop: 3 }}>{sentLine}</div> : null}
+                    {sentLine ? <div style={{ fontFamily: FONT.sans, fontSize: 10.5, lineHeight: '1.4', color: EMAIL.muted, marginTop: 3 }}>{sentLine}</div> : null}
                   </td>
                 </tr>
               </tbody>

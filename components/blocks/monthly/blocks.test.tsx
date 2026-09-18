@@ -506,6 +506,25 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
+  // THE APPARATUS IS NOT DECORATION (the fix pass, review finding [High]).
+  // `EMAIL.faint` is #9AA0A6: 2.64:1 on white and 2.46:1 on the panels, far
+  // under AA, and it was carrying the six-month trails, the method footnote,
+  // the side labels on every subject row and the refusal reasons — the part of
+  // the artefact that makes the numbers honest, set in the one grey a reader
+  // cannot see. This artefact's own nodes are at the muted grey (#6E7378,
+  // 4.79:1); the token itself is the artboards' hex and shared by every email
+  // surface, so lowering it product-wide is the merge lead's call.
+  it('sets the evidence in a grey a reader can actually see', () => {
+    const data = monthlyFixture()
+    for (const key of ['monthly.movers', 'monthly.subjects', 'monthly.rivals', 'monthly.sound'] as const) {
+      const body = render(MONTHLY_BLOCKS[key].render(data, 'email', ctx))
+        // The frame's own `meta` cell is a shared primitive and keeps the
+        // token; this is about what the block itself prints.
+        .replace(/<td align="right" style="font-family:[^"]*font-size:11px;color:#9AA0A6">[^<]*<\/td>/g, '')
+      expect(body).not.toContain(EMAIL.faint)
+    }
+  })
+
   // THE METER MAY NOT SAY MORE THAN THE FIGURE BESIDE IT (review finding
   // [Important]). It drew min(of, 12) segments and filled max(1, round(…)), so
   // "1 of 64" — 1.6% — drew as 1 of 12, or 8.3%: a picture five times its own

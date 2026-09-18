@@ -95,7 +95,7 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                             AND THE WORDS ARE THE SNAPSHOT'S OWN STAMP, never
                             recomposed here: `data.period` is what the deck and
                             the share page print. */}
-                        <div style={{ ...text.eyebrow, lineHeight: '1.45' }}>
+                        <div style={{ ...text.eyebrow, color: EMAIL.muted, lineHeight: '1.45' }}>
                           <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
                           {monthlyEyebrow(data.period)}
                         </div>
@@ -109,7 +109,7 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                           <tbody>
                             <tr>
                               <td style={{ ...text.mono, color: EMAIL.muted, fontSize: 12 }}>{monthlyContext(data.reading.overview.bar)}</td>
-                              <td align="right" style={{ ...text.mono, color: EMAIL.faint, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
+                              <td align="right" style={{ ...text.mono, color: EMAIL.muted, fontSize: 12, whiteSpace: 'nowrap' }}>{data.company}</td>
                             </tr>
                           </tbody>
                         </table>

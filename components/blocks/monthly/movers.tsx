@@ -88,7 +88,7 @@ export const monthlyMovers: Block<MonthlyData> = {
         {m.goneQuiet.length > 0 ? <Quiet rows={m.goneQuiet} mode={mode} /> : null}
         {notes
           ? email
-            ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.faint, marginTop: 8 }}>{notes}</div>
+            ? <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 8 }}>{notes}</div>
             : <p className="m-0 font-mono text-[11px] text-muted-foreground">{notes}</p>
           : null}
       </>
@@ -299,7 +299,7 @@ function Trail({ trail, mode }: { trail: string; mode: RenderMode }) {
     </Fragment>
   ))
   return mode === 'email' ? (
-    <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.faint, marginTop: 2 }}>{parts}</div>
+    <div data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 11, lineHeight: '1.5', color: EMAIL.muted, marginTop: 2 }}>{parts}</div>
   ) : (
     <span data-copy="level" className="font-mono text-[10.5px] tabular-nums text-muted-foreground">{parts}</span>
   )

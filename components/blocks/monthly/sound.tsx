@@ -55,7 +55,7 @@ export function monthlySoundEmail(data: OverviewData, ctx: BlockContext): ReactN
       {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : null}
       <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: 1.5, color: EMAIL.muted }}>{lines.join(' ')}</div>
       {footnote.length > 0 ? (
-        <div style={{ fontFamily: FONT.sans, fontSize: 11, lineHeight: 1.5, color: EMAIL.faint, marginTop: 8 }}>{footnote.join(' ')}</div>
+        <div style={{ fontFamily: FONT.sans, fontSize: 11, lineHeight: 1.5, color: EMAIL.muted, marginTop: 8 }}>{footnote.join(' ')}</div>
       ) : null}
     </BlockFrame>
   )
