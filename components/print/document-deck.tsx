@@ -7,6 +7,7 @@ import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
+import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
@@ -429,6 +430,31 @@ function StandingBars({ data, parties }: { data: DocumentSnapshotData; parties: 
   )
 }
 
+/** A share with the count it was measured on — "23.4% of 380". Null where the
+ *  count is not on the delta at all, which a snapshot frozen before the field
+ *  existed is: that is a fact about our own bookkeeping, and `UNCOUNTED` says
+ *  it rather than printing the percentage anyway. */
+const judgedLevel = (pct: number, n: number | null | undefined): string | null =>
+  typeof pct === 'number' && Number.isFinite(pct) && typeof n === 'number' && Number.isFinite(n) && n > 0
+    ? `${Math.round(pct * 10) / 10}% of ${fmtCount(n)}`
+    : null
+
+/** The same for a share side, which carries its numerator too — the videos in
+ *  the client's own bucket out of every tracked video, the pair `SHARE_BAND`
+ *  floors on. */
+const shareLevel = (s: ShareSide | null | undefined): string | null =>
+  s && typeof s.client === 'number' && Number.isFinite(s.client)
+    && typeof s.totalVideos === 'number' && s.totalVideos > 0
+    && typeof s.clientVideos === 'number' && Number.isFinite(s.clientVideos)
+    ? `${Math.round(s.client * 10) / 10}% (${fmtCount(s.clientVideos)} of ${fmtCount(s.totalVideos)} videos)`
+    : null
+
+/** What a level says when the count behind it was never stored. It is not a
+ *  fifth refusal word for a thin comparison — the badge beside it still says
+ *  what the comparison was — it is the sentence for a figure we cannot
+ *  evidence, and it prints no percentage at all. */
+const UNCOUNTED = 'The counts behind these levels were not recorded'
+
 /** What moved, in the delta's own verdicts. A metric the update could not
  *  judge says so rather than showing a number that means nothing.
  *
@@ -444,29 +470,51 @@ function StandingBars({ data, parties }: { data: DocumentSnapshotData; parties: 
  *
  *  `good` is the favourability axis: tone and share rising is good for the
  *  client, and volume is our own gather cadence rather than anything about
- *  them, so it is neutral. */
+ *  them, so it is neutral.
+ *
+ *  EVERY LEVEL CARRIES THE COUNT IT WAS MEASURED ON (copy contract rule (b)).
+ *  Both figures used to print bare — "23.4% to 27.1% positive" — in every
+ *  state INCLUDING `too_little_data`, which is the one state that says those
+ *  levels are thin, and where the sentence this replaced printed no number at
+ *  all. Two percentages to one decimal, a badge that only qualifies the
+ *  DIFFERENCE, and no n anywhere on the sheet is a score, and the
+ *  denominators were sitting unused on the delta the whole time
+ *  (`nowJudged` / `prevJudged`, `ShareSide.clientVideos` / `totalVideos` —
+ *  the same counts `SHARE_BAND` floors on). `copy: 'level'` is what carries
+ *  that into the markup, so rule (b) reads these two lines on paper the way
+ *  it reads every level on screen. */
 export function movementLines(data: DocumentSnapshotData): {
   label: string
   value: string
+  /** The `data-copy` kind the line's value is rendered under. `level` is a
+   *  calibrated share and rule (b) will demand its "of N"; the lines that are
+   *  a plain count or a list of labels claim no level and mark nothing. */
+  copy?: 'level'
   verdict?: DeltaVerdict | null
   count?: number | null
   good?: Good
 }[] {
   const d = data.delta
   if (!d) return [{ label: 'Movement', value: 'No earlier update to compare with.' }]
-  const out: { label: string; value: string; verdict?: DeltaVerdict | null; count?: number | null; good?: Good }[] = []
+  const out: { label: string; value: string; copy?: 'level'; verdict?: DeltaVerdict | null; count?: number | null; good?: Good }[] = []
   if (d.sentiment) {
+    const prev = judgedLevel(d.sentiment.prev, d.sentiment.prevJudged)
+    const now = judgedLevel(d.sentiment.now, d.sentiment.nowJudged)
     out.push({
       label: 'Tone',
-      value: `${Math.round(d.sentiment.prev * 10) / 10}% to ${Math.round(d.sentiment.now * 10) / 10}% positive`,
+      value: prev && now ? `${prev} judged to ${now} positive` : UNCOUNTED,
+      ...(prev && now ? { copy: 'level' as const } : {}),
       verdict: d.sentiment.verdict,
       good: 'up',
     })
   }
   if (d.share) {
+    const prev = shareLevel(d.share.prev)
+    const now = shareLevel(d.share.now)
     out.push({
       label: 'Share',
-      value: `${Math.round(d.share.prev.client * 10) / 10}% to ${Math.round(d.share.now.client * 10) / 10}%`,
+      value: prev && now ? `${prev} to ${now}` : UNCOUNTED,
+      ...(prev && now ? { copy: 'level' as const } : {}),
       verdict: d.share.verdict,
       good: 'up',
     })

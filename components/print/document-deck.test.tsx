@@ -53,7 +53,11 @@ describe('movementLines', () => {
   const moved = data({
     prevRunDate: '2026-09-06',
     sentiment: { now: 27.1, prev: 23.4, verdict: verdict('moved', 3.7), nowJudged: 412, prevJudged: 380 },
-    share: { now: { client: 31.2 } as never, prev: { client: 28.0 } as never, verdict: verdict('moved', 3.2) },
+    share: {
+      now: { client: 31.2, clientVideos: 39, totalVideos: 125, competitor: null },
+      prev: { client: 28.0, clientVideos: 34, totalVideos: 121, competitor: null },
+      verdict: verdict('moved', 3.2),
+    },
     newThemes: { count: 3, labels: ['Durability', 'Fit', 'Price'] },
     conversations: { now: 1388, prev: 1270 },
   })
@@ -64,8 +68,37 @@ describe('movementLines', () => {
   it('states the two levels and claims no direction of its own', () => {
     const lines = movementLines(moved)
     const tone = lines.find((l) => l.label === 'Tone')!
-    expect(tone.value).toBe('23.4% to 27.1% positive')
+    expect(tone.value).toBe('23.4% of 380 judged to 27.1% of 412 positive')
     for (const l of lines) expect(l.value).not.toMatch(/\b(up|down|rose|fell|grew|moved)\b/i)
+  })
+
+  // Rule (b): a percentage without the count it was measured on is a score.
+  // Both figures printed bare until 2026-09-18 — including in the one state
+  // that says the levels are thin.
+  it('carries the count behind each level, on both lines', () => {
+    const lines = movementLines(moved)
+    expect(lines.find((l) => l.label === 'Share')!.value).toBe('28% (34 of 121 videos) to 31.2% (39 of 125 videos)')
+    for (const label of ['Tone', 'Share']) {
+      const line = lines.find((l) => l.label === label)!
+      expect(line.copy).toBe('level')
+      expect(line.value).toMatch(/\bof\s\d/)
+    }
+  })
+
+  // A count the snapshot never stored is a fact about our bookkeeping. The
+  // line says so instead of printing a percentage it cannot evidence.
+  it('prints no percentage it cannot evidence', () => {
+    const uncounted = data({
+      ...moved.delta!,
+      sentiment: { now: 27.1, prev: 23.4, verdict: verdict('moved', 3.7) } as never,
+      share: { now: { client: 31.2 } as never, prev: { client: 28.0 } as never, verdict: verdict('moved', 3.2) },
+    })
+    for (const label of ['Tone', 'Share']) {
+      const line = movementLines(uncounted).find((l) => l.label === label)!
+      expect(line.value).toBe('The counts behind these levels were not recorded')
+      expect(line.value).not.toMatch(/\d/)
+      expect(line.copy).toBeUndefined()
+    }
   })
 
   it('hands the claim about the difference to the verdict', () => {
@@ -77,7 +110,9 @@ describe('movementLines', () => {
   it('keeps the levels when the comparison refuses — they are measured either way', () => {
     const thin = data({ ...moved.delta!, sentiment: { now: 27.1, prev: 23.4, verdict: verdict('too_little_data', 3.7), nowJudged: 4, prevJudged: 3 } })
     const tone = movementLines(thin).find((l) => l.label === 'Tone')!
-    expect(tone.value).toBe('23.4% to 27.1% positive')
+    // …and they carry the counts that made the comparison refuse, which is
+    // the whole reason a reader may see 23.4% beside "too few to compare".
+    expect(tone.value).toBe('23.4% of 3 judged to 27.1% of 4 positive')
     expect(tone.verdict!.state).toBe('too_little_data')
   })
 
