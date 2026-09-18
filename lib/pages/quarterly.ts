@@ -60,6 +60,7 @@ import { CLIENT_AUDIENCE } from '../rivals'
 import type { PlanCheckCard } from '../ask/plan-cards'
 import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
+import type { MoveReading } from '../reading/moves'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
 /**
@@ -448,6 +449,17 @@ export interface MovesPage {
    * carried it — never "held N updates".
    */
   plan: PlanCheckCard | null
+  /**
+   * `qr.p6.move1` · the measured reading behind each declared move — Market's
+   * own `readMove` output, matched to the moves this quarter drew.
+   *
+   * ONE READING PER MOVE, NOT A SECOND MEASUREMENT. `MarketSurfaceData
+   * .readings` is already built and already banded; the deck takes the ones
+   * whose move it is printing and draws them. `MoveReading.chartNote` is the
+   * refusal a line gets below three readings, and it is printed where the mock
+   * draws the chart — a chart is a direction claim too.
+   */
+  readings: MoveReading[]
 }
 
 // WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
@@ -1899,8 +1911,13 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
   const inQuarter = (day: string | null): boolean => !!day && day >= a.quarter.from && day <= a.quarter.to
   const moves = (m?.moves.rows ?? []).filter((r) => inQuarter(r.declaredAt.slice(0, 10)))
   const advice = m?.advice.rows ?? []
+  const declared = new Set(moves.map((r) => r.id))
   return {
     moves,
+    // THE READINGS OF THE MOVES THIS PAGE DRAWS, and no others: a reading of a
+    // move declared in another quarter is a real reading and is not this
+    // page's, and the moves above are already filtered by declared date.
+    readings: (m?.moves.readings ?? []).filter((r: MoveReading) => declared.has(r.moveId)),
     movesNote: m ? (m.moves.recorded ? m.moves.empty : 'Moves are not recorded for this workspace yet.') : 'Moves could not be read for this workspace.',
     advice,
     // NEITHER SIDE OF THIS WAS QUARTER-SCOPED, AND THE DENOMINATOR WAS A

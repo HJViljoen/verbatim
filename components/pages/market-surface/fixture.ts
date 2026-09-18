@@ -207,6 +207,20 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           declaredAt: '2026-09-14',
           line: moveLedgerLine({ title: 'Say less about recycling', declared_at: '2026-09-14' }, 'on the subject Durability'),
         },
+        // THE MOVE THE READING BELOW IS OF (Block D wave 2). `readings` has
+        // carried `moveReadingFixture()` since wave 1 and no row matched its
+        // `moveId`, so every surface that joins a move to its reading — the
+        // quarterly review's page 6 among them — drew the unread arm and only
+        // the unread arm. In production the two are the same `moves.id`; here
+        // they now are too, and the row above keeps the other arm.
+        {
+          id: 'mv-1',
+          title: 'Push repairability',
+          kind: 'subject',
+          on: 'on the subject Repair & warranty',
+          declaredAt: '2026-08-12',
+          line: moveLedgerLine({ title: 'Push repairability', declared_at: '2026-08-12' }, 'on the subject Repair & warranty'),
+        },
       ],
       masthead: MOVES_MASTHEAD,
       unlock: MOVES_UNLOCK,
