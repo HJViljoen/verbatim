@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test/render'
 import { overviewFixture } from '@/components/pages/overview/fixture'
-import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { documentViewerPages } from '@/lib/reports/viewer'
 import { overviewTiles } from '@/lib/reports/documents/overview'
 import type { ScriptedLine, SwitchingFigure } from '@/lib/reports/documents/figures'
@@ -70,11 +70,28 @@ describe('documentSlides over a layout', () => {
   // Studio bar counted `pages.length + 1` while DocumentDeck numbered
   // `documentSlides(data).length + 1`, so a brief's sheets were undercounted by
   // its borrowed blocks — roughly half of every one of the four briefs.
+  //
+  // E-marketing folded the cover onto the In-short sheet for a brief whose MAP
+  // opts in, so the "+ 1" is now conditional — and all three paginators read
+  // `documentCoverSheet` through `documentSheetCount`, because two of them
+  // disagreeing by one is the bug this test was written for in the first place.
+  //
+  // THE FOLD IS A FROZEN FIELD, NOT A PROPERTY OF HAVING A LAYOUT (fix pass).
+  // Keyed on `layout`, the fold reached every brief the other three maps build
+  // and every artefact stored since WP19 — re-paginating documents already
+  // sent. A brief that carries no `cover` keeps the cover it printed.
   it('documentViewerPages counts a borrowed block as a sheet', () => {
-    expect(documentViewerPages(base())).toBe(documentSlides(base()).length + 1)
+    const folded = base({ cover: false })
+    expect(documentViewerPages(folded)).toBe(documentSlides(folded).length)
+    expect(documentViewerPages(folded)).toBe(2)
+    expect(documentCoverSheet(folded)).toBe(false)
+    // A brief with a layout and no `cover`: composed before the fold, or by a
+    // map that has not opted in. It keeps its cover and its page count.
+    expect(documentCoverSheet(base())).toBe(true)
     expect(documentViewerPages(base())).toBe(3)
     const old = base({ layout: undefined, sections: undefined, surfaces: undefined })
     expect(documentViewerPages(old)).toBe(2)
+    expect(documentCoverSheet(old)).toBe(true)
   })
 })
 

@@ -64,7 +64,12 @@ export const subjectsLine: Block<SubjectsData> = {
       })
       .filter((s): s is CalendarSeries => s != null)
 
-    // THROUGH `openLink`, LIKE EVERY OTHER BLOCK ON THE PAGE. A hand-rolled
+    // THROUGH `openLink`, LIKE EVERY OTHER BLOCK ON THE PAGE — which is also
+    // E-marketing's fix, arrived at from the other side: the marketing brief
+    // borrows this block onto a landscape sheet, where "Compare another
+    // subject →" is an instruction to press a control the reader of a PDF has
+    // not got. `openLink` draws nothing for print, so both packages get what
+    // they asked for from one call. A hand-rolled
     // pair prints the app's own control on PAPER too — and this page is a
     // registered `PageModule`, so its print arm reaches a PDF and a
     // `/r/<token>` page, where "Compare another subject →" resolves to a login

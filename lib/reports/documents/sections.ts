@@ -129,6 +129,46 @@ export interface BriefBlockSection {
   /** What has to be recorded for this section to hold anything. */
   needs: readonly ReadinessId[]
   /**
+   * The SHEET this section shares with its neighbours (package E-marketing).
+   *
+   * WHY A GROUPING AND NOT A SECOND MAP. `documentSlides` gave every section a
+   * landscape sheet of its own, which is why the marketing brief spends twelve
+   * sheets on a month the artboard spends seven on — a sheet holding only
+   * `overview.moves` (three short lines) against a mock sheet holding two move
+   * charts, a card and three claim rows. The artboards are dense 12-column
+   * grids and `Slide.layout: 'grid'` plus `.vb-print-grid` have been sitting
+   * in the codebase unused since the deck was written.
+   *
+   * CONSECUTIVE SECTIONS SHARING A NAME BECOME ONE SLIDE, and the name is the
+   * slide's title. Absent — which every section in the other three maps is —
+   * the section keeps its own sheet exactly as before, so nothing that has
+   * ever been built changes shape.
+   *
+   * `span` is the section's own width on the twelve columns. It is per
+   * SECTION rather than per sheet because two blocks on one sheet are almost
+   * never equal halves: the subjects table wants eight columns and the gap
+   * card four.
+   */
+  sheet?: string
+  /** Columns of twelve this section takes when it shares a sheet. Ignored on
+   *  a section that has a sheet to itself. */
+  span?: number
+  /**
+   * An element the DECK draws on this section's sheet, beside the blocks.
+   *
+   * ONE TODAY: `'gap'`, the artboard's "The gap that matters" card. It is not a
+   * block because no surface owns it — `overview.subjects` publishes the two
+   * levels and deliberately publishes no gap figure — and the gap itself is
+   * frozen onto the reading.
+   *
+   * A FLAG AND NOT THE SHEET'S NAME (fix pass). The deck keyed this on
+   * `sheet === 'Your subjects'`, so renaming the sheet in a map silently
+   * dropped the card with no test failing, and any second map that happened to
+   * name a sheet "Your subjects" inherited it. The flag makes both directions
+   * loud: the card follows the section that asked for it.
+   */
+  extras?: 'gap'
+  /**
    * Inputs this section READS BETTER WITH and draws fine without — printed as
    * a line beside it, never as a refusal (`sales.p4.untracked`).
    *
@@ -160,26 +200,67 @@ const page = (p: DocPageKind): BriefEntry => ({ kind: 'page', page: p })
 // RP1's own words: "subjects, the category, rivals, the moves, the method
 // page". Five blocks and the written pages that argue from them.
 
+/**
+ * THE SHEETS ARE THE ARTBOARD'S, AS FAR AS THE BLOCKS FIT (package
+ * E-marketing, 2026-09-18).
+ *
+ * The map used to paginate to twelve landscape sheets for a month the artboard
+ * spends seven on, because every section had a sheet of its own and
+ * `Slide.layout: 'grid'` / `.vb-print-grid` had been sitting unused since the
+ * deck was written. `sheet` groups the neighbours that belong together.
+ *
+ * ONE SHEET IS GROUPED AND THE REST ARE NOT, AND THE REASON IS MEASURED, NOT
+ * PREFERRED. The borrowed blocks draw at the APP's scale inside the zoomed
+ * slide body — `BlockFrame` in `print` lifts its title from 10.5px to 12px and
+ * nothing else moves — so a sheet holding two full-width blocks OVERFLOWS and
+ * the second is cut off at the footer. Shot at 1123 × 631 on 2026-09-18: the
+ * month sentence above the standings lost the whole standings table; the moves
+ * block beside `market.ways` lost half the claims. The subjects table, its
+ * monthly line and the gap card DO fit, so that sheet is grouped and the
+ * others keep the sheet they had. Grouping the rest needs a print-density pass
+ * on `components/blocks/frame.tsx`, which is P0's and which this package may
+ * not change (E-marketing status note, "NOT done").
+ *
+ * The month sentence and the standings are on no artboard sheet at all, and
+ * both are what mock-gap §7 calls the product's own honesty machinery — the
+ * anomaly line with its band, the top recommendation with its ledger meta, the
+ * dual-mention caveat. They are kept.
+ */
 export const MARKETING_MAP: readonly BriefEntry[] = [
   page('in_short'),
+  block({
+    id: 'mk.subjects', block: 'overview.subjects', surface: 'overview',
+    title: 'Your subjects', framing: 'Each subject this month, against the month before and against the category.',
+    needs: ['subject-set', 'months-of-history'],
+    sheet: 'Your subjects', span: 12, extras: 'gap',
+  }),
+  // The artboard's own chart, built since Block B and never borrowed by a
+  // brief: the calendar line per side, with the tracking-change rule, the
+  // back-read band and a below-floor month drawn as a gutter mark. Six columns,
+  // beside the gap card the deck draws.
+  block({
+    id: 'mk.subjectline', block: 'subjects.line', surface: 'subjects',
+    title: 'Month by month', framing: 'The same subjects month by month, on the axis each side was read on.',
+    needs: ['subject-set', 'months-of-history'],
+    sheet: 'Your subjects', span: 6,
+  }),
   block({
     id: 'mk.month', block: 'overview.sentence', surface: 'overview',
     title: 'The month', framing: 'Where the month stands, with the band it cleared and the count behind it.',
     needs: ['months-of-history'],
   }),
   block({
-    id: 'mk.subjects', block: 'overview.subjects', surface: 'overview',
-    title: 'Your subjects', framing: 'Each subject this month, against the month before and against the category.',
-    needs: ['subject-set', 'months-of-history'],
-  }),
-  block({
     id: 'mk.category', block: 'overview.category', surface: 'overview',
-    title: 'The category', framing: 'What the wider conversation was about this month.',
+    title: 'What changed this month', framing: 'What the wider conversation was about this month.',
     needs: ['months-of-history'],
   }),
   block({
     id: 'mk.rivals', block: 'overview.rivals', surface: 'overview',
-    title: 'Rivals', framing: 'Where each tracked rival sits in the same month.',
+    // AND THE READER'S OWN ROW IS IN IT. The table prints you beside every
+    // rival — which is what makes the rivals readable — so "Where each tracked
+    // rival sits" had the client's own brand listed under a heading that said
+    // it was about other people.
+    title: 'Rivals', framing: 'Where you and each tracked rival sit in the same month.',
     needs: ['months-of-history'],
   }),
   page('finding'),
@@ -329,6 +410,50 @@ export const BRIEF_MAPS: Record<DocumentRole, readonly BriefEntry[]> = {
 }
 
 export const briefMap = (role: DocumentRole): readonly BriefEntry[] => BRIEF_MAPS[role]
+
+/**
+ * The maps whose brief opens on CONTENT, with the title at the top of the first
+ * sheet rather than on a landscape sheet of its own.
+ *
+ * ONE MAP OPTS IN, AND ITS OWN PACKAGE OPTS IT IN. The fold was written as
+ * "any brief composed from a section map", which is all four of them — so the
+ * sales, leadership and content briefs lost their cover sheet from under the
+ * three packages building them, mid-wave, and every stored brief built since
+ * WP19 re-rendered one sheet shorter with every footer renumbered. All four
+ * artboards do open on content, so the direction is right for each of them;
+ * the decision is each map owner's to take, and to take in a diff that says so.
+ */
+export const COVER_FOLDED_MAPS: readonly (readonly BriefEntry[])[] = [MARKETING_MAP]
+
+export const foldsCoverSheet = (map: readonly BriefEntry[] | undefined): boolean =>
+  map != null && COVER_FOLDED_MAPS.includes(map)
+
+/**
+ * The sheet a brief's UNFILLED sections share.
+ *
+ * A section that could not be filled prints one sentence — the block's own
+ * empty state, or the missing-input sentence naming the input and who closes
+ * it — and it used to print that sentence on a numbered, footed, stamped
+ * landscape sheet of its own. On production today the marketing brief has
+ * FOUR: "Your moves" is two sentences and a page number over 92% white paper.
+ * The answer is neither to drop them (the sentence is the answer to "why is
+ * this not here", and dropping it is the silence `briefSections` was written
+ * to end) nor to spend a sheet each: they share one, titled as what they are.
+ */
+export const UNFILLED_SHEET = 'Not read this month'
+export const UNFILLED_FRAMING = 'What this brief could not read for this month, and what each one is waiting on.'
+
+/**
+ * The maps whose unfilled sections share that sheet.
+ *
+ * OPT-IN AND FROZEN, for the reason `COVER_FOLDED_MAPS` is: pagination belongs
+ * to the artefact. A stored brief re-renders the sheets it printed, with the
+ * numbers its footers carry, however this list reads later.
+ */
+export const UNFILLED_SHEET_MAPS: readonly (readonly BriefEntry[])[] = [MARKETING_MAP]
+
+export const groupsUnfilledSections = (map: readonly BriefEntry[] | undefined): boolean =>
+  map != null && UNFILLED_SHEET_MAPS.includes(map)
 
 /** Every block section in a map, in order. */
 export function sectionsOf(map: readonly BriefEntry[]): BriefBlockSection[] {

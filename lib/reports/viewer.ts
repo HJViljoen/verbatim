@@ -9,7 +9,7 @@ import { WEEKLY_BLOCK_KEYS } from './weekly'
 import { MONTHLY_BLOCK_KEYS } from './monthly'
 import { QUARTERLY_BLOCK_KEYS } from './quarterly'
 import { deckSlides } from './compose'
-import { documentSlides } from './documents/compose'
+import { documentSheetCount } from './documents/compose'
 import type { ReportSnapshotData } from './types'
 
 // The in-app viewer's data (2026-09-09). Opening a build is a URL — `?view=`
@@ -130,9 +130,14 @@ export async function loadViewerSnapshot(admin: SupabaseClient, clientId: string
  *
  * This is the seam WP17 added `weeklyViewerPages` for, and WP18 and WP20 both
  * took the lesson; the brief is the one kind that did not.
+ *
+ * ONE FUNCTION, THREE CALLERS (fix pass). This wrapper is kept because the
+ * viewer's vocabulary is `<kind>ViewerPages` and the switch above reads better
+ * for it; the arithmetic itself is `documentSheetCount`, which the deck and the
+ * share link's header now read too.
  */
 export function documentViewerPages(data: DocumentSnapshotData): number {
-  return documentSlides(data).length + 1
+  return documentSheetCount(data)
 }
 
 /**

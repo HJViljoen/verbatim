@@ -7,7 +7,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
 import { CLUSTERING_CAVEAT, briefStamp, commentsRead, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
-import { missingSentence, missingSummary, pageKindsOf } from './sections'
+import { UNFILLED_SHEET, foldsCoverSheet, groupsUnfilledSections, missingSentence, missingSummary, pageKindsOf } from './sections'
 import type { Signals } from './signals'
 import type { ResearchAnswer, ResearchPoint } from './research'
 import { ASKED_MAX, CLAIMS_PER_PAGE, PAGE_TITLE, PERSONAS_PER_PAGE, SAY_HEAR_MAX, type DocumentTemplate } from './templates'
@@ -237,11 +237,17 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     const { sure, conversations } = calibrateSure(gs)
     return { f, ok, gs, cs, sure, conversations }
   })
+  // THE BAR IS THE CONVERSATIONS FLOOR, AND ONLY THAT. "N below the bar" is a
+  // claim about the evidence, so it counts the findings the FLOOR cut and
+  // nothing else: a headline that did not survive the scrub and a finding that
+  // rests on no grounded point were not weighed against the bar at all, and the
+  // cap is a different sentence again. Counted here, where each reason is known.
+  let belowBar = 0
   const kept = candidates.filter((c) => {
     const headline = line(c.f.headline, figures, cap('headline'), true)
     if (!headline) { dropped.push({ headline: c.f.headline, reason: 'no headline survived scrub' }); return false }
     if (c.gs.length === 0) { dropped.push({ headline, reason: 'rests on no grounded point' }); notSure.push(headline); return false }
-    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); return false }
+    if (c.conversations < DOCUMENT_FINDING_MIN_CONVERSATIONS) { dropped.push({ headline, reason: `too thin: ${c.conversations} conversations` }); notSure.push(headline); belowBar += 1; return false }
     return true
   })
   kept.sort((x, y) => y.conversations - x.conversations || y.gs.length - x.gs.length)
@@ -512,6 +518,16 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
     // in them rides `freezeQuotes` / `resolveQuotes` structurally, exactly as a
     // finding's pull quote does — nothing here stores a commenter's words.
     ...(s.slideFigures ? { slideFigures: s.slideFigures } : {}),
+    // WHETHER THIS BRIEF PRINTS A COVER, decided by the MAP and frozen here.
+    // The fold was written as "any brief composed from a section map", which is
+    // all four of them — so the other three lost their cover from under the
+    // packages building them. Only a map that opts in folds, and only a brief
+    // built from one carries the field, so a stored artefact keeps the
+    // pagination it printed.
+    ...(foldsCoverSheet(s.map) ? { cover: false } : {}),
+    // And whether the sections it could not fill share one sheet. Same rule,
+    // same reason: the map decides, the artefact remembers.
+    ...(groupsUnfilledSections(s.map) ? { unfilledSheet: true } : {}),
     pages,
     // What the skeleton above was composed from, so it can be composed again
     // (WP7d): the eval and any rebuild read these, not the picker.
@@ -531,6 +547,22 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       // The denominator behind "Findings". Computed since the composer
       // existed, kept in the workings, never shown to a reader.
       dropped: dropped.length,
+      // The three the numbers card could not reach: how many findings fell
+      // below the bar, the language share with its basis, and the delivery
+      // record. All three are already computed — two on the reading, one right
+      // here — and none of them has ever reached a printed artefact.
+      // NOT `candidates.length - findingPages.length`, which counted the cap
+      // and the scrub as evidence failures: on a template with `findingsMax` 3
+      // and eight findings that all cleared the floor the card printed "3 above
+      // the bar · 5 below it" when five were above it and were simply not
+      // printed. The bar is DOCUMENT_FINDING_MIN_CONVERSATIONS; the cap gets
+      // its own half of the sentence.
+      findingsBelow: belowBar,
+      ...(kept.length > findingPages.length ? { findingsHeld: kept.length - findingPages.length } : {}),
+      ...(s.reading?.method?.language ? { languages: s.reading.method.language } : {}),
+      ...(s.reading?.delivery
+        ? { delivery: `${s.reading.delivery}${s.reading.counter ? ` — ${s.reading.counter}` : ''}` }
+        : {}),
     },
     notSureYet,
     generatedAt: new Date().toISOString(),
@@ -573,6 +605,11 @@ export function documentReading(r: BriefReading): DocumentReading {
     method: r.method,
     delivery: r.delivery,
     confidence: r.confidence,
+    // E-marketing: the gaps and the banded comparisons travel onto the
+    // snapshot, because the sheets that print them are drawn from the frozen
+    // artefact and never from a live loader.
+    ...(r.gaps.length ? { gaps: r.gaps.map((g) => ({ ...g })) } : {}),
+    ...(r.verdicts.length ? { verdicts: r.verdicts.map((v) => ({ ...v })) } : {}),
   }
 }
 
@@ -677,9 +714,83 @@ export function documentSlides(data: DocumentSnapshotData): Slide[] {
       continue
     }
     const section = data.sections?.find((x) => x.id === entry.id)
-    if (section) out.push({ title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' })
+    if (!section) continue
+    // A SECTION THAT COULD NOT BE FILLED DOES NOT GET A SHEET OF ITS OWN (fix
+    // pass). Its body is one sentence, and four of them on the marketing brief
+    // meant four numbered, footed, stamped landscape sheets carrying a sentence
+    // each — one of them 92% white paper. They share a sheet, wherever the
+    // first of them fell in the map's order; an unfilled section has no content
+    // to be in order with, which is what makes moving it honest. Only for a
+    // brief whose map asked for it, and only from the frozen field, so a stored
+    // artefact keeps the sheets it printed.
+    if (data.unfilledSheet && section.empty != null) {
+      const sheet = out.find((s) => s.layout === 'grid' && s.title === UNFILLED_SHEET)
+      if (sheet) sheet.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      else out.push({ title: UNFILLED_SHEET, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' })
+      continue
+    }
+    // CONSECUTIVE SECTIONS SHARING A SHEET BECOME ONE SLIDE (E-marketing).
+    // The sheet's NAME is its title, so a two-block sheet is not headed by
+    // whichever block happened to come first. A section with no `sheet` — every
+    // section of every brief built before 2026-09-18, and every section of the
+    // other three maps — keeps its own sheet exactly as it had one, which is
+    // what makes this additive rather than a re-pagination of stored artefacts.
+    const last = out[out.length - 1]
+    if (section.sheet && last && last.layout === 'grid' && last.title === section.sheet) {
+      last.keys.push(`${SECTION_SLIDE_PREFIX}${section.id}`)
+      continue
+    }
+    out.push(
+      section.sheet
+        ? { title: section.sheet, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'grid' }
+        : { title: section.title, keys: [`${SECTION_SLIDE_PREFIX}${section.id}`], layout: 'single' },
+    )
   }
   return out
+}
+
+/**
+ * Whether this brief prints a cover sheet of its own (package E-marketing).
+ *
+ * NO, WHERE THE BRIEF'S OWN MAP FOLDED IT. All four brief artboards open on the
+ * In-short sheet with a 17px page title and one mono context line, and none of
+ * them spends a landscape sheet on a 58px title — "Marketing brief · September
+ * 2026 · Sealand · as at 28 Sep · still filling · 7 pages" sits at the top of
+ * the first sheet of content. MARKETING_MAP is the one map that opts in today
+ * (`COVER_FOLDED_MAPS`); each other map's own package makes that call.
+ *
+ * READ FROM THE FROZEN FIELD, NOT FROM `layout` (fix pass). The first rule here
+ * was "no cover for any brief that has a layout", which is every brief built
+ * since WP19 — so the sales, leadership and content briefs lost their cover
+ * from under the three packages building them, and every stored artefact built
+ * since the maps re-rendered a sheet shorter, with every footer renumbered and
+ * a different page count in the viewer, the Studio bar and any `/r/<token>`
+ * already sent. Pagination belongs to the artefact: `cover: false` is written
+ * at compose and an artefact that carries no such field keeps the cover it
+ * printed, which is the same rule `documentSlides` applies to `sheet`/`span`.
+ *
+ * READ BY ALL THREE PAGINATORS through `documentSheetCount`. `DocumentDeck`
+ * draws the sheets, the viewer counts them and the share header prints the
+ * count, and any two disagreeing by one is a bug this file has shipped twice.
+ */
+export function documentCoverSheet(data: DocumentSnapshotData): boolean {
+  return data.cover !== false
+}
+
+/**
+ * HOW MANY SHEETS A BRIEF PRINTS, computed ONCE for every surface that states
+ * it (fix pass, package E-marketing).
+ *
+ * Three surfaces print this number — the deck's own stamp and its footers
+ * (`DocumentDeck`), the viewer and the Studio bar (`documentViewerPages`), and
+ * the share link's header (`DocumentShareShell`) — and each carried its own
+ * arithmetic. This diff moved two of them onto the deck's rule and left
+ * `/r/<token>` on `pages.length + 1`, so the one CLIENT-FACING surface printed
+ * "4 pages" about forty pixels above a deck whose own footers read "1 / 9".
+ * The count is one function now, and a fourth caller adds no fourth answer.
+ */
+export function documentSheetCount(data: DocumentSnapshotData): number {
+  return documentSlides(data).length + (documentCoverSheet(data) ? 1 : 0)
 }
 
 /** The section a slide key names, or null where it names a written page. */

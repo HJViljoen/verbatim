@@ -4,22 +4,27 @@ import { BlockSlot } from './block-slot'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
-import { monthName, shortDate } from '@/lib/format'
+import { FigureCell } from '@/components/blocks/frame'
+import { gapLine, sidePct, type Gap } from '@/lib/reading/gap'
+import { fullDate, monthName, round1, shortDate } from '@/lib/format'
+import { nextMonth } from '@/lib/reading/month-key'
 import { platformShareLine } from '@/lib/reading/method'
 import { MOVE_PROMISE } from '@/lib/subjects/types'
+import { MOVES_EMPTY } from '@/lib/pages/overview'
+import { MONTHLY_MOVES_EMPTY } from '@/lib/reports/monthly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
-import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { documentCoverSheet, documentSheetCount, documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { briefStampShort, commentsRead } from '@/lib/reports/documents/reading'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
-import type { BriefSurface } from '@/lib/reports/documents/sections'
+import { UNFILLED_FRAMING, UNFILLED_SHEET, type BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { coverCarriesSummary, findingCards, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { concludedBasisLine, coverCarriesSummary, findingCards, findingHeadlines, leadGap, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -259,12 +264,17 @@ function audiencePills(audiences: string, company: string) {
 const footerStamp = (data: DocumentSnapshotData): string | null =>
   data.reading ? briefStampShort(data.reading) : null
 
-function BriefFooter({ company, date, stamp }: { company: string; date: string; stamp: string | null }) {
+function BriefFooter({ company, date, stamp, note }: { company: string; date: string; stamp: string | null; note?: string | null }) {
   return (
     <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
       <span className="text-secondary-foreground">Created by {company} with Verbatim</span>
       <span aria-hidden> · </span>
       <span>{stamp ?? date}</span>
+      {/* WHAT THE SHEET WAS READ FROM (merge, Block D wave 2: E-marketing's
+          `corpusNote`, which it carried on its own footer). The platform list
+          and the corpus count are what make every figure above them mean
+          something, and they appeared on no sheet of any brief. */}
+      {note ? <><span aria-hidden> · </span><span>{note}</span></> : null}
     </p>
   )
 }
@@ -385,7 +395,7 @@ function ClaimBadge({ verdict, unit }: { verdict?: Verdict | null; unit?: string
  * "of N", so the two together are what rule (b) reads — a tile whose label
  * names no population is a score, which this product does not print.
  */
-function StatTile({ value, label, verdict, note, level = false }: {
+function StatTile({ value, label, verdict, note, level = false, word = false }: {
   value: string
   label: string
   verdict?: Verdict | null
@@ -395,13 +405,34 @@ function StatTile({ value, label, verdict, note, level = false }: {
    *  names a population. It was a regex over the rendered label until
    *  2026-09-18, which is the node-declares-itself discipline inverted. */
   level?: boolean
+  /** The value is a WORD and not a figure — a refusal is the tile's ANSWER and
+   *  is set as a sentence (`OverviewTile.word`, E-marketing). It carries no
+   *  `data-copy="figure"` for the same reason: it is not one. */
+  word?: boolean
 }) {
-  const body = (
-    <>
-      <p data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">{value}</p>
-      <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
-    </>
-  )
+  const body = word
+    ? (
+      <>
+        {/* A refusal at the artboard's numeral scale reads as a measurement
+            (mock-gap §6 D2), so it is set as a sentence. */}
+        <p className="text-[19px] font-medium leading-[1.2] tracking-[-0.01em] text-secondary-foreground">{value}</p>
+        <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+      </>
+    )
+    : (
+      <>
+        <p data-copy="figure" className="font-mono text-[38px] font-medium leading-none tracking-[-0.02em] tabular-nums text-foreground">
+          {/* The arrow is set in the SANS face at two thirds the numeral's
+              size: IBM Plex Mono draws ▲ at the full advance width of a digit,
+              so a 38px mono arrow is twice the artboard's and drags the figure
+              beside it off the tile. */}
+          {/^[\u25b2\u25bc]/.test(value)
+            ? <><span className="font-sans text-[24px] align-[0.06em]">{value.slice(0, 1)}</span>{value.slice(1)}</>
+            : value}
+        </p>
+        <p className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{label}</p>
+      </>
+    )
   return (
     <div className={`${CARD} px-5 py-4`}>
       {level ? <div data-copy="level">{body}</div> : body}
@@ -415,7 +446,81 @@ function StatTile({ value, label, verdict, note, level = false }: {
   )
 }
 
-function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+/**
+ * The calibration note, at last on a brief (`mkt.p1.calibrationnote`).
+ *
+ * The sentence exists twice in the product — `components/how-to-read.tsx` and
+ * the quarterly's method block — and has never reached a printed artefact,
+ * where it matters most: a reader of a PDF has no How-to-read drawer to open,
+ * and the whole question a brief raises is which of its words a model chose.
+ * It names the words this deck actually prints.
+ *
+ * AND IT NAMES THE EVIDENCE WORDS TOO (fix pass). The sentence listed the five
+ * movement words and stopped, two lines above finding rows carrying chips that
+ * read `solid` and `reasonable` — calibrated words by exactly the definition
+ * this sentence uses, assigned by `calibrateSure` (lib/reports/documents/
+ * scrub.ts) from distinct conversations and independent strands. On the one
+ * sheet whose job is to make the vocabulary checkable, two of its own words
+ * were unlisted; the artboard's version names its evidence words as well.
+ * The basis clause names both measures, because the two tiers are not counted
+ * off the same thing.
+ */
+export const CALIBRATION_NOTE =
+  'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos and the conversations behind each finding, never worded by the model.'
+
+/**
+ * WHAT THIS SHEET WAS READ FROM, along the foot (`mkt.p1.title`'s corpus line).
+ *
+ * The artboard's footer is "September 2026 reading · as at 28 Sep · TikTok,
+ * YouTube, Instagram, Reddit · 2,359 videos" and the deck printed only the
+ * provenance half — so the platform list and the corpus count, which are what
+ * make every figure above them mean something, appeared nowhere on any sheet.
+ * The month and the reading instant are NOT repeated here: they ride the
+ * header's stamp on every sheet already.
+ *
+ * The count is the category's denominator, the same number the numbers card
+ * prints — never `method.videos`, which is the update's and would be a second
+ * answer to the card's question at the other end of the same sheet.
+ */
+export function corpusNote(data: DocumentSnapshotData): string | null {
+  const r = data.reading
+  if (!r || r.denominators.length === 0) return null
+  const platforms = Object.entries(r.platformMix)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => PLATFORM[k] ?? k)
+  const category = r.denominators.find((d) => d.audience === 'industry-other') ?? r.denominators[0]
+  const corpus = category ? `${fmtCount(category.videos)} videos in ${category.label}` : ''
+  return [platforms.join(', '), corpus].filter(Boolean).join(' · ') || null
+}
+
+/** The brief's own title, on the first sheet of content rather than on a
+ *  landscape sheet of its own (`mkt.p1.title`). The mono line under it is the
+ *  artboard's context line: the month, the company, the reading instant and
+ *  how much follows. */
+function SheetTitle({ data, pages }: { data: DocumentSnapshotData; pages: number }) {
+  const stamp = data.reading?.stamp ?? data.period
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="inline-block h-[3px] w-14 rounded-full bg-primary" aria-hidden />
+      <h1 className="max-w-[24ch] text-[26px] font-semibold leading-[1.1] tracking-[-0.02em] text-foreground [text-wrap:balance]">{data.title}</h1>
+      <p className="font-mono text-[11px] text-muted-foreground">
+        {stamp} · {data.company} · {pages} {pages === 1 ? 'page' : 'pages'}
+      </p>
+    </div>
+  )
+}
+
+/** The count and the confidence word behind finding n, off the finding page
+ *  itself so an edit to the deck's pages flows through to this list. */
+function findingMeta(data: DocumentSnapshotData, i: number): { conversations: number; sure: string } | null {
+  const page = data.pages.filter((p) => p.kind === 'finding')[i]
+  const conversations = Number(page?.meta?.conversations ?? 0)
+  if (!page || !Number.isFinite(conversations) || conversations <= 0) return null
+  return { conversations, sure: page.meta?.sure ?? 'thin' }
+}
+
+function OverviewPage({ page, data, title, pages }: { page: DocPage; data: DocumentSnapshotData; title?: boolean; pages?: number }) {
   const f = data.figures
   const summary = page.blocks.find((b) => b.field === 'summary')
   // The numbers and the headlines are derived in
@@ -437,10 +542,14 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   const onCover = coverCarriesSummary(data)
   return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex min-h-0 flex-col gap-6">
+      <div className="flex min-h-0 flex-col gap-5">
+        {/* THE SHEET'S OWN TITLE, where the brief puts one here rather than on
+            a cover (E-marketing); the eyebrow stands in its place where it
+            does not. */}
+        {title && <SheetTitle data={data} pages={pages ?? 0} />}
         {!onCover && (
           <div className="flex flex-col gap-3">
-            <Eyebrow>In short</Eyebrow>
+            {!title && <Eyebrow>In short</Eyebrow>}
             {summary?.text && <BlockSlot block={summary} textClass="max-w-[66ch] text-[17px] leading-[1.55] text-foreground"><Paragraphs text={summary.text} figures={f} className="max-w-[66ch] text-[17px] leading-[1.55] text-foreground" /></BlockSlot>}
           </div>
         )}
@@ -458,11 +567,20 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
                         sheet — the list indexes the argument rather than
                         restating it, and a sheet that was 85% white space on a
                         one-finding brief carries what it is a list OF. */}
-                    <p className="font-mono text-[11px] leading-[1.4] text-muted-foreground">
-                      page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
-                      {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
-                      {' · '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
-                      {' · '}confidence {c.sure}
+                    <p className="flex flex-wrap items-baseline gap-x-1.5 font-mono text-[11px] leading-[1.4] text-muted-foreground">
+                      <span>
+                        page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
+                        {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
+                        {' · '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
+                        {' · '}confidence
+                      </span>
+                      {/* THE TIER KEEPS ITS COLOUR STEP (E-marketing's fix
+                          pass). The artboard's evidence chips are a green one
+                          and an amber one; `reasonable` drawn on the neutral
+                          inner tint read as the third tier. The WORDS are the
+                          calibrated ones and do not change — the treatment is
+                          the mock's. */}
+                      <Pill tone={c.sure === 'solid' ? 'you' : c.sure === 'reasonable' ? 'new' : 'plain'}>{c.sure}</Pill>
                     </p>
                     <span className="flex flex-wrap gap-1.5">{audiencePills(c.audiences, data.company)}</span>
                   </div>
@@ -471,6 +589,7 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             </ol>
           </div>
         )}
+        <p className="mt-auto max-w-[70ch] text-[12px] leading-[1.45] text-muted-foreground">{CALIBRATION_NOTE}</p>
       </div>
       <div className="flex min-h-0 flex-col gap-4">
         {/* THE TILES BELONG TO WHICHEVER SHEET CARRIES THE SUMMARY. They are
@@ -478,7 +597,7 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             the cover AND here would be a document stating one measurement
             twice, three sheets apart, with nothing saying they are the same
             one. */}
-        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} />)}</div>}
+        {!onCover && <div className="flex flex-col gap-3">{tiles.map((t, i) => <StatTile key={i} value={t.value} label={t.label} verdict={t.verdict} note={t.note} level={t.level} word={t.word} />)}</div>}
         {notSure.length > 0 && (
           <div className="rounded-lg bg-inner px-5 py-4">
             <Eyebrow className="mb-2">Not settled this update</Eyebrow>
@@ -571,7 +690,14 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
             <div className="mt-1"><QuoteBlock quote={saw.quote} mode="print" /></div>
           )}
         </div>
-        <div className={`${CARD} flex min-h-0 flex-col gap-4 px-6 py-5`}>
+        {/* SIZED TO ITS CONTENT, NOT TO THE SHEET (fix pass). The card filled
+            the column's height and pinned CONFIDENCE to its foot, so a finding
+            with one practice bullet drew about 380px of empty bordered white
+            between the bullet and the rule — a hole in the middle of the
+            sheet's most prominent card. `distribute="between"` is right for a
+            card whose content fills it; the artboard's card is sized to its
+            content and lets the SHEET carry the slack. */}
+        <div className={`${CARD} flex min-h-0 flex-col gap-4 self-start px-6 py-5`}>
           <p className="font-mono text-[12px] text-muted-foreground">
             <span className="text-foreground">{fmtCount(conversations)}</span> conversations · <span className="text-foreground">{strands}</span> strands of the research
           </p>
@@ -596,7 +722,7 @@ function FindingPage({ page, figures, company, lens }: { page: DocPage; figures:
               </BlockSlot>
             </div>
           )}
-          <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-3">
+          <div className="mt-1 flex flex-col gap-1.5 border-t border-border pt-3">
             <p className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
               Confidence <ConfidenceDots sure={sureWord} /> <span className="normal-case tracking-normal text-foreground">{sureWord}</span>
             </p>
@@ -1188,6 +1314,110 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
   )
 }
 
+/**
+ * "This brief in numbers" (`mkt.p7.numbers`).
+ *
+ * THE SHARPEST DEVIATION ON THE DECK, FIXED. `data.method.conversations` and
+ * `.videos` are `run_summary.period_comments` / `period_videos` — an UPDATE's
+ * two biggest counts, printed under a month stamp in the row above them, three
+ * inches from a basis paragraph stating the month's own denominators from
+ * `month_denominators`. Two measurements of one quantity on one sheet, which is
+ * the thing `lib/reports/documents/reading.ts` says in its header it exists to
+ * prevent. Where the brief HAS a reading, this card is the reading's.
+ *
+ * Eight rows against the six the card printed: the artboard's "The unit" and
+ * its language share are added, `Sources` becomes the mix as SHARES rather
+ * than a list of names, `Held back` becomes the comparisons this reading
+ * refused (the phrase count keeps its place where there is no reading), and
+ * `Findings` states both sides of the bar.
+ *
+ * NOT THE ARTBOARD'S "trailing median 2,240" and not its "4 updates": neither
+ * is computed anywhere in the product, and a median invented at render would
+ * be a figure with no basis on the sheet that explains the basis.
+ */
+/** The last day of a month, as a date — `2026-09-01` → `2026-09-30`. The
+ *  period a month reading covers ends here; `readingAt` is when we looked. */
+function monthLastDay(month: string): string {
+  return new Date(new Date(`${nextMonth(month)}T00:00:00.000Z`).getTime() - 86_400_000).toISOString()
+}
+
+export function methodRows(data: DocumentSnapshotData): [string, string][] {
+  const m = data.method
+  // THE BASIS IS DECIDED ONCE, FOR THE WHOLE CARD (fix pass). Every row used to
+  // guard independently — `Period` on `r`, `Conversations` on `r && comments`,
+  // `Videos` on `r && category`, `Sources` on a non-empty mix — so a reading
+  // whose denominators had not been written (the state AGENTS.md says every
+  // reader has to survive) printed the MONTH's period and platform mix beside
+  // the UPDATE's comment and video counts. That is the same two-measurements-
+  // of-one-quantity defect this card was rewritten to close, one branch over.
+  // A reading with no denominators is not a reading for this card's purposes.
+  const r = data.reading && data.reading.denominators.length > 0 ? data.reading : null
+  const category = r?.denominators.find((d) => d.audience === 'industry-other') ?? r?.denominators[0] ?? null
+  const comments = r ? r.denominators.reduce((n, d) => n + d.comments, 0) : 0
+  const refused =
+    (r?.verdicts ?? []).filter((v) => v.state === 'refused').length +
+    (r?.gaps ?? []).filter((g) => g.state === 'refused').length
+  const findings = data.pages.filter((p) => p.kind === 'finding').length
+  const below = m.findingsBelow ?? 0
+  const held = m.findingsHeld ?? 0
+  const rows: [string, string][] = [
+    // THE PERIOD ENDS WHEN THE MONTH ENDS, NOT WHEN WE LOOKED. This printed
+    // `month start → readingAt`, and `readingAt` is the instant we read: a
+    // September month re-read on 2 December printed "Period 1 Sep 2026 → 2 Dec
+    // 2026" on the one sheet whose job is to state the basis. The quarterly's
+    // identical row already prints "1 Jul – 30 Sep 2026" with "still filling"
+    // as a separate note, and the reading instant is on every sheet's stamp.
+    ['Period', r ? `${shortDate(r.month)} – ${fullDate(monthLastDay(r.month))}${r.monthStatus === 'filling' ? ' · still filling' : ''}` : m.period],
+    // COMMENTS, NEVER "CONVERSATIONS" (lib/calibration.ts GLOSSARY: a
+    // conversation is one video and the comments it sparked, and comments are
+    // always counted separately as comments). Two rows below, this card defines
+    // the unit as "a video with at least one analysed comment" — so the old
+    // label contradicted its own table. The quarterly was fixed for this reason
+    // and its fix is pinned (lib/pages/quarterly.test.ts).
+    ['Comments', r ? `${fmtCount(comments)} read in ${r.monthLabel}` : fmtCount(m.conversations)],
+    [
+      'Videos',
+      r && category
+        ? `${fmtCount(category.videos)} in ${category.label}${r.denominators.filter((d) => d !== category).map((d) => ` · ${fmtCount(d.videos)} in ${d.label}`).join('')}`
+        : `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`,
+    ],
+    [
+      'Sources',
+      (r ? platformShareLine(r.platformMix) : '') || m.sources.map((s) => PLATFORM[s] ?? s).join(', ') || 'public video platforms',
+    ],
+    [
+      'Held back',
+      r && refused > 0
+        ? `${refused} ${refused === 1 ? 'comparison' : 'comparisons'} refused${m.heldBack ? ` · ${fmtCount(m.heldBack)} phrases in other languages` : ''}`
+        : `${fmtCount(m.heldBack)} phrases in other languages`,
+    ],
+    // BOTH SIDES OF THE BAR, AND THE CAP IS A THIRD THING. The bar is the
+    // conversations floor; a finding that cleared it and was not printed was
+    // held back by the template's cap, which is not an evidence failure and may
+    // not be counted as one.
+    [
+      'Findings',
+      `${findings} printed${held > 0 ? ` of ${findings + held} above the bar` : ' above the bar'}`
+      + `${below > 0 ? ` · ${below} below it` : ''}${m.thin ? ' (thin update)' : ''}`,
+    ],
+    // The artboard's own definition, and the reason every count on this deck
+    // is comparable with every other: the unit is a VIDEO, never a comment.
+    ['The unit', 'a video with at least one analysed comment'],
+  ]
+  if (m.languages) rows.push(['Languages', m.languages])
+  return rows
+}
+
+// E-MARKETING'S `MethodPage` STOOD HERE (merge, Block D wave 2). Both packages
+// ported this sheet and the deck can only have one: the surviving one is
+// E-sales's, below, because its left column carries the band rule, the quote
+// rule and `CannotTell` — which prints the same "What this brief cannot tell
+// you" box E-marketing's did, in the record's own words. What E-marketing's
+// card had and that one did not has moved INTO `NumbersCard`: the delivery
+// record under the hairline, and any row `methodRows` names that the sales
+// card has no answer for. `methodRows` is still the marketing brief's row set
+// and is still exported and tested.
+
 // ── answers you can use (sales.p6) ─────────────────────────────────────────
 
 /**
@@ -1348,11 +1578,16 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
         : `${fmtCount(findings)}${m.thin ? ' (thin update)' : ''}`,
     ],
   ]
+  // E-MARKETING'S ROWS THAT THIS CARD HAS NO ANSWER FOR (merge). The six above
+  // are the sales artboard's, and their wording is what its tests pin; the
+  // marketing artboard names two more — "The unit" and "Languages" — and a
+  // brief that lost them to a merge would be a brief whose basis got quieter.
+  const extra = methodRows(data).filter(([k]) => !rows.some(([j]) => j === k))
   return (
     <div className={`${CARD} self-start px-6 py-5`}>
       <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
       <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
-        {rows.map(([k, v]) => (
+        {[...rows, ...extra].map(([k, v]) => (
           <Fragment key={k}>
             <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
             <dd className="text-[14px] leading-[1.4] text-foreground">{v}</dd>
@@ -1369,6 +1604,12 @@ function NumbersCard({ data }: { data: DocumentSnapshotData }) {
             .filter(Boolean)
             .join(' ')}
         </p>
+      )}
+      {/* Under the hairline because it is the one line on this card that is NOT
+          a month reading: the delivery record is dated by the run, and says so
+          in its own words (E-marketing, `mkt.p7.delivery`). */}
+      {data.method.delivery && (
+        <p className="mt-3 border-t border-border pt-3 text-[12.5px] leading-[1.45] text-muted-foreground">{data.method.delivery}</p>
       )}
     </div>
   )
@@ -1487,11 +1728,11 @@ const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
  *  2026-09-02) carry none: they are all Sales briefs. */
 const lensOf = (data: DocumentSnapshotData): DocLens => data.lens ?? { means: 'What it means for a sale', short: 'for a sale' }
 
-function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+function PageBody({ page, data, title, pages }: { page: DocPage; data: DocumentSnapshotData; title?: boolean; pages?: number }) {
   const figures = data.figures
   const lens = lensOf(data)
   switch (page.kind) {
-    case 'in_short': return <OverviewPage page={page} data={data} />
+    case 'in_short': return <OverviewPage page={page} data={data} title={title} pages={pages} />
     case 'finding': return <FindingPage page={page} figures={figures} company={data.company} lens={lens} />
     case 'competitor': return <CompetitorPage page={page} figures={figures} data={data} />
     case 'personas': return <PersonasPage page={page} figures={figures} lens={lens} />
@@ -1516,6 +1757,7 @@ function PageBody({ page, data }: { page: DocPage; data: DocumentSnapshotData })
  * prints its one line instead: the block's own empty state, or the
  * missing-input sentence naming the input and who closes it.
  */
+/**
 /**
  * The right-hand pane of a borrowed sheet (`sales.p2` … `sales.p5`).
  *
@@ -1643,7 +1885,49 @@ function SectionPane({ section, data, why }: {
  *  SSR mismatch on a page that is also printed by a headless browser. */
 const monthLabel = monthName
 
-function SectionBody({ section, data, why }: { section: DocBriefSection; data: DocumentSnapshotData; why: boolean }) {
+/**
+ * AN EMPTY STATE WRITTEN FOR A SCREEN, SAID ON PAPER (fix pass).
+ *
+ * `overview.moves` says "Nothing dated yet. Press Track this on a subject or a
+ * theme and this block starts scoring it from the following month." — which on
+ * production today is the WHOLE BODY of the brief's Your-moves sheet: an
+ * instruction to press a control, printed on a landscape page, to a reader who
+ * has a PDF. `lib/reports/monthly.ts` ruled on exactly this when it gave the
+ * monthly artefact `MONTHLY_MOVES_EMPTY` — the page's wording "is a control on
+ * a page the reader of an email is not looking at" — and a brief is the same
+ * reader with less recourse, so it takes the artefact's sentence.
+ *
+ * KEYED ON THE BLOCK AND ON THE EXACT STRING, both. The section's `empty` is
+ * also where the MISSING-INPUT sentence lands ("we have not recorded your
+ * subjects, and here is who closes it"), and that one names an act the reader's
+ * own operator performs — substituting the artefact's wording over it would
+ * throw away the answer. Matching the page's own constant means a section
+ * carrying anything else prints what it was given.
+ *
+ * AT RENDER, NOT AT COMPOSE: the string is frozen onto the snapshot, so a brief
+ * already built and already shared stops printing the control the next time it
+ * is opened.
+ */
+const PAPER_EMPTY: { block: string; screen: string; paper: string }[] = [
+  { block: 'overview.moves', screen: MOVES_EMPTY, paper: MONTHLY_MOVES_EMPTY },
+]
+
+export function paperEmpty(section: Pick<DocBriefSection, 'block' | 'empty'>): string | null {
+  if (section.empty == null) return null
+  return PAPER_EMPTY.find((x) => x.block === section.block && x.screen === section.empty)?.paper ?? section.empty
+}
+
+/** One borrowed section's body. `why` (E-sales) says whether this sheet
+ *  prints the sentence behind the confidence word; `framing` / `title`
+ *  (E-marketing) are for a sheet that carries more than one section, where the
+ *  slide's note belongs to the first of them and the others state their own. */
+function SectionBody({ section, data, why = false, framing = true, title = false }: {
+  section: DocBriefSection
+  data: DocumentSnapshotData
+  why?: boolean
+  framing?: boolean
+  title?: boolean
+}) {
   const surface = (data.surfaces ?? {})[section.surface]
   const block = blocksFor(section.surface as BriefSurface)?.find((b) => b.key === section.block)
   const body = section.empty != null || !block || surface == null
@@ -1652,16 +1936,24 @@ function SectionBody({ section, data, why }: { section: DocBriefSection; data: D
     // of a column — and the contract's kinds are all about a model's words.
     // Marking it `stored` asked the scanner for a `data-slot` that does not
     // exist (measured: two violations on Össur's marketing brief).
-    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{section.empty ?? 'This section could not be read for this month.'}</p>
+    ? <p className="m-0 text-[13px] leading-[1.5] text-muted-foreground">{paperEmpty(section) ?? 'This section could not be read for this month.'}</p>
     : block.render(surface as never, 'print', blockContext(appBaseUrl(), EMAIL))
-  // THE FRAMING IS THE SLIDE'S NOTE NOW, not a paragraph inside the body: the
-  // artboard draws it as a serif italic line under the title, which is exactly
-  // what `Slide.note` already prints, and `DocumentDeck` passes it there. What
-  // opens the column instead is the green-ruled eyebrow every artboard sheet
-  // has and no borrowed section had.
+  // THE FRAMING IS THE SLIDE'S NOTE WHERE THE SHEET HAS ONE TO SPARE, not a
+  // paragraph inside the body: the artboard draws it as a serif italic line
+  // under the title, which is exactly what `Slide.note` prints, and
+  // `DocumentDeck` passes it there for a sheet carrying ONE section. A sheet
+  // carrying several can only put the FIRST section's there, so the others
+  // print their own here — which is what `framing` is for. What opens the
+  // column either way is the green-ruled eyebrow every artboard sheet has and
+  // no borrowed section had.
   const left = (
     <div className="flex min-h-0 flex-col gap-3">
-      {section.eyebrow && <Eyebrow>{section.eyebrow}</Eyebrow>}
+      {/* AN UNFILLED SECTION SAYS WHICH SECTION IT IS. A filled block prints
+          its own `BlockFrame` title; a section that could not be filled prints
+          one sentence, and on a shared sheet that sentence had nothing above
+          it naming what it was about. */}
+      {section.eyebrow ? <Eyebrow>{section.eyebrow}</Eyebrow> : title ? <Eyebrow>{section.title}</Eyebrow> : null}
+      {framing && section.framing && <p className="m-0 text-[12.5px] leading-[1.45] text-muted-foreground">{section.framing}</p>}
       {body}
     </div>
   )
@@ -1674,48 +1966,202 @@ function SectionBody({ section, data, why }: { section: DocBriefSection; data: D
   )
 }
 
+/**
+ * "The gap that matters" — the artboard's own headline, in the honest form
+ * (package E-marketing, `mkt.p2.gap`; mock-gap §6 D1).
+ *
+ * THE ARTBOARD WRITES "gap 13 points, narrowed from 19 in June". "Narrowed" is
+ * a movement claim about a DERIVED quantity — the difference of two shares on
+ * two denominators — and nothing bands it, so the product cannot say it.
+ * `gapLine` prints both sides with their k, their n and the band beside the
+ * magnitude, and `gapBasisLine` prints the EARLIER gap as its own dated, banded
+ * reading beside it, which is what lets a reader see that it was larger without
+ * the product deciding for them. Below the floor the line reads "too few to
+ * compare" and across a rename "comparison refused" — and in both cases no
+ * magnitude is printed at all, because a `Gap` carries the number and the band
+ * together or neither.
+ *
+ * THE BARS ARE THE TWO SIDES THE GAP IS BETWEEN. The artboard draws three,
+ * adding the category; a `Gap` is a claim about two audiences and holds two,
+ * and drawing a third bar from another figure would put a number on this card
+ * that the sentence above it was not measured against.
+ */
+export function GapCard({ gap }: { gap: Gap }) {
+  const basis = concludedBasisLine(gap)
+  const sides = [gap.a, gap.b]
+  const pcts = sides.map((s) => sidePct(s))
+  const max = Math.max(...pcts.map((p) => p ?? 0), 1)
+  // MARKED `level` ONLY WHERE IT CARRIES ONE (fix pass). `levelOf` prints
+  // "— not tracked" / "— no reading" for a side nothing was read for, so a gap
+  // with BOTH sides unread renders "you — not tracked · the category — not
+  // tracked · too few to compare" — a `level` node with no "of N" in it, which
+  // is rule (b)'s own failure and would have thrown the copy contract at
+  // render. Unmarked it is what it is: a sentence naming two silences, with no
+  // level to defend and no direction word for rule (c) to catch.
+  const carriesLevel = sides.some((side) => side.observed && sidePct(side) != null)
+  return (
+    <div className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
+      <Eyebrow>The gap that matters</Eyebrow>
+      <p className={`m-0 ${BODY_SM}`}>
+        <span className="font-medium">{gap.objectLabel}</span>
+        {' — '}
+        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{gapLine(gap)}</span>
+        {/* UNMARKED, and deliberately. `gapLine` is two levels and their
+            banded difference, which is a `level` node; the basis line is a
+            SECOND banded difference at an earlier window and carries no level
+            at all — marking it one asked rule (b) for an "of N" that a
+            refusal ("too few to compare in August") has no business printing.
+            It carries no direction word either, which is what rule (c) polices
+            on unmarked markup. */}
+        {basis && <>{'. '}{basis}</>}
+      </p>
+      <div className="flex flex-col gap-2">
+        {sides.map((side, i) => {
+          const pct = pcts[i]
+          return (
+            <div key={side.audience} className="flex items-center gap-3">
+              <span className="w-[104px] shrink-0 truncate text-[12.5px] text-foreground">{side.label}</span>
+              <span className="h-[10px] flex-1">
+                <span
+                  className={`block h-full rounded-[3px] ${i === 0 ? 'bg-you' : 'bg-comp'}`}
+                  style={{ width: pct == null ? '0%' : `${Math.max(2, (pct / max) * 100)}%` }}
+                />
+              </span>
+              <span className="w-[104px] shrink-0">
+                {side.observed && pct != null
+                  ? <FigureCell align="right" value={`${round1(pct)}%`} of={`${fmtCount(side.value.k)} of ${fmtCount(side.value.n)}`} />
+                  : <span className="block text-right font-mono text-[11px] text-muted-foreground">&mdash; not tracked</span>}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * What the deck draws on a sheet BESIDE its blocks.
+ *
+ * One element today: the gap card. It is here rather than in a block because
+ * no surface owns it — `overview.subjects` publishes the two levels and
+ * deliberately publishes no gap figure — and the gap itself is frozen onto the
+ * reading.
+ *
+ * KEYED ON THE SECTION'S OWN FLAG (fix pass), not on the sheet's title. It read
+ * `if (sheet !== 'Your subjects') return null`, so renaming that sheet in the
+ * map dropped the card silently with no test failing, and a second map naming a
+ * sheet "Your subjects" inherited it. `extras: 'gap'` travels on the section,
+ * frozen, so the card follows the section that asked for it and nothing else.
+ */
+function sheetExtras(sections: readonly DocBriefSection[], data: DocumentSnapshotData): ReactNode {
+  if (!sections.some((s) => s.extras === 'gap')) return null
+  const gap = leadGap(data.reading?.gaps)
+  if (!gap) return null
+  return <div data-col="6" className="flex min-w-0 flex-col"><GapCard gap={gap} /></div>
+}
+
+/**
+ * One sheet carrying two or three borrowed blocks, on the 12-column print grid
+ * (package E-marketing).
+ *
+ * `.vb-print-grid` and `Slide.layout: 'grid'` have been in the codebase since
+ * the deck was written and no built page has ever composed internal columns —
+ * which is most of the density gap between the artboards and the deck. A
+ * section's own `span` is its width; a section that declares none takes the
+ * full twelve, so a sheet that groups by accident still reads as the stack it
+ * was.
+ *
+ * `data-col` is what `.vb-print [data-col="n"]` keys on, and the extra wrapper
+ * is deliberate: the block renders itself and must not be asked to know what
+ * width it was given.
+ */
+function SheetSection({ section, data, framing = false }: { section: DocBriefSection; data: DocumentSnapshotData; framing?: boolean }) {
+  // NO SECTION TITLE HERE FOR A FILLED BLOCK. `BlockFrame` prints the block's
+  // own title and its question, so a wrapper heading printed "YOUR SUBJECTS"
+  // twice, four lines apart. An UNFILLED section draws no frame of its own, so
+  // on the shared sheet it takes both: the title says which section, the
+  // framing says what it was for.
+  //
+  // AND THE SECOND SECTION'S FRAMING IS NOT DROPPED (fix pass). Only the FIRST
+  // section's framing is hoisted to the Slide's serif note — which is the one
+  // line the artboard draws under a sheet's title — and every section after it
+  // was rendered with `framing={false}`, so `mk.subjectline`'s "The same
+  // subjects month by month, on the axis each side was read on." was composed,
+  // frozen onto the snapshot and printed nowhere. It prints in its own column.
+  const unfilled = section.empty != null
+  return (
+    <div data-col={String(unfilled ? 6 : Math.min(12, Math.max(1, section.span ?? 12)))} className="flex min-w-0 flex-col">
+      <SectionBody section={section} data={data} framing={framing || unfilled} title={unfilled} />
+    </div>
+  )
+}
+
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
   const slides = documentSlides(data)
-  const pages = slides.length + 1
-  // THE HEADER NAMES THE SHEET'S PLACE; THE FOOTER CARRIES THE STAMP. The
-  // artboard's header reads "Objections · September 2026" — two words and a
-  // month in a 10.5px mono slot that has to fit on one line beside a title.
-  // The deck put the whole 60-character reading stamp there, on every sheet,
-  // beside a title it repeated, and the stamp then appeared nowhere else. It
-  // now rides `BriefFooter` on every sheet including the cover, which is where
-  // the artboard puts it.
+  // THE COVER FOLDS WHERE ITS MAP SAYS SO (E-marketing). The artboards open on
+  // the In-short sheet, not on a 58px title sheet; a brief composed from a map
+  // that opts in folds its cover onto that first sheet, and a stored artefact
+  // built before the maps keeps the cover it printed.
+  const cover = documentCoverSheet(data)
+  // ONE FUNCTION, and every surface that states this number reads it: the deck,
+  // the viewer/Studio bar and the share link's header.
+  const pages = documentSheetCount(data)
+  // THE HEADER NAMES THE SHEET'S PLACE; THE FOOTER CARRIES THE STAMP AND THE
+  // CORPUS (E-sales and E-marketing, merged). The artboard's header reads
+  // "Objections · September 2026" — two words and a month in a 10.5px mono
+  // slot that has to fit beside a title — so the SHORT month label goes there
+  // and the sixty-character reading stamp rides `BriefFooter` on every sheet,
+  // with the platforms and the corpus count beside it.
   const short = data.reading?.monthLabel ?? data.period
   // The first sheet in the deck that carries a pane — the one that prints the
   // sentence behind the confidence word. See `SectionPane`'s `why`.
   const firstPane = slides.map((x) => sectionOfSlide(data, x.keys[0])).find((x) => x?.pane)?.id ?? null
-  // WP19: the stamp rides every sheet, the way the weekly deck's rule does — a
-  // reader of a PDF has no masthead to scroll back to. In the artboard's SHORT
-  // form (`briefStampShort`), because the long one is sixty characters and the
-  // method sheet printed it three times on one sheet; the freeze date it drops
-  // is on the method card's PERIOD row, in full.
-  const footer = <BriefFooter company={data.company} date={date} stamp={footerStamp(data)} />
-  const chrome = (page: DocPage) => ({ context: `${PAGE_CONTEXT[page.kind] ?? page.title} · ${short}`, footer })
+  const footer = <BriefFooter company={data.company} date={date} stamp={footerStamp(data)} note={corpusNote(data)} />
+  const chrome = (context: string) => ({ context, footer })
+  const n = (i: number) => i + (cover ? 2 : 1)
   return (
     <>
-      <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: i + 2, title: s.title }))} />
+      {cover && <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: n(i), title: s.title }))} />}
       {slides.map((s, i) => {
-        const section = sectionOfSlide(data, s.keys[0])
-        if (section) {
+        const sections = s.keys.map((k) => sectionOfSlide(data, k)).filter(Boolean) as DocBriefSection[]
+        // A SHEET THAT CARRIES SEVERAL SECTIONS (E-marketing). Its note is the
+        // first section's; the rest state their own framing in their columns.
+        if (sections.length > 1 || (sections.length === 1 && s.layout === 'grid')) {
+          return (
+            <Slide
+              key={sections[0].id}
+              title={s.title}
+              chrome={chrome(short)}
+              page={n(i)}
+              pages={pages}
+              layout="grid"
+              flow
+              note={s.title === UNFILLED_SHEET ? UNFILLED_FRAMING : sections[0].framing}
+            >
+              {sections.map((sec, j) => <SheetSection key={sec.id} section={sec} data={data} framing={j > 0} />)}
+              {sheetExtras(sections, data)}
+            </Slide>
+          )
+        }
+        if (sections.length === 1) {
+          const section = sections[0]
           // "Objections · September 2026", not the title repeated beside itself
-          // under a 60-character stamp in a 10.5px mono slot. The stamp rides
-          // the footer of every sheet.
-          const context = `${section.context ?? section.title} · ${short}`
+          // under a 60-character stamp in a 10.5px mono slot.
+          const context = section.context ? `${section.context} · ${short}` : short
           return (
             <Slide
               key={section.id}
               title={section.title}
-              chrome={{ context, footer }}
-              page={i + 2}
+              chrome={chrome(context)}
+              page={n(i)}
               pages={pages}
               layout="single"
               note={section.framing}
             >
-              <SectionBody section={section} data={data} why={section.id === firstPane} />
+              {/* The framing is the slide's note on a sheet of its own, so the
+                  body does not print it a second time. */}
+              <SectionBody section={section} data={data} why={section.id === firstPane} framing={false} />
             </Slide>
           )
         }
@@ -1723,8 +2169,20 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page)} page={i + 2} pages={pages} layout="single" note={PAGE_NOTE[page.kind] ?? null}>
-            <PageBody page={page} data={data} />
+          <Slide
+            key={page.id}
+            title={title}
+            chrome={chrome(`${PAGE_CONTEXT[page.kind] ?? page.title} · ${short}`)}
+            page={n(i)}
+            pages={pages}
+            layout="single"
+            note={PAGE_NOTE[page.kind] ?? null}
+            header={cover || page.kind !== 'in_short'}
+          >
+            {/* The brief's own title rides the first sheet of content when the
+                cover was folded away — never on a second one, and never under
+                a section line saying the same words. */}
+            <PageBody page={page} data={data} title={!cover && page.kind === 'in_short'} pages={pages} />
           </Slide>
         )
       })}

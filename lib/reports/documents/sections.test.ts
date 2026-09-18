@@ -68,7 +68,9 @@ describe('the four section maps', () => {
   it('surfacesOf names only the surfaces a map borrows from', () => {
     expect(surfacesOf(briefMap('leadership_brief'))).toEqual(['overview', 'competitive'])
     expect(surfacesOf(briefMap('content_brief'))).toEqual(['subjects', 'market'])
-    expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview'])
+    // E-marketing: the artboard's slide 2 carries the monthly line, which is
+    // `subjects.line`, so the marketing brief now pays for a second loader.
+    expect(surfacesOf(briefMap('market_brief'))).toEqual(['overview', 'subjects'])
   })
 
   it('pageKindsOf is what the writer is still asked for', () => {
@@ -78,8 +80,31 @@ describe('the four section maps', () => {
 
   it('the marketing map is RP1\'s own list: subjects, category, rivals, moves, method', () => {
     const titles = sectionsOf(briefMap('market_brief')).map((s) => s.title)
-    expect(titles).toEqual(['The month', 'Your subjects', 'The category', 'Rivals', 'Your moves'])
+    expect(titles).toEqual(['Your subjects', 'Month by month', 'The month', 'What changed this month', 'Rivals', 'Your moves'])
     expect(pageKindsOf(briefMap('market_brief'))).toContain('method')
+  })
+
+  // E-marketing, the artboard's seven sheets. The map used to paginate to
+  // twelve landscape sheets for a month the artboard spends seven on, because
+  // every section had a sheet of its own. The sheets are the assertion, not the
+  // section count: a section may be added to a sheet, and the day one is given
+  // a sheet of its own again is the day this line has to be argued for.
+  it('the marketing map cuts one sheet, and every sheeted section states its span', () => {
+    const sections = sectionsOf(briefMap('market_brief'))
+    expect(sections.filter((s) => s.sheet).map((s) => s.id)).toEqual(['mk.subjects', 'mk.subjectline'])
+    for (const s of sections) {
+      if (!s.sheet) { expect(s.span, s.id).toBeUndefined(); continue }
+      expect(s.span, s.id).toBeGreaterThan(0)
+      expect(s.span!, s.id).toBeLessThanOrEqual(12)
+    }
+  })
+
+  // The other three maps are untouched by the sheets, which is what makes the
+  // grouping additive rather than a re-pagination of every brief.
+  it('no other map declares a sheet', () => {
+    for (const role of ['leadership_brief', 'sales_brief', 'content_brief'] as const) {
+      for (const s of sectionsOf(briefMap(role))) expect(s.sheet, `${role} · ${s.id}`).toBeUndefined()
+    }
   })
 
   it('no framing line carries a direction word or pipeline vocabulary', () => {

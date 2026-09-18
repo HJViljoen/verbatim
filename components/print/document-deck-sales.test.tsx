@@ -100,7 +100,12 @@ describe('sales.p1 — the cover', () => {
   // `sales.p1.stats`: three tiles, not the one a seeded month left.
   it('draws three stat tiles once the month is read', () => {
     const w = words(cover())
-    expect(w).toContain('2,359 comments read, on 1,388 videos')
+    // MERGE, BLOCK D WAVE 2: the basis tile now NAMES THE MONTH and the
+    // population the videos are of — E-marketing's wording for the same
+    // figure, which is the same number with the two facts a reader needs
+    // beside it. It is also the LAST of the three now, because the two
+    // measures come first (see `overviewTiles`).
+    expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
     expect(w).toContain('120 videos name a switch between brands')
     expect(w).toContain('28 of 205 videos carry')
   })
@@ -169,7 +174,12 @@ describe('sales.p1 — the cover', () => {
   it('renders a brief built before the slide figures existed', () => {
     const w = words(sheets(deck(salesBriefLegacyFixture()))[0])
     expect(w).toContain('Sales brief')
-    expect(w).toContain('2,359 comments read, on 1,388 videos')
+    // MERGE, BLOCK D WAVE 2: the basis tile now NAMES THE MONTH and the
+    // population the videos are of — E-marketing's wording for the same
+    // figure, which is the same number with the two facts a reader needs
+    // beside it. It is also the LAST of the three now, because the two
+    // measures come first (see `overviewTiles`).
+    expect(w).toContain('2,359 comments read in September 2026, on 1,388 videos in the category')
     expect(w).not.toContain('name a switch between brands')
   })
 })

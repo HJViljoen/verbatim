@@ -1,4 +1,5 @@
-import { fmtInt } from '../../format'
+import { GAP_WORDS, gapBasisLine, gapLine, sidePct, type Gap } from '../../reading/gap'
+import { fmtInt, round1 } from '../../format'
 import type { Verdict } from '../../reading/verdicts'
 import type { DocumentSnapshotData } from './types'
 
@@ -47,6 +48,143 @@ export interface OverviewTile {
    * and knows which of them is a measurement of a population.
    */
   level?: boolean
+  /**
+   * The value is a WORD, not a figure — "too few to compare", "comparison
+   * refused" — so the tile sets it at reading size rather than at the 38px
+   * mono the artboard's figures sit at.
+   *
+   * IT IS NOT A STYLE FLAG IN DISGUISE. A refusal is the tile's answer, and a
+   * refusal typeset as a 38px number reads as one; keeping the tile and
+   * changing the type is how the artboard's layout survives a rule the
+   * artboard does not have (mock-gap §6 D1, D2).
+   */
+  word?: boolean
+}
+
+/**
+ * The gap a brief leads with (package E-marketing, `mkt.p2.gap` / `mkt.p1.stats`).
+ *
+ * THE FIRST ONE THAT CONCLUDED SOMETHING, and the order is the order the page
+ * drew its rows in — the brief does not re-rank the subjects, because the page
+ * already ranked them and a brief that re-sorted would be a second reading. A
+ * gap that is `apart` beats one that read `level`, which beats a refusal;
+ * within a state the page's own order stands. Null where the reading holds no
+ * gap at all, which a workspace without subjects is.
+ */
+export function leadGap(gaps: readonly Gap[] | undefined): Gap | null {
+  if (!gaps?.length) return null
+  const rank = (g: Gap) => (g.state === 'apart' ? 0 : g.state === 'level' ? 1 : 2)
+  return [...gaps].sort((a, b) => rank(a) - rank(b))[0] ?? null
+}
+
+/**
+ * The gap tile's face: the magnitude where one was earned, the state's own
+ * word where it was not. Never a magnitude beside a refusal (D2).
+ *
+ * AND THE WORD IS SAID ONCE. `gapLine` ends in the state's phrase and the
+ * tile's own value IS that phrase, so the obvious composition printed "too few
+ * to compare — you 31% of 84 · Freitag 44% of 142 · too few to compare. too
+ * few to compare in August" — the same four words three times on one tile. The
+ * label under a word-valued tile therefore carries the LEVELS alone, which is
+ * the half of `gapLine` that still says something, and the earlier reading is
+ * printed only where it CONCLUDED something: a second refusal beside the first
+ * is a sentence about our bookkeeping twice over.
+ */
+/**
+ * The earlier gap, printed ONLY where it concluded something.
+ *
+ * `gapBasisLine` answers for every state, which is right for a caller that
+ * wants the earlier reading whatever it was. A brief prints the current
+ * reading's own refusal already, and a second refusal beside it ("too few to
+ * compare. too few to compare in August") is a sentence about our bookkeeping
+ * said twice — it tells a reader nothing about August that the line above it
+ * has not told them about September.
+ */
+export function concludedBasisLine(gap: Gap): string | null {
+  return gap.basis && (gap.basis.state === 'apart' || gap.basis.state === 'level') ? gapBasisLine(gap) : null
+}
+
+export function gapTile(gap: Gap): OverviewTile {
+  const basis = concludedBasisLine(gap)
+  if (gap.state === 'apart' && gap.gapPts != null) {
+    return { value: `${round1(Math.abs(gap.gapPts))} pts`, label: `${gap.objectLabel} — ${gapLine(gap)}${basis ? `. ${basis}` : ''}` }
+  }
+  const levels = [gap.a, gap.b]
+    .map((side) => {
+      const pct = sidePct(side)
+      return side.observed && pct != null
+        ? `${side.label} ${round1(pct)}% of ${fmtInt(side.value.n)}`
+        : `${side.label} — not tracked`
+    })
+    .join(' · ')
+  return { value: GAP_WORDS[gap.state], label: `${gap.objectLabel} — ${levels}${basis ? `. ${basis}` : ''}`, word: true }
+}
+
+/**
+ * One measurement's identity: the object, the audience it is a proportion of,
+ * what it counts and the window it covers.
+ *
+ * NOT THE OBJECT ALONE. `CountedOver.measure` exists because two readings of
+ * one object are two statements — a rival's cut of the panel's videos and its
+ * cut of the panel's comments are both true and neither is a duplicate of the
+ * other — so the key carries it, exactly as the record does.
+ */
+const measurementKey = (v: Verdict) =>
+  [v.objectKind, v.objectId, v.audience, v.countedOver?.measure ?? 'videos', v.window.from, v.window.to].join('|')
+
+/** What two readings of ONE measurement have to agree on to be the same
+ *  reading: both sides' counts, the change and the band. */
+const readingSignature = (v: Verdict) =>
+  [v.value.k, v.value.n, v.changePts, v.bandPts, v.state].join('|')
+
+/**
+ * The verdict a brief leads with: the largest banded MOVE, and only a move.
+ *
+ * A tile is the most prominent thing on the first sheet, so it states a
+ * conclusion or it states nothing — `no_clear_change` and `too_little_data`
+ * are real answers on a row of a table and are not a headline. Ties break on
+ * the larger n, so the one measured on more videos wins.
+ *
+ * BY MEASUREMENT, AND A DISAGREEMENT IS REFUSED (fix pass). A brief merges the
+ * verdicts of every surface it borrows, and two surfaces can publish a verdict
+ * for the same object over the same window — `overview.subjects` and
+ * `subjects.line` both read a subject's category share. Taking the MAXIMUM
+ * `changePts` across the merged list meant that where two readings of one
+ * measurement differed, the LOUDER one won the most prominent tile on the
+ * brief, over a sheet whose table prints the other. Measured on this package's
+ * own fixture: "▲ 5.5 pts · Durability — 24.5%, 340 of 1,388" one line under a
+ * paragraph reading "22% of its videos".
+ *
+ * On production the two surfaces should agree, and where they do this collapses
+ * them to one reading and changes nothing. Where they do not, the brief cannot
+ * tell which is the month's — so it leads with neither, and the next
+ * measurement takes the tile. A refusal is a real answer; picking the bigger
+ * number is not.
+ */
+export function leadVerdict(verdicts: readonly Verdict[] | undefined): Verdict | null {
+  const moved = (verdicts ?? []).filter((v) => v.state === 'moved' && v.changePts != null && v.bandPts != null)
+  const byMeasurement = new Map<string, Verdict[]>()
+  for (const v of moved) {
+    const key = measurementKey(v)
+    byMeasurement.set(key, [...(byMeasurement.get(key) ?? []), v])
+  }
+  const agreed = [...byMeasurement.values()]
+    .filter((group) => new Set(group.map(readingSignature)).size === 1)
+    .map((group) => group[0])
+  return agreed.sort((a, b) => Math.abs(b.changePts!) - Math.abs(a.changePts!) || b.value.n - a.value.n)[0] ?? null
+}
+
+/** "▲ 3.2 pts" and the sentence under it — the levels, the band, and the
+ *  population, with NO direction word: `Verdict.direction` is filled only by
+ *  `directionWord`, over three readings, and a tile may not add one. */
+export function verdictTile(v: Verdict): OverviewTile {
+  const pct = v.value.n > 0 ? round1((v.value.k / v.value.n) * 100) : 0
+  const arrow = (v.changePts ?? 0) >= 0 ? '\u25b2' : '\u25bc'
+  const of = `${fmtInt(v.value.k)} of ${fmtInt(v.value.n)}`
+  return {
+    value: `${arrow} ${round1(Math.abs(v.changePts ?? 0))} pts`,
+    label: `${v.objectLabel} — ${pct}%, ${of}. Band ${round1(v.bandPts ?? 0)}.`,
+  }
 }
 
 /** The standing page packs its party names as JSON (a name may carry any
@@ -64,25 +202,102 @@ function standingParties(raw: string | undefined): string[] {
 export const slugOf = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/(^_|_$)/g, '')
 
 /**
- * The three numbers on the cover.
+ * The three tiles on the In-short sheet.
  *
- * TWO BASES, AND THE READING'S ONE COMES FIRST (Block D wave 2, E-sales).
- * Without a monthly reading these are the update's: conversations read, share
- * of tracked conversation (paired with the first competitor when there is one),
- * positive of judged. A number the run could not measure is simply absent.
+ * WITHOUT A MONTHLY READING these are the update's: conversations read, share
+ * of tracked conversation (paired with the first competitor when there is
+ * one), positive of judged. A number the run could not measure is simply
+ * absent, and nothing on this branch changed.
  *
- * WITH one, two of those three are deliberately withdrawn upstream —
- * `documentFigures` sets `client_share_pct` and `positive_pct` only on the
- * no-reading branch, because a share of one run's tracked videos is not a
- * reading of a month — and the cover was left printing a SINGLE tile. The
- * artboard draws three. So the two withdrawn tiles are replaced by two real
- * measures of the same month rather than by nothing: the switching pool with
- * its own refusal beside it, and the objection with its denominator. Both come
- * off `slideFigures`, which is to say off the numbers wave 1 already counted;
- * neither is a second measurement of anything.
+ * WITH ONE, `documentFigures` withdraws two of those three upstream —
+ * `client_share_pct` and `positive_pct` are set only on the no-reading branch,
+ * because a share of one run's tracked videos is not a reading of a month — so
+ * the sheet printed a SINGLE tile, measured on the populated fixture and on
+ * production. E-sales and E-marketing each fixed that and each chose a
+ * different three; BOTH SETS ARE KEPT AND THE ORDER DECIDES (merge, Block D
+ * wave 2), because each of the four is a real measure of the same month:
+ *
+ *   1. the lead GAP (E-marketing) — `gapTile`, the magnitude where one was
+ *      earned and the state's own word where it was not;
+ *   2. the lead banded CHANGE (E-marketing) — `verdictTile`, with no direction
+ *      word, which `directionWord` alone may fill;
+ *   3. the SWITCHING pool with its own refusal beside it (E-sales);
+ *   4. the leading OBJECTION with the population it is a share of (E-sales).
+ *
+ * The first two of whichever of those four the month actually earned are
+ * printed, and the third tile is always the BASIS — the comments the month was
+ * read on, which is the one number the others are shares of. So a month that
+ * concluded a gap and a change prints E-marketing's three; a month that
+ * concluded neither prints E-sales's, instead of falling back to one tile.
+ *
+ * THE LABEL SAID "THIS UPDATE" OVER A MONTH'S NUMBER. `f.conversations` has
+ * been the month's comments since WP19 and the tile went on calling them "read
+ * this update", on the first sheet a reader meets. Same class as AGENTS.md's
+ * "a page once claimed no email is sent while Resend sent".
+ *
+ * The attention index the artboard draws as its third is refused: it is a
+ * movement claim over a comment count under a fixed panel, which has no
+ * denominator and therefore no band (D7).
  */
 export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
   const f = data.figures
+  const r = data.reading
+  const sf = data.slideFigures ?? null
+  const switching = sf?.switching ?? null
+  const objection = sf?.scripted?.[0]?.objection ?? null
+  // THE POOL IS THE VALUE AND THE LEAN IS THE LABEL, which is the mock's own
+  // tile read honestly: "12 · videos name a switch between brands · 7 toward
+  // Sealand · 5 away". The lean carries its own "of N" because 7 of 12 and
+  // 7 of 1,388 are different sentences.
+  const switchingTile: OverviewTile | null = switching
+    ? {
+        value: fmtInt(switching.pool),
+        label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away`,
+        verdict: switching.verdict,
+        note: switching.unread,
+        // The lean carries its own population, so the pair is a level.
+        level: true,
+      }
+    : null
+  // The objection, with the population it is a share of. No badge: a kind's
+  // level carries no banded comparison on this corpus, and the artboard's
+  // "▼ 3 pts · fading, 3rd month" is exactly the claim nothing measured.
+  const objectionTile: OverviewTile | null = objection && objection.value.n > 0
+    ? {
+        value: fmtInt(objection.value.k),
+        label: `of ${fmtInt(objection.value.n)} videos carry ${objection.label.toLowerCase()}`,
+        level: true,
+      }
+    : null
+
+  if (r) {
+    const gap = leadGap(r.gaps)
+    const verdict = leadVerdict(r.verdicts)
+    const category = r.denominators.find((d) => d.audience === 'industry-other') ?? r.denominators[0] ?? null
+    const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
+    // THE BASIS: the comments the month was read on, which is the one number
+    // the others are shares of. Off the month's own denominators where they
+    // have been written, and off the update's figure where they have not — a
+    // reading whose denominators are unwritten is the state every reader has
+    // to survive, and it must not cost the sheet its basis tile.
+    const basis: OverviewTile | null = comments > 0
+      ? {
+          value: fmtInt(comments),
+          label: `comments read in ${r.monthLabel}${category ? `, on ${fmtInt(category.videos)} videos in ${category.label}` : ''}`,
+        }
+      : f.conversations
+        ? {
+            value: f.conversations.value,
+            label: `comments read${f.videos ? `, on ${f.videos.value} videos` : ''}`,
+          }
+        : null
+    // The order is the merge's decision — see the header. A concluded gap and
+    // a banded change lead where the month earned them; the basis follows;
+    // E-sales's two measures fill whatever is left.
+    return [gap ? gapTile(gap) : null, verdict ? verdictTile(verdict) : null, basis, switchingTile, objectionTile]
+      .filter(Boolean)
+      .slice(0, 3) as OverviewTile[]
+  }
   // The name to set the share against: the first competitor with a page, or,
   // for a template that prints none (the leadership brief's standing page),
   // the first one the standing page lists. A share with nothing beside it is
@@ -91,44 +306,21 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
     data.pages.find((p) => p.kind === 'competitor')?.meta?.name
     ?? standingParties(data.pages.find((p) => p.kind === 'standing')?.meta?.parties)[1]
   const compKey = competitor ? `${slugOf(competitor)}_share_pct` : null
-  const sf = data.slideFigures ?? null
-  const switching = sf?.switching ?? null
-  const objection = sf?.scripted?.[0]?.objection ?? null
   return [
-    // THE NOUN IS THE BASIS'S. With a monthly reading `f.conversations` is
-    // "comments read in September 2026" (`documentFigures`) and the tile says
-    // comments; without one it is the update's conversation count and keeps
-    // the word the legacy figure has always carried. Two clocks, two nouns,
-    // and lib/calibration.ts GLOSSARY fixes both.
+    // THE NOUN IS THE BASIS'S. Without a reading `f.conversations` is the
+    // update's conversation count and keeps the word the legacy figure has
+    // always carried (lib/calibration.ts GLOSSARY).
     f.conversations && {
       value: f.conversations.value,
-      label: `${data.reading ? 'comments read' : 'conversations read this update'}${f.videos ? `, on ${f.videos.value} videos` : ''}`,
+      label: `conversations read this update${f.videos ? `, on ${f.videos.value} videos` : ''}`,
     },
     f.client_share_pct && {
       value: f.client_share_pct.value,
       label: compKey && f[compKey] ? `${data.company}'s share of tracked conversation · ${competitor} ${f[compKey].value}` : `${data.company}'s share of tracked conversation`,
     },
     f.positive_pct && { value: f.positive_pct.value, label: 'positive, of the conversations judged for tone' },
-    // THE POOL IS THE VALUE AND THE LEAN IS THE LABEL, which is the mock's own
-    // tile read honestly: "12 · videos name a switch between brands · 7 toward
-    // Sealand · 5 away". The lean carries its own "of N" because 7 of 12 and
-    // 7 of 1,388 are different sentences.
-    switching && {
-      value: fmtInt(switching.pool),
-      label: `${switching.pool === 1 ? 'video names' : 'videos name'} a switch between brands · ${fmtInt(switching.toward.k)} of ${fmtInt(switching.pool)} toward you · ${fmtInt(switching.away.k)} of ${fmtInt(switching.pool)} away`,
-      verdict: switching.verdict,
-      note: switching.unread,
-      // The lean carries its own population, so the pair is a level.
-      level: true,
-    },
-    // The objection, with the population it is a share of. No badge: a kind's
-    // level carries no banded comparison on this corpus, and the artboard's
-    // "▼ 3 pts · fading, 3rd month" is exactly the claim nothing measured.
-    objection && objection.value.n > 0 && {
-      value: fmtInt(objection.value.k),
-      label: `of ${fmtInt(objection.value.n)} videos carry ${objection.label.toLowerCase()}`,
-      level: true,
-    },
+    switchingTile,
+    objectionTile,
   ].filter(Boolean).slice(0, 3) as OverviewTile[]
 }
 

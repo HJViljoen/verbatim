@@ -465,15 +465,20 @@ export function briefSections(
         : block
           ? block.emptyState(data as never)
           : 'This section names a block this build does not know how to draw.'
+    // The sheet's own layout, frozen with it: a stored artefact renders the
+    // sheet it was built as, not the sheet today's map would build — so
+    // pagination (`sheet` / `span` / `extras`, E-marketing) travels with the
+    // header and the pane (E-sales).
     return {
       id: s.id, block: s.block, surface: s.surface, title: s.title, framing: s.framing, empty,
-      // The sheet's own layout, frozen with it: a stored artefact renders the
-      // sheet it was built as, not the sheet today's map would build.
       ...(s.context ? { context: s.context } : {}),
       ...(s.eyebrow ? { eyebrow: s.eyebrow } : {}),
       ...(s.pane ? { pane: s.pane } : {}),
       ...(s.paneTitle ? { paneTitle: s.paneTitle } : {}),
       ...(s.paneLead ? { paneLead: s.paneLead } : {}),
+      ...(s.sheet ? { sheet: s.sheet } : {}),
+      ...(s.span ? { span: s.span } : {}),
+      ...(s.extras ? { extras: s.extras } : {}),
     }
   })
 }

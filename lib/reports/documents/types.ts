@@ -1,6 +1,8 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
 import type { MethodLines } from '../../reading/method'
+import type { Gap } from '../../reading/gap'
 import type { MonthStatus } from '../../reading/types'
+import type { Verdict } from '../../reading/verdicts'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
 import type { Audience, FigureTable } from '../types'
@@ -205,6 +207,19 @@ export interface DocumentReading {
   stamp: string
   denominators: { audience: string; label: string; videos: number; comments: number }[]
   platformMix: Record<string, number>
+  /**
+   * The two-audience gaps the blocks drew (D1), frozen (package E-marketing).
+   *
+   * `BriefReading.gaps` has carried these since wave 1 and `documentReading`
+   * dropped them, so no artefact could print the one sentence the artboards
+   * lead with. Frozen because a brief freezes NUMBERS: the gap is measured at
+   * the reading instant, and re-deriving it at render would be a second
+   * measurement of a month a reader may open in March.
+   */
+  gaps?: Gap[]
+  /** The banded comparisons the blocks drew, frozen for the same reason. The
+   *  stat tiles print one; nothing on the deck may invent another. */
+  verdicts?: Verdict[]
   /** True where the window crosses a recorded clustering boundary — the label
    *  decision L requires travels with it. */
   crossesClustering: boolean
@@ -291,6 +306,16 @@ export interface DocBriefSection {
    *  no lead prints the reading's denominators, as every pane did before. */
   paneTitle?: string
   paneLead?: string
+  /** The sheet this section shares with its neighbours (E-marketing). Absent
+   *  on every section that has a landscape sheet to itself, which is every
+   *  section of every brief built before 2026-09-18. */
+  sheet?: string
+  /** Columns of twelve this section takes on a shared sheet. */
+  span?: number
+  /** An element the deck draws on this section's sheet beside the blocks —
+   *  `'gap'` is the gap card. Frozen, like `sheet` and `span`, because what a
+   *  sheet carries is the artefact's and not today's map's. */
+  extras?: 'gap'
 }
 
 /**
@@ -356,6 +381,54 @@ export interface DocumentMethod {
    * reading was. Absent on a brief built before wave 2.
    */
   dropped?: number
+  /**
+   * Findings written and dropped BELOW the bar this build (`mkt.p7.numbers`).
+   *
+   * NOT `dropped` ABOVE, AND BOTH ARE KEPT ON PURPOSE (merge, Block D wave 2).
+   * `dropped` is every finding the composer wrote and did not print, whatever
+   * the reason — the structural check's rejections, the floor, no grounded
+   * point, scrubbed to nothing — and it is what the sales brief's numbers card
+   * prints as "not carried". These two are the marketing card's finer split of
+   * the same build: below the bar, and held by the template's cap. A reader of
+   * one card never sees the other's row, and folding them would make one of
+   * the two sentences wrong.
+   *
+   * The artboard's row is "4 above the bar · 5 below the bar", and the deck
+   * could only ever print the first half: the dropped ones live in the
+   * workings, which the render and share paths never select. A count is not a
+   * headline and carries no evidence, so it travels on the snapshot.
+   */
+  findingsBelow?: number
+  /**
+   * Findings that CLEARED the bar and were not printed, because the template's
+   * cap stopped first (`findingsMax`, and three on a thin update).
+   *
+   * Its own field because it is its own sentence. `findingsBelow` used to be
+   * `candidates - printed`, which folded the cap and the scrub into a claim
+   * about the evidence: a brief capped at three with eight good findings said
+   * "3 above the bar · 5 below it" about five findings that were above it.
+   */
+  findingsHeld?: number
+  /**
+   * "27% of what was said on camera was not in English" — `MethodLines.language`,
+   * with the basis it must never be printed without.
+   *
+   * NOT THE ARTBOARD'S PER-LANGUAGE BREAKDOWN. "Afrikaans 14% · German 6% ·
+   * other 7%" needs a per-language count and the product records one bit —
+   * English or not — on `video_speech`. The share it does hold is printed, with
+   * its stated basis (D15).
+   */
+  languages?: string | null
+  /**
+   * "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026 —
+   * your 3rd monthly reading, the quarter view needs 6" (`mkt.p7.delivery`).
+   *
+   * RUN-DATED AND SAYING SO. It is the record OF the deliveries, which is the
+   * one figure a run's own clock is the honest index for — and it is the one
+   * line on the numbers card that is NOT a month reading, which is why it sits
+   * under the hairline rather than as a row beside them.
+   */
+  delivery?: string | null
 }
 
 /** report_snapshots.data for a document build (kind stays 'report'). */
@@ -378,6 +451,26 @@ export interface DocumentSnapshotData {
   missing?: DocumentMissingInput[]
   /** The borrowed page blocks, in the section map's order (WP19). */
   sections?: DocBriefSection[]
+  /**
+   * FALSE where this brief's map folds its title onto the first sheet of
+   * content instead of spending a landscape sheet on it (E-marketing).
+   *
+   * FROZEN, AND ABSENT MEANS "KEEP THE COVER". A stored artefact re-renders
+   * from this field, never from today's map: pagination is the artefact's, so a
+   * brief that printed a cover, was shared on a `/r/<token>` and is opened
+   * again next March prints the same sheets with the same numbers in the same
+   * footers. The fold reaching a brief built before it landed is exactly the
+   * re-pagination `documentSlides` refuses for `sheet` and `span`.
+   */
+  cover?: boolean
+  /**
+   * TRUE where the sections this brief could not fill share one sheet instead
+   * of taking a landscape sheet each (E-marketing).
+   *
+   * Frozen for the same reason as `cover`, and absent means "one sheet each",
+   * which is what every brief built before this printed.
+   */
+  unfilledSheet?: boolean
   /** Each borrowed surface's loader output, frozen — the same data the page
    *  drew, so the brief and the page cannot come to say different things
    *  (WP19). Quotes inside it freeze and resolve like any other snapshot's. */

@@ -197,8 +197,17 @@ export const overviewSentence: Block<OverviewData> = {
         <p className="m-0 flex min-w-0 items-baseline gap-2 text-[12.5px]">
           <span aria-hidden className="mt-1 size-1.5 shrink-0 self-start rounded-full bg-mixed" />
           <span className="min-w-0">
-            <span className="font-medium">Unusual this week:</span> {anomalySentence(s.anomaly)}{' '}
-            <Link href={week} className="whitespace-nowrap font-medium underline underline-offset-[3px]">This week →</Link>
+            <span className="font-medium">Unusual this week:</span> {anomalySentence(s.anomaly)}
+            {/* NOT ON PAPER (package E-marketing, fix pass). The marketing
+                brief borrows this block onto a landscape sheet, where "This
+                week →" is an instruction to press a control the reader of a
+                PDF has not got — the rule `MONTHLY_MOVES_EMPTY` was written
+                under. The anomaly sentence carries itself; only the link
+                goes. E-main's ported layout keeps the dot and the baseline
+                row. */}
+            {mode === 'print' ? null : (
+              <> <Link href={week} className="whitespace-nowrap font-medium underline underline-offset-[3px]">This week →</Link></>
+            )}
           </span>
         </p>
       )
