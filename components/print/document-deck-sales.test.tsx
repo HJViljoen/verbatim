@@ -364,6 +364,24 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(words(objections())).not.toContain('What they are pushing back on · September 2026 · reading as at')
   })
 
+  // …AND THE PAGE KINDS TOO. `context` was given to the four `block()` entries
+  // only, so five of the nine numbered sheets still read their own title back
+  // at themselves in the 10.5px mono slot. `PAGE_CONTEXT` is the same slot for
+  // a written page, in the artboard's own words where it has them.
+  it('gives every page kind its own place, never its title repeated', () => {
+    for (const [title, context] of [
+      ['Who is moving, and which way', 'Switching signals'],
+      ['Answers you can use', 'Grounded answers'],
+      ['About this brief', 'Method'],
+      ['Overview', 'In short'],
+      ['Language to handle with care', 'Language'],
+    ] as const) {
+      const w = words(sheetNamed(deck(), title))
+      expect(w).toContain(`${context} · September 2026`)
+      expect(w).not.toContain(`${title} · September 2026`)
+    }
+  })
+
   // The framing is the slide's serif note, which is what the artboard draws;
   // the green-ruled eyebrow says what the ORDER of the rows is, which a list
   // of counted rows will not tell a reader itself.

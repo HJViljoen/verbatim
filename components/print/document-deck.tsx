@@ -1345,6 +1345,35 @@ function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData 
  * own words. The other page kinds keep no note, because each already opens
  * with its own lead paragraph.
  */
+/**
+ * The sheet's PLACE in the brief, for the page kinds (`sales.p2.header`).
+ *
+ * `BriefBlockSection.context` gave the four borrowed sheets the artboard's own
+ * two-word slot — "Objections", "Selling points", "Rivals" — and every PAGE
+ * kind went on through `chrome`, which is `${title} · ${short}` beside an
+ * `<h1>` of the same title. Five of the nine numbered sheets therefore read
+ * "Who is moving, and which way · September 2026" next to "Who is moving, and
+ * which way", which is the exact fault the comment on `chrome` claims to have
+ * fixed. The artboard's own words are used where it has them (`Switching
+ * signals`, `Grounded answers`, `Method`); the kinds this brief does not carry
+ * take the same shape, because the map is shared with three other briefs.
+ *
+ * Absent falls back to the page's title, which is what every kind did before.
+ */
+const PAGE_CONTEXT: Partial<Record<DocPage['kind'], string>> = {
+  in_short: 'In short',
+  finding: 'Findings',
+  competitor: 'Rivals',
+  personas: 'Buyers',
+  standing: 'Standing',
+  say_hear: 'Say and hear',
+  asked: 'Questions',
+  language: 'Language',
+  switching: 'Switching signals',
+  scripted: 'Grounded answers',
+  method: 'Method',
+}
+
 const PAGE_NOTE: Partial<Record<DocPage['kind'], string>> = {
   switching: 'The videos that name both you and a rival, and which way each of them leaned — a small number, printed as it stands.',
   scripted: 'The sentence to say is a writer\u2019s; every figure under it is counted.',
@@ -1519,7 +1548,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // the artboard puts it.
   const short = data.reading?.monthLabel ?? data.period
   const footer = <BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} />
-  const chrome = (title: string) => ({ context: `${title} · ${short}`, footer })
+  const chrome = (page: DocPage) => ({ context: `${PAGE_CONTEXT[page.kind] ?? page.title} · ${short}`, footer })
   return (
     <>
       <DocumentCover data={data} pages={pages} date={date} contents={slides.map((s, i) => ({ page: i + 2, title: s.title }))} />
@@ -1548,7 +1577,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (!page) return null
         const title = page.kind === 'finding' ? `Finding ${page.meta?.n ?? ''}` : page.kind === 'competitor' ? 'Competitor' : page.title
         return (
-          <Slide key={page.id} title={title} chrome={chrome(page.title)} page={i + 2} pages={pages} layout="single" note={PAGE_NOTE[page.kind] ?? null}>
+          <Slide key={page.id} title={title} chrome={chrome(page)} page={i + 2} pages={pages} layout="single" note={PAGE_NOTE[page.kind] ?? null}>
             <PageBody page={page} data={data} />
           </Slide>
         )
