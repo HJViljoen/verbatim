@@ -35,6 +35,31 @@ describe('groundingFor', () => {
     ).toBeNull()
   })
 
+  it('reads a row whose market insights are ALSO gone as pruned, not as unrecorded', () => {
+    // The chain is based_on -> market_insights -> audience_insights, and the
+    // caller resolves the first link before this function sees it. A row that
+    // cited two insights and resolves to none is the pruned case wearing the
+    // unrecorded label.
+    const g = groundingFor({
+      basedOn: [],
+      videoByInsight: videoMap([]),
+      themeIds: [],
+      audience: 'client',
+      month: '2026-09-01',
+      cited: 2,
+    })
+    expect(g).not.toBeNull()
+    expect(g?.pruned).toBe(true)
+    expect(g?.videos).toBe(0)
+    expect(g?.line).toContain('no longer on record')
+  })
+
+  it('still says nothing was recorded where nothing was', () => {
+    expect(
+      groundingFor({ basedOn: [], videoByInsight: videoMap([]), themeIds: [], audience: 'client', month: '2026-09-01', cited: 0 }),
+    ).toBeNull()
+  })
+
   it('degrades to a smaller count when SOME of the evidence has been pruned away', () => {
     const g = groundingFor({
       basedOn: ['i1', 'gone'],

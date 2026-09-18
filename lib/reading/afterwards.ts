@@ -105,6 +105,18 @@ export interface GroundingInput {
   /** Any day in the month this grounding is being STATED in — the date the
    *  count was taken, not a period it is scoped to. See `groundingFor`. */
   month: string
+  /**
+   * How many evidence refs the advice RECORDED, before any of them were
+   * resolved — `recommendations.based_on.insight_ids.length`.
+   *
+   * IT IS THE DIFFERENCE BETWEEN TWO ABSENCES, ONE LINK EARLIER. `basedOn`
+   * arrives already resolved, so a row whose `market_insights` rows are
+   * themselves gone reaches this function as `[]` — indistinguishable from a
+   * row that never wrote its evidence down. That is the pruned case wearing
+   * the unrecorded label, which is exactly what `pruned` exists to stop one
+   * link further on. Omit it and the old reading stands.
+   */
+  cited?: number
 }
 
 /**
@@ -143,8 +155,20 @@ export interface GroundingInput {
  * evidence; the truth is that the evidence has been replaced. `pruned` carries
  * that fact and `line` says it.
  */
+/** The one sentence for "the evidence was replaced", written once so the two
+ *  places that reach it cannot come to say different things. */
+const PRUNED_LINE =
+  'The evidence this was written from is no longer on record — a later update replaced it, so we cannot count the videos behind it.'
+
+const prunedGrounding = (audience: string): Grounding =>
+  ({ videos: 0, themes: 0, audience, pruned: true, line: PRUNED_LINE })
+
 export function groundingFor(input: GroundingInput): Grounding | null {
   const based = [...new Set(input.basedOn)]
+  // THE ROW RECORDED EVIDENCE AND NONE OF IT RESOLVED. That is the pruned
+  // case, and it reaches here as an empty `basedOn` because the market insight
+  // the advice cites is gone too — see `GroundingInput.cited`.
+  if (based.length === 0 && (input.cited ?? 0) > 0) return prunedGrounding(input.audience)
   if (based.length === 0) return null
 
   const videoIds = new Set<string>()
@@ -156,7 +180,7 @@ export function groundingFor(input: GroundingInput): Grounding | null {
   const videos = videoIds.size
   const pruned = videos === 0
   const line = pruned
-    ? 'The evidence this was written from is no longer on record — a later update replaced it, so we cannot count the videos behind it.'
+    ? PRUNED_LINE
     : `${fmtInt(videos)} ${videos === 1 ? 'video' : 'videos'} behind it, ` +
       `counted over everything we have read for you up to ${monthName(monthStartOf(input.month))} — not over one month.`
   return { videos, themes, audience: input.audience, pruned, line }

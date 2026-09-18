@@ -886,6 +886,10 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
         themeIds: cited.map((a) => themeSlugById.get(a)).filter((s): s is string => Boolean(s)),
         audience: LEDGER_AUDIENCE,
         month,
+        // What the ROW recorded, before anything was resolved — so a row whose
+        // market insights are themselves gone reads as pruned rather than as
+        // never having written its evidence down.
+        cited: r.basedOn.length,
       }),
       targetIds: orderedTargets(cited, registryByInsight),
     }
