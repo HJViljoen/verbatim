@@ -51,14 +51,29 @@ import { isThin, movementDirection } from './movement'
 // AND IT SPENDS NO MODEL CALL. Every figure here is counted; every sentence is
 // either the client's own model prose (scrubbed) or code's.
 
-/** A month on a finding's chart. Both sides present, always: a month with no
- *  denominator row is not a zero and is left off the axis rather than drawn at
- *  the floor (`isReadable`, lib/reading/series.ts). */
+/**
+ * A month on a finding's chart.
+ *
+ * THE MONTH IS ALWAYS THERE AND THE VALUES MAY NOT BE. A hollow month, a month
+ * below the floor, an unseeded tenant and an unapplied migration are four
+ * different noes (`MonthState` has six values), and none of them is a zero. A
+ * month that cannot be read keeps its SLOT with null k and null n — which is
+ * why `SeriesPoint.videos` and `.k` are nullable everywhere else in the reading
+ * layer, and what `monthAxis`' own docstring warns about: drop the month and
+ * the line joins July straight to September and misdates everything after the
+ * gap.
+ *
+ * The pinned interface in the brief had these non-null. It is widened here
+ * rather than left for the chart to discover, because a chart cannot be drawn
+ * honestly from an array that cannot say "we could not read this month".
+ */
 export interface MeasuredPoint {
   month: string
-  k: number
-  n: number
-  /** k as a percentage of n, one decimal. Null only where n is zero. */
+  /** Null where the month carries no readable row — never 0. */
+  k: number | null
+  n: number | null
+  /** k as a percentage of n, one decimal. Null where either side is missing or
+   *  n is zero. */
   pct: number | null
 }
 
@@ -153,14 +168,25 @@ const pctOf = (k: number, n: number): number | null => (n > 0 ? Math.round((k / 
  *  depends on that is a key the table sometimes does not hold. */
 const tokenBase = (index: number): string => `f${index + 1}`
 
-/** Every point of the series a chart may draw: the months that actually carry
- *  a reading on both sides. */
-function measuredPoints(series: MonthSeries): MeasuredPoint[] {
+/**
+ * Every month of the axis up to the month being measured, readable or not.
+ *
+ * A month the reading layer refuses (`isReadable`: hollow, below the floor,
+ * unseeded, unapplied) keeps its slot with nulls. Months AFTER the measured one
+ * are not on this chart at all — the same rule the direction word follows: a
+ * figure beside an answer is a figure about the month the answer is measured
+ * against.
+ */
+function measuredPoints(series: MonthSeries, month: string): MeasuredPoint[] {
   const out: MeasuredPoint[] = []
   for (const p of series.points) {
-    if (!isReadable(p)) continue
-    if (p.videos == null || p.k == null) continue
-    out.push({ month: p.month, k: p.k, n: p.videos, pct: pctOf(p.k, p.videos) })
+    if (monthStartOf(p.month) > month) continue
+    const readable = isReadable(p) && p.videos != null && p.k != null
+    out.push(
+      readable
+        ? { month: p.month, k: p.k as number, n: p.videos as number, pct: pctOf(p.k as number, p.videos as number) }
+        : { month: p.month, k: null, n: null, pct: null },
+    )
   }
   return out
 }
@@ -326,7 +352,7 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
       audience: series.audience,
       audienceLabel: audienceLabel(series.audience),
       label,
-      series: measuredPoints(series),
+      series: measuredPoints(series, month),
       verdict,
       direction,
       figures: own,

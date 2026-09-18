@@ -141,6 +141,26 @@ describe('measureAnswer', () => {
     expect(m.figures.f1_band.unit).toBe('pts')
   })
 
+  it('keeps an unreadable month on the axis as a gap, never drops it', () => {
+    // August below the floor. Dropping it joins July to September and misdates
+    // everything after the gap — `monthAxis`' own warning.
+    const gapped = climbing({
+      points: [
+        point('2026-07-01', 210, 1400),
+        point('2026-08-01', null, null, { state: 'below_floor', status: null }),
+        point(MONTH, 320, 1388),
+      ],
+    })
+    const f = measureAnswer({ findings, series: [gapped], month: MONTH, directionWords: true }).findings[0]
+    expect(f.series.map((p) => p.month)).toEqual(['2026-07-01', '2026-08-01', MONTH])
+    expect(f.series[1]).toEqual({ month: '2026-08-01', k: null, n: null, pct: null })
+    // And a month after the one measured is not on this chart at all.
+    const ahead = climbing({ points: [...climbing().points, point('2026-10-01', 400, 1500)] })
+    expect(
+      measureAnswer({ findings, series: [ahead], month: MONTH, directionWords: true }).findings[0].series.at(-1)!.month,
+    ).toBe(MONTH)
+  })
+
   it('earns the word from the months up to the one being measured, never after it', () => {
     // Four months: the last three climb, the three ending in August do not.
     const withAugust = climbing({
