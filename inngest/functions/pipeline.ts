@@ -2201,9 +2201,20 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
  *     writes, and the same reason app/api/cron/ops-check/route.ts unions both
  *     tables. Their `evidence.supporting_theme_ids` then holds the
  *     `audience_insights` ids (scripts/citation-floor.ts states that mapping).
- *     Both links are protected: a market insight that a live recommendation
- *     cites is part of the chain, and a row whose market insight is itself
- *     gone reaches lib/reading/afterwards.ts as an empty `based_on`.
+ *     ONLY THE SECOND LINK IS PROTECTED HERE, and the first needs no protecting
+ *     by this step: it deletes `audience_insights` and `language_samples` and
+ *     nothing else, so no `market_insights` / `competitive_insights` row is at
+ *     risk from a prune. Those two tables ACCUMULATE across runs — lib/pipeline/
+ *     pass-d.ts:695 and lib/pipeline/pass-c.ts:285 delete only THEIR OWN run's
+ *     rows before re-inserting — which is why 329 of 334 stored refs still
+ *     resolved when this was measured. The one way the first link breaks is
+ *     documented at lib/pipeline/pass-d.ts:878-895: a D-b retry that fails
+ *     after `market_insights` was re-inserted with fresh ids leaves the
+ *     surviving recommendations' `based_on` pointing at rows that are gone.
+ *     That hole is real, it is deliberate ("degraded beats empty"), and it is
+ *     not this step's to close — a row whose market insight is itself gone
+ *     reaches lib/reading/afterwards.ts as an empty `based_on`, which is what
+ *     `GroundingInput.cited` exists to tell from the other absence.
  *
  *  2. PLAN CHECKS, both tables. `plan_checks.claims[].insightIds` is the
  *     upload's reading and `plan_check_evaluations.claims[].insightIds` each
