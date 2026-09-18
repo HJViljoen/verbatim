@@ -74,7 +74,7 @@ export default async function SettingsSubjectsPage() {
       context={`${tenant}${!canEdit ? ' · read-only' : ''}`}
       contentTitle="Subjects"
       contentMeta={available ? verdict.line : undefined}
-      counts={available ? { subjects: String(active) } : undefined}
+      counts={available ? { subjects: { value: String(active), unit: `subject${active === 1 ? '' : 's'} being measured` } } : undefined}
     >
       <div className="flex flex-col gap-3">
         {!available ? (

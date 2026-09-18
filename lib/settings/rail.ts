@@ -63,5 +63,20 @@ export const SETTINGS_ADDRESSES: readonly string[] =
  *
  * `Partial`, and a missing key prints nothing: a count nobody has loaded must
  * not become a zero (the readiness module's own rule, applied to furniture).
+ *
+ * A FIGURE AND ITS UNIT, SEPARATELY, BECAUSE THE RAIL IS 224px. "5 schedules"
+ * beside "Reports and recipients" does not fit, and what gave way was the
+ * LABEL — the rail printed "Reports and recipi…", cutting the one entry a
+ * reader is least able to guess. The number is what the rail has room for; the
+ * unit travels with it as the count's accessible name and its tooltip, so
+ * nothing is lost to a reader who asks, and the sub-page's own header states
+ * what it counts in full.
  */
-export type RailCounts = Partial<Record<SettingsSection, string>>
+export interface RailCount {
+  /** What is drawn: a bare figure. */
+  value: string
+  /** What it counts, as a phrase that completes it ("schedules", "updates"). */
+  unit: string
+}
+
+export type RailCounts = Partial<Record<SettingsSection, RailCount>>

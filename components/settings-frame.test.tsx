@@ -26,12 +26,21 @@ describe('the settings rail', () => {
     expect(parked.match(/aria-current="page"/g)).toBeNull()
   })
 
-  it('prints a rail count only where one was supplied', () => {
+  it('prints a rail count only where one was supplied, and never at the label’s expense', () => {
     const markup = render(
-      <SettingsFrame active="tracking" title="Settings" counts={{ tracking: '21 terms' }}>x</SettingsFrame>,
+      <SettingsFrame
+        active="tracking"
+        title="Settings"
+        counts={{ tracking: { value: '21', unit: 'search terms' }, reports: { value: '5', unit: 'schedules' } }}
+      >x</SettingsFrame>,
     )
-    expect(markup).toContain('21 terms')
-    // Nothing invented for the six with no count — a count nobody loaded must
+    // M4: the figure is what the 224px rail has room for; the unit travels as
+    // the accessible name, because "5 schedules" beside "Reports and
+    // recipients" truncated the label rather than the count.
+    expect(markup).toContain('>21<')
+    expect(markup).toContain('aria-label="5 schedules"')
+    expect(markup).toContain('Reports and recipients')
+    // Nothing invented for the five with no count — a count nobody loaded must
     // not become a zero.
     expect(markup).not.toContain('>0<')
   })

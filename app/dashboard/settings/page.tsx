@@ -104,10 +104,16 @@ export default async function SettingsTrackingPage() {
       ].join(' · ') : undefined}
       contentRule="What we look for, where we look for it, and how often it lands. Changing any of this breaks a series: the months already counted stay as they are, and the new basis starts at the change."
       counts={{
-        tracking: `${termCount} terms`,
-        ...(inputs.railCounts.subjects != null ? { subjects: String(inputs.railCounts.subjects) } : {}),
-        ...(inputs.updates.length > 0 ? { record: `${inputs.updates.length} updates` } : {}),
-        ...(inputs.railCounts.schedules != null ? { reports: `${inputs.railCounts.schedules} schedules` } : {}),
+        tracking: { value: String(termCount), unit: `search term${termCount === 1 ? '' : 's'}` },
+        ...(inputs.railCounts.subjects != null
+          ? { subjects: { value: String(inputs.railCounts.subjects), unit: `subject${inputs.railCounts.subjects === 1 ? '' : 's'} being measured` } }
+          : {}),
+        ...(inputs.updates.length > 0
+          ? { record: { value: String(inputs.updates.length), unit: `update${inputs.updates.length === 1 ? '' : 's'} on record` } }
+          : {}),
+        ...(inputs.railCounts.schedules != null
+          ? { reports: { value: String(inputs.railCounts.schedules), unit: `schedule${inputs.railCounts.schedules === 1 ? '' : 's'}` } }
+          : {}),
       }}
       railFooter={<LastSaveStrip state={strip} note={inputs.lastChangeNote} />}
     >
