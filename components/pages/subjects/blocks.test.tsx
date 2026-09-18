@@ -6,6 +6,8 @@ import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { layoutFor, SUBJECT_BLOCKS } from './index'
 import { subjectsList } from './list'
+import { subjectsOwnPosts } from './own-posts'
+import { subjectsSayHear } from './say-hear'
 import { subjectsSubject } from './subject'
 import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
@@ -28,9 +30,16 @@ describe('the Subjects blocks, all of them', () => {
     }
   })
 
+  // EVERY BLOCK THAT IS ABOUT THE SUBJECT READING. `subjects.ownposts` is the
+  // exception and it is the fixture's whole point: `videos` is tenant-readable
+  // whatever M4 says, so a workspace with no subject reading still knows what
+  // it published and the census is REAL on the refused fixture. A block that
+  // invented an empty state there would be claiming an absence it does not
+  // have. Its own absence — no post published in the month — is tested below.
   it('every block says something honest when it has nothing — a refusal is a reading too', () => {
     const data = refusedFixture()
     for (const block of SUBJECT_BLOCKS) {
+      if (block.key === 'subjects.ownposts') continue
       const empty = block.emptyState(data)
       expect(empty, block.key).toBeTruthy()
       expect(renderText(block.render(data, 'app', ctx)), block.key).toContain(empty!)
@@ -56,7 +65,12 @@ describe('SU1 · the subjects list', () => {
   it('names every subject with its level and the day it was named', () => {
     const text = renderText(subjectsList.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('Durability')
-    expect(text).toContain('26 of 84 videos')
+    // "26 of 84 · too few to compare" — the mock's own row, and the noun is
+    // dropped on a 240px rail where the full form wrapped every row onto a
+    // third line. The level still prints its "of N" (the copy contract's rule
+    // (b)) and the pane one tile over prints "26 of 84 videos" in full.
+    expect(text).toContain('26 of 84')
+    expect(text).toContain('too few to compare')
     expect(text).toContain('named 19 Aug 2026')
   })
 
@@ -68,7 +82,7 @@ describe('SU1 · the subjects list', () => {
       list: { ...data.list, rows: [{ ...first, level: { k: 1042, n: 3877, pct: 26.9 } }, ...rest] },
     }
     const text = renderText(subjectsList.render(big, 'app', ctx))
-    expect(text).toContain('1,042 of 3,877 videos')
+    expect(text).toContain('1,042 of 3,877')
     expect(text).toContain('26.9%')
   })
 
@@ -255,8 +269,25 @@ describe('SU2 · the kind mix', () => {
     expect(text).not.toMatch(/\b(pain_point|purchase_intent|demographic_signal|switching_signal|feature_request|buying_trigger|misinformation)\b/)
   })
 
-  it('names Reddit’s share of the question-and-objection videos', () => {
-    expect(renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))).toContain('Reddit carried')
+  // THE REDDIT READ MOVED TO THE FOOTER NOTE, where the mock puts it: a basis
+  // in the mono face, not a body paragraph that reads as one of the block's
+  // findings. The overlap caveat stays in the body, beside the shares it is
+  // about.
+  it('names Reddit’s share of the question-and-objection videos, as a basis', () => {
+    const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Reddit · 236 of 736 question videos')
+    expect(text).toContain('counted in each')
+  })
+
+  // `kindChange` has existed since WP3 and this block called it for the first
+  // time in wave 2 — mock-gap's "cheapest real gap on the page". Each verdict
+  // is banded and carries its own k and n, so each is honest to print; they do
+  // not sum and nothing adds them.
+  it('prints a banded verdict per kind on the category, and names the month it is against', () => {
+    const text = renderText(subjectsKinds.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Category — no brand, since Aug:')
+    expect(text).toContain('band')
+    expect(blockAnswers(subjectsKinds, subjectsFixture()).verdicts.length).toBeGreaterThan(0)
   })
 
   it('says the kind mix is not recorded when M5 has not landed', () => {
@@ -284,7 +315,7 @@ describe('SU2 · the voices', () => {
   })
 
   it('says how many it drew, out of how many there were', () => {
-    expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('2 of 41')
+    expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('6 of 41')
   })
 
   it('sends the reader to the comment where there is a link, and prints the words where there is not', () => {
@@ -294,7 +325,7 @@ describe('SU2 · the voices', () => {
   })
 
   it('declares its refs so a snapshot can freeze ids and resolve words at render', () => {
-    expect(blockAnswers(subjectsVoices, subjectsFixture()).quotes).toEqual(['e:1', 'e:2'])
+    expect(blockAnswers(subjectsVoices, subjectsFixture()).quotes).toEqual(['e:1', 'e:6', 'e:8', 'e:2', 'e:3', 'e:7'])
   })
 
   it('says a quote whose words are gone is counted, not quotable', () => {
@@ -312,8 +343,12 @@ describe('SU3 · questions your posts did not answer', () => {
     const text = renderText(subjectsUnanswered.render(subjectsFixture(), 'app', ctx))
     expect(text).toContain('came up in 130 of the videos we have read')
     expect(text).toContain('none of your 9 posts in the last 12 months touched it')
-    // The gate's own number, on the meta line, the way the mock prints it.
-    expect(text).toContain('214 videos asked about this subject · 9 posts of yours')
+    // THE GATE'S OWN NUMBER IS THE ROWS' DENOMINATOR NOW, which is where a
+    // reader needs it: 130 of the 214 videos that asked anything about this
+    // subject. Both ends of that fraction come off one read on one clock —
+    // unlike the mock's "130 of 1,388", whose denominator is comment-dated.
+    expect(text).toContain('130 of 214 videos')
+    expect(text).toContain('9 posts of yours')
     expect(text).toContain('counts, not shares')
     expect(text).not.toContain('%')
   })
@@ -361,6 +396,160 @@ describe('SU3 · questions your posts did not answer', () => {
   })
 })
 
+// ---- the two rail tiles the mock draws and the build had never had ----------
+
+describe('SU4 · your own posts', () => {
+  it('counts what you published, says what cleared the floor, and NAMES THE CLOCK', () => {
+    const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('9 posts published')
+    expect(text).toContain('3 of 9 cleared the 5-comment floor')
+    // D9. Every other figure on this page is comment-dated; a census of what
+    // you published is dated by `videos.upload_date`, and an upload-dated count
+    // under a comment-dated month heading is the mixing UNANSWERED_BASIS exists
+    // to name one tile down.
+    expect(text).toContain('dated by the day you posted')
+    expect(text).toContain('posts published in September')
+  })
+
+  it('draws the hooks as independent shares, each with its own "of N" — never a partition', () => {
+    const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
+    // Five of nine posts carry a hook at all, so the rows do not sum to the
+    // census (D4). Each says what it is a share of instead.
+    expect(text).toContain('Demonstration')
+    expect(text).toContain('of 9')
+    expect(text).not.toContain('Other hooks')
+  })
+
+  it('names the subjects your posts matched, with the count of posts', () => {
+    const text = renderText(subjectsOwnPosts.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Subjects matched')
+    expect(text).toContain('Durability')
+    expect(text).toContain('3 of 9')
+  })
+
+  it('survives M4 — `videos` is readable whatever the month tables say', () => {
+    expect(subjectsOwnPosts.emptyState(refusedFixture())).toBeNull()
+    expect(renderText(subjectsOwnPosts.render(refusedFixture(), 'app', ctx))).toContain('9 posts published')
+  })
+
+  it('says the census is empty rather than printing a zero', () => {
+    const data = subjectsFixture()
+    const none = { ...data, ownPosts: null }
+    expect(subjectsOwnPosts.emptyState(none)).toContain('not recorded')
+  })
+
+  it('is email-safe', () => {
+    const markup = render(subjectsOwnPosts.render(subjectsFixture(), 'email', ctx))
+    expect(markup).not.toContain('class=')
+    expect(markup).not.toContain('var(--')
+  })
+})
+
+describe('SU5 · say vs hear', () => {
+  it('prints each claim, what the audience did with it, and the whole ledger’s tally', () => {
+    const text = renderText(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Built to last a decade')
+    expect(text).toContain('Echoed')
+    expect(text).toContain('said in 2 of 9 posts')
+    // BOUND, NOT REBUILT: `claimCounts` over the same run_summary rows Market
+    // reads. Two tiles counting one ledger twice is how two pages disagree.
+    expect(text).toContain('13 claims · 3 echoed · 2 pushed back · 8 silent')
+  })
+
+  it('dates itself by the update, never by the month heading above it', () => {
+    // D9. The ledger is Pass D-a's resolution on ONE completed update; the
+    // month at the top of this page means comment-dated. The mock stamps this
+    // tile "Sep".
+    const text = renderText(subjectsSayHear.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('latest update')
+    expect(text).not.toContain('Sep ·')
+  })
+
+  it('names the half it cannot read rather than drawing it as nothing', () => {
+    expect(subjectsSayHear.emptyState(refusedFixture())).toContain('not readable')
+  })
+
+  it('quotes no figure token — a claim is not a video, a comment, a point or a percentage', () => {
+    expect(blockAnswers(subjectsSayHear, subjectsFixture()).figures).toEqual({})
+  })
+})
+
+// ---- what wave 2 changed about the blocks that already existed ---------------
+
+describe('the mock’s own shape, where the data allows it', () => {
+  it('leads the pane with the banded gap and never with "narrowed"', () => {
+    const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    // D1: both levels with both denominators, and the refusal the band earned.
+    expect(text).toContain('Durability — You 31% of 84 · Freitag 43.7% of 142 · too few to compare')
+    expect(text).not.toContain('narrowed')
+  })
+
+  it('qualifies each side and says what its figure is a share of', () => {
+    const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('You — Sealand')
+    expect(text).toContain('Freitag — rival')
+    expect(text).toContain('Category — no brand')
+    expect(text).toContain('of your videos')
+    expect(text).toContain('of their videos')
+    expect(text).toContain('of category videos')
+  })
+
+  // D5 / D11. `directionWord` answers `flat` when three readings exist and do
+  // not agree — the ABSENCE of a direction — and "flat" is not a word this
+  // product has (MOVEMENT_WORDS carries none). The build printed "flat, 3
+  // months" beside Freitag's "no clear change": two non-answers, one of them
+  // dressed as a finding.
+  it('prints no "flat" anywhere, and still prints a direction the category earned', () => {
+    const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    expect(markup).not.toContain('flat')
+    expect(markup).toContain('growing, 3 months')
+    expect(copyViolations(markup).filter((v) => v.rule === 'direction-word')).toEqual([])
+  })
+
+  it('states the category’s last three levels as levels, dated, and claims no direction from them', () => {
+    const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Jul 17% → Aug 19% → Sep 24.5% in the category')
+  })
+
+  it('names the axis the chart spans, and what the shading over it means', () => {
+    const text = renderText(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('monthly · Apr → Sep 2026')
+  })
+
+  it('keys the chart by audience AND kind, and paints a second rival its own ink', () => {
+    const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    expect(markup).toContain('Sealand — you')
+    expect(markup).toContain('Freitag — rival')
+    expect(markup).toContain('Category — no brand')
+    // The end label keeps the SHORT name and its denominator — the one part of
+    // an end label that may not be lost to the gutter's clip.
+    expect(markup).toContain('of 142')
+  })
+
+  it('draws the gap bracket only where the band earned a magnitude (D1)', () => {
+    // On the mock's own month the gap is `too_little_data`, so there is no
+    // bracket — the same answer the pane's lead gives one tile above.
+    const markup = render(subjectsLine.render(subjectsFixture(), 'app', ctx))
+    expect(markup).not.toContain('apart')
+  })
+
+  it('names the subject in the voices title and states the language basis, not the mock’s', () => {
+    const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Voices on durability')
+    // D15. What is recorded is the language of what was said ON CAMERA,
+    // all-time; "27% of this month's videos" would restate a different
+    // denominator.
+    expect(text).toContain('said on camera was not in English')
+  })
+
+  it('flags a creator speaking on camera, and pairs the frame’s own words with it', () => {
+    const text = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(text).toContain('Said on camera')
+    expect(text).toContain('On-screen text on the same video')
+    expect(text).toContain('1 bag. 3 years. 0 regrets')
+  })
+})
+
 describe('the page’s own layout', () => {
   it('draws all six blocks when a subject is selected', () => {
     expect(layoutFor(subjectsFixture()).map((b) => b.block.key)).toEqual(SUBJECT_BLOCKS.map((b) => b.key))
@@ -370,8 +559,12 @@ describe('the page’s own layout', () => {
     // Six tiles printing the same sentence down two screens of empty space is
     // honest and unreadable. The page decides what to drop; that division is
     // the block contract's own ("a report drops a slide").
+    // The two rail tiles that are about the WORKSPACE stay: what you published
+    // and what you claimed are true whether or not a subject is selected, and
+    // on the refused fixture they are the only reading on the page.
     for (const data of [refusedFixture(), candidatesFixture()]) {
-      expect(layoutFor(data).map((b) => b.block.key)).toEqual(['subjects.list', 'subjects.subject'])
+      expect(layoutFor(data).map((b) => b.block.key))
+        .toEqual(['subjects.list', 'subjects.subject', 'subjects.ownposts', 'subjects.sayhear'])
     }
   })
 
