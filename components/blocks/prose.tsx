@@ -51,12 +51,20 @@ export function TokenProse({
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
   if (parts.length === 0) return null
+  const hero = size === 'hero'
+  // A FIGURE IN A HERO SENTENCE TAKES THE SENTENCE'S FACE. Mono inside 13.5px
+  // sans is a deliberate signal — code's number, in code's typeface — and at
+  // 23px serif it is the opposite: tabular mono sets "1,388" as "1 , 388" and
+  // "9.4%" as "9 . 4%", so the one sentence the artefact is about reads as
+  // machine output. The artboard sets its figures in the sentence's own face at
+  // weight 600, which says the same thing without breaking the line.
   const children: ReactNode[] = parts.map((p, i) =>
     'text' in p
       ? <span key={i}>{p.text}</span>
-      : <span key={i} data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{p.figure}</span>,
+      : hero
+        ? <span key={i} data-copy="figure" style={mode === 'email' ? { fontWeight: 600 } : undefined} className={mode === 'email' ? undefined : 'font-semibold'}>{p.figure}</span>
+        : <span key={i} data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{p.figure}</span>,
   )
-  const hero = size === 'hero'
   if (mode === 'email') {
     return (
       <div

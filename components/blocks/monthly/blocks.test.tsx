@@ -7,6 +7,10 @@ import { render, renderText } from '@/lib/test/render'
 import { fmtInt, fmtPct } from '@/lib/format'
 import { sentFigureRows } from '@/lib/reports/sent-figures'
 import { MONTHLY_BLOCK_KEYS, MONTHLY_MOVES_UNLOCK } from '@/lib/reports/monthly'
+import { MOVEMENT_WORDS } from '@/components/delta-badge'
+import { REFUSAL_WHY } from '@/lib/reading/record'
+import { gapLine, type Gap } from '@/lib/reading/gap'
+import { OWN_POSTS_UNREADABLE } from '@/lib/pages/overview'
 import { MOVERS_UNREAD_NOTE } from '@/lib/pages/monthly'
 import { ALL_MONTHLY_BLOCKS, MONTHLY_BLOCKS, monthlyBlocksFor } from './index'
 import { formingMonthlyFixture, monthlyFixture, refusedMonthlyFixture } from './fixture'
@@ -406,12 +410,63 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
+  // THE MOVE'S LINE IS STILL PRINTED WHOLE — it is just printed in the
+  // artboard's two type sizes (E-monthly). `moveLine` composes "{title} ·
+  // tracked 14 Sep · …", and the email arm sets the name in 15/600 above the
+  // rest of it, so the joined text reads "Advanced technology tracked 14 Sep …"
+  // with the separator gone. The assertion is the two halves, which is what the
+  // reader sees; asserting the raw line back would pin the block to printing
+  // the name once, in one size, which is the thing that changed.
   it('still print the rows, the promise and the figures the page declares', () => {
     const data = monthlyFixture()
     const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(data, 'email', ctx))
     expect(text).toContain(MONTHLY_MOVES_UNLOCK)
     expect(text).toContain(data.overview.moves.masthead)
-    for (const row of data.overview.moves.rows) expect(text).toContain(row.line)
+    for (const row of data.overview.moves.rows) {
+      expect(text).toContain(row.title)
+      const rest = row.line.startsWith(`${row.title} · `) ? row.line.slice(row.title.length + 3) : row.line
+      expect(text).toContain(rest)
+    }
+    // AND THE WHOLE-LEDGER TALLY, which nothing on this artefact printed before
+    // (mock-gap D12 — never "this quarter").
+    expect(text).toContain(data.overview.moves.acted?.line as string)
+  })
+
+  it('prints the rivals lead sentence, which wave 1 composed and nothing drew', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain(data.overview.rivals.lead as string)
+    // D8: a count and the names, never "slipped 2" — a direction word for a
+    // movement the row beneath it says did not clear its band.
+    expect(text).not.toMatch(/slipped/i)
+  })
+
+  it('says in the open why a comparison was refused, where a title cannot be read', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain(MOVEMENT_WORDS.refused)
+    expect(text).toContain(REFUSAL_WHY.tracking_change)
+  })
+
+  it('marks your own row and prints what the rivals said on their own posts', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.rivals'].render(data, 'email', ctx))
+    expect(text).toContain('Sealand (you)')
+    expect(text).toContain('What the tracked rivals said on their own posts')
+    expect(text).toContain(OWN_POSTS_UNREADABLE)
+  })
+
+  it('prints both sides of a subject as a column, each with its own "of N"', () => {
+    const data = monthlyFixture()
+    const text = renderText(MONTHLY_BLOCKS['monthly.subjects'].render(data, 'email', ctx))
+    for (const row of data.overview.subjects.rows) {
+      expect(text).toContain(`${fmtInt(row.you.k ?? 0)} of ${fmtInt(row.you.n ?? 0)}`)
+      expect(text).toContain(`${fmtInt(row.category.k ?? 0)} of ${fmtInt(row.category.n ?? 0)}`)
+    }
+    // D1: the gap prints as both sides and a band, and the earlier gap as its
+    // own dated reading — never "narrowed from 19 in June".
+    expect(text).toContain(gapLine(data.overview.subjects.gaps.s1 as Gap))
+    expect(text).not.toMatch(/narrowed/i)
   })
 
   it('merge into one figure table with no key printed two ways', () => {

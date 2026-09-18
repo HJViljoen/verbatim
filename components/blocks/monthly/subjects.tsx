@@ -56,6 +56,7 @@ export function monthlySubjectsEmail(data: OverviewData, ctx: BlockContext): Rea
       title={overviewSubjects.title}
       question={overviewSubjects.question}
       mode="email"
+      accent
       meta={s.rows.length > 0 ? `${fmtInt(s.rows.length)} named` : undefined}
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Subjects →</a>}
       footerNote={s.rows.length > 0 ? 'share of videos where the subject came up' : undefined}
@@ -179,11 +180,25 @@ function SubjectBlock({ row, sentLine }: { row: SubjectRow; sentLine: string | n
                       row. "you" / "the category" are the artboard's own column
                       words, not new vocabulary. */}
                   <td align="right" style={{ paddingLeft: 10, whiteSpace: 'nowrap', verticalAlign: 'baseline' }}>
-                    <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>you</span>
-                    <BlockMovement verdict={row.you.verdict} unit="pts" mode="email" />
-                    <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, margin: '0 4px 0 8px' }}>the category</span>
-                    <BlockMovement verdict={row.category.verdict} unit="pts" mode="email" />{' '}
-                    <DirectionWord direction={row.direction} mode="email" />
+                    {/* A SIDE'S LABEL ONLY WHERE THAT SIDE HAS AN ANSWER. A
+                        bare "you" with nothing after it — which is what a null
+                        verdict left behind — reads as a truncated sentence, and
+                        "you the category" beside one badge is worse than no
+                        label at all. No verdict is not a refusal: it is a first
+                        reading, and the row simply shows no comparison. */}
+                    {row.you.verdict ? (
+                      <>
+                        <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, marginRight: 4 }}>you</span>
+                        <BlockMovement verdict={row.you.verdict} unit="pts" mode="email" />
+                      </>
+                    ) : null}
+                    {row.category.verdict ? (
+                      <>
+                        <span style={{ fontFamily: FONT.sans, fontSize: 10.5, color: EMAIL.faint, margin: row.you.verdict ? '0 4px 0 8px' : '0 4px 0 0' }}>the category</span>
+                        <BlockMovement verdict={row.category.verdict} unit="pts" mode="email" />{' '}
+                        <DirectionWord direction={row.direction} mode="email" />
+                      </>
+                    ) : null}
                   </td>
                 </tr>
               </tbody>

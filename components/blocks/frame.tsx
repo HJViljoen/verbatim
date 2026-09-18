@@ -37,7 +37,7 @@ import { cn } from '@/lib/utils'
  * chrome rather than content and lives here.
  */
 export function BlockFrame({
-  title, question, mode = 'app', footer, footerNote, meta, children, className,
+  title, question, mode = 'app', footer, footerNote, meta, children, className, accent = false,
 }: {
   title: string
   question?: string
@@ -60,6 +60,25 @@ export function BlockFrame({
   meta?: ReactNode
   children: ReactNode
   className?: string
+  /**
+   * The artboards' RULED EYEBROW (Block D wave 2, E-monthly — ADDITIVE, and
+   * the default is off, so every existing caller is byte-identical).
+   *
+   * Every one of the seventeen artboards heads a section the same way: a
+   * 2 x 16px green rule, then the title in MONO 11 uppercase at `.08em`. The
+   * built frame sets it in sans 12/600 at `.6px` with no mark, which is why
+   * the built pages read softer and less instrument-like than the artboards
+   * do — mock-gap's own diagnosis for the MonthlyReport, where it is the
+   * largest remaining chrome difference once the tables are ported.
+   *
+   * IT IS A FLAG AND NOT A COLOUR. The mark is the product's one accent and a
+   * caller may not choose another: a second green would be a second meaning.
+   *
+   * Left off by default deliberately. Turning it on for every block in the
+   * product is a change to seventeen surfaces at once and belongs to whoever
+   * merges this wave, not to the one package that needed it first.
+   */
+  accent?: boolean
 }) {
   if (mode === 'email') {
     return (
@@ -70,7 +89,25 @@ export function BlockFrame({
               <table width="100%" role="presentation" cellPadding={0} cellSpacing={0} border={0} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                 <tbody>
                   <tr>
-                    <td style={{ fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.6px' }}>{title}</td>
+                    {accent ? (
+                      <>
+                        {/* THE MARK IS A SPAN INSIDE THE CELL, not the cell's
+                            own background. A `<td>` with a background fills
+                            whatever height the row takes from the title beside
+                            it, so a 2px rule painted on the cell rendered as a
+                            16px green square. */}
+                        <td width={16} style={{ width: 16, verticalAlign: 'middle', lineHeight: 0 }}>
+                          <span style={{ display: 'inline-block', width: 16, height: 2, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
+                        </td>
+                        <td width={8} style={{ width: 8, fontSize: 1 }}>&nbsp;</td>
+                      </>
+                    ) : null}
+                    <td style={accent
+                      ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.08em' }
+                      : { fontFamily: FONT.sans, fontSize: 12, fontWeight: 600, color: EMAIL.muted, textTransform: 'uppercase', letterSpacing: '.6px' }}
+                    >
+                      {title}
+                    </td>
                     {meta ? <td align="right" style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.faint }}>{meta}</td> : null}
                   </tr>
                 </tbody>
@@ -113,7 +150,15 @@ export function BlockFrame({
   return (
     <section className={cn('flex min-w-0 flex-col gap-2.5', className)}>
       <header className="flex items-baseline justify-between gap-2">
-        <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
+        <h2 className={cn(
+          'm-0 flex min-w-0 items-center gap-2',
+          accent
+            ? 'font-mono text-[11px] uppercase tracking-[0.08em] text-secondary-foreground'
+            : cn('font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]'),
+        )}>
+          {accent ? <span aria-hidden className="inline-block h-[2px] w-4 flex-none rounded-full bg-positive" /> : null}
+          {title}
+        </h2>
         {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
       </header>
       {question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}

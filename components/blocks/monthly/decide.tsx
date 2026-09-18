@@ -64,6 +64,11 @@ export const monthlyDecide: Block<MonthlyData> = {
         title={monthlyDecide.title}
         question={monthlyDecide.question}
         mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and
+        // the title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
         // NO `meta` WITH THE NEXT READING'S DATE ON IT. The body says "The next
         // reading of this is 1 Oct 2026." in full, and the frame said the same
         // date three lines above it — confirmed in both rendered emails. One

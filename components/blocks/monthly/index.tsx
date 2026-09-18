@@ -15,6 +15,7 @@ import { fromOverview } from './adapt'
 import { monthlySubjectsEmail } from './subjects'
 import { monthlyRivalsEmail } from './rivals'
 import { monthlyMovesEmail } from './moves'
+import { monthlySoundEmail } from './sound'
 import { monthlyMonth } from './month'
 import { monthlyMovers } from './movers'
 import { monthlyVoices } from './voices'
@@ -50,7 +51,7 @@ export const MONTHLY_BLOCKS: Record<MonthlyBlockKey, Block<MonthlyData>> = {
   'monthly.moves': fromOverview('monthly.moves', overviewMoves, artefactMoves, monthlyMovesEmail),
   'monthly.voices': monthlyVoices,
   'monthly.decide': monthlyDecide,
-  'monthly.sound': fromOverview('monthly.sound', overviewRecord),
+  'monthly.sound': fromOverview('monthly.sound', overviewRecord, undefined, monthlySoundEmail),
 }
 
 /**

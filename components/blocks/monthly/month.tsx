@@ -126,6 +126,11 @@ export const monthlyMonth: Block<MonthlyData> = {
         title={monthlyMonth.title}
         question={monthlyMonth.question}
         mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and the
+        // title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open the month →</a>
           : <Link href={href} className="hover:underline">Open the month →</Link>}

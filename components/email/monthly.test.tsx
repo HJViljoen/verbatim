@@ -5,9 +5,12 @@ import { markupText, render } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import {
   MONTHLY_BLOCK_KEYS,
+  MONTHLY_CARD_WIDTH,
   MONTHLY_EMAIL_WIDTH,
   MONTHLY_RULE,
   MONTHLY_RULE_FROZEN,
+  monthlyContext,
+  monthlyEyebrow,
   monthlyPeriod,
 } from '@/lib/reports/monthly'
 import type { MonthlySnapshotData } from '@/lib/reports/monthly-build'
@@ -54,9 +57,49 @@ const withNote = () => {
 }
 
 describe('the monthly email', () => {
-  it('is 640 wide, the mock’s width', () => {
+  // THE FRAME IS 640 AND THE CARD IS 600 (E-monthly). The artboard's outer
+  // element is 640 with 20px of canvas padding, so the white card is 600 —
+  // which the design system states in so many words (§4, "600px card"). The
+  // card carried 640 and every line of copy ran ~40px long.
+  it('is a 600 card inside the mock’s 640 frame', () => {
     expect(MONTHLY_EMAIL_WIDTH).toBe(640)
+    expect(MONTHLY_CARD_WIDTH).toBe(600)
     expect(body(snapshot())).toContain('max-width:640px')
+    expect(body(snapshot())).toContain('max-width:600px')
+  })
+
+  it('heads the masthead with the product and the reading, not the tenant', () => {
+    const data = snapshot()
+    const text = words(data)
+    expect(text).toContain(monthlyEyebrow(data.month, data.monthStatus, data.readingAt))
+    expect(text).not.toContain('consumer intelligence')
+    // The green rule beside it — the artboard's 30 x 3 mark, and the only green
+    // on the artefact above the button.
+    expect(body(data)).toContain(`background:${EMAIL.green}`)
+  })
+
+  it('prints the update dates, which have been loaded since WP11 and drawn nowhere', () => {
+    const data = snapshot()
+    const bar = data.reading.overview.bar
+    const text = words(data)
+    expect(text).toContain(monthlyContext(bar))
+    for (const d of bar.updateDates) expect(text).toContain(d)
+    // THE RANGE IS THE MONTH'S OWN DAYS, never the run window: a period is
+    // dated by the comment.
+    expect(text).toContain('1–18 Sep 2026')
+  })
+
+  it('names the month on the button, so twelve of these are not twelve of one', () => {
+    expect(words(snapshot())).toContain('Open the September reading')
+  })
+
+  // The artboard separates its eight sections with a full-bleed #DCDFE3 rule.
+  // They shared one padded cell with 22px of margin, which reads as one column
+  // rather than as a document with parts.
+  it('rules one section off from the next', () => {
+    const markup = body(snapshot())
+    const rules = markup.split(`background:${EMAIL.border};font-size:1px`).length - 1
+    expect(rules).toBeGreaterThanOrEqual(MONTHLY_BLOCK_KEYS.length)
   })
 
   it('prints all eight sections, in the stored order, on every state', () => {

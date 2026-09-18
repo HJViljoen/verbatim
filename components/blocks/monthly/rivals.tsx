@@ -58,6 +58,7 @@ export function monthlyRivalsEmail(data: OverviewData, ctx: BlockContext): React
       title={overviewRivals.title}
       question={overviewRivals.question}
       mode="email"
+      accent
       meta="attention share"
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Competitive →</a>}
       footerNote="both shares of a frozen panel of accounts · no rank is printed"
@@ -102,14 +103,18 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
               {row.role === 'client' ? <span style={{ fontWeight: 400, color: EMAIL.muted }}> (you)</span> : null}
               {row.retiredAt ? <span style={{ fontWeight: 400, color: EMAIL.muted }}> · tracked until {shortDate(row.retiredAt)}</span> : null}
             </div>
-            <div style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint, marginTop: 4 }}>
-              content share <Share share={row.content} recorded={recorded} />
-            </div>
-            <div style={{ marginTop: 4 }}>
-              <BlockMovement verdict={row.contentVerdict} unit="pts" mode="email" />
+            {/* THE CONTENT SIDE AND ITS OWN VERDICT ON ONE LINE. Stacked, the
+                badge sat at the left margin where the attention badge sits at
+                the right, and a reader had no way to tell which share either
+                belonged to. */}
+            <div style={{ marginTop: 5 }}>
+              <span style={{ fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.faint }}>
+                content share <Share share={row.content} recorded={recorded} />
+              </span>
+              {row.contentVerdict ? <span style={{ marginLeft: 6 }}><BlockMovement verdict={row.contentVerdict} unit="pts" mode="email" /></span> : null}
             </div>
           </td>
-          <td width={96} align="right" style={{ width: 96, padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
+          <td width={112} align="right" style={{ width: 112, padding: '9px 10px 9px 0', verticalAlign: 'top' }}>
             {row.attention == null || row.attention.pct == null ? (
               <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{recorded ? NOT_OBSERVED : NOT_RECORDED}</span>
             ) : (
@@ -121,7 +126,7 @@ function Row({ row, recorded }: { row: RivalRow; recorded: boolean }) {
               />
             )}
           </td>
-          <td width={132} align="right" style={{ width: 132, padding: '9px 0', verticalAlign: 'top' }}>
+          <td width={124} align="right" style={{ width: 124, padding: '9px 0', verticalAlign: 'top' }}>
             <BlockMovement verdict={row.attentionVerdict} unit="pts" mode="email" />
             {/* THE REASON, IN THE OPEN. "Comparison refused" alone tells a
                 reader something is wrong without telling them what, and the

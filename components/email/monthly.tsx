@@ -86,7 +86,9 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                         <table {...presentation} style={{ borderCollapse: 'collapse', borderSpacing: 0 }}>
                           <tbody>
                             <tr>
-                              <td width={30} height={3} style={{ width: 30, height: 3, background: EMAIL.green, borderRadius: 2, fontSize: 1, lineHeight: '3px' }}>&nbsp;</td>
+                              <td width={30} style={{ width: 30, verticalAlign: 'middle', lineHeight: 0 }}>
+                                <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
+                              </td>
                               <td width={10} style={{ width: 10, fontSize: 1 }}>&nbsp;</td>
                               <td style={text.eyebrow}>{monthlyEyebrow(data.month, data.monthStatus, data.readingAt)}</td>
                             </tr>

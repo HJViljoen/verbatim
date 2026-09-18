@@ -40,6 +40,7 @@ export function monthlyMovesEmail(data: OverviewData, ctx: BlockContext): ReactN
       title={overviewMoves.title}
       question={overviewMoves.question}
       mode="email"
+      accent
       meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} dated` : undefined}
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>}
     >
@@ -56,11 +57,22 @@ export function monthlyMovesEmail(data: OverviewData, ctx: BlockContext): ReactN
   )
 }
 
+/**
+ * One move, in the artboard's row: the title, then what the line says about it.
+ *
+ * THE TITLE IS NOT PRINTED TWICE. `moveLine` composes "{title} · tracked 14 Sep
+ * · first scoring lands with the October reading", so a bold title above the
+ * whole line said the name twice in two type sizes. The line is the loader's to
+ * word and this does not re-word it: it takes off the leading name where the
+ * line starts with it, and prints the line whole where it does not.
+ */
 function Row({ row }: { row: MoveRow }) {
+  const prefix = `${row.title} · `
+  const rest = row.line.startsWith(prefix) ? row.line.slice(prefix.length) : row.line
   return (
     <div style={{ borderTop: `1px solid ${EMAIL.hairline}`, padding: '12px 0', marginTop: 8 }}>
       <div style={{ fontFamily: FONT.sans, fontSize: 15, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
-      <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '1.5', color: EMAIL.ink2, marginTop: 3 }}>{row.line}</div>
+      <div style={{ fontFamily: FONT.sans, fontSize: 13, lineHeight: '1.5', color: EMAIL.ink2, marginTop: 3 }}>{rest}</div>
     </div>
   )
 }
@@ -69,7 +81,11 @@ function Row({ row }: { row: MoveRow }) {
  *  the figure rather than a picture of one. */
 function Acted({ acted }: { acted: { decided: number; of: number; line: string } }) {
   const segments = acted.of > 0 ? Math.min(acted.of, 12) : 0
-  const filled = acted.of > 0 ? Math.round((acted.decided / acted.of) * segments) : 0
+  // A DECISION THAT HAPPENED IS NEVER DRAWN AS NONE. 1 of 64 rounds to zero
+  // segments of twelve, and twelve grey blocks beside the figure "1" say the
+  // opposite of the figure. The meter is a reading of the ratio and it is
+  // coarse; it may round down, but not through the only thing it is about.
+  const filled = acted.decided > 0 ? Math.max(1, Math.round((acted.decided / acted.of) * segments)) : 0
   return (
     <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '15px 18px', marginTop: 12 }}>
       <table width="100%" {...presentation} style={T}>

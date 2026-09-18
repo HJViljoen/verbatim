@@ -58,6 +58,11 @@ export const monthlyMovers: Block<MonthlyData> = {
         title={monthlyMovers.title}
         question={monthlyMovers.question}
         mode={mode}
+        // THE ARTBOARDS' RULED EYEBROW (E-monthly): a 2 x 16 green mark and
+        // the title in mono 11 uppercase, which is how all seventeen head a
+        // section. Off by default on the primitive; on for every section of
+        // this artefact, so the eight read as one document.
+        accent
         meta={m.span || undefined}
         footer={email
           ? <a href={href} style={{ color: EMAIL.ink }}>Open Voice →</a>
