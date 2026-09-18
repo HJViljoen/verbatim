@@ -62,11 +62,21 @@ function moreLine(p: { formats: FormatMatrix; hooks: FormatMatrix }): string {
 
 const pctOf = (row: FormatRow | null): number | null => (row ? row.pct : null)
 
-/** The widest share in a column, so one column's bars are scaled against each
- *  other and never against another column's. Never a partition: the bar is a
- *  reading aid inside one audience, and the number beside it is the claim. */
-function columnMax(side: FormatMatrixSide, keys: readonly { key: string }[]): number {
-  const values = keys.map((k) => pctOf(side.byKey[k.key]) ?? 0)
+/**
+ * The widest share in the TABLE, so every bar on it is drawn at one scale.
+ *
+ * IT WAS PER COLUMN, AND THAT INVERTED ROWS (design review 4, code review 3).
+ * Each column scaled against its own largest value, so Össur's 28 of 84 — a
+ * 33% share — drew a full-width bar beside the category's 40.8% at 60% width:
+ * the longest bar in the row belonged to the smallest share. A bar is a reading
+ * aid for a SHARE and a share is comparable across sides whatever each side's
+ * denominator is, so one scale is the only one that can be read across a row.
+ *
+ * Still never a partition (D4): nothing sums to the width of the table, there
+ * is no remainder row, and the number beside each bar carries its own "of N".
+ */
+function matrixMax(sides: readonly FormatMatrixSide[], keys: readonly { key: string }[]): number {
+  const values = sides.flatMap((side) => keys.map((k) => pctOf(side.byKey[k.key]) ?? 0))
   return Math.max(...values, 1)
 }
 
@@ -80,21 +90,36 @@ function Bar({ pct, max, colour }: { pct: number | null; max: number; colour: st
   )
 }
 
-/** One cell: the bar, then the figure over its own denominator. */
-function Cell({ side, row, max, mode }: { side: FormatMatrixSide; row: FormatRow | null; max: number; mode: RenderMode }) {
-  if (side.unread) return <span />
+/**
+ * One cell: the bar, then the figure over its own denominator.
+ *
+ * THE UNIT IS DECIDED BY WHICH SIDE, NEVER BY HOW BIG (design review 4, code
+ * review 3). It was `n >= 100`, evaluated per CELL, so a row whose two named
+ * sides straddled a hundred printed "40.8% of 687 · 28 of 84 · 21.8% of 124" —
+ * the two columns the page exists to compare, in two different units, decided
+ * by a cutoff that happened to fall between them. The comment claimed the
+ * artboard's authority for it; the artboard prints the CATEGORY as a share and
+ * both named columns as counts ("2 of 9" · "6 of 14"), which is a rule about
+ * which side. That rule is here: the category is a share of a population nobody
+ * can name a member of, and you and your rival are counts, in the same unit as
+ * each other, whatever either one's total. The denominator is in the cell
+ * either way (D10).
+ */
+export function cellFigure(side: FormatMatrixSide, row: FormatRow | null): { value: string; of: string } {
   const k = row?.value.k ?? 0
   const n = row?.value.n ?? side.of
-  // THE CATEGORY COLUMN IS A PERCENTAGE AND THE NARROW ONES ARE COUNTS, which
-  // is the artboard's own choice and the honest one: "2 of 9" is readable and
-  // "22.2% of 9" pretends to a precision nine videos do not carry. The rule
-  // that matters is the same either way — the denominator is in the cell.
-  const wide = n >= 100
+  const share = side.audience === INDUSTRY_AUDIENCE
+  return { value: share ? fmtPct(row?.pct ?? 0) : fmtInt(k), of: `of ${fmtInt(n)}` }
+}
+
+function Cell({ side, row, max, mode }: { side: FormatMatrixSide; row: FormatRow | null; max: number; mode: RenderMode }) {
+  if (side.unread) return <span />
+  const figure = cellFigure(side, row)
   return (
     <span className="flex items-center gap-2.5">
       <Bar pct={pctOf(row)} max={max} colour={sideColour(side)} />
       <span className="w-[62px] flex-none">
-        <FigureCell mode={mode} value={wide ? fmtPct(row?.pct ?? 0) : fmtInt(k)} of={`of ${fmtInt(n)}`} />
+        <FigureCell mode={mode} value={figure.value} of={figure.of} />
       </span>
     </span>
   )
@@ -143,7 +168,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
   const limit = SHOWN[heading] ?? matrix.keys.length
   const keys = matrix.keys.slice(0, limit)
   if (keys.length === 0 || sides.length === 0) return null
-  const maxes = sides.map((s) => columnMax(s, keys))
+  const max = matrixMax(sides, keys)
   const cols = `168px repeat(${sides.length}, minmax(0, 1fr))`
   return (
     <div className="flex flex-col gap-2">
@@ -156,8 +181,8 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
         {sides.map((s) => <ColumnHead key={s.audience}>{s.label}</ColumnHead>)}
         {keys.map((k) => (
           <Row key={k.key} label={k.label}>
-            {sides.map((s, i) => (
-              <Cell key={s.audience} side={s} row={s.byKey[k.key]} max={maxes[i]} mode={mode} />
+            {sides.map((s) => (
+              <Cell key={s.audience} side={s} row={s.byKey[k.key]} max={max} mode={mode} />
             ))}
           </Row>
         ))}

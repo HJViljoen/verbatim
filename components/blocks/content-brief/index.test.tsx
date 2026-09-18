@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
@@ -8,6 +9,7 @@ import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { toMake } from './make'
+import { cellFigure } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
@@ -99,6 +101,26 @@ describe('content.playbook — the mock’s page 3', () => {
 
   it('states the classified n against the published one, per side', () => {
     expect(text).toMatch(/Read from [\d,]+ of .+ videos published in September\./)
+  })
+
+  // ONE ROW, ONE UNIT PER SIDE (design review 4, code review 3). The cutoff was
+  // `n >= 100` per CELL, so the two columns a reader compares printed "28 of 84"
+  // beside "21.8% of 124" whenever their denominators straddled a hundred.
+  it('prints the category as a share and the named sides as counts, whatever their size', () => {
+    const sides = data.playbook.playbook!.formats.sides
+    const you = sides.find((s) => s.audience === CLIENT_AUDIENCE)!
+    const rival = sides.find((s) => s.audience !== CLIENT_AUDIENCE && s.audience !== INDUSTRY_AUDIENCE)!
+    // The fixture is the case that produced the mixed row: one named side under
+    // a hundred classified videos and one over it.
+    expect(Math.min(you.of, rival.of)).toBeLessThan(100)
+    expect(Math.max(you.of, rival.of)).toBeGreaterThanOrEqual(100)
+    const key = data.playbook.playbook!.formats.keys[0].key
+    const category = sides.find((s) => s.audience === INDUSTRY_AUDIENCE)!
+    expect(cellFigure(category, category.byKey[key]).value).toMatch(/%$/)
+    expect(cellFigure(you, you.byKey[key]).value).not.toMatch(/%/)
+    expect(cellFigure(rival, rival.byKey[key]).value).not.toMatch(/%/)
+    // And every cell still carries its own denominator (D10).
+    for (const s of sides) expect(cellFigure(s, s.byKey[key]).of).toMatch(/^of [\d,]+$/)
   })
 
   it('says why Reddit is in no engagement row, in the one sentence that says it', () => {
