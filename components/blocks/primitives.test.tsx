@@ -112,10 +112,12 @@ describe('BlockFrame', () => {
     const text = markupText(dropped)
     expect(text).not.toContain('Rivals')
     expect(text).not.toContain('Who holds it?')
-    // THE META SURVIVES. It is the block's own note about what it is a reading
-    // of ("September · still filling"), not the section's title, and dropping
-    // it with the heading would take a basis off the page.
-    expect(text).toContain('September')
+    // THE META GOES WITH IT, and used to survive as a right-aligned mono
+    // paragraph — which printed "September" under a slide header already
+    // reading "Content brief · September 2026" (E-content design review 7).
+    // `meta` is the right-hand half of the heading ROW: no heading row, no
+    // meta. The footer note, which is about the block's own reading, stays.
+    expect(text).not.toContain('September')
     expect(text).toContain('all-time')
   })
 

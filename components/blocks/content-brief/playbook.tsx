@@ -320,7 +320,12 @@ export const contentPlaybook: Block<ContentBriefData> = {
         mode={mode}
         heading={mode !== 'print'}
         meta={data.monthLabel}
-        footerNote={p.basisLine}
+        // NO `footerNote` (design review 7). It printed "videos published in
+        // September" at the right-hand end of a footer whose own sentence ends
+        // "…videos published in September." — the same clause twice on one
+        // line. The basis is named by `coverageLine`, by every table's own
+        // reading and by the engagement card, which is D9 kept without saying
+        // it three times.
         footer={moreLine(p) ? `${p.coverageLine} ${moreLine(p)}.` : p.coverageLine}
       >
         <div className="flex min-w-0 flex-col gap-2.5">

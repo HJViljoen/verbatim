@@ -94,6 +94,18 @@ describe('content.playbook — the mock’s page 3', () => {
     expect(text).toContain('videos published in September')
   })
 
+  // A LINE THE ARTBOARD DOES NOT HAVE, PRINTED TWICE (design review 7). The
+  // suppressed heading re-emitted its meta as a stray "September" under a slide
+  // header that already reads "Content brief · September 2026", and the footer
+  // note repeated the basis clause the footer sentence already ends with.
+  it('names its clock once on a slide that already stamps the month', () => {
+    expect(text.match(/videos published in September/g)?.length ?? 0).toBeLessThanOrEqual(3)
+    expect(markup).not.toContain('text-right font-mono text-[11px] text-muted-foreground')
+    // In app mode the block draws its own heading row, and the meta belongs to
+    // it: the flag is about a slide, not about the value.
+    expect(renderText(render(contentPlaybook.render(data, 'app', ctx)))).toContain('September')
+  })
+
   it('prints a denominator in every cell it draws (D10)', () => {
     // FigureCell stamps `level` only where an "of N" was handed to it, and the
     // copy contract fails a level without one — so the assertion that matters

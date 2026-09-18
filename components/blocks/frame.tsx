@@ -51,9 +51,20 @@ export function BlockFrame({
    * `<h2>` prints the same idea again, in caps, one line under it — two
    * headings for one section, which the artboards draw once. A block that
    * knows it is inside a titled sheet passes `heading={false}` and keeps the
-   * meta, the footer and the footer note, which are the block's and not the
-   * section's. Nothing else changes: the default is true and every existing
-   * call site is untouched.
+   * footer and the footer note, which are the block's and not the section's.
+   * Nothing else changes: the default is true and every existing call site is
+   * untouched.
+   *
+   * THE META GOES WITH THE HEADING (E-content design review 7, code review 9).
+   * It was re-emitted as a right-aligned mono paragraph, which put "September"
+   * two lines under a slide header already reading "Content brief · September
+   * 2026", "September · still filling" under another and "64 in the ledger ·
+   * oldest first" under a third — none of them in the artboard, each landing in
+   * the dead space between the framing line and the first eyebrow. `meta` is
+   * the right-hand half of the heading ROW; a slide that prints no heading
+   * prints no heading row, and a block with something to say about its own
+   * basis says it in the body or in the footer note, where a reader can see
+   * what it is about.
    */
   heading?: boolean
   /** The line along the bottom, LEFT: a link deeper. */
@@ -131,8 +142,6 @@ export function BlockFrame({
           <h2 className={cn('m-0 font-semibold uppercase tracking-[0.06em] text-secondary-foreground', big ? 'text-[11px]' : 'text-[10.5px]')}>{title}</h2>
           {meta ? <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">{meta}</span> : null}
         </header>
-      ) : meta ? (
-        <p className="m-0 text-right font-mono text-[11px] text-muted-foreground">{meta}</p>
       ) : null}
       {heading && question ? <p className={cn('m-0 text-muted-foreground', big ? 'text-[11.5px]' : 'text-[12.5px]')}>{question}</p> : null}
       {children}
