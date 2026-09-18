@@ -7,7 +7,7 @@ import { RivalRename } from '@/app/dashboard/settings/rival-rename'
 import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
-import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, type RivalRow } from '@/lib/settings/rivals-view'
+import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
 import { cn } from '@/lib/utils'
 
 // `settings.rivals.*` — the rivals table at the artboard's five columns, and
@@ -64,9 +64,10 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
   const known = new Set(rows.map((r) => r.name))
   const added = names.filter((n) => !known.has(n))
 
+
   return (
     <Section>
-      <SectionHead title="Rivals" meta={rivalsMeta(rows)} rule={RIVAL_BREAK_RULE} />
+      <SectionHead title="Rivals" meta={rivalsMeta(rows, { names, added: added.length })} rule={RIVAL_BREAK_RULE} />
 
       {/* "This POST carried the rival list." Outside the table on purpose: the
           state that most needs it is the empty one, where there is no table and
@@ -77,25 +78,33 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
         <p className="text-[12.5px] text-muted-foreground">No rival is named. Naming one is how the category gets a shape.</p>
       ) : (
         <GridTable cols={COLS} min={860} head={head}>
-          {rows.map((r) => (
+          {rows.map((r) => {
+            // Taken off here and not yet saved. The row STAYS — its months are
+            // frozen under this name and a reader still has to see them — but
+            // it stops presenting as tracked: no hidden input, the state cell
+            // says what is waiting, and the control that acted on it offers the
+            // way back. Before this, the only thing the x removed was itself.
+            const dropped = !r.retiredAt && !names.includes(r.name)
+            return (
             <GridRow
               key={r.identity?.id ?? r.name}
               cols={COLS}
               minHeight={52}
+              className={dropped ? 'opacity-60' : undefined}
               cells={[
                 <span key="n" className="flex items-center gap-2">
-                  {names.includes(r.name) && canEdit && (
+                  {!dropped && !r.retiredAt && canEdit && (
                     <button
                       type="button"
                       onClick={() => onRemove(r.name)}
                       aria-label={`Stop tracking ${r.name}`}
-                      className="cursor-pointer rounded-full p-0.5 text-cat transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      className="cursor-pointer rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-inner hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     >
                       <X className="size-3" aria-hidden />
                     </button>
                   )}
                   <span className="min-w-0 truncate text-[12.5px] font-medium">{r.name}</span>
-                  {isNewRival(r, month) && (
+                  {isNewRival(r, month) && !dropped && (
                     <span className="shrink-0 rounded-full bg-warning/20 px-2 py-px text-[10.5px] font-semibold">New</span>
                   )}
                   {/* The tracked list is the form's; one hidden input per name
@@ -104,8 +113,8 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                 </span>,
                 <span key="h" className="block text-left">
                   <span className="inline-flex items-center gap-1.5 text-[12.5px] text-secondary-foreground">
-                    <Dot tone={r.retiredAt ? 'none' : r.noAccounts ? 'watch' : r.read > 0 ? 'good' : 'watch'} />
-                    {rivalState(r)}
+                    <Dot tone={dropped || r.retiredAt ? 'none' : r.noAccounts ? 'watch' : r.read > 0 ? 'good' : 'watch'} />
+                    {dropped ? RIVAL_REMOVED_PENDING : rivalState(r)}
                   </span>
                   {r.perPlatform.length > 0 && (
                     <span className="mt-0.5 block font-mono text-[10.5px] text-cat">
@@ -132,12 +141,19 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
                   // three-line text saying one thing. The dash says there is no
                   // census; the note under the table says why, once.
                   : <span key="o" className="block text-right text-[11.5px] text-cat">— not read</span>,
-                r.identity && !r.retiredAt && canEdit
-                  ? <RivalRename key="r" id={r.identity.id} name={r.name} />
-                  : <span key="r" className="block text-right text-[11.5px] text-cat">{r.retiredAt ? 'no longer tracked' : RENAME_UNAVAILABLE}</span>,
+                dropped && canEdit
+                  ? (
+                    <span key="r" className="block text-right">
+                      <button type="button" onClick={() => setError(onAdd(r.name))} className={CONTROL}>Put it back</button>
+                    </span>
+                  )
+                  : r.identity && !r.retiredAt && canEdit
+                    ? <RivalRename key="r" id={r.identity.id} name={r.name} />
+                    : <span key="r" className="block text-right text-[11.5px] text-muted-foreground">{r.retiredAt ? 'no longer tracked' : RENAME_UNAVAILABLE}</span>,
               ]}
             />
-          ))}
+            )
+          })}
           {added.map((name) => (
             <GridRow
               key={`new-${name}`}

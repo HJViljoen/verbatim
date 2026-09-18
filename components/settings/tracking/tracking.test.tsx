@@ -4,6 +4,7 @@ import { CadenceSection, FREEZE_NOTE, SLOT_NOTE } from './cadence'
 import { CommunitiesSection } from './communities'
 import { PlatformsSection } from './platforms'
 import { RivalsSection, RENAME_UNAVAILABLE } from './rivals'
+import { RIVAL_REMOVED_PENDING } from '@/lib/settings/rivals-view'
 import { NEW_TERM_RULE, TermsSection } from './terms'
 import { BREAK_NOT_RECORDED, BROKE_NOTHING, LastSaveStrip, NEVER_SAVED, SaveStateLine } from '../save-state-strip'
 import { renderText } from '@/lib/test/render'
@@ -176,6 +177,21 @@ describe('the rivals section', () => {
     expect(words).toContain('28 captured, 0 read')
     expect(words).toContain('earliest evidence in our own data')
     expect(words).toContain('removing one is a break, not a zero')
+  })
+
+  it('shows a rival the reader has taken off as taken off, and offers the way back', () => {
+    // C3: `names` is the form's list and `rows` is the server's. With the
+    // rival gone from the first, the row used to keep its state sentence, its
+    // census and its "Tracked since" and lose only its own x — the one edit on
+    // the page with no visible consequence.
+    const dropped = renderText(
+      <RivalsSection rows={rows} names={['Poler']} month="2026-09-01" canEdit onAdd={() => null} onRemove={() => {}} />,
+    )
+    expect(dropped).toContain(RIVAL_REMOVED_PENDING)
+    expect(dropped).toContain('Put it back')
+    // And the head counts the form, not the load.
+    expect(dropped).toContain('1 tracked')
+    expect(dropped).toContain('1 waiting to be taken off')
   })
 
   it('keeps the copy contract', () => {
