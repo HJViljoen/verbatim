@@ -4,7 +4,7 @@ import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
 import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
 import type { OverviewData, RivalRow, SideReading, SubjectRow } from '@/lib/pages/overview'
-import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
+import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, moveLine, readingsCounter, rivalsLead } from '@/lib/pages/overview'
 import {
   actedTally,
   buildMoveCandidate,
@@ -566,8 +566,15 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     // fixtures that exercise "the report of {date} read X" set it themselves.
     sent: null,
     moves: {
+      // THE ARTBOARD'S TWO MOVES, and the first one's ID MATCHES THE READING.
+      // It did not: the row was `m1` and `moveReadingFixture()` is `mv-1`, so
+      // the one move with a banded comparison behind it rendered its fallback
+      // line and every wave-2 port would have designed the row against the
+      // empty arm. The second move is declared this month and has no reading
+      // yet, which is the artboard's own second row.
       rows: [
-        { id: 'm1', title: 'Advanced technology', kind: 'subject', declaredAt: '2026-09-14', line: 'Advanced technology · tracked 14 Sep · first scoring lands with the October reading.' },
+        { id: 'mv-1', title: 'Push repairability', kind: 'subject', declaredAt: '2026-08-12', line: moveLine({ title: 'Push repairability', declared_at: '2026-08-12' }) },
+        { id: 'mv-2', title: 'Track: Waterproofing', kind: 'subject', declaredAt: '2026-09-02', line: moveLine({ title: 'Track: Waterproofing', declared_at: '2026-09-02' }) },
       ],
       unlock: MOVES_UNLOCK,
       masthead: MOVES_MASTHEAD,

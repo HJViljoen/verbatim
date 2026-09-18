@@ -1,22 +1,316 @@
-import type { Block } from '@/lib/blocks/types'
+import type { ReactNode } from 'react'
+import type { Block, RenderMode } from '@/lib/blocks/types'
 import { openLink } from '@/components/blocks/open-link'
-import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
-import { fmtInt } from '@/lib/format'
+import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockMovement } from '@/components/blocks/movement'
+import { TileBlock } from '@/components/shell/tile'
+import { TileColumns } from '@/components/shell/page-grid'
+import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import type { FigureTable } from '@/lib/reading/verdicts'
-import type { OverviewData } from '@/lib/pages/overview'
+import type { CardCount, MoveCandidate, MoveReading } from '@/lib/reading/moves'
+import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
+import type { MoveRow, OverviewData } from '@/lib/pages/overview'
 
-// OV5 · What we are doing, and whether it is working (design §3 OV5).
+// OV5 · What we are doing, and whether it is working (design §3 OV5; ported to
+// `Main.dc.html` §5 in Block D wave 2).
 //
-// HONEST RATHER THAN EMPTY. Phase 2 brings the pre-filled monthly card and the
-// scoring; Phase 1 ships the block with what it actually has — every move the
-// client has dated, each on one line, with the month its first score will land
-// in. Nothing is scored and nothing is ticked, and the unlock is NAMED on the
-// block rather than left for the reader to wonder about.
+// THE CARD IS BUILT AND THE WRITE PATH IS NOT, AND THE BLOCK SAYS WHICH. Wave 1
+// built `buildMoveCandidate` and `readMove` — the pre-filled monthly card and
+// the one banded comparison a declared move earns — and nothing rendered either
+// of them. This is that render: the card on the left as the artboard draws it,
+// the declared moves on the right, and the ledger's whole-history ratio under
+// them.
 //
 // The masthead is code-written and never a model's: "We report what the
 // conversation did after you acted. We never claim you caused it." It is the
-// one sentence that keeps every line under it from reading as a causal claim.
+// one sentence that keeps every line under it from reading as a causal claim,
+// and it takes the artboard's footer-note slot.
+
+/** How many claim rows the card prints before it stops.
+ *
+ *  MEASURED (wave 1's fixture header): Sealand's nine September claims are all
+ *  DISTINCT, between 93 and 197 characters each, several to a post. The mock
+ *  imagines short repeated slogans and lays out a tally; what the data holds is
+ *  a list of long machine paraphrases, so the row needs a cap, and the cap has
+ *  to be small enough that the card stays a card. */
+export const CARD_CLAIMS_SHOWN = 2
+
+/** How many characters of one claim the card prints. A claim is the client's
+ *  own words off its own transcript, so it is CUT rather than re-worded. */
+export const CARD_CLAIM_MAX = 96
+
+/**
+ * What stands in the primary button's place (`main.moves.card.confirm`).
+ *
+ * THE CARD IS BUILT AND THE WRITE PATH IS NOT. The artboard draws "Yes, count
+ * this as a move" as the card's green primary; a button that cannot write is
+ * worse than no button, so the SLOT is kept — same place, bottom of the card —
+ * and the sentence says what the reader is waiting for. It does not name a
+ * month: nothing in the product knows when that write ships, and a delivery
+ * date computed from the calendar is a promise recomputed monthly, wrong the
+ * first time it is read (the defect `MOVES_UNLOCK` was rewritten to end).
+ */
+export const CARD_CONFIRM_SLOT =
+  'Every count above is real. Turning them into a move is a button this page does not have yet, so nothing here counts as one until you say so.'
+
+export function claimText(claim: string): string {
+  const t = claim.replace(/\s+/g, ' ').trim()
+  return t.length <= CARD_CLAIM_MAX ? t : `${t.slice(0, CARD_CLAIM_MAX - 1).trimEnd()}…`
+}
+
+/**
+ * "2 declared · 1 card waiting for you" (`main.moves.header`).
+ *
+ * The second clause exists only now that the card is built, and only where
+ * there is something to confirm: a card with no `proposal` cannot be confirmed
+ * (either nothing was published, or `moves` is not applied here), and calling
+ * one "waiting for you" would be asking for an action the page cannot take.
+ */
+export function movesMeta(m: OverviewData['moves']): string | undefined {
+  const parts: string[] = []
+  if (m.rows.length > 0) parts.push(`${fmtInt(m.rows.length)} declared`)
+  if (m.card?.proposal) parts.push('1 card waiting for you')
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+/** One counted row of the card: the figure over the population it is counted
+ *  in. `CardCount.basis` is the artboard's "posts published in September" — and
+ *  on the own-post rows that is `upload_date`, a THIRD clock (D9), which is why
+ *  the basis prints beside the figure and is never assumed. */
+function Count({ count, mode }: { count: CardCount; mode: RenderMode }) {
+  return (
+    <span className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-0.5'}>
+      <FigureCell
+        mode={mode}
+        value={fmtInt(count.value.k)}
+        of={count.value.n > 0 && count.value.n !== count.value.k ? `of ${fmtInt(count.value.n)}` : undefined}
+      />
+      <span
+        className={mode === 'email' ? undefined : 'text-[11px] leading-[1.35] text-muted-foreground'}
+        style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+      >
+        {count.label} · {count.basis}
+      </span>
+    </span>
+  )
+}
+
+/** The pre-filled card — the artboard's left column. */
+function Card({ card, mode }: { card: MoveCandidate; mode: RenderMode }) {
+  const email = mode === 'email'
+  const claims = card.claimRows.slice(0, CARD_CLAIMS_SHOWN)
+  const moreClaims = card.claimRows.length - claims.length
+  const body = (
+    <>
+      <span
+        className={email ? undefined : 'text-[10px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}
+      >
+        This month’s card · pre-filled from your own posts
+      </span>
+
+      <span className={email ? undefined : 'flex flex-wrap items-start gap-x-6 gap-y-2'}>
+        <Count count={card.posts} mode={mode} />
+        <Count count={card.overFloor} mode={mode} />
+      </span>
+
+      {/* CLAIMS YOU MADE (`main.moves.card.claims`). The claim text is the
+          client's own words lifted off its own transcript, so it is a QUOTATION
+          — several real ones carry a digit ("Made from 100% recycled sails")
+          and rule (a) may not police a quotation. Capped and cut rather than
+          re-worded, because the data is long machine paraphrase and not the
+          mock's slogans. */}
+      {claims.length > 0 ? (
+        <span className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+          <span
+            className={email ? undefined : 'text-[11px] text-muted-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+          >
+            Claims you made · {card.claims.basis}
+          </span>
+          {claims.map((c) => (
+            <span key={c.claim} className={email ? undefined : 'flex min-w-0 items-baseline gap-2 text-[12px]'}>
+              <span data-copy="quote" className={email ? undefined : 'min-w-0 flex-1'}>“{claimText(c.claim)}”</span>
+              <span data-copy="level" className={email ? undefined : 'shrink-0 font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+                {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
+              </span>
+            </span>
+          ))}
+          {moreClaims > 0 ? (
+            <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+              and {fmtInt(moreClaims)} more, each said on its own post
+            </span>
+          ) : null}
+        </span>
+      ) : null}
+
+      {/* THE HOOK SPLIT, FROM THE REAL `hook_style` ENUM AND NOT THE MOCK'S
+          THREE LABELS (`main.moves.card.hooks`). It is mostly empty — twelve of
+          Sealand's seventeen September posts carry no hook at all — so
+          "not classified" is the largest row rather than a rounding footnote,
+          and `buildMoveCandidate` emits it as a row so the card says so. */}
+      {card.hooks.length > 0 ? (
+        <span
+          className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}
+          style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted } : undefined}
+        >
+          hooks: {card.hooks.map((h) => `${h.label} ${fmtInt(h.value.k)} of ${fmtInt(h.value.n)}`).join(' · ')}
+        </span>
+      ) : null}
+
+      {/* SUBJECTS MATCHED, DENOMINATED ON POSTS ACTUALLY READ
+          (`main.moves.card.subjects`) — never on posts published. A subject
+          match only exists for a post Pass A analysed, and denominating on
+          every post published would print a statement about our gather cadence
+          wearing the client's noun. `subjectsBasis` says which. */}
+      <span className={email ? undefined : 'flex flex-wrap items-baseline gap-2'}>
+        <span
+          className={email ? undefined : 'text-[11px] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+        >
+          Subjects matched · {card.subjectsBasis}
+        </span>
+        {card.subjectsUnread ? (
+          <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>{card.subjectsUnread}</span>
+        ) : card.subjects.length === 0 ? (
+          <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>none of your posts matched a subject this month</span>
+        ) : (
+          card.subjects.map((s) => (
+            <span
+              key={s.subjectId}
+              data-copy="level"
+              className={email ? undefined : 'inline-flex items-center gap-1.5 rounded-full bg-tile px-2 py-0.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border'}
+            >
+              {s.label}{' '}
+              <span
+                className={email ? undefined : 'font-mono text-[10.5px] tabular-nums'}
+                style={email ? { fontFamily: FONT.mono, fontSize: 10.5, color: EMAIL.muted } : undefined}
+              >
+                {fmtInt(s.matched.k)} of {fmtInt(s.matched.n)}
+              </span>
+            </span>
+          ))
+        )}
+      </span>
+
+      {/* THE PAIRED MOVEMENT, PRINTED SIDE BY SIDE AND NEVER DIFFERENCED (D2).
+          The mock writes "Durability in the category 19% → 22% · in your
+          audience 27% → 31% (too few to compare)" — a magnitude beside a
+          refusal. A `Verdict` carries the change and the band together or
+          neither, so each side prints its own badge and the two sit beside each
+          other for the reader to weigh. */}
+      {card.movement.yours || card.movement.category ? (
+        <span className={email ? undefined : 'flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground'}>
+          {card.movement.yours ? (
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={card.movement.yours} unit="pts" mode={mode} /></span>
+          ) : null}
+          {card.movement.category ? (
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>the category <BlockMovement verdict={card.movement.category} unit="pts" mode={mode} /></span>
+          ) : null}
+        </span>
+      ) : null}
+
+      {/* THE PRIMARY BUTTON'S SLOT, WITH THE HONEST SENTENCE IN IT
+          (`main.moves.card.confirm`). The card is built; the write path is not.
+          A button that cannot write is worse than none, so the slot keeps the
+          artboard's place at the bottom of the card and states what it is
+          waiting for — and `card.unread` is what distinguishes "there is
+          nothing to confirm" from "this cannot be confirmed here yet". */}
+      <span
+        className={email ? undefined : 'mt-auto text-[11px] text-muted-foreground'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted } : undefined}
+      >
+        {card.unread ?? CARD_CONFIRM_SLOT}
+      </span>
+    </>
+  )
+  if (email) {
+    return <div style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, background: EMAIL.inner, padding: '10px 14px', borderRadius: 4 }}>{body}</div>
+  }
+  return <TileBlock className="flex min-h-full min-w-0 flex-col gap-[7px]">{body}</TileBlock>
+}
+
+/** The audience's own label, off the series the reading carries — never a
+ *  second name for one audience. */
+export function seriesLabel(reading: MoveReading, audience: string): string {
+  return reading.series.find((s) => s.audience === audience)?.label ?? audience
+}
+
+/**
+ * "You 7% → 9% → 12% · The category 9% → 10% → 11%" — every side's own series,
+ * printed beside the others (`main.moves.move1.figures`).
+ *
+ * LEVELS, NOT A DIFFERENCE. Each series is a run of readings on its own
+ * denominator; the mock prints "themes you are not working on +0.4 per 100
+ * videos", which is a synthetic control subtracted from the client side, and
+ * nothing in this product computes one.
+ */
+export function seriesLine(reading: MoveReading): string {
+  return reading.series
+    .map((s) => {
+      const points = s.points
+        .filter((p) => p.pct != null)
+        .map((p) => `${p.month.slice(5, 7)}/${p.month.slice(2, 4)} ${p.pct}%`)
+      return points.length > 0 ? `${s.label} ${points.join(' → ')}` : null
+    })
+    .filter((x): x is string => x != null)
+    .join(' · ')
+}
+
+/** One declared move: the artboard's row — title, subject chip, declared stamp,
+ *  the move's one movement claim, and the series beside it. */
+function MoveBody({ row, reading, mode }: { row: MoveRow; reading: MoveReading | null; mode: RenderMode }) {
+  const email = mode === 'email'
+  return (
+    <div className={email ? undefined : 'flex min-w-0 flex-col gap-[3px]'}>
+      <span className={email ? undefined : 'flex flex-wrap items-center gap-2'}>
+        <span className={email ? undefined : 'text-[13px] font-semibold'}>{row.title}</span>
+        {reading?.on ? (
+          <span
+            data-copy="subject"
+            data-slot="pass_b_theme"
+            className={email ? undefined : 'inline-block rounded-full bg-inner px-2 py-px text-[10.5px] font-semibold text-muted-foreground'}
+          >
+            {reading.on}
+          </span>
+        ) : null}
+        <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>declared {shortDate(row.declaredAt)}</span>
+      </span>
+      {/* THE MOVE'S ONE MOVEMENT CLAIM — yours, and the controls beside it,
+          PRINTED BESIDE AND NEVER SUBTRACTED (`main.moves.move1.verdict` /
+          `.figures`). `readMove` bands the client side before against after;
+          the controls are the audiences the move did not touch, which is what
+          would have moved anyway. A difference between them is a synthetic
+          control, and this product does not compute one. */}
+      {reading ? (
+        <>
+          <span className={email ? undefined : 'flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-secondary-foreground'}>
+            <span className={email ? undefined : 'flex items-center gap-1.5'}>your audience <BlockMovement verdict={reading.verdict} unit="pts" mode={mode} /></span>
+            {reading.control.map((v) => (
+              <span key={`${v.objectId}-${v.audience}`} className={email ? undefined : 'flex items-center gap-1.5'}>
+                {seriesLabel(reading, v.audience)} <BlockMovement verdict={v} unit="pts" mode={mode} />
+              </span>
+            ))}
+          </span>
+          <span className={email ? undefined : 'font-mono text-[10.5px] tabular-nums text-muted-foreground'}>
+            {seriesLine(reading)}
+          </span>
+          {/* D3: A CHART IS A DIRECTION CLAIM TOO. `chartNote` is why a line
+              may not be drawn over this reading; where it is null the reading
+              has three months in one regime and the line would be honest. */}
+          <span className={email ? undefined : 'font-mono text-[10.5px] text-muted-foreground'}>
+            {reading.chartNote ?? reading.line}
+          </span>
+          {reading.unread ? (
+            <span className={email ? undefined : 'text-[11px] text-muted-foreground'}>{reading.unread}</span>
+          ) : null}
+        </>
+      ) : (
+        <span className={email ? undefined : 'text-[12.5px] text-secondary-foreground'}>{row.line}</span>
+      )}
+    </div>
+  )
+}
 
 export const overviewMoves: Block<OverviewData> = {
   key: 'overview.moves',
@@ -28,48 +322,80 @@ export const overviewMoves: Block<OverviewData> = {
     const email = mode === 'email'
     const href = `${ctx.appUrl}/dashboard/market`
     const empty = overviewMoves.emptyState(data)
+    const readingFor = (id: string) => m.readings.find((r) => r.moveId === id) ?? null
+
+    const declared: ReactNode = (
+      <div className={email ? undefined : 'flex min-w-0 flex-col gap-2.5'}>
+        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
+        {m.rows.map((row, i) => (
+          <div key={row.id} className={email ? undefined : i > 0 ? 'border-t border-border/70 pt-2.5' : undefined}>
+            <MoveBody row={row} reading={readingFor(row.id)} mode={mode} />
+          </div>
+        ))}
+        {/* THE WHOLE LEDGER, NEVER A QUARTER (`main.moves.acted`, D12). The
+            mock writes "acted on 2 of 5 this quarter"; `actedTally` counts every
+            piece of advice this product has ever given, because a quarter of a
+            table that is deleted and reinserted every update is a window over a
+            table with no history in it. */}
+        {m.acted ? (
+          <p
+            className={email ? undefined : 'm-0 mt-auto border-t border-border/70 pt-2.5 text-[12.5px] text-secondary-foreground'}
+            style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 6 } : undefined}
+          >
+            <span data-copy="level">{m.acted.line}</span>
+          </p>
+        ) : null}
+        <p
+          className={email ? undefined : 'm-0 text-[11px] text-muted-foreground'}
+          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
+        >
+          {m.unlock}
+        </p>
+      </div>
+    )
 
     return (
       <BlockFrame
         title={overviewMoves.title}
         question={overviewMoves.question}
         mode={mode}
-        meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} dated` : undefined}
+        meta={movesMeta(m)}
         footer={openLink(mode, href, 'Open Market →')}
+        // THE MASTHEAD INTO THE FOOTER NOTE (`main.moves.footer`). It is the
+        // sentence that keeps every line above it from reading as a causal
+        // claim, and the artboard sets it in the footer's mono slot where the
+        // build printed it as a body paragraph among the findings.
+        footerNote={m.masthead}
       >
-        {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        {m.rows.length > 0 ? (
-          <div className={email ? undefined : 'flex flex-col gap-1'}>
-            {m.rows.map((row) =>
-              email ? (
-                <div key={row.id} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' }}>{row.line}</div>
-              ) : (
-                <p key={row.id} className="m-0 text-[12.5px]">{row.line}</p>
-              ),
-            )}
-          </div>
-        ) : null}
-        <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-        >
-          {m.unlock}
-        </p>
-        <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 2 } : undefined}
-        >
-          {m.masthead}
-        </p>
+        {email ? (
+          <div>{m.card ? <Card card={m.card} mode={mode} /> : null}{declared}</div>
+        ) : m.card ? (
+          // THE ARTBOARD'S TWO COLUMNS: the pre-filled card on the left, the
+          // declared moves on the right.
+          <TileColumns of={2}>
+            <Card card={m.card} mode={mode} />
+            <div className="flex min-w-0 flex-col xl:pl-4">{declared}</div>
+          </TileColumns>
+        ) : declared}
       </BlockFrame>
     )
   },
 
-  // NO FIGURES. Nothing on this block is a reading: a count of moves is a count
-  // of things the client typed, and the one number in a move's line is a DATE.
-  // The budget counts readings, and a block with none declares none.
+  // NO FIGURES. Nothing on this block is a reading of the CONVERSATION: the
+  // card counts posts the client published (dated by `upload_date`, a third
+  // clock) and the ledger's ratio counts advice, not videos. The budget counts
+  // readings, and a block with none declares none. The moves' own verdicts ARE
+  // readings and are declared below.
   figures(): FigureTable {
     return {}
+  },
+
+  verdicts(data): Verdict[] {
+    const card = data.moves.card
+    return [
+      ...data.moves.readings.flatMap((r) => [r.verdict, ...r.control].filter((v): v is Verdict => v != null)),
+      ...(card ? [card.movement.yours, card.movement.category].filter((v): v is Verdict => v != null) : []),
+    ]
   },
 
   emptyState(data) {

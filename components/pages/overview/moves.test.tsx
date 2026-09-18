@@ -5,7 +5,7 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { MOVES_UNLOCK } from '@/lib/pages/overview'
-import { overviewMoves } from './moves'
+import { CARD_CONFIRM_SLOT, claimText, movesMeta, overviewMoves, seriesLine } from './moves'
 import { overviewRecord } from './record'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -22,8 +22,13 @@ describe('OV5 · your moves', () => {
   })
 
   it('lists each dated move with the month its first score lands in', () => {
+    // BLOCK D WAVE 2: a move that HAS a reading now prints the reading (its
+    // banded comparison and every side's series) and a move that does not
+    // prints `moveLine`, which is the sentence naming the month its first score
+    // lands in. The fixture carries one of each, which is what the artboard
+    // draws.
     const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('Advanced technology · tracked 14 Sep')
+    expect(text).toContain('Track: Waterproofing · tracked 2 Sep')
     expect(text).toContain('first scoring lands with the October reading')
   })
 
@@ -118,5 +123,92 @@ describe('OV6 · how sound is this month', () => {
 
   it('declares no figures — the blocks above already print them', () => {
     expect(blockAnswers(overviewRecord, overviewFixture()).figures).toEqual({})
+  })
+})
+
+// ---- Block D wave 2 · the artboard's §5 ------------------------------------
+
+describe('OV5, ported to the artboard', () => {
+  it('draws the pre-filled card beside the declared moves', () => {
+    // Wave 1 built `buildMoveCandidate` and `readMove` and nothing rendered
+    // either of them.
+    const markup = render(overviewMoves.render(overviewFixture(), 'app', ctx))
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('xl:grid-cols-2')
+    expect(text).toContain('This month’s card · pre-filled from your own posts')
+  })
+
+  it('names the clock every own-post figure is on, beside the figure', () => {
+    // D9: own posts are dated by `upload_date` — a third clock — and the card
+    // says so on every counted row rather than letting a reader assume the
+    // month is the comment's.
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('posts published · posts published in September')
+    expect(text).toContain('cleared the comment floor · posts published in September')
+  })
+
+  it('denominates the subject rows on posts READ, not posts published', () => {
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('Subjects matched · posts of yours we read in September')
+    expect(text).toContain('Durability 3 of 5')
+  })
+
+  it('prints the real hook enum, including the row that is mostly empty', () => {
+    // Twelve of Sealand's seventeen September posts carry no hook, so
+    // "not classified" is the largest row rather than a rounding footnote.
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('not classified 12 of 17')
+  })
+
+  it('caps and cuts the claims rather than laying out the mock’s slogan tally', () => {
+    const long = 'x'.repeat(200)
+    expect(claimText(long).length).toBeLessThanOrEqual(96)
+    expect(claimText('short claim')).toBe('short claim')
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('and 3 more, each said on its own post')
+  })
+
+  it('prints the paired movement side by side and never differenced', () => {
+    // D2: the mock puts "+4 pts" next to "too few to compare". A Verdict
+    // carries the change and the band together or neither, so each side prints
+    // its own badge.
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('your audience too few to compare')
+    expect(text).toContain('the category ▲ 3 pts · band 1.9')
+  })
+
+  it('keeps the button’s slot with an honest sentence in it, and names no date', () => {
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain(CARD_CONFIRM_SLOT)
+    expect(CARD_CONFIRM_SLOT).not.toMatch(/\b(Oct|Nov|Dec|Jan|Q[1-4])\b/)
+  })
+
+  it('counts the whole ledger, never a quarter', () => {
+    // D12: a quarter of a table deleted and reinserted every update is a
+    // window over a table with no history in it.
+    const text = renderText(overviewMoves.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('every piece of advice this product has ever given you')
+    expect(text).not.toContain('this quarter')
+  })
+
+  it('counts the card in the header only where there is something to confirm', () => {
+    const m = overviewFixture().moves
+    expect(movesMeta(m)).toBe('2 declared · 1 card waiting for you')
+    expect(movesMeta({ ...m, card: m.card ? { ...m.card, proposal: null } : null })).toBe('2 declared')
+    expect(movesMeta({ ...m, rows: [], card: null })).toBeUndefined()
+  })
+
+  it('prints every side’s own series beside the others, never a difference', () => {
+    const reading = overviewFixture().moves.readings[0]
+    const line = seriesLine(reading)
+    expect(line).toContain('You')
+    expect(line).toContain('The category')
+    expect(line).toContain('Freitag')
+    expect(line).not.toContain('per 100 videos')
+  })
+
+  it('declares the moves’ verdicts, so the record can count what refused', () => {
+    const { verdicts } = blockAnswers(overviewMoves, overviewFixture())
+    expect(verdicts.length).toBeGreaterThan(0)
   })
 })
