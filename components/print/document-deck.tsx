@@ -1,10 +1,12 @@
 import { Fragment, type ReactNode } from 'react'
-import { QuoteBlock } from '@/components/quote-block'
+import { MACHINE_TRANSLATION_STAMP, QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
-import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import { CountBadge, MOVEMENT_WORDS, MovementBadge } from '@/components/delta-badge'
 import { shortDate } from '@/lib/format'
+import { platformShareLine } from '@/lib/reading/method'
+import { MOVE_PROMISE } from '@/lib/subjects/types'
 import type { Verdict } from '@/lib/reading/verdicts'
 import type { Good } from '@/components/charts/stat'
 import type { DeltaVerdict } from '@/lib/report-bands'
@@ -1123,34 +1125,150 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
 
 // ── method ─────────────────────────────────────────────────────────────────
 
-function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
-  const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
+/**
+ * The numbers card (`sales.p7.numbers`).
+ *
+ * The card's ANATOMY was already the artboard's — a 130px mono gutter, six
+ * rows, hairline above the footnote. Every row's CONTENT differed, and three
+ * of the six were wrong rather than merely thin:
+ *
+ *  · "Videos: 1,388 · 84 Sealand · 356 competitor" SUMMED the rivals, which
+ *    double-counts a video naming two of them — `compose.ts` warns about
+ *    exactly this in `AUDIENCE_SUMMED_VIDEO_FIGURES`, and then the method card
+ *    printed the sum anyway. The row is now one audience per entry, off the
+ *    reading's own denominators, which is what the artboard draws too (D8).
+ *  · "Sources: TikTok, YouTube, Instagram, Reddit" was a NAME LIST. A share of
+ *    a corpus that is 90% one platform is a statement about that platform, so
+ *    the row is the mix as shares (`platformShareLine`).
+ *  · "Findings: 1" had no denominator. The count of findings BELOW THE BAR was
+ *    computed on every build and kept in the workings; without it the row says
+ *    nothing about how selective the reading was.
+ *
+ * AND THE LABEL FOLLOWS THE UNIT. The artboard's own row reads `Conversations`
+ * over "2,359 videos analysed", which is the label and the unit disagreeing
+ * (D10). Comments are comments (`lib/calibration.ts` GLOSSARY) and the row
+ * says so.
+ */
+function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   const m = data.method
-  const rows: [string, string][] = [
-    ['Period', m.period],
-    ['Conversations', fmtCount(m.conversations)],
-    ['Videos', `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`],
-    ['Sources', m.sources.map((s) => PLATFORM[s] ?? s).join(', ') || 'public video platforms'],
-    ['Held back', `${fmtCount(m.heldBack)} phrases in other languages`],
-    ['Findings', `${data.pages.filter((p) => p.kind === 'finding').length}${m.thin ? ' (thin update)' : ''}`],
+  const r = data.reading ?? null
+  const comments = r ? r.denominators.reduce((n, d) => n + d.comments, 0) : m.conversations
+  const refusals = data.slideFigures?.cannotTell.refusals ?? []
+  const findings = data.pages.filter((p) => p.kind === 'finding').length
+  const dropped = m.dropped ?? null
+  const mix = r ? platformShareLine(r.platformMix) : ''
+  const rows: [string, ReactNode][] = [
+    ['Period', r ? r.stamp : m.period],
+    [r ? 'Comments' : 'Conversations', `${fmtCount(comments)} read${r ? ` in ${r.monthLabel}` : ''}`],
+    [
+      'Videos',
+      r && r.denominators.length > 0
+        // NEVER SUMMED: one entry per audience, named.
+        ? r.denominators.map((d) => `${fmtCount(d.videos)} ${d.label}`).join(' · ')
+        : `${fmtCount(m.videos)} · ${fmtCount(m.clientVideos)} ${data.company} · ${fmtCount(m.competitorVideos)} competitor`,
+    ],
+    ['Sources', mix || m.sources.map((x) => PLATFORM[x] ?? x).join(', ') || 'public video platforms'],
+    [
+      'Held back',
+      [
+        refusals.length > 0
+          ? `${fmtCount(refusals.length)} ${refusals.length === 1 ? 'comparison' : 'comparisons'} not drawn`
+          : '',
+        m.heldBack > 0 ? `${fmtCount(m.heldBack)} phrases in other languages read for the counts, not quoted` : '',
+      ].filter(Boolean).join(' · ') || 'Nothing was held back.',
+    ],
+    [
+      'Findings',
+      dropped != null
+        ? `${fmtCount(findings)} of ${fmtCount(findings + dropped)} written · ${fmtCount(dropped)} below the bar${m.thin ? ' · thin update' : ''}`
+        : `${fmtCount(findings)}${m.thin ? ' (thin update)' : ''}`,
+    ],
   ]
   return (
+    <div className={`${CARD} self-start px-6 py-5`}>
+      <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
+      <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
+        {rows.map(([k, v]) => (
+          <Fragment key={k}>
+            <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
+            <dd className="text-[14px] leading-[1.4] text-foreground">{v}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      {/* `sales.p7.footnote` — five sentences the product has composed on every
+          reading since wave 1 and no document has ever printed. Two of them are
+          on a different clock from the sheet they sit on, and `basis` is the
+          clause that says which (D15). */}
+      {data.reading?.method && (
+        <p className="mt-4 border-t border-border pt-3 font-mono text-[10.5px] leading-[1.5] text-muted-foreground">
+          {[data.reading.method.basis, data.reading.method.language, data.reading.method.redditCap, data.reading.method.privacy]
+            .filter(Boolean)
+            .join(' ')}
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What this brief cannot tell you (`sales.p7.cannottell`).
+ *
+ * THE CHEAPEST ELEMENT IN THE PACKAGE AND THE ONE THAT MATTERS MOST. The
+ * refusals are the product's own honesty machinery: computed on every brief's
+ * reading, and thrown away at the door until wave 1 gave them a shape and wave
+ * 2 a sheet. Every string here is the RECORD's own — `refusedSentence` and
+ * `REFUSAL_WHY` — so a brief and Settings › The record cannot come to say
+ * different things about one refusal.
+ *
+ * THE CAUSATION LINE IS THE PRODUCT'S OWN PROMISE, not a sentence written for
+ * this card: `MOVE_PROMISE` is what the moves list prints over itself, and the
+ * artboard asks for it here in the same words.
+ */
+function CannotTell({ data }: { data: DocumentSnapshotData }) {
+  const c = data.slideFigures?.cannotTell ?? null
+  return (
+    <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-inner px-[18px] py-3.5">
+      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What this brief cannot tell you</p>
+      <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{MOVE_PROMISE}</p>
+      {/* `refusedSentence`, WHICH ALREADY NAMES EVERY REASON AND COUNTS THEM.
+          `CannotTell.items` is one line per refusal and on a page with two
+          refusals of two reasons it restates the summary twice; the summary is
+          the one that carries the count, so it is the one that prints. Both
+          are built from `REFUSAL_WHY`, so neither can say anything the record
+          does not. */}
+      {c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">{c.line}</p>}
+      {!c && <p className="text-[12.5px] leading-[1.4] text-secondary-foreground">Which comparisons this reading refused is not recorded for this brief.</p>}
+    </div>
+  )
+}
+
+function MethodPage({ page, data }: { page: DocPage; data: DocumentSnapshotData }) {
+  const items = page.blocks.find((b) => b.field === 'method')?.items ?? []
+  return (
     <div className="grid h-full min-h-0 grid-cols-[7fr_5fr] gap-x-12">
-      <div className="flex flex-col gap-4">
+      <div className="flex min-h-0 flex-col gap-3">
         <Eyebrow>How this brief was made</Eyebrow>
         {items.map((it, i) => <p key={i} className={`max-w-[66ch] ${BODY}`}>{it}</p>)}
+        {/* THE BAND RULE, IN THE READER'S OWN WORDS. The artboard prints it and
+            the product never has: the vocabulary lives in `MOVEMENT_WORDS` and
+            is stamped on badges a reader is never told the rule for. The words
+            are that table's, so the sentence and the badge cannot drift. */}
+        <p className={`max-w-[66ch] ${BODY}`}>
+          Every figure prints how many it came from. A change is called only when it clears its band; below that it reads
+          {' '}<em className="font-semibold not-italic">{MOVEMENT_WORDS.no_clear_change}</em>, and where the audience is too small it reads
+          {' '}<em className="font-semibold not-italic">{MOVEMENT_WORDS.too_little_data}</em>.
+        </p>
+        {/* HOW A QUOTE IS PRINTED, which is the other half of the privacy
+            rule and is true of this deck by construction: `QuoteBlock` prints
+            the original first and the machine rendering under it, stamped. The
+            artboard asks for the sentence; the product only ever printed the
+            half about identification. */}
+        <p className={`max-w-[66ch] ${BODY}`}>
+          Quotes carry the platform, the date and where they were found. The words are printed as they were written, with an English rendering underneath — marked as a {MACHINE_TRANSLATION_STAMP} — where they were not in English.
+        </p>
+        <CannotTell data={data} />
       </div>
-      <div className={`${CARD} self-start px-6 py-5`}>
-        <Eyebrow className="mb-3">This brief in numbers</Eyebrow>
-        <dl className="grid grid-cols-[130px_1fr] gap-x-4 gap-y-2.5">
-          {rows.map(([k, v]) => (
-            <Fragment key={k}>
-              <dt className="pt-[3px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{k}</dt>
-              <dd className="text-[14.5px] leading-[1.4] text-foreground">{v}</dd>
-            </Fragment>
-          ))}
-        </dl>
-      </div>
+      <NumbersCard data={data} />
     </div>
   )
 }

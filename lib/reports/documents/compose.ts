@@ -528,6 +528,9 @@ export function composeDocument(a: ComposeArgs): { data: DocumentSnapshotData; w
       sources: sourcesOf(s),
       heldBack: s.heldBackPhrases,
       thin,
+      // The denominator behind "Findings". Computed since the composer
+      // existed, kept in the workings, never shown to a reader.
+      dropped: dropped.length,
     },
     notSureYet,
     generatedAt: new Date().toISOString(),
@@ -562,6 +565,13 @@ export function documentReading(r: BriefReading): DocumentReading {
     denominators: r.denominators.map((d) => ({ ...d })),
     platformMix: { ...r.platformMix },
     crossesClustering: r.crossesClustering,
+    // THE FOOTNOTE AND THE DELIVERY LINE, FROZEN (E-sales, `sales.p7`). Both
+    // were composed on every reading and consumed only by `methodItems`, as
+    // prose inside one paragraph. The method SHEET prints them as what they
+    // are — a footnote under the numbers card, and the record of how many
+    // updates there have been — and a stored artefact has to keep them.
+    method: r.method,
+    delivery: r.delivery,
   }
 }
 
@@ -635,8 +645,12 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     //   · the read-depth and language shares are ALL-TIME, and say so;
     //   · the caveat is this month's, about the client's own side.
     r?.delivery ? `${r.delivery}${r.counter ? ` — ${r.counter}.` : '.'}` : '',
-    r?.method ? `${r.method.basis} ${r.method.language ?? ''}`.trim() : '',
-    r?.method ? `${r.method.redditCap} ${r.method.privacy}` : '',
+    // THE OTHER FIVE MOVED TO THE CARD (E-sales). `methodLines`' read-depth,
+    // language, Reddit and privacy sentences are the artboard's FOOTNOTE — the
+    // mono rule under the numbers card, which is where a reader looks for the
+    // fine print — and the deck prints them there off `reading.method`. Two
+    // renderings of one sentence on one sheet is the drift `lib/reading/method.ts`
+    // was written to end, so the paragraph arm goes rather than both staying.
     r?.hollow ?? '',
   ].filter(Boolean)
 }

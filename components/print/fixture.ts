@@ -1,6 +1,7 @@
 import { briefFiguresFixture, thinFiguresFixture, unreadFiguresFixture } from '@/components/blocks/brief-figures/fixture'
 import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { subjectsFixture } from '@/components/pages/subjects/fixture'
+import { methodFixture } from '@/lib/test/method-fixture'
 import { briefSections } from '@/lib/reports/documents/load-reading'
 import { SALES_MAP } from '@/lib/reports/documents/sections'
 import type { DocLayoutEntry, DocPage, DocumentSnapshotData } from '@/lib/reports/documents/types'
@@ -81,7 +82,7 @@ const METHOD: DocPage = {
       items: [
         'This brief is a reading of September 2026, written from public conversation around Sealand, Freitag, Cotopaxi and the wider category. 1,388 videos in the category · 84 videos in your own brand · 2,359 comments read. Across TikTok 161 · YouTube 135 · Instagram 85 · Reddit 68. A month is dated by when the comment was written, not by when we looked, and this month is still filling. September 2026 · reading as at 28 September 2026 · still filling until 30 October 2026.',
         'Findings are the researcher’s readings of that conversation, ordered by the evidence behind them.',
-        'Commenters are never identified; quotes carry platform and date only.',
+        '23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026 — your 6th monthly reading.',
       ],
     },
   ],
@@ -173,6 +174,10 @@ function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
       ],
       platformMix: { tiktok: 161, youtube: 135, instagram: 85, reddit: 68 },
       crossesClustering: false,
+      // Through the real `methodLines`, over a `RecordInputs` shaped like
+      // Sealand's — never a hand-typed footnote (`lib/test/method-fixture.ts`).
+      method: methodFixture('Sealand'),
+      delivery: '23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026',
     },
     sections: briefSections(SALES_MAP, surfaces, []),
     surfaces,
@@ -184,7 +189,7 @@ function base(over: Partial<DocumentSnapshotData> = {}): DocumentSnapshotData {
     method: {
       conversations: 2359, videos: 1388, clientVideos: 84, competitorVideos: 356,
       period: 'September 2026', sources: ['tiktok', 'youtube', 'instagram', 'reddit'],
-      heldBack: 192, thin: false,
+      heldBack: 192, thin: false, dropped: 3,
     },
     notSureYet: ['Whether buckle and strap complaints can be compared at all: 44 videos this month, with no earlier figure beside them.'],
     generatedAt: '2026-09-28T06:00:00.000Z',

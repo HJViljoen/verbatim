@@ -1,4 +1,5 @@
 import { DOCUMENT_BRIEF_MAX, directionWordsFor } from '../../config'
+import type { MethodLines } from '../../reading/method'
 import type { MonthStatus } from '../../reading/types'
 import type { Quote } from '../../renderables/types'
 import type { RunDelta } from '../../report-delta'
@@ -207,6 +208,24 @@ export interface DocumentReading {
   /** True where the window crosses a recorded clustering boundary — the label
    *  decision L requires travels with it. */
   crossesClustering: boolean
+  /**
+   * The method footnote, frozen (`sales.p7.footnote`, D15).
+   *
+   * Read depth, the translated and on-screen-text shares, the Reddit cap and
+   * the privacy sentence — every one already composed by `methodLines` on
+   * every brief's reading since wave 1, and every one thrown away at the door.
+   * Two of the five are NOT about the month this brief reads (read depth is
+   * all-time by construction; the language share is about what was said on
+   * camera), and `MethodLines.basis` is the clause that says so. Frozen rather
+   * than recomposed because the artefact must say in March what it said in
+   * September. Absent on every brief built before wave 2.
+   */
+  method?: MethodLines | null
+  /** "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026"
+   *  — `deliveryRecord().line`, the sentence Settings › The record prints. The
+   *  one figure a run's own clock is the honest index for, and the artboard
+   *  puts it in the method sheet's footer. */
+  delivery?: string | null
 }
 
 /** One input a brief needed and the workspace has not recorded, frozen so the
@@ -299,6 +318,17 @@ export interface DocumentMethod {
   heldBack: number
   /** The update was partial or below the conversation floor. */
   thin: boolean
+  /**
+   * Findings the composer wrote and did not print — below the conversation
+   * floor, resting on no grounded point, or scrubbed to nothing.
+   *
+   * The count was computed on every build (`dropped.push(…)`) and lived only
+   * in the workings, which no reader of the document ever sees. "4 concluded ·
+   * 5 below the bar" is the artboard's row and it is the honest one: a
+   * findings count with no denominator says nothing about how selective the
+   * reading was. Absent on a brief built before wave 2.
+   */
+  dropped?: number
 }
 
 /** report_snapshots.data for a document build (kind stays 'report'). */

@@ -238,3 +238,92 @@ describe('the sales brief’s order is the artboard’s', () => {
     expect(at('Answers you can use')).toBeLessThan(at('About this brief'))
   })
 })
+
+// ── sales.p7 — how this brief was made ────────────────────────────────────
+
+describe('sales.p7 — the method sheet', () => {
+  const sheet = (data = salesBriefFixture()) => sheetNamed(deck(data), 'About this brief')
+
+  // `sales.p7.numbers`: the card's anatomy was already the artboard's and
+  // every row's content differed. Three of the six were wrong, not thin.
+
+  // D8: the composer's own `AUDIENCE_SUMMED_VIDEO_FIGURES` warns that a video
+  // count summed across audiences double-counts a video naming two rivals —
+  // and the method card printed the sum anyway.
+  it('names each audience’s videos and never sums the rivals', () => {
+    const w = words(sheet())
+    expect(w).toContain('1,388 the category · 142 Freitag’s audience · 84 your own brand')
+    expect(w).not.toContain('356 competitor')
+  })
+
+  // A share of a corpus that is 90% one platform is a statement about that
+  // platform. The row was a name list.
+  it('prints the sources as a share mix', () => {
+    expect(words(sheet())).toMatch(/TikTok \d+% · YouTube \d+%/)
+  })
+
+  // The dropped count was computed on every build and kept in the workings,
+  // where no reader of the document ever sees it.
+  it('gives the findings row its denominator', () => {
+    expect(words(sheet())).toContain('1 of 4 written · 3 below the bar')
+  })
+
+  // D10: the artboard's own row reads "Conversations" over "videos analysed".
+  it('labels the comment count as comments', () => {
+    const w = words(sheet())
+    expect(w).toContain('2,359 read in September 2026')
+    expect(w).not.toContain('Conversations 2,359')
+  })
+
+  it('counts the comparisons it held back', () => {
+    expect(words(sheet())).toContain('2 comparisons not drawn')
+  })
+
+  // `sales.p7.footnote` (D15): five sentences the product has composed on
+  // every reading since wave 1 and no document had ever printed. Two of the
+  // five are on a different clock and say which.
+  it('prints the method footnote, with its basis', () => {
+    const w = words(sheet())
+    expect(w).toContain('Of everything we have ever read for you, not just this window')
+    expect(w).toContain('of what was said on camera was not in English')
+    expect(w).toContain('capped at 40 per thread')
+    expect(w).toContain('Commenters are never identified')
+  })
+
+  it('prints the footnote once, not twice', () => {
+    const w = words(sheet())
+    expect(w.split('Commenters are never identified').length - 1).toBe(1)
+  })
+
+  // `sales.p7.cannottell`: the product's own honesty machinery, computed on
+  // every reading and thrown away at the door until now.
+  it('says what it cannot tell you, in the record’s own words', () => {
+    const w = words(sheet())
+    expect(w).toContain('What this brief cannot tell you')
+    expect(w).toContain('We never claim you caused it')
+    expect(w).toContain('2 comparisons were refused')
+    expect(w).toContain('the two sides were grouped differently')
+  })
+
+  // `sales.p7.method`: the artboard prints the band rule and the product never
+  // had — the vocabulary is stamped on badges a reader is never told the rule
+  // for. The words are `MOVEMENT_WORDS`', so the rule and the badge cannot
+  // drift.
+  it('states the band rule in the badge’s own words', () => {
+    const w = words(sheet())
+    expect(w).toContain('A change is called only when it clears its band')
+    expect(w).toContain('no clear change')
+    expect(w).toContain('too few to compare')
+  })
+
+  it('states how a quote is printed, not only that nobody is named', () => {
+    expect(words(sheet())).toContain('with an English rendering underneath — marked as a machine translation')
+  })
+
+  // Every Sales brief on production predates the frozen footnote.
+  it('degrades to the update’s own numbers on a brief built before wave 2', () => {
+    const w = words(sheet(salesBriefLegacyFixture()))
+    expect(w).toContain('What this brief cannot tell you')
+    expect(w).toContain('is not recorded for this brief')
+  })
+})

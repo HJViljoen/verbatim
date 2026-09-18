@@ -137,20 +137,38 @@ describe('the method page', () => {
     expect(items.join(' ')).not.toContain('reading as at')
   })
 
-  it('carries the method footnote, each half with its own basis', () => {
+  // WHERE THE FOOTNOTE LIVES CHANGED IN WAVE 2 (E-sales, `sales.p7.footnote`).
+  // Wave 1 put the read-depth, language, Reddit and privacy sentences into the
+  // method PARAGRAPHS, which was the right half of the fix — they reached a
+  // document at all for the first time. The artboard draws them as the mono
+  // FOOTNOTE under the numbers card, which is where a reader looks for fine
+  // print, so they are frozen onto `DocumentReading.method` and the deck prints
+  // them there. Two renderings of one sentence on one sheet is the drift
+  // `lib/reading/method.ts` exists to end, so the paragraph arm went rather
+  // than both staying. The two lines that are NOT footnote — the delivery
+  // record and the hollow-side caveat — stay as paragraphs, because they are
+  // about the reading rather than about the instrument.
+  it('carries the delivery record and the hollow-side caveat as paragraphs', () => {
     const items = methodItems(signals({ reading: reading() }), 'x', false, 5, kinds)
     const joined = items.join('\n')
-    // sales.p7.footnote — the read-depth and language shares, which reach a
-    // client on the app surfaces and have never reached a document.
-    expect(joined).toContain('Of everything we have ever read for you, not just this window, speech was read on')
-    expect(joined).toContain('of what was said on camera was not in English')
-    expect(joined).toContain('Reddit comments are capped at 40 per thread')
-    expect(joined).toContain('Commenters are never identified; quotes carry platform and date only.')
     // content.p5.delivery — run-dated, and it names the updates.
     expect(joined).toContain('23 updates since 6 April 2026 · longest gap 35 days')
     expect(joined).toContain('your 3rd monthly reading · the quarter view needs 6')
     // content.p5.caveat — this month's, about the client's own side.
     expect(joined).toContain('the category column carries the month')
+    // …and the footnote is not also here.
+    expect(joined).not.toContain('Of everything we have ever read for you')
+    expect(joined).not.toContain('Commenters are never identified')
+  })
+
+  it('freezes the footnote onto the reading, each half with its own basis', () => {
+    const d = documentReading(reading())
+    const joined = [d.method?.basis, d.method?.language, d.method?.redditCap, d.method?.privacy].join('\n')
+    expect(joined).toContain('Of everything we have ever read for you, not just this window, speech was read on')
+    expect(joined).toContain('of what was said on camera was not in English')
+    expect(joined).toContain('Reddit comments are capped at 40 per thread')
+    expect(joined).toContain('Commenters are never identified; quotes carry platform and date only.')
+    expect(d.delivery).toContain('23 updates since 6 April 2026')
   })
 
   it('prints no footnote at all where there is no reading behind it', () => {
@@ -196,7 +214,10 @@ describe('documentReading', () => {
     expect(d.denominators).toHaveLength(3)
     expect(JSON.stringify(d)).not.toContain('verdict')
     expect(Object.keys(d).sort()).toEqual(
-      ['crossesClustering', 'denominators', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
+      // `delivery` and `method` are wave 2's (E-sales): the method sheet's
+      // footnote and the record of how many updates there have been, frozen so
+      // the artefact says in March what it said in September.
+      ['crossesClustering', 'delivery', 'denominators', 'method', 'month', 'monthLabel', 'monthStatus', 'platformMix', 'readingAt', 'stamp'],
     )
   })
 })
