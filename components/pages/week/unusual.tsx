@@ -208,19 +208,40 @@ function Flag({ flag, n, mode, figures }: { flag: UnusualFlag; n: number; mode: 
           (P0's ruling, the in-app quote); a claim the code composed is not
           speech. Recorded as a deviation. */}
       <span
-        data-copy="verdict"
         className={email ? undefined : 'text-[15px] font-medium leading-[1.35] tracking-[-0.005em] text-foreground [text-wrap:pretty]'}
         style={email ? { fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, lineHeight: 1.35, color: EMAIL.ink } : undefined}
       >
-        {flag.label} ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months} — a difference of{' '}
-        {flag.changePts.toFixed(1)} points, on a band of {flag.bandPts.toFixed(1)}.
+        {/* THE LABEL IS THE MODEL'S WORDS AND IS MARKED AS THE MODEL'S (code
+            review C6 / design review F9). `flag.label` is a `pass_b_theme`
+            string a reasoning model wrote, and the whole sentence used to be
+            ONE `data-copy="verdict"` span — the contract's widest exemption,
+            whose entire range rule (c) cuts out of the block-wide sweep. So a
+            register label reading "Concerns about declining quality" printed a
+            direction word in the page's lead sentence with nothing checking it,
+            and read as the product's own movement claim because the rest of the
+            span is one. The sibling block on this page has always done it
+            correctly (`rising.tsx`); the lead sentence now does too: the label
+            names its slot, the claim code composed stays a verdict, and the
+            span around them is marked nothing and is checked like any prose. */}
+        <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>{' '}
+        <span data-copy="verdict">
+          ran at {fmtPct(weekPct, 1)} of this update against {fmtPct(basePct, 1)} across {months} — a difference of{' '}
+          {flag.changePts.toFixed(1)} points, on a band of {flag.bandPts.toFixed(1)}.
+        </span>
       </span>
       <BlockStat
         mode={mode}
         size="lg"
         value={fmtInt(flag.week.k)}
         unit="videos this update"
-        level={{ word: flag.label, of: `of ${fmtInt(flag.week.n)} videos this update covered` }}
+        // THE SAME LABEL, THE SAME MARKER. `BlockStat.level` takes a NODE for
+        // exactly this: rule (b) reads the level node's whole text, marked
+        // descendants included, so the "of N" is still enforced while the
+        // model's words carry their own slot.
+        level={{
+          word: <span data-copy="subject" data-slot="pass_b_theme">{flag.label}</span>,
+          of: `of ${fmtInt(flag.week.n)} videos this update covered`,
+        }}
         base={`${flag.denominator} · against ${fmtPct(basePct, 1)} across ${months}`}
       />
       {/* THE OTHER CAVEAT ABOUT THE SAME THREE MONTHS. `baseline_filling_months`

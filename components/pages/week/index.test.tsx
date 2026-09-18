@@ -135,6 +135,19 @@ describe('WK §2 · this week in your subjects', () => {
     expect(text).toContain('what an update of its size usually adds')
   })
 
+  it('claims no verdict exemption for the typical tag or the contribution', () => {
+    // Code review C7. Both were `data-copy="verdict"` — the contract's node
+    // for words a `Verdict` computed, and the one node rule (c) never checks —
+    // and neither is one: `typicalTag` is three fixed words against a level,
+    // the contribution is a count. Unmarked they are CHECKED, and they pass.
+    for (const mode of MODES) {
+      const markup = render(weekSubjects.render(weekFixture(), mode, ctx))
+      expect(markupText(markup), mode).toContain('above typical')
+      expect(markup, mode).not.toContain('data-copy="verdict"')
+      assertCopyContract(markup)
+    }
+  })
+
   it('names when the subjects were named, and calls it naming', () => {
     // D14: `named_at` is the day somebody typed the subject into Settings —
     // not the day the conversation about it began, which is what "tracking

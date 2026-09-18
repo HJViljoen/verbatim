@@ -184,7 +184,17 @@ function Column({ row }: { row: SubjectWeekRow }) {
         // update put in more than an update of its size usually does; it says
         // nothing about where the subject is headed, which is why the word is
         // `typicalTag`'s and not `directionWord`'s.
-        <span data-copy="verdict" className="inline-flex w-fit items-center rounded-full bg-inner px-2 py-px text-[10.5px] font-semibold text-muted-foreground">
+        //
+        // AND SO IT IS MARKED NOTHING (code review C7). It was marked
+        // `data-copy="verdict"` — the contract's node for words a `Verdict`
+        // (lib/reading/verdicts.ts) computed, and the one node rule (c) never
+        // checks — directly under a comment saying it is not one. This tag
+        // carries no band and no both-sides k/n; it is three fixed words
+        // (`typicalTag`), none of them in DIRECTION_WORDS, so unmarked it is
+        // CHECKED and it passes. An exemption that names nothing is a hole
+        // (AGENTS.md), and this one was exempting a word that needed no
+        // exemption.
+        <span className="inline-flex w-fit items-center rounded-full bg-inner px-2 py-px text-[10.5px] font-semibold text-muted-foreground">
           {row.tag}
         </span>
       ) : null}
@@ -233,13 +243,16 @@ function Level({ row, className }: { row: SubjectWeekRow; className?: string }) 
 /**
  * What THIS update put in.
  *
- * A COUNT, MARKED AS A VERDICT, AND NOT A DIRECTION. "+14 videos since the last
- * update" says what arrived; it does not say the subject is growing, because
- * one update against one update is two readings of an incompletely filled
- * month. The marker is there because the plus sign is movement vocabulary to a
- * reader's eye even when it is not to the scrubber's.
+ * A COUNT, AND NOT A DIRECTION. "+14 videos since the last update" says what
+ * arrived; it does not say the subject is growing, because one update against
+ * one update is two readings of an incompletely filled month.
  */
 function Added({ row }: { row: SubjectWeekRow }) {
   if (row.addedVideos == null) return null
-  return <span data-copy="verdict">+{fmtInt(row.addedVideos)} this update</span>
+  // MARKED NOTHING, for `typicalTag`'s reason (code review C7). This was a
+  // verdict node too, on the argument that a plus sign is movement vocabulary
+  // to a reader's eye — but the node's meaning in the contract is "a `Verdict`
+  // computed these words", and no Verdict computed this count. "+14 this
+  // update" holds no direction word, so checked it passes.
+  return <span>+{fmtInt(row.addedVideos)} this update</span>
 }

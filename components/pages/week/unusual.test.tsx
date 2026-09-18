@@ -49,6 +49,24 @@ describe('WK1 · unusual this week', () => {
     expect(text).not.toContain('×')
   })
 
+  it('marks the flag’s own label as the model’s words, not as the page’s verdict', () => {
+    // Code review C6 / design review F9. `flag.label` is a `pass_b_theme`
+    // string a reasoning model wrote. The lead sentence was ONE verdict node
+    // around it, and a verdict node is the contract's widest exemption: rule
+    // (c) cuts its whole range out of the sweep, so a label carrying a
+    // direction word printed unchecked in the page's first sentence and read
+    // as the product's own movement claim.
+    const d = weekFixture()
+    const flags = d.unusual.flags.map((f) => ({ ...f, label: 'Concerns about declining quality' }))
+    for (const mode of MODES) {
+      const markup = render(weekUnusual.render({ ...d, unusual: { ...d.unusual, flags } }, mode, ctx))
+      // The label names the call that wrote it — in the lead AND in the level
+      // cell under it, which is the second place it is printed.
+      expect(markup.match(/data-copy="subject" data-slot="pass_b_theme"/g)?.length ?? 0, mode).toBeGreaterThanOrEqual(2)
+      assertCopyContract(markup)
+    }
+  })
+
   it('names the months the baseline pooled, and which of them were still filling', () => {
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('Jun 2026, Jul 2026, Aug 2026')
