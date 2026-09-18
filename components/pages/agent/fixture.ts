@@ -1,9 +1,10 @@
-import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
-import { INTERPRETATION_CAVEAT, TOO_FEW, type AnswerMeasure } from '@/lib/agent/measure'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
+import { measureAnswer, type AnswerMeasure } from '@/lib/agent/measure'
 import { askRecordHref, askRecordLines, type AgentThreadData } from '@/lib/pages/agent-thread'
 import { askBasisLine, type AskBasis } from '@/lib/agent/basis'
 import { NOT_ANSWERED_HREF, DECLINED_WHY } from '@/lib/agent/measure'
 import { surface } from '@/lib/nav'
+import type { MonthPoint, MonthSeries } from '@/lib/reading/series'
 import type { Verdict } from '@/lib/reading/verdicts'
 
 // Ask's fixtures (Phase 1 Block D, package D8).
@@ -26,6 +27,7 @@ import type { Verdict } from '@/lib/reading/verdicts'
 
 const MONTH = '2026-09-01'
 const LABEL = 'Will it survive a wet commute'
+const REGISTRY_ID = 'reg-wet-commute'
 
 const BASIS: AskBasis = {
   updateAt: '2026-09-27T04:00:00.000Z',
@@ -43,63 +45,85 @@ const EMPTY_BASIS: AskBasis = {
   lastEmbeddedAt: null,
 }
 
-export const askVerdict = (over: Partial<Verdict> = {}): Verdict => ({
-  objectKind: 'theme',
-  objectId: 'reg-wet-commute',
-  objectLabel: LABEL,
-  audience: INDUSTRY_AUDIENCE,
-  window: { kind: 'month', from: MONTH, to: '2026-10-01' },
-  basis: { from: '2026-08-01', to: MONTH },
-  value: { k: 130, n: 1388 },
-  baseline: { k: 99, n: 1455 },
-  changePts: 2.6,
-  bandPts: 1.8,
-  state: 'moved',
-  direction: 'growing',
-  flags: [],
-  ...over,
-})
+/**
+ * The fixture's own months — the series `measureAnswer` is run over.
+ *
+ * THE MEASUREMENT IS COMPUTED, NOT TYPED. A hand-written fixture carried
+ * `bandPts: 1.8`, and no verdict in this product can carry a band under 2.0:
+ * the band is `max(2 x SE, minBandPts)` and `minBandPts` is 2
+ * (lib/report-bands.ts). A fixture is what wave 2 builds a badge and a chart
+ * against, so a fixture stating a number the loader can never hand it is worse
+ * than no fixture. Running the real function over real series makes that class
+ * of error impossible rather than caught.
+ */
+function monthPoint(month: string, k: number | null, videos: number | null, audience: string): MonthPoint {
+  return {
+    month,
+    state: 'frozen',
+    videos,
+    comments: videos == null ? null : videos * 8,
+    k,
+    kComments: k == null ? null : k * 8,
+    pct: k != null && videos ? Math.round((k / videos) * 1000) / 10 : null,
+    audience,
+    status: 'frozen',
+    origin: 'live',
+    readAt: '2026-09-28T00:00:00.000Z',
+    runId: 'run-1',
+    frozenAt: null,
+    clusteringKey: 'cl-1',
+    labels: [],
+  }
+}
+
+function series(audience: string, rows: [string, number, number][]): MonthSeries {
+  return {
+    audience,
+    names: [audience],
+    objectId: REGISTRY_ID,
+    objectLabel: LABEL,
+    points: rows.map(([month, k, n]) => monthPoint(month, k, n, audience)),
+    notes: [],
+    firstReadable: rows[0][0],
+    substrate: 'seeded',
+  }
+}
+
+/** The category's side: climbing, one clustering, every month over both floors
+ *  — which is what lets `directionWord` earn "growing" here at all. */
+const CATEGORY = series(INDUSTRY_AUDIENCE, [
+  ['2026-07-01', 71, 1400],
+  ['2026-08-01', 99, 1455],
+  [MONTH, 130, 1388],
+])
+
+/** The client's own side: real, and far under the floor — the caveat, never the
+ *  drawn line. */
+const OWN = series(CLIENT_AUDIENCE, [
+  ['2026-07-01', 21, 79],
+  ['2026-08-01', 25, 91],
+  [MONTH, 26, 84],
+])
 
 export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
-  const verdict = askVerdict()
-  const figures = {
-    f1_k: { value: 130, unit: 'videos' as const, label: `videos naming ${LABEL} in September` },
-    f1_n: { value: 1388, unit: 'videos' as const, label: 'videos read in The category in September' },
-    f1_pct: { value: 9.4, unit: 'pct' as const, label: `${LABEL}’s share of The category in September` },
-    f1_prev_k: { value: 99, unit: 'videos' as const, label: `videos naming ${LABEL} the month before` },
-    f1_prev_n: { value: 1455, unit: 'videos' as const, label: 'videos read in The category the month before' },
-    f1_prev_pct: { value: 6.8, unit: 'pct' as const, label: `${LABEL}’s share the month before` },
-    f1_change: { value: 2.6, unit: 'pts' as const, label: `change in ${LABEL}’s share` },
-    f1_band: { value: 1.8, unit: 'pts' as const, label: `the band ${LABEL}’s change is judged against` },
-  }
   return {
-    month: MONTH,
-    findings: [
-      {
-        findingId: '0:G1',
-        value: { k: 130, n: 1388 },
-        audience: INDUSTRY_AUDIENCE,
-        audienceLabel: 'The category',
-        label: LABEL,
-        series: [
-          { month: '2026-07-01', k: 71, n: 1400, pct: 5.1 },
-          { month: '2026-08-01', k: 99, n: 1455, pct: 6.8 },
-          { month: MONTH, k: 130, n: 1388, pct: 9.4 },
-        ],
-        verdict,
-        direction: 'growing',
-        figures,
-      },
-    ],
-    verdicts: [verdict],
-    figures,
-    caveats: [
-      INTERPRETATION_CAVEAT,
-      `Your own side of ${LABEL} is 26 of 84 videos in September — ${TOO_FEW}.`,
-    ],
+    ...measureAnswer({
+      findings: [{ findingId: '0:G1', registryIds: [REGISTRY_ID] }],
+      series: [CATEGORY, OWN],
+      month: MONTH,
+      // The one reader whose flag is true (`agent.movement`). The fixture pins
+      // the TRUE branch; `lib/agent/measure.test.ts` holds both.
+      directionWords: true,
+      ownAudience: CLIENT_AUDIENCE,
+      hasJudgement: true,
+    }),
     ...over,
   }
 }
+
+/** The verdict the fixture's own months produce. Read off the measurement so
+ *  the two can never disagree. */
+export const askVerdict = (): Verdict => askMeasure().findings[0].verdict as Verdict
 
 function turn(answerText: string, groundedText: string): AgentThreadData['turns'][number] {
   return {

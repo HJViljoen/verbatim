@@ -118,7 +118,15 @@ describe('the Ask fixtures', () => {
     expect(f.value).toEqual({ k: 130, n: 1388 })
     expect(f.verdict!.state).toBe('moved')
     expect(f.verdict!.changePts).toBe(2.6)
-    expect(f.verdict!.bandPts).toBe(1.8)
+    // The band is max(2 x SE, minBandPts) and minBandPts is 2, so no verdict in
+    // this product can ever carry a band under 2.0. The fixture used to state
+    // 1.8, which is a number the loader can never hand wave 2's badge.
+    expect(f.verdict!.bandPts).toBe(2)
+    expect(f.verdict!.bandPts!).toBeGreaterThanOrEqual(2)
+    // Every figure comes off the same measurement, so the table and the verdict
+    // cannot disagree.
+    expect(f.figures.f1_band.value).toBe(f.verdict!.bandPts)
+    expect(f.figures.f1_k.value).toBe(f.value.k)
     // The one reader whose flag is true may print the word — and only because
     // three consecutive readings in one regime earned it.
     expect(f.direction).toBe('growing')
