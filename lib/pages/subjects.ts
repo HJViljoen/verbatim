@@ -818,7 +818,6 @@ interface OwnPostRow {
 interface OwnClaimStored {
   id: string
   source_video_id: string
-  entity: string
   claim: string
 }
 
@@ -882,12 +881,25 @@ export async function loadOwnPosts(
     // it, so asking for it is a permission error on the day M8 lands rather
     // than a wider read — and the census prints claims without verbatim words
     // by design (the migration's own comment on the column).
+    //
+    // AND NO `entity` FILTER, for the reason the video half has none either.
+    // `video_claims.entity` froze `videos.is_client` at the run that wrote the
+    // row, and a re-tag since rewrites the video and never the claim — 72 of
+    // Sealand's 376 stored rows disagree with their video today, 18 of them on
+    // Sealand's own posts (lib/pipeline/claims.ts). Filtering on it would drop
+    // a claim sitting on one of THIS MONTH'S own posts because an older run
+    // called that post a competitor's — and because `claims.length > 0` is
+    // also the "was this half readable" test, a tenant whose every row is
+    // stale would be told the claims half was REFUSED rather than empty. The
+    // filter buys nothing either: `ownPostCensus` keeps only claims whose
+    // `source_video_id` is one of the posts the video half already selected by
+    // the LIVE rule, and M8's RLS enforces `entity = 'client'` on the tenant
+    // path regardless.
     selectAll<OwnClaimStored>(() =>
       supabase
         .from('video_claims')
-        .select('id, source_video_id, entity, claim')
+        .select('id, source_video_id, claim')
         .eq('client_id', clientId)
-        .eq('entity', 'client')
         .order('id', { ascending: true }),
     ).catch(() => [] as OwnClaimStored[]),
   ])
@@ -942,7 +954,11 @@ export async function loadOwnPosts(
     audience: CLIENT_AUDIENCE,
     audienceLabel: 'You',
     videos,
-    claims: claims.map((c) => ({ ...c, quote: '' })),
+    // `entity` is the census's, not the row's. Every claim that survives the
+    // census's own month filter sits on a post the LIVE rule already called
+    // yours, so the answer to "whose post was this" is the audience this
+    // census counts — never the column a run froze and a re-tag left behind.
+    claims: claims.map((c) => ({ ...c, entity: CLIENT_AUDIENCE, quote: '' })),
     membership,
     echoes,
   }

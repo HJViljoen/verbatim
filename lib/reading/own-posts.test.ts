@@ -134,6 +134,24 @@ describe('ownPostCensus', () => {
     expect(c.claims[0].quote?.ref).toMatch(/^v:/)
   })
 
+  it('counts a claim by the post it sits on, never by the entity a run froze on it', () => {
+    // `video_claims.entity` froze `videos.is_client` at the run that wrote the
+    // row; a re-tag since rewrites the video and never the claim. The census's
+    // membership test is the POST, so a stale row on one of this month's own
+    // posts is counted, and a row on a post outside the census is not.
+    const c = ownPostCensus(
+      input({
+        claims: [
+          { id: 'c1', source_video_id: 'v1', entity: 'competitor:Freitag', claim: 'Built to last a decade', quote: '' },
+          { id: 'c2', source_video_id: 'v4', entity: 'client', claim: 'Made from recycled sails', quote: '' },
+        ],
+        echoes: [],
+      }),
+    )
+    expect(c.claims.map((r) => r.claim)).toEqual(['Built to last a decade'])
+    expect(c.claims[0].posts).toEqual({ k: 1, n: 3 })
+  })
+
   it('leaves a claim nobody counted as an absence, never as silence', () => {
     const c = ownPostCensus(
       input({
