@@ -11,6 +11,7 @@ import {
   type SwitchingVideo,
 } from './figures'
 import { monthlyLineLabel } from '../../pages/overview'
+import { briefFiguresFixture, thinFiguresFixture, unreadFiguresFixture } from '../../../components/blocks/brief-figures/fixture'
 import { NOT_DRAWN_WHY, REFUSAL_WHY, refusedSentence } from '../../reading/record'
 import type { FigureTable as ReadingFigures, RefusedReason, Verdict, VerdictState, VerdictWindow } from '../../reading/verdicts'
 
@@ -316,5 +317,44 @@ describe('cannotTell', () => {
     expect(out.items[0]).toBe('Too little was read on one side or both.')
     expect(out.items[1]).toBe('There are not enough months behind it yet.')
     expect(out.line).toContain('2 comparisons')
+  })
+})
+
+// ── the fixtures wave 2 binds against ────────────────────────────────────────
+
+describe('the sales brief’s slide fixtures', () => {
+  it('draws every figure on a month that reads on every side', () => {
+    const f = briefFiguresFixture()
+    expect(f.switching?.verdict).not.toBeNull()
+    expect(f.switching?.unread).not.toContain('Too few')
+    expect(f.crosscheck).toContain('Two populations, two denominators')
+    expect(f.scripted).toHaveLength(1)
+    expect(f.line?.series).toHaveLength(1)
+    expect(f.cannotTell.items).toHaveLength(2)
+    expect(f.untracked).toHaveLength(1)
+    // The note names the role and never a date — the honest half of the mock's
+    // "owner · by date".
+    expect(f.untracked[0].line).not.toMatch(/\b\d{1,2} (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/)
+  })
+
+  it('refuses and says how many it had on the pool production actually has', () => {
+    const f = thinFiguresFixture()
+    expect(f.switching?.pool).toBe(35)
+    expect(f.switching?.verdict).toBeNull()
+    expect(f.switching?.unread).toContain('35')
+    // Two readings is not a line, so the months are named instead of drawn.
+    expect(f.line?.series).toHaveLength(0)
+    expect(f.line?.label).toBe('Aug → Sep only')
+  })
+
+  it('says each absence in words where the month tables are not applied', () => {
+    const f = unreadFiguresFixture()
+    expect(f.switching).toBeNull()
+    expect(f.crosscheck).toBeNull()
+    expect(f.scripted).toEqual([])
+    expect(f.line?.empty).toContain('month series')
+    // The refusals are still printed: they are the cheapest half of the brief
+    // and the half that was being thrown away.
+    expect(f.cannotTell.items.length).toBeGreaterThan(0)
   })
 })
