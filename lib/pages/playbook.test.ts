@@ -107,6 +107,33 @@ describe('buildPlaybook · CO7', () => {
     expect(p.formats.sides.map((s) => s.audience)).toEqual(['industry-other', 'client'])
   })
 
+  it('orders the engagement column by MEDIAN, not by how common the format is', () => {
+    // 20 videos of a dull format against 5 of a good one: the token named
+    // `playbook_best_format_engagement` used to publish the dull one's 1.0%,
+    // because the column was count-ordered and `[0]` was the most common row.
+    const p = buildPlaybook({
+      month: '2026-09-01',
+      brand: 'Össur',
+      rival: null,
+      videos: [
+        ...run('category', 20, { classified_type: 'promotional', engagement_rate: 1 }),
+        ...run('category', 5, { classified_type: 'entertainment', engagement_rate: 9 }),
+      ],
+    })
+    expect(p.formats.keys.map((k) => k.key)).toEqual(['promotional', 'entertainment'])
+    expect(p.engagement.map((r) => [r.key, r.engagement.median])).toEqual([
+      ['entertainment', 9],
+      ['promotional', 1],
+    ])
+    const f = playbookFigures(p)
+    expect(f['playbook_best_format_engagement']).toEqual({
+      value: 9,
+      unit: 'pct',
+      label: 'median engagement of Entertainment',
+    })
+    expect(f['playbook_best_format_n'].value).toBe(5)
+  })
+
   it('reads engagement off the category and "what not to make" off your own side', () => {
     const p = playbook()
     expect(p.engagement.map((r) => [r.key, r.engagement.median])).toEqual([

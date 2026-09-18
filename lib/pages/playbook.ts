@@ -51,8 +51,15 @@ export interface PlaybookBlock {
   /** "Read from 569 of 1,388 videos published in September." — the classified
    *  n against the published one, per side, said once under the table. */
   coverageLine: string
-  /** The category's median engagement per format, best first — the mock's
-   *  fourth column, each with the videos it was measured over. */
+  /** The category's median engagement per format, BEST FIRST — the mock's
+   *  fourth column, each with the videos it was measured over.
+   *
+   *  Best means the highest MEDIAN, which is not the same list as the format
+   *  table beside it: that one is count-ordered, and the highest median of a
+   *  month is regularly a format nobody makes much of. It ran count-ordered
+   *  once and published the most common format's median under the token named
+   *  `playbook_best_format_engagement`. Every row here clears
+   *  `ENGAGEMENT_MIN_VIDEOS`, because a row under it carries no median at all. */
   engagement: FormatRow[]
   /** Your own formats running under your own median video — "what not to make"
    *  as the inverse of the playbook rather than as an instruction. */
@@ -125,7 +132,14 @@ export function buildPlaybook(input: {
     formats,
     hooks,
     coverageLine: coverageLine(formatReadings, month),
-    engagement: category.rows.filter((r) => r.engagement.median !== null),
+    engagement: [...category.rows]
+      .filter((r) => r.engagement.median !== null)
+      .sort(
+        (a, b) =>
+          (b.engagement.median ?? 0) - (a.engagement.median ?? 0) ||
+          b.engagement.n - a.engagement.n ||
+          a.label.localeCompare(b.label),
+      ),
     below: own ? belowMedian(own) : [],
     excludedNote: EXCLUDED_NOTE,
     unread:
@@ -340,6 +354,11 @@ export function playbookFigures(playbook: PlaybookBlock | null): FigureTable {
       out[`playbook_${key}_median_n`] = { value: side.median.n, unit: 'videos', label: `videos ${side.label}’s median was read off` }
     }
   }
+  // `engagement` is median-ordered, so `[0]` IS the best-performing format.
+  // It was count-ordered once, and this token then published the most common
+  // format's median under a label reading "median engagement of X" — a wrong
+  // number reaching a document through the mechanism built to stop wrong
+  // numbers reaching documents.
   const best = playbook.engagement[0]
   if (best?.engagement.median != null) {
     out['playbook_best_format_engagement'] = { value: best.engagement.median, unit: 'pct', label: `median engagement of ${best.label}` }
