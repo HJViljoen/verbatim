@@ -17,6 +17,7 @@ import {
 } from '../reading/record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict } from '../reading/verdicts'
+import type { OwnPostCensus, SaidAbout } from '../reading/own-posts'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
 import { composeInterpretation, type Interpretation } from '../prose/interpret'
@@ -213,6 +214,27 @@ export interface CategoryPage {
 
 export interface RivalsPage {
   rows: RivalRow[]
+  /**
+   * `qr.p5.whattheysay` · what each tracked rival PUBLISHED in `monthLabel`'s
+   * month — one census per rival, straight off Competitive's own read so the
+   * deck and the page cannot disagree.
+   *
+   * MONTH-SCOPED ON A QUARTERLY DECK, AND SAID SO. These are this block's rows'
+   * month, the same one `monthLabel` and `monthNote` already qualify, not a
+   * quarter: an own-post census is dated by `videos.upload_date` and summing
+   * three months of it would be a fourth dating nobody asked for.
+   * `OwnPostCensus.basis` prints the month beside every figure.
+   */
+  ownPosts: OwnPostCensus[]
+  /**
+   * `qr.p5.saidabout` · what is said ABOUT each rival by everybody else.
+   *
+   * Empty on every row and each row says why: the claims are `video_claims`
+   * rows in a rival's bucket, which no tenant session may select. The block
+   * exists here because a deck that silently drops a section reads as a deck
+   * that had nothing to say.
+   */
+  saidAbout: SaidAbout[]
   /** The month THESE ROWS are of — Overview's, which is the month the product
    *  is in. The page headed itself off `standings.monthLabel` instead, a
    *  different read of a different surface: it printed "Sep 2026" while the
@@ -1259,6 +1281,11 @@ function buildRivals(a: {
   const co = a.competitive
   return {
     rows: a.overview.rivals.rows,
+    // COMPETITIVE'S OWN TWO READS, PASSED THROUGH. Re-deriving either here
+    // would be a second count of one thing on one artefact, which is how a
+    // deck comes to disagree with the page it was composed from.
+    ownPosts: co?.ownClaims ?? [],
+    saidAbout: co?.saidAbout ?? [],
     monthLabel: a.monthLabel,
     monthNote: a.monthNote,
     recorded: a.overview.rivals.recorded,

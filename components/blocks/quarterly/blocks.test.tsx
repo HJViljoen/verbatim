@@ -9,6 +9,7 @@ import { unsettledItems } from '@/lib/pages/quarterly'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
+import { competitiveFixture } from '@/components/pages/competitive-surface/fixture'
 import { QUARTERLY_BLOCKS, quarterlyBlocksFor } from './index'
 import { afterQuarterFixture, closedFixture, formingFixture, quarterlyFixture, thinMonthFixture } from './fixture'
 
@@ -410,6 +411,23 @@ describe('what each page owes the reader', () => {
       rivals: { ...data.rivals, recorded: true, rows: data.rivals.rows.map((r) => ({ ...r, attention: null, content: null })) },
     }
     expect(renderText(QUARTERLY_BLOCKS['quarterly.rivals'].render(recorded, 'app', ctx))).toContain('not observed')
+  })
+
+  it('carries Competitive’s own two rival reads rather than a second count of them', () => {
+    // A deck composed from a page may not re-derive the page's figures: one
+    // artefact, two counts of one thing, is how the two come to disagree.
+    expect(data.rivals.ownPosts.map((c) => c.audience)).toEqual(
+      competitiveFixture().ownClaims.map((c) => c.audience),
+    )
+    expect(data.rivals.saidAbout.map((s) => s.audience)).toEqual(
+      competitiveFixture().saidAbout.map((s) => s.audience),
+    )
+    // Every census on a quarterly deck states the month its posts were
+    // published in — the deck is quarter-scoped and this figure is not.
+    for (const c of data.rivals.ownPosts) expect(c.basis).toMatch(/^posts published in /)
+    // And nothing said about a rival is readable, so every row says so rather
+    // than the section quietly not existing.
+    for (const s of data.rivals.saidAbout) expect(s.empty).toBeTruthy()
   })
 
   it('draws the quarter columns on page 3, under the tenant’s OWN audience', () => {
