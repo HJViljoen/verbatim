@@ -249,6 +249,32 @@ function StatTile({ value, label, word }: { value: string; label: string; word?:
 export const CALIBRATION_NOTE =
   'Every calibrated word here — up, down, no clear change, too few to compare, comparison refused, and a finding’s solid, reasonable or thin — is assigned by a fixed rule from counted videos and the conversations behind each finding, never worded by the model.'
 
+/**
+ * WHAT THIS SHEET WAS READ FROM, along the foot (`mkt.p1.title`'s corpus line).
+ *
+ * The artboard's footer is "September 2026 reading · as at 28 Sep · TikTok,
+ * YouTube, Instagram, Reddit · 2,359 videos" and the deck printed only the
+ * provenance half — so the platform list and the corpus count, which are what
+ * make every figure above them mean something, appeared nowhere on any sheet.
+ * The month and the reading instant are NOT repeated here: they ride the
+ * header's stamp on every sheet already.
+ *
+ * The count is the category's denominator, the same number the numbers card
+ * prints — never `method.videos`, which is the update's and would be a second
+ * answer to the card's question at the other end of the same sheet.
+ */
+export function corpusNote(data: DocumentSnapshotData): string | null {
+  const r = data.reading
+  if (!r || r.denominators.length === 0) return null
+  const platforms = Object.entries(r.platformMix)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k]) => PLATFORM[k] ?? k)
+  const category = r.denominators.find((d) => d.audience === 'industry-other') ?? r.denominators[0]
+  const corpus = category ? `${fmtCount(category.videos)} videos in ${category.label}` : ''
+  return [platforms.join(', '), corpus].filter(Boolean).join(' · ') || null
+}
+
 /** The brief's own title, on the first sheet of content rather than on a
  *  landscape sheet of its own (`mkt.p1.title`). The mono line under it is the
  *  artboard's context line: the month, the company, the reading instant and
@@ -1246,7 +1272,17 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
   // numbers are a month's has to name the month on the page they are read on.
   const stamp = data.reading?.stamp ?? data.period
-  const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
+  // THE CONTEXT LINE SAYS WHAT THE TITLE DOES NOT (fix pass). It was
+  // `${title} · ${stamp}`, and on a borrowed-block sheet the block prints its
+  // own heading too — so "Your subjects" appeared three times in three type
+  // styles across one 1123px line: the slide's h1, this mono line and
+  // `BlockFrame`'s. The title is already at the other end of the same rule;
+  // this slot carries the month it is a reading of, which is the fact a reader
+  // of a loose sheet does not otherwise have.
+  const chrome = (title: string, repeatsTitle = false) => ({
+    context: repeatsTitle ? stamp : `${title} · ${stamp}`,
+    footer: <DeckFooter company={data.company} date={date} note={corpusNote(data)} />,
+  })
   const n = (i: number) => i + (cover ? 2 : 1)
   return (
     <>
@@ -1258,7 +1294,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
             <Slide
               key={sections[0].id}
               title={s.title}
-              chrome={chrome(s.title)}
+              chrome={chrome(s.title, true)}
               page={n(i)}
               pages={pages}
               layout="grid"
@@ -1273,7 +1309,7 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
         if (sections.length === 1) {
           const section = sections[0]
           return (
-            <Slide key={section.id} title={section.title} chrome={chrome(section.title)} page={n(i)} pages={pages} layout="single">
+            <Slide key={section.id} title={section.title} chrome={chrome(section.title, true)} page={n(i)} pages={pages} layout="single">
               <SectionBody section={section} data={data} />
             </Slide>
           )

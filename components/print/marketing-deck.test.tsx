@@ -6,7 +6,7 @@ import { documentCoverSheet, documentSheetCount, documentSlides } from '@/lib/re
 import { documentViewerPages } from '@/lib/reports/viewer'
 import { leadGap, leadVerdict, overviewTiles } from '@/lib/reports/documents/overview'
 import { DocumentShareShell } from '@/components/share/document-share-shell'
-import { DocumentDeck, GapCard, methodRows, paperEmpty, CALIBRATION_NOTE } from './document-deck'
+import { DocumentDeck, GapCard, corpusNote, methodRows, paperEmpty, CALIBRATION_NOTE } from './document-deck'
 import { SURE_WORDS } from '@/lib/reports/documents/scrub'
 import { MOVES_EMPTY } from '@/lib/pages/overview'
 import { MONTHLY_MOVES_EMPTY } from '@/lib/reports/monthly'
@@ -437,6 +437,31 @@ describe('the method sheet', () => {
     expect(rows.Comments).toBe('9,120')
     expect(rows.Videos).toContain('2,359')
     expect(rows['Held back']).toBe('14 phrases in other languages')
+  })
+})
+
+describe('the sheet’s chrome', () => {
+  // THE SHEET SAID ITS OWN NAME THREE TIMES (fix pass): the slide's h1, the
+  // mono context line and the block's own `BlockFrame` heading, in three type
+  // styles across one 1123px line.
+  it('does not repeat a borrowed sheet’s title in its context line', () => {
+    const html = render(<DocumentDeck data={marketingDeckFixture()} date="28 Sep 2026" />)
+    const sheet = markupText(html).split('2 / 9')[0].split('1 / 9')[1]
+    expect(sheet).toContain('Your subjects')
+    expect(sheet).not.toContain('Your subjects · September 2026')
+  })
+
+  // The artboard's footer names what the sheet was read from; the deck printed
+  // only the provenance half, so the platform list and the corpus count
+  // appeared on no sheet at all.
+  it('carries the corpus along the foot, and never the update’s own count', () => {
+    const data = marketingDeckFixture()
+    expect(corpusNote(data)).toBe('TikTok, YouTube, Instagram, Reddit · 1,388 videos in the category')
+    const text = markupText(render(<DocumentDeck data={data} date="28 Sep 2026" />))
+    expect(text).toContain('TikTok, YouTube, Instagram, Reddit · 1,388 videos in the category')
+    expect(corpusNote(data)).not.toContain('2,359')
+    // A brief with no reading names no corpus rather than naming the update's.
+    expect(corpusNote(marketingDeckFixture({ reading: null }))).toBeNull()
   })
 })
 

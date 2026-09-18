@@ -57,7 +57,10 @@ export function Slide({
       </div>
       <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
         <div className="min-w-0 flex-1">{chrome.footer}</div>
-        <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">{page} / {pages}</span>
+        {/* 11px, not 9.5px: under the sheet's .902 zoom a 9.5px numeral sets
+            at about 6.4pt on a 297mm page, below the 8pt most print work holds
+            to. Moves with `DeckFooter`, which sits on the same baseline. */}
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">{page} / {pages}</span>
       </footer>
     </section>
   )
