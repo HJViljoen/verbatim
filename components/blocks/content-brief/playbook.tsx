@@ -149,6 +149,9 @@ function Eyebrow({ children }: { children: ReactNode }) {
   )
 }
 
+/** Every side, INCLUDING one whose column is not drawn: the legend is what
+ *  says a side exists and how much it published, which is the half of the
+ *  answer a dropped column would otherwise take with it. */
 function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -174,8 +177,25 @@ function Legend({ sides }: { sides: readonly FormatMatrixSide[] }) {
  */
 const SHOWN: Record<string, number> = { 'What gets made': 4, 'How they open': 3 }
 
+/**
+ * The sentences the unread columns carry, said once for the slide.
+ *
+ * A COLUMN NEVER READ PRINTS A SENTENCE RATHER THAN A ZERO — that rule is
+ * right and it was drawn wrong (design review 11): the side kept its heading
+ * over four empty rows in the formats table and three in the hooks table, and
+ * `Össur published nothing we read in September` printed under BOTH tables,
+ * because the note was emitted per matrix. A column with nothing in it is not a
+ * column; the side is named in the sentence, and the sentence is said once.
+ */
+export function unreadNotes(p: { formats: FormatMatrix; hooks: FormatMatrix }): string[] {
+  const all = [...p.formats.sides, ...p.hooks.sides].map((s) => s.unread).filter((x): x is string => !!x)
+  return [...new Set(all)]
+}
+
 function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix; heading: string; mode: RenderMode; legend?: boolean }) {
-  const { sides } = matrix
+  // A side that was not read at all is not drawn as a headed column of blanks;
+  // its sentence is printed once for the slide (`unreadNotes`).
+  const sides = matrix.sides.filter((s) => !s.unread)
   const limit = SHOWN[heading] ?? matrix.keys.length
   const keys = matrix.keys.slice(0, limit)
   if (keys.length === 0 || sides.length === 0) return null
@@ -185,7 +205,7 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Eyebrow>{heading}</Eyebrow>
-        {legend ? <Legend sides={sides} /> : null}
+        {legend ? <Legend sides={matrix.sides} /> : null}
       </div>
       {/* A TABLE THAT SAYS IT IS ONE (design review 9). The layout is the
           artboard's CSS grid and stays exactly that — `display: contents` on
@@ -208,9 +228,6 @@ function Matrix({ matrix, heading, mode, legend = true }: { matrix: FormatMatrix
           </Row>
         ))}
       </div>
-      {sides.filter((s) => s.unread).map((s) => (
-        <p key={s.audience} className="m-0 text-[12px] leading-[1.45] text-muted-foreground">{s.unread}</p>
-      ))}
     </div>
   )
 }
@@ -364,6 +381,10 @@ export const contentPlaybook: Block<ContentBriefData> = {
             <Matrix matrix={p.hooks} heading="How they open" mode={mode} legend={false} />
             <Engagement rows={p.engagement} mode={mode} of={category?.of ?? 0} basisLine={p.basisLine} />
           </div>
+          {/* SAID ONCE, FOR THE SLIDE (design review 11). */}
+          {unreadNotes(p).map((note) => (
+            <p key={note} className="m-0 text-[12px] leading-[1.45] text-muted-foreground">{note}</p>
+          ))}
           {slide.below.length > 0 ? (
             /* "WHAT NOT TO MAKE", AS THE INVERSE OF THE PLAYBOOK RATHER THAN AS
                AN INSTRUCTION (`belowMedian`). Every row carries the videos its

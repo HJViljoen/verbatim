@@ -11,7 +11,7 @@ import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { toMake } from './make'
-import { cellFigure, engagementOrder } from './playbook'
+import { cellFigure, engagementOrder, unreadNotes } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
@@ -219,6 +219,25 @@ describe('content.playbook — the mock’s page 3', () => {
     const empty = blockAnswers(contentPlaybook, data).empty ?? ''
     expect(empty).toContain('none of them has been classified yet')
     expect(markupText(render(contentPlaybook.render(data, 'print', ctx)))).toContain(empty)
+  })
+})
+
+describe('content.playbook — a side nobody read', () => {
+  // A COLUMN NEVER READ PRINTS A SENTENCE RATHER THAN A ZERO, and it used to
+  // print a HEADED column of blanks with the sentence under both tables
+  // (design review 11).
+  const thin = thinContentBriefFixture()
+  const markup = render(contentPlaybook.render(thin, 'print', ctx))
+  const text = markupText(markup)
+
+  it('says it once, and heads no column it cannot fill', () => {
+    const note = unreadNotes(thin.playbook.playbook!)[0]
+    expect(note).toContain('published nothing we read')
+    expect(text.split(note).length - 1).toBe(1)
+    // The side is still named — in the legend, with what it published — and it
+    // is not a column head over four empty rows.
+    expect(text).toContain('Össur, 0 posts')
+    expect(markup.match(/role="columnheader"/g)?.length ?? 0).toBe(4)
   })
 })
 
