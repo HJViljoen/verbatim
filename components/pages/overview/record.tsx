@@ -1,24 +1,55 @@
 import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
+import { TileColumns } from '@/components/shell/page-grid'
 import { fullDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { OverviewData } from '@/lib/pages/overview'
 
-// OV6 · How sound is this month (design §3 OV6).
+// OV6 · How sound is this month (design §3 OV6; ported to `Main.dc.html` §6 in
+// Block D wave 2).
 //
 // THE SAME LINE AS THE PAGE BAR, EXPANDED. The bar prints one sentence
-// (`howSoundLine`) and this block prints the record behind it
-// (`recordLines`) — both composed in lib/reading/record.ts, so the short form
-// and the long form can never come to say different things. One link, to the
-// record itself.
+// (`howSoundLine`) and this block prints the record behind it (`recordLines`) —
+// both composed in lib/reading/record.ts, so the short form and the long form
+// can never come to say different things. One link, to the record itself.
 //
 // THE REFUSALS ARE PART OF IT. "Comparisons refused this month and why" is a
 // fact about what the page declined to say, and it is counted over the page's
 // OWN verdicts rather than over the corpus: the same month refuses three
 // comparisons on Overview and none on a tile that prints only levels
 // (lib/reading/record.ts countRefused).
+//
+// AND THE METHOD IS THE SECOND COLUMN (`main.coverage.para1` / `.para2`).
+// `methodLines` (wave 1) is the ONE composer for the five facts every surface
+// was composing separately — coverage, read depth, language, the Reddit cap and
+// the privacy line — and D15 is the reason it is bound here rather than
+// re-derived: two of those five are NOT about the month this block is a reading
+// of. Read depth is all-time by construction and the language share is about
+// what was said on camera, not about the comments a reader sees. Each sentence
+// carries its own basis, in `methodLines`' own words.
+
+/**
+ * The two paragraphs the artboard sets side by side.
+ *
+ * LEFT is what was READ into this month — the record's own lines, which carry
+ * the updates, the videos, the discards and the freeze. RIGHT is how it was
+ * read and what it would not say — the method footnote plus the sentence naming
+ * when this month stops moving. The split is the artboard's and it is also the
+ * honest one: the left column is about the CORPUS and the right is about the
+ * INSTRUMENT, and they are on different clocks.
+ */
+export function recordColumns(data: OverviewData): { read: string[]; method: string[] } {
+  const r = data.record
+  return {
+    read: [...r.lines],
+    method: [
+      ...(data.method?.lines ?? []),
+      `This month stops moving on ${fullDate(r.freezesOn)}; until then every figure above may still change.`,
+    ],
+  }
+}
 
 export const overviewRecord: Block<OverviewData> = {
   key: 'overview.record',
@@ -29,19 +60,12 @@ export const overviewRecord: Block<OverviewData> = {
     const r = data.record
     const email = mode === 'email'
     const href = `${ctx.appUrl}${r.href}`
-    const lines = [
-      // The refusals and their reasons are already in `r.lines`, composed with
-      // the rest of the record in lib/reading/record.ts — the block adds only
-      // the freeze date, which is the one fact about this month that no
-      // window-shaped record holds.
-      ...r.lines,
-      `This month stops moving on ${fullDate(r.freezesOn)}; until then every figure above may still change.`,
-    ]
+    const { read, method } = recordColumns(data)
 
     if (email) {
       return (
         <BlockFrame title={overviewRecord.title} mode={mode} footer={<a href={href} style={{ color: EMAIL.ink }}>the record →</a>}>
-          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: 1.5, color: EMAIL.muted }}>{lines.join(' ')}</div>
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: 1.5, color: EMAIL.muted }}>{[...read, ...method].join(' ')}</div>
         </BlockFrame>
       )
     }
@@ -51,9 +75,24 @@ export const overviewRecord: Block<OverviewData> = {
         question={overviewRecord.question}
         mode={mode}
         meta={r.line}
+        // "the record →" BESIDE THE EYEBROW, which is where the artboard puts
+        // it (`main.coverage.header`): this block has no onward page of its own
+        // — it IS the record — so the link belongs in the header rather than in
+        // the footer rail every other block uses to send a reader deeper.
         footer={<Link href={href} className="hover:underline">the record →</Link>}
       >
-        <p className="m-0 text-[11.5px] leading-relaxed text-muted-foreground">{lines.join(' ')}</p>
+        {/* TWO COLUMNS OF MONO (`main.coverage.para1` / `.para2`). The artboard
+            sets them at 9.5px, which is the smallest type on the page and
+            deliberately so: this is the block a reader consults rather than
+            reads, and it has to fit beside the reading it is about. */}
+        <TileColumns of={2}>
+          <p className="m-0 font-mono text-[9.5px] leading-[1.45] tabular-nums text-muted-foreground">
+            <span className="text-secondary-foreground">What was read: </span>{read.join(' ')}
+          </p>
+          <p className="m-0 font-mono text-[9.5px] leading-[1.45] tabular-nums text-muted-foreground xl:pl-4">
+            <span className="text-secondary-foreground">How it was read, and what would not compare: </span>{method.join(' ')}
+          </p>
+        </TileColumns>
       </BlockFrame>
     )
   },
