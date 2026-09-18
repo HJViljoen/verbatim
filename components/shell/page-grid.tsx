@@ -47,17 +47,32 @@ export function PageGrid({ children, className }: { children: ReactNode; classNa
  * columns — so it never rules beside a column that is no longer beside
  * anything. Class strings are written out in full, never interpolated, so
  * Tailwind v4's scanner sees them (the rule the span maps in tile.tsx follow).
+ *
+ * MORE CHILDREN THAN COLUMNS IS A SECOND ROW, AND `divide-x` CANNOT SEE ONE.
+ * `divide-x` compiles to a sibling selector (`& > * ~ *`), which knows nothing
+ * about grid position: with `of={2}` and four children it ruled children 2, 3
+ * and 4, so the first cell of the SECOND row drew a vertical hairline against
+ * the container's edge, beside nothing. The vertical rule is therefore keyed to
+ * the column a child lands in — every child except the first of its row — which
+ * is right for any number of children, and a caller no longer has to know that
+ * the count must equal `of`. Below `xl` the children are one stacked column and
+ * `divide-y` is exactly right for that, so it stays.
+ *
+ * The rule sits at the LEADING EDGE of its column, not centred in the 16px
+ * gutter: a grid gap is empty space no child owns, and nothing can paint inside
+ * it without a wrapper per column. That is the trade this primitive makes, and
+ * it is what the artboards' inner tables look like closely enough.
  */
 const COLUMNS: Record<2 | 3, string> = {
-  2: 'xl:grid-cols-2',
-  3: 'xl:grid-cols-3',
+  2: 'xl:grid-cols-2 xl:[&>*:not(:nth-child(2n+1))]:border-l',
+  3: 'xl:grid-cols-3 xl:[&>*:not(:nth-child(3n+1))]:border-l',
 }
 
 export function TileColumns({ of, children, className }: { of: 2 | 3; children: ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        'grid min-w-0 grid-cols-1 gap-4 divide-y divide-border/70 xl:divide-x xl:divide-y-0',
+        'grid min-w-0 grid-cols-1 gap-4 divide-y divide-border/70 xl:divide-y-0 xl:[&>*]:border-border/70',
         COLUMNS[of],
         className,
       )}

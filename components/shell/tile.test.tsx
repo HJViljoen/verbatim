@@ -117,8 +117,21 @@ describe('TileColumns', () => {
     // The rule is vertical between columns and horizontal once they stack, so
     // it never draws a line beside a column that is no longer beside anything.
     expect(markup).toContain('divide-y')
-    expect(markup).toContain('xl:divide-x')
+    expect(markup).toContain('nth-child(2n+1))]:border-l')
     expect(markup).toContain('xl:divide-y-0')
+  })
+
+  // `divide-x` is a sibling selector and knows nothing about grid position:
+  // with four children two-up it ruled children 2, 3 and 4, so the first cell
+  // of the SECOND row drew a vertical hairline against the container's edge,
+  // beside nothing. The rule is keyed to the column a child lands in instead,
+  // so any child count is safe and a caller does not have to know that the
+  // count must equal `of`.
+  it('rules between columns, not between siblings — a second row starts clean', () => {
+    const four = render(<TileColumns of={2}><div>a</div><div>b</div><div>c</div><div>d</div></TileColumns>)
+    expect(four).not.toContain('divide-x')
+    expect(four).toContain('nth-child(2n+1)')
+    expect(render(<TileColumns of={3}><div>a</div><div>b</div><div>c</div><div>d</div></TileColumns>)).toContain('nth-child(3n+1)')
   })
 
   it('takes a caller class without losing its own', () => {
