@@ -205,7 +205,18 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
     const search = t.search
 
     const searchBox = email ? null : (
-      <form action="/dashboard/voice" method="get" className="flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-1.5 ring-1 ring-border xl:max-w-[300px]">
+      // THE PILL IS THE CONTROL, SO THE PILL TAKES THE FOCUS RING. The port
+      // moved the border off the `<input>` and put `outline-none` on it with
+      // nothing in its place; a `<form>` never receives `:focus`, so the one
+      // text control on the page went from the UA ring to no indication at
+      // all. `focus-within` is what a composed control focuses with, and the
+      // ring is the house one (components/ui/input.tsx).
+      //
+      // AND THE BOX HOLDS ITS OWN PLACEHOLDER. The inline label is half the
+      // control; at `max-w-[300px]` the placeholder rendered as "search every
+      // theme evei" at 1440 — the one width this page is reviewed at — and was
+      // only legible below the breakpoint, where the box widens.
+      <form action="/dashboard/voice" method="get" className="flex min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 py-1.5 ring-1 ring-border focus-within:ring-2 focus-within:ring-ring/60 xl:max-w-[430px]">
         {/* The reader's whole selection travels with the search, so a result
             opens in the same audience and horizon they were reading in. */}
         {Object.entries(data.params)

@@ -184,6 +184,17 @@ describe('voiceTheme', () => {
     expect(markup).toContain('bg-primary')
   })
 
+  it('gives the search a visible focus indicator, and room for its own placeholder', () => {
+    // The port restyled the input into a pill and put `outline-none` on it
+    // with nothing back: a `<form>` receives no `:focus`, so a keyboard user
+    // tabbing to the page's one text control saw nothing at all. And at
+    // `max-w-[300px]` the inline label ate half the box — the placeholder
+    // rendered as "search every theme evei" at 1440.
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('focus-within:ring-2')
+    expect(markup).not.toContain('xl:max-w-[300px]')
+  })
+
   it('carries the reader’s whole selection into the search', () => {
     const markup = renderText(voiceTheme.render(voiceFixture(), 'app', ctx))
     expect(markup).toContain('Have we seen this before?')
