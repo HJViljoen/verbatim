@@ -1936,9 +1936,13 @@ async function loadRivals(
  * sit on one block.
  *
  * HEAD COUNTS, ONE PER POST, ISSUED TOGETHER. Nothing is fetched: the only
- * thing printed is the integer, and a popular post is thousands of rows. Capped
- * at `RIVAL_POSTS_SHOWN` per rival by the caller, which is what keeps this from
- * being a hundred round trips.
+ * thing printed is the integer, and a popular post is thousands of rows. The
+ * caller caps at `RIVAL_POSTS_CONSIDERED` per rival — SIX, not the three that
+ * are shown, because the pick is two stages and the comment count is what the
+ * second stage ranks on. So the cost is six head counts per tracked rival on
+ * every load of this page: six on Össur's one rival, eighteen on Sealand's
+ * three, covered by `idx_comments_client_platform_video`. That is what keeps
+ * this from being a count per post of ninety-two.
  *
  * A COUNT THAT FAILS IS ABSENT FROM THE MAP, and the caller prints 0 for it —
  * the one place this file rounds a silence to a number, because a post row with
