@@ -42,7 +42,7 @@ import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsSeries 
 // one), while `attentionVerdict` was computed, declared in `verdicts()` and
 // never shown. And a null verdict rendered nothing — so on Sealand the
 // CLIENT'S OWN row printed three figures and then an empty cell, while
-// Cotopaxi said "no clear change" and Freitag "too little data". A verdict is
+// Cotopaxi said "no clear change" and Freitag "too few to compare". A verdict is
 // null for three different reasons and `changeNote` says which.
 
 const COLOR: Record<StandingRow['role'], string> = {

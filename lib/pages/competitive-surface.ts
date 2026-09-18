@@ -248,7 +248,7 @@ export const standingsUnreadMonth = (month: string): string =>
  * the client's OWN brand: rendered live for Sealand, their row printed 0.6%
  * (3 of 475), 0.3% (27 of 9,704), "1 of 1" and then nothing at all under
  * "Change on last month", while Cotopaxi said "no clear change" and Freitag
- * "too little data". The blank is `contentVerdict === null`, which happens for
+ * "too few to compare". The blank is `contentVerdict === null`, which happens for
  * three different reasons, and a reader cannot tell which from an empty cell.
  */
 export function changeNote(observed: boolean, prevMonthLabel: string | null): string {

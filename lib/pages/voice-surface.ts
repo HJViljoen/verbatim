@@ -1111,7 +1111,7 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // carried no row, so the pool admits zero-numerator rows — they belong in
   // the movers, where a theme that fell to nothing is a real fading row. They
   // do not belong under this block's heading: opened, Össur's own-brand page
-  // drew "Price and availability questions · 0% · too little data · Early
+  // drew "Price and availability questions · 0% · too few to compare · Early
   // signal · 0 of 19 videos", six quotes from the run, a "Said on camera" line
   // and a link to "The 0 videos behind it". A calibrated level over a zero
   // numerator is the score-without-evidence the contract exists to stop.

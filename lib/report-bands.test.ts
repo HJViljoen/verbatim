@@ -9,7 +9,7 @@ describe('proportionDelta — floors and bands (T0-8)', () => {
     expect(v.band).toBeGreaterThan(6.2) // ≈ 9.8 pts at these n
   })
 
-  it('under 100 judged on either side is too little data, whatever the shift', () => {
+  it('under 100 judged on either side refuses as too_little_data, whatever the shift', () => {
     const v = proportionDelta({ nowPct: 70, nowN: 414, prevPct: 50, prevN: 80 }, SENTIMENT_BAND)
     expect(v.state).toBe('too_little_data')
   })
@@ -38,7 +38,7 @@ describe('proportionDelta — floors and bands (T0-8)', () => {
     expect(v.change).toBe(10)
   })
 
-  it('zero denominators are too little data, not a crash', () => {
+  it('zero denominators are too_little_data, not a crash', () => {
     const v = proportionDelta({ nowPct: 0, nowN: 0, prevPct: 0, prevN: 0 }, SENTIMENT_BAND)
     expect(v.state).toBe('too_little_data')
     expect(Number.isFinite(v.band)).toBe(true)

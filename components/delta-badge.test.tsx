@@ -68,7 +68,12 @@ describe('MovementBadge', () => {
     expect(renderText(<MovementBadge verdict={{ state: 'moved', change: 4.1, band: 2 }} unit="pts" />)).toBe('▲ 4.1 pts · band 2')
     expect(renderText(<MovementBadge verdict={{ state: 'moved', changePts: 4.1, bandPts: null } as never} unit="pts" />)).toBe('▲ 4.1 pts')
     expect(renderText(<MovementBadge verdict={{ state: 'no_clear_change', change: 0.4, band: 2 }} />)).toBe('no clear change')
-    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe('too little data')
+    // P0 item 6 / mock-gap §6 D11: the thin-reading word is "too few to
+    // compare" — the phrase GLOSSARY.change, the agent, the quarterly and the
+    // overview note already used. Asserted against the table, so the day it
+    // moves again it moves in one place.
+    expect(renderText(<MovementBadge verdict={{ state: 'too_little_data', change: 0, band: 2 }} />)).toBe(MOVEMENT_WORDS.too_little_data)
+    expect(MOVEMENT_WORDS.too_little_data).toBe('too few to compare')
   })
 
   it('shows no comparison at all when there is none', () => {

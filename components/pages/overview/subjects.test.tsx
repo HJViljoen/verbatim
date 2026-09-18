@@ -28,7 +28,7 @@ describe('OV2 · your subjects', () => {
 
   it('bands the category and refuses your own side, without hiding it', () => {
     const text = renderText(overviewSubjects.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('too little data')
+    expect(text).toContain('too few to compare') // P0 item 6 / §6 D11 — the badge's one word
     expect(text).toContain('the category column carries the month')
   })
 

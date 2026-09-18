@@ -1041,7 +1041,7 @@ interface SidesInput {
  * paying tenant your own audience carries 84 videos in a month and the category
  * 1,388, so the category is the only side of the three that can carry a monthly
  * change — and a page that printed the same verdict shape on all three would
- * print "too little data" on two of them for ever without saying why. The level
+ * print "too few to compare" on two of them for ever without saying why. The level
  * is real on every side and is always shown; the CHANGE is drawn where the band
  * can be, and `axisNote` says in one sentence which lines those are.
  */

@@ -5,6 +5,7 @@ import { digestSubject } from './subject'
 import { firstSentence, htmlToText } from './text'
 import { tokenHex } from './theme'
 import { DeltaBlock } from '../../components/email/delta-block'
+import { MOVEMENT_WORDS } from '../../components/delta-badge'
 import { clip, contentEmail, dashboardEmail } from '../../components/email/tiles'
 import type { RunDelta } from '../report-delta'
 import type { DashboardData } from '../pages/dashboard'
@@ -61,7 +62,7 @@ describe('the delta block', () => {
     const flat = { ...delta, sentiment: { ...delta.sentiment!, verdict: { state: 'too_little_data' as const, change: 0.4, band: 2 } } }
     const html = renderToStaticMarkup(createElement(DeltaBlock, { delta: flat, dashboard: null, appUrl: ctx.appUrl }))
     expect(html).toContain('Where you stand this update')
-    expect(html).toContain('too little data')
+    expect(html).toContain(MOVEMENT_WORDS.too_little_data) // the chip reads the one table (P0 item 6)
     const first = renderToStaticMarkup(createElement(DeltaBlock, { delta: null, dashboard: { sentiment: { positivePct: 91.2, judged: 120, deltaText: null, tierLabel: null, segments: [] }, share: null } as unknown as DashboardData, appUrl: ctx.appUrl }))
     expect(first).toContain('your first update')
     expect(first).toContain('<strong>91%</strong>')

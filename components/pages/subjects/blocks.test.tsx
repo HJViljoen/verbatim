@@ -137,7 +137,7 @@ describe('SU2 · the subject in full', () => {
 
   it('refuses your own side’s change and answers the category’s, and says which in one sentence', () => {
     const text = renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))
-    expect(text).toContain('too little data')
+    expect(text).toContain('too few to compare') // P0 item 6 / §6 D11 — the badge's one word
     expect(text).toContain('carried too few videos this month to compare')
   })
 
