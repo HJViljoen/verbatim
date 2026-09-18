@@ -6,6 +6,10 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { chartId, type CalendarRule, type CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
+
+/** "Jul" — the month alone, for the left half of a span whose right half
+ *  carries the year. */
+const shortMonth = (month: string): string => monthName(month).replace(/\s+\d{4}$/, '')
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { NOT_OBSERVED, standingText, type StandingRow, type StandingShare } from '@/lib/reading/standings'
 import type { FigureTable, Verdict } from '@/lib/reading/verdicts'
@@ -75,10 +79,15 @@ const COLOR: Record<StandingRow['role'], string> = {
  *  printed" — the artboard's meta, over the axis this block was actually given
  *  rather than over the four months the mock happens to draw. */
 export function metaLine(s: StandingsBlock): string {
+  // THE ARTBOARD'S ARROW, AND THE YEAR ONCE. It read "Jul 2026 to Sep 2026"
+  // where the mock (and the brief) write "Jun → Sep". The year stays — a span
+  // that crosses a year boundary is ambiguous without it, which is deviation
+  // 4's argument on the head-to-head — but it is printed on the end month
+  // only, and "to" becomes the arrow.
   const span = s.months.length > 0
     ? s.months.length === 1
       ? monthName(s.months[0])
-      : `${monthName(s.months[0])} to ${monthName(s.months[s.months.length - 1])}`
+      : `${shortMonth(s.months[0])} → ${monthName(s.months[s.months.length - 1])}`
     : null
   return ['share of the tracked set', span, 'both denominators printed'].filter((x): x is string => x != null).join(' · ')
 }

@@ -5,7 +5,8 @@ import {
   buildSaidAbout, competitiveUnlockRows, questionsEmpty,
   type CompetitiveSurfaceData,
 } from '@/lib/pages/competitive-surface'
-import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
+import { methodRecordFixture } from '@/lib/test/method-fixture'
+import { methodLines } from '@/lib/reading/method'
 import { claimEcho, rivalOwnClaims, type OwnPostInput } from '@/lib/reading/own-posts'
 import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/playbook'
 
@@ -22,6 +23,41 @@ import { buildHeadToHead, buildPlaybook, type PlaybookVideo } from '@/lib/pages/
 
 const NOW = '2026-09-18T09:00:00.000Z'
 const MONTH = '2026-09-01'
+
+/**
+ * THE FOOTNOTE IS THIS PAGE'S TENANT, AND ITS OWN CORPUS.
+ *
+ * `methodFixture()` is shaped like Sealand's and is the right shared default
+ * for the pages that use it; on THIS page every populated state's foot read
+ * "Prepared for Sealand with Verbatim · 2,359 videos read in this window" under
+ * a bar, a standings table, a head-to-head and a playbook that all say Össur
+ * and 449. The fixtures are wave 2's review surface, so a footnote that
+ * contradicts the page above it is a defect in the thing being reviewed.
+ *
+ * The coverage rows below sum to the SAME 449 the standings' September
+ * denominator does (19 client · 42 Ottobock · 388 the rest), because
+ * `methodLines` derives its "read in this window" from exactly that sum. The
+ * composer is the real one, so the fixture can still never print a sentence
+ * `methodLines` would not.
+ */
+const OSSUR_COVERAGE = [
+  { audience: 'client', videos: 19, comments: 151, platformMix: { tiktok: 9, youtube: 6, instagram: 4 }, dualMention: 6, excludedUndated: 0 },
+  { audience: 'competitor:Ottobock', videos: 42, comments: 645, platformMix: { tiktok: 21, youtube: 13, instagram: 8 }, dualMention: 0, excludedUndated: 1 },
+  { audience: 'industry-other', videos: 388, comments: 10_534, platformMix: { tiktok: 195, youtube: 116, instagram: 77 }, dualMention: 0, excludedUndated: 12 },
+]
+
+const ossurMethod = () =>
+  methodLines(methodRecordFixture({ coverage: OSSUR_COVERAGE }), { brand: 'Össur' })
+
+/** The degraded footnote, same tenant: no month-by-month coverage on record. */
+const ossurMethodRefused = () =>
+  methodLines(
+    methodRecordFixture({
+      coverage: null,
+      language: { analysed: 2_359, unknown: 2_359, english: 0, notEnglish: 0, basis: 'video_speech' },
+    }),
+    { brand: 'Össur' },
+  )
 
 const den = (month: string, audience: string, videos: number, comments: number, dual = 0) => ({
   month,
@@ -335,7 +371,7 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       lines: ['2 updates delivered in this month.'],
       href: '/dashboard/settings',
     },
-    method: methodFixture(),
+    method: ossurMethod(),
     ...over,
   }
 }
@@ -432,7 +468,7 @@ export function unreadMonthsFixture(): CompetitiveSurfaceData {
   const base = competitiveFixture()
   return {
     ...base,
-    method: methodRefusedFixture(),
+    method: ossurMethodRefused(),
     // FIVE OF SEVEN OVERVIEW BLOCKS STILL SAY "not recorded" UNTIL M1–M9 ARE
     // APPLIED, and wave 2 is reviewed in that state — so the degraded arm is
     // part of the handover, not an afterthought. Nothing read means nothing to

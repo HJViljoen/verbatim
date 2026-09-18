@@ -663,7 +663,9 @@ describe('the page, as the artboard composes it', () => {
     const text = renderText(competitiveStandings.render(competitiveFixture(), 'app', ctx))
     // The axis this block was GIVEN, not the four months the artboard happens
     // to draw — `last_3` at 18 Sep is Jul, Aug, Sep.
-    expect(text).toContain('share of the tracked set · Jul 2026 to Sep 2026 · both denominators printed')
+    // The artboard's arrow, with the year printed once on the end month — a
+    // span that crosses a year boundary is ambiguous without it.
+    expect(text).toContain('share of the tracked set · Jul → Sep 2026 · both denominators printed')
     expect(text).toContain('Open the record →')
     expect(text).toContain('no rank is printed')
   })
