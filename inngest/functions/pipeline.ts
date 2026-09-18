@@ -5,6 +5,7 @@ import { createAdminClient, selectAll } from '@/lib/supabase-admin'
 import { planGatherSearches, searchStepId, searchOne, gatePlatform, scrapeCommentsBatch, transcribeBatch, planTranscribeBatches, resolveGatherWindow, inWindow, loadGatherConfig, type SearchResult } from '@/lib/gather/gather'
 import { runPassA, passALane, passAPromptVersion } from '@/lib/pipeline/pass-a'
 import { decideAnalysis, emptyReasonTally, staleInsightIds, type SelectReason } from '@/lib/pipeline/pass-a-plan'
+import { parseRef } from '@/lib/renderables/quotes-freeze'
 import { loadGroupedInsights, runStepA2Bucket, type StepA2BucketResult } from '@/lib/pipeline/step-a2'
 import { runPassB } from '@/lib/pipeline/pass-b'
 import { runPassC } from '@/lib/pipeline/pass-c'
@@ -1878,13 +1879,21 @@ export const runPipeline = inngest.createFunction(
     //    close-run on purpose: the dashboard flips to this run on that status
     //    write, so the previous run's quotes resolve right up to the flip. Only
     //    completed/partial runs reach here (a failed run's stale rows wait for
-    //    the next successful close). Non-fatal and uncounted — leftovers are
-    //    harmless, just storage.
+    //    the next successful close). Non-fatal and uncounted — a leftover is
+    //    just storage.
+    //
+    //    IT DOES NOT TAKE CITED EVIDENCE (2026-09-18). The "leftovers are
+    //    harmless" this comment used to end on was true when nothing pointed at
+    //    a superseded row. Recommendations, plan checks and frozen exports all
+    //    do now, so citedEvidenceIds resolves what still cites what and
+    //    staleInsightIds never returns one of those rows. Same step id, same
+    //    position, one function body — see the note in citedEvidenceIds for
+    //    the three classes and why each is resolved the way it is.
     const pruned = await step
       .run('prune-stale-analysis', () => pruneStaleAnalysis(clientId))
       .catch((e) => {
         console.error(`[prune-stale-analysis] out of retries: ${e instanceof Error ? e.message : String(e)}`)
-        return { insights: 0, languageSamples: 0, failed: true }
+        return { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0, failed: true }
       })
 
     // 8. Periodic report — only when requested (the scheduler sets this), so a
@@ -2167,21 +2176,156 @@ async function planPassABatches(clientId: string, runId: string, force: boolean,
   return { batches, considered, selected: eligible.length, reasons }
 }
 
+/**
+ * What a prune MAY NOT TAKE: the `audience_insights` / `language_samples` rows
+ * something stored still points at.
+ *
+ * THE DEFECT THIS CLOSES (2026-09-18). `prune-stale-analysis` removes every row
+ * a later re-read superseded, and its own comment called the leftovers
+ * "harmless, just storage" — true when nothing cited them. Things cite them
+ * now: all twelve of Sealand's oldest recommendations, every row its advice
+ * ledger actually draws, had lost every `audience_insights` row beneath them,
+ * so "Grounded in" resolved to zero live videos down the whole page.
+ *
+ * FAIL CLOSED. Everything here is loaded BEFORE the first delete, so a read
+ * that fails takes the step to its retry and then to its non-fatal catch with
+ * nothing deleted. Deleting less than we could is a storage cost; deleting a
+ * cited row is unrecoverable.
+ *
+ * THE THREE CITATION CLASSES, and why each is resolved the way it is:
+ *
+ *  1. RECOMMENDATIONS, a two-link chain. `recommendations.based_on.insight_ids`
+ *     names insight rows, and it MIXES `market_insights` (M#) and
+ *     `competitive_insights` (C#) ids — the resolution lib/pipeline/pass-d.ts
+ *     writes, and the same reason app/api/cron/ops-check/route.ts unions both
+ *     tables. Their `evidence.supporting_theme_ids` then holds the
+ *     `audience_insights` ids (scripts/citation-floor.ts states that mapping).
+ *     Both links are protected: a market insight that a live recommendation
+ *     cites is part of the chain, and a row whose market insight is itself
+ *     gone reaches lib/reading/afterwards.ts as an empty `based_on`.
+ *
+ *  2. PLAN CHECKS, both tables. `plan_checks.claims[].insightIds` is the
+ *     upload's reading and `plan_check_evaluations.claims[].insightIds` each
+ *     re-check's; `currentReading` (lib/ask/plan-cards.ts) prints the newest
+ *     evaluation that has claims and FALLS BACK to the upload's, so protecting
+ *     only one of the two leaves the other printing a card with no voices.
+ *
+ *  3. FROZEN SNAPSHOT QUOTES. `report_snapshots.evidence_ids` repeats every ref
+ *     in the stored artefact (lib/renderables/quotes-freeze.ts). Two of the ref
+ *     kinds name a row this prune can delete, and both are id-exact:
+ *     `e:<insight_evidence.id>`, which cascades from `audience_insights` and so
+ *     resolves back through it, and `p:<language_samples.id>`, which IS one of
+ *     these rows. The brief listed snapshots as a named non-goal to be measured
+ *     rather than fixed, "unless the count says it is the same one-line set
+ *     union". It is the same set union — `p:` needs no resolution at all and
+ *     `e:` needs one chunked select — so it is done here rather than left as a
+ *     second defect of the same shape. This is also why `language_samples` is
+ *     protected at all: it carries no OTHER citation path, but a stored export
+ *     names its rows by id.
+ *
+ *     The other ref kinds are deliberately NOT here. `c:`, `v:` and `m:` do not
+ *     name a row — they resolve by SEARCHING `insight_evidence` for any live
+ *     excerpt on that comment or video, so a re-read that produced fresh
+ *     evidence on the same comment keeps them resolving (possibly to a
+ *     different excerpt, which is a separate question and not this one).
+ *     `k:`, `h:` and `b:` read `video_claims`, a hero row and `run_summary`,
+ *     none of which this step touches.
+ */
+async function citedEvidenceIds(
+  admin: ReturnType<typeof createAdminClient>,
+  clientId: string,
+): Promise<{ insights: Set<string>; languageSamples: Set<string>; from: Record<string, number> }> {
+  const insights = new Set<string>()
+  const languageSamples = new Set<string>()
+  const from: Record<string, number> = { recommendations: 0, planChecks: 0, snapshots: 0 }
+
+  // 1. Recommendations → market/competitive insights → audience insights.
+  const recs = await selectAll<{ id: string; based_on: { insight_ids?: string[] } | null }>(() =>
+    admin.from('recommendations').select('id, based_on').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const containers = new Set<string>()
+  for (const r of recs) for (const id of r.based_on?.insight_ids ?? []) if (typeof id === 'string' && id) containers.add(id)
+  for (const table of ['market_insights', 'competitive_insights'] as const) {
+    // Chunk 200 for the same PostgREST URL-length reason as the deletes below.
+    // A 200-id chunk can return at most 200 rows (`id` is the primary key), so
+    // the 1000-row default cap on a bare `.select()` is never in play here.
+    for (const part of chunk([...containers], 200)) {
+      const { data, error } = await admin.from(table).select('id, evidence').eq('client_id', clientId).in('id', part)
+      if (error) throw new Error(`cited ${table}: ${error.message}`)
+      for (const row of (data ?? []) as { evidence: { supporting_theme_ids?: string[] } | null }[]) {
+        for (const id of row.evidence?.supporting_theme_ids ?? []) {
+          if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.recommendations++ }
+        }
+      }
+    }
+  }
+
+  // 2. Plan checks — the upload's claims and every re-evaluation's.
+  for (const table of ['plan_checks', 'plan_check_evaluations'] as const) {
+    const rows = await selectAll<{ id: string; claims: unknown }>(() =>
+      admin.from(table).select('id, claims').eq('client_id', clientId).order('id', { ascending: true }),
+    )
+    for (const row of rows) {
+      if (!Array.isArray(row.claims)) continue
+      for (const claim of row.claims as { insightIds?: unknown }[]) {
+        if (!claim || !Array.isArray(claim.insightIds)) continue
+        for (const id of claim.insightIds) {
+          if (typeof id === 'string' && id && !insights.has(id)) { insights.add(id); from.planChecks++ }
+        }
+      }
+    }
+  }
+
+  // 3. Frozen snapshot quotes.
+  const snapshots = await selectAll<{ id: string; evidence_ids: string[] | null }>(() =>
+    admin.from('report_snapshots').select('id, evidence_ids').eq('client_id', clientId).order('id', { ascending: true }),
+  )
+  const evidenceRowIds = new Set<string>()
+  for (const s of snapshots) {
+    for (const ref of s.evidence_ids ?? []) {
+      const parsed = typeof ref === 'string' ? parseRef(ref) : null
+      if (!parsed) continue
+      if (parsed.kind === 'e') evidenceRowIds.add(parsed.id)
+      else if (parsed.kind === 'p' && !languageSamples.has(parsed.id)) { languageSamples.add(parsed.id); from.snapshots++ }
+    }
+  }
+  for (const part of chunk([...evidenceRowIds], 200)) {
+    const { data, error } = await admin.from('insight_evidence').select('id, audience_insight_id').in('id', part)
+    if (error) throw new Error(`cited insight_evidence: ${error.message}`)
+    for (const row of (data ?? []) as { audience_insight_id: string | null }[]) {
+      const id = row.audience_insight_id
+      if (id && !insights.has(id)) { insights.add(id); from.snapshots++ }
+    }
+  }
+
+  return { insights, languageSamples, from }
+}
+
 /** Delete every audience_insights / language_samples row that is not the
- *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts).
+ *  current analysis of its video (staleInsightIds, lib/pipeline/pass-a-plan.ts)
+ *  AND that nothing stored still cites (citedEvidenceIds, above).
  *  Chunked deletes; insight_evidence cascades. video_claims is left alone —
  *  its reader is already newest-run-wins (lib/pipeline/claims.ts). */
-async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number }> {
+async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number; languageSamples: number; keptInsights: number; keptSamples: number }> {
   const admin = createAdminClient()
+  // Loaded first, and a failure here throws before anything is deleted.
+  const cited = await citedEvidenceIds(admin, clientId)
   const videos = await selectAll<{ id: string; analyzed_run_id: string | null }>(() =>
     admin.from('videos').select('id, analyzed_run_id').eq('client_id', clientId).order('id', { ascending: true }),
   )
-  const out = { insights: 0, languageSamples: 0 }
+  const out = { insights: 0, languageSamples: 0, keptInsights: 0, keptSamples: 0 }
   for (const table of ['audience_insights', 'language_samples'] as const) {
     const rows = await selectAll<{ id: string; run_id: string | null; source_video_id: string | null }>(() =>
       admin.from(table).select('id, run_id, source_video_id').eq('client_id', clientId).order('id', { ascending: true }),
     )
-    const stale = staleInsightIds(videos, rows)
+    const protectedIds = table === 'audience_insights' ? cited.insights : cited.languageSamples
+    const stale = staleInsightIds(videos, rows, protectedIds)
+    // What protection actually cost, counted against this tenant's own rows
+    // rather than against the size of the cited set: an id cited by a
+    // recommendation may name a row that is current anyway, or one this
+    // tenant no longer has at all.
+    const wouldHaveTaken = staleInsightIds(videos, rows)
+    const kept = wouldHaveTaken.length - stale.length
     // Chunk 200, not 500: ~500 uuids in an `in.()` filter overflows the
     // PostgREST URL cap ("fetch failed" — the lesson behind every other chunked
     // .in() in this repo). A first prune on a real tenant is thousands of rows.
@@ -2189,9 +2333,14 @@ async function pruneStaleAnalysis(clientId: string): Promise<{ insights: number;
       const { error } = await admin.from(table).delete().in('id', part)
       if (error) throw new Error(`prune ${table}: ${error.message}`)
     }
-    if (table === 'audience_insights') out.insights = stale.length
-    else out.languageSamples = stale.length
+    if (table === 'audience_insights') { out.insights = stale.length; out.keptInsights = kept }
+    else { out.languageSamples = stale.length; out.keptSamples = kept }
   }
+  console.log(
+    `[prune-stale-analysis] deleted ${out.insights} insight(s) · ${out.languageSamples} language sample(s); ` +
+    `kept ${out.keptInsights} + ${out.keptSamples} superseded row(s) because something still cites them ` +
+    `(recommendations ${cited.from.recommendations} · plan checks ${cited.from.planChecks} · snapshots ${cited.from.snapshots} cited id(s))`,
+  )
   return out
 }
 
