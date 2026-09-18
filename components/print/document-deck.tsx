@@ -441,16 +441,42 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
 
 // ── finding ────────────────────────────────────────────────────────────────
 
-/** Three dots, filled to the confidence word.
+/**
+ * Three dots, filled to the confidence word.
  *
- *  TWO VOCABULARIES, ONE RAIL. A finding's word is `solid | reasonable | thin`
- *  (calibrated from conversations and strands); a READING's is `reasonable |
- *  partly | not yet` (`confidenceOf`, off the verdicts). They are two answers
- *  to two questions and neither is being renamed — the dots just have to know
- *  both, and an unrecognised word fills one rather than three, which is the
- *  safe way for it to be wrong. */
+ * TWO VOCABULARIES, ONE LADDER. A finding's word is `solid | reasonable |
+ * thin` (calibrated from conversations and strands); a READING's is
+ * `reasonable | partly | not yet` (`confidenceOf`, off the verdicts). They are
+ * two answers to two questions and neither is being renamed — but they sit on
+ * ONE sheet count in one document, so a word may not fill two different
+ * numbers of dots depending on which question asked it.
+ *
+ * THE LADDER IS THIS TABLE AND EVERY WORD HAS ITS OWN RUNG. `solid` is three
+ * and only a finding can earn it; `reasonable` is two in both vocabularies
+ * because it is one word meaning one thing, and a reading is CAPPED there by
+ * construction (`confidenceOf`: a quarter whose own side is still forming is
+ * never better than "partly", however solid the category side is, so no
+ * reading ever claims `solid`); `partly` and `thin` are one; and `not yet` is
+ * ZERO, which is what "nothing cleared a band on either side, so there is no
+ * reading to be confident about" actually says. Until 2026-09-18 the body was
+ * `solid ? 3 : reasonable ? 2 : 1`, so `partly` and `not yet` drew the same
+ * one dot and a three-state word rendered as two — while the docstring above
+ * claimed the dots knew both vocabularies.
+ *
+ * An unrecognised word fills one rather than three, which is the safe way for
+ * it to be wrong, and the WORD is printed beside the dots at both call sites,
+ * so the dots never carry the claim alone.
+ */
+const CONFIDENCE_DOTS: Record<string, number> = {
+  solid: 3,
+  reasonable: 2,
+  partly: 1,
+  thin: 1,
+  'not yet': 0,
+}
+
 function ConfidenceDots({ sure }: { sure: string }) {
-  const n = sure === 'solid' ? 3 : sure === 'reasonable' ? 2 : 1
+  const n = CONFIDENCE_DOTS[sure.toLowerCase()] ?? 1
   return (
     <span className="inline-flex items-center gap-1.5 align-middle">
       {[0, 1, 2].map((i) => <span key={i} className={`inline-block h-[9px] w-[9px] rounded-full ${i < n ? 'bg-primary' : 'bg-neutral-seg'}`} />)}

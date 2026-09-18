@@ -419,6 +419,22 @@ describe('the borrowed sheets carry the artboard’s chrome', () => {
     expect(words(thin)).toContain('Aug → Sep only')
   })
 
+  // TWO VOCABULARIES, ONE LADDER. A finding's `solid | reasonable | thin` and a
+  // reading's `reasonable | partly | not yet` share one set of three dots, so
+  // each word gets its own rung: `partly` and `not yet` drew the same single
+  // dot until now, which rendered a three-state word as two.
+  it('fills a different number of dots for each confidence word', () => {
+    const filled = (sheet: string) => (sheet.match(/bg-primary"/g) ?? []).length
+    const of = (word: string) =>
+      filled(sheetNamed(deck(salesBriefFixture({
+        reading: { ...salesBriefFixture().reading!, confidence: { word, why: 'why.' } },
+        // The chart pane would draw its own primary-coloured marks; the rivals
+        // sheet's pane is the confidence one and draws none.
+      })), 'What they complain about with each rival'))
+    expect(of('reasonable')).toBeGreaterThan(of('partly'))
+    expect(of('partly')).toBeGreaterThan(of('not yet'))
+  })
+
   // `sales.p2.confidence` … `p5.confidence`: the dots existed only inside a
   // finding page's right card.
   it('carries the confidence dots, the word and the caveat on a borrowed sheet', () => {
