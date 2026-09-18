@@ -1,4 +1,4 @@
-import { longMonth, shortDate } from '../format'
+import { fullDate, longMonth, shortDate } from '../format'
 import { DEFAULT_HORIZON, HORIZONS, HORIZON_LABEL, HORIZON_PARAM, type Horizon } from '../reading/horizon'
 import type { MonthStatus } from '../reading/types'
 
@@ -66,7 +66,13 @@ export function contextLine(input: ContextLineInput): string {
   // A frozen month says nothing about filling: it is finished, and a clause
   // saying so on every past month would be noise on every page.
   if (input.status === 'filling') parts.push('still filling')
-  parts.push(`as at ${shortDate(input.readingAt)}`)
+  // THE STAMP TAKES THE YEAR WHEN IT IS NOT THE MONTH'S (code review m13). The
+  // short form is right — and is what the artboard prints — while the two are
+  // in the same year, because the month beside it carries one. A frozen month
+  // read in a later year says "August 2026 · as at 2 Oct" with no year on the
+  // instant, which dates the reading to nothing.
+  const stamp = input.readingAt.slice(0, 4) === year ? shortDate(input.readingAt) : fullDate(input.readingAt)
+  parts.push(`as at ${stamp}`)
   if (input.sent) parts.push(input.sent)
   return parts.join(' · ')
 }

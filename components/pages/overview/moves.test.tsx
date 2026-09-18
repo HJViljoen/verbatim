@@ -90,10 +90,11 @@ describe('OV6 · how sound is this month', () => {
     // what was said on camera"), and it squeezed the h2 beside it into five
     // stacked words. It is the soundness band's sentence, it wraps there, and
     // this block prints the record it rests on.
-    const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
     const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
     expect(text).not.toContain('27% of what was said on camera was not in English · 1 tracking change')
-    expect(markup).not.toContain('whitespace-nowrap')
+    // The meta slot is not empty — it carries "the record →", which is four
+    // words and fits — but nothing long is passed through it any more.
+    expect(text).toContain('the record →')
     expect(text).toContain('2,359 videos carried conversation in this window')
   })
 

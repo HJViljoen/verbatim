@@ -26,6 +26,15 @@ describe('contextLine', () => {
     expect(line).toContain('as at 1 Sep')
   })
 
+  it('takes the year back when the stamp is not in the month’s year', () => {
+    // Code review m13. The short form is right while the two are in the same
+    // year — the month beside it carries one — but a frozen month read in a
+    // later year said "December 2026 · as at 4 Jan", which dates the reading to
+    // nothing. The month is unchanged; only the instant takes its year.
+    expect(contextLine({ brand: 'Sealand', month: '2026-12-01', status: 'frozen', readingAt: '2027-01-04T06:00:00Z' }))
+      .toBe('Sealand · December 2026 · as at 4 Jan 2027')
+  })
+
   it('prints no direction word', () => {
     expect(directionHits(contextLine({ brand: 'Össur', month: '2026-09-01', status: 'filling', readingAt: '2026-09-15T18:00:00Z' }))).toEqual([])
   })

@@ -1,6 +1,6 @@
-import Link from 'next/link'
 import type { Block } from '@/lib/blocks/types'
 import { BlockFrame } from '@/components/blocks/frame'
+import { openLink } from '@/components/blocks/open-link'
 import { TileColumns } from '@/components/shell/page-grid'
 import { fullDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -92,7 +92,18 @@ export const overviewRecord: Block<OverviewData> = {
         // it (`main.coverage.header`): this block has no onward page of its own
         // — it IS the record — so the link belongs in the header rather than in
         // the footer rail every other block uses to send a reader deeper.
-        footer={<Link href={href} className="hover:underline">the record →</Link>}
+        //
+        // AND IT IS IN THE HEADER NOW. It was passed as `footer`, which
+        // `BlockFrame` draws in the footer rail at the bottom of the tile —
+        // the port's own note said "beside the eyebrow" and the markup said
+        // otherwise, and the test pinning it asserted only that the words
+        // appeared SOMEWHERE (code review m16). The meta slot is free because
+        // the ~180-character soundness line no longer occupies it.
+        //
+        // `openLink` rather than a bare `Link`, on the rule the other six
+        // blocks already follow: a PDF and a `/r/<token>` page are read by
+        // somebody who cannot click it, and this one points at Settings.
+        meta={openLink(mode, href, 'the record →')}
       >
         {/* TWO COLUMNS OF MONO (`main.coverage.para1` / `.para2`). The artboard
             sets them at 9.5px, which is the smallest type on the page and

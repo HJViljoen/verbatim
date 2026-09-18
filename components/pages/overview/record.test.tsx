@@ -62,8 +62,24 @@ describe('OV6 · how sound is this month', () => {
   it('puts the record link in the header, not in the footer rail', () => {
     // This block has no onward page of its own — it IS the record — so the link
     // sits beside the eyebrow where the artboard puts it.
-    const text = renderText(overviewRecord.render(overviewFixture(), 'app', ctx))
-    expect(text).toContain('the record →')
+    //
+    // AND THE ASSERTION SAYS WHICH (code review m16). "contains 'the record →'"
+    // was true of the footer arm as well as the header arm the test names, so
+    // it would have passed the very move it exists to prevent. `BlockFrame`
+    // puts the header's slot before the block's body and the footer's after it,
+    // so the link's position in the markup is the fact to pin.
+    const markup = render(overviewRecord.render(overviewFixture(), 'app', ctx))
+    const link = markup.indexOf('the record →')
+    const body = markup.indexOf('What was read:')
+    expect(link).toBeGreaterThan(-1)
+    expect(body).toBeGreaterThan(-1)
+    expect(link).toBeLessThan(body)
+    // It really is in the header element, and the tile draws no footer rail at
+    // all on this block — which was the thing the old assertion could not tell
+    // apart, because the link was in the footer the whole time.
+    expect(markup.slice(0, markup.indexOf('</header>'))).toContain('the record →')
+    // And a reader who cannot click it does not get it.
+    expect(render(overviewRecord.render(overviewFixture(), 'print', ctx))).not.toContain('the record →')
   })
 
   it('declares no figures, because every number in it is printed by the block it rests on', () => {
