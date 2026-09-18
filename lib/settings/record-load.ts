@@ -91,7 +91,12 @@ const headCount = async (q: PromiseLike<{ count: number | null; error: unknown }
   return count ?? 0
 }
 
-async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ updates: UpdateInput[]; slotsRecorded: boolean }> {
+/** Exported since block D (D9): the brief's method page carries the same
+ *  delivery line Settings › The record prints ("23 updates since 6 Apr 2026
+ *  · longest gap 35 days · last on 27 Sep 2026"), and a second reader of
+ *  `pipeline_runs` would be a second answer to "how many updates have you had"
+ *  — which is exactly what `deliveryRecord`'s own header forbids. */
+export async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ updates: UpdateInput[]; slotsRecorded: boolean }> {
   // The bookkeeping columns land in their own migration; probe once rather
   // than letting a wide read fail on a column nobody asked about.
   const probe = await client.from('pipeline_runs').select('scheduled_for, stalled').limit(1)

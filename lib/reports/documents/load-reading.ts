@@ -14,6 +14,9 @@ import { computeReadiness } from '../../readiness/compute'
 import { loadReadiness } from '../../readiness/load'
 import { OWNER_LABEL } from '../../readiness/types'
 import { loadRecordInputs, monthRecordWindow, totalPlatformMix } from '../../reading/record'
+import { methodLines } from '../../reading/method'
+import { deliveryRecord } from '../../settings/delivery'
+import { loadUpdates } from '../../settings/record-load'
 import { DEFAULT_HORIZON } from '../../reading/horizon'
 import type { Scope } from '../../renderables/types'
 import type { Block } from '../../blocks/types'
@@ -127,15 +130,28 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     .map(([surface, data]) => blockReading(BLOCKS[surface], data as never))
   const merged = mergeReadings(parts.length > 0 ? parts : [blockReading(BLOCKS.overview, overview as never)])
 
-  const record = await loadRecordInputs(
-    scope.reading.client as SupabaseClient,
-    scope.clientId,
-    monthRecordWindow(overview.month, readingAt),
-    { now: readingAt },
-  ).catch((e) => {
-    console.error(`[documents] brief record: ${(e as { message?: string })?.message ?? String(e)}`)
-    return null
-  })
+  // THE RECORD, AND THE DELIVERY RECORD BESIDE IT. The first is the month's,
+  // comment-dated; the second is all-time and run-dated, and it is the one
+  // figure a run's own clock is the honest index for. Two reads, in parallel,
+  // and neither recomputes anything an app surface already computes:
+  // `deliveryRecord` is the same composer Settings › The record prints, so a
+  // brief and that page cannot disagree about how many updates a workspace
+  // has had.
+  const [record, updates] = await Promise.all([
+    loadRecordInputs(
+      scope.reading.client as SupabaseClient,
+      scope.clientId,
+      monthRecordWindow(overview.month, readingAt),
+      { now: readingAt },
+    ).catch((e) => {
+      console.error(`[documents] brief record: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    }),
+    loadUpdates(scope.reading.client as SupabaseClient, scope.clientId).catch((e) => {
+      console.error(`[documents] brief delivery: ${(e as { message?: string })?.message ?? String(e)}`)
+      return null
+    }),
+  ])
 
   const reading: BriefReading = {
     month: overview.month,
@@ -154,6 +170,14 @@ export async function loadBriefReading(scope: Scope, options: BriefReadingOption
     // like for like; a build inherits the same caveat rather than inventing a
     // second rule for the same fact.
     crossesClustering: overview.notes.some((n) => n.kind === 'clustering_changed' || n.kind === 'split_keys'),
+    method: record ? methodLines(record, { brand: overview.brand, readingAt }) : null,
+    delivery: updates ? deliveryRecord({ updates: updates.updates, slotsRecorded: updates.slotsRecorded }).line : null,
+    // OFF THE OVERVIEW THIS BRIEF ALREADY LOADED, never recomputed. Both are
+    // sentences the page composes and no document has ever printed; the
+    // caveat matters MORE on a PDF, where the reader cannot see the column
+    // that carries the month.
+    counter: overview.bar.counter,
+    hollow: overview.subjects.note,
   }
   return { reading, surfaces, missing, map, sections }
 }

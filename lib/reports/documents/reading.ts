@@ -8,6 +8,7 @@ import type { FigureTable as ReadingFigures, Verdict } from '../../reading/verdi
 import { proseFigures } from '../../prose/figures'
 import type { FigureTable } from '../types'
 import type { CoverageRecord } from '../../reading/record'
+import type { MethodLines } from '../../reading/method'
 
 /**
  * The reading a brief is written from (Phase 1 WP19, item 43, decision R).
@@ -68,6 +69,39 @@ export interface BriefReading {
   /** True when the window crosses a recorded clustering boundary. A reading
    *  may not cross a boundary without saying so. */
   crossesClustering: boolean
+  /**
+   * The method footnote (block D, D9 — `sales.p7.footnote`).
+   *
+   * Every number in it was already on `RecordInputs` and composed by
+   * `recordLines`, and none of it has ever reached a document: the read-depth
+   * shares, the language share and the Reddit cap are drawn on the app
+   * surfaces through the page bar and on Settings › The record, and nowhere
+   * else. Composed from the record `load-reading.ts` already loads, so it
+   * costs the build nothing. Null where that record could not be read.
+   */
+  method: MethodLines | null
+  /**
+   * "23 updates since 6 Apr 2026 · longest gap 35 days · last on 27 Sep 2026"
+   * (`content.p5.delivery`). `deliveryRecord().line`, the same sentence
+   * Settings › The record prints — never a second count of `pipeline_runs`.
+   * RUN-DATED, and it is the record OF the deliveries, which is the one thing
+   * a run's own date is the honest index for.
+   */
+  delivery: string | null
+  /** "your 3rd monthly reading · the quarter view needs 6" — the second half
+   *  of `content.p5.delivery`, taken off the Overview this brief already
+   *  loaded (`readingsCounter`), never recomputed. */
+  counter: string | null
+  /**
+   * "Your side reads 'too few to compare' on 84 videos — the category column
+   * carries the month." (`content.p5.caveat`).
+   *
+   * Overview composes this and no document has ever printed it, which is the
+   * wrong way round: a reader of the PDF cannot see the column that carries
+   * the month, so the caveat matters MORE here than on the page. Null where
+   * the client's own side is not hollow.
+   */
+  hollow: string | null
 }
 
 /** What a brief says about its own window, on every page, in the design's
