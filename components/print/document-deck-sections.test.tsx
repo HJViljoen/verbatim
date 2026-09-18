@@ -84,9 +84,12 @@ describe('the deck', () => {
     expect(html).toContain('data-copy=')
   })
 
+  // THE SHORT FORM, since the footer took `briefStampShort` (E-sales fix pass):
+  // the long stamp is sixty characters and rode all eleven sheets, which put it
+  // three times on the method sheet alone. Every sheet still names its month.
   it('stamps the month on every sheet', () => {
     const html = render(<DocumentDeck data={base()} date="16 Sep 2026" />)
-    const stamps = html.split('still filling until 31 Oct 2026').length - 1
+    const stamps = html.split('September 2026 · as at 16 Sep · still filling').length - 1
     expect(stamps).toBeGreaterThanOrEqual(2)
   })
 

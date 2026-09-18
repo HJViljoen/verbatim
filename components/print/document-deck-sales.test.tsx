@@ -119,11 +119,21 @@ describe('sales.p1 — the cover', () => {
   })
 
   // The stamp rides every sheet including this one, because a reader of a PDF
-  // has no masthead to scroll back to.
-  it('puts the reading stamp in the footer of every sheet', () => {
+  // has no masthead to scroll back to — in the artboard's SHORT form. The
+  // sixty-character one appeared three times on the method sheet alone (the
+  // footer, the card's PERIOD row, and the end of the first method paragraph).
+  it('puts the short reading stamp in the footer of every sheet', () => {
     const html = deck()
-    const stamps = html.split('still filling until 30 October 2026').length - 1
+    const stamps = html.split('September 2026 · as at 28 Sep · still filling').length - 1
     expect(stamps).toBeGreaterThanOrEqual(sheets(html).length)
+  })
+
+  it('keeps the freeze date for the method card, and prints it there and not in a footer', () => {
+    const html = deck()
+    expect(words(sheetNamed(html, 'About this brief'))).toContain('still filling until 30 October 2026')
+    // Twice on that one sheet — the PERIOD row and the method paragraph, which
+    // are the composer's, not this deck's — and nowhere else in the document.
+    expect(html.split('still filling until 30 October 2026').length - 1).toBeLessThanOrEqual(2)
   })
 
   it('keeps the copy contract', () => {

@@ -1,4 +1,4 @@
-import { fmtInt, fullDate, longMonth, platformLabel } from '../../format'
+import { fmtInt, fullDate, longMonth, platformLabel, shortDate } from '../../format'
 import { blockAnswers, mergeFigures } from '../../blocks/types'
 import type { Block } from '../../blocks/types'
 import { freezeBoundary } from '../../reading/monthly'
@@ -144,6 +144,32 @@ export function briefStamp(r: Pick<BriefReading, 'month' | 'monthStatus' | 'read
   const parts = [monthAndYear(r.month), `reading as at ${fullDate(r.readingAt)}`]
   if (r.monthStatus === 'filling') parts.push(`still filling until ${fullDate(freezeBoundary(r.month))}`)
   return parts.join(' · ')
+}
+
+/**
+ * The same stamp in the artboard's FOOTER form — "September 2026 · as at 28
+ * Sep · still filling".
+ *
+ * ONE SHEET CANNOT SAY ONE THING THREE TIMES. `briefStamp` is sixty
+ * characters, and the deck printed it whole in the footer of all eleven
+ * sheets; on the method sheet that string then appeared three times over —
+ * the footer, the PERIOD row of the numbers card, and the end of the first
+ * method paragraph. The artboard's footer is the short form and its method
+ * card is the long one, which is the same rule `lib/reading/method.ts` exists
+ * to hold: a sentence is rendered once, where it is the point.
+ *
+ * It is the SAME reading, read off the same three fields as `briefStamp` and
+ * sitting beside it, so the two forms cannot come to name different months or
+ * disagree about whether one is still filling. What the short form drops is
+ * the freeze DATE, which the method card still prints in full — a footer says
+ * which month you are reading, not when it will stop moving.
+ */
+export function briefStampShort(r: Pick<BriefReading, 'month' | 'monthStatus' | 'readingAt'>): string {
+  return [
+    monthAndYear(r.month),
+    `as at ${shortDate(r.readingAt)}`,
+    r.monthStatus === 'filling' ? 'still filling' : 'frozen',
+  ].join(' · ')
 }
 
 /** "September 2026". `longMonth` is the product's month name and carries no

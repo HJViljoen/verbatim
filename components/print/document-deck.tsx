@@ -13,6 +13,7 @@ import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
+import { briefStampShort } from '@/lib/reports/documents/reading'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
@@ -216,8 +217,15 @@ function audiencePills(audiences: string, company: string) {
  * read and the freeze boundary on every single sheet, because a reader of a
  * PDF has no masthead to scroll back to. So the brief prints its reading's own
  * stamp where the report prints a render date, and falls back to the date on a
- * brief that has no reading.
+ * brief that has no reading — in the artboard's SHORT form (`briefStampShort`),
+ * because the long one is sixty characters and printing it on all eleven
+ * sheets put it three times on the method sheet alone.
  */
+/** The footer's stamp: the artboard's short form where there is a reading, and
+ *  nothing (so the render date stands) where there is not. */
+const footerStamp = (data: DocumentSnapshotData): string | null =>
+  data.reading ? briefStampShort(data.reading) : null
+
 function BriefFooter({ company, date, stamp }: { company: string; date: string; stamp: string | null }) {
   return (
     <p className="truncate font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
@@ -285,7 +293,7 @@ function DocumentCover({ data, pages, contents, date }: {
           printed no footer at all, so the first sheet of a paid PDF was the one
           sheet with no page number and no "Created by". */}
       <footer className="flex shrink-0 items-baseline justify-between gap-4 border-t border-border/70 pt-1.5">
-        <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} /></div>
+        <div className="min-w-0 flex-1"><BriefFooter company={data.company} date={date} stamp={footerStamp(data)} /></div>
         <span className="shrink-0 font-mono text-[9.5px] text-muted-foreground">1 / {pages}</span>
       </footer>
     </section>
@@ -1535,10 +1543,6 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
   const slides = documentSlides(data)
   const pages = slides.length + 1
-  // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
-  // a reader of a PDF has no masthead to scroll back to, and a brief whose
-  // numbers are a month's has to name the month on the page they are read on.
-  const stamp = data.reading?.stamp ?? data.period
   // THE HEADER NAMES THE SHEET'S PLACE; THE FOOTER CARRIES THE STAMP. The
   // artboard's header reads "Objections · September 2026" — two words and a
   // month in a 10.5px mono slot that has to fit on one line beside a title.
@@ -1547,7 +1551,12 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   // now rides `BriefFooter` on every sheet including the cover, which is where
   // the artboard puts it.
   const short = data.reading?.monthLabel ?? data.period
-  const footer = <BriefFooter company={data.company} date={date} stamp={data.reading?.stamp ?? null} />
+  // WP19: the stamp rides every sheet, the way the weekly deck's rule does — a
+  // reader of a PDF has no masthead to scroll back to. In the artboard's SHORT
+  // form (`briefStampShort`), because the long one is sixty characters and the
+  // method sheet printed it three times on one sheet; the freeze date it drops
+  // is on the method card's PERIOD row, in full.
+  const footer = <BriefFooter company={data.company} date={date} stamp={footerStamp(data)} />
   const chrome = (page: DocPage) => ({ context: `${PAGE_CONTEXT[page.kind] ?? page.title} · ${short}`, footer })
   return (
     <>
