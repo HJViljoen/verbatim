@@ -1127,13 +1127,21 @@ export function GapCard({ gap }: { gap: Gap }) {
   const sides = [gap.a, gap.b]
   const pcts = sides.map((s) => sidePct(s))
   const max = Math.max(...pcts.map((p) => p ?? 0), 1)
+  // MARKED `level` ONLY WHERE IT CARRIES ONE (fix pass). `levelOf` prints
+  // "— not tracked" / "— no reading" for a side nothing was read for, so a gap
+  // with BOTH sides unread renders "you — not tracked · the category — not
+  // tracked · too few to compare" — a `level` node with no "of N" in it, which
+  // is rule (b)'s own failure and would have thrown the copy contract at
+  // render. Unmarked it is what it is: a sentence naming two silences, with no
+  // level to defend and no direction word for rule (c) to catch.
+  const carriesLevel = sides.some((side) => side.observed && sidePct(side) != null)
   return (
     <div className={`${CARD} flex flex-col gap-3 px-5 py-4`}>
       <Eyebrow>The gap that matters</Eyebrow>
       <p className={`m-0 ${BODY_SM}`}>
         <span className="font-medium">{gap.objectLabel}</span>
         {' — '}
-        <span data-copy="level">{gapLine(gap)}</span>
+        <span {...(carriesLevel ? { 'data-copy': 'level' as const } : {})}>{gapLine(gap)}</span>
         {/* UNMARKED, and deliberately. `gapLine` is two levels and their
             banded difference, which is a `level` node; the basis line is a
             SECOND banded difference at an earlier window and carries no level

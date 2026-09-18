@@ -281,6 +281,30 @@ describe('the gap card', () => {
   it('says nothing about direction', () => {
     assertCopyContract(render(<GapCard gap={gap()} />))
   })
+
+  // A GAP WITH NO READABLE SIDE CARRIES NO LEVEL (fix pass). `levelOf` prints
+  // "— not tracked" for a side nothing was read for, so both sides unread is a
+  // sentence with no "of N" in it — marked `level`, rule (b) would have thrown
+  // the block's own contract at render.
+  it('does not claim a level where neither side was read', () => {
+    const g = gap()
+    const unread = {
+      ...g,
+      state: 'too_little_data' as const,
+      gapPts: null,
+      bandPts: null,
+      a: { ...g.a, observed: false, pct: null, value: { k: 0, n: 0 } },
+      b: { ...g.b, observed: false, pct: null, value: { k: 0, n: 0 } },
+    }
+    const html = render(<GapCard gap={unread} />)
+    expect(html).not.toContain('data-copy="level"')
+    expect(markupText(html)).toContain('not tracked')
+    assertCopyContract(html)
+    // And one readable side is still a level, with its "of N".
+    const half = { ...unread, a: g.a }
+    expect(render(<GapCard gap={half} />)).toContain('data-copy="level"')
+    assertCopyContract(render(<GapCard gap={half} />))
+  })
 })
 
 describe('the method sheet', () => {
