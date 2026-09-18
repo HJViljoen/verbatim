@@ -24,7 +24,7 @@ import { ArchiveDateFilter } from '@/components/reports/date-filter'
 import { loadQuarterlyCard } from '@/lib/pages/reports-card'
 import { readingHandle } from '@/lib/reading/read'
 import { pickableCatalogue } from '@/lib/reports/catalogue'
-import { activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
+import { UPDATES_UNREAD_LINE, activePreset, loadReportsPageContext, presetLine } from '@/lib/reports/page-context'
 import { fmtBytes } from '@/lib/reports/files'
 import { shortDate } from '@/lib/format'
 import { surface } from '@/lib/nav'
@@ -620,7 +620,10 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
           presets={ctx.presets}
           activePresetKey={presetKey}
           presetHref={(x) => presetPath(BASE, x)}
-          presetNote={chosen ? presetLine(chosen) : null}
+          // A FAILED RUN READ SAYS SO. `ctx.presets` is empty in exactly that
+          // case (never four chips reading zero), and silence there would let
+          // a reader take an unread record for an empty one.
+          presetNote={chosen ? presetLine(chosen) : ctx.updatesUnread ? UPDATES_UNREAD_LINE : null}
           filter={filter}
           footer={
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">

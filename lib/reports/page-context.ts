@@ -5,8 +5,8 @@ import { deliveryRecord, updatesInMonth, type DeliveryRecord } from '../settings
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
 import { methodLines, type MethodLines } from '../reading/method'
 import { loadRecordInputs, monthRecordWindow } from '../reading/record'
+import { loadUpdates } from '../settings/record-load'
 import { contextLine } from '../shell/bar'
-import { selectAll } from '../supabase-admin'
 import type { UpdateInput } from '../readiness/types'
 import type { MonthStatus } from '../reading/types'
 
@@ -24,9 +24,11 @@ import type { MonthStatus } from '../reading/types'
  * the minimal handle. It reads three things and composes nothing twice:
  *
  *   · the workspace's own name, for the context line and "Prepared for …";
- *   · every update on record, ONE `pipeline_runs` read, which answers the
- *     archive's delivery meta AND the four preset chips AND the dated line
- *     beside them — three elements the mock draws from one fact;
+ *   · every update on record, through `loadUpdates` — the ONE reader of
+ *     `pipeline_runs` Settings › The record and the method page already share
+ *     — which answers the archive's delivery meta AND the four preset chips
+ *     AND the dated line beside them: three elements the mock draws from one
+ *     fact;
  *   · the record for the month in hand, which `methodLines` turns into the
  *     footnote the mock prints word for word.
  *
@@ -75,8 +77,15 @@ export interface ReportsPageContext {
   context: string
   /** Every update on record, all-time. Null where the read failed. */
   delivery: DeliveryRecord | null
-  /** The mock's four chips: this month, the two before it, and all-time. */
+  /** The mock's four chips: this month, the two before it, and all-time.
+   *  EMPTY WHERE THE UPDATES COULD NOT BE READ, never four chips reading zero:
+   *  `archivePresets([])` counts nothing and `presetLine` then states "No
+   *  update on record", which is a claim about the workspace a failed read
+   *  does not support. `updatesUnread` is how a caller tells the two apart. */
   presets: ArchivePreset[]
+  /** True where the run read itself failed — the archive's own `ListReach`
+   *  precedent, one page up. */
+  updatesUnread: boolean
   /** The method footnote. Null where the record could not be read. */
   method: MethodLines | null
 }
@@ -93,6 +102,9 @@ export interface ReportsPageContext {
  * The dates are dropped past eight: a chip line is one line, and "Since we
  * started" on a two-year workspace is not a list.
  */
+export const UPDATES_UNREAD_LINE =
+  'We could not read your update record just now, so the months are not listed here. Try again in a moment.'
+
 export function presetLine(p: ArchivePreset): string {
   const where = p.key === 'all' ? 'on record' : `in ${p.label}`
   if (p.updates === 0) return `No update ${where}.`
@@ -191,7 +203,13 @@ export async function loadReportsPageContext(
   const month = monthStartOf(readingAt)
   const monthStatus = freezeStateFor(month, readingAt)
 
-  type RunRow = { id: string; started_at: string | null; completed_at: string | null; status: string }
+  // ONE READER OF `pipeline_runs`, AND IT IS THE SHARED ONE. `loadUpdates`
+  // (lib/settings/record-load.ts) is the read Settings › The record and the
+  // brief's method page already go through, and its own header says why: a
+  // second reader is a second answer to "how many updates have you had". It
+  // also PROBES `scheduled_for` rather than assuming the bookkeeping migration
+  // is unapplied, which is what the hand-rolled read here had hardcoded — the
+  // column landed 2026-09-15 and `slotsRecorded: false` had stopped being true.
   const [brand, updates] = await Promise.all([
     (async (): Promise<string | null> => {
       try {
@@ -202,24 +220,14 @@ export async function loadReportsPageContext(
         return null
       }
     })(),
-    selectAll<RunRow>(() =>
-      supabase
-        .from('pipeline_runs')
-        .select('id, started_at, completed_at, status')
-        .eq('client_id', clientId)
-        .order('started_at', { ascending: true }),
-    ).catch((e: unknown) => {
+    loadUpdates(supabase, clientId).catch((e: unknown) => {
       console.error(`[reports-context] updates: ${msg(e)}`)
       return null
     }),
   ])
 
   const brandName = brand ?? 'Your workspace'
-  const runs: UpdateInput[] | null = updates
-    ? updates
-        .filter((r: RunRow): r is RunRow & { started_at: string } => typeof r.started_at === 'string')
-        .map((r): UpdateInput => ({ id: r.id, status: r.status, startedAt: r.started_at, completedAt: r.completed_at }))
-    : null
+  const runs: UpdateInput[] | null = updates?.updates ?? null
 
   // THE METHOD FOOTNOTE IS THE MONTH'S, and the month is the one the context
   // line names. `monthRecordWindow` is the same window every reading surface
@@ -238,8 +246,14 @@ export async function loadReportsPageContext(
     monthStatus,
     readingAt,
     context: contextLine({ brand: brandName, month, status: monthStatus, readingAt }),
-    delivery: runs ? deliveryRecord({ updates: runs, slotsRecorded: false }) : null,
-    presets: archivePresets(runs ?? [], month),
+    delivery: runs ? deliveryRecord({ updates: runs, slotsRecorded: updates?.slotsRecorded ?? false }) : null,
+    // A FAILED READ IS NOT ZERO UPDATES. `?? []` here lit the all-time chip and
+    // printed "No update on record." into a tile listing the sends — the rule
+    // this page states about itself at `page.tsx` ("readRows, not `data ?? []`:
+    // a failed read and an empty archive render the same page"), broken in the
+    // one new loader.
+    presets: runs ? archivePresets(runs, month) : [],
+    updatesUnread: runs == null,
     method,
   }
 }
