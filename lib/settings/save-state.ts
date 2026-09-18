@@ -31,7 +31,16 @@ import { monthsOfRange } from './change-log'
 // what this save broke" are different sentences and 91 of the 93 stored rows
 // are the second.
 //
-// Pure. The caller reads the rows and supplies the form's own edits.
+// Pure. The caller reads the rows and supplies the form's own edits — and on
+// Settings › The record the read is already done: `loadRecordPage` hands back
+// `changes.rows` newest-first and `changes.affectsRecorded`, so the strip is
+//
+//   saveState({ pending, lastChange: inputs.changes.rows[0] ?? null,
+//               affectsRecorded: inputs.changes.affectsRecorded })
+//
+// and nothing else. `affectsRecorded` is the flag the wide read sets and the
+// M1-less fallback clears; `available` beside it is about the TABLE, and the
+// two are different absences.
 
 /** One field the reader has changed and not yet saved. */
 export interface PendingEdit {
