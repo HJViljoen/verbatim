@@ -166,6 +166,40 @@ describe('sales.p1 — the cover', () => {
 
 // ── sales.p5 — who is moving, and which way ───────────────────────────────
 
+// ── the overview sheet ─────────────────────────────────────────────────────
+
+describe('the overview sheet, once the cover has taken the summary', () => {
+  const sheet = () => sheetNamed(deck(), 'Overview')
+
+  // The summary, the contents and the three tiles all moved to the cover for
+  // this brief, which left a numbered list of sentences and one box on a
+  // 1123 × 631 sheet — about 85% of it nothing on a one-finding month. The
+  // list is worth having and is not the cover's (the cover indexes PAGES,
+  // this indexes the argument), so it carries what it is a list of.
+  it('carries each finding’s evidence, its sheet and its audiences', () => {
+    const w = sheet()
+    const t = words(w)
+    expect(t).toContain('The objection to answer is longevity, not cost.')
+    expect(t).toContain('page 3')
+    expect(t).toContain('1,388 conversations')
+    expect(t).toContain('4 strands of the research')
+    expect(t).toContain('confidence reasonable')
+    expect(t).toContain('the category')
+    expect(t).toContain('Sealand’s audience')
+  })
+
+  // Every count on the row is the finding page's own meta, so the two sheets
+  // cannot disagree and nothing is measured twice.
+  it('reads the same counts the finding sheet prints', () => {
+    const finding = words(sheetNamed(deck(), 'Finding 1'))
+    expect(finding).toContain('1,388 conversations · 4 strands of the research')
+  })
+
+  it('still prints what the update did not settle', () => {
+    expect(words(sheet())).toContain('Not settled this update')
+  })
+})
+
 describe('sales.p5 — the switching sheet', () => {
   const sheet = (data = salesBriefFixture()) => sheetNamed(deck(data), 'Who is moving, and which way')
 

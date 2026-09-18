@@ -146,13 +146,55 @@ export function overviewTiles(data: DocumentSnapshotData): OverviewTile[] {
 export const coverCarriesSummary = (data: DocumentSnapshotData): boolean =>
   data.template === 'sales_brief'
 
-/** The finding headlines, in page order — from the finding pages themselves,
- *  never the overview's own written-once list, so an edited headline shows. */
-export function findingHeadlines(data: DocumentSnapshotData): string[] {
+/**
+ * Each finding as the overview sheet indexes it: the headline and the evidence
+ * behind it, in page order.
+ *
+ * WHY THE EVIDENCE TRAVELS WITH THE HEADLINE. The sales artboard moved the
+ * summary, the contents and the three tiles onto the cover, which left the
+ * overview sheet holding a numbered list of sentences and one box — on a
+ * workspace with one finding, a 1123 × 631 sheet of a paid PDF about 85% of
+ * which was nothing. The list is worth having and is not the cover's (the
+ * cover indexes PAGES, this indexes the argument), so what it was missing is
+ * what makes it an index rather than a restatement: how much each finding
+ * rests on, how sure we are of it, and whose conversation it was read in.
+ * Every field is already on the page's own meta and is already printed on the
+ * finding sheet itself — none of it is computed twice or measured again here.
+ */
+export interface FindingCard {
+  /** The finding page's id, so a caller can find its sheet number. */
+  id: string
+  headline: string
+  /** The conversations the finding was calibrated on, and the strands of
+   *  research behind it — `FindingPage`'s own two counts. */
+  conversations: number
+  strands: number
+  /** The packed audience list, for `audiencePills`. */
+  audiences: string
+  /** `solid | reasonable | thin` — the finding's own calibrated word. */
+  sure: string
+}
+
+export function findingCards(data: DocumentSnapshotData): FindingCard[] {
   return data.pages
     .filter((p) => p.kind === 'finding')
-    .map((p) => p.blocks.find((b) => b.field === 'headline')?.text ?? '')
-    .filter(Boolean)
+    .map((p) => ({
+      id: p.id,
+      headline: p.blocks.find((b) => b.field === 'headline')?.text ?? '',
+      conversations: Number(p.meta?.conversations ?? 0),
+      strands: Number(p.meta?.strands ?? 0),
+      audiences: p.meta?.audiences ?? '',
+      sure: p.meta?.sure ?? 'thin',
+    }))
+    .filter((c) => c.headline)
+}
+
+/** The finding headlines, in page order — from the finding pages themselves,
+ *  never the overview's own written-once list, so an edited headline shows.
+ *  The email reads this and the paper reads `findingCards`, and they are one
+ *  walk, so the two cannot come to list different findings. */
+export function findingHeadlines(data: DocumentSnapshotData): string[] {
+  return findingCards(data).map((c) => c.headline)
 }
 
 /** The in-short paragraph, still carrying its [[key]] placeholders. */

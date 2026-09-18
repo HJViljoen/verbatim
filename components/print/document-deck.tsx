@@ -19,7 +19,7 @@ import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { appBaseUrl } from '@/lib/site'
-import { coverCarriesSummary, findingHeadlines, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
+import { coverCarriesSummary, findingCards, overviewTiles, slugOf } from '@/lib/reports/documents/overview'
 import { shownTrajectory, type DocBlock, type DocBriefSection, type DocLens, type DocPage, type DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { FigureTable } from '@/lib/reports/types'
 
@@ -393,7 +393,11 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
   // lib/reports/documents/overview.ts — the email reads the same functions, so
   // the paper and the email cannot drift. (The not-settled list stays local:
   // it is the page's own block, and the email does not carry it.)
-  const findings = findingHeadlines(data)
+  const findings = findingCards(data)
+  // The sheet each finding is on, so the list points at the argument rather
+  // than restating it. The deck's own pagination: slide `i` is page `i + 2`.
+  const slides = documentSlides(data)
+  const pageOf = (id: string) => slides.findIndex((x) => x.keys[0] === id) + 2
   const notSureBlock = page.blocks.find((b) => b.field === 'not_sure')
   const notSure = notSureBlock?.items ?? []
   const tiles = overviewTiles(data)
@@ -414,11 +418,25 @@ function OverviewPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
         {findings.length > 0 && (
           <div className="flex flex-col gap-2.5">
             <Eyebrow>Findings in this brief</Eyebrow>
-            <ol className="flex flex-col gap-2">
-              {findings.map((h, i) => (
-                <li key={i} className="flex items-baseline gap-4 text-[16px] leading-[1.4] text-foreground">
+            <ol className="flex flex-col gap-3.5">
+              {findings.map((c, i) => (
+                <li key={c.id} className="flex items-baseline gap-4">
                   <span className="w-6 shrink-0 font-mono text-[13px] tabular-nums text-primary">{i + 1}</span>
-                  <span className="font-medium"><Figured text={h} figures={f} /></span>
+                  <div className="flex min-w-0 flex-col gap-1.5">
+                    <span className="text-[16px] font-medium leading-[1.4] text-foreground"><Figured text={c.headline} figures={f} /></span>
+                    {/* THE EVIDENCE TRAVELS WITH THE HEADLINE. Every count here
+                        is the finding page's own meta, already printed on its
+                        sheet — the list indexes the argument rather than
+                        restating it, and a sheet that was 85% white space on a
+                        one-finding brief carries what it is a list OF. */}
+                    <p className="font-mono text-[11px] leading-[1.4] text-muted-foreground">
+                      page <span className="tabular-nums text-foreground">{pageOf(c.id)}</span>
+                      {' · '}<span className="tabular-nums text-foreground">{fmtCount(c.conversations)}</span> conversations
+                      {' · '}<span className="tabular-nums text-foreground">{c.strands}</span> {c.strands === 1 ? 'strand' : 'strands'} of the research
+                      {' · '}confidence {c.sure}
+                    </p>
+                    <span className="flex flex-wrap gap-1.5">{audiencePills(c.audiences, data.company)}</span>
+                  </div>
                 </li>
               ))}
             </ol>
