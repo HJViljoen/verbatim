@@ -776,6 +776,35 @@ export function contributionLine(month: string, videos: number, of: number): str
   return `this update’s contribution to ${longMonth(month)} so far: ${fmtInt(videos)} of ${fmtInt(of)}`
 }
 
+/**
+ * Every audience's contribution to the month, on ONE line.
+ *
+ * "this update's contribution to September so far, by audience: Your brand
+ * 14 of 96 · Ottobock 47 of 118"
+ *
+ * THE RULE ON EVERY ROW, WITHOUT A LINE UNDER EVERY BAR (Block D wave 2,
+ * design review F11). Each row of §4's table states counts of a WINDOW, and a
+ * window is not a period, whoever's conversation it was — so each one is handed
+ * back to the month it fell in. That was printed under each bar, which made a
+ * row three lines, stopped the bars reading as a comparable column and wrapped
+ * mid-phrase in a 236px cell. Said once, in a line the whole table shares,
+ * every row is still restated and the column is a column again.
+ *
+ * Null where no row has a contribution — production today on both tenants,
+ * where the windowed reading is not installed and the block says so in full
+ * above the table.
+ */
+export function audienceContributionLine(
+  month: string,
+  rows: readonly { label: string; contribution: { videos: number; of: number } | null }[],
+): string | null {
+  const parts = rows
+    .filter((r) => r.contribution != null)
+    .map((r) => `${r.label} ${fmtInt(r.contribution!.videos)} of ${fmtInt(r.contribution!.of)}`)
+  if (parts.length === 0) return null
+  return `this update’s contribution to ${longMonth(month)} so far, by audience: ${parts.join(' · ')}`
+}
+
 /** "This update also covered 21 days of August." — printed only when the
  *  window reaches back past the month start, which a monthly cadence does
  *  every time (Sealand's newest update covers 11 Aug – 10 Sep). Without it the

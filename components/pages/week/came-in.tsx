@@ -8,6 +8,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt, shortDate } from '@/lib/format'
 import { platformMixLine } from '@/lib/reading/record'
 import {
+  audienceContributionLine,
   contributionLine,
   crossedIntoLine,
   crossingLine,
@@ -190,6 +191,7 @@ export const weekCameIn: Block<WeekData> = {
 function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | 'print' | 'email'; month: string }) {
   const rows = block.rows
   const email = mode === 'email'
+  const byAudience = audienceContributionLine(month, rows)
   if (email) {
     return (
       <div style={{ marginTop: 8 }}>
@@ -201,11 +203,9 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
                 tracked since {shortDate(r.trackedSince)}, so its line is shorter than the rows above it
               </div>
             ) : null}
-            {r.contribution ? (
-              <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
-                {contributionLine(month, r.contribution.videos, r.contribution.of)}
-              </div>
-            ) : null}
+            {/* NO PER-ROW CONTRIBUTION HERE EITHER (design review F11): the
+                block states it once, above, in every mode. A block renders
+                three modes and they state the same reading. */}
             {r.share.n > 0 ? (
               <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted }}>
                 <span data-copy="level">{fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed</span>
@@ -216,6 +216,9 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
             ) : null}
           </div>
         ))}
+        {byAudience ? (
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 }}>{byAudience}</div>
+        ) : null}
       </div>
     )
   }
@@ -224,7 +227,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
     : null
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <div className="hidden items-end gap-2.5 border-b border-border/70 pb-1 xl:grid xl:grid-cols-[112px_minmax(0,1fr)_44px_44px_56px]">
+      <div className="hidden items-end gap-2.5 border-b border-border/70 pb-1 xl:grid xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px]">
         <Head>Audience</Head>
         <Head>Share of this update</Head>
         <Head right>Analysed</Head>
@@ -232,7 +235,7 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
         <Head right>Comments</Head>
       </div>
       {rows.map((r) => (
-        <div key={r.audience} className="grid grid-cols-1 items-start gap-1 xl:grid-cols-[112px_minmax(0,1fr)_44px_44px_56px] xl:gap-2.5">
+        <div key={r.audience} className="grid grid-cols-1 items-start gap-1 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
           <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] font-medium">
             <span className="size-1.5 shrink-0 rounded-full" style={{ background: audienceColor(r.audience) }} aria-hidden />
             <span className="truncate" title={r.label}>{r.label}</span>
@@ -251,14 +254,16 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
                 {fmtInt(r.share.k)} of {fmtInt(r.share.n)} videos this update analysed
               </span>
             ) : null}
-            {/* ONE PER AUDIENCE, which is what makes this block's point ON EVERY
-                ROW: each count beside it is of a WINDOW, and a window is not a
-                period, whoever's conversation it was. */}
-            {r.contribution ? (
-              <span className="text-[11px] text-muted-foreground">
-                {contributionLine(month, r.contribution.videos, r.contribution.of)}
-              </span>
-            ) : null}
+            {/* THE CONTRIBUTION IS THE BLOCK'S, NOT EVERY ROW'S (design review
+                F11). It was printed under every bar, so a row was three lines
+                instead of one, the bars stopped reading as a comparable column
+                and the sentence wrapped mid-phrase ("144 of / 398") in a
+                284px cell. The rule is that every window count this page states
+                is restated as a contribution to its month — it is stated, in
+                full, at the top of this column for the table's own total, and
+                four more copies of it under four bars is four times what the
+                rule asks for. The row's own level keeps both sides of its
+                share, which is the number the bar draws. */}
             {/* THE MOCK'S "POLER SINCE 3 SEP", on the row it is about rather
                 than in the total row. It is printed only where the rival's line
                 starts inside the months this page compares — `first_seen_at`
@@ -270,37 +275,40 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
               </span>
             ) : null}
           </span>
-          <span className="xl:justify-self-end"><FigureCell value={fmtInt(r.analysed)} align="right" mode={mode} /></span>
-          <span className="xl:justify-self-end"><FigureCell value={fmtInt(r.gathered)} align="right" mode={mode} /></span>
-          <span className="xl:justify-self-end">
+          <Cell label="Analysed"><FigureCell value={fmtInt(r.analysed)} align="right" mode={mode} /></Cell>
+          <Cell label="Found"><FigureCell value={fmtInt(r.gathered)} align="right" mode={mode} /></Cell>
+          <Cell label="Comments">
             {r.comments != null
               ? <FigureCell value={fmtInt(r.comments)} align="right" mode={mode} />
-              : <span className="font-mono text-[11px] text-muted-foreground xl:block xl:text-right">not recorded</span>}
-          </span>
+              : <NotRecorded />}
+          </Cell>
         </div>
       ))}
       {/* THE MOCK'S TOTAL ROW. It adds the two video columns, which do add —
           they are counts of this update's own videos, split by audience — and
           the comments column only where every row carries one, because a
           partial sum is not a sum. */}
-      <div className="grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:grid-cols-[112px_minmax(0,1fr)_44px_44px_56px] xl:gap-2.5">
+      <div className="grid grid-cols-1 items-center gap-1 border-t border-border/70 pt-1.5 xl:grid-cols-[112px_minmax(0,1fr)_58px_50px_64px] xl:gap-2.5">
         <span className="text-[12.5px] font-medium text-secondary-foreground">All audiences</span>
         <span className="font-mono text-[10.5px] text-muted-foreground">
           {block.window ? 'this update’s own videos, split by whose conversation they were' : ''}
         </span>
-        <span className="xl:justify-self-end"><FigureCell value={fmtInt(block.analysed)} align="right" mode={mode} /></span>
-        <span className="xl:justify-self-end"><FigureCell value={fmtInt(block.gathered)} align="right" mode={mode} /></span>
-        <span className="xl:justify-self-end">
+        <Cell label="Analysed"><FigureCell value={fmtInt(block.analysed)} align="right" mode={mode} /></Cell>
+        <Cell label="Found"><FigureCell value={fmtInt(block.gathered)} align="right" mode={mode} /></Cell>
+        <Cell label="Comments">
           {block.windowComments != null
             ? <FigureCell value={fmtInt(block.windowComments)} align="right" mode={mode} />
-            : <span className="font-mono text-[11px] text-muted-foreground xl:block xl:text-right">not recorded</span>}
-        </span>
+            : <NotRecorded />}
+        </Cell>
       </div>
       {rowedComments != null && block.windowComments != null && rowedComments < block.windowComments ? (
         <span className="font-mono text-[10.5px] text-muted-foreground">
           the rows above account for {fmtInt(rowedComments)} of them
         </span>
       ) : null}
+      {/* EVERY ROW'S WINDOW, HANDED BACK TO ITS MONTH — once, for the table
+          (design review F11). See `audienceContributionLine`. */}
+      {byAudience ? <span className="text-[11px] text-muted-foreground">{byAudience}</span> : null}
       {/* ABSENT MEANS ABSENT, AND IT IS SAID IN WORDS ONCE. An em dash in the
           column would read as a zero; a zero here would be a measurement. The
           windowed reading is M3 and is installed on neither tenant today, which
@@ -312,6 +320,16 @@ function Audiences({ block, mode, month }: { block: CameInBlock; mode: 'app' | '
       ) : null}
     </div>
   )
+}
+
+/** The comments cell where the windowed reading is absent. An em dash would
+ *  read as a zero and a zero would be a measurement, so the words stay — set
+ *  to one line (`whitespace-nowrap`), because at 56px "not recorded" wrapped
+ *  in every cell of the absent arm and was the only two-line cell in the
+ *  table (design review, nits). The column's own width is what gives, and the
+ *  sentence under the table says the same thing in full. */
+function NotRecorded() {
+  return <span className="whitespace-nowrap font-mono text-[10.5px] text-muted-foreground xl:block xl:text-right">not recorded</span>
 }
 
 /** Colour follows the ENTITY, never the rank: you green, a rival orange, the
@@ -326,6 +344,27 @@ function audienceColor(audience: string): string {
 function Head({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <span className={`text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground${right ? ' text-right' : ''}`}>
+      {children}
+    </span>
+  )
+}
+
+/**
+ * A numeric cell that carries its own column name where the header cannot
+ * (design review F10).
+ *
+ * The header row is `hidden … xl:grid`, because below `xl` the page is ONE
+ * stacked column and a five-column header has nothing to sit over. But the
+ * cells carried no label either, so at 1024 an audience row ended in three
+ * unlabelled stacked numbers — 360 / 429 / 3,600, with nothing saying which is
+ * analysed, which found and which comments. That is every laptop under 1280,
+ * not an edge case. The label prints below `xl` and disappears under it, where
+ * the header takes over.
+ */
+function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="flex items-baseline gap-1.5 xl:block xl:justify-self-end">
+      <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground xl:hidden">{label}</span>
       {children}
     </span>
   )

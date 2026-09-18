@@ -291,13 +291,21 @@ describe('WK §4 · what came in', () => {
   it('hands it back per audience too, which is what the plan asks for', () => {
     // Each row's own window against that audience's own month — the windowed
     // RPC already answers per audience, so this costs no extra read.
-    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('this update’s contribution to September so far: 14 of 96')
-    expect(text).toContain('this update’s contribution to September so far: 47 of 118')
+    //
+    // ON ONE SHARED LINE SINCE THE WAVE-2 FIX PASS (design review F11). It was
+    // a sentence under every bar, which made a row three lines, stopped the
+    // bars reading as a column and wrapped mid-phrase in a 236px cell. Every
+    // row is still restated — the rule is not the layout.
+    for (const mode of MODES) {
+      const text = renderText(weekCameIn.render(weekFixture(), mode, ctx))
+      expect(text, mode).toContain('this update’s contribution to September so far, by audience:')
+      expect(text, mode).toContain('Your own brand 14 of 96')
+      expect(text, mode).toContain('Ottobock 47 of 118')
+    }
     // And says nothing per row where the windowed read is not available —
     // which is production on both tenants today, not a hypothetical.
     const absent = renderText(weekCameIn.render(absentReadingFixture(), 'app', ctx))
-    expect(absent).not.toContain('this update’s contribution to September so far')
+    expect(absent).not.toContain('by audience')
     expect(absent).toContain('The month’s own reading is not available here')
   })
 
@@ -402,14 +410,31 @@ describe('WK §4 · what came in', () => {
     expect(text).toContain('2 of the 303 themes first heard in this update carried 10 videos or more this month.')
   })
 
+  it('labels its numeric columns where the header row cannot reach them', () => {
+    // Design review F10: the header is `hidden … xl:grid`, because below xl the
+    // page is one stacked column — but the cells carried no label either, so at
+    // 1024 a row ended in three unlabelled stacked numbers with nothing saying
+    // which is analysed, which found and which comments. That is every laptop
+    // under 1280.
+    const markup = render(weekCameIn.render(weekFixture(), 'app', ctx))
+    for (const label of ['Analysed', 'Found', 'Comments']) {
+      // Once in the header, and once per row plus the total row, in a span that
+      // disappears at xl where the header takes over.
+      expect(markup, label).toContain(`xl:hidden">${label}</span>`)
+    }
+  })
+
   it('restates every audience’s count as a contribution to the month', () => {
     // The rule the whole block exists for, on EVERY row: a window is not a
-    // period, whoever's conversation it was.
+    // period, whoever's conversation it was. Said once, for the table, since
+    // the wave-2 fix pass (design review F11) — every row is named in it.
     const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
     for (const row of weekFixture().cameIn.rows) {
       expect(row.contribution).not.toBeNull()
-      expect(text).toContain(`this update’s contribution to September so far: ${row.contribution!.videos} of ${row.contribution!.of}`)
+      expect(text).toContain(`${row.label} ${row.contribution!.videos} of ${row.contribution!.of}`)
     }
+    // ONE sentence, not one per row: that is the fix.
+    expect(text.match(/contribution to September so far/g)).toHaveLength(2)
   })
 
   it('words its own no-window sentence, not the sales section’s', () => {
