@@ -163,6 +163,34 @@ describe('buildMoveCandidate — the pre-filled card', () => {
     expect(c.unread).toBe(CARD_NO_POSTS)
   })
 
+  it('denominates the subject rows on the posts we READ, never on every post', () => {
+    // Nine published; three of them analysed. A subject matching two of those
+    // three is 2 of 3 — printing 2 of 9 would be a statement about our gather
+    // cadence wearing the client's noun.
+    const c = card({ readPosts: 3 })
+    expect(c.readPosts.value).toEqual({ k: 3, n: 9 })
+    expect(c.readPosts.basis).toBe('posts published in September')
+    expect(c.subjectsBasis).toBe('posts of yours we read in September')
+    expect(c.subjects.map((x) => [x.label, x.matched.k, x.matched.n])).toEqual([
+      ['Durability', 3, 3],
+      ['Recycled materials', 2, 3],
+    ])
+    // Every other row keeps the published denominator.
+    expect(c.posts.value.n).toBe(9)
+    expect(c.overFloor.value.n).toBe(9)
+    expect(c.hooks.every((h) => h.value.n === 9)).toBe(true)
+  })
+
+  it('says one population when everything published was read', () => {
+    const c = card()
+    expect(c.readPosts.value).toEqual({ k: 9, n: 9 })
+    expect(c.subjectsBasis).toBe(c.posts.basis)
+  })
+
+  it('never claims to have read more than was published', () => {
+    expect(card({ readPosts: 40 }).readPosts.value).toEqual({ k: 9, n: 9 })
+  })
+
   it('a floor the caller names excludes the posts under it', () => {
     expect(card({ commentFloor: 20 }).overFloor.value).toEqual({ k: 1, n: 9 })
     expect(card({ commentFloor: 1 }).overFloor.value).toEqual({ k: 6, n: 9 })

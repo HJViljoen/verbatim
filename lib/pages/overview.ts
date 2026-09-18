@@ -1532,6 +1532,9 @@ export type ClientPost = {
   comments_count: number
   hook_style: string | null
   classified_type: string | null
+  /** The run whose analysis is this post's current one. Null means we have not
+   *  read it — the subject rows denominate on the ones we have. */
+  analyzed_run_id: string | null
 }
 
 /**
@@ -1544,14 +1547,14 @@ export type ClientPost = {
  * case — "where a figure is genuinely a property of a video … it is dated by
  * `videos.upload_date` and the basis is printed beside it".
  *
- * Five columns, never `*`: `videos` carries transcripts and OCR text.
+ * Six columns, never `*`: `videos` carries transcripts and OCR text.
  */
 async function loadOwnPosts(supabase: SupabaseClient, clientId: string, month: string): Promise<ClientPost[] | null> {
   try {
     return await selectAll<ClientPost>(() =>
       supabase
         .from('videos')
-        .select('id, upload_date, comments_count, hook_style, classified_type')
+        .select('id, upload_date, comments_count, hook_style, classified_type, analyzed_run_id')
         .eq('client_id', clientId)
         .eq('is_client', true)
         .gte('upload_date', monthStartOf(month))
@@ -1865,6 +1868,11 @@ export async function loadMovesExtras(input: {
       clientVideos: posts.videos,
       claims: posts.claims,
       membership,
+      // WHAT WE READ, not what was published. A subject match can only come off
+      // a post Pass A analysed, and 62 of Sealand's 90 own posts carry no
+      // analysis at all (measured 2026-09-18) — so the subject rows are a share
+      // of the read ones and the card says which population that is.
+      readPosts: posts.videos.filter((v) => v.analyzed_run_id != null).length,
       yours: movement.yours,
       category: movement.category,
       declarable: input.moves != null,

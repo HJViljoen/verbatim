@@ -90,6 +90,12 @@ export function cardFixture(): MoveCandidate {
       { subjectId: 's1', label: 'Durability', videoIds: ['p1', 'p4', 'p6'] },
       { subjectId: 's2', label: 'Recycled materials', videoIds: ['p1', 'p2'] },
     ],
+    // SEVENTEEN PUBLISHED, SIX READ. A subject match only exists for a post
+    // Pass A analysed, and on Sealand 62 of 90 own posts carry no analysis at
+    // all (measured 2026-09-18) — so the card's subject rows say "3 of 6" and
+    // name their population, rather than reading "3 of 17" about eleven posts
+    // nobody read.
+    readPosts: 6,
     yours: verdict({
       objectKind: 'subject',
       objectId: 's1',
@@ -471,6 +477,7 @@ export function refusedFixture(): OverviewData {
         ],
         claims: [],
         membership: [],
+        readPosts: 0,
         yours: null,
         category: null,
         declarable: false,

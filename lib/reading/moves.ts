@@ -82,7 +82,23 @@ export interface MoveCandidate {
   claimRows: CardClaim[]
   /** The hook split of those posts. */
   hooks: CardCount[]
-  /** Subjects your own posts matched, by subject id. */
+  /**
+   * How many of the month's posts we actually READ — the denominator the
+   * subject rows are a share of, and not the same number as `posts`.
+   *
+   * MEASURED, AND THE REASON THIS FIELD EXISTS. A subject match comes off
+   * `audience_insights`, which only exist for a post Pass A analysed; Sealand
+   * published 17 posts in September and none of them had been analysed on
+   * 2026-09-18, and across all time 28 of its 90 own posts carry any analysis
+   * at all. Denominating the subject rows on every post published would have
+   * printed "0 of 17 matched Durability" about a month in which 17 posts were
+   * never read — a statement about our gather cadence wearing the client's
+   * noun. The share is of what was read, and `subjectsBasis` says so.
+   */
+  readPosts: CardCount
+  /** The population the subject rows are a share of, in the reader's words. */
+  subjectsBasis: string
+  /** Subjects your own posts matched, by subject id — of `readPosts`. */
   subjects: { subjectId: string; label: string; matched: Counted }[]
   /** Your movement and the category's, side by side. Either may be null. */
   movement: { yours: Verdict | null; category: Verdict | null }
@@ -101,6 +117,10 @@ export interface MoveCandidateInput {
   yours: Verdict | null
   category: Verdict | null
   commentFloor?: number
+  /** How many of the month's posts were analysed — the posts a subject match
+   *  could possibly have come off. Omitted, every post counts, which is right
+   *  only for a caller that knows they were all read. */
+  readPosts?: number
   /** False where `moves` (M4) is not applied here: the card still counts, and
    *  there is nothing to declare it as. */
   declarable?: boolean
@@ -198,11 +218,16 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
     }))
     .sort((a, b) => b.value.k - a.value.k || a.label.localeCompare(b.label))
 
+  // THE SUBJECT ROWS DENOMINATE ON WHAT WAS READ, not on what was published —
+  // see `MoveCandidate.readPosts`. `Math.min` because a caller's count of read
+  // posts is about the same month and may not exceed it.
+  const read = Math.min(input.readPosts ?? n, n)
+  const subjectsBasis = read === n ? basis : `posts of yours we read in ${longMonth(month)}`
   const subjects = input.membership
     .map((m) => ({
       subjectId: m.subjectId,
       label: m.label,
-      matched: counted(new Set([...m.videoIds].filter((id) => ids.has(id))).size, n),
+      matched: counted(new Set([...m.videoIds].filter((id) => ids.has(id))).size, read),
     }))
     .filter((s) => s.matched.k > 0)
     .sort((a, b) => b.matched.k - a.matched.k || a.label.localeCompare(b.label))
@@ -230,6 +255,8 @@ export function buildMoveCandidate(input: MoveCandidateInput): MoveCandidate {
     claimTopics: claimRows.map((c) => c.claim),
     claimRows,
     hooks,
+    readPosts: { label: 'we have read', value: counted(read, n), basis },
+    subjectsBasis,
     subjects,
     movement: { yours: input.yours, category: input.category },
     proposal,
