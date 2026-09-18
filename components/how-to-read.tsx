@@ -16,7 +16,13 @@ import { Card, CardContent } from '@/components/ui/card'
 // own path as basePath.
 export function HowToRead({ items, basePath, anchor }: { items: GlossaryKey[]; open?: boolean; basePath: string; anchor?: NavKey }) {
   const sp = useSearchParams()
-  const isOpen = sp.get('detail') === 'legend'
+  // `?.` BECAUSE THIS RENDERS OUTSIDE A ROUTER TOO (Block D wave 2, E-week).
+  // `useSearchParams()` returns null when no app router is mounted — which is
+  // exactly what `renderToStaticMarkup` does in the render tier and in the
+  // fixture screenshot harness — and `sp.get` then threw, so a page carrying
+  // this control could not be rendered by its own test. Null reads as "no
+  // params", which is the honest answer off a router: the legend is closed.
+  const isOpen = sp?.get('detail') === 'legend'
   return (
     <>
       <DrawerLink

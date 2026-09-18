@@ -9,6 +9,9 @@ import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } fro
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
 import { weekCameIn } from './came-in'
+import { weekRivalPosts } from './rival-posts'
+import { weekReply } from './reply'
+import { weekFlagged } from './flagged'
 import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
@@ -277,30 +280,6 @@ describe('WK §4 · what came in', () => {
     expect(thin).toContain('the same conversation under a new label')
   })
 
-  it('shows a rival who posted nothing as a zero, not as silence', () => {
-    // Sealand's Rareform: their posts ARE read and none came in. Dropping the
-    // row let "Rareform went quiet" reach the reader as nothing at all.
-    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('Rareform')
-  })
-
-  it('states the by/about distinction, and why a zero is a zero', () => {
-    // Össur has never captured a post of Ottobock's in six months of
-    // gathering, handle configured or not: "0 posts of their own" would read
-    // as "Ottobock went quiet this week".
-    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
-    expect(text).toContain('92 posts about them')
-    expect(text).toContain('their own posts are not read yet — Verbatim engineering')
-    // Sealand does capture rival-owned posts, so both counts are real.
-    const thin = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
-    expect(thin).toContain('94 posts about them, 44 posts of their own')
-    // And one is a post, not "1 posts" — production has a rival with exactly
-    // one (Sealand's Rareform).
-    const one = thinFixture()
-    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, postsTotal: 2, postsConsidered: 0, posts: [], ownPostsUnread: false }]
-    expect(renderText(weekCameIn.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
-  })
-
   it('prints each audience’s share with both sides and its own comments', () => {
     for (const mode of MODES) {
       const text = renderText(weekCameIn.render(weekFixture(), mode, ctx))
@@ -322,15 +301,164 @@ describe('WK §4 · what came in', () => {
     expect(text).not.toContain('0 comments written in these days')
   })
 
+  it('restates every audience’s count as a contribution to the month', () => {
+    // The rule the whole block exists for, on EVERY row: a window is not a
+    // period, whoever's conversation it was.
+    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
+    for (const row of weekFixture().cameIn.rows) {
+      expect(row.contribution).not.toBeNull()
+      expect(text).toContain(`this update’s contribution to September so far: ${row.contribution!.videos} of ${row.contribution!.of}`)
+    }
+  })
+
+  it('words its own no-window sentence, not the sales section’s', () => {
+    // It used to print "there is nothing to read a week of objections out of"
+    // under the heading "New on your subjects" — one string, wrong noun.
+    const d = thinFixture()
+    const data = { ...d, cameIn: { ...d.cameIn, quotesUnread: 'This update covered no window, so there are no days for a new comment on your subjects to have been written in.' } }
+    const text = renderText(weekCameIn.render(data, 'app', ctx))
+    expect(text).toContain('no days for a new comment on your subjects to have been written in')
+    expect(text).not.toContain('a week of objections')
+  })
+
+  it('says why there are no subject quotes, rather than showing none', () => {
+    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
+  })
+})
+
+describe('WK §2 · worth a reply', () => {
+  it('dates every row by the day the comment was written, never by an age', () => {
+    // D6/D9: Content prints "3d", measured from the clock at page load. Every
+    // other figure on this page is dated by the days the update covered, and a
+    // relative age beside "6 Sep – 13 Sep" is a second clock on one page.
+    const text = renderText(weekReply.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('11 Sep')
+    // `ageLabel`'s own forms: "3d", "2w", "4mo". None of them may reach a row.
+    expect(text).not.toMatch(/\b\d+(d|w|mo)\b/)
+  })
+
+  it('states the pick as a cap, never as a level over the update’s videos', () => {
+    // D10/D8: the mock's "12 of 312 videos this week" divides comments by
+    // videos. The digest takes at most three of a category and twelve in all,
+    // so the number is a cap and the meta says which rule produced it.
+    const text = renderText(weekReply.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('6 picked, at most three of a kind')
+    expect(text).toContain('picked from the comments written in the days this update covered')
+    expect(text).not.toContain('of 205 videos')
+  })
+
+  it('prints why each row surfaced on the row itself', () => {
+    // The reason was a link into a drawer on the Content page, so the tile
+    // showed a quote with no account of why this quote.
+    const markup = render(weekReply.render(weekFixture(), 'app', ctx))
+    expect(markupText(markup)).toContain('Ready to buy')
+    // The words are a model's, written at Pass A and read back here, so the
+    // node names the call that wrote them.
+    expect(markup).toContain('data-slot="pass_a_audience_insight"')
+  })
+
+  it('never prints a reply history, because nothing records one', () => {
+    // D14: "8 answered last week · 4 ignored" has no field anywhere in this
+    // product.
+    for (const fixture of FIXTURES) {
+      const text = renderText(weekReply.render(fixture(), 'app', ctx))
+      expect(text).not.toContain('answered')
+      expect(text).not.toContain('ignored')
+    }
+  })
+
+  it('carries a queue the loader could actually have produced', () => {
+    // `buildReplies` sets `total` off the rows it kept and `counts` off the
+    // same rows, so a fixture that inflated either would draw a proportion bar
+    // over a queue that does not exist.
+    for (const fixture of FIXTURES) {
+      const r = fixture().replies
+      expect(r.total).toBe(r.rows.length)
+      expect(r.counts.reduce((t, c) => t + c.count, 0)).toBe(r.rows.length)
+      for (const row of r.flagged) expect(row.intent).toBe('misinformation')
+    }
+  })
+
+  it('says the queue is empty rather than drawing an empty table', () => {
+    const text = renderText(weekReply.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('nothing here to answer')
+    expect(weekReply.emptyState(thinFixture())).toContain('nothing here to answer')
+  })
+
+  it('keeps the copy contract with a commenter’s own words in every mode', () => {
+    for (const fixture of FIXTURES) {
+      for (const mode of MODES) assertCopyContract(render(weekReply.render(fixture(), mode, ctx)))
+    }
+  })
+})
+
+describe('WK §8 · flagged for awareness', () => {
+  it('carries no reply link, by construction rather than by rendering', () => {
+    const d = weekFixture()
+    for (const row of d.replies.flagged) expect(row.href).toBeNull()
+    const markup = render(weekFlagged.render(d, 'app', ctx))
+    expect(markupText(markup)).toContain('no reply link')
+    expect(markup).not.toContain('Reply →')
+  })
+
+  it('never claims a claim has persisted, and never mixes comments with videos', () => {
+    // D14: nothing records when a flagged claim was first heard. D10: one
+    // comment over a count of videos is two units on one line.
+    const text = renderText(weekFlagged.render(weekFixture(), 'app', ctx))
+    expect(text).not.toContain('persisted')
+    expect(text).not.toContain('of 205 videos')
+    expect(text).toContain('1 claim · no reply link')
+  })
+
+  it('says nothing was flagged rather than drawing a hole', () => {
+    expect(weekFlagged.emptyState(thinFixture())).toContain('flagged as a claim about this space')
+  })
+})
+
+describe('WK §5 · notable rival posts', () => {
+  // THE TILE THE ROWS MOVED INTO (Block D wave 2, the mock's §5). Every
+  // assertion below was written against §4, which built these rows inside
+  // itself; the reading is the same `CameInBlock.rivals` and only the tile
+  // changed, so the strings are kept verbatim — a port that quietly reworded
+  // the readiness sentence or the two-stage rule would pass a rewritten test
+  // and print something else.
+  it('shows a rival who posted nothing as a zero, not as silence', () => {
+    // Sealand's Rareform: their posts ARE read and none came in. Dropping the
+    // row let "Rareform went quiet" reach the reader as nothing at all.
+    const text = renderText(weekRivalPosts.render(thinFixture(), 'app', ctx))
+    expect(text).toContain('Rareform')
+  })
+
+  it('states the by/about distinction, and why a zero is a zero', () => {
+    // Össur has never captured a post of Ottobock's in six months of
+    // gathering, handle configured or not: "0 posts of their own" would read
+    // as "Ottobock went quiet this week".
+    const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('92 posts about them')
+    expect(text).toContain('their own posts are not read yet — Verbatim engineering')
+    // Sealand does capture rival-owned posts, so both counts are real.
+    const thin = renderText(weekRivalPosts.render(thinFixture(), 'app', ctx))
+    expect(thin).toContain('94 posts about them, 44 posts of their own')
+    // And one is a post, not "1 posts" — production has a rival with exactly
+    // one (Sealand's Rareform).
+    const one = thinFixture()
+    one.cameIn.rivals = [{ audience: 'competitor:Rareform', label: 'Rareform', byThem: 1, aboutThem: 1, comments: 0, postsTotal: 2, postsConsidered: 0, posts: [], ownPostsUnread: false }]
+    expect(renderText(weekRivalPosts.render(one, 'app', ctx))).toContain('1 post about them, 1 post of their own')
+  })
+
   it('names the rival posts themselves, and says how many of how many', () => {
     for (const mode of MODES) {
-      const text = renderText(weekCameIn.render(weekFixture(), mode, ctx))
+      const text = renderText(weekRivalPosts.render(weekFixture(), mode, ctx))
       // A post has no title column, so identity is platform · account · date ·
       // caption · link.
       expect(text, mode).toContain('PhysioWithPriya')
       expect(text, mode).toContain('Testing the Ottobock C-Leg 4 on stairs')
       expect(text, mode).toContain('posted 8 Sep')
-      expect(text, mode).toContain('610 comments under it in these days')
+      // THE COLUMN IS A COLUMN ON THE PAGE AND A SENTENCE IN AN EMAIL. An
+      // inbox has no table header to carry "Comments", so the email arm says
+      // what the number is; the page's header row and meta say it once.
+      expect(text, mode).toContain(mode === 'email' ? '610 comments under it in these days' : '610')
       // THE RULE, SAID OUT LOUD. The pick is two stages — the widest-reaching
       // few, then the most-commented of those — because on production the
       // widest-reaching posts carry no window comments at all (Freitag's two
@@ -375,7 +503,7 @@ describe('WK §4 · what came in', () => {
       },
     }
     for (const mode of MODES) {
-      const markup = render(weekCameIn.render(data, mode, ctx))
+      const markup = render(weekRivalPosts.render(data, mode, ctx))
       // The words ARE on the page — the test would pass vacuously if the
       // caption were simply not rendered.
       expect(markupText(markup), mode).toContain('Our waitlist is growing fast and prices are rising')
@@ -386,34 +514,28 @@ describe('WK §4 · what came in', () => {
   it('draws no post table for a rival with no post this update', () => {
     // Rareform's posts ARE read and none came in: the row is a zero and there
     // is nothing under it, which is different from the row being dropped.
-    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
+    const text = renderText(weekRivalPosts.render(thinFixture(), 'app', ctx))
     expect(text).toContain('Rareform')
     expect(text).not.toContain('0 of 0 shown')
   })
 
-  it('restates every audience’s count as a contribution to the month', () => {
-    // The rule the whole block exists for, on EVERY row: a window is not a
-    // period, whoever's conversation it was.
-    const text = renderText(weekCameIn.render(weekFixture(), 'app', ctx))
-    for (const row of weekFixture().cameIn.rows) {
-      expect(row.contribution).not.toBeNull()
-      expect(text).toContain(`this update’s contribution to September so far: ${row.contribution!.videos} of ${row.contribution!.of}`)
-    }
+  it('prints the comment count with no denominator, and says where the days are', () => {
+    // A COUNT UNDER ONE POST IS NOT A SHARE OF ANYTHING on this page — not of
+    // the update's videos, which are a different unit. `FigureCell`'s contract
+    // is that an omitted "of N" is a statement; the days the comments were
+    // counted in are in the block's meta, once.
+    const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('comments counted under each post · 6 Sep – 13 Sep')
+    expect(text).not.toContain('610 of')
   })
 
-  it('words its own no-window sentence, not the sales section’s', () => {
-    // It used to print "there is nothing to read a week of objections out of"
-    // under the heading "New on your subjects" — one string, wrong noun.
-    const d = thinFixture()
-    const data = { ...d, cameIn: { ...d.cameIn, quotesUnread: 'This update covered no window, so there are no days for a new comment on your subjects to have been written in.' } }
-    const text = renderText(weekCameIn.render(data, 'app', ctx))
-    expect(text).toContain('no days for a new comment on your subjects to have been written in')
-    expect(text).not.toContain('a week of objections')
-  })
-
-  it('says why there are no subject quotes, rather than showing none', () => {
-    const text = renderText(weekCameIn.render(thinFixture(), 'app', ctx))
-    expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
+  it('sends the fourth column where that reading actually lives', () => {
+    // The mock's "What the audience asked under it" has no per-post field;
+    // Competitive reads the questions per RIVAL. The layout keeps the table
+    // and the footer says so once, rather than a column repeating it.
+    const text = renderText(weekRivalPosts.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('what the audience asked is read per rival, not per post')
+    expect(text).toContain('Open Competitive →')
   })
 })
 

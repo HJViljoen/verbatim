@@ -2,24 +2,34 @@ import type { Block, BlockContext } from '@/lib/blocks/types'
 import { blockContext, figureCount } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
+import { HowToRead } from '@/components/how-to-read'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
+import type { GlossaryKey } from '@/lib/calibration'
 import type { WeekData } from '@/lib/pages/week'
 import { weekUnusual } from './unusual'
+import { weekReply } from './reply'
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
 import { weekCameIn } from './came-in'
+import { weekRivalPosts } from './rival-posts'
+import { weekFlagged } from './flagged'
 import { weekSales } from './sales'
 import { weekWorked } from './worked'
 import { weekCoverage } from './coverage'
 
 // This week — the page (Phase 1 WP15, decision P; the mock's ThisWeek.dc.html).
 //
-// SEVEN BLOCKS IN THE WEEKLY REPORT'S ORDER, for the reason Overview's seven
-// are in the monthly report's: the page and the artefact are the same reading,
-// so a reader who has seen one has seen the other, and WP17 arranges these same
-// keys rather than writing its own sections.
+// TEN BLOCKS IN THE ARTBOARD'S ORDER (Block D wave 2, E-week). Until this port
+// they were seven in the weekly report's order, on the reasoning that the page
+// and the artefact are the same reading. Two things changed: the artboard's own
+// nine tiles are what the page must become ("the mock is the spec"), and two of
+// its nine — the reply inbox and the awareness flag — MOVED here from the
+// Content page, which is where `LATER_LINE` always said they would go. The
+// weekly report arranges its own keys (components/blocks/weekly) and is
+// unaffected by this order; nothing outside this file reads it.
 //
 // NO HORIZON, NO SOUNDNESS BAND. `Surface.bar` is `'week'` (lib/nav.ts), which
 // is what gates both controls. A horizon on a page dated by the update would
@@ -30,11 +40,14 @@ import { weekCoverage } from './coverage'
 
 export const WEEK_BLOCKS: readonly Block<WeekData>[] = [
   weekUnusual,
+  weekReply,
   weekSubjects,
-  weekRising,
   weekCameIn,
-  weekSales,
+  weekRivalPosts,
   weekWorked,
+  weekSales,
+  weekFlagged,
+  weekRising,
   weekCoverage,
 ]
 
@@ -48,14 +61,29 @@ export const WEEK_BLOCKS: readonly Block<WeekData>[] = [
  */
 export const FIRST_SCREEN: readonly Block<WeekData>[] = [weekUnusual]
 
+/** The words this page's legend explains — the update, the week, the month it
+ *  is stated against, and the three that make a figure readable. Every one is
+ *  a GLOSSARY entry (lib/calibration.ts), never copy written here. */
+export const WEEK_LEGEND: GlossaryKey[] = ['update', 'week', 'month', 'video', 'audience', 'level', 'change', 'direction']
+
+/** How wide each block's tile is, on the grid's twelve columns — the mock's
+ *  own spans: everything full-width except the span-5 / span-7 pair. */
+const COLS: Record<string, number> = {
+  'week.worked': 5,
+  'week.sales': 7,
+}
+
 /** How tall each block's tile is, in the grid's 116px row units. */
 const ROWS: Record<string, number> = {
   'week.unusual': 4,
+  'week.reply': 3,
   'week.subjects': 3,
-  'week.rising': 3,
   'week.came-in': 4,
+  'week.rival-posts': 3,
+  'week.worked': 4,
   'week.sales': 4,
-  'week.worked': 3,
+  'week.flagged': 1,
+  'week.rising': 2,
   'week.coverage': 1,
 }
 
@@ -69,6 +97,27 @@ export function weekContext(params: Record<string, string | undefined> = {}): Bl
  *  the budget test counts what the page counts. */
 export function weekFigureCount(data: WeekData, blocks: readonly Block<WeekData>[] = FIRST_SCREEN): number {
   return figureCount(blocks.map((b) => b.figures?.(data) ?? {}))
+}
+
+/**
+ * The right-hand end of the page bar: who this is a reading of, and how big
+ * the update was.
+ *
+ * THE VIDEO COUNT IS NULL UNTIL M3 AND SAYS SO. `windowVideos` comes off
+ * `loadWindowReading`, which is installed on neither tenant today, and the
+ * mock's "312 videos this week" then has nothing behind it. A line that simply
+ * stopped after the brand would read as a smaller update rather than as an
+ * absent reading.
+ */
+function BarContext({ data }: { data: WeekData }) {
+  return (
+    <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">
+      {data.brand}
+      {data.windowVideos != null
+        ? ` · ${fmtInt(data.windowVideos)} videos this update`
+        : ' · this update’s videos are not counted here yet'}
+    </span>
+  )
 }
 
 export function WeekPage({
@@ -95,38 +144,41 @@ export function WeekPage({
 
   const ctx = weekContext(params)
   return (
-    <PageFrame>
-      <SurfacePageBar
-        nav="week"
-        params={params}
-        updates={{ update: data.update.date, previous: data.update.previous }}
-      >
-        {/* The brand and the update's own size, where the mock puts them — in
-            the bar's own line rather than on a block, because they are what the
-            page is a reading OF and not part of any one answer. */}
-        <span className="flex-none whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-          {data.brand}
-          {data.windowVideos != null ? ` · ${fmtInt(data.windowVideos)} videos this update` : ''}
-        </span>
-      </SurfacePageBar>
-      <PageGrid>
-        {WEEK_BLOCKS.map((block) => (
-          <Tile key={block.key} col={12} row={ROWS[block.key] ?? 2}>
-            {block.render(data, 'app', ctx)}
-          </Tile>
-        ))}
-      </PageGrid>
-      {data.notes.length > 0 ? (
-        <p className="m-0 text-[11px] text-muted-foreground">
-          {/* THE READING LAYER'S OWN CAVEATS, ONCE FOR THE PAGE. §1 pools three
-              months into a baseline and §3 pools three into a comparison, and
-              neither is like-for-like across a stretch whose grouping was never
-              recorded. `mergeSeriesNotes` collapses a run of months into ONE
-              sentence rather than one per bar (the Block A convention), and
-              Overview prints its own the same way. */}
-          {data.notes.map((n) => n.text).join(' ')}
-        </p>
-      ) : null}
-    </PageFrame>
+    // THE EXPORT SCOPE NAMES THE TILES, so the per-tile control and the page
+    // export address exactly the keys the block list above declares.
+    <ExportScope page="week" params={params} tiles={WEEK_BLOCKS.map((b) => ({ key: b.key, title: b.title }))}>
+      <PageFrame>
+        <SurfacePageBar
+          nav="week"
+          params={params}
+          updates={{ update: data.update.date, previous: data.update.previous }}
+        >
+          {/* The brand and the update's own size, where the mock puts them — in
+              the bar's own line rather than on a block, because they are what
+              the page is a reading OF and not part of any one answer. */}
+          <BarContext data={data} />
+          <HowToRead items={WEEK_LEGEND} basePath="/dashboard/week" anchor="week" />
+          <ExportMenu />
+        </SurfacePageBar>
+        <PageGrid>
+          {WEEK_BLOCKS.map((block) => (
+            <Tile key={block.key} col={COLS[block.key] ?? 12} row={ROWS[block.key] ?? 2}>
+              {block.render(data, 'app', ctx)}
+            </Tile>
+          ))}
+        </PageGrid>
+        {data.notes.length > 0 ? (
+          <p className="m-0 text-[11px] text-muted-foreground">
+            {/* THE READING LAYER'S OWN CAVEATS, ONCE FOR THE PAGE. §1 pools three
+                months into a baseline and §3 pools three into a comparison, and
+                neither is like-for-like across a stretch whose grouping was never
+                recorded. `mergeSeriesNotes` collapses a run of months into ONE
+                sentence rather than one per bar (the Block A convention), and
+                Overview prints its own the same way. */}
+            {data.notes.map((n) => n.text).join(' ')}
+          </p>
+        ) : null}
+      </PageFrame>
+    </ExportScope>
   )
 }

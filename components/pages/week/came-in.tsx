@@ -4,7 +4,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt, platformLabel, shortDate } from '@/lib/format'
+import { fmtInt } from '@/lib/format'
 import { platformMixLine } from '@/lib/reading/record'
 import {
   contributionLine,
@@ -13,7 +13,6 @@ import {
   newThemesLine,
   windowDays,
   type CameInBlock,
-  type RivalPost,
   type WeekData,
 } from '@/lib/pages/week'
 import type { FigureTable } from '@/lib/reading/verdicts'
@@ -39,7 +38,11 @@ import type { FigureTable } from '@/lib/reading/verdicts'
 //   videos in production and 92 posts about Ottobock. "Notable rival posts"
 //   unqualified would read as "Ottobock posted nothing this week", which is
 //   false; what is true is that we cannot see their own posts, and the row says
-//   so with the readiness owner named.
+//   so with the readiness owner named. THAT PAIR NOW LIVES IN ITS OWN TILE
+//   (`components/pages/week/rival-posts.tsx`, Block D wave 2, the mock's §5) —
+//   the data is still `CameInBlock.rivals`, read once here, because the two
+//   readings are one read and splitting the read would be two chances to count
+//   a rival's week two ways.
 //
 // AND THE CONTRIBUTION LINE, WHICH IS WHY THE SECTION EXISTS. Every count above
 // is of a window, and a window is not a period. Handing each one back to the
@@ -121,7 +124,6 @@ export const weekCameIn: Block<WeekData> = {
         ) : null}
 
         <Themes block={c} mode={mode} />
-        <Rivals block={c} mode={mode} />
         <Quotes block={c} mode={mode} />
       </BlockFrame>
     )
@@ -233,36 +235,6 @@ function AudienceShare({ row }: { row: CameInBlock['rows'][number] }) {
   )
 }
 
-/**
- * One rival post, by the only identity a post in this product has
- * (`week.rivalposts.col.post` / `.col.comments`).
- *
- * THE CAPTION AND THE ACCOUNT ARE SOMEBODY ELSE'S WORDS, so they are marked as
- * a quote: rule (c) may not police them, for the reason the copy contract
- * already gives about a commenter — a rival whose caption says "growing" has
- * not made a direction claim on this product's behalf. Everything code says
- * about the post sits outside those nodes.
- */
-function Post({ post, mode }: { post: RivalPost; mode: 'app' | 'print' | 'email' }) {
-  const email = mode === 'email'
-  return (
-    <span
-      className={email ? undefined : 'block pl-3 text-[11.5px] text-muted-foreground'}
-      style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, paddingLeft: 10 } : undefined}
-    >
-      {platformLabel(post.platform)}
-      {post.account ? <> · <span data-copy="quote">{post.account}</span></> : null}
-      {/* THE POST'S OWN DATE, and the only figure on this row that is not
-          window-dated: `videos.upload_date` is the video's clock. The comments
-          beside it are dated by the days the update covered, which is why the
-          two are worded differently and never joined by a comma. */}
-      {post.postedOn ? ` · posted ${shortDate(post.postedOn)}` : ''}
-      {post.caption ? <> · <span data-copy="quote">{post.caption}</span></> : null}
-      {' · '}<span data-copy="figure">{fmtInt(post.comments)}</span> {post.comments === 1 ? 'comment' : 'comments'} under it in these days
-    </span>
-  )
-}
-
 function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
   return (
     <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-1'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
@@ -275,49 +247,6 @@ function Themes({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | '
           style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' } : undefined}
         >
           {t.label} — <span data-copy="figure">{fmtInt(t.videos)}</span> videos this month
-        </p>
-      ))}
-    </div>
-  )
-}
-
-function Rivals({ block, mode }: { block: CameInBlock; mode: 'app' | 'print' | 'email' }) {
-  if (block.rivals.length === 0) return null
-  return (
-    <div className={mode === 'email' ? undefined : 'flex min-w-0 flex-col gap-1'} style={mode === 'email' ? { marginTop: 10 } : undefined}>
-      <Heading mode={mode}>Rival posts this update</Heading>
-      {block.rivals.map((r) => (
-        <p
-          key={r.audience}
-          className={mode === 'email' ? undefined : 'm-0 text-[12px]'}
-          style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, padding: '2px 0' } : undefined}
-        >
-          <span className={mode === 'email' ? undefined : 'font-medium'}>{r.label}</span>{' '}
-          <span className={mode === 'email' ? undefined : 'text-muted-foreground'}>
-            — <span data-copy="figure">{fmtInt(r.aboutThem)}</span> {r.aboutThem === 1 ? 'post' : 'posts'} about them
-            {r.ownPostsUnread
-              // THE READINESS GAP, NAMED WHERE IT BITES. This workspace has
-              // never captured a post of this rival's, so a zero here would be
-              // read as "they went quiet" when what is true is that their own
-              // posts are not being read at all.
-              ? ' · their own posts are not read yet — Verbatim engineering'
-              : `, ${fmtInt(r.byThem)} ${r.byThem === 1 ? 'post' : 'posts'} of their own`}
-          </span>
-          {/* THE POSTS THEMSELVES, AND WHAT THE COLUMN IS A COLUMN OF. Three of
-              ninety-four, said out loud: the comment count beside the rival is
-              the sum over the posts NAMED and not that rival's week, which is
-              the claim a bare total would make. */}
-          {r.posts.length > 0 ? (
-            <>
-              <span className={mode === 'email' ? undefined : 'block text-[11.5px] text-muted-foreground'} style={mode === 'email' ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-                {/* THE RULE, NOT JUST THE RATIO. The pick is two stages — the
-                    widest-reaching few, then the most-commented of those — and
-                    "3 of 94" alone would describe a rule this did not follow. */}
-                <span data-copy="figure">{fmtInt(r.posts.length)}</span> shown: the most commented on in these days of the <span data-copy="figure">{fmtInt(r.postsConsidered)}</span> widest-reaching of <span data-copy="figure">{fmtInt(r.postsTotal)}</span>; <span data-copy="figure">{fmtInt(r.comments)}</span> {r.comments === 1 ? 'comment' : 'comments'} under them in these days
-              </span>
-              {r.posts.map((post, i) => <Post key={`${post.platform}:${post.href ?? i}`} post={post} mode={mode} />)}
-            </>
-          ) : null}
         </p>
       ))}
     </div>
