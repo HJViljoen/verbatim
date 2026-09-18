@@ -85,6 +85,27 @@ This version has breaking changes — APIs, conventions, and file structure may 
   stay on the base tables so they resolve rows an in-flight run has superseded
   but not yet pruned. A Pass A prompt-version bump re-reads the whole corpus
   on the next run — that is the cost of a change, budget for it.
+  **Cited evidence is retained past re-analysis** (2026-09-18): the
+  `prune-stale-analysis` step deletes a superseded row only when nothing stored
+  points at it, so an id-set lookup keeps resolving past the next run and not
+  only during it. Three citation classes count, resolved in `citedEvidenceIds`
+  (`inngest/functions/pipeline.ts`) and enforced by the optional third argument
+  to `staleInsightIds` (`lib/pipeline/pass-a-plan.ts`, where the tests are):
+  **recommendations** — `based_on.insight_ids` through BOTH `market_insights`
+  and `competitive_insights` (it mixes M# and C# ids) to
+  `evidence.supporting_theme_ids`; **plan checks** — `insightIds` on the claims
+  of `plan_checks` AND `plan_check_evaluations`, because `currentReading` prints
+  the newest evaluation and falls back to the upload's; and **frozen exports** —
+  `report_snapshots.evidence_ids`, where `e:<insight_evidence.id>` resolves back
+  to its `audience_insights` row and `p:<language_samples.id>` IS one of these
+  rows (the only citation path `language_samples` has). `c:` / `v:` / `m:` refs
+  are NOT in the set and must not be added by id: they resolve by SEARCHING
+  `insight_evidence` for any live excerpt on that comment or video, so they name
+  no row. The set loads before the first delete, so the step fails closed — a
+  read that fails deletes nothing. This is a different thing from the retention
+  cron (`inngest/functions/retention.ts`), which drops raw payloads and AI-call
+  bodies past 30 days and refreshes-or-deletes YouTube only; nothing analytical
+  is deleted on any other platform, which is what the notice says.
 - **Theme identity lives in `theme_registry`.** `themes.id` is a per-run row id
   (the table is fully replaced each run) and must NEVER be used as a cross-run
   key; `themes.registry_id` is the stable identity, and cross-run joins use it.
