@@ -84,7 +84,9 @@ describe('what is waiting to be saved', () => {
 describe('the section metas', () => {
   it('counts the terms and leaves the exclusions out of the total', () => {
     const meta = termsMeta({ brand: ['a', 'b'], competitor: ['c'], category: ['d'], exclusions: ['e'] })
-    expect(meta).toBe('4 terms · brand 2 · competitor 1 · category 1 · not this 1')
+    // The fourth figure is said as an exclusion, not as a fourth bucket count
+    // under a total that covers three.
+    expect(meta).toBe('4 terms · brand 2 · competitor 1 · category 1 · 1 excluded, not searched')
   })
 
   it('says ALL TIME on the community counts rather than implying a month', () => {

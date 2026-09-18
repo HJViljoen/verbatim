@@ -151,8 +151,10 @@ export function termsMeta(buckets: {
     `category ${buckets.category.length}`,
   ]
   // The exclusions are not search terms and are not in the total: an exclusion
-  // subtracts, and adding it to "21 terms" would say we search for it.
-  if (buckets.exclusions.length > 0) parts.push(`not this ${buckets.exclusions.length}`)
+  // subtracts, and adding it to "21 terms" would say we search for it. Said as
+  // an exclusion too — "not this 2" beside three bucket counts reads as a
+  // fourth count under the total, which is the one thing it is not.
+  if (buckets.exclusions.length > 0) parts.push(`${buckets.exclusions.length} excluded, not searched`)
   return parts.join(' · ')
 }
 

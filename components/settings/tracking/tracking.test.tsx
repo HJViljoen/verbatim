@@ -22,6 +22,13 @@ import { saveState, type LastChange } from '@/lib/settings/save-state'
 // honesty rule on this page lives: the scope word on a lifetime count, the em
 // dash instead of a zero, the absent third line of the save strip, the cadence
 // options the product can actually run, and the basis beside every share.
+//
+// WHAT "keeps the copy contract" MEANS ON THIS PAGE, EXACTLY (m6). No section
+// here marks a single `data-copy` node, because nothing on a settings page is
+// model prose — so `assertCopyContract` exercises rule (c) alone: no direction
+// word outside a verdict. Rules (a) and (b) have no node to apply to. The five
+// occurrences of that sentence below are that one check, and the figures and
+// scope words are asserted by name in the tests around it.
 
 const term = (over: Partial<TermSummary> = {}): TermSummary => ({
   key: 'eco bag', keyword: 'eco bag', bucket: 'industry', platforms: ['tiktok'], updates: 8,
@@ -65,8 +72,22 @@ describe('the search terms section', () => {
   const words = renderText(termsSection)
 
   it('prints every bucket with its own count, the fourth one included', () => {
-    expect(words).toContain('4 terms · brand 2 · competitor 1 · category 1 · not this 1')
+    expect(words).toContain('4 terms · brand 2 · competitor 1 · category 1 · 1 excluded, not searched')
     expect(words).toContain('Not this')
+  })
+
+  it('leaves the chips bare where the log holds no date at all', () => {
+    // m7: with no dates the chips each repeated "in the set before we kept a
+    // record" — the same statement twenty-one times under a note that already
+    // makes it once.
+    const bare = renderText(
+      <TermsSection terms={{ ...TERMS }} dates={{}} datesNote="We have not written down when a term was added yet."
+        review={[]} canEdit onAdd={() => null} onRemove={() => {}} />,
+    )
+    expect(bare.split('in the set before we kept a record').length - 1).toBe(0)
+    expect(bare).toContain('We have not written down when a term was added yet.')
+    // Where SOME terms are dated, an undated one keeps its own sentence.
+    expect(words).toContain('in the set before we kept a record')
   })
 
   it('carries the short date on a chip and keeps the weaker grade weaker', () => {

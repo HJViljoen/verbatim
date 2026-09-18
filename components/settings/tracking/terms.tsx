@@ -71,6 +71,7 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
   // The rows come from the server's pooled record and stayed put after a
   // removal, so the one control on the strip looked inert whether it had
   // worked or not; now the strip goes with the term.
+  const logged = Object.keys(dates).length > 0
   const tracked = new Set(Object.values(terms).flat().map((t) => t.trim().toLowerCase()))
   const flagged = review.filter((t) => tracked.has(t.keyword.trim().toLowerCase()))
 
@@ -108,7 +109,17 @@ export function TermsSection({ terms, dates, datesNote, review, canEdit, onAdd, 
               <li key={t}>
                 <span className="inline-flex items-center gap-2 whitespace-nowrap rounded-[4px] bg-inner py-[7px] pl-2.5 pr-2 text-[12px] font-medium">
                   {t}
-                  <span className="font-mono text-[10.5px] font-normal text-muted-foreground">{dates[t.trim().toLowerCase()] ?? 'in the set before we kept a record'}</span>
+                  {/* WHERE THE LOG HOLDS NOTHING AT ALL, THE CHIPS SAY NOTHING.
+                      The sentence under them ("We have not written down when a
+                      term was added yet") already says it once; per chip it is
+                      the same statement twenty-one times. Where SOME terms are
+                      dated, an undated one keeps its own sentence, because
+                      there the absence is about that term. */}
+                  {logged && (
+                    <span className="font-mono text-[10.5px] font-normal text-muted-foreground">
+                      {dates[t.trim().toLowerCase()] ?? 'in the set before we kept a record'}
+                    </span>
+                  )}
                   <input type="hidden" name={b.key} value={t} />
                   <button
                     type="button"

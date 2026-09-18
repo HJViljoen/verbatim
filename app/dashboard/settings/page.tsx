@@ -81,9 +81,12 @@ export default async function SettingsTrackingPage() {
   // "tracking since 6 Apr"; the only date we hold is the first update on
   // record, which is evidence that we were already tracking by then and not the
   // day anybody asked us to. "Last saved" is a real `config_changes.changed_at`.
+  // FOUR PARTS, AND THE PLAN IS NOT ONE OF THEM. The artboard's context line is
+  // the workspace, the tracking date and the last save; the plan is billing's
+  // fact, it is on its own sub-page, and a fifth part is what pushed this line
+  // past the width it has.
   const context = [
     inputs.tenant,
-    inputs.plan ? `${inputs.plan} plan` : null,
     delivery.since ? `first update on record ${shortDate(`${delivery.since}T00:00:00.000Z`)}` : null,
     strip.lastSavedAt ? `last saved ${shortDate(strip.lastSavedAt)}` : null,
     !canEdit ? 'read-only' : null,
