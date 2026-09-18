@@ -140,25 +140,60 @@ function Reading({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode 
   )
 }
 
+/**
+ * The stop card's headline, and why it is not the advice (design review 3).
+ *
+ * The card printed the stored title — "Lead with price comparisons against
+ * Ottobock" — at 17px semibold, the largest type on the card, negated only by a
+ * 10.5px mono eyebrow above it. Scanned at a glance, which is how a four-column
+ * row is read, it was a fourth thing to MAKE. The artboard solved it in the
+ * words ("Stop leading with price comparisons against Freitag"); we cannot,
+ * because those words are `pass_d_b_recommendation`'s own and rewriting a
+ * model's stored sentence is the one thing a render may never do.
+ *
+ * So the negation is carried by the card's STRUCTURE: the headline is code's
+ * ("What not to make"), the advice sits under it at body size behind a label
+ * that says what it is, and the largest, boldest thing on the card is the one
+ * word a scanner needs.
+ */
+const STOP_HEAD = 'What not to make'
+const STOP_LABEL = 'The advice you dismissed'
+
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
+  const stop = n == null
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-md border border-border bg-tile px-4 py-3">
+    <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/30 bg-negative/[0.04]' : 'border-border bg-tile'}`}>
       <div className="flex items-center justify-between gap-2">
-        {n == null
-          ? <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">What not to make</span>
+        {stop
+          ? <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-negative">Stop</span>
           : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
         <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
       </div>
       {/* THE ADVICE'S OWN WORDS, WRITTEN BY PASS D-b AND READ BACK OUT OF A
           COLUMN — the `stored` kind, naming the slot that adjudicated them
-          (lib/test/copy-contract.ts). */}
-      <h3
-        data-copy="stored"
-        data-slot="pass_d_b_recommendation"
-        className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
-      >
-        {row.title}
-      </h3>
+          (lib/test/copy-contract.ts). On the stop card they are the SUBJECT of
+          the headline rather than the headline. */}
+      {stop ? (
+        <>
+          <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-negative">{STOP_HEAD}</h3>
+          <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</p>
+          <p
+            data-copy="stored"
+            data-slot="pass_d_b_recommendation"
+            className="m-0 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
+          >
+            {row.title}
+          </p>
+        </>
+      ) : (
+        <h3
+          data-copy="stored"
+          data-slot="pass_d_b_recommendation"
+          className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
+        >
+          {row.title}
+        </h3>
+      )}
       <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
       {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
       <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
@@ -182,12 +217,26 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
 }
 
 function EmailCard({ row, n }: { row: AdviceRow; n: number | null }) {
+  const stop = n == null
   return (
     <div style={{ marginTop: 10, paddingTop: 8, borderTop: `1px solid ${EMAIL.hairline}` }}>
       <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted }}>
-        {n == null ? 'What not to make' : String(n).padStart(2, '0')} · {chipWord(row)}
+        {stop ? 'Stop' : String(n).padStart(2, '0')} · {chipWord(row)}
       </div>
-      <div data-copy="stored" data-slot="pass_d_b_recommendation" style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 3 }}>
+      {/* THE HEADLINE IS CODE'S ON THE STOP CARD (design review 3) — the same
+          structural negation the app and print arms draw, because an email is
+          scanned harder than a sheet. */}
+      {stop ? (
+        <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink, marginTop: 3 }}>{STOP_HEAD}</div>
+      ) : null}
+      {stop ? (
+        <div style={{ fontFamily: FONT.mono, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted, marginTop: 3 }}>{STOP_LABEL}</div>
+      ) : null}
+      <div
+        data-copy="stored"
+        data-slot="pass_d_b_recommendation"
+        style={{ fontFamily: FONT.sans, fontSize: stop ? 12.5 : 14, fontWeight: stop ? 400 : 600, color: stop ? EMAIL.ink2 : EMAIL.ink, marginTop: 3 }}
+      >
         {row.title}
       </div>
       <div style={{ fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted, marginTop: 3 }}>{provenance(row)}</div>

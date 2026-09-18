@@ -191,12 +191,30 @@ describe('content.make — the mock’s page 2', () => {
   const markup = render(contentMake.render(data, 'print', ctx))
   const text = renderText(markup)
 
-  it('draws three things to make and one to stop', () => {
+  it('draws the things to make, numbered, and the one to stop', () => {
     expect(text).toContain('01')
     expect(text).toContain('02')
     expect(text).toContain('03')
     expect(text).toContain('What not to make')
     expect(text).toContain('Lead with price comparisons against Ottobock')
+  })
+
+  // THE STOP CARD'S HEADLINE IS CODE'S, NOT THE ADVICE'S (design review 3).
+  // The card printed the stored title at the card-title size, negated only by a
+  // mono eyebrow, so a scan of the four-column row read it as a fourth thing to
+  // make. The words cannot be rewritten — they are the model's, stored — so the
+  // negation is structural: the biggest type on the card is "What not to make",
+  // and the advice sits under a label saying what it is.
+  it('heads the stop card with the negation and not with the advice', () => {
+    const head = markup.indexOf('What not to make')
+    const advice = markup.indexOf('Lead with price comparisons against Ottobock')
+    expect(head).toBeGreaterThan(-1)
+    expect(advice).toBeGreaterThan(head)
+    // The stored advice is no longer the card's `<h3>`; the code-written
+    // headline is.
+    expect(markup).toMatch(/<h3[^>]*>What not to make<\/h3>/)
+    expect(markup).not.toMatch(/<h3[^>]*>Lead with price comparisons/)
+    expect(text).toContain('The advice you dismissed')
   })
 
   // WORK ALREADY DONE IS NOT A THING TO MAKE (design review 2, code review 2).
