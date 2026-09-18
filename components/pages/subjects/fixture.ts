@@ -15,6 +15,8 @@ import {
   type StoredKindRow,
   type SubjectsData,
 } from '@/lib/pages/subjects'
+import { claimEcho, ownCensusWithClaims, ownPostCensus, type OwnPostInput } from '@/lib/reading/own-posts'
+import { claimCounts } from '@/lib/market-tiles'
 import type { Subject } from '@/lib/subjects/types'
 
 // The Subjects page's block fixtures (Phase 1 WP12).
@@ -97,6 +99,56 @@ function sidesAndSeries() {
   })
   const series = sides.map((s) => seriesFor('s1', s.audience))
   return { sides, series, per, kindRows }
+}
+
+/**
+ * "Your own posts", September — the mock's own tile, built through the real
+ * `ownPostCensus` so the fixture cannot drift from the function.
+ *
+ * NINE POSTS, THREE OVER THE FLOOR, AND FOUR OF THE NINE CARRYING NO HOOK. The
+ * last part is the one a reviewer has to see: the hook rows sum to five of
+ * nine, not to nine, because the classifier names a hook on some posts and not
+ * others — and on the live tenant it is five of seventeen. A tile that draws
+ * these as a partition is drawing a figure the data does not hold.
+ */
+function ownPostsInput(): OwnPostInput {
+  const post = (id: string, day: number, comments: number, hook: string | null, format: string | null) => ({
+    id, upload_date: `2026-09-${String(day).padStart(2, '0')}`, comments_count: comments,
+    hook_style: hook, classified_type: format, platform: 'tiktok',
+  })
+  return {
+    month: MONTH,
+    audience: CLIENT_AUDIENCE,
+    audienceLabel: 'You',
+    videos: [
+      post('p1', 2, 41, 'demonstration', 'review'),
+      post('p2', 5, 18, 'bold-claim', 'promotional'),
+      post('p3', 9, 7, 'demonstration', 'behind-the-scenes'),
+      post('p4', 11, 4, 'personal-story', 'story'),
+      post('p5', 14, 2, 'statistic', null),
+      post('p6', 17, 1, null, null),
+      post('p7', 21, 0, null, null),
+      post('p8', 24, 3, null, null),
+      post('p9', 27, 1, null, null),
+      // August: outside the census, and the reason the basis line exists.
+      post('p0', 30, 55, 'demonstration', 'review'),
+    ].map((v, i) => (i === 9 ? { ...v, upload_date: '2026-08-30' } : v)),
+    claims: [
+      { id: 'cl1', source_video_id: 'p1', entity: 'client', claim: 'Built to last a decade', quote: '' },
+      { id: 'cl2', source_video_id: 'p3', entity: 'client', claim: 'built to last a decade', quote: '' },
+      { id: 'cl3', source_video_id: 'p2', entity: 'client', claim: 'Made from 100% recycled sails', quote: '' },
+      { id: 'cl4', source_video_id: 'p4', entity: 'client', claim: 'Waterproof', quote: '' },
+    ],
+    membership: [
+      { subjectId: 's1', label: 'Durability', videoIds: ['p1', 'p3', 'p4'] },
+      { subjectId: 's2', label: 'Recycled materials', videoIds: ['p2'] },
+    ],
+    echoes: [
+      claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: { k: 26, n: 84 }, stance: 'echoes' }),
+      claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: { k: 9, n: 84 }, stance: 'contradicts' }),
+      claimEcho({ audience: CLIENT_AUDIENCE, audienceLabel: 'You', reading: { k: 0, n: 84 }, stance: 'silent' }),
+    ],
+  }
 }
 
 export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
@@ -182,6 +234,13 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       axisNote: axisNote(sides, 100),
       notRecorded: null,
     },
+    ownPosts: ownCensusWithClaims(ownPostsInput(), true),
+    // The mock's own ledger: thirteen claims, three of them echoed.
+    sayHear: claimCounts([
+      ...Array.from({ length: 3 }, () => ({ audience: 'echoes' })),
+      ...Array.from({ length: 2 }, () => ({ audience: 'contradicts' })),
+      ...Array.from({ length: 8 }, () => ({ audience: 'silent' })),
+    ]),
     record: {
       line: '4 updates · 2,359 videos · TikTok, YouTube, Instagram, Reddit',
       lines: ['4 updates delivered in this window.', 'Nothing was refused on this page.'],
@@ -205,6 +264,13 @@ export function refusedFixture(over: Partial<SubjectsData> = {}): SubjectsData {
       canEdit: true,
     },
     selected: null,
+    // THE CENSUS SURVIVES M4 AND THE CLAIMS DO NOT. `videos` is tenant-readable
+    // whatever the month tables say, so a workspace with no subject reading
+    // still knows what it published — and `video_claims` has no tenant policy
+    // until M8, so the claims half is NAMED rather than drawn as zero. This is
+    // the state production is in today and the state wave 2 is reviewed in.
+    ownPosts: ownCensusWithClaims(ownPostsInput(), false),
+    sayHear: null,
     ...over,
   }
 }
