@@ -9,7 +9,7 @@ import { BlockQuotes } from '@/components/blocks/quote'
 import { BlockStat } from '@/components/blocks/stat'
 import { TileColumns } from '@/components/shell/page-grid'
 import { DirectionWord } from '@/components/pages/overview/subjects'
-import type { CalendarSeries } from '@/lib/charts/calendar'
+import { STATE_LABEL, type CalendarSeries } from '@/lib/charts/calendar'
 import { PREVALENCE_LABEL } from '@/lib/calibration'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
@@ -204,7 +204,13 @@ function seriesCaption(t: ThemeBlock): string | null {
   const parts = points.map((p) => {
     const month = monthName(p.month).slice(0, 3)
     if (p.pct == null) return `${month} not read`
-    return p.videos == null ? `${month} ${fmtPct(p.pct)}` : `${month} ${fmtPct(p.pct)} of ${fmtInt(p.videos)}`
+    const reading = p.videos == null ? `${month} ${fmtPct(p.pct)}` : `${month} ${fmtPct(p.pct)} of ${fmtInt(p.videos)}`
+    // THE ONE WORD THE LEGEND USED TO CARRY. The chart's legend is off on this
+    // block (see the `legend={false}` below), and its only gutter token here
+    // is `filling` — a month that may still be rewritten, which is the
+    // distinction this whole product is built on. It says so in the caption
+    // instead, in the chart's own word (STATE_LABEL.filling).
+    return p.status === 'filling' ? `${reading}, ${STATE_LABEL.filling}` : reading
   })
   return `share of ${t.audienceLabel.toLowerCase()} videos · ${parts.join(' · ')}`
 }
@@ -417,6 +423,16 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
                       width={CHART_W}
                       height={CHART_H}
                       padR={CHART_PAD}
+                      // ONE NAME, TWICE, THE WAY THE ARTBOARD HAS IT: the
+                      // block's heading and the label at the line's end. The
+                      // legend was a third and a fourth rendering of the same
+                      // string — and it prints the SERIES label, which is the
+                      // one shortened to thirty characters, so the refused
+                      // state showed "Admiration for personal resil…" twice
+                      // with the full name two lines above. The one word it
+                      // carried besides the name, "still filling", is in the
+                      // caption.
+                      legend={false}
                       label={`${t.label}, share of ${t.audienceLabel.toLowerCase()} videos, by month`}
                     />
                   </Line>

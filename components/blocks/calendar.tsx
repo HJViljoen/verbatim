@@ -37,7 +37,7 @@ import { EMAIL, FONT, tokenHex } from '@/lib/email/theme'
  */
 export function BlockCalendar({
   blockKey, axis, series, rules = [], bands = [], format = (v) => `${v}`,
-  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padR,
+  caption, label, mode = 'app', ctx, emailMonths = 6, height, width, padR, legend,
 }: {
   /** The block's own key — what the runner rendered the PNG under. */
   blockKey: string
@@ -66,6 +66,17 @@ export function BlockCalendar({
    *  chart draws OUTSIDE the plot area. The 180-unit default fits a short
    *  series name; a theme's name is the model's words and is not short. */
   padR?: number
+  /** Draw the chart's own legend (default: the chart's own rule — on, wherever
+   *  there are two series or a gutter token to name).
+   *
+   *  A CALLER TURNS IT OFF ONLY WHEN THE WORDS ARE ELSEWHERE ON THE BLOCK. One
+   *  series named in the block's heading, drawn at the line's end and named
+   *  again in the legend is one string rendered three times — twice through
+   *  the same truncation, since the legend prints the SERIES label, which is
+   *  the shortened one. Whatever the legend would have said about a gutter
+   *  token has to be said by the caption instead; it is not optional
+   *  decoration. */
+  legend?: boolean
 }) {
   if (!axis.length || !series.length) return null
 
@@ -82,6 +93,7 @@ export function BlockCalendar({
         height={height}
         width={width}
         padR={padR}
+        {...(legend === undefined ? {} : { legend })}
         // The block key alone is not an identity: it is stripped of its
         // punctuation (so `overview.line` and `overview-line` collide) and WP12
         // draws one calendar per audience under ONE key, which is exactly the

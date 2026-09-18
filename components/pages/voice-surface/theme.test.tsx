@@ -139,7 +139,22 @@ describe('voiceTheme', () => {
     // denominators, which is the whole reason the change between two of them
     // is banded. The chart's hover `<title>` is not an answer; it is mouse-only
     // and absent from print and from the PDF.
-    expect(draw()).toContain('share of the category videos · Jul 5.9% of 1,200 · Aug 6.8% of 1,200 · Sep 9.4% of 1,388')
+    expect(draw()).toContain('share of the category videos · Jul 5.9% of 1,200 · Aug 6.8% of 1,200 · Sep 9.4% of 1,388, still filling')
+  })
+
+  it('prints the theme\u2019s name twice, the way the artboard does — not four times', () => {
+    // Heading, chart legend, chart end label, caption: one string rendered
+    // four times, and the legend prints the SERIES label, which is the one
+    // shortened to thirty characters. The refused state showed
+    // "Admiration for personal resil…" twice with the full name two lines
+    // above. The legend is off; the one word it carried besides the name —
+    // "still filling" — is in the caption.
+    const markup = render(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))
+    // Minus the hover `<title>`s, which are a mouse-only tooltip and print
+    // nowhere — the reason I2 moved the denominators into the caption.
+    const visible = markup.replace(/<title[^>]*>[\s\S]*?<\/title>/g, '')
+    expect(visible.split('Admiration for personal resil…')).toHaveLength(2)
+    expect(renderText(voiceTheme.render(refusedVoiceFixture(), 'app', ctx))).toContain('still filling')
   })
 
   it('shortens only the CHART\u2019s copy of a long name, never the block\u2019s', () => {
