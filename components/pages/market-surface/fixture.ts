@@ -1,6 +1,7 @@
 import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 import {
   ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, CONCLUSIONS_CORPUS_LINE,
+  CONCLUSIONS_NEW_LINE,
   LEDGER_AUDIENCE, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
@@ -11,6 +12,7 @@ import { refusals, refusedSentence } from '@/lib/reading/record'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
+import { recurrenceOf } from '@/lib/reading/head-to-head'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -154,6 +156,9 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'confirmed',
           videos: 157,
           themes: [{ slug: 'comfort_and_fit', label: 'Comfort and fit' }, { slug: 'personalisation', label: null }],
+          // HEARD BEFORE. Three months of readings behind its leading theme, so
+          // no chip — the state most conclusions are in.
+          recurrence: recurrenceOf('reg-comfort', ['2026-07-01', '2026-08-01', '2026-09-01'], '2026-09-01'),
         },
         {
           id: 'mi-2',
@@ -163,6 +168,9 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'early_signal',
           videos: 0,
           themes: [],
+          // THE MONTH TABLES HOLD NOTHING FOR IT, which is not "new" — the chip
+          // is absent and so is the claim. This is the arm production is in.
+          recurrence: null,
         },
         {
           id: 'mi-3',
@@ -172,13 +180,18 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'archive',
           videos: 2,
           themes: [],
+          // The mock's "New" chip: one month of readings, none of them earlier.
+          recurrence: recurrenceOf('reg-resale', ['2026-09-01'], '2026-09-01'),
         },
       ],
       corpusVideos: 1699,
       corpusLine: CONCLUSIONS_CORPUS_LINE,
       counts: { confirmed: 1, early: 1, archive: 1 },
       belowBar: 1,
+      total: 9,
       sortedBy: 'strongest evidence first, then by how many videos are behind it',
+      concludedOn: '2026-09-27T02:00:00.000Z',
+      newLine: CONCLUSIONS_NEW_LINE,
       empty: null,
     },
     advice: {

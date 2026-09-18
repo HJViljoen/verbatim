@@ -11,6 +11,7 @@ import { methodLines, type MethodLines } from '../reading/method'
 import { PLAN_EMPTY, loadPlanChecks, type PlanCheckCard } from '../ask/plan-cards'
 import { scrubProse } from '../prose/scrub'
 import { afterwardsFor, groundingFor, type Afterwards, type Grounding } from '../reading/afterwards'
+import { recurrenceOf, type Recurrence } from '../reading/head-to-head'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
 import type { Verdict } from '../reading/verdicts'
@@ -80,6 +81,18 @@ export const CONCLUSIONS_SHOWN = 8
 export const CONCLUSIONS_CORPUS_LINE =
   'The videos behind a conclusion are counted over everything we have read for you, not over this month alone.'
 
+/** What the "New" chip on a conclusion means — a statement about OUR RECORD,
+ *  said once under the rows because every chip means the same thing. See
+ *  `ConclusionRow.recurrence`. */
+export const CONCLUSIONS_NEW_LINE =
+  'New means we have no earlier month in which the theme behind it was read — a fact about our record, not a direction.'
+
+/** What the ledger's "Grounded in" column counts, said once under the table
+ *  because every row's cell is counted the same way (D8, and the same shape as
+ *  `CONCLUSIONS_CORPUS_LINE` two blocks above it). */
+export const GROUNDED_CORPUS_LINE =
+  'Grounded in counts the videos behind a piece of advice over everything we have read for you up to this month, never over one month.'
+
 /** Quotes shown under a claim in MK5. */
 export const CLAIM_ROWS = 5
 
@@ -94,6 +107,27 @@ export interface ConclusionRow {
   /** Distinct videos behind it — the size of the evidence, measured. */
   videos: number
   themes: ThemeChip[]
+  /**
+   * Whether the theme behind this conclusion has been read in an earlier month
+   * — the mock's "New" flag (D4; the open item wave 1 left to this package).
+   *
+   * IT IS A FACT ABOUT THE RECORD, NOT A DIRECTION. `recurrenceOf` says so in
+   * its own docstring: `isNew` means the identity has no earlier month, and it
+   * says nothing about where anything is headed. The block prints the mock's
+   * chip off `isNew`, states the basis once, and never turns the count of
+   * months into a word about the conversation.
+   *
+   * KEYED ON `theme_registry.id`, never a label — labels churn ~88% run to run
+   * (AGENTS.md), so a flag keyed on one would mark nine conclusions in ten as
+   * new every month and would be measuring our own naming. The identity is the
+   * LEADING one of the conclusion's cited themes, by `orderedTargets`, for the
+   * same reason the ledger's afterwards reading takes one: several identities
+   * cannot be pooled into one answer.
+   *
+   * Null where the conclusion cites no theme we follow month by month, or where
+   * the month tables could not be read — neither of which is "new".
+   */
+  recurrence: Recurrence | null
 }
 
 export interface ConclusionsBlock {
@@ -106,8 +140,25 @@ export interface ConclusionsBlock {
   counts: { confirmed: number; early: number; archive: number }
   /** The conclusions below the evidence bar. Labelled, never hidden. */
   belowBar: number
+  /** Every conclusion this update reached, drawn or not — the "of 9 concluded"
+   *  the header's count of those above the bar is a count OUT OF. */
+  total: number
   /** The sort actually used, said on the block rather than implied. */
   sortedBy: string
+  /**
+   * When these conclusions were reached — `pipeline_runs.started_at` of the
+   * update that wrote them, the mock's "concluded with the update of 27 Sep".
+   *
+   * AN UPDATE'S OWN DATE, AND LABELLED AS ONE. It is the one thing on this
+   * block that is dated by the RUN rather than by the comment, which is exactly
+   * why it is printed with the word "update" on it (D9): the conclusions are
+   * this update's, they are not a period reading, and a reader has to be able
+   * to tell the two apart. Null where the run carried no date.
+   */
+  concludedOn: string | null
+  /** What "New" on a conclusion means, in the reader's words — the basis that
+   *  has to travel with the chip. */
+  newLine: string
   empty: string | null
 }
 
@@ -854,13 +905,22 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const themeSlugById = new Map(audienceRows.map((a) => [a.id, a.theme]))
   const videoByInsight = new Map(audienceRows.map((a) => [a.id, a.source_video_id]))
   const chipLabels = labelsBySlug(bucketRows)
+  // MOVED AHEAD OF MK1 (this package). The registry bridge was built in MK2's
+  // section because the ledger was the only block that crossed it; the "New"
+  // chip on a conclusion crosses the same bridge, and building it twice would
+  // be two answers to "which identity is this row about".
+  const registryByInsight = registryIdsByInsight(bucketRows)
 
   const tierById = insightTiers(insights)
+  // The leading identity behind each conclusion, by the SAME rule the ledger
+  // uses (`orderedTargets`) — one object per row, most-cited first.
+  const conclusionTarget = new Map<string, string | null>()
   const conclusionRows: ConclusionRow[] = insights.map((mi) => {
     const ids = mi.evidence?.supporting_theme_ids ?? []
     const slugs = new Set<string>()
     for (const id of ids) { const s = themeSlugById.get(id); if (s) slugs.add(s) }
     const videos = distinctVideos(ids, videoByInsight)
+    conclusionTarget.set(mi.id, orderedTargets(ids, registryByInsight)[0] ?? null)
     return {
       id: mi.id,
       title: mi.title,
@@ -873,6 +933,10 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
       tier: groundedTier(tierById.get(mi.id) ?? gateTier(mi.confidence_score, 0), videos),
       videos,
       themes: themeChips(slugs, chipLabels),
+      // Filled below, once the page's one month read has come back. Null until
+      // then, and null after it for a conclusion whose theme the month tables
+      // hold nothing for — which is not "new".
+      recurrence: null,
     }
   })
   // COUNTED OFF THE ROWS, NOT OFF THE RAW TIERS, so the header's "N below the
@@ -888,20 +952,11 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
   const TIER_RANK: Record<GateTier, number> = { confirmed: 0, early_signal: 1, archive: 2 }
   conclusionRows.sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier] || b.videos - a.videos || a.id.localeCompare(b.id))
 
-  const conclusions: ConclusionsBlock = {
-    rows: conclusionRows.slice(0, CONCLUSIONS_SHOWN),
-    corpusVideos,
-    corpusLine: CONCLUSIONS_CORPUS_LINE,
-    counts,
-    belowBar: counts.archive,
-    sortedBy: 'strongest evidence first, then by how many videos are behind it',
-    empty: conclusionRows.length === 0 ? 'Conclusions land with your next update.' : null,
-  }
+  const shownConclusions = conclusionRows.slice(0, CONCLUSIONS_SHOWN)
 
   // ── MK2 · the advice, and what you decided ─────────────────────────────
   //
   // The rows were built above; this is the three columns they did not have.
-  const registryByInsight = registryIdsByInsight(bucketRows)
   const groundedRows = shownRows.map((r) => {
     const cited = r.basedOn.flatMap((id) => evidenceByInsight.get(id) ?? [])
     return {
@@ -920,7 +975,34 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
       targetIds: orderedTargets(cited, registryByInsight),
     }
   })
-  const withAfterwards = await readAfterwards(reading, clientId, month, groundedRows, themeLabels)
+  // THE PAGE'S ONE MONTH READ, over both blocks' identities. The ledger asks
+  // only for rows that have been decided on and name something (an undecided
+  // row's answer is a sentence); the conclusions ask for the leading theme of
+  // every row they draw. One query, two blocks — see `loadTargetPoints`.
+  const monthPoints = await loadTargetPoints(reading, clientId, month, [
+    ...groundedRows.filter((r) => r.decidedAt && r.targetIds.length > 0).map((r) => r.targetIds[0]),
+    ...shownConclusions.map((c) => conclusionTarget.get(c.id)).filter((t): t is string => Boolean(t)),
+  ])
+  const withAfterwards = readAfterwards(groundedRows, monthPoints, themeLabels)
+
+  const conclusions: ConclusionsBlock = {
+    rows: shownConclusions.map((c) => ({
+      ...c,
+      recurrence: recurrenceForTarget(conclusionTarget.get(c.id) ?? null, monthPoints, month),
+    })),
+    corpusVideos,
+    corpusLine: CONCLUSIONS_CORPUS_LINE,
+    counts,
+    belowBar: counts.archive,
+    total: conclusionRows.length,
+    sortedBy: 'strongest evidence first, then by how many videos are behind it',
+    // THE RUN'S OWN DATE, and the only one on this block. See
+    // `ConclusionsBlock.concludedOn`.
+    concludedOn: latestRun.started_at ?? null,
+    newLine: CONCLUSIONS_NEW_LINE,
+    empty: conclusionRows.length === 0 ? 'Conclusions land with your next update.' : null,
+  }
+
   // The NEWEST copy's hero quote per identity — the ledger prints the current
   // wording of a piece of advice, so it prints the current copy's quote. Kept
   // off `AdviceRow` on purpose: an unvouched hero quote must not ride into the
@@ -1148,54 +1230,67 @@ function monthsBack(month: string, n: number): string {
 
 type RowWithTargets = AdviceRow & { targetIds: string[] }
 
+/** One month of one identity, in one audience. */
+export interface TargetPoint {
+  month: string
+  k: number
+  n: number
+  clusteringKey: string | null
+  audience: string | null
+}
+
+/** The key a target's months are held under — the audience AND the identity,
+ *  never the identity alone. Two audiences of one theme are two series
+ *  (`MonthSeries.audience`), and a map keyed on `objectId` silently keeps
+ *  whichever of them the loop reached last. */
+const targetKey = (audience: string, objectId: string): string => `${audience}|${objectId}`
+
+/** The audiences the page's one month read covers: the client's, which is what
+ *  a piece of advice's afterwards is a reading of (`LEDGER_AUDIENCE`), and the
+ *  category's, which is where a conclusion about the conversation at large was
+ *  heard. Both come back from one query. */
+export const MARKET_AUDIENCES = [LEDGER_AUDIENCE, 'industry-other'] as const
+
 /**
- * "Afterwards", for the rows that can have one.
+ * Every month this page reads, in ONE query.
  *
- * ONE MONTH-SERIES READ FOR THE WHOLE LEDGER, over the union of the drawn rows'
- * target identities, and only where a row has actually been decided on: an
- * undecided row's answer is a sentence, not a reading, and reading months for
- * it would spend the query to print the same words.
+ * ONE MONTH-SERIES READ FOR THE WHOLE PAGE, over the union of the drawn ledger
+ * rows' target identities and the drawn conclusions' — two blocks that each
+ * wanted the same table for the same themes, and would otherwise have been two
+ * round trips for one answer on a database where round trips are the cost
+ * (AGENTS.md's ration).
  *
  * `loadMonthSeries` is the only way in (AGENTS.md: a reader reads the series,
  * it never sums videos across months). Where the numerator table is not applied
  * — `substrate` / `numeratorSubstrate` `missing`, which is how a fresh database
- * and a tenant mid-migration both look — the series is empty, every row falls
- * to `too_soon`, and the ledger says so in words.
+ * and a tenant mid-migration both look — the map is empty, every ledger row
+ * falls to `too_soon` and every conclusion's recurrence is null, and both
+ * blocks say so in words.
+ *
+ * THE CLUSTERING KEY AND THE AUDIENCE TRAVEL WITH THE POINT. Dropping them
+ * would hand `afterwardsFor` two months it cannot tell apart — see
+ * `AfterwardsInput.series`.
  */
-async function readAfterwards(
+async function loadTargetPoints(
   reading: ReadingHandle,
   clientId: string,
   month: string,
-  rows: readonly RowWithTargets[],
-  themeLabels: Map<string, string>,
-): Promise<AdviceRow[]> {
-  const readable = rows.filter((r) => r.decidedAt && r.targetIds.length > 0)
-  // ONE IDENTITY PER ROW, so the read asks for the objects the page will
-  // actually print rather than every theme the evidence touches.
-  const targets = [...new Set(readable.map((r) => r.targetIds[0]))]
-  if (targets.length === 0) {
-    return rows.map(({ targetIds, ...r }) => ({
-      ...r,
-      afterwards: afterwardsFor({ decidedAt: r.decidedAt, targetIds, series: [], audience: LEDGER_AUDIENCE }),
-    }))
-  }
-
-  // THE CLUSTERING KEY AND THE AUDIENCE TRAVEL WITH THE POINT. Dropping them
-  // here would hand `afterwardsFor` two months it cannot tell apart — see
-  // `AfterwardsInput.series`.
-  const points = new Map<string, { month: string; k: number; n: number; clusteringKey: string | null; audience: string | null }[]>()
+  targets: readonly string[],
+): Promise<Map<string, TargetPoint[]>> {
+  const points = new Map<string, TargetPoint[]>()
+  if (targets.length === 0) return points
   try {
     const set = await loadMonthSeries(reading.client, clientId, {
-      audiences: [LEDGER_AUDIENCE],
+      audiences: [...MARKET_AUDIENCES],
       objectKind: 'theme',
-      objectIds: targets,
+      objectIds: [...new Set(targets)],
       from: monthsBack(month, LEDGER_MONTHS_BACK),
       to: month,
     })
     for (const series of set.series) {
       if (!series.objectId) continue
       points.set(
-        series.objectId,
+        targetKey(series.audience, series.objectId),
         series.points
           .filter((p) => p.k != null && p.videos != null)
           .map((p) => ({
@@ -1210,10 +1305,63 @@ async function readAfterwards(
   } catch (error) {
     // The month tables arrive with a migration and a deploy can land first.
     // Every row then reads `too_soon`, which is the honest answer for "we have
-    // no months to read", and the page keeps its other four blocks.
-    console.error(`[pages] market-surface.afterwards: ${error instanceof Error ? error.message : String(error)}`)
+    // no months to read", and the page keeps its other blocks.
+    console.error(`[pages] market-surface.months: ${error instanceof Error ? error.message : String(error)}`)
   }
+  return points
+}
 
+/**
+ * Which months a conclusion's leading theme was heard in — the mock's "New"
+ * chip, as a fact about the record.
+ *
+ * ANY AUDIENCE WE READ, because a conclusion is not scoped to one: "Durability
+ * is the category's rising subject" is about the category and "Freitag's
+ * audience discusses smell" is about a rival's, and the block states that basis
+ * once beneath the rows rather than pretending the chip means one bucket. A
+ * month counts as heard only where the theme actually carried a reading in it
+ * (`k > 0`); a month whose denominator we read and whose theme nobody mentioned
+ * is not a month it was heard in.
+ *
+ * Pure.
+ */
+export function recurrenceForTarget(
+  targetId: string | null,
+  points: Map<string, TargetPoint[]>,
+  month: string,
+): Recurrence | null {
+  if (!targetId) return null
+  const months = new Set<string>()
+  let read = false
+  for (const audience of MARKET_AUDIENCES) {
+    const series = points.get(targetKey(audience, targetId))
+    if (!series) continue
+    read = true
+    for (const p of series) if (p.k > 0) months.add(p.month)
+  }
+  // NOTHING READ IS NOT "NEW". A theme the month tables hold nothing for has no
+  // record either way, and `recurrenceOf` would call that first-heard-this-month
+  // — a claim about the conversation made out of a gap in our own bookkeeping.
+  if (!read) return null
+  return recurrenceOf(targetId, [...months], month)
+}
+
+/**
+ * "Afterwards", for the rows that can have one.
+ *
+ * Reads the page's one month map (`loadTargetPoints`) and computes nothing of
+ * its own. Only rows that have actually been decided on and name an identity
+ * contribute a target to that read: an undecided row's answer is a sentence,
+ * not a reading, and reading months for it would spend the query to print the
+ * same words.
+ *
+ * Pure.
+ */
+function readAfterwards(
+  rows: readonly RowWithTargets[],
+  points: Map<string, TargetPoint[]>,
+  themeLabels: Map<string, string>,
+): AdviceRow[] {
   return rows.map(({ targetIds, ...r }) => {
     // THE SERIES IS ONE OBJECT'S, and it is the object the verdict is labelled
     // with. See `orderedTargets`: pooling every target's months takes the two
@@ -1225,7 +1373,7 @@ async function readAfterwards(
         decidedAt: r.decidedAt,
         targetIds,
         objectLabel: target ? themeLabels.get(target) ?? target : undefined,
-        series: target ? points.get(target) ?? [] : [],
+        series: target ? points.get(targetKey(LEDGER_AUDIENCE, target)) ?? [] : [],
         audience: LEDGER_AUDIENCE,
       }),
     }
