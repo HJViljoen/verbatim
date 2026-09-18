@@ -8,7 +8,7 @@ import { RPC_WINDOW_DENOMINATORS, RPC_WINDOW_THEME_READINGS } from '../reading/t
 import { quarterFor } from '../reports/quarterly'
 import {
   confidenceOf, countedLines, coverBody, flagOutcome, methodNumbers, ordinal, quarterWindowFor,
-  readingCounter, unsettledItems, withFlags,
+  quietRows, readingCounter, unsettledItems, withFlags,
 } from './quarterly'
 import type { Mover } from './overview'
 import { READER_FLAGS } from '../calibration'
@@ -392,6 +392,37 @@ describe('what the quarterly pages now carry (package D7)', () => {
     expect(thinMonthFixture().category.quietNote).toContain('has gone quiet')
     expect(quarterlyFixture().category.quiet).toHaveLength(2)
     expect(quarterlyFixture().category.quietNote).toBeNull()
+  })
+
+  it('orders the gone-quiet list by the month it was last heard in, never by a run clock', () => {
+    const dormant = [
+      { id: 'a', label: 'Alpha' },
+      { id: 'b', label: 'Beta' },
+      { id: 'c', label: 'Gamma' },
+      { id: 'd', label: 'Delta' },
+    ]
+    const heard = new Map([
+      ['a', '2026-05-01'],
+      ['b', '2026-08-01'],
+      ['c', '2026-05-01'],
+    ])
+    const out = quietRows(dormant, heard, 5)
+    expect(out.map((q) => q.id)).toEqual(['b', 'a', 'c', 'd'])
+    // A theme the axis does not reach back to says so, and is never given a date.
+    expect(out[3].lastHeard).toBeNull()
+    // Every month printed is a month start — the comment-dated key, not an instant.
+    for (const q of out) if (q.lastHeard) expect(q.lastHeard).toMatch(/^\d{4}-\d{2}-01$/)
+  })
+
+  it('takes the same five in the same order every time it is asked', () => {
+    // Fifty dormant rows carrying ONE identical value is the production shape
+    // that made the first implementation's database order arbitrary: here
+    // nothing is heard at all, and the label is what decides.
+    const dormant = Array.from({ length: 8 }, (_, i) => ({ id: `t${i}`, label: `Theme ${7 - i}` }))
+    const once = quietRows(dormant, new Map(), 5).map((q) => q.label)
+    const twice = quietRows([...dormant].reverse(), new Map(), 5).map((q) => q.label)
+    expect(once).toEqual(twice)
+    expect(once).toEqual(['Theme 0', 'Theme 1', 'Theme 2', 'Theme 3', 'Theme 4'])
   })
 
   it('carries the same voices to both pages, as refs, and never two sets of words', () => {

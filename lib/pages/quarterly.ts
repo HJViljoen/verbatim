@@ -17,6 +17,7 @@ import {
   type Refusal,
 } from '../reading/record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
+import { isMissingMonthTable } from '../reading/monthly'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict, type VerdictFlag } from '../reading/verdicts'
 import { proseFigures } from '../prose/figures'
 import type { MonthStatus } from '../reading/types'
@@ -726,9 +727,17 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
  * construction not dormant, so this is a list beside the movers and never a
  * flag on one of them.
  *
- * `lastHeard` is taken off the axis the pages already drew. Null where the
- * axis does not reach back to it — the honest answer, and not a date we
- * guessed.
+ * AND `lastHeard` IS DATED BY THE COMMENT, WHICH COST THIS FUNCTION ITS FIRST
+ * IMPLEMENTATION. It read `theme_registry.last_seen_at`, which is the RUN's
+ * wall clock at persist (`lib/pipeline/themes.ts` writes `nowIso`) — measured
+ * read-only on 2026-09-18, all 50 dormant rows on one tenant carry the single
+ * value `2026-08-23`, so the artefact would have printed "last heard August"
+ * for fifty themes whose comments are from any month, and ordered the five it
+ * shows arbitrarily inside one identical timestamp. `lib/pages/voice-surface.ts`
+ * already refuses those two columns in writing on this same table. The answer
+ * is the one Voice takes: the last month the theme actually carried a reading
+ * on this artefact's axis (`month_theme_readings`, the category's audience,
+ * comment-dated), and null where the axis does not reach back to it.
  */
 export async function loadQuiet(
   supabase: SupabaseClient,
@@ -739,23 +748,95 @@ export async function loadQuiet(
   try {
     const res = await supabase
       .from('theme_registry')
-      .select('id, canonical_label, last_seen_at')
+      .select('id, canonical_label')
       .eq('client_id', clientId)
       .eq('status', 'dormant')
-      .order('last_seen_at', { ascending: false })
-      .limit(limit)
+      .limit(QUIET_POOL)
     if (res.error) throw res.error
-    const heard = new Map<string, string>()
-    for (const m of [...overview.category.growing, ...overview.category.fading]) heard.set(m.id, overview.month)
-    return rows<{ id: string; canonical_label: string | null; last_seen_at: string | null }>(res, 'quarterly.quiet').map((r) => ({
+    const dormant = rows<{ id: string; canonical_label: string | null }>(res, 'quarterly.quiet').map((r) => ({
       id: r.id,
       label: r.canonical_label ?? r.id,
-      lastHeard: heard.get(r.id) ?? (r.last_seen_at ? monthStartOfDay(r.last_seen_at) : null),
     }))
+    if (dormant.length === 0) return []
+    const heard = await lastHeardMonths(supabase, clientId, overview, dormant.map((d) => d.id))
+    return quietRows(dormant, heard, limit)
   } catch (error) {
     console.error(`[pages] quarterly.quiet: ${(error as { message?: string })?.message ?? String(error)}`)
     return null
   }
+}
+
+/** How many dormant entries are ranked before the five are taken. The register
+ *  is small (1,046 active / 50 dormant on the larger tenant, measured) and the
+ *  ranking needs the whole set, because the top five by LAST MONTH cannot be
+ *  taken by a database order on a column that is not the answer. */
+export const QUIET_POOL = 200
+
+/**
+ * The last month each of these themes was read in, on the category's axis.
+ *
+ * One bounded read of `month_theme_readings` — the comment-dated table — for
+ * the dormant ids alone, and never a per-theme loop. A month with no videos is
+ * not a month it was heard in. Where the month tables are not applied here the
+ * map is empty and every row's `lastHeard` is null, which is the honest
+ * answer and not a guessed date.
+ */
+async function lastHeardMonths(
+  supabase: SupabaseClient,
+  clientId: string,
+  overview: OverviewData,
+  ids: readonly string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  if (ids.length === 0) return out
+  try {
+    const read = await selectAll<{ theme_id: string; month: string; videos: number | null }>(() =>
+      supabase
+        .from('month_theme_readings')
+        .select('theme_id, month, videos')
+        .eq('client_id', clientId)
+        .eq('audience', overview.category.audience)
+        .in('theme_id', [...ids])
+        .lte('month', overview.month)
+        .order('month', { ascending: true }),
+    )
+    for (const r of read) {
+      if ((r.videos ?? 0) <= 0) continue
+      const month = monthStartOfDay(r.month)
+      const held = out.get(r.theme_id)
+      if (!held || month > held) out.set(r.theme_id, month)
+    }
+  } catch (error) {
+    if (!isMissingMonthTable(error)) throw error
+  }
+  return out
+}
+
+/**
+ * The five to print: the most recently heard first, and a stable order under
+ * them.
+ *
+ * NULLS LAST AND THE LABEL BREAKS EVERY TIE, because the five a reader sees
+ * must not change between a render and its re-render. The first implementation
+ * ordered on a column whose fifty rows held one identical value, which is not
+ * an order at all.
+ */
+export function quietRows(
+  dormant: readonly { id: string; label: string }[],
+  heard: ReadonlyMap<string, string>,
+  limit: number,
+): QuarterQuiet[] {
+  return [...dormant]
+    .map((d) => ({ id: d.id, label: d.label, lastHeard: heard.get(d.id) ?? null }))
+    .sort((a, b) => {
+      if (a.lastHeard !== b.lastHeard) {
+        if (a.lastHeard == null) return 1
+        if (b.lastHeard == null) return -1
+        return b.lastHeard.localeCompare(a.lastHeard)
+      }
+      return a.label.localeCompare(b.label)
+    })
+    .slice(0, limit)
 }
 
 const monthStartOfDay = (iso: string): string => `${iso.slice(0, 7)}-01`
