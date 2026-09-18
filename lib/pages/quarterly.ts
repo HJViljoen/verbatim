@@ -58,6 +58,7 @@ import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { CLIENT_AUDIENCE } from '../rivals'
 import type { PlanCheckCard } from '../ask/plan-cards'
+import type { HeadToHead } from '../reading/head-to-head'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
@@ -402,6 +403,21 @@ export interface RivalsPage {
   standingsNote: string | null
   questions: QuestionRow[]
   questionsLine: string
+  /**
+   * `qr.p5.h2h` · head to head, then and now — Competitive's own five measures,
+   * passed through (`lib/reading/head-to-head.ts`, wave 1).
+   *
+   * MONTH-SCOPED ON A QUARTERLY DECK, like the rows above it and for the same
+   * reason: the share measures are comment-dated and the engagement, positive
+   * share and own-post rows are dated by a video's upload, so each row names
+   * its own clock. THREE OF THE FIVE CARRY NO BADGE ON PURPOSE — a rate, a
+   * median and a bare count are not proportions, and the product's band is
+   * built for shares. Null where no rival is selected or nothing was read.
+   */
+  headToHead: HeadToHead | null
+  /** Whose videos the questions were asked under — the mock's brand prefix on
+   *  each row. One rival, because `buildQuestions` reads one. */
+  questionsRival: string | null
   rivalsNote: string | null
   dualMention: number | null
   caveat: string
@@ -1858,6 +1874,8 @@ function buildRivals(a: {
     standings: co?.standings ?? null,
     standingsNote: co ? co.standings.empty : 'The standings could not be read for this workspace.',
     questions: co?.questions.rows.slice(0, 6) ?? [],
+    questionsRival: co?.questions.rival ?? null,
+    headToHead: co?.headToHead ?? null,
     questionsLine: co
       // FINDINGS, NOT READINGS. `co.questions.insights` counts question-kind
       // audience_insights rows. "Reading" is one of the thirteen words and is
