@@ -214,7 +214,25 @@ export function crosscheckLine(
 /** What a scripted line is built from: an objection the conversation counted,
  *  the reasons under it, and the sentence a writer drafted for it. */
 export interface ScriptedLineInput {
-  objection: { label: string; registryId: string; value: Counted }
+  objection: {
+  label: string
+  /**
+   * `theme_registry.id` where this row IS a theme, and NULL where it is not.
+   *
+   * NOT A SYNTHETIC KEY. This field was documented as the objection's identity
+   * and filled with the string `kind:objection`, which names nothing in
+   * `theme_registry`; a render that linked the row to a theme, or joined it to
+   * anything, would have got a dead key with no type error to warn it. A kind
+   * has no registry entry — `theme_registry` carries no kind column — so the
+   * honest answer is null, and the type now forces a caller to handle it.
+   */
+  registryId: string | null
+  /** What the row is counted over: a theme of the register, or an insight
+   *  KIND (`month_kind_readings`, one share of one denominator). A render
+   *  that heads the row has to know which. */
+  source: 'theme' | 'kind'
+  value: Counted
+}
   /** Each reason with its own n — never a share of the objection's k, and
    *  never a figure that merely happened to be measured beside it. */
   because: { label: string; value: Counted }[]
@@ -238,8 +256,26 @@ export interface ScriptedLinesInput {
 }
 
 export interface ScriptedLine {
-  /** The objection, as a counted theme. */
-  objection: { label: string; registryId: string; value: Counted }
+  /** The objection, as a counted theme or a counted kind — and it says which. */
+  objection: {
+  label: string
+  /**
+   * `theme_registry.id` where this row IS a theme, and NULL where it is not.
+   *
+   * NOT A SYNTHETIC KEY. This field was documented as the objection's identity
+   * and filled with the string `kind:objection`, which names nothing in
+   * `theme_registry`; a render that linked the row to a theme, or joined it to
+   * anything, would have got a dead key with no type error to warn it. A kind
+   * has no registry entry — `theme_registry` carries no kind column — so the
+   * honest answer is null, and the type now forces a caller to handle it.
+   */
+  registryId: string | null
+  /** What the row is counted over: a theme of the register, or an insight
+   *  KIND (`month_kind_readings`, one share of one denominator). A render
+   *  that heads the row has to know which. */
+  source: 'theme' | 'kind'
+  value: Counted
+}
   /** The scripted sentence, already scrubbed under `document_write`. */
   say: string
   /** Each reason with its own n. */

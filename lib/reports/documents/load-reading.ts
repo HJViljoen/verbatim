@@ -329,7 +329,13 @@ export async function documentFiguresFor(
         figures: a.reading.measured,
         lines: [
           {
-            objection: { label: objection.label, registryId: `kind:objection`, value: objection.value },
+            // ONE ROW, AND IT SAYS WHAT IT IS. The mock asks for a row per
+            // objection THEME; `theme_registry` carries no kind, so the only
+            // place an objection is counted on this corpus is the aggregate
+            // kind share — one row, with no registry identity and `source`
+            // saying so, rather than several rows we cannot substantiate or a
+            // synthetic id a render would follow into nothing.
+            objection: { label: objection.label, registryId: null, source: 'kind', value: objection.value },
             // No reason for this objection was measured, so none is claimed.
             because: [],
             alsoRunning,

@@ -128,7 +128,7 @@ describe('scriptedLines', () => {
       figures,
       lines: [
         {
-          objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } },
+          objection: { label: 'Price', registryId: 'r1', source: 'theme' as const, value: { k: 28, n: 205 } },
           because: [{ label: 'compared with a rival', value: { k: 11, n: 205 } }],
           draft: 'Price came up in 28 of 205 videos. Say that the warranty is included.',
         },
@@ -143,7 +143,7 @@ describe('scriptedLines', () => {
       figures,
       lines: [
         {
-          objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } },
+          objection: { label: 'Price', registryId: 'r1', source: 'theme' as const, value: { k: 28, n: 205 } },
           because: [],
           draft: 'Price is running at [[objection_share]] of the month.',
         },
@@ -152,10 +152,26 @@ describe('scriptedLines', () => {
     expect(line.say).toContain('[[objection_share]]')
   })
 
+  it('carries no identity for a row the register does not hold', () => {
+    const [line] = scriptedLines({
+      figures,
+      lines: [
+        {
+          objection: { label: 'Pushing back', registryId: null, source: 'kind', value: { k: 28, n: 205 } },
+          because: [],
+        },
+      ],
+    })
+    // A kind is not a registry entry, and `kind:objection` was a dead key a
+    // render would have followed into nothing.
+    expect(line.objection.registryId).toBeNull()
+    expect(line.objection.source).toBe('kind')
+  })
+
   it('invents no sentence where there is no draft', () => {
     const [line] = scriptedLines({
       figures,
-      lines: [{ objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } }, because: [] }],
+      lines: [{ objection: { label: 'Price', registryId: 'r1', source: 'theme' as const, value: { k: 28, n: 205 } }, because: [] }],
     })
     expect(line.say).toBe('')
     expect(line.objection.value).toEqual({ k: 28, n: 205 })
@@ -166,7 +182,7 @@ describe('scriptedLines', () => {
       figures,
       lines: [
         {
-          objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } },
+          objection: { label: 'Price', registryId: 'r1', source: 'theme' as const, value: { k: 28, n: 205 } },
           because: [],
           alsoRunning: [
             { label: 'Durability', value: { k: 46, n: 205 } },
@@ -185,9 +201,9 @@ describe('scriptedLines', () => {
     const lines = scriptedLines({
       figures,
       lines: [
-        { objection: { label: 'One voice', registryId: 'r2', value: { k: 1, n: 205 } }, because: [] },
+        { objection: { label: 'One voice', registryId: 'r2', source: 'theme' as const, value: { k: 1, n: 205 } }, because: [] },
         {
-          objection: { label: 'Price', registryId: 'r1', value: { k: 28, n: 205 } },
+          objection: { label: 'Price', registryId: 'r1', source: 'theme' as const, value: { k: 28, n: 205 } },
           because: [
             { label: 'counted', value: { k: 11, n: 205 } },
             { label: 'uncounted', value: { k: 0, n: 0 } },
