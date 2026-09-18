@@ -310,11 +310,20 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       ),
     ),
   ]
-  // THE AXIS ENDS AT THE CURRENT CALENDAR MONTH, filling or not — the month a
-  // reader asking today wants, which is the `loadMovement` precedent and the
-  // voice-surface one before it. The month is the COMMENT's, never the month
-  // the question was asked in.
-  const readMonth = monthStartOf(new Date().toISOString())
+  // THE AXIS ENDS AT THE MONTH THIS THREAD WAS ANSWERED IN, and not at today's.
+  //
+  // The months are the COMMENT's either way — that is what the reading layer
+  // holds and nothing here changes it. What this decides is WHICH of them the
+  // answer is measured against, and "today" was wrong: a thread answered in
+  // June, opened in September, printed September's figures under June's prose
+  // and had June's sentences scrubbed against September's verdicts. The answer
+  // was written against a June update and can only be checked against what
+  // June's conversation says. Capped at the current month, because a clock that
+  // ran ahead is not a month anyone can read.
+  const answeredAt = [...messages].reverse().find((m) => m.role === 'agent' && m.result)?.created_at ?? null
+  const thisMonth = monthStartOf(new Date().toISOString())
+  const answeredMonth = answeredAt ? monthStartOf(answeredAt) : thisMonth
+  const readMonth = answeredMonth > thisMonth ? thisMonth : answeredMonth
   const seriesP = storedRegistryIds.length
     ? loadMonthSeries(scope.reading.client, scope.reading.clientId, {
         audiences: [CLIENT_AUDIENCE, INDUSTRY_AUDIENCE],

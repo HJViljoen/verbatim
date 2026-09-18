@@ -73,6 +73,7 @@ export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
     f1_band: { value: 1.8, unit: 'pts' as const, label: `the band ${LABEL}’s change is judged against` },
   }
   return {
+    month: MONTH,
     findings: [
       {
         findingId: '0:G1',

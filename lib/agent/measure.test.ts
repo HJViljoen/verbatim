@@ -209,6 +209,12 @@ describe('measureAnswer', () => {
     ).toBe('Will it survive a wet commute')
   })
 
+  it('names the month every figure on it is a figure of', () => {
+    expect(measureAnswer({ findings, series: [climbing()], month: MONTH, directionWords: true }).month).toBe(MONTH)
+    expect(measureAnswer({ findings, series: [climbing()], month: '2026-08-14', directionWords: true }).month)
+      .toBe('2026-08-01')
+  })
+
   it('measures nothing when the month carries no row for the topic', () => {
     const empty = climbing({ points: [point('2026-07-01', 210, 1400)] })
     const m = measureAnswer({ findings, series: [empty], month: MONTH, directionWords: true })
@@ -358,7 +364,7 @@ describe('answerFallback', () => {
   })
 
   it('writes nothing when nothing was measured', () => {
-    expect(answerFallback({ findings: [], verdicts: [], figures: {}, caveats: [] })).toBeNull()
+    expect(answerFallback({ month: MONTH, findings: [], verdicts: [], figures: {}, caveats: [] })).toBeNull()
   })
 })
 

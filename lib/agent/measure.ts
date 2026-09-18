@@ -96,6 +96,16 @@ export interface FindingMeasure {
 }
 
 export interface AnswerMeasure {
+  /**
+   * The calendar month every figure here is a figure OF, `YYYY-MM-01`.
+   *
+   * Not on the brief's pinned shape, and it has to be: the measurement is taken
+   * for the month the answer was ANSWERED in, so a thread read months later
+   * carries figures that are not this month's, and a surface that cannot name
+   * the month cannot say so. The figure labels name it too ("videos naming X in
+   * June"); this is the same fact where a caller can reach it.
+   */
+  month: string
   findings: FindingMeasure[]
   /** Every verdict the answer's prose may name — the `verdicts` argument to
    *  scrubProse. */
@@ -379,6 +389,7 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
   if (input.hasJudgement) caveats.unshift(INTERPRETATION_CAVEAT)
 
   return {
+    month,
     findings,
     verdicts: findings.map((f) => f.verdict).filter((v): v is Verdict => v != null),
     figures,
