@@ -70,7 +70,13 @@ export function SettingsFrame({
   /** Rail counts, where the page that drew the rail happens to know them. A
    *  key that is absent prints nothing rather than a zero. */
   counts?: RailCounts
-  /** Under the rail: the save-state strip, on the pages that have one. */
+  /** Under the rail, below the seven links: the mock's save-state strip
+   *  (`SettingsRecord.dc.html`, and the same block on the Tracking artboard).
+   *  It belongs to the AREA rather than to a sub-page — the thing it says is
+   *  "you have unsaved edits somewhere in Settings, and the last save broke
+   *  this" — and a sub-page that drew it inside its own pane would be saying it
+   *  about itself. Optional, so a page that has not composed one draws no
+   *  empty box. */
   railFooter?: ReactNode
   children: ReactNode
 }) {

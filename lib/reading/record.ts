@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { CONFIG_CHANGES_TABLE, isMissingConfigLog, type ConfigChange } from '../config-log'
 import { GATE_APPEALS_TABLE, isMissingGateAppeals, type GateAccess } from '../gate-record'
+import { REDDIT_COMMENT_DEPTH_CAP } from '../config'
 import { GATE_DEFAULT_REASONS } from '../gather/gate-verdicts'
 import { fmtInt, fmtPct, fullDate, shortDate } from '../format'
 import { selectAll } from '../supabase-admin'
@@ -187,9 +188,10 @@ export interface InstrumentRecord {
 export interface ChangeRecord {
   /** Logged changes inside the window. */
   inWindow: number
-  /** The first REAL entry: a reconstructed row is inference from what an update
-   *  searched, and dating the boundary from one would say the log begins before
-   *  anything was written down. */
+  /** The first REAL entry, as an ISO timestamp — its readers format it, and a
+   *  value that arrives already rendered is formatted twice. A reconstructed
+   *  row is inference from what an update searched, and dating the boundary
+   *  from one would say the log begins before anything was written down. */
   loggedFrom: string | null
   /** Rows reconstructed rather than recorded at the time. */
   reconstructed: number
@@ -841,7 +843,14 @@ async function loadChanges(client: SupabaseClient, clientId: string, w: RecordWi
   const logged = all.filter((c) => c.source !== 'reconstructed')
   return {
     inWindow: all.filter((c) => c.changed_at >= from && c.changed_at <= to).length,
-    loggedFrom: logged[0] ? fullDate(logged[0].changed_at) : null,
+    // THE ISO TIMESTAMP, NOT A RENDERED DATE. The field is formatted by both
+    // its readers (`fullDate` in `recordLines`, `recordDate` in `recordRows`)
+    // and every fixture and test in the repo hands it an ISO day, so a loader
+    // that pre-rendered it was formatting a formatted string: on a machine east
+    // of UTC `new Date('6 Apr 2026')` is 5 Apr 22:00Z and the record's first
+    // date printed a day early. The type says `string | null` and could not
+    // catch it.
+    loggedFrom: logged[0] ? logged[0].changed_at : null,
     reconstructed: all.length - logged.length,
   }
 }
@@ -1072,4 +1081,312 @@ export function recordLines(input: RecordInputs): string[] {
   lines.push(`Reading as at ${fullDate(input.readingAt)}.`)
   lines.push(input.frozenAt == null ? 'No month in this window has been frozen yet — they are still filling.' : `The newest month here was frozen ${fullDate(input.frozenAt)}.`)
   return lines
+}
+
+// ---- The record as ROWS (block E wave 2, `record.coverage.rows`) -------------
+//
+// `recordLines` above is the record as SENTENCES, and it is what OV6, the
+// monthly report's section 8 and the quarterly method page print — one fact per
+// line, each with its basis, in prose. The artboard draws the same record as a
+// two-column grid of `LABEL │ figure — basis` rows, and the difference is not
+// decoration: a reader scanning fifteen sentences for "how many videos" has to
+// READ, where a reader scanning fifteen labelled figures can LOOK. The gap
+// mapping calls this the largest single gap on the page.
+//
+// SAME FACTS, SAME BASES, SAME REFUSALS — WITH ONE FIGURE MORE, NAMED HERE.
+// Every row that carries a basis carries the same one in the same words, and
+// where the two differ is mostly that a row can put the figure in one node and
+// its basis in another, which is what lets the figure be set in mono and the
+// basis be set quietly beside it.
+//
+// THE EXCEPTION IS "COMMENTS READ", and a later reader deciding whether these
+// two may drift needs to know it: `recordLines` prints videos, the mix,
+// dual-mention and undated comments and never a pooled comment total, and this
+// grid does (code review finding 6). It is defensible — `CoverageRecord
+// .comments` is comment-dated and the row names that clock — but it is one
+// figure this module states in rows and not in lines, and "nothing new here"
+// would have been the wrong thing to have written down.
+//
+// AND FOUR OF THE ARTBOARD'S ROWS ARE NOT WHAT THEY LOOK LIKE. They are kept in
+// the artboard's POSITION with the honest figure in their place:
+//
+//   · "Comments read 11,840 — 2,960 per update" divides a COMMENT-DATED
+//     numerator by a RUN-DATED divisor. The quotient is neither, and it moves
+//     when a run straddles a month boundary. The row prints the count with its
+//     clock named, and no per-update ratio.
+//   · "Themes per video 2.4 — August 2.3" keys an instrument figure measured on
+//     ONE RUN by a calendar month (AGENTS.md: a run's date is a period key for
+//     nothing outside `run_summary`). The row names the update instead.
+//   · "Platform mix TikTok 38% · YouTube 29% …" needs one denominator, and
+//     audience denominators do not add — the same reason a window read is its
+//     own table and not a sum of month rows. `platformMixLine`'s COUNTS are the
+//     honest form and every platform is named.
+//   · "Comparisons refused 2 — the Poler rows" is a property of the page that
+//     DREW the comparisons, not of the corpus (`RecordInputs.comparisonsRefused`
+//     is the caller's own count). The record page draws none, so the row says
+//     where the number lives rather than printing a zero.
+//
+// Pure, and the callers' extras are optional: a caller with no change log or no
+// month history gets the rows it can honestly fill and no others.
+
+/** One row of the record grid. */
+export interface RecordRow {
+  id: string
+  /** The mono uppercase label in the left column. */
+  label: string
+  /** Words before the figure — "on", "discarded". Usually empty. */
+  lead: string
+  /** The one figure the row is about, set in mono. Null where nothing has
+   *  recorded it: then `rest` is the sentence that says so. */
+  figure: string | null
+  /** What follows the figure — the basis, the breakdown, the caveat. */
+  rest: string
+  /** True where an em dash separates the figure from what follows ("4 — 6, 13,
+   *  20, 27 Sep") and false where `rest` continues the figure's own sentence
+   *  ("214 threads, each read to 40 comments"). Per row, because the artboard
+   *  does both and a rule that guessed would punctuate half of them wrong. */
+  dash: boolean
+  /** The long clause — the basis, the caveat, the start date — set quietly on
+   *  its own line under the value.
+   *
+   *  A SECOND LINE, BECAUSE THE HONEST BASES ARE LONGER THAN THE ARTBOARD'S.
+   *  The artboard's value column is about 274px at 1440 and its bases are four
+   *  words ("trailing median 2,240"); the ones this product actually owes a
+   *  reader run to a sentence ("of everything we have ever read for you, not
+   *  just this window — Reddit excluded, which has neither audio nor a cover
+   *  frame"). Inline, those wrapped to four lines and the row stopped being
+   *  scannable, which is the whole point of the grid. Stacked, the figure line
+   *  stays one line and the basis is still on the page — which is the rule
+   *  (D15: a figure's basis is part of the figure), not a request that it be
+   *  short. */
+  basis: string
+}
+
+/** What the RECORD PAGE knows and the record loader does not: the change log's
+ *  own rows, the denominator history, the month the strip is about. Every one
+ *  is optional and an absent one drops its clause rather than guessing it. */
+export interface RecordExtras {
+  /** The pooled trailing median of the gathered era (`lib/settings/readings.ts`,
+   *  computed Overview's way). */
+  trailingMedian?: number | null
+  /** "Poler added as a rival, 3 Sep" — `changeNote` over the same
+   *  `config_changes` rows the count came from. */
+  changeNote?: string | null
+  /** The thinnest month under the audience floor, and the floor itself. */
+  belowFloor?: { label: string; who: string; videos: number; floor: number; more: number } | null
+  /** Where the refused-comparison count actually lives, for a page that draws
+   *  no comparison of its own. */
+  refusedElsewhere?: string | null
+}
+
+/**
+ * A date on the grid: the page's short form, and the long one where the year is
+ * the point.
+ *
+ * `fullDate` exists because the readiness page dates things four years apart on
+ * one screen, and "16 Aug" beside "16 Aug" is two different Augusts. Nothing on
+ * this grid is: every other date it prints is inside the window it is reading.
+ * So a date that falls in the window's own year is short, like its neighbours,
+ * and one that does not carries its year, because that is the case `fullDate`
+ * was written for.
+ */
+export function recordDate(iso: string, within: string): string {
+  return iso.slice(0, 4) === within.slice(0, 4) ? shortDate(iso) : fullDate(iso)
+}
+
+/** "6, 13, 20, 27 Sep" where a window is one month, and dated short forms
+ *  otherwise. Never an ISO day: `recordLines`' own rule, one row over. */
+export function datesLine(dates: readonly string[]): string {
+  // A DATE NOTHING CAN PARSE IS REFUSED, NOT PRINTED. `getUTCDate` on an
+  // unparseable string is NaN, and "NaN, 13, 20 Sep" is worse than a shorter
+  // line: the rule this module states about every other figure is that a thing
+  // it cannot say it does not say (code review finding 8).
+  const ok = dates.filter((d) => !Number.isNaN(Date.parse(`${d.slice(0, 10)}T00:00:00.000Z`)))
+  if (ok.length === 0) return ''
+  const months = new Set(ok.map((d) => d.slice(0, 7)))
+  const years = new Set(ok.map((d) => d.slice(0, 4)))
+  // THE LAST DATE CARRIES ITS YEAR WHERE THE WINDOW CROSSES ONE — `recordLines`'
+  // own rule, one row over, and this function is exported from the shared
+  // record module, so the next caller's window may not be a calendar month as
+  // this page's is: "31 Dec · 6 Jan" is two different Januaries.
+  const last = years.size === 1 ? shortDate(ok[ok.length - 1]) : fullDate(ok[ok.length - 1])
+  if (months.size === 1) {
+    const days = ok.slice(0, -1).map((d) => String(new Date(`${d.slice(0, 10)}T00:00:00.000Z`).getUTCDate()))
+    return days.length ? `${days.join(', ')}, ${last}` : last
+  }
+  return [...ok.slice(0, -1).map((d) => shortDate(d)), last].join(' · ')
+}
+
+export function recordRows(input: RecordInputs, extra: RecordExtras = {}): RecordRow[] {
+  const rows: RecordRow[] = []
+  const push = (
+    id: string, label: string, figure: string | null, rest: string,
+    opts: { lead?: string; dash?: boolean; basis?: string } = {},
+  ): void => {
+    rows.push({
+      id, label, lead: opts.lead ?? '', figure, rest,
+      dash: figure != null && (opts.dash ?? false), basis: opts.basis ?? '',
+    })
+  }
+
+  const d = input.delivery
+  push(
+    'updates', 'Updates this window',
+    d.delivered === 0 ? null : fmtInt(d.delivered),
+    d.delivered === 0 ? 'No update ran inside this window.' : datesLine(d.dates),
+    { dash: true },
+  )
+
+  if (input.coverage == null) {
+    push('coverage', 'How much was read', null, 'The month-by-month reading has not been recorded for this workspace yet.')
+  } else if (input.coverage.length === 0) {
+    push('coverage', 'How much was read', null, 'Nothing was read in this window.')
+  } else {
+    const videos = totalVideos(input.coverage)
+    const comments = input.coverage.reduce((n, c) => n + c.comments, 0)
+    const dual = input.coverage.reduce((n, c) => n + c.dualMention, 0)
+    const undated = input.coverage.reduce((n, c) => n + c.excludedUndated, 0)
+    const mix = totalPlatformMix(input.coverage)
+
+    push('comments', 'Comments read', fmtInt(comments), 'dated by the comment, not by the update', { dash: true })
+    push(
+      'videos', 'Videos analysed', fmtInt(videos),
+      extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet',
+      {
+        dash: true,
+        basis: extra.trailingMedian != null
+          ? 'over the months we have gathered, which is the only span the two are comparable over'
+          : 'two gathered months are the fewest a median can be taken over',
+      },
+    )
+    push('dual', 'Dual-mention videos', fmtInt(dual), 'counted in one audience by precedence', { dash: true })
+    push('platforms', 'Platform mix', null, platformMixLine(mix) || 'No platform was recorded on anything read in this window.')
+    const threads = mix.reddit ?? 0
+    push(
+      'reddit', 'Reddit', threads > 0 ? fmtInt(threads) : null,
+      threads > 0 ? 'threads' : 'No Reddit thread carried conversation in this window.',
+      threads > 0 ? { basis: `each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments and no deeper` } : {},
+    )
+    if (undated > 0) push('undated', 'Comments with no date', fmtInt(undated), 'in no month, and in no reading', { dash: true })
+  }
+
+  const lang = input.language
+  const known = lang.english + lang.notEnglish
+  push(
+    'language', 'Not in English',
+    lang.analysed > 0 && known > 0 ? share(lang.notEnglish, known) : null,
+    lang.analysed === 0
+      ? 'No video has been analysed for this workspace yet.'
+      : known === 0
+        ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
+        : `of the ${fmtInt(known)} videos whose language we know`,
+    lang.analysed > 0 && known > 0
+      ? {
+        basis: `what was said on camera, not what was written in comments${lang.unknown > 0 ? `; ${fmtInt(lang.unknown)} videos have no language recorded at all` : ''}`,
+      }
+      : {},
+  )
+
+  const r = input.readDepth
+  // D15: the basis is part of the figure. `analyzed_with_*` is a fact about a
+  // video and a video belongs to a month through its comments, so there is no
+  // such thing as "speech read on 71% of September" — the same sentence
+  // `recordLines` and `methodLines` both print, in the same words.
+  const allTime = 'of everything we have ever read for you, not just this window — Reddit excluded, which has neither audio nor a cover frame'
+  // THE SECOND READ-DEPTH ROW CARRIES THE SAME BASIS, SHORTER, and that is not
+  // a weakening of D15 (design review finding 5). Both figures are all-time and
+  // both owe a reader that basis, so both carry one — but the two rows sit side
+  // by side in the grid and the first port attached this twenty-word sentence
+  // VERBATIM to each, so six lines at one eye level said one thing twice. The
+  // short form is self-contained rather than a reference to the row beside it,
+  // which would be false the moment the grid reflowed.
+  const allTimeAgain = 'of everything we have ever read, not just this window — Reddit excluded'
+  push(
+    'speech', 'Speech read', r.analysed > 0 ? share(r.speech, r.analysed) : null,
+    r.analysed > 0 ? `of videos · translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
+    r.analysed > 0 ? { lead: 'on', basis: allTime } : {},
+  )
+  if (r.analysed > 0) {
+    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), 'of videos', { lead: 'on', basis: allTimeAgain })
+    if (r.unflagged > 0) {
+      push('unflagged', 'Read before the flags', fmtInt(r.unflagged), 'videos read before the product recorded which of the three it managed')
+    }
+  }
+
+  const g = input.discard
+  push(
+    'gate', 'Relevance gate',
+    g.readable && g.recordedFrom != null && g.judged > 0 ? share(g.setAside, g.judged) : null,
+    !g.readable
+      ? 'What we looked at and set aside is recorded, and we do not yet show it to you.'
+      : g.recordedFrom == null
+        ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
+        : g.judged === 0
+          ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
+          : 'of what was looked at',
+    g.readable && g.recordedFrom != null && g.judged > 0
+      ? {
+        lead: 'discarded',
+        basis: `dated by the update, and recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}`,
+      }
+      : {},
+  )
+
+  const i = input.instrument
+  push(
+    'themes', 'Themes per video',
+    i.themesPerVideo == null ? null : String(i.themesPerVideo),
+    i.themesPerVideo == null
+      ? 'How many themes attach to each video has not been recorded yet.'
+      // NOT "August 2.3". The figure is measured on one run, and a run's date is
+      // a period key for nothing (AGENTS.md).
+      : 'attached per analysed video on the most recent update',
+    i.themesPerVideo == null ? {} : { basis: 'an update’s own measure, never a month’s' },
+  )
+
+  const c = input.changes
+  push(
+    'changes', 'Tracking changes',
+    c.inWindow === 0 ? null : fmtInt(c.inWindow),
+    c.inWindow === 0
+      ? 'Nothing about what we track changed in this window.'
+      : extra.changeNote ?? 'inside this window',
+    { dash: true },
+  )
+  // A DATE IS THIS ROW'S FIGURE, and it is set like every other figure on the
+  // grid: it was passed as `rest` with `figure: null`, so the one number in the
+  // row missed the mono/semibold treatment the whole grid exists for, and it
+  // was the only long-form date on a page of short ones (design review finding
+  // 9). `recordDate` keeps the year where the year is the point.
+  push(
+    'changelog', 'Change record begins',
+    c.loggedFrom == null ? null : recordDate(c.loggedFrom, input.window.to),
+    c.loggedFrom == null
+      ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
+      : '',
+    c.loggedFrom != null && c.reconstructed > 0
+      ? { basis: `${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry was' : 'entries were'} worked out afterwards from what each update searched` }
+      : {},
+  )
+
+  push(
+    'refused', 'Comparisons refused',
+    input.comparisonsRefused == null ? null : fmtInt(input.comparisonsRefused),
+    input.comparisonsRefused == null
+      ? extra.refusedElsewhere ?? 'Counted by the page that draws the comparisons, never by the corpus.'
+      : refusedSentence(input.refusals),
+  )
+
+  if (extra.belowFloor) {
+    const f = extra.belowFloor
+    push(
+      'floor', 'Below the floor', fmtInt(f.videos),
+      `videos in ${f.label} — ${f.who}`,
+      {
+        basis: `under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
+      },
+    )
+  }
+
+  return rows
 }

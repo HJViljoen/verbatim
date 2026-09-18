@@ -6,6 +6,7 @@ import { isMissingAffects } from './change-log'
 import { isMissingBookkeepingColumn } from '../pipeline/run-bookkeeping'
 import { loadRecordInputs, type RecordInputs, type RecordWindow } from '../reading/record'
 import type { UpdateInput } from '../readiness/types'
+import type { RailCounts } from './rail'
 import { selectAll } from '../supabase-admin'
 import {
   GATE_SAMPLE, REJECT_ROWS, appealKey, gateTotalsFrom,
@@ -294,4 +295,52 @@ export async function loadRecordPage(args: {
     gate,
     coverage,
   }
+}
+
+/**
+ * The counts beside the rail's labels (`record.tabs`).
+ *
+ * The artboard prints five of them and this page passed none, so standing on
+ * The record the rail read "The record" where the mock reads "The record · 23
+ * updates" — and the count it does hold was one level in, in the content pane's
+ * meta. Two cheap reads buy the other two: the tracked terms are three arrays
+ * on one `tracking_configs` row, and the named subjects are a head count.
+ *
+ * THREE ENTRIES CARRY NONE, EACH FOR ITS OWN REASON. Readiness is refused by
+ * `lib/settings/rail.ts` — the mock's "3 missing" is wrong against production
+ * by 2× and the true number costs the whole thirteen-row load. "Reports and
+ * recipients · 5 roles" counts a thing the product does not have: recipients
+ * are addresses on `report_schedules`, not roles, and a count of addresses
+ * under the word "roles" would be the artboard's claim rather than ours. Team
+ * and How to read have no count in the artboard either.
+ *
+ * `RailCounts` is `Partial` for exactly this: a key nobody loaded prints
+ * nothing, and never a zero.
+ */
+export async function loadRailCounts(
+  client: SupabaseClient,
+  clientId: string,
+  updates: number,
+): Promise<RailCounts> {
+  // A FIGURE AND ITS UNIT, not one string (E-settings, `RailCount`): the rail
+  // is 224px and a "5 schedules" that does not fit cut the LABEL, not the
+  // count. The unit travels as the count's accessible name and its tooltip.
+  const counts: RailCounts = { record: { value: String(updates), unit: `update${updates === 1 ? '' : 's'}` } }
+  const [config, subjects] = await Promise.all([
+    client.from('tracking_configs').select('brand_keywords, competitor_keywords, industry_keywords')
+      .eq('client_id', clientId).maybeSingle(),
+    client.from('subjects').select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId).eq('status', 'active'),
+  ])
+  const cfg = config.data as { brand_keywords?: string[]; competitor_keywords?: string[]; industry_keywords?: string[] } | null
+  if (!config.error && cfg) {
+    const terms = [cfg.brand_keywords, cfg.competitor_keywords, cfg.industry_keywords]
+      .reduce((n, list) => n + (list ?? []).length, 0)
+    if (terms > 0) counts.tracking = { value: String(terms), unit: `term${terms === 1 ? '' : 's'}` }
+  }
+  // A table that is not there is not a workspace with no subjects.
+  if (!subjects.error && subjects.count != null && subjects.count > 0) {
+    counts.subjects = { value: String(subjects.count), unit: `subject${subjects.count === 1 ? '' : 's'}` }
+  }
+  return counts
 }

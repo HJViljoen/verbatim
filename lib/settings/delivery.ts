@@ -1,4 +1,4 @@
-import { fullDate } from '../format'
+import { fmtInt, fullDate, longMonth, shortDate } from '../format'
 import { longestGapDays } from '../readiness/compute'
 import type { UpdateInput } from '../readiness/types'
 
@@ -30,7 +30,21 @@ import type { UpdateInput } from '../readiness/types'
  *  wider set here would make them disagree. */
 const FINISHED = new Set(['completed', 'partial'])
 
+/** The same set, for the one other reader ON THIS PAGE: the monthly-readings
+ *  strip counts DELIVERED updates per month, because that is what Overview's
+ *  counter and `thinMonth`'s updates arm count, and the two surfaces must not
+ *  disagree about how many updates a month had. Exported rather than copied a
+ *  third time — the delivery record counts every run that settled, failures
+ *  included, and the strip counts the ones that produced something; two
+ *  different questions, one list of statuses. */
+export const DELIVERED_STATUSES: ReadonlySet<string> = FINISHED
+
 export interface DeliveryRecord {
+  /** Every run row on record for this workspace — the ones that finished, the
+   *  one that failed, and a run that is in flight while the page is open. NOT
+   *  a count of updates DELIVERED: `DELIVERED_STATUSES` is that question, and
+   *  the monthly-readings strip is what asks it. Nothing that prints this
+   *  number may caption it "delivered" (code review finding 1). */
   total: number
   /** The first update, `YYYY-MM-DD`. */
   since: string | null
@@ -113,4 +127,118 @@ export function updatesInMonth(updates: readonly UpdateInput[], month: string): 
   return [...updates]
     .filter((u) => u.startedAt.slice(0, 7) === month)
     .sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1))
+}
+
+// ---- The artboard's four stat cells ------------------------------------------
+//
+// SettingsRecord.dc.html draws the delivery record as four 24px mono figures
+// over 11.5px captions — "6 Apr / tracking since", "23 / updates delivered",
+// "5 / weeks · longest gap, in May", "27 Sep / last update · next 4 Oct" — and
+// the build printed one running sentence in their place. The figures are the
+// same `DeliveryRecord`; these compose the CELLS, and they are where the two
+// honest departures from the artboard are made:
+//
+//   · "TRACKING SINCE" IS NOT A START DATE (mock-gap §6 D14). `since` is the
+//     first update on record, which is the earliest evidence we hold that we
+//     were reading at all — not the day the client asked for it, which nothing
+//     recorded. Settings › Tracking already prints that caveat about the rival
+//     rows; the caption here says it rather than repeating the mock's claim.
+//   · "NEXT 4 OCT" HAS NO FIELD AT ALL. Nothing in the product knows when the
+//     next gather runs — `report_schedules` knows when an artefact SENDS — so
+//     the fourth cell carries the last update alone and the chip row carries no
+//     ghost pill. A hollow "next" pill is a promise the scheduler never made.
+
+/** One of the four stat cells: a mono figure, an optional unit beside it, and
+ *  the caption under it. */
+export interface DeliveryStat {
+  id: 'since' | 'delivered' | 'gap' | 'last'
+  figure: string
+  /** The 12px word set beside the figure ("updates", "weeks"). */
+  unit: string | null
+  caption: string
+}
+
+/**
+ * The longest gap, in the artboard's unit.
+ *
+ * ONE CONVERSION, HERE (mock-gap §6 deviation 9). `longestGapDays` is days by
+ * construction and is shared with readiness row 9, so the two surfaces cannot
+ * disagree about how long the longest gap was; rendering it as weeks on one
+ * surface and days on the other is exactly the drift that shared import exists
+ * to prevent. So the conversion happens in one place, from the one answer, and
+ * anything under a fortnight stays in days — "1.7 weeks" is a worse sentence
+ * than "12 days" and rounds a real number into a vague one.
+ */
+export function gapFigure(days: number | null): { figure: string; unit: string } | null {
+  if (days == null) return null
+  if (days < 14) return { figure: String(days), unit: days === 1 ? 'day' : 'days' }
+  const weeks = Math.round((days / 7) * 10) / 10
+  return { figure: String(weeks), unit: weeks === 1 ? 'week' : 'weeks' }
+}
+
+/**
+ * The month the longest gap ENDED in — the artboard's "longest gap, in May".
+ *
+ * DERIVED FROM THE SHARED ANSWER, NEVER COMPUTED A SECOND TIME. It walks the
+ * same settled updates in the same order and returns the month of the update
+ * that closed the pair whose length equals `longestGapDays`. Where no pair
+ * matches — which can only happen if the two counting rules ever part company —
+ * it returns null and the caption drops the clause rather than naming a month
+ * off a different count.
+ */
+export function gapMonth(updates: readonly UpdateInput[], days: number | null): string | null {
+  if (days == null) return null
+  const times = [...updates]
+    .filter((u) => FINISHED.has(u.status))
+    .map((u) => u.startedAt)
+    .sort()
+  for (let n = 1; n < times.length; n++) {
+    const span = Math.round((Date.parse(times[n]) - Date.parse(times[n - 1])) / 86_400_000)
+    if (span === days) return times[n].slice(0, 7)
+  }
+  return null
+}
+
+/** The four cells, in the artboard's order. Empty where no update has ever
+ *  run — a record of nothing is a sentence, not four dashes. */
+export function deliveryStats(record: DeliveryRecord, updates: readonly UpdateInput[]): DeliveryStat[] {
+  if (record.total === 0) return []
+  const out: DeliveryStat[] = []
+  if (record.since) {
+    out.push({
+      id: 'since',
+      figure: shortDate(record.since),
+      unit: null,
+      // D14: earliest evidence, worded as such.
+      caption: 'first update on record',
+    })
+  }
+  out.push({
+    // NOT "delivered". `total` has no status filter at all, so on a workspace
+    // with one failed run it counted 22 while the readings strip two lines
+    // below — which filters `DELIVERED_STATUSES` — totalled 21, and the page
+    // marked that very run "· did not finish" on its own pill. Open the page
+    // during a run and the figure gains one that has delivered nothing yet.
+    // "On record" is what the number is, and it is the page bar's own word for
+    // the first of them (code review finding 1).
+    id: 'delivered',
+    figure: fmtInt(record.total),
+    unit: record.total === 1 ? 'update' : 'updates',
+    caption: 'on record',
+  })
+  const gap = gapFigure(record.longestGapDays)
+  if (gap) {
+    const month = gapMonth(updates, record.longestGapDays)
+    out.push({
+      id: 'gap',
+      figure: gap.figure,
+      unit: gap.unit,
+      caption: month ? `longest gap, in ${longMonth(`${month}-01`)}` : 'longest gap between updates',
+    })
+  }
+  if (record.lastOn) {
+    // No "next 4 Oct": nothing records when the next gather runs.
+    out.push({ id: 'last', figure: shortDate(record.lastOn), unit: null, caption: 'last update' })
+  }
+  return out
 }

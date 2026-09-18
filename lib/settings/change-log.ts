@@ -1,4 +1,4 @@
-import { fullDate, monthName } from '../format'
+import { fullDate, monthName, shortDate } from '../format'
 import { audienceLabel } from '../readiness/types'
 import type { ActorKind, ConfigChange, ConfigSurface } from '../config-log'
 
@@ -159,6 +159,12 @@ export interface ClientChange {
    *  this. */
   on: string
   date: string
+  /** The same date in the artboard's form, "3 Sep". The long form stays on
+   *  `date` because the quarterly deck's change log prints it beside dates a
+   *  year apart, and there "3 Sep" beside "3 Sep" is two different Septembers
+   *  (lib/format.ts's own reason for `fullDate`). The record page's table is
+   *  one workspace's own recent history in a column 100px wide. */
+  dateShort: string
   surface: ConfigSurface
   what: string
   /** The plain sentence from `note`, or a composed one when the row has none
@@ -240,6 +246,7 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
     id: change.id,
     on: change.changed_at.slice(0, 10),
     date: fullDate(change.changed_at),
+    dateShort: shortDate(change.changed_at),
     surface: change.surface,
     what: SURFACE_WORDS[change.surface] ?? SURFACE_WORDS.other,
     said: change.note?.trim() || composedNote(change),
@@ -264,4 +271,77 @@ export function readChangeLog(args: ReadChangeLogArgs): ChangeLogView {
     prehistory: prehistory.map(view),
     firstLoggedAt: firstLogged,
   }
+}
+
+// ---- The artboard's header meta and the coverage row -------------------------
+
+/**
+ * "4 changes since 19 Aug · 1 this month" — the mono meta beside the section's
+ * eyebrow.
+ *
+ * RECORDED ROWS ONLY, for the reason the module's header gives: a reconstructed
+ * row is inference and is never summed with the record. "This month" is the
+ * WALL CLOCK, which is what a change is dated by (`ClientChange.on` is
+ * `changed_at`, and its doc comment says it is a period key for nothing) — so
+ * this counts changes made in the current calendar month and not comments
+ * written in it. The two clocks are named where they meet, which is here.
+ *
+ * "SINCE" IS THE DAY THE RECORD BEGAN, NOT THE FIRST UPDATE (code review
+ * finding 5). It was handed `delivery.since` — the first update on record — so
+ * on every tenant that predates the change log, which is the reason
+ * `changeLogBoundary` exists at all, the meta read as though changes had been
+ * recorded since April when the first one was written in August. The date is
+ * `view.firstLoggedAt`, which is the same date `changeLogBoundary` puts in the
+ * note beside this line; nothing else can honestly follow the word "since"
+ * here.
+ */
+export function changeLogMeta(view: ChangeLogView, args: { now: string }): string {
+  const total = view.recorded.length
+  const month = args.now.slice(0, 7)
+  const thisMonth = view.recorded.filter((c) => c.on.slice(0, 7) === month).length
+  const parts = [
+    total === 0
+      ? 'no change recorded yet'
+      : `${total} change${total === 1 ? '' : 's'}${view.firstLoggedAt ? ` since ${shortDate(view.firstLoggedAt)}` : ''}`,
+  ]
+  if (thisMonth > 0) parts.push(`${thisMonth} this month`)
+  return parts.join(' · ')
+}
+
+/** Was this change made inside the current calendar month? The artboard's amber
+ *  flag, and the reason the meta above can say "1 this month". */
+export function madeThisMonth(change: ClientChange, now: string): boolean {
+  return change.on.slice(0, 7) === now.slice(0, 7)
+}
+
+/**
+ * The coverage grid's "Tracking changes · 1 — Poler added 3 Sep" clause.
+ *
+ * The count itself is `ChangeRecord.inWindow`, read off the same table by
+ * `lib/reading/record.ts`; this NAMES the change, which the record loader
+ * cannot, because it counts rows and never reads their notes.
+ *
+ * THE TWO HALVES DO NOT COUNT THE SAME ROWS, AND THE CLAUSE SAYS SO. `inWindow`
+ * counts `all`, reconstructed rows included; this reads `view.recorded` only,
+ * because a reconstructed row is a label and is never summed with the record.
+ * So a window holding one logged change and one reconstructed one printed
+ * "2 — Poler added as a rival, 3 Sep", naming one of two as though it were the
+ * only one (code review finding 4). `counted` is the figure this clause sits
+ * beside: where it exceeds the rows named here, the clause says "the newest",
+ * which is true of both counts. Where nothing recorded falls inside the window
+ * there is nothing to name and the clause is null, as it always was.
+ */
+export function changeNote(
+  view: ChangeLogView,
+  window: { from: string; to: string },
+  opts: { counted?: number | null } = {},
+): string | null {
+  const inside = view.recorded.filter((c) => c.on >= window.from && c.on <= window.to)
+  if (inside.length === 0) return null
+  const counted = opts.counted ?? inside.length
+  const newest = inside[0]
+  const said = newest.said.replace(/\.$/, '')
+  return inside.length === 1 && counted <= 1
+    ? `${said}, ${newest.dateShort}`
+    : `the newest ${said}, ${newest.dateShort}`
 }
