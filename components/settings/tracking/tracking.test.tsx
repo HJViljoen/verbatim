@@ -213,6 +213,17 @@ describe('the rivals section', () => {
     expect(words).toContain(RENAME_UNAVAILABLE)
   })
 
+  it('closes the section in one paragraph, not a stack of four', () => {
+    // H2: every sentence stays; the four separate blocks of 10.5px grey do
+    // not. `SectionNotes` flows them, so the section spends the lines the
+    // words need rather than four paragraphs' worth of them.
+    const markup = render(section)
+    const tail = markup.slice(markup.lastIndexOf('Add a rival'))
+    expect(tail.match(/<p /g)?.length ?? 0).toBe(1)
+    expect(words).toContain('earliest evidence in our own data')
+    expect(words).toContain('dated by the day the post went up')
+  })
+
   it('keeps the capture-versus-read census and the earliest-evidence footnote', () => {
     expect(words).toContain('28 captured, 0 read')
     expect(words).toContain('earliest evidence in our own data')

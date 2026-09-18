@@ -194,6 +194,32 @@ export function MonoNote({ children, className }: { children: ReactNode; classNa
   return <span className={cn('font-mono text-[10.5px] leading-[1.4] text-muted-foreground', className)}>{children}</span>
 }
 
+/**
+ * The sentences that close a section — as ONE paragraph, not a stack.
+ *
+ * Every one of these sentences earns its place (the handle caveat, what
+ * "Tracked since" means, which clock the own-posts column is on, why a
+ * community nobody chose is in the table). The STACK does not: four paragraphs
+ * of 10.5px grey, each on its own two lines, closing a section whose whole
+ * point is density — that alone is most of why the built page ran 513px taller
+ * than the artboard. Flowing them into one paragraph keeps every word and
+ * spends the lines the words actually need.
+ *
+ * Nulls are dropped, so a caller can list a sentence that may not apply without
+ * guarding each one at the call site.
+ */
+export function SectionNotes({ notes }: { notes: readonly ReactNode[] }) {
+  const kept = notes.filter((n) => n != null && n !== false && n !== '')
+  if (kept.length === 0) return null
+  return (
+    <p className="max-w-[820px] font-mono text-[10.5px] leading-[1.45] text-muted-foreground">
+      {kept.map((n, i) => (
+        <span key={i}>{i > 0 ? ' ' : ''}{n}</span>
+      ))}
+    </p>
+  )
+}
+
 /** The artboard's control height and edge, in one place. A control that can be
  *  pressed carries a hairline ring; nothing on this page is a filled button
  *  except the one save. */

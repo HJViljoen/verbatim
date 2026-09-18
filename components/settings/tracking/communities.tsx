@@ -1,4 +1,4 @@
-import { Dot, Figure, gridIntrinsic, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { Dot, Figure, gridIntrinsic, GridRow, GridTable, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { shortDate } from '@/lib/format'
 import { REDDIT_CAP_LINE } from '@/lib/reading/method'
 import { COMMUNITY_STATE_RULE, communitiesMeta, communityWords, type CommunityRow } from '@/lib/settings/communities'
@@ -100,26 +100,20 @@ export function CommunitiesSection({
 
       <CommunityAdd canEdit={canEdit} note={REDDIT_CAP_LINE} />
 
-      {hidden > 0 && (
-        <MonoNote className="max-w-[820px]">
-          {hidden} further communit{hidden === 1 ? 'y is' : 'ies are'} not shown, between them carrying{' '}
-          {hiddenPosts.toLocaleString('en-GB')} post{hiddenPosts === 1 ? '' : 's'} — one or two each, dragged in by a
-          search and not by anyone’s choice.
-        </MonoNote>
-      )}
-      {unconfigured.posts > 0 && unconfigured.fromUnconfigured > 0 && (
-        <MonoNote className="max-w-[820px]">
-          {unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put on the
-          list — the search found them. They are counted the same way, and they are the first place to look when a
-          Reddit figure looks wrong.
-        </MonoNote>
-      )}
-      {keptClosed && (
-        <MonoNote className="max-w-[820px]">
-          How much of each community we kept is shown to owners and admins only — it is read off the accounts other
-          people posted from, and the fewer copies of those we hand around the better.
-        </MonoNote>
-      )}
+      {/* One paragraph, not three stacked blocks (design H2). */}
+      <SectionNotes
+        notes={[
+          hidden > 0
+            ? `${hidden} further communit${hidden === 1 ? 'y is' : 'ies are'} not shown, between them carrying ${hiddenPosts.toLocaleString('en-GB')} post${hiddenPosts === 1 ? '' : 's'} — one or two each, dragged in by a search and not by anyone’s choice.`
+            : null,
+          unconfigured.posts > 0 && unconfigured.fromUnconfigured > 0
+            ? `${unconfigured.pct.toFixed(0)}% of the Reddit posts we hold for you came from communities nobody put on the list — the search found them. They are counted the same way, and they are the first place to look when a Reddit figure looks wrong.`
+            : null,
+          keptClosed
+            ? 'How much of each community we kept is shown to owners and admins only — it is read off the accounts other people posted from, and the fewer copies of those we hand around the better.'
+            : null,
+        ]}
+      />
     </Section>
   )
 }

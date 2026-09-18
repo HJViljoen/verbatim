@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { RIVALS_PRESENT } from '@/app/dashboard/settings/constants'
 import { RivalRename } from '@/app/dashboard/settings/rival-rename'
-import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead } from '@/components/settings/chrome'
+import { CONTROL, Dot, Figure, FIELD, GridRow, GridTable, MonoNote, Section, SectionHead, SectionNotes } from '@/components/settings/chrome'
 import { monthName, platformLabel, shortDate } from '@/lib/format'
 import { HANDLE_FORMAT_CAVEAT } from '@/lib/provisioning'
 import { isNewRival, rivalRefusalNote, rivalState, rivalsMeta, RIVAL_BREAK_RULE, RIVAL_REMOVED_PENDING, type RivalRow } from '@/lib/settings/rivals-view'
@@ -204,17 +204,19 @@ export function RivalsSection({ rows, names, onAdd, onRemove, canEdit, month }: 
         {error && <span className="text-[11.5px] text-negative">{error}</span>}
       </div>
 
-      <MonoNote className="max-w-[820px]">{HANDLE_FORMAT_CAVEAT}</MonoNote>
-      <MonoNote className="max-w-[820px]">{TRACKED_SINCE_NOTE}</MonoNote>
-      {rows.some((r) => r.ownPosts) && (
-        <MonoNote className="max-w-[820px]">
-          Own posts are dated by the day the post went up, which is a different clock from everything else on this
-          page — {rows.find((r) => r.ownPosts)?.ownPosts?.basis}.
-        </MonoNote>
-      )}
-      {[...new Set(rows.map((r) => r.ownPostsWhy).filter((w): w is string => w != null))].map((why) => (
-        <MonoNote key={why} className="max-w-[820px]">{why}</MonoNote>
-      ))}
+      {/* Four sentences, one paragraph (design H2). Each is true and each is
+          needed; four stacked blocks of grey mono closing a section built for
+          density is not. */}
+      <SectionNotes
+        notes={[
+          HANDLE_FORMAT_CAVEAT,
+          TRACKED_SINCE_NOTE,
+          rows.some((r) => r.ownPosts)
+            ? `Own posts are dated by the day the post went up, which is a different clock from everything else on this page — ${rows.find((r) => r.ownPosts)?.ownPosts?.basis}.`
+            : null,
+          ...[...new Set(rows.map((r) => r.ownPostsWhy).filter((w): w is string => w != null))],
+        ]}
+      />
     </Section>
   )
 }
