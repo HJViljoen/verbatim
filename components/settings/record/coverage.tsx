@@ -62,13 +62,16 @@ function Row({ row }: { row: RecordRow }) {
   return (
     <div className="grid grid-cols-1 items-center gap-x-4 gap-y-0.5 border-t border-border/70 py-3 md:min-h-[52px] md:grid-cols-[186px_minmax(0,1fr)] md:py-2">
       <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{row.label}</span>
-      <span className="min-w-0 text-[12.5px]">
-        {row.lead ? `${row.lead} ` : ''}
-        {row.figure != null ? (
-          <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
-        ) : null}
-        {row.figure != null && row.rest ? (row.dash ? ' — ' : ' ') : ''}
-        {row.rest}
+      <span className="min-w-0">
+        <span className="block text-[12.5px]">
+          {row.lead ? `${row.lead} ` : ''}
+          {row.figure != null ? (
+            <span data-copy="figure" className="font-mono font-semibold tabular-nums">{row.figure}</span>
+          ) : null}
+          {row.figure != null && row.rest ? (row.dash ? ' — ' : ' ') : ''}
+          {row.rest}
+        </span>
+        {row.basis ? <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{row.basis}</span> : null}
       </span>
     </div>
   )

@@ -1130,6 +1130,20 @@ export interface RecordRow {
    *  ("214 threads, each read to 40 comments"). Per row, because the artboard
    *  does both and a rule that guessed would punctuate half of them wrong. */
   dash: boolean
+  /** The long clause — the basis, the caveat, the start date — set quietly on
+   *  its own line under the value.
+   *
+   *  A SECOND LINE, BECAUSE THE HONEST BASES ARE LONGER THAN THE ARTBOARD'S.
+   *  The artboard's value column is about 274px at 1440 and its bases are four
+   *  words ("trailing median 2,240"); the ones this product actually owes a
+   *  reader run to a sentence ("of everything we have ever read for you, not
+   *  just this window — Reddit excluded, which has neither audio nor a cover
+   *  frame"). Inline, those wrapped to four lines and the row stopped being
+   *  scannable, which is the whole point of the grid. Stacked, the figure line
+   *  stays one line and the basis is still on the page — which is the rule
+   *  (D15: a figure's basis is part of the figure), not a request that it be
+   *  short. */
+  basis: string
 }
 
 /** What the RECORD PAGE knows and the record loader does not: the change log's
@@ -1166,9 +1180,12 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
   const rows: RecordRow[] = []
   const push = (
     id: string, label: string, figure: string | null, rest: string,
-    opts: { lead?: string; dash?: boolean } = {},
+    opts: { lead?: string; dash?: boolean; basis?: string } = {},
   ): void => {
-    rows.push({ id, label, lead: opts.lead ?? '', figure, rest, dash: figure != null && (opts.dash ?? false) })
+    rows.push({
+      id, label, lead: opts.lead ?? '', figure, rest,
+      dash: figure != null && (opts.dash ?? false), basis: opts.basis ?? '',
+    })
   }
 
   const d = input.delivery
@@ -1193,19 +1210,21 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     push('comments', 'Comments read', fmtInt(comments), 'dated by the comment, not by the update', { dash: true })
     push(
       'videos', 'Videos analysed', fmtInt(videos),
-      extra.trailingMedian != null
-        ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))} over the months we have gathered`
-        : 'no trailing median yet — two gathered months are the fewest one can be taken over',
-      { dash: true },
+      extra.trailingMedian != null ? `trailing median ${fmtInt(Math.round(extra.trailingMedian))}` : 'no trailing median yet',
+      {
+        dash: true,
+        basis: extra.trailingMedian != null
+          ? 'over the months we have gathered, which is the only span the two are comparable over'
+          : 'two gathered months are the fewest a median can be taken over',
+      },
     )
     push('dual', 'Dual-mention videos', fmtInt(dual), 'counted in one audience by precedence', { dash: true })
     push('platforms', 'Platform mix', null, platformMixLine(mix) || 'No platform was recorded on anything read in this window.')
     const threads = mix.reddit ?? 0
     push(
       'reddit', 'Reddit', threads > 0 ? fmtInt(threads) : null,
-      threads > 0
-        ? `threads, each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments and no deeper`
-        : 'No Reddit thread carried conversation in this window.',
+      threads > 0 ? 'threads' : 'No Reddit thread carried conversation in this window.',
+      threads > 0 ? { basis: `each read to ${fmtInt(REDDIT_COMMENT_DEPTH_CAP)} comments and no deeper` } : {},
     )
     if (undated > 0) push('undated', 'Comments with no date', fmtInt(undated), 'in no month, and in no reading', { dash: true })
   }
@@ -1219,7 +1238,12 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       ? 'No video has been analysed for this workspace yet.'
       : known === 0
         ? 'No language was recorded for any video, so the share not in English cannot be drawn.'
-        : `of the ${fmtInt(known)} videos whose language we know — what was said on camera, not what was written in comments${lang.unknown > 0 ? `; ${fmtInt(lang.unknown)} have no language recorded at all` : ''}`,
+        : `of the ${fmtInt(known)} videos whose language we know`,
+    lang.analysed > 0 && known > 0
+      ? {
+        basis: `what was said on camera, not what was written in comments${lang.unknown > 0 ? `; ${fmtInt(lang.unknown)} videos have no language recorded at all` : ''}`,
+      }
+      : {},
   )
 
   const r = input.readDepth
@@ -1230,11 +1254,11 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
   const allTime = 'of everything we have ever read for you, not just this window — Reddit excluded, which has neither audio nor a cover frame'
   push(
     'speech', 'Speech read', r.analysed > 0 ? share(r.speech, r.analysed) : null,
-    r.analysed > 0 ? `${allTime}; translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
-    { lead: r.analysed > 0 ? 'on' : '' },
+    r.analysed > 0 ? `of videos · translated on ${share(r.translated, r.analysed)}` : 'How much of each video we managed to read is not recorded yet.',
+    r.analysed > 0 ? { lead: 'on', basis: allTime } : {},
   )
   if (r.analysed > 0) {
-    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), allTime, { lead: 'on' })
+    push('ocr', 'On-screen text read', share(r.onScreenText, r.analysed), 'of videos', { lead: 'on', basis: allTime })
     if (r.unflagged > 0) {
       push('unflagged', 'Read before the flags', fmtInt(r.unflagged), 'videos read before the product recorded which of the three it managed')
     }
@@ -1250,8 +1274,13 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
         ? 'What was looked at and set aside is not recorded at all, so the share left out cannot be drawn for any month.'
         : g.judged === 0
           ? `Nothing was looked at and set aside in this window — the record of it begins ${fullDate(g.recordedFrom)}.`
-          : `of what was looked at, dated by the update; recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}`,
-    { lead: g.readable && g.recordedFrom != null && g.judged > 0 ? 'discarded' : '' },
+          : 'of what was looked at',
+    g.readable && g.recordedFrom != null && g.judged > 0
+      ? {
+        lead: 'discarded',
+        basis: `dated by the update, and recorded only from ${fullDate(g.recordedFrom)}, so no month before that can show it${discardCaveat(g)}`,
+      }
+      : {},
   )
 
   const i = input.instrument
@@ -1262,8 +1291,8 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
       ? 'How many themes attach to each video has not been recorded yet.'
       // NOT "August 2.3". The figure is measured on one run, and a run's date is
       // a period key for nothing (AGENTS.md).
-      : 'attached per analysed video on the most recent update — an update’s own measure, not a month’s',
-    { dash: false },
+      : 'attached per analysed video on the most recent update',
+    i.themesPerVideo == null ? {} : { basis: 'an update’s own measure, never a month’s' },
   )
 
   const c = input.changes
@@ -1280,7 +1309,10 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     null,
     c.loggedFrom == null
       ? 'No change to what we track has been recorded yet, so no comparison can be checked against one.'
-      : `${fullDate(c.loggedFrom)}${c.reconstructed > 0 ? `, with ${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry' : 'entries'} worked out afterwards from what each update searched` : ''}`,
+      : fullDate(c.loggedFrom),
+    c.loggedFrom != null && c.reconstructed > 0
+      ? { basis: `${fmtInt(c.reconstructed)} earlier ${c.reconstructed === 1 ? 'entry was' : 'entries were'} worked out afterwards from what each update searched` }
+      : {},
   )
 
   push(
@@ -1295,7 +1327,10 @@ export function recordRows(input: RecordInputs, extra: RecordExtras = {}): Recor
     const f = extra.belowFloor
     push(
       'floor', 'Below the floor', fmtInt(f.videos),
-      `videos in ${f.label} for ${f.who} — under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
+      `videos in ${f.label} — ${f.who}`,
+      {
+        basis: `under the ${fmtInt(f.floor)} a banded reading needs${f.more > 0 ? `, and ${fmtInt(f.more)} other ${f.more === 1 ? 'month is' : 'months are'} under it too` : ''}`,
+      },
     )
   }
 

@@ -162,19 +162,19 @@ describe('the record as rows', () => {
     expect(datesLine(['2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27'])).toBe('6, 13, 20, 27 Sep')
     // A window that crosses a month dates every one of them.
     expect(datesLine(['2026-08-31', '2026-09-06'])).toBe('31 Aug · 6 Sep')
-    expect(rows().some((r) => /\d{4}-\d{2}-\d{2}/.test(`${r.figure ?? ''} ${r.rest}`))).toBe(false)
+    expect(rows().some((r) => /\d{4}-\d{2}-\d{2}/.test(`${r.figure ?? ''} ${r.rest} ${r.basis}`))).toBe(false)
   })
 
   it('refuses the per-update comment ratio, because it divides two clocks', () => {
     expect(row('comments').figure).toBe('11,840')
     expect(row('comments').rest).toBe('dated by the comment, not by the update')
-    expect(rows().some((r) => /per update/.test(r.rest))).toBe(false)
+    expect(rows().some((r) => /per update/.test(`${r.rest} ${r.basis}`))).toBe(false)
   })
 
   it('never keys the instrument figure by a calendar month', () => {
     expect(row('themes').figure).toBe('2.4')
-    expect(row('themes').rest).toContain('an update’s own measure, not a month’s')
-    expect(row('themes').rest).not.toContain('August')
+    expect(row('themes').basis).toContain('an update’s own measure, never a month’s')
+    expect(row('themes').basis).not.toContain('August')
   })
 
   it('prints the platform mix as counts, because audience denominators do not add', () => {
@@ -190,14 +190,14 @@ describe('the record as rows', () => {
 
   it('carries the all-time basis on the two read-depth rows (D15)', () => {
     for (const id of ['speech', 'ocr']) {
-      expect(row(id).rest).toContain('of everything we have ever read for you, not just this window')
+      expect(row(id).basis).toContain('of everything we have ever read for you, not just this window')
       expect(row(id).lead).toBe('on')
     }
   })
 
   it('states the Reddit cap the product actually enforces', () => {
     expect(row('reddit').figure).toBe('214')
-    expect(row('reddit').rest).toContain('40 comments and no deeper')
+    expect(row('reddit').basis).toContain('40 comments and no deeper')
   })
 
   it('says what a fresh database cannot say, with no figure anywhere it has none', () => {

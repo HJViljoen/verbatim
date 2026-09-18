@@ -258,7 +258,7 @@ describe('the coverage grid', () => {
     expect(text).toContain('dated by the comment, not by the update')
     // A run's measure is not a month's.
     expect(text).not.toContain('August 2.3')
-    expect(text).toContain('an update’s own measure, not a month’s')
+    expect(text).toContain('an update’s own measure, never a month’s')
     // Audience denominators do not add, so the mix is counts.
     expect(text).toContain('TikTok')
     expect(text).not.toMatch(/TikTok \d+%/)
