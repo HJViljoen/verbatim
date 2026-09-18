@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises"
+import path from "node:path"
 import { ImageResponse } from "next/og"
 import { OgMark } from "@/components/brand/og-mark"
 
@@ -15,9 +16,20 @@ const ROOM = "#0F1F19"
 const MINT = "#3DBF8C"
 
 export default async function OpengraphImage() {
+  // READ BY PATH, NOT BY `import.meta.url` (Block D wave 1, P0 item 8).
+  // Turbopack rewrites `new URL(..., import.meta.url)` into an asset
+  // reference; webpack's `import.meta.url` shim does not, so the URL resolves
+  // to a chunk directory that holds no fonts and `npx next build --webpack`
+  // has been broken on this route since the card landed (pre-existing on
+  // origin/main, not a Phase 1 regression). A path read works under both
+  // bundlers — and is invisible to Next's URL-based file tracing, which is
+  // why next.config.ts now names ./app/fonts/** in
+  // outputFileTracingIncludes for this route. Without that entry the route
+  // deploys and then throws at request time with no font.
+  const fonts = path.join(process.cwd(), "app", "fonts")
   const [regular, bold] = await Promise.all([
-    readFile(new URL("./fonts/BricolageGrotesque-Regular.ttf", import.meta.url)),
-    readFile(new URL("./fonts/BricolageGrotesque-Bold.ttf", import.meta.url)),
+    readFile(path.join(fonts, "BricolageGrotesque-Regular.ttf")),
+    readFile(path.join(fonts, "BricolageGrotesque-Bold.ttf")),
   ])
 
   return new ImageResponse(

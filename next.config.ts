@@ -39,6 +39,13 @@ const nextConfig: NextConfig = {
     '/api/admin/send-report': ['./node_modules/@sparticuz/chromium/bin/**/*', './node_modules/react-dom/**/*'],
     '/api/schedules/\\[id\\]/send': ['./node_modules/@sparticuz/chromium/bin/**/*', './node_modules/react-dom/**/*'],
     '/api/schedules/\\[id\\]/preview': ['./node_modules/react-dom/**/*'],
+    // The OG card reads its two Bricolage weights off disk by PATH rather than
+    // through `new URL(..., import.meta.url)`, because webpack's shim for that
+    // resolves to a chunk directory with no fonts in it and broke
+    // `next build --webpack` outright (P0 item 8). A path read is invisible to
+    // the URL-based file tracer, so the fonts are named here: without this the
+    // route ships and throws at request time with no face to draw with.
+    '/opengraph-image': ['./app/fonts/**'],
   },
   // Share links (Stage 2): a public, read-only page nobody should index. The
   // page sets metadata.robots as well; this is the header form for crawlers
