@@ -305,6 +305,32 @@ describe('readMove — the one movement claim a move earns', () => {
     expect(r.figures.videos_read.value).toBe(118)
     expect(r.figures.share_now.value).toBe(11.9)
     expect(r.figures.share_before.value).toBe(7.3)
+    // AND EACH LABEL NAMES THE MONTH IT READ. Neither side is "this month":
+    // the after side is the latest READABLE month after the declaration and
+    // the before side is the last readable month before it.
+    expect(r.figures.share_now.label).toBe('your share in September')
+    expect(r.figures.videos_read.label).toBe('your videos read in September')
+    expect(r.figures.share_before.label).toBe('your share in July, before you declared it')
+    for (const f of Object.values(r.figures)) expect(f.label).not.toMatch(/this month/)
+  })
+
+  it('names the month it actually read when the newest month carries nothing', () => {
+    // June declared, September hollow: the after side is AUGUST, and a label
+    // saying "this month" would assert a month with no reading behind it.
+    const patchy = series({
+      points: [
+        { month: '2026-05-01', k: 6, n: 100, pct: 6 },
+        { month: '2026-08-01', k: 12, n: 120, pct: 10 },
+        { month: '2026-09-01', k: null, n: null, pct: null },
+      ],
+    })
+    const r = reading({
+      move: { id: 'mv7', title: 'Push repairability', kind: 'subject', declared_at: '2026-06-10', subject_id: 's9', registry_ids: null, lineage_id: null },
+      series: [patchy],
+    })
+    expect(r.verdict?.value).toEqual({ k: 12, n: 120 })
+    expect(r.figures.share_now.label).toBe('your share in August')
+    expect(r.figures.share_before.label).toBe('your share in May, before you declared it')
   })
 
   it('a move younger than two months has no verdict and says why', () => {

@@ -495,11 +495,24 @@ export function readMove(input: MoveReadingInput): MoveReading {
   const figures: FigureTable = {}
   if (verdict) {
     const pct = (side: Counted) => (side.n > 0 ? Math.round((side.k / side.n) * 1000) / 10 : 0)
-    figures.share_now = { value: pct(verdict.value), unit: 'pct', label: 'your share this month' }
-    figures.videos_now = { value: verdict.value.k, unit: 'videos', label: 'your videos on it this month' }
-    figures.videos_read = { value: verdict.value.n, unit: 'videos', label: 'your videos read this month' }
+    // EACH LABEL NAMES ITS OWN MONTH, because neither side is "this month".
+    // The after side is the LATEST READABLE month after the declaration, which
+    // on a tenant whose newest month carries no reading is an older one, and
+    // the before side is the last readable month before it — two named months,
+    // never "now" and "before". A figure label is what a surface substitutes
+    // into prose, so a label that asserts a month the reading did not read is
+    // the leak, not a rounding.
+    const after = longMonth(verdict.window.from)
+    const before = verdict.basis ? longMonth(verdict.basis.from) : null
+    figures.share_now = { value: pct(verdict.value), unit: 'pct', label: `your share in ${after}` }
+    figures.videos_now = { value: verdict.value.k, unit: 'videos', label: `your videos on it in ${after}` }
+    figures.videos_read = { value: verdict.value.n, unit: 'videos', label: `your videos read in ${after}` }
     if (verdict.baseline) {
-      figures.share_before = { value: pct(verdict.baseline), unit: 'pct', label: 'your share before you declared it' }
+      figures.share_before = {
+        value: pct(verdict.baseline),
+        unit: 'pct',
+        label: before ? `your share in ${before}, before you declared it` : 'your share before you declared it',
+      }
     }
     if (verdict.changePts != null) figures.change_pts = { value: verdict.changePts, unit: 'pts', label: 'the change' }
     if (verdict.bandPts != null) figures.band_pts = { value: verdict.bandPts, unit: 'pts', label: 'the band' }
