@@ -47,14 +47,26 @@ export function monthlyMovesEmail(data: OverviewData, ctx: BlockContext): ReactN
       meta={m.rows.length > 0 ? `${fmtInt(m.rows.length)} dated` : undefined}
       footer={<a href={href} style={{ color: EMAIL.ink }}>Open Market →</a>}
     >
-      {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : null}
-      {/* THE MASTHEAD LEADS, as the artboard has it: it is the one sentence
-          that keeps every line under it from reading as a causal claim, and the
-          built block printed it LAST, below the unlock, where a reader has
-          already read the rows. */}
-      <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 4 }}>{m.masthead}</div>
-      {m.rows.map((row) => <Row key={row.id} row={row} />)}
-      <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>{m.unlock}</div>
+      {/* AN EMPTY SECTION SAYS ONE THING (the fix pass, review finding [Nit]).
+          With nothing dated, this printed the empty state AND the masthead AND
+          the unlock — three sentences of methodology about scoring moves that
+          do not exist, more policy prose than the populated arm prints
+          content. The masthead and the unlock are both about how a dated move
+          is read; with no move, MASTER.md's rule for a tile with nothing in it
+          is the one-line honest empty state. The whole-ledger tally still
+          prints where there is one: it is a figure about the advice, not about
+          the moves. */}
+      {empty ? <BlockEmpty mode="email">{empty}</BlockEmpty> : (
+        <>
+          {/* THE MASTHEAD LEADS, as the artboard has it: it is the one sentence
+              that keeps every line under it from reading as a causal claim, and
+              the built block printed it LAST, below the unlock, where a reader
+              has already read the rows. */}
+          <div style={{ fontFamily: FONT.sans, fontSize: 12.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 4 }}>{m.masthead}</div>
+          {m.rows.map((row) => <Row key={row.id} row={row} />)}
+          <div style={{ fontFamily: FONT.sans, fontSize: 11.5, lineHeight: '1.5', color: EMAIL.muted, marginTop: 8 }}>{m.unlock}</div>
+        </>
+      )}
       {m.acted ? <Acted acted={m.acted} /> : null}
     </BlockFrame>
   )

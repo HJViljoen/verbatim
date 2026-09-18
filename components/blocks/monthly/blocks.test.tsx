@@ -566,6 +566,23 @@ describe('the five sections that are Overview’s', () => {
     }
   })
 
+  // AN EMPTY SECTION SAYS ONE THING (the fix pass, review finding [Nit]).
+  // With nothing dated, "Your moves" printed the empty state plus the masthead
+  // plus the unlock — three sentences of methodology about scoring moves that
+  // do not exist, more policy prose than the populated arm prints content.
+  it('prints one honest line where nothing has been dated, not three of policy', () => {
+    const forming = formingMonthlyFixture()
+    const m = forming.overview.moves
+    const text = renderText(MONTHLY_BLOCKS['monthly.moves'].render(forming, 'email', ctx))
+    expect(text).toContain('No move has been dated yet')
+    expect(text).not.toContain(m.masthead)
+    expect(text).not.toContain(MONTHLY_MOVES_UNLOCK)
+    // And the populated arm still carries both.
+    const full = renderText(MONTHLY_BLOCKS['monthly.moves'].render(monthlyFixture(), 'email', ctx))
+    expect(full).toContain(monthlyFixture().overview.moves.masthead)
+    expect(full).toContain(MONTHLY_MOVES_UNLOCK)
+  })
+
   // THE APPARATUS IS NOT DECORATION (the fix pass, review finding [High]).
   // `EMAIL.faint` is #9AA0A6: 2.64:1 on white and 2.46:1 on the panels, far
   // under AA, and it was carrying the six-month trails, the method footnote,

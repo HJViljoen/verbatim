@@ -6,14 +6,15 @@ import { TokenProse } from '@/components/blocks/prose'
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { EMAIL, FONT } from '@/lib/email/theme'
 
-/** The artboard's amber interpretation pill, `rgba(230,176,60,.20)` — the same
- *  `EMAIL.mixed` every other amber on the artefact is, at the artboard's own
- *  opacity. An email may not use `color-mix`, so the rgba is literal. */
-const AMBER_TINT = 'rgba(230,176,60,.20)'
 import { fullDate, shortDate } from '@/lib/format'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { briefStaleLine, type BriefLink, type MonthlyData } from '@/lib/pages/monthly'
 import type { LedgerRow } from '@/lib/pages/overview'
+
+/** The artboard's amber interpretation pill, `rgba(230,176,60,.20)` — the same
+ *  `EMAIL.mixed` every other amber on the artefact is, at the artboard's own
+ *  opacity. An email may not use `color-mix`, so the rgba is literal. */
+const AMBER_TINT = 'rgba(230,176,60,.20)'
 
 /**
  * MR7 · What to decide before the next reading (Phase 1 WP18; the mock's
