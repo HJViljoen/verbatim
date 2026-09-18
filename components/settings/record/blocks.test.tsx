@@ -1,0 +1,343 @@
+import { describe, expect, it } from 'vitest'
+
+import { assertCopyContract } from '@/lib/test/copy-contract'
+import { render, renderText } from '@/lib/test/render'
+
+import { ChangeLogBlock } from './change-log'
+import { CoverageBlock } from './coverage'
+import { DeliveryBlock } from './delivery'
+import { RecordHeader, SaveStrip, ScopeStatement } from './header'
+import { RejectLogBlock } from './rejects'
+import {
+  changeLogFixture, changeMetaFixture, coverageRowsFixture, deliveryFixture,
+  freshCoverageRowsFixture, gateBasisFixture, gateSummaryFixture, keptByPlatformFixture,
+  keptByTermFixture, noReadingsFixture, oneLineFixture, readingsFixture, rejectRowsFixture,
+  saveStateFixture, statsFixture, unrecordedSaveStateFixture, updatesFixture,
+} from './fixture'
+
+// The render tier for Settings › The record (block E wave 2). One static
+// render per block, against the copy contract, in both the populated arm and
+// the arm a fresh database produces — because on the record page the degraded
+// arm is not an edge case, it is what both live tenants show for three of the
+// five sections today.
+
+const september = updatesFixture().filter((u) => u.startedAt.startsWith('2026-09'))
+
+const delivery = (
+  <DeliveryBlock
+    record={deliveryFixture()}
+    stats={statsFixture()}
+    updates={september}
+    month="September 2026"
+    readings={readingsFixture()}
+  />
+)
+
+const changeLog = (
+  <ChangeLogBlock
+    log={changeLogFixture()}
+    rows={20}
+    meta={changeMetaFixture()}
+    boundary="a change breaks a series; the old line is kept"
+    showing={null}
+    now="2026-09-28T09:00:00.000Z"
+  />
+)
+
+const rejects = (
+  <RejectLogBlock
+    rows={rejectRowsFixture()}
+    summary={gateSummaryFixture()}
+    unjudged={null}
+    byTerm={keptByTermFixture()}
+    byPlatform={keptByPlatformFixture()}
+    basis={gateBasisFixture()}
+    control={(r) => <span>{r.appealed ? 'Filed — we will look at this one.' : 'This should have been kept'}</span>}
+  />
+)
+
+const coverage = (
+  <CoverageBlock
+    title="Coverage · September 2026"
+    meta="still filling · as at 28 Sep 2026"
+    rows={coverageRowsFixture()}
+    oneLine={oneLineFixture()}
+  />
+)
+
+describe('the delivery block', () => {
+  it('prints four stat cells rather than one sentence, and the gap in weeks with the month it fell in', () => {
+    const text = renderText(delivery)
+    expect(text).toContain('6 Apr')
+    expect(text).toContain('22')
+    expect(text).toContain('updates')
+    // 35 days = 5 weeks, and the month the gap ended in.
+    expect(text).toContain('5')
+    expect(text).toContain('longest gap, in May')
+    expect(text).toContain('27 Sep')
+    // Four 24px mono figures, one per cell.
+    expect(render(delivery).match(/text-\[24px\]/g)).toHaveLength(4)
+  })
+
+  it('never claims a start date it does not hold, and never promises a next update', () => {
+    const text = renderText(delivery)
+    // D14: "tracking since" is a claim about an act nothing recorded.
+    expect(text).not.toContain('tracking since')
+    // Nothing in the product knows when the next gather runs.
+    expect(text).not.toContain('next 4 Oct')
+    expect(text).not.toContain('next ')
+    expect(text).toContain('first update on record')
+  })
+
+  it('dates the pills in the reader’s form and marks the update that did not finish', () => {
+    const text = renderText(delivery)
+    expect(text).toContain('6 Sep')
+    expect(text).toContain('27 Sep')
+    expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/)
+    const june = renderText(
+      <DeliveryBlock
+        record={deliveryFixture()}
+        stats={statsFixture()}
+        updates={updatesFixture().filter((u) => u.startedAt.startsWith('2026-06'))}
+        month="June 2026"
+        readings={readingsFixture()}
+      />,
+    )
+    expect(june).toContain('did not finish')
+  })
+
+  it('prints the monthly readings strip this page never had', () => {
+    const text = renderText(delivery)
+    expect(text).toContain('Monthly readings')
+    expect(text).toContain('6 so far')
+    expect(text).toContain('monthly reading')
+    expect(text).toContain('Your 6th monthly reading')
+    expect(text).toContain('read at setup')
+    expect(text).toContain('under the floor')
+    expect(text).toContain('has not filled up')
+  })
+
+  it('says the reading is not recorded rather than counting zero readings', () => {
+    const text = renderText(
+      <DeliveryBlock
+        record={deliveryFixture()}
+        stats={statsFixture()}
+        updates={september}
+        month="September 2026"
+        readings={noReadingsFixture()}
+      />,
+    )
+    expect(text).toContain('has not been recorded for this workspace yet')
+    expect(text).not.toContain('0 so far')
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(delivery)
+    assertCopyContract(
+      <DeliveryBlock
+        record={deliveryFixture()}
+        stats={statsFixture()}
+        updates={[]}
+        month="September 2026"
+        readings={noReadingsFixture()}
+      />,
+    )
+  })
+})
+
+describe('the change log', () => {
+  it('prints one row per recorded change, with the short date and the amber flag', () => {
+    const text = renderText(changeLog)
+    expect(text).toContain('3 Sep')
+    expect(text).toContain('Poler added as a rival')
+    expect(text).toContain('this month')
+    // 19 Aug is not this month and carries no flag.
+    expect(text).toContain('19 Aug')
+    expect(render(changeLog).match(/bg-warning\/20/g)).toHaveLength(1)
+  })
+
+  it('prints a person where the artboard prints a role, because the product has no roles', () => {
+    // D14. `actorWords` resolves the actor; nothing maps a user to a job title.
+    const text = renderText(changeLog)
+    expect(text).toContain('You')
+    expect(text).not.toContain('digital director')
+  })
+
+  it('keeps the reconstructed rows apart from the record', () => {
+    const text = renderText(changeLog)
+    expect(text).toContain('Before the record began')
+    expect(text).toContain('a label, not a record')
+    expect(changeMetaFixture()).toContain('4 changes since 6 Apr')
+    expect(changeMetaFixture()).toContain('1 this month')
+  })
+
+  it('says the log is not recorded rather than drawing an empty table', () => {
+    const text = renderText(
+      <ChangeLogBlock
+        log={changeLogFixture()}
+        rows={20}
+        meta=""
+        boundary=""
+        showing={null}
+        now="2026-09-28T09:00:00.000Z"
+        unavailable="Nothing in the product can record a configuration change yet."
+      />,
+    )
+    expect(text).toContain('can record a configuration change yet')
+    expect(text).not.toContain('Poler')
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(changeLog)
+  })
+})
+
+describe('the reject log', () => {
+  it('draws the artboard’s three columns and the control in its own column', () => {
+    const text = renderText(rejects)
+    expect(text).toContain('Thrown away')
+    expect(text).toContain('The rule that fired')
+    expect(text).toContain('Sealand sardines recipe')
+    expect(text).toContain('homonym — food')
+    expect(text).toContain('This should have been kept')
+    expect(text).toContain('Filed — we will look at this one.')
+  })
+
+  it('prints the note about what an appeal does and does not do', () => {
+    expect(renderText(rejects)).toContain('Kept rejections train the gate; they do not change a month already read.')
+  })
+
+  it('says the record is not open rather than printing a confident nothing', () => {
+    const text = renderText(
+      <RejectLogBlock
+        rows={[]}
+        summary=""
+        unjudged={null}
+        byTerm={[]}
+        byPlatform={[]}
+        basis={null}
+        unavailable="We do not yet show you what was set aside."
+      />,
+    )
+    expect(text).toContain('do not yet show you')
+    expect(text).not.toContain('Nothing has been set aside yet')
+  })
+
+  it('keeps the copy contract, with the stranger’s own caption exempt from rule (c)', () => {
+    assertCopyContract(rejects)
+  })
+})
+
+describe('the coverage grid', () => {
+  it('prints every fact as a labelled figure rather than a sentence', () => {
+    const markup = render(coverage)
+    const text = renderText(coverage)
+    for (const label of [
+      'UPDATES THIS WINDOW', 'COMMENTS READ', 'VIDEOS ANALYSED', 'NOT IN ENGLISH', 'SPEECH READ',
+      'ON-SCREEN TEXT READ', 'RELEVANCE GATE', 'THEMES PER VIDEO', 'TRACKING CHANGES',
+      'COMPARISONS REFUSED', 'DUAL-MENTION VIDEOS', 'PLATFORM MIX', 'REDDIT', 'BELOW THE FLOOR',
+    ]) {
+      expect(text.toUpperCase()).toContain(label)
+    }
+    // Each row's figure is its own mono node, which is what makes the grid
+    // scannable and what keeps rule (a) satisfiable.
+    expect((markup.match(/data-copy="figure"/g) ?? []).length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('carries the basis with the figures whose basis is not this window (D15)', () => {
+    const text = renderText(coverage)
+    expect(text).toContain('of everything we have ever read for you, not just this window')
+    expect(text).toContain('Reddit excluded')
+    expect(text).toContain('what was said on camera, not what was written in comments')
+  })
+
+  it('refuses the artboard’s four dishonest figures and says what it prints instead', () => {
+    const text = renderText(coverage)
+    // Comment-dated over run-dated is neither clock.
+    expect(text).not.toContain('per update')
+    expect(text).toContain('dated by the comment, not by the update')
+    // A run's measure is not a month's.
+    expect(text).not.toContain('August 2.3')
+    expect(text).toContain('an update’s own measure, not a month’s')
+    // Audience denominators do not add, so the mix is counts.
+    expect(text).toContain('TikTok')
+    expect(text).not.toMatch(/TikTok \d+%/)
+    // The refusal count belongs to the page that drew the comparisons.
+    expect(text).toContain('Counted by the page that draws the comparisons')
+  })
+
+  it('prints the trailing median, the named change and the floor the strip computed', () => {
+    const text = renderText(coverage)
+    expect(text).toContain('trailing median')
+    expect(text).toContain('Poler added as a rival, 3 Sep')
+    expect(text).toContain('under the 100 a banded reading needs')
+  })
+
+  it('prints the one-line summary this page never carried', () => {
+    const text = renderText(coverage)
+    expect(text).toContain('This window in one line')
+    expect(text).toContain('monthly reading')
+    expect(text).toContain('4 updates')
+  })
+
+  it('says what a fresh database cannot say, without a zero anywhere', () => {
+    const text = renderText(
+      <CoverageBlock
+        title="Coverage · September 2026"
+        meta="nothing frozen yet"
+        rows={freshCoverageRowsFixture()}
+        oneLine="no monthly reading yet · 0 updates"
+      />,
+    )
+    expect(text).toContain('No update ran inside this window.')
+    expect(text).toContain('has not been recorded for this workspace yet')
+    expect(text).toContain('we do not yet show it to you')
+    expect(text).toContain('has not been recorded yet')
+  })
+
+  it('keeps the copy contract in both arms', () => {
+    assertCopyContract(coverage)
+    assertCopyContract(
+      <CoverageBlock title="Coverage" meta="" rows={freshCoverageRowsFixture()} oneLine="no monthly reading yet" />,
+    )
+  })
+})
+
+describe('the page’s own chrome', () => {
+  it('states the record’s rule in the header, in the artboard’s words', () => {
+    const text = renderText(
+      <RecordHeader meta="23 updates delivered · longest gap 5 weeks · last on 27 Sep">
+        What was delivered, what changed, what was thrown away, and how much was read. Written as the work happens; it
+        is added to, never edited.
+      </RecordHeader>,
+    )
+    expect(text).toContain('added to, never edited')
+    expect(text).toContain('23 updates delivered')
+  })
+
+  it('tells a save that broke nothing from a save whose breakage was never written down', () => {
+    const recorded = renderText(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
+    expect(recorded).toContain('Nothing waiting to be saved.')
+    expect(recorded).toContain('Last save 3 Sep — Poler added as a rival.')
+    expect(recorded).toContain('Broke:')
+    const unrecorded = renderText(<SaveStrip state={unrecordedSaveStateFixture()} />)
+    expect(unrecorded).toContain('not written down here yet')
+    expect(unrecorded).not.toContain('Broke: nothing')
+  })
+
+  it('says why there is no Export button rather than drawing one that produces nothing', () => {
+    const text = renderText(
+      <ScopeStatement
+        text="Sealand — what this reading covers."
+        why="Settings has no registered page module, so the record exports as text rather than as a file."
+      />,
+    )
+    expect(text).toContain('no registered page module')
+    expect(text).toContain('what this reading covers')
+  })
+
+  it('keeps the copy contract', () => {
+    assertCopyContract(<SaveStrip state={saveStateFixture()} note="Poler added as a rival" />)
+    assertCopyContract(<ScopeStatement text="x" why="y" />)
+  })
+})
