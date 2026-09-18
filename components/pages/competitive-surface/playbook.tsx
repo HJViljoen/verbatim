@@ -101,6 +101,20 @@ function Cell({ side, formatKey, mode }: { side: FormatMatrixSide; formatKey: st
   if (side.unread) return mode === 'email' ? <span /> : <span aria-hidden />
   const row = side.byKey[formatKey] ?? null
   const value = row ? row.value.k : 0
+  // EMAIL IS INLINE HERE, AND FigureCell's EMAIL ARM IS A <div>. This matrix's
+  // email row is a sentence — "Story — The category 27 of 124 Össur 4 of 84" —
+  // so each side sits in a `<span>`, and a block inside an inline element is
+  // laid out by Word in the one client that matters. The markers are the same
+  // pair `FigureCell` stamps, so the copy contract reads this cell exactly as
+  // it reads the app one; only the box changes.
+  if (mode === 'email') {
+    return (
+      <span data-copy="level" style={{ fontFamily: FONT.mono, fontSize: 12, color: EMAIL.ink }}>
+        <span data-copy="figure">{fmtInt(value)}</span>
+        <span style={{ color: EMAIL.muted }}> of {fmtInt(side.of)}</span>
+      </span>
+    )
+  }
   // STACKED, WHICH COSTS NOTHING HERE. The widest column stacks its percentage
   // over its "of N" (that is what `FigureCell` is, and the artboard's own table
   // cell), so the row is already two lines tall — stacking these too adds no

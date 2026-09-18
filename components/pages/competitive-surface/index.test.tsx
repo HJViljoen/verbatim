@@ -561,6 +561,18 @@ describe('CO7 · how the category makes content', () => {
     expect(text).toContain('capped at 40 a thread')
   })
 
+  it('keeps the email matrix inline — no block inside a sentence', () => {
+    // The email row is a sentence and each side sits in a <span>;
+    // `FigureCell`'s email arm is a <div>, and Outlook lays out with Word.
+    const markup = render(competitivePlaybook.render(competitiveFixture(), 'email', ctx))
+    const from = markup.indexOf('Story')
+    const row = markup.slice(from, markup.indexOf('</div>', from))
+    expect(row).not.toContain('<div')
+    // The markers survive the change of box.
+    expect(markup).toContain('data-copy="level"')
+    expect(markup).toContain('data-copy="figure"')
+  })
+
   it('states the published clock in its meta, not the page’s month', () => {
     expect(render(competitivePlaybook.render(competitiveFixture(), 'app', ctx))).toContain('videos published in September')
   })
