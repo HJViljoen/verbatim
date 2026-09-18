@@ -81,9 +81,14 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
  * `months` is the axis in words, and it is REQUIRED because it is the only
  * honest thing a printed sparkline has instead of a hover: a reader with a
  * sheet of paper cannot ask what a point was. Under three readings nothing is
- * drawn at all and the months are named instead — the rule
- * `monthlyLineLabel` already applies on screen (mock-gap §6 D3: a chart is a
- * direction claim too, and two points are not a direction).
+ * drawn at all and the months that CARRIED a reading are named instead — the
+ * rule `monthlyLineLabel` already applies on screen (mock-gap §6 D3: a chart
+ * is a direction claim too, and two points are not a direction), in the words
+ * that rule already prints: "Aug → Sep only", "Sep only", "no month reads".
+ * The label named every month it was handed until 2026-09-18, so two readings
+ * over a four-month axis printed four month names — the opposite of what the
+ * refusal is for, and a fourth phrase for a state the product already had
+ * words for.
  *
  * No document in the snapshot carries a series yet, so nothing on the four
  * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
@@ -95,11 +100,15 @@ export function DeckSpark({ values, months, color = 'var(--primary)' }: {
   months: string[]
   color?: string
 }) {
-  const read = values.filter((v) => v != null).length
-  if (read < 3) {
+  // The months that carried a reading, in order. A slot with no reading is not
+  // a month this line can name.
+  const read = months.filter((_, i) => values[i] != null)
+  if (read.length < 3) {
     return (
       <p className="font-mono text-[10.5px] text-muted-foreground">
-        {months.length ? `${months.join(' · ')} — too few months to draw a line` : 'too few months to draw a line'}
+        {read.length === 0 ? 'no month reads'
+          : read.length === 1 ? `${read[0]} only`
+          : `${read[0]} → ${read[read.length - 1]} only`}
       </p>
     )
   }

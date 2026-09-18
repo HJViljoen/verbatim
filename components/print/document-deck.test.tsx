@@ -25,12 +25,24 @@ describe('DeckSpark', () => {
   it('refuses to draw under three readings and names the months instead', () => {
     const markup = render(<DeckSpark values={[18, 22]} months={['Aug', 'Sep']} />)
     expect(markup).not.toContain('<svg')
-    expect(markupText(markup)).toBe('Aug · Sep — too few months to draw a line')
+    // The words `monthlyLineLabel` already prints on screen for this state —
+    // not a fourth phrase for the same idea.
+    expect(markupText(markup)).toBe('Aug → Sep only')
   })
 
   it('counts READINGS, not slots — a gap is not a reading', () => {
     expect(render(<DeckSpark values={[18, null, null, 27]} months={MONTHS} />)).not.toContain('<svg')
     expect(render(<DeckSpark values={[18, null, 22, 27]} months={MONTHS} />)).toContain('<svg')
+  })
+
+  // It named every month it was handed until 2026-09-18, so two readings over
+  // a four-month axis printed "Jun · Jul · Aug · Sep" — four months on the
+  // strength of two, under a line that says there are too few.
+  it('names only the months that carried a reading', () => {
+    const words = markupText(render(<DeckSpark values={[18, null, null, 27]} months={MONTHS} />))
+    expect(words).toBe('Jun → Sep only')
+    expect(words).not.toContain('Jul')
+    expect(markupText(render(<DeckSpark values={[null, null, 19, null]} months={MONTHS} />))).toBe('Aug only')
   })
 
   it('draws no direction word of its own', () => {
@@ -39,7 +51,7 @@ describe('DeckSpark', () => {
   })
 
   it('prints nothing about an axis it was given none of', () => {
-    expect(renderText(<DeckSpark values={[1]} months={[]} />)).toBe('too few months to draw a line')
+    expect(renderText(<DeckSpark values={[1]} months={[]} />)).toBe('no month reads')
   })
 })
 
