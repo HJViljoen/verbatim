@@ -1,24 +1,43 @@
 import Link from 'next/link'
 import type { Block, RenderMode } from '@/lib/blocks/types'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
+import { TileBlock } from '@/components/shell/tile'
+import { Derivation } from './derivation'
 import { TierChip, tierMetaLine } from './tier'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, shortDate } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 
-// MK1 · What we concluded this month (design §3 MK1).
+// MK1 · What we concluded this month (design §3 MK1; ported to the artboard,
+// Block D wave 2).
+//
+// THE ARTBOARD'S SHAPE IS TWO ABREAST, not one stacked column. Each conclusion
+// is a tinted inner block carrying its tier chip and its count on one line, the
+// model's words under them, and its theme chips pinned to the bottom so cards
+// of different lengths still line their chips up. The page had this as a single
+// column of hairline-separated paragraphs at roughly half the density.
 //
 // THE TIER CHIP IS SHOWN EXACTLY AS BUILT. The design's gate is one sentence —
 // "a conclusion below the evidence bar is labelled, not hidden" — and on both
 // tenants the conclusion the model is MOST confident about (10 of 10) is the
 // one with no grounding at all, which is precisely the row the gate exists for.
-// It is drawn with everyone else's, wearing "Early signal".
+// The artboard's answer is the footer control: the below-bar rows are one press
+// away, under a summary that COUNTS them and says what they are, rather than
+// dropped. In print and in an email there is nothing to press, so they are
+// drawn inline — a disclosure that cannot be opened is a row that is hidden.
 //
 // THE CHIPS LINK INTO VOICE, which is the design's "each beside the theme it
 // came from". A chip carries a theme SLUG, which is what `/dashboard/voice
 // ?themes=` narrows on; the registry id is the cross-run identity (AGENTS.md)
 // and is not what this link is for — it is a filter on the update's own themes.
+//
+// "NEW" IS A FACT ABOUT OUR RECORD AND SAYS SO. `ConclusionRow.recurrence` is
+// `recurrenceOf` over the leading `theme_registry` id behind the conclusion,
+// and `isNew` means we hold no earlier month in which that theme was read.
+// `newLine` is printed once under the rows, because the chip alone would read
+// as a claim about the conversation. A conclusion whose theme the month tables
+// hold nothing for carries NO chip — an absent record is not a new theme.
 //
 // THE MODEL'S WORDS ARE MARKED `stored`, NOT `prose`. The title and the
 // description are Pass D-a's, written at some past update and read back out of
@@ -30,48 +49,88 @@ import type { ConclusionRow, MarketSurfaceData } from '@/lib/pages/market-surfac
 // what was adjudicated and what was not. The count beside them is code's and
 // stays `figure`.
 
+/** The artboard's dotted-underlined mono figure: a number a reader can see is
+ *  counted rather than asserted. */
+const FIGURE = 'font-mono text-[11.5px] tabular-nums text-secondary-foreground underline decoration-muted-foreground decoration-dotted underline-offset-[3px]'
+
 function Row({ row, mode, appUrl, corpus }: { row: ConclusionRow; mode: RenderMode; appUrl: string; corpus: number | null }) {
   const email = mode === 'email'
-  // THE DENOMINATOR IS PRINTED. `distinctVideos` counts over the WHOLE corpus
-  // (Össur: 1,699 analysed videos), and "301 videos behind it" directly under
-  // "What we concluded this month" — beside a page bar reading "September 2026"
-  // and a Competitive surface saying September held 449 — reads as a share of
-  // the month that does not exist.
-  const count = (
-    <span data-copy="figure" className={email ? undefined : 'font-mono text-[11.5px] tabular-nums text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
-      {corpus != null
-        ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
-        : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
-    </span>
-  )
+  // THE DENOMINATOR IS PRINTED AND THE POPULATION IS NAMED (D8). The artboard
+  // writes "305 of 1,388 category videos" — this month's category corpus —
+  // over a numerator that is nothing of the sort: `distinctVideos` counts over
+  // the WHOLE corpus (Össur: 1,699 analysed videos), so "305 of 1,388" beside a
+  // page bar reading "September 2026" is a fraction of two populations.
+  // `corpusLine` under the rows says which population this one is.
+  // A COUNT OF NOTHING IS NOT A SHARE OF ANYTHING. "0 of 1,699 videos behind
+  // it" is a fraction whose numerator says the record is empty, printed in the
+  // dotted-underline of a measured figure and sitting beside a chip promising
+  // an early signal. The row says it in words instead, and `TierChip` drops
+  // its tint (never its label) for the same reason.
+  const grounded = row.videos > 0
+  const count = !grounded
+    ? (
+      <span
+        className={email ? undefined : 'text-[11.5px] text-muted-foreground'}
+        style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted } : undefined}
+      >
+        no videos we can still count behind it
+      </span>
+    )
+    : (
+      <span data-copy="figure" className={email ? undefined : FIGURE} style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.muted } : undefined}>
+        {corpus != null
+          ? <>{fmtInt(row.videos)} of {fmtInt(corpus)} videos behind it</>
+          : <>{fmtInt(row.videos)} {row.videos === 1 ? 'video' : 'videos'} behind it</>}
+      </span>
+    )
   const chips = row.themes.map((t) => {
     const href = `${appUrl}/dashboard/voice?themes=${encodeURIComponent(t.slug)}`
     const label = t.label ?? t.slug
     return email
       ? <a key={t.slug} href={href} style={{ fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.ink2, marginRight: 8 }}>{label}</a>
-      : <Link key={t.slug} href={href} className="rounded-full bg-inner px-2 py-0.5 text-[11px] text-secondary-foreground hover:bg-tile">{label}</Link>
+      : <Link key={t.slug} href={href} className="rounded-full bg-tile px-2 py-0.5 text-[11.5px] font-medium text-secondary-foreground ring-1 ring-border hover:text-foreground">{label}</Link>
   })
+  // The artboard's amber flag, and the ONLY thing `recurrence` prints here.
+  const isNew = row.recurrence?.isNew === true
+  const newChip = !isNew
+    ? null
+    : email
+      ? <span style={{ fontFamily: FONT.sans, fontSize: 11, fontWeight: 600, color: EMAIL.ink2 }}>New</span>
+      : <span title={row.recurrence?.line} className="rounded-full bg-warning/15 px-2 py-0.5 text-[11.5px] font-semibold text-warning">New</span>
 
   if (email) {
     return (
       <div style={{ padding: '6px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
         <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{row.title}</div>
-        <div style={{ marginTop: 3 }}><TierChip tier={row.tier} mode={mode} /> {count}</div>
+        <div style={{ marginTop: 3 }}><TierChip tier={row.tier} mode={mode} ungrounded={!grounded} /> {count}</div>
         <div data-copy="stored" data-slot="pass_d_a_insight" style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink2, marginTop: 3 }}>{row.description}</div>
-        {chips.length > 0 ? <div style={{ marginTop: 3 }}>{chips}</div> : null}
+        {chips.length > 0 || newChip ? <div style={{ marginTop: 3 }}>{chips} {newChip}</div> : null}
       </div>
     )
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-1 border-t border-border/70 pt-2">
-      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[13px] font-medium">{row.title}</p>
-      <span className="flex flex-wrap items-center gap-2"><TierChip tier={row.tier} mode={mode} /> {count}</span>
-      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[12.5px] text-secondary-foreground">{row.description}</p>
-      {chips.length > 0 ? <span className="flex flex-wrap items-center gap-1.5">{chips}</span> : null}
-    </div>
+    <TileBlock className="flex min-w-0 flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <TierChip tier={row.tier} mode={mode} ungrounded={!grounded} />
+        {count}
+      </div>
+      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[13px] font-medium leading-[1.4]">{row.title}</p>
+      <p data-copy="stored" data-slot="pass_d_a_insight" className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">{row.description}</p>
+      {chips.length > 0 || newChip ? <span className="mt-auto flex flex-wrap items-center gap-1.5 pt-0.5">{chips}{newChip}</span> : null}
+    </TileBlock>
   )
 }
+
+/** The artboard's footer control, counted by name — over EVERY row below the
+ *  bar (`ConclusionsBlock.belowBar`), not over the ones this block happened to
+ *  draw. `rows` is capped at `CONCLUSIONS_SHOWN`, so counting the drawn ones
+ *  under-counted exactly the rows the block's own rule ("labelled, never
+ *  hidden") is about. Where the cap bites, the disclosure says how many of
+ *  them it is showing. */
+const belowBarWord = (n: number): string => `${fmtInt(n)} below the bar this update`
+const belowBarShown = (drawn: number, all: number): string | null =>
+  drawn < all ? `${fmtInt(drawn)} of them are on this page; the rest are past this update's cap.` : null
 
 export const marketConclusions: Block<MarketSurfaceData> = {
   key: 'market.conclusions',
@@ -81,30 +140,63 @@ export const marketConclusions: Block<MarketSurfaceData> = {
   render(data, mode = 'app', ctx) {
     const c = data.conclusions
     const email = mode === 'email'
+    const app = mode === 'app'
     const empty = marketConclusions.emptyState(data)
-    // THE CHIPS' OWN WORDS. This read "5 confirmed · 1 early · 0 below the
-    // bar" — `confirmed` is the internal GateTier key — beside chips reading
-    // "Strong evidence" / "Early signal" / "Below the evidence bar".
-    const meta = tierMetaLine({ confirmed: c.counts.confirmed, early: c.counts.early, archive: c.belowBar })
+    const meta = tierMetaLine({ confirmed: c.counts.confirmed, early: c.counts.early, archive: c.belowBar }, c.total)
+    const above = c.rows.filter((r) => r.tier !== 'archive')
+    const below = c.rows.filter((r) => r.tier === 'archive')
+    const row = (r: ConclusionRow) => <Row key={r.id} row={r} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />
+    // THE RUN'S OWN DATE, WEARING THE WORD "UPDATE" (D9). It is the one thing
+    // on this block dated by delivery rather than by a comment, and a reader
+    // has to be able to tell it from the month in the page bar.
+    const concluded = c.concludedOn ? `concluded with the update of ${shortDate(c.concludedOn)}` : undefined
 
     return (
-      <BlockFrame title={marketConclusions.title} question={marketConclusions.question} mode={mode} meta={meta}>
+      <BlockFrame
+        title={marketConclusions.title}
+        question={marketConclusions.question}
+        mode={mode}
+        meta={meta}
+        footer={below.length === 0
+          ? undefined
+          : app
+            ? (
+              <details className="group min-w-0">
+                <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-medium text-foreground">
+                  {/* The arrow turns with the disclosure — it was a static ▼
+                      in both states, which says "open" when it is shut. */}
+                  <span aria-hidden className="text-[10px] text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none">▶</span>
+                  {belowBarWord(c.belowBar)}
+                </summary>
+                <div className="mt-2 grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2">{below.map(row)}</div>
+                {belowBarShown(below.length, c.belowBar)
+                  ? <p className="m-0 mt-1.5 text-[11px] font-normal text-muted-foreground">{belowBarShown(below.length, c.belowBar)}</p>
+                  : null}
+              </details>
+            )
+            : belowBarWord(c.belowBar)}
+        footerNote={concluded}
+      >
         {empty ? <BlockEmpty mode={mode}>{empty}</BlockEmpty> : null}
-        <div className={email ? undefined : 'flex min-w-0 flex-col gap-2'}>
-          {c.rows.map((row) => <Row key={row.id} row={row} mode={mode} appUrl={ctx.appUrl} corpus={c.corpusVideos} />)}
+        <div className={email ? undefined : 'grid min-w-0 grid-cols-1 gap-2.5 xl:grid-cols-2'}>
+          {above.map(row)}
+          {/* PAPER AND EMAIL HAVE NOTHING TO PRESS, so the rows below the bar
+              are drawn with the rest, labelled by their own chip. The block's
+              rule is that they are labelled and not hidden, and a disclosure
+              nobody can open would hide them. */}
+          {!app ? below.map(row) : null}
         </div>
-        <p
-          className={email ? undefined : 'm-0 text-[11.5px] text-muted-foreground'}
-          style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 6 } : undefined}
-        >
+        <Derivation mode={mode} label="How these are counted">
           {/* THE SORT IS PRINTED, not implied. The design asks for tier and
               then the size of the MOVEMENT behind each conclusion, and the
               movement is not computable: a conclusion cites audience_insight
               ids and the monthly reading is keyed on theme_registry ids, with
               nothing joining the two. So the second key is the size of the
-              evidence, and a reader is told which one they are looking at. */}
-          Ordered by {c.sortedBy}. {c.corpusLine}
-        </p>
+              evidence, and a reader is told which one they are looking at.
+              `newLine` rides with them because the chip above is a fact about
+              our record and must not be read as one about the conversation. */}
+          Ordered by {c.sortedBy}. {c.corpusLine} {c.newLine}
+        </Derivation>
       </BlockFrame>
     )
   },

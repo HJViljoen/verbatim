@@ -1,6 +1,7 @@
 import type { AdviceRow, MarketSurfaceData } from '@/lib/pages/market-surface'
 import {
   ADVICE_EMPTY, ADVICE_REQUESTED_LINE, ADVICE_UNLOCK, CLAIMS_CAVEAT, CONCLUSIONS_CORPUS_LINE,
+  CONCLUSIONS_NEW_LINE,
   LEDGER_AUDIENCE, MOVES_EMPTY_MK4, MOVES_UNRECORDED,
   actedLine, moveLedgerLine, repeatLine, unlockRows, waysOfMoving,
 } from '@/lib/pages/market-surface'
@@ -11,6 +12,7 @@ import { refusals, refusedSentence } from '@/lib/reading/record'
 import type { Verdict } from '@/lib/reading/verdicts'
 import { PLAN_EMPTY, planCard } from '@/lib/ask/plan-cards'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
+import { recurrenceOf } from '@/lib/reading/head-to-head'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -154,6 +156,9 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'confirmed',
           videos: 157,
           themes: [{ slug: 'comfort_and_fit', label: 'Comfort and fit' }, { slug: 'personalisation', label: null }],
+          // HEARD BEFORE. Three months of readings behind its leading theme, so
+          // no chip — the state most conclusions are in.
+          recurrence: recurrenceOf('reg-comfort', ['2026-07-01', '2026-08-01', '2026-09-01'], '2026-09-01'),
         },
         {
           id: 'mi-2',
@@ -163,6 +168,9 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'early_signal',
           videos: 0,
           themes: [],
+          // THE MONTH TABLES HOLD NOTHING FOR IT, which is not "new" — the chip
+          // is absent and so is the claim. This is the arm production is in.
+          recurrence: null,
         },
         {
           id: 'mi-3',
@@ -172,13 +180,18 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
           tier: 'archive',
           videos: 2,
           themes: [],
+          // The mock's "New" chip: one month of readings, none of them earlier.
+          recurrence: recurrenceOf('reg-resale', ['2026-09-01'], '2026-09-01'),
         },
       ],
       corpusVideos: 1699,
       corpusLine: CONCLUSIONS_CORPUS_LINE,
       counts: { confirmed: 1, early: 1, archive: 1 },
       belowBar: 1,
+      total: 9,
       sortedBy: 'strongest evidence first, then by how many videos are behind it',
+      concludedOn: '2026-09-27T02:00:00.000Z',
+      newLine: CONCLUSIONS_NEW_LINE,
       empty: null,
     },
     advice: {
@@ -249,6 +262,15 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
   }
 }
 
+/** The plan's claims as the upload read them — one contradicted, two untested.
+ *  The 13 Sep re-evaluation below re-reads them, which is where the card's
+ *  printed verdicts and its `checkedOn` date come from. */
+const CLAIMS_AT_UPLOAD = [
+  { ref: 'C1', claim: 'Customers choose us on price.', verdict: 'contradicts' as const, theySay: 'They compare on what a bag survives, and name price second.', conversationCount: 41, themeRefs: [], insightIds: ['ai-9'], source: null },
+  { ref: 'C2', claim: 'The recycled story drives sharing.', verdict: 'silent' as const, theySay: null, conversationCount: 0, themeRefs: [], insightIds: [], source: null },
+  { ref: 'C3', claim: 'Travellers buy sets, not singles.', verdict: 'silent' as const, theySay: null, conversationCount: 0, themeRefs: [], insightIds: [], source: null },
+]
+
 /** MK6's card, shaped like production's: a plan whose claims are read fresh
  *  against every update, one of which moved on the newest reading and has
  *  therefore been carried by exactly one. */
@@ -258,15 +280,27 @@ const PLAN_CARD = planCard({
   sourceFilename: 'summer-2627-brief.pdf',
   uploadedOn: '2026-08-20T09:00:00.000Z',
   notice: null,
-  claims: [
-    { ref: 'C1', claim: 'Customers choose us on price.', verdict: 'contradicts', theySay: 'They compare on what a bag survives, and name price second.', conversationCount: 41, themeRefs: [], insightIds: ['ai-9'], source: null },
-    { ref: 'C2', claim: 'The recycled story drives sharing.', verdict: 'echoes', theySay: 'People repeat the sail story back in their own words.', conversationCount: 22, themeRefs: [], insightIds: ['ai-10'], source: null },
-    { ref: 'C3', claim: 'Travellers buy sets, not singles.', verdict: 'silent', theySay: null, conversationCount: 0, themeRefs: [], insightIds: [], source: null },
-  ],
-  summary: { supported: 1, contradicted: 1, untested: 1 },
+  claims: CLAIMS_AT_UPLOAD,
+  summary: { supported: 0, contradicted: 1, untested: 2 },
+  // THE NEWEST RE-EVALUATION CARRIES ITS OWN CLAIMS, which is what production
+  // holds and what `currentReading` exists for: `plan_checks.claims` is written
+  // once, at upload, and `reevaluate.ts` never writes it back. A fixture whose
+  // re-evaluations carried no claims left `checkedOn` null and printed the
+  // upload's verdicts under a "moved since upload" row naming a transition the
+  // chips above it did not show.
   evaluations: [
-    { createdAt: '2026-09-06T02:00:00.000Z', runDate: '2026-09-06', moved: [] },
-    { createdAt: '2026-09-13T02:00:00.000Z', runDate: '2026-09-13', moved: [{ ref: 'C2', claim: 'The recycled story drives sharing.', from: 'silent', to: 'echoes' }] },
+    { createdAt: '2026-09-06T02:00:00.000Z', runDate: '2026-09-06', moved: [], claims: CLAIMS_AT_UPLOAD, summary: { supported: 0, contradicted: 1, untested: 2 } },
+    {
+      createdAt: '2026-09-13T02:00:00.000Z',
+      runDate: '2026-09-13',
+      moved: [{ ref: 'C2', claim: 'The recycled story drives sharing.', from: 'silent', to: 'echoes' }],
+      claims: [
+        CLAIMS_AT_UPLOAD[0],
+        { ...CLAIMS_AT_UPLOAD[1], verdict: 'echoes' as const, theySay: 'People repeat the sail story back in their own words.', conversationCount: 22, insightIds: ['ai-10'] },
+        CLAIMS_AT_UPLOAD[2],
+      ],
+      summary: { supported: 1, contradicted: 1, untested: 1 },
+    },
   ],
   corpusVideos: 2359,
   quoteFor: (c) => (c.ref === 'C1' ? { ref: 'e:ev-9', text: 'Ek kyk eers of dit hou. Prys is tweede.', lang: 'af', english: 'I look first at whether it lasts. Price is second.' } : null),

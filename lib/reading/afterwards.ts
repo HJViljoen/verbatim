@@ -340,9 +340,13 @@ export function afterwardsFor(input: AfterwardsInput): Afterwards {
       state: 'too_soon',
       verdict: null,
       months,
+      // A DIGIT MUST NOT END THE CLAUSE BEFORE A MONTH NAME. This read "…and
+      // we compare from 2. Sep 2026 itself is in neither side", where "2. Sep
+      // 2026" is a date in most of the world and the sentence break vanishes.
+      // The count moves off the end of its clause; nothing else changes.
       line:
         `${have === 0 ? 'No month' : have === 1 ? 'One month' : `${fmtInt(have)} months`} has been read in ${where} since you decided this, ` +
-        `and we compare from ${fmtInt(minReadings)}. ${monthName(decidedMonth)} itself is in neither side — ` +
+        `and we do not compare until ${fmtInt(minReadings)} have been read. ${monthName(decidedMonth)} itself is in neither side — ` +
         // A decision dated the 1st was not made partway through anything. The
         // month is still left out of both sides, and the reason is the same
         // one either way: the decision falls inside it.
