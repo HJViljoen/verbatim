@@ -2,6 +2,7 @@ import { Fragment, type ReactNode } from 'react'
 import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
+import { LeadershipSheet, SHEET_SECTIONS, leadershipSheetData } from '@/components/print/leadership-sheet'
 import { Slide } from '@/components/print/slide'
 import { Sparkline } from '@/components/charts/sparkline'
 import { CountBadge, MovementBadge } from '@/components/delta-badge'
@@ -871,7 +872,21 @@ function SectionBody({ section, data }: { section: DocBriefSection; data: Docume
 }
 
 export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: DocumentSnapshotData; date?: string }) {
-  const slides = documentSlides(data)
+  // THE LEADERSHIP ONE-PAGER LEADS ITS OWN DOCUMENT (Block D wave 2,
+  // E-leadership). The artboard is ONE sheet with no cover, so where the sheet
+  // can be drawn it REPLACES the 58px cover and absorbs the four borrowed
+  // sections it packs (`SHEET_SECTIONS`), whose slides are then not printed a
+  // second time. Everything the model wrote — the short read, the findings, the
+  // method page — and the standings slide follow it, so the page count stays
+  // honest rather than being forced to "1 / 1". Null for every other template
+  // and for any snapshot with no frozen Overview, where the deck is exactly as
+  // it was.
+  const sheet = leadershipSheetData(data)
+  const slides = documentSlides(data).filter(
+    (s) => !(sheet && sectionOfSlide(data, s.keys[0]) && SHEET_SECTIONS.has(sectionOfSlide(data, s.keys[0])!.id)),
+  )
+  // The sheet takes the cover's place in the count, so the arithmetic is the
+  // same either way.
   const pages = slides.length + 1
   // WP19: the stamp rides every sheet, the way the weekly deck's rule does —
   // a reader of a PDF has no masthead to scroll back to, and a brief whose
@@ -880,7 +895,9 @@ export function DocumentDeck({ data, date = fmtDate(new Date()) }: { data: Docum
   const chrome = (title: string) => ({ context: `${title} · ${stamp}`, footer: <DeckFooter company={data.company} date={date} /> })
   return (
     <>
-      <DocumentCover data={data} pages={pages} />
+      {sheet
+        ? <LeadershipSheet data={data} overview={sheet} date={date} page={1} pages={pages} />
+        : <DocumentCover data={data} pages={pages} />}
       {slides.map((s, i) => {
         const section = sectionOfSlide(data, s.keys[0])
         if (section) {

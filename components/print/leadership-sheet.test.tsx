@@ -1,0 +1,212 @@
+import { describe, expect, it } from 'vitest'
+
+import { markupText, render, renderText } from '@/lib/test/render'
+import { assertCopyContract } from '@/lib/test/copy-contract'
+import { overviewFixture, refusedFixture } from '@/components/pages/overview/fixture'
+import type { OverviewData } from '@/lib/pages/overview'
+import type { DocumentSnapshotData } from '@/lib/reports/documents/types'
+import { DocumentDeck } from './document-deck'
+import { LeadershipSheet, SHEET_SECTIONS, leadGap, leadSubject, leadershipSheetData } from './leadership-sheet'
+
+// The leadership one-pager (Block D wave 2, E-leadership).
+//
+// The render tier's one static render per block, applied to a SHEET: the
+// artboard packs eight information units onto one slide, so what this asserts
+// is that each of them prints, that each prints the HONEST form where the mock
+// asks for one the rules refuse, and that the whole sheet keeps the copy
+// contract in both the reading state and the refused one — which is the state
+// production is in until M3–M7 are applied.
+
+const LEAD: DocumentSnapshotData = {
+  version: 1,
+  kind: 'document',
+  template: 'leadership_brief',
+  reportId: 'r1',
+  title: 'Leadership brief',
+  audience: 'leadership',
+  company: 'Sealand',
+  period: 'September 2026 · reading as at 18 Sep 2026',
+  runId: null,
+  figures: {},
+  delta: null,
+  pages: [
+    { id: 'in_short', kind: 'in_short', title: 'In short', blocks: [{ id: 'in_short.summary', field: 'summary', text: 'The month in a paragraph.', items: [] }] },
+    { id: 'method', kind: 'method', title: 'How this was read', blocks: [{ id: 'method.method', field: 'method', text: '', items: ['One paragraph.'] }] },
+  ],
+  lens: { means: 'What it means for the business', short: 'for the business' },
+  method: { conversations: 0, videos: 0, clientVideos: 0, competitorVideos: 0, period: 'x', sources: [], heldBack: 0, thin: false },
+  notSureYet: [],
+  generatedAt: '2026-09-18T09:00:00.000Z',
+  model: 'm',
+  promptVersion: 'leadership_brief_v1',
+  reading: {
+    month: '2026-09-01', monthLabel: 'September 2026', monthStatus: 'filling',
+    readingAt: '2026-09-18T09:00:00.000Z',
+    stamp: 'September 2026 · reading as at 18 Sep 2026 · still filling until 30 Oct 2026',
+    denominators: [], platformMix: {}, crossesClustering: false,
+  },
+  sections: [
+    { id: 'ld.month', block: 'overview.sentence', surface: 'overview', title: 'The month', framing: 'The month in one reading.', empty: null },
+    { id: 'ld.category', block: 'overview.category', surface: 'overview', title: 'The category', framing: 'What the wider conversation was about.', empty: null },
+    { id: 'ld.standing', block: 'competitive.months', surface: 'competitive', title: 'Where you stand', framing: 'Your own share beside every rival.', empty: null },
+    { id: 'ld.subjects', block: 'overview.subjects', surface: 'overview', title: 'Your subjects', framing: 'The subjects this workspace is read against.', empty: null },
+    { id: 'ld.moves', block: 'overview.moves', surface: 'overview', title: 'What was decided', framing: 'Each recommendation and what was done about it.', empty: null },
+  ],
+  surfaces: { overview: overviewFixture() },
+  layout: [
+    { kind: 'page', id: 'in_short' },
+    { kind: 'section', id: 'ld.month' },
+    { kind: 'section', id: 'ld.category' },
+    { kind: 'section', id: 'ld.standing' },
+    { kind: 'section', id: 'ld.subjects' },
+    { kind: 'section', id: 'ld.moves' },
+    { kind: 'page', id: 'method' },
+  ],
+}
+
+const sheet = (overview: OverviewData = overviewFixture(), over: Partial<DocumentSnapshotData> = {}) =>
+  <LeadershipSheet data={{ ...LEAD, ...over }} overview={overview} date="18 Sep 2026" page={1} pages={4} />
+
+describe('the leadership one-pager', () => {
+  it('keeps the copy contract on a month that read', () => {
+    assertCopyContract(render(sheet()))
+  })
+
+  // The state production is in: M3–M7 unapplied, so the subjects, the mood,
+  // the attention panel and the moves all come back as sentences saying what
+  // is not recorded. The refusal is the reading a client sees first, and a
+  // sheet that only holds together when everything reads is not a sheet.
+  it('keeps the copy contract on the refused month, and still draws every unit', () => {
+    const markup = render(sheet(refusedFixture()))
+    assertCopyContract(markup)
+    const words = markupText(markup)
+    expect(words).toContain('The one thing to decide')
+    expect(words).toContain('Your subjects')
+    expect(words).toContain('Your moves')
+    expect(words).toContain('Our read')
+    expect(words).toContain('Coverage')
+  })
+
+  it('leads with the serif gap sentence, not the cover', () => {
+    const words = renderText(sheet())
+    // D1: the gap is both sides with their counts, the difference and the band.
+    expect(words).toContain('Durability')
+    expect(words).toMatch(/26 of 84/)
+    expect(words).toMatch(/62 of 142/)
+  })
+
+  // mock-gap §6 D1. "narrowed to 13 points" is a direction claim off two
+  // readings of two independent binomials, and `narrowed` is on the scrubber's
+  // own banned list. The earlier reading is printed instead, dated and banded.
+  it('never says the gap narrowed', () => {
+    const words = renderText(sheet()).toLowerCase()
+    for (const banned of ['narrowed', 'narrowing', 'widened', 'closing']) {
+      expect(words).not.toContain(banned)
+    }
+  })
+
+  // mock-gap §6 D7. The mock's "−18% since June" and "▼ 9,100 comments" are a
+  // percentage change and a delta of a RAW COMMENT COUNT: no denominator, so no
+  // band, and June→September crosses the 3 September re-freeze. The level, the
+  // panel's size and the banded step go in their place.
+  it('states the attention panel as a level over its own size, never as a percentage change', () => {
+    const words = renderText(sheet())
+    expect(words).toContain('a fixed panel of 214 accounts')
+    expect(words).toContain('re-frozen 3 Sep')
+    expect(words).not.toContain('since June')
+    expect(words).not.toContain('9,100')
+  })
+
+  // mock-gap §6 D12. The product refuses the quarter framing deliberately:
+  // the decisions were not dated inside the quarter, so the ratio is the whole
+  // ledger's and `actedTally` is the one sentence for it.
+  it('prints the whole-ledger acted-on ratio, never a quarter', () => {
+    const words = renderText(sheet())
+    expect(words).toContain('every piece of advice this product has ever given you')
+    expect(words).not.toContain('this quarter')
+  })
+
+  // The mock's change column carries a muted stand-alone "flat". It is not in
+  // MOVEMENT_WORDS, and as a substitute for "no clear change" it would be a
+  // direction word earned from one banded comparison — which is what the copy
+  // contract's rule (c) refuses. The badge's own vocabulary prints instead.
+  it('draws the subjects table with a denominator on every cell', () => {
+    const words = renderText(sheet())
+    // The artboard hoists the denominator into the header …
+    expect(words).toContain('You · of 84')
+    expect(words).toContain('Freitag · of 142')
+    // … and the cell keeps its own "of N", which is what rule (b) reads.
+    expect(words).toContain('26 of 84')
+    expect(words).toContain('305 of 1,388')
+  })
+
+  it('carries the coverage line and the reading counter the deck never printed', () => {
+    const words = renderText(sheet())
+    expect(words).toContain('2,359 videos')
+    expect(words).toContain('trailing median 2,240')
+    expect(words).toContain('Created by Sealand with Verbatim')
+    expect(words).toContain('monthly reading')
+  })
+
+  it('names the recommendation as stored model prose, with its slot', () => {
+    const markup = render(sheet())
+    expect(markup).toContain('data-copy="stored"')
+    expect(markup).toContain('data-slot="pass_d_b_recommendation"')
+  })
+})
+
+describe('which rows the figure cards are about', () => {
+  it('leads with the widest gap that cleared its band', () => {
+    const gaps = overviewFixture().subjects.gaps
+    expect(leadGap(gaps)?.objectId).toBeTruthy()
+  })
+
+  it('answers with a refused gap rather than nothing — that is Sealand today', () => {
+    const only = { s1: { ...overviewFixture().subjects.gaps.s1!, state: 'too_little_data' as const, gapPts: null, bandPts: null } }
+    expect(leadGap(only)?.state).toBe('too_little_data')
+  })
+
+  it('has no gap to lead with when no subject read on both sides', () => {
+    expect(leadGap({})).toBeNull()
+    expect(leadSubject([])).toBeNull()
+  })
+
+  it('picks the biggest banded move on the side that can carry one', () => {
+    // Durability moved 3.2 points, Price −3.1: the category is the only side
+    // with the n to carry a month on this corpus.
+    expect(leadSubject(overviewFixture().subjects.rows)?.id).toBe('s1')
+  })
+})
+
+describe('the sheet inside the deck', () => {
+  it('replaces the cover and absorbs the sections it draws', () => {
+    const markup = render(<DocumentDeck data={LEAD} date="18 Sep 2026" />)
+    const words = markupText(markup)
+    // The 58px cover is gone …
+    expect(markup).not.toContain('text-[58px]')
+    // … and "The month" / "Your subjects" / "What was decided" / "The category"
+    // print ONCE, on the sheet, never again as their own slides.
+    expect(words.match(/What was decided/g) ?? []).toHaveLength(0)
+    // The standings slide is NOT absorbed and keeps its own sheet.
+    expect(words).toContain('Where you stand')
+  })
+
+  it('numbers the sheet 1 of the pages that actually follow it', () => {
+    // in_short + the sheet + ld.standing + method = four.
+    const words = markupText(render(<DocumentDeck data={LEAD} date="18 Sep 2026" />))
+    expect(words).toContain('1 / 4')
+    expect(words).toContain('4 / 4')
+  })
+
+  it('falls back to the cover for every other template, and for a snapshot with no Overview', () => {
+    expect(leadershipSheetData({ ...LEAD, template: 'market_brief', role: undefined })).toBeNull()
+    expect(leadershipSheetData({ ...LEAD, surfaces: {} })).toBeNull()
+    expect(leadershipSheetData({ ...LEAD, surfaces: undefined })).toBeNull()
+    const markup = render(<DocumentDeck data={{ ...LEAD, template: 'market_brief' }} date="18 Sep 2026" />)
+    expect(markup).toContain('text-[58px]')
+  })
+
+  it('absorbs exactly the four sections the sheet draws', () => {
+    expect([...SHEET_SECTIONS].sort()).toEqual(['ld.category', 'ld.month', 'ld.moves', 'ld.subjects'])
+  })
+})
