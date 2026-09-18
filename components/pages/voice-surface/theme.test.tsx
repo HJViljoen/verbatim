@@ -146,6 +146,15 @@ describe('voiceTheme', () => {
     expect(text.split('said on camera rather than typed')).toHaveLength(1)
   })
 
+  it('draws the reach bar in a fill separable from its own track', () => {
+    // `var(--cat)` (#9AA1A9) on the bg-inner track (#F6F7F8) is 2.4:1, under
+    // the 3:1 floor for a graphic that carries meaning — on the one bar in
+    // this product whose argument is that a reading can be weighed, and the
+    // only visual encoding of this theme's level.
+    const markup = render(voiceTheme.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('background:var(--chart-3)')
+  })
+
   it('prints the month the share moved from, and rules the bar there against a NAMED axis', () => {
     const text = draw()
     expect(text).toContain('130 of 1,388 this month · Aug 6.8% of 1,200')

@@ -95,7 +95,18 @@ export function BlockProportion({
  * silent maximum it is six times its own size. Printed, it is a measurement.
  *
  * The rule carries its own words, because a rule with no label is a line.
+ *
+ * AND THE FILL IS SEPARABLE FROM ITS TRACK. It was `var(--cat)` (#9AA1A9) on
+ * the `bg-inner` track (#F6F7F8): 2.4:1, under the 3:1 WCAG floor for a
+ * graphic that carries meaning — on the one bar in this product whose whole
+ * argument is that a reading can be WEIGHED, and the only visual encoding of
+ * the level it draws. `var(--chart-3)` is the ink ramp's middle (4.5:1 light,
+ * 5.8:1 dark) and is not an entity colour: this bar places one reading on a
+ * scale, it does not say whose reading it is.
  */
+/** The reach bar's fill — see the note on separability in `BlockReach`. */
+const REACH_FILL = 'var(--chart-3)'
+
 export function BlockReach({
   pct, max, rule = null, ruleLabel, axisLabel, mode = 'app',
 }: {
@@ -120,7 +131,7 @@ export function BlockReach({
   if (mode === 'email') {
     return (
       <div>
-        <Bar segments={[{ pct: width, color: tokenHex('var(--cat)'), label: scale }]} height={10} />
+        <Bar segments={[{ pct: width, color: tokenHex(REACH_FILL), label: scale }]} height={10} />
         <div style={{ ...emailText.small, marginTop: 4 }}>
           <span data-copy="figure">{ruleLabel ? <>{ruleLabel} · </> : null}{scale}</span>
         </div>
@@ -132,7 +143,7 @@ export function BlockReach({
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="relative w-full">
         <div className="flex h-2.5 w-full shrink-0 overflow-hidden rounded-full bg-inner">
-          <span className="rounded-full" style={{ width: `${width}%`, background: 'var(--cat)' }} />
+          <span className="rounded-full" style={{ width: `${width}%`, background: REACH_FILL }} />
         </div>
         {/* THE RULE IS A SIBLING OF THE BAR, not a child: the bar clips to its
             own rounded corners, and a rule inside it loses the 3px it stands
