@@ -55,8 +55,18 @@ describe('voiceCast', () => {
     expect(draw()).toContain('A video can carry more than one group, so these counts overlap and do not add up to a whole.')
   })
 
-  it('says the group floor on the block rather than implying it', () => {
-    expect(draw()).toContain('A group is named only where at least 3 videos carry it · this month as it stands, never compared with another month')
+  it('says the group floor on the block rather than implying it, and what the block is a reading OF', () => {
+    // PORTED (wave 2): the artboard's footer has two ends. The floor is about
+    // which groups are named; the state is about the whole block, and is the
+    // page's one exception to the comment clock. The mock's words for it —
+    // "current state, not a trend" — cannot be printed: "trend" is on the
+    // product's own direction list.
+    expect(draw()).toContain('A group is named only where at least 3 videos carry it.')
+    expect(draw()).toContain('this month as it stands, never compared with another month')
+  })
+
+  it('sets the groups as three cards abreast, the way the artboard does', () => {
+    expect(render(voiceCast.render(voiceFixture(), 'app', ctx))).toContain('xl:grid-cols-3')
   })
 
   it('dates the cast by the update that wrote it — this block is the one exception on the page', () => {

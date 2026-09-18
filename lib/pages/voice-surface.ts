@@ -404,6 +404,12 @@ export interface CastBlock {
   profileDate: string | null
   stale: boolean
   floorNote: string
+  /** The other half of the artboard's footer: what this whole block is a
+   *  reading OF. It is the page's one exception to the comment clock, and the
+   *  mock's words for it ("current state, not a trend") cannot be printed — a
+   *  trend is a direction claim and "trend" is on the product's own direction
+   *  list, so the note says the thing itself instead. */
+  stateNote: string
   empty: string | null
 }
 
@@ -1790,12 +1796,17 @@ interface CastInput {
  * call, as the page's one piece of decoration.
  */
 async function buildCast(input: CastInput): Promise<CastBlock> {
-  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it · this month as it stands, never compared with another month.`
+  // TWO HALVES, BECAUSE THE ARTBOARD'S FOOTER HAS TWO ENDS (Block D wave 2).
+  // The floor is a fact about which groups are named; the state is a fact about
+  // what the whole block is a reading of, and it belongs in the mono note at
+  // the right-hand end rather than trailing a sentence about the floor.
+  const floorNote = `A group is named only where at least ${fmtInt(PERSONA_VIDEO_FLOOR)} videos carry it.`
+  const stateNote = 'this month as it stands, never compared with another month'
   const overlapNote = 'A video can carry more than one group, so these counts overlap and do not add up to a whole.'
   if (!input.profile) {
     return {
       state: 'not_run', personas: [], selected: null, population: null,
-      overlapNote, profileDate: null, stale: false, floorNote,
+      overlapNote, profileDate: null, stale: false, floorNote, stateNote,
       empty: 'Reading who is talking is not switched on for this workspace yet.',
     }
   }
@@ -1806,7 +1817,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     return {
       state: 'no_personas', personas: [], selected: null,
       population: input.profile.insight_population ?? null,
-      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote,
+      overlapNote, profileDate: input.profile.run_date, stale: false, floorNote, stateNote,
       empty: 'Too little conversation in this update to describe who is talking.',
     }
   }
@@ -1860,6 +1871,7 @@ async function buildCast(input: CastInput): Promise<CastBlock> {
     profileDate: input.profile.run_date,
     stale: Boolean(input.newestRunId) && input.profile.run_id !== input.newestRunId,
     floorNote,
+    stateNote,
     empty: null,
   }
 }

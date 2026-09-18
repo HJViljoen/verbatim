@@ -467,7 +467,8 @@ describe('castMasthead', () => {
     state: 'ready', personas: [], selected: null, population: 3129,
     overlapNote: 'A video can carry more than one group, so these counts overlap and do not add up to a whole.',
     profileDate: '2026-09-13', stale: false,
-    floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it · current state, not a trend.`,
+    floorNote: `A group is named only where at least ${PERSONA_VIDEO_FLOOR} videos carry it.`,
+    stateNote: 'this month as it stands, never compared with another month',
     empty: null,
     ...over,
   })
