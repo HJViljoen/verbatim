@@ -4,7 +4,7 @@ import { ASK_MONTHLY_CAP } from '../config'
 import { fmtInt, longMonth } from '../format'
 import { capLine, monthStartIso } from '../ask/quota'
 import { proseFigures } from '../prose/figures'
-import { MAGNITUDE_RE, replaceOutsideQuotes, scrubProse, type ProseScrub } from '../prose/scrub'
+import { MAGNITUDE_RE, allowTokens, replaceOutsideQuotes, scrubProse, type ProseScrub } from '../prose/scrub'
 import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
@@ -395,10 +395,18 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
  * figure as measured, the prose layer as printed, and three hand-rolled
  * conversions is how "3.4%", "3%" and "3.4 pct" reach one product.
  */
-export function scrubAnswer(raw: string, measure: AnswerMeasure): ProseScrub {
+export function scrubAnswer(raw: string, measure: AnswerMeasure, allow: readonly string[] = []): ProseScrub {
   return scrubProse('agent_answer', raw, {
     figures: proseFigures(measure.figures),
     verdicts: measure.verdicts,
+    // NAMES THAT CARRY DIGITS — "3R78", "C-Leg 4", "L5999". Every other caller
+    // of the digit rule carries one (pass-c, pass-d, pass-e, owned-events,
+    // anomaly-check, documents/scrub) and Ask carried none, so a sentence
+    // naming one of Ossur's own products dropped whole. `askAllowList` mines it
+    // from the thread's INPUTS — the client's questions and the theme labels —
+    // and never from the model's own answer prose, which would let a model
+    // launder a figure it typed by shaping it like a name.
+    allow,
     // THE MAGNITUDE STRIP IS OFF HERE, and it is the one rule this slot turns
     // down. It is a WORD-delete, and a word-delete is the failure mode the
     // sentence rules exist to avoid: "The majority of commenters mention fit"
@@ -467,16 +475,17 @@ export interface ScrubbedAnswer<T> {
 export function scrubThreadAnswer<T extends { text: string }>(
   answer: { answer: string; grounded: T[] },
   measure: AnswerMeasure,
-  keyOf?: (node: T, index: number) => string,
+  opts: { keyOf?: (node: T, index: number) => string; allow?: readonly string[] } = {},
 ): ScrubbedAnswer<T> {
-  const head = scrubAnswer(answer.answer, measure)
+  const { keyOf, allow = [] } = opts
+  const head = scrubAnswer(answer.answer, measure, allow)
   let dropped = head.dropped
   let droppedDigits = head.droppedDigits
   let droppedDirection = head.droppedDirection
   let magnitude = magnitudeWords(answer.answer)
   let leaked = head.leaked
   const grounded = answer.grounded.map((g, i) => {
-    const s = scrubAnswer(g.text, measure)
+    const s = scrubAnswer(g.text, measure, allow)
     dropped += s.dropped
     droppedDigits += s.droppedDigits
     droppedDirection += s.droppedDirection
@@ -486,6 +495,19 @@ export function scrubThreadAnswer<T extends { text: string }>(
     return { ...g, text: groundedFallback(measure, keyOf ? keyOf(g, i) : ''), replaced: true }
   })
   return { answer: head.text, grounded, scrub: { dropped, droppedDigits, droppedDirection, magnitude, leaked } }
+}
+
+/**
+ * The allow-list for one thread: names that carry digits, mined from what the
+ * thread was given rather than from what the model wrote back.
+ *
+ * The sources are the CLIENT's question and the theme labels the answer rests
+ * on — a run's own inputs, which is what `allowTokens` was written for. The
+ * answer's prose is deliberately not a source: "22pts" is shaped like a name,
+ * and a model that could widen its own allow-list would have no rule at all.
+ */
+export function askAllowList(texts: readonly (string | null | undefined)[]): string[] {
+  return allowTokens(texts.filter((t): t is string => Boolean(t)))
 }
 
 /** What the page says when the scrubbers empty an answer's own sentences. The

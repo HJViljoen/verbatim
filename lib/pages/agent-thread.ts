@@ -13,6 +13,7 @@ import { JUDGEMENT_HEADING, NEAREST_HEADING, type AgentAnswer } from '../agent/t
 import { askBasisLine, loadIndexFacts, type AskBasis } from '../agent/basis'
 import {
   answerFallback,
+  askAllowList,
   loadNotAnswered,
   measureAnswer,
   scrubThreadAnswer,
@@ -461,11 +462,20 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
   })
   const fallback = answerFallback(measure)
+  // The thread's own inputs, never its output: the client's questions and the
+  // theme labels the answer rests on. A product name with a digit in it
+  // ("3R78", "L5999") is a NAME, and without this every sentence carrying one
+  // dropped whole — on Ossur, the tenant the allow-list was written for.
+  const allow = askAllowList([
+    thread.title as string | null,
+    ...turns.map((t) => t.question),
+    ...turns.flatMap((t) => (t.answer?.grounded ?? []).flatMap((g) => (g.themeRefs ?? []).map((r) => r.label))),
+  ])
   turns.forEach((t, i) => {
     if (!t.answer) return
     // `findingKey` on both ends: a point that loses its sentence finds its own
     // measurement, never the neighbouring turn's.
-    const scrubbed = scrubThreadAnswer(t.answer, measure, (g) => findingKey(i, g.id))
+    const scrubbed = scrubThreadAnswer(t.answer, measure, { keyOf: (g) => findingKey(i, g.id), allow })
     t.answer = {
       ...t.answer,
       answer: scrubbed.answer,

@@ -14,6 +14,7 @@ import {
   loadNotAnswered,
   magnitudeWords,
   measureAnswer,
+  askAllowList,
   groundedFallback,
   notAnsweredFrom,
   scrubAnswer,
@@ -295,7 +296,7 @@ describe('scrubThreadAnswer', () => {
       answer: 'Durability leads.',
       grounded: [{ text: 'There is clear openness to innovation through 3D printing.', quotes: [] }],
     }
-    const out = scrubThreadAnswer(answer, measure, () => 'G1')
+    const out = scrubThreadAnswer(answer, measure, { keyOf: () => 'G1' })
     expect(out.grounded[0].text).not.toBe('')
     expect(out.grounded[0].text.startsWith(POINT_REPLACED_NOTE)).toBe(true)
     // The reading itself, with its own denominator.
@@ -311,10 +312,26 @@ describe('scrubThreadAnswer', () => {
     const out = scrubThreadAnswer(
       { answer: 'x', grounded: [{ text: 'It came up in 305 of 1,388 videos.' }] },
       nothing,
-      () => '0:G1',
+      { keyOf: () => '0:G1' },
     )
     expect(out.grounded[0].text).toBe(POINT_REMOVED_NOTE)
     expect(groundedFallback(null, '0:G1')).toBe(POINT_REMOVED_NOTE)
+  })
+
+  it('keeps a sentence naming a product whose name carries a digit', () => {
+    // Ossur's own catalogue is the case the allow-list was written for.
+    const raw = 'The 3R78 knee is what people compare against.'
+    expect(scrubAnswer(raw, measure).text).toBe('')
+    const allow = askAllowList(['Which knee do people compare the 3R78 against?'])
+    expect(allow).toContain('3R78')
+    expect(scrubAnswer(raw, measure, allow).text).toBe(raw)
+    // A figure is still a figure beside an allowed name.
+    expect(scrubAnswer('The 3R78 came up in 305 videos.', measure, allow).text).toBe('')
+    // WHY THE ANSWER'S OWN PROSE IS NOT A SOURCE: "22pts" is shaped like a
+    // name and would be mined as one, so a model allowed to seed its own
+    // allow-list could launder a figure it typed. The loader mines the
+    // client's questions and the theme labels only.
+    expect(askAllowList(['22pts of change'])).toContain('22pts')
   })
 
   it('keeps a magnitude word and counts it, rather than word-deleting it', () => {
