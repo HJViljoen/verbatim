@@ -221,7 +221,13 @@ describe('the reject log', () => {
   })
 
   it('prints the note about what an appeal does and does not do', () => {
-    expect(renderText(rejects)).toContain('Kept rejections train the gate; they do not change a month already read.')
+    const text = renderText(rejects)
+    expect(text).toContain('files it for a person to look at')
+    expect(text).toContain('does not change a month already read')
+    // NOT "trains the gate": nothing reads `gate_appeals` except this page and
+    // a readiness probe, so a feedback loop is a claim the code does not carry
+    // (design review finding 3, code review finding 3).
+    expect(text).not.toContain('train the gate')
   })
 
   it('says the record is not open rather than printing a confident nothing', () => {

@@ -20,13 +20,20 @@ import { RecordSection } from './frame'
  * exactly as it was, and the package's own side-by-side did not show it because
  * the shot route supplied a stand-in (design review finding 2).
  *
- * THE NOTE UNDER THE TABLE IS NEW AND IT IS TRUE (`record.rejects.note`).
- * "Kept rejections train the gate; they do not change a month already read."
- * The first half is what an appeal does — `fileGateAppeal` writes a row and
- * changes no configuration (`actions.ts`); the second is the freeze, which is
- * enforced by three database guards per month table and not by a convention
- * (AGENTS.md). The idea lived in a code comment and no reader-facing sentence
- * said it.
+ * THE NOTE UNDER THE TABLE IS THE ARTBOARD'S IDEA IN THE CODE'S WORDS
+ * (`record.rejects.note`). The artboard — and the brief, which asserted it was
+ * true — says "Kept rejections train the gate". Nothing implements that:
+ * `gate_appeals` is written by `fileGateAppeal` and read by exactly two places,
+ * this page (to mark a row filed) and `lib/readiness/load.ts` (a table probe).
+ * Nothing in `lib/gather/`, `inngest/` or `lib/pipeline/` reads it at all, and
+ * `actions.ts` says so in capitals — "IT FILES A COMPLAINT; IT DOES NOT
+ * RE-GATHER" — adding that what we then DO about an appeal is a separate
+ * configuration change. "Trains the gate" reads as an automatic feedback loop
+ * and is the class of claim AGENTS.md names ("a page once claimed 'no email is
+ * sent' while Resend sent"), so the sentence says what filing one actually does
+ * (design review finding 3, code review finding 3). The second half is the
+ * freeze, and that one IS true: three database guards per month table, not a
+ * convention.
  *
  * THE APPEAL CONTROL IS PASSED IN. It is a client component with an action
  * behind it; this file is rendered by the block test tier, which renders once
@@ -118,7 +125,8 @@ export function RejectLogBlock({
       )}
 
       <p className="m-0 text-[12px] text-muted-foreground">
-        Kept rejections train the gate; they do not change a month already read.
+        Saying so files it for a person to look at — it does not re-run the gather, and it does not change a month
+        already read.
       </p>
 
       {byTerm.length > 0 ? (
