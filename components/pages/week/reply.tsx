@@ -91,7 +91,7 @@ export const weekReply: Block<WeekData> = {
 
         {r.rows.length > 0 ? (
           <>
-            <Lead rows={r.rows} total={r.total} mode={mode} />
+            <Lead counts={r.counts} total={r.total} mode={mode} />
             <div className={email ? undefined : 'flex min-w-0 flex-col'}>
               {shown.map((row) => <Row key={row.id} row={row} mode={mode} />)}
             </div>
@@ -129,10 +129,13 @@ export const weekReply: Block<WeekData> = {
  * maps one insight category to one of four — so these segments divide the
  * picked set and nothing else, and the legend says what they are a division of.
  */
-function Lead({ rows, total, mode }: { rows: readonly ReplyRow[]; total: number; mode: 'app' | 'print' | 'email' }) {
-  const counts = new Map<Intent, number>()
-  for (const r of rows) counts.set(r.intent, (counts.get(r.intent) ?? 0) + 1)
-  const segments = [...counts.entries()].map(([intent, count]) => ({
+function Lead({ counts, total, mode }: { counts: readonly { intent: Intent; count: number }[]; total: number; mode: 'app' | 'print' | 'email' }) {
+  // THE LOADER'S OWN COUNTS (code review C9). This rebuilt its own Map from
+  // `rows` and took Map insertion order while `RepliesBlock.counts` — built by
+  // `intentCounts`, ordered by `INTENT_ORDER`, and pinned by a test — was
+  // rendered by nothing. Two implementations of one thing, agreeing by
+  // accident.
+  const segments = counts.map(({ intent, count }) => ({
     label: INTENT_PLURAL[intent],
     count,
     pct: Math.round((count / Math.max(1, total)) * 100),
@@ -146,7 +149,13 @@ function Lead({ rows, total, mode }: { rows: readonly ReplyRow[]; total: number;
         unit="worth a reply"
         base="picked from the comments written in the days this update covered"
       />
-      <BlockProportion segments={segments} of="comments" mode={mode} />
+      {/* THE ARTBOARD'S COUNTED CHIPS, NOT A PERCENTAGE OF SIX (design review
+          F14). "Buying signals 50% · Questions 33% · Objections 17%" over a
+          pick of six is noise, and it is the one figure on a page that works
+          this hard to keep every "of N" that reads as a score. The bar is the
+          same bar: a comment has exactly one intent, so these segments divide
+          the picked set and nothing else. */}
+      <BlockProportion segments={segments} of="comments" mode={mode} legend="count" />
     </div>
   )
 }

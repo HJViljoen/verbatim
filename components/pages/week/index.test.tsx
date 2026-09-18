@@ -175,6 +175,20 @@ describe('WK §3 · moving now', () => {
     expect(text).toContain('18 of them arrived with this update')
   })
 
+  it('takes the whole tile with one riser, and the mock’s columns with three', () => {
+    // Design review F12. `TileColumns of={3}` was unconditional, so the one
+    // riser both paying tenants have today took a third of a full-width tile
+    // with 700px of white beside it. The sibling block on this page already
+    // picks its column count from its rows.
+    const one = weekFixture()
+    expect(one.rising.rows).toHaveLength(1)
+    expect(render(weekRising.render(one, 'app', ctx))).not.toContain('xl:grid-cols-3')
+    const three = { ...one, rising: { ...one.rising, rows: [0, 1, 2].map((i) => ({ ...one.rising.rows[0], id: `r${i}` })) } }
+    expect(render(weekRising.render(three, 'app', ctx))).toContain('xl:grid-cols-3')
+    const two = { ...one, rising: { ...one.rising, rows: [0, 1].map((i) => ({ ...one.rising.rows[0], id: `r${i}` })) } }
+    expect(render(weekRising.render(two, 'app', ctx))).toContain('xl:grid-cols-2')
+  })
+
   it('draws three across and leads each column with the month', () => {
     // The artboard's column leads "34 videos this week" and puts the month
     // second; D6 refuses a week alone, so the figure is the month's and the

@@ -86,12 +86,21 @@ export const weekRising: Block<WeekData> = {
           email
             ? <>{r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}</>
             : (
-              // THE ARTBOARD'S THREE-ACROSS STRIP. `RISING_SHOWN` is three and
-              // has been since the design named it, so the columns and the rows
-              // are the same three.
-              <TileColumns of={3}>
-                {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}
-              </TileColumns>
+              // THE ARTBOARD'S THREE-ACROSS STRIP, AT THE WIDTH IT HAS ROWS FOR
+              // (design review F12). `RISING_SHOWN` is three and has been since
+              // the design named it, so three risers are three columns — but
+              // both paying tenants have at most ONE today, and `of={3}`
+              // unconditionally gave that one riser a third of a full-width
+              // tile with 700px of white beside it. The sibling block on this
+              // page already picks its column count from its rows
+              // (`subjects.tsx`); a single riser takes the tile.
+              r.rows.length === 1
+                ? <Row riser={r.rows[0]} mode={mode} month={r.month} max={max} />
+                : (
+                  <TileColumns of={r.rows.length === 2 ? 2 : 3}>
+                    {r.rows.map((riser) => <Row key={riser.id} riser={riser} mode={mode} month={r.month} max={max} />)}
+                  </TileColumns>
+                )
             )
         ) : null}
         {r.rows.length > 0 ? (
