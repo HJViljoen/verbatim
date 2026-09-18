@@ -323,9 +323,26 @@ export interface MissingInput {
   ownerRole: 'client' | 'ops' | 'engineering'
   /** The act that changes it — `ReadinessRow.unlocks`. */
   unlocks: string
-  /** The sections that went without it, by title. */
+  /** The sections that went without it, by title — the caller's match key. */
   sections: string[]
+  /** The same sections by SHORT name (`labelOf`), which is what the sentence
+   *  splices; a title is a heading and reads as a clause inside one. */
+  labels: string[]
 }
+
+/**
+ * The SHORT name of a section, for a sentence that splices one into itself.
+ *
+ * A section's `title` is written to be read as a heading — "What they complain
+ * about with each rival" — and both `missingSentence` and `untrackedSentence`
+ * splice it into running prose as if it were a short noun phrase. It was one
+ * ("By rival") until the map took the artboard's own titles, and the sentence
+ * then read "What they complain about with each rival is read without it",
+ * which is not a sentence. `context` is already exactly this word — the
+ * artboard's two-word slot, "Rivals" — so the label is that where a section
+ * has one, and the title where it has not.
+ */
+const labelOf = (section: BriefBlockSection): string => section.context ?? section.title
 
 /** A readiness row as this module needs it — the four fields, so a test needs
  *  no fixture of thirteen. */
@@ -358,8 +375,8 @@ export function missingInputs(
       const row = byId.get(need)
       if (!row || row.status !== 'missing') continue
       const held = out.get(need)
-      if (held) held.sections.push(section.title)
-      else out.set(need, { id: need, input: row.input, owner: row.owner, ownerRole: row.ownerRole, unlocks: row.unlocks, sections: [section.title] })
+      if (held) { held.sections.push(section.title); held.labels.push(labelOf(section)) }
+      else out.set(need, { id: need, input: row.input, owner: row.owner, ownerRole: row.ownerRole, unlocks: row.unlocks, sections: [section.title], labels: [labelOf(section)] })
     }
   }
   return [...out.values()]
@@ -384,7 +401,11 @@ export function missingSentence(m: MissingInput): string {
   // already opens with its own article ("the rival accounts we read"), so the
   // obvious wording reads "we have no the rival accounts we read". The verb
   // carries the sentence instead, and the input is quoted as the row it is.
-  const head = `${m.sections.join(' and ')} could not be filled. We have not recorded ${m.input}.`
+  // THE SHORT NAME, AND NAMED AS A SECTION. See `labelOf`: a map title is
+  // written to be read as a heading ("What they complain about with each
+  // rival") and this sentence splices it into running prose.
+  const names = m.labels.length > 0 ? m.labels : m.sections
+  const head = `The ${names.join(' and ')} ${names.length === 1 ? 'section' : 'sections'} could not be filled. We have not recorded ${m.input}.`
   // `unlocks` IS AN INSTRUCTION TO WHOEVER OWNS THE ROW, and only the CLIENT
   // can act on theirs. Every other row's act is our own operator copy and must
   // not be printed as if the reader could do it: `subject-set` reads "Phase 1
@@ -438,8 +459,11 @@ export interface UntrackedNote {
   /** Who closes it, by ROLE — never a person, and never a date. */
   owner: string
   ownerRole: 'client' | 'ops' | 'engineering'
-  /** The sections it is noted on, by title. */
+  /** The sections it is noted on, by title — the deck matches on this. */
   sections: string[]
+  /** The same sections by SHORT name (`labelOf`), which is what the sentence
+   *  splices. */
+  labels: string[]
   /** The line itself, already composed. */
   line: string
 }
@@ -468,6 +492,7 @@ export function untrackedNotes(
       const held = out.get(note)
       if (held) {
         held.sections.push(section.title)
+        held.labels.push(labelOf(section))
         held.line = untrackedSentence(held)
         continue
       }
@@ -477,6 +502,7 @@ export function untrackedNotes(
         owner: row.owner,
         ownerRole: row.ownerRole,
         sections: [section.title],
+        labels: [labelOf(section)],
         line: '',
       }
       built.line = untrackedSentence(built)
@@ -497,8 +523,12 @@ export function untrackedNotes(
  * mock's line is actually for: a reader has to know whether this is theirs to
  * fix or ours.
  */
-export function untrackedSentence(note: Pick<UntrackedNote, 'input' | 'ownerRole' | 'sections'>): string {
-  const where = note.sections.length > 0 ? ` ${note.sections.join(' and ')} ${note.sections.length === 1 ? 'is' : 'are'} read without it.` : ''
+export function untrackedSentence(note: Pick<UntrackedNote, 'input' | 'ownerRole' | 'sections' | 'labels'>): string {
+  // THE SHORT NAME, NOT THE HEADING. See `labelOf`: the map took the
+  // artboard's own titles in this wave and "What they complain about with each
+  // rival is read without it" stopped being a sentence the day it did.
+  const names = note.labels?.length ? note.labels : note.sections
+  const where = names.length > 0 ? ` The ${names.join(' and ')} ${names.length === 1 ? 'section is' : 'sections are'} read without it.` : ''
   const whose =
     note.ownerRole === 'client'
       ? 'Yours to name in Settings.'

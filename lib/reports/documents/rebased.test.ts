@@ -196,12 +196,15 @@ describe('the method page', () => {
 
   it('names every missing input and who closes it', () => {
     const items = methodItems(
-      signals({ reading: reading(), missing: [{ id: 'subject-set', input: 'the subjects', owner: 'Client', ownerRole: 'client', unlocks: 'Name them in Settings › Subjects.', sections: ['Your subjects'] }] }),
+      signals({ reading: reading(), missing: [{ id: 'subject-set', input: 'the subjects', owner: 'Client', ownerRole: 'client', unlocks: 'Name them in Settings › Subjects.', sections: ['Your subjects'], labels: ['Your subjects'] }] }),
       'x', false, 5, kinds,
     )
     const joined = items.join(' ')
     expect(joined).toContain('One thing this brief needed is not recorded')
-    expect(joined).toContain('Your subjects could not be filled')
+    // "The Your subjects section could not be filled" — a section is named as a
+    // section now, because the sentence splices a name into running prose and
+    // the map's titles are headings (see `labelOf`).
+    expect(joined).toContain('The Your subjects section could not be filled')
     expect(joined).toContain('This one is yours to close')
     expect(joined).toContain('Name them in Settings › Subjects')
     // The method page is a printed page behind a share link: it names the act,

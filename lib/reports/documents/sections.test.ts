@@ -123,15 +123,22 @@ describe('missingInputs', () => {
     expect(missing).toHaveLength(1)
     // The sales map's own order, which is the artboard's (E-sales).
     expect(missing[0].sections).toEqual(['What they are pushing back on', 'What sells, in their words'])
+    // …and the sentence splices the SHORT names, which is what a reader meets.
+    expect(missing[0].labels).toEqual(['Objections', 'Selling points'])
+    expect(missingSentence(missing[0])).toContain('The Objections and Selling points sections could not be filled.')
   })
 })
 
 describe('missingSentence', () => {
   const m = missingInputs(briefMap('leadership_brief'), READINESS)[0]
 
+  // A SECTION IS NAMED AS A SECTION. The name spliced in is the short one
+  // (`labelOf` — `context` where a section has it) and it is introduced as a
+  // section, because a map title is written to be read as a heading and the
+  // sales map took the artboard's own eleven-word titles in this wave.
   it('names the input and who closes it — and no work package', () => {
     expect(missingSentence(m)).toBe(
-      'Your subjects could not be filled. We have not recorded the five to eight subjects this workspace is read against. This one is yours to close. Name the subjects in Settings › Subjects.',
+      'The Your subjects section could not be filled. We have not recorded the five to eight subjects this workspace is read against. This one is yours to close. Name the subjects in Settings › Subjects.',
     )
   })
 
@@ -200,6 +207,16 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
     // the two functions answer two different questions about one row.
     expect(missingInputs(briefMap('sales_brief'), READINESS).map((m) => m.id)).not.toContain('rival-accounts')
     expect(notes[0].sections).toEqual(['What they complain about with each rival'])
+    // THE RENDERED SENTENCE, not just the sections it names. The map took the
+    // artboard's own titles in this wave — "By rival" became "What they
+    // complain about with each rival" — and `untrackedSentence` splices a
+    // section into running prose, so the rename turned the line into "What
+    // they complain about with each rival is read without it", which is not a
+    // sentence. It splices the SHORT name now (`context`, the artboard's own
+    // two-word slot) and says "section" out loud.
+    expect(notes[0].line).toBe(
+      'Not tracked: the rival accounts we read. The Rivals section is read without it. Yours to name in Settings.',
+    )
   })
 
   it('says nothing about an input that exists', () => {
@@ -210,7 +227,7 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
   })
 
   it('names the ROLE and never a date or a person', () => {
-    const line = untrackedSentence({ input: 'the rival accounts we read', ownerRole: 'ops', sections: ['By rival'] })
+    const line = untrackedSentence({ input: 'the rival accounts we read', ownerRole: 'ops', sections: ['By rival'], labels: ['Rivals'] })
     expect(line).toContain('Not tracked: the rival accounts we read.')
     expect(line).toContain('Ours to set up.')
     // D14: ReadinessRow carries a role token and never a person or a due date,
@@ -220,7 +237,7 @@ describe('untrackedNotes — the readiness NOTE rule (sales.p4.untracked)', () =
   })
 
   it('points a client-owned row at the client', () => {
-    expect(untrackedSentence({ input: 'x', ownerRole: 'client', sections: [] })).toContain('Yours to name in Settings.')
+    expect(untrackedSentence({ input: 'x', ownerRole: 'client', sections: [], labels: [] })).toContain('Yours to name in Settings.')
   })
 
   it('is empty for a map that notes nothing', () => {
