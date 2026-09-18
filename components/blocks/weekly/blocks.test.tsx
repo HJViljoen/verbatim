@@ -327,10 +327,14 @@ describe('WR3 · what came in this week', () => {
     expect(render(block.render(weeklyFixture(), 'email', ctx))).toContain('font-size:21px')
   })
 
-  it('carries the reason instead of a count where nobody counted', () => {
+  it('carries the reason instead of a count where nobody counted, ONCE', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
     expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
     expect(text).not.toContain('0 new comments on your subjects')
+    // The stat row's note and the trailing paragraph both fired whenever
+    // subjects are not recorded, so the forming state printed the same thirty
+    // words twice, eight lines apart.
+    expect(text.split('Quotes are counted against your subjects').length - 1).toBe(1)
   })
 
   // THE COUNT IS COUNTED, THE CARDS ARE CAPPED. `newThemes` is the shown few
@@ -596,8 +600,13 @@ describe('WR6 · coverage', () => {
       .toContain('Reddit comments are capped at')
   })
 
-  it('prints the rule that keeps the artefact honest', () => {
-    expect(renderText(block.render(weeklyFixture(), 'app', ctx))).toContain(WEEKLY_RULE)
+  // AND IT DOES NOT REPRINT THE RULE. The same 26 italic words were drawn
+  // under the masthead and again here, twice in one 640px email; the artboard
+  // has them in neither position, and DESIGN.md says italic is semantic.
+  it('leaves the rule to the masthead rather than printing it twice', () => {
+    for (const mode of MODES) {
+      expect(renderText(block.render(weeklyFixture(), mode, ctx)), mode).not.toContain(WEEKLY_RULE)
+    }
   })
 
   it('declares no figures — every number in the record is printed by the block it rests on', () => {

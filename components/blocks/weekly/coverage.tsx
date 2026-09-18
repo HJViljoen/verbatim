@@ -4,7 +4,7 @@ import { BlockFrame } from '@/components/blocks/frame'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { fmtInt } from '@/lib/format'
 import type { WeeklyData } from '@/lib/pages/weekly'
-import { inPeriod, periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
+import { inPeriod } from '@/lib/reports/weekly'
 
 // WR6 · Coverage, in one line (design §3 WR section 6).
 //
@@ -39,7 +39,8 @@ import { inPeriod, periodNounFor, weeklyRuleFor } from '@/lib/reports/weekly'
 //     reading surface has ever printed, and the one a reader counting Reddit
 //     posts most needs. The other four are already on this artefact: coverage
 //     and the read-depth basis inside the record's own lines, prepared-by and
-//     the privacy sentence in the footer.
+//     the privacy sentence in the footer;
+//   · AND THE RULE IS NOT REPEATED AT THE FOOT. See the render.
 
 function Sentence({ mode, children }: { mode: RenderMode; children: React.ReactNode }) {
   return mode === 'email'
@@ -77,13 +78,16 @@ export const weeklyCoverage: Block<WeeklyData> = {
           </div>
           {c.lines.map((l, i) => <Sentence key={i} mode={mode}>{l}</Sentence>)}
           {data.method ? <Sentence mode={mode}>{data.method.redditCap}</Sentence> : null}
-
-          <div
-            style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 14, fontStyle: 'italic' } : undefined}
-            className={email ? undefined : 'mt-3.5 text-[11.5px] italic text-muted-foreground'}
-          >
-            {weeklyRuleFor(periodNounFor(data.window))}
-          </div>
+          {/* THE RULE IS NOT REPRINTED HERE. It was drawn under the masthead
+              and again at the foot of this block — the same 26 italic words
+              twice in one 640px email, and seven times in the print deck's
+              page footers beside it. `lib/reports/weekly.ts` already called it
+              the most-printed string in the artefact, and the artboard carries
+              it in neither position. DESIGN.md: "Italic is semantic, never
+              decorative." It stays where a reader meets their first number —
+              the masthead in the email and on the share page, every sheet
+              footer on paper — and this block, which is about how sound the
+              reading is, says that in the record's own lines. */}
         </div>
       </BlockFrame>
     )

@@ -55,9 +55,12 @@ describe('the weekly email', () => {
     expect(text).toContain('Nothing this update read was an objection')
   })
 
-  it('prints the rule that keeps it honest under the masthead and again at the foot', () => {
+  // ONCE, WHERE A READER MEETS THEIR FIRST NUMBER. It was printed under the
+  // masthead AND at the foot of WR6 — the same 26 italic words twice in one
+  // 640px email — and the artboard carries them in neither position.
+  it('prints the rule that keeps it honest exactly once', () => {
     const text = words(snapshot())
-    expect(text.split(WEEKLY_RULE).length - 1).toBe(2)
+    expect(text.split(WEEKLY_RULE).length - 1).toBe(1)
   })
 
   it('stamps the reading date, which M9 will read back out of `data`', () => {

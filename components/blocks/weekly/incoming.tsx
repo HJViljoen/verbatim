@@ -256,7 +256,12 @@ export const weeklyIncoming: Block<WeeklyData> = {
             ) : null}
             {i.quotes.map((q, n) => <BlockQuote key={n} quote={q.quote} cite={`${q.subject} · ${q.cite}`} mode={mode} />)}
           </div>
-        ) : i.quotesNote ? (
+        ) : i.quotesNote && i.quotesTotal != null ? (
+          /* ONCE, NOT TWICE. Where `quotesTotal` is null the stat row above
+             already carries this exact sentence as its note, and both
+             conditions hold together whenever subjects are not recorded — so
+             the forming state printed the same thirty words twice, eight lines
+             apart. The trailing paragraph speaks only when the row did not. */
           <Note mode={mode}>{i.quotesNote}</Note>
         ) : null}
       </div>,
