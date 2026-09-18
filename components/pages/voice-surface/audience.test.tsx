@@ -15,6 +15,15 @@ const ctx = blockContext('', EMAIL, {})
 const draw = (data = voiceFixture(), mode: RenderMode = 'app') => renderText(voiceAudience.render(data, mode, ctx))
 
 describe('voiceAudience', () => {
+  it('says "too thin to compare" in words, not only on a tooltip', () => {
+    // The mark is the pill's weight, which is the mock's; the words were on
+    // `title` alone, which reaches neither a keyboard nor a touch screen — so
+    // for a thin audience nobody has selected, the fact that decides what the
+    // page below may claim was mouse-only.
+    const markup = render(voiceAudience.render(voiceFixture(), 'app', ctx))
+    expect(markup).toContain('<span class="sr-only"> · too thin to compare</span>')
+  })
+
   it('states the population once, and keeps its question off the bar', () => {
     // The right-hand basis column exists because each row is a share of a
     // different denominator — and two of them were not: the platform mix
@@ -52,7 +61,10 @@ describe('voiceAudience', () => {
     const data = voiceFixture()
     const thin = { ...data, audience: { ...data.audience, thin: true, videos: 27 } }
     expect(draw(thin)).toContain('27 videos in this audience · Sep 2026 · too thin to compare')
-    expect(draw()).not.toContain('· too thin to compare')
+    // Not on the ROW's note when the audience being read is not thin. The
+    // pills of the thin audiences carry the words themselves, for a reader
+    // with no mouse (see the sr-only test below).
+    expect(draw()).not.toContain('videos in this audience · Sep 2026 · too thin to compare')
   })
 
   it('keeps the audience its PROSE name in an email, where there is no switch', () => {

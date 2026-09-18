@@ -102,7 +102,15 @@ function AudiencePill({ option, mode }: { option: AudienceOption; mode: RenderMo
       {/* TWO STATES, NOT A RUN-ON. "Poler not observed tracked to 9 Sep 2026"
           reads as one clause and is two facts: nothing was read for this rival
           this month, and it left the tracked set on that day. */}
-      {label} {count}{retired ? <> · {retired}</> : null}
+      {label} {count}
+      {/* THIN, IN WORDS, FOR EVERY READER. The mark is the pill's WEIGHT (the
+          mock's density argument) and the words were on `title` alone, which
+          reaches neither a keyboard nor a touch screen — so for a thin
+          audience nobody has selected, the one fact that decides what the page
+          below may claim was mouse-only. `sr-only` keeps the mock's density
+          and gives the words back. */}
+      {option.thin && option.observed ? <span className="sr-only"> · too thin to compare</span> : null}
+      {retired ? <> · {retired}</> : null}
     </Link>
   )
 }
@@ -123,7 +131,9 @@ function Row({ label, note, mode, children }: { label: string; note?: ReactNode;
   }
   return (
     <div className="flex min-w-0 flex-col gap-1.5 border-t border-border/70 pt-2 first:border-0 first:pt-0 xl:flex-row xl:items-center xl:gap-3">
-      <span className="w-[104px] flex-none text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{label}</span>
+      {/* A HEADING, NOT A STYLED SPAN — the filter bar's four rows are four
+          sections of the block and were unreachable to heading navigation. */}
+      <h3 className="m-0 w-[104px] flex-none text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{label}</h3>
       <div className="min-w-0 flex-1">{children}</div>
       {note ? <span className="flex-none whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground">{note}</span> : null}
     </div>

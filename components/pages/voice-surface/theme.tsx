@@ -93,7 +93,13 @@ function Line({ label, note, mode, children }: { label: string; note?: ReactNode
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{label}</span>
+        {/* A HEADING, NOT A STYLED SPAN. Every sub-section inside these blocks
+            was a `<span>`: the page had one h1, four h2s and one h3 for some
+            fifteen sections, so heading navigation dropped a screen-reader
+            user into the middle of a tile with no way to move within it. The
+            level is h4 because the theme's own name is the h3 under the
+            block's h2 — `BlockFrame` owns that one. */}
+        <h4 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">{label}</h4>
         {note ? <span className="flex-none whitespace-nowrap font-mono text-[11px] tabular-nums text-muted-foreground">{note}</span> : null}
       </div>
       {children}
@@ -494,9 +500,15 @@ export const voiceTheme: Block<VoiceSurfaceData> = {
               is not our sentence — the counting is not deferred, there is
               simply nothing in this theme that describes who is speaking. */}
           <div className={email ? undefined : 'flex flex-wrap items-baseline justify-between gap-3 border-t border-border/70 pt-2.5'}>
-            <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted } : undefined}>
-              Who these commenters are — counted, not quoted
-            </span>
+            {email ? (
+              <span style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>
+                Who these commenters are — counted, not quoted
+              </span>
+            ) : (
+              <h4 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">
+                Who these commenters are — counted, not quoted
+              </h4>
+            )}
             <span className={email ? undefined : 'min-w-0 flex-1 text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>
               {t.withheld > 0
                 ? <><span data-copy="figure">{fmtInt(t.withheld)}</span> comments describe who these commenters are and are counted rather than quoted.</>

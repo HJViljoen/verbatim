@@ -139,7 +139,7 @@ function Arm({ label, rows, mode, ctx }: {
     return (
       <div style={{ paddingTop: 6 }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>
-          {label} · {fmtInt(rows.length)}
+          {label} · {fmtInt(rows.length)} {rows.length === 1 ? 'theme' : 'themes'}
         </div>
         {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} />)}
       </div>
@@ -148,8 +148,15 @@ function Arm({ label, rows, mode, ctx }: {
   return (
     <div className="flex min-w-0 flex-col">
       <div className="flex items-baseline justify-between gap-2 pb-1">
-        <span className="min-w-0 text-[12px] font-semibold text-foreground">{label}</span>
-        <span data-copy="figure" className="flex-none whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground">{fmtInt(rows.length)}</span>
+        {/* A HEADING, NOT A STYLED SPAN: the arms are the sections of this
+            block and heading navigation could not reach them. */}
+        <h3 className="m-0 min-w-0 text-[12px] font-semibold text-foreground">{label}</h3>
+        {/* AND THE COUNT CARRIES ITS NOUN. A bare "2" at the far right of a
+            sixty-character heading reads as a step number; the artboard pairs
+            the numeral with a word. */}
+        <span data-copy="figure" className="flex-none whitespace-nowrap font-mono text-[10.5px] tabular-nums text-muted-foreground">
+          {fmtInt(rows.length)} {rows.length === 1 ? 'theme' : 'themes'}
+        </span>
       </div>
       {rows.map((m) => <MoverRow key={m.id} mover={m} mode={mode} ctx={ctx} />)}
     </div>

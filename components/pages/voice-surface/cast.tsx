@@ -70,7 +70,7 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
           rather than the artboard's ten-icon array, four of them filled, which
           is a share drawn as a picture and this block has no share to draw. */}
       <CrowdFigure personaKey={persona.key} className="h-9 w-auto flex-none" title={persona.name} />
-      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{persona.name}</span>
+      <h3 className="m-0 min-w-0 flex-1 truncate text-[13px] font-semibold">{persona.name}</h3>
       {/* A COUNT, AND NO SHARE — see CastPersona.videos and the file header.
           `BlockStat` with no level is the right primitive for exactly this: a
           count that is not a share of anything, at the mock's 18px, stamping
@@ -104,19 +104,28 @@ function Persona({ persona, mode }: { persona: CastPersona; mode: RenderMode }) 
         // wraps a word code wrote is a place a real direction word could hide.
         // Only the model's own sentence is marked.
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>Drives</span>{' '}
+          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
+              is a field name beside the model's own words, and at body weight
+              it read as the start of the sentence. */}
+          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>Drives</span>{' '}
           <span data-copy="subject" data-slot="pass_e_persona">{persona.wants}</span>
         </p>
       ) : null}
       {persona.blockers ? (
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>Stops</span>{' '}
+          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
+              is a field name beside the model's own words, and at body weight
+              it read as the start of the sentence. */}
+          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>Stops</span>{' '}
           <span data-copy="subject" data-slot="pass_e_persona">{persona.blockers}</span>
         </p>
       ) : null}
       {persona.triggers ? (
         <p className={email ? undefined : 'm-0 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink } : undefined}>
-          <span className={email ? undefined : 'text-muted-foreground'}>What made them look</span>{' '}
+          {/* THE ARTBOARD'S MONO SMALL CAPS, not sentence-case body ink: this
+              is a field name beside the model's own words, and at body weight
+              it read as the start of the sentence. */}
+          <span className={email ? undefined : 'font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground'}>What made them look</span>{' '}
           <span data-copy="subject" data-slot="pass_e_persona">{persona.triggers}</span>
         </p>
       ) : null}
