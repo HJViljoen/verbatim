@@ -16,6 +16,7 @@ import type { Verdict } from '../reading/verdicts'
 // D3 · own posts, own claims and what the rivals say. This module's own two
 // fields and one call line; everything counted is in lib/reading/own-posts.ts.
 import {
+  OWN_POSTS_NO_ACCOUNTS,
   rivalOwnClaims,
   saidAbout,
   type OwnPostCensus,
@@ -473,15 +474,44 @@ export const QUESTIONS_SUBJECTS_NOTE =
  * it is.
  *
  * All four printed "— not tracked", which is ST1's state for a section whose
- * inputs are not configured. That is true of CO4 alone: a rival's own-post
- * claims may only be read from videos they posted, and their accounts are the
- * client's to name. Head-to-head, findings and category content have their
- * inputs — they are the same ones CO2 and CO5 have just drawn on the page
+ * inputs are not configured. Head-to-head, findings and category content have
+ * their inputs — they are the same ones CO2 and CO5 have just drawn on the page
  * above — and what they are missing is the code. Market's own unlocks say
  * "— not built yet" for that, and two surfaces of one product should not
  * disagree about what a missing section is.
+ *
+ * CO4'S ROW IS NOW READ OFF THE CENSUSES BESIDE IT, and that is the whole point
+ * of the argument. Until this package the section drew nothing, so "their
+ * accounts are not configured" was always true enough to print. It now draws a
+ * census per rival — "Freitag · 10 posts published in September" — and on both
+ * tenants every tracked rival has handles on two or three platforms, so the
+ * page would have printed "nobody is watching Freitag" directly beside ten of
+ * Freitag's posts. A page may not claim a behaviour the code has just
+ * disproved. So: where no rival is tracked, or every tracked rival has no
+ * account configured, the row is unchanged and the job is still the client's
+ * digital director's. Where the accounts ARE configured, the inputs are not
+ * what is missing — what is missing is the verbatim claims half, which is read
+ * from the rival's own transcripts and is not printed from a tenant session,
+ * and that is engineering's row to answer, not the client's to fix.
  */
-export function competitiveUnlockRows(): CompetitiveUnlockRow[] {
+export function competitiveUnlockRows(ownClaims: readonly OwnPostCensus[] = []): CompetitiveUnlockRow[] {
+  const watched = ownClaims.filter((c) => c.unread !== OWN_POSTS_NO_ACCOUNTS).length
+  const co4: CompetitiveUnlockRow =
+    watched === 0
+      ? {
+          section: 'CO4',
+          state: 'not tracked' as const,
+          title: 'What they say about themselves',
+          line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
+          owner: 'Your digital director',
+        }
+      : {
+          section: 'CO4',
+          state: 'not built yet' as const,
+          title: 'What they say about themselves',
+          line: 'What each rival published this month is above. What they CLAIM in it is read from their own transcripts and is not printed here — putting a rival’s words on this page is a decision to take, not a gap to fill.',
+          owner: 'Verbatim engineering',
+        }
   return [
     {
       section: 'CO3',
@@ -490,13 +520,7 @@ export function competitiveUnlockRows(): CompetitiveUnlockRow[] {
       line: 'You against the selected rival, one row per measure — videos about, comments per video, engagement per video, positive share, own posts published — now, last month and the change, with an n on every row.',
       owner: 'Verbatim engineering',
     },
-    {
-      section: 'CO4',
-      state: 'not tracked' as const,
-      title: 'What they say about themselves',
-      line: 'The rival’s own-post claims, verbatim, beside what their audience says on the same subject. Their accounts are not configured, and a rival’s claims may only be read from videos they posted themselves.',
-      owner: 'Your digital director',
-    },
+    co4,
     {
       section: 'CO6',
       state: 'not built yet' as const,
@@ -648,6 +672,10 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     subjectsNamed,
   })
 
+  // CO4 · the censuses, taken before the return because the readiness row below
+  // is read off them.
+  const ownClaims = await ownClaimsAhead
+
   // ── the record ─────────────────────────────────────────────────────────
   const verdicts = standingsVerdicts({ standings })
   const recordInputs: RecordInputs = {
@@ -671,7 +699,7 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
     },
     standings,
     questions,
-    ownClaims: await ownClaimsAhead,
+    ownClaims: ownClaims,
     // CO6 · the denominator is the audience's own videos this month, off the
     // rows the standings already read — never a second count of the same thing.
     saidAbout: buildSaidAbout(rivals.rivals, (audience) =>
@@ -679,7 +707,9 @@ export async function loadCompetitiveSurface(scope: Scope): Promise<CompetitiveS
         .filter((row2) => monthStartOf(row2.month) === month && row2.audience === audience)
         .reduce((n, row2) => n + row2.videos, 0),
     ),
-    unlocks: { rows: competitiveUnlockRows() },
+    // CO4's readiness row is read off the censuses beside it: a page may not
+    // say "their accounts are not configured" above ten of Freitag's posts.
+    unlocks: { rows: competitiveUnlockRows(ownClaims) },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
   }
 }

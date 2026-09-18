@@ -173,7 +173,9 @@ export function competitiveFixture(over: Partial<CompetitiveSurfaceData> = {}): 
       [{ name: 'Ottobock' }, { name: 'Rareform' }, { name: 'Patagonia' }],
       (audience) => (audience === 'competitor:Ottobock' ? 42 : 0),
     ),
-    unlocks: { rows: competitiveUnlockRows() },
+    // Read off the censuses above: accounts ARE configured for these rivals, so
+    // CO4 no longer says nobody is watching them.
+    unlocks: { rows: competitiveUnlockRows(ownClaimsFixture()) },
     record: {
       line: 'your 4th monthly reading · 2 updates · 449 videos · 34% of what was said on camera was not in English',
       lines: ['2 updates delivered in this month.'],
