@@ -225,7 +225,7 @@ describe('WK1 · unusual this week', () => {
         expect(text, mode).toContain('the 9 updates behind it that found anything ran')
         expect(text, mode).toContain('1–559 videos')
         expect(text, mode).toContain('typical 462')
-        expect(text, mode).toContain('3 of them found nothing at all, drawn and left out of the range')
+        expect(text, mode).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
         // ONCE, not twice — the defect F4 named.
         expect(text.match(/1–559/g) ?? [], mode).toHaveLength(1)
         expect(text.match(/found nothing at all/g) ?? [], mode).toHaveLength(1)
@@ -309,7 +309,7 @@ describe('WK1 · unusual this week', () => {
     // seven are drawn rather than dropped.
     // The legend's words, because the chart is drawn on this arm (F4).
     expect(text).toContain('the 5 updates behind it that found anything ran')
-    expect(text).toContain('7 of them found nothing at all, drawn and left out of the range')
+    expect(text).toContain('7 of them found nothing at all, drawn off the line and left out of the range')
   })
 
   it('says nothing about the series where no update carries a window', () => {
@@ -328,15 +328,26 @@ describe('WK1 · unusual this week', () => {
 })
 
 describe('the thirteen-point chart (Block D wave 2)', () => {
-  it('draws one point per update, zeroes included', () => {
+  it('draws one point per update, zeroes included, and does not join them to the line', () => {
     const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
     const d = weekFixture()
     expect(d.unusual.series!.points).toHaveLength(13)
     // A point per update, and the zero deliveries are among them: three of
     // Össur's thirteen found nothing and are drawn on the floor rather than
-    // dropped out of the line.
+    // dropped out of the chart.
     expect(markup.match(/<circle/g)).toHaveLength(13)
     expect(markup).toContain('<polyline')
+    // AND THE LINE BREAKS AT EACH OF THEM (design review F5). One polyline over
+    // every point dived to the floor and climbed back three times — a gather
+    // gap drawn as the conversation collapsing and recovering. Össur's series
+    // is 0 · 94 · 0 · 1 462 · 0 · 488 456 473 376 466 559 618, so the runs of
+    // two-or-more that found something are two: [94] alone draws no stroke,
+    // [1, 462] does, and the six from 488 on do.
+    expect(markup.match(/<polyline/g)).toHaveLength(2)
+    // The quiet updates are a different MARK, not the same dot at zero: an
+    // open ring, and the legend's swatch is the same ring.
+    expect(markup).toContain('found nothing · the 7 days to 5 Jul')
+    expect(markup).toContain('drawn off the line and left out of the range')
   })
 
   it('names its axis as updates and never as weeks', () => {
@@ -356,7 +367,7 @@ describe('the thirteen-point chart (Block D wave 2)', () => {
     // videos. This one says "videos"; the flag's says "points".
     const text = renderText(weekUnusual.render(weekFixture(), 'app', ctx))
     expect(text).toContain('1–559 videos')
-    expect(text).toContain('3 of them found nothing at all, drawn and left out of the range')
+    expect(text).toContain('3 of them found nothing at all, drawn off the line and left out of the range')
     expect(text).toContain('on a band of 4.9')
   })
 

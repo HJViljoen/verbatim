@@ -19,11 +19,23 @@ import { updateBand, type UpdateSeries } from '@/lib/reading/updates'
 // and then nine zeroes. A chart of that column would tell a paying client we
 // read nothing for nine weeks. `lib/reading/updates.ts` carries the measurement.
 //
-// A ZERO IS DRAWN AND IS LEFT OUT OF THE BAND. An update that found nothing is
-// a fact about that delivery, so the line goes to the floor and stays visible;
-// "what an update of this workspace usually brings in" is not a question about
-// the updates that brought in nothing, so `updateBand` excludes them and the
-// legend says how many it counted.
+// A ZERO IS DRAWN, IS LEFT OUT OF THE BAND, AND IS NOT ON THE LINE. An update
+// that found nothing is a fact about that delivery, so it is drawn and stays
+// visible; "what an update of this workspace usually brings in" is not a
+// question about the updates that brought in nothing, so `updateBand` excludes
+// them and the legend says how many it counted.
+//
+// AND THE LINE BREAKS AT ONE RATHER THAN DIVING THROUGH IT (Block D wave 2,
+// design review F5). The polyline ran over every point including the ones that
+// found nothing, so on Össur it dived to the floor and climbed back three
+// times and on Sealand seven — a gather gap rendered as the conversation
+// collapsing and recovering. Gathering is a thing that FILLS UP over time
+// (Heinrich, 2026-09-18): an update that found nothing is a week we did not
+// look, or did not look wide enough, and joining it to its neighbours with a
+// stroke asserts a reading nobody took. So the line is drawn in segments over
+// the updates that found something, and a quiet update is an OPEN RING on the
+// floor — a different mark, not a low value — with the legend's swatch the
+// same open ring rather than the dot every other point uses.
 //
 // THE BAND IS A COUNT BAND IN VIDEOS. The other band in this block — a flag's
 // `bandPts` — is in percentage points, and two unlabelled bands on one block is
@@ -39,7 +51,10 @@ import { updateBand, type UpdateSeries } from '@/lib/reading/updates'
 const W = 620
 const H = 168
 const LEFT = 40
-const RIGHT = 576
+// The plot stops short of the box so the end label has room: it sets the
+// newest count in mono 11 at `RIGHT + 8`, and at 576 a six-character value ran
+// past the 620 viewBox and clipped (design review, nits).
+const RIGHT = 560
 const TOP = 20
 const FLOOR = 132
 
@@ -53,7 +68,20 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
   const y = (v: number) => FLOOR - (v / high) * (FLOOR - TOP)
   const x = (i: number) => LEFT + (i / (points.length - 1)) * (RIGHT - LEFT)
   const newest = points[points.length - 1]
-  const path = points.map((p, i) => `${x(i)},${y(p.videos)}`).join(' ')
+  // SEGMENTS, NOT ONE PATH. A run of consecutive updates that each found
+  // something is one stroke; a quiet update ends the run. A run of one has no
+  // stroke to draw — its dot stands alone, which is the truth about it.
+  const segments: string[] = []
+  let run: string[] = []
+  points.forEach((p, i) => {
+    if (p.videos > 0) {
+      run.push(`${x(i)},${y(p.videos)}`)
+      return
+    }
+    if (run.length > 1) segments.push(run.join(' '))
+    run = []
+  })
+  if (run.length > 1) segments.push(run.join(' '))
 
   const label = (i: number) => shortDate(points[i].window.to)
   const mid = Math.floor((points.length - 1) / 2)
@@ -99,20 +127,32 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
         ) : null}
         <text x={LEFT - 6} y={y(high) + 3} textAnchor="end" className="fill-muted-foreground font-mono text-[10px]">{fmtInt(high)}</text>
 
-        <polyline points={path} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        {points.map((p, i) => (
-          <circle
-            key={p.runId}
-            cx={x(i)}
-            cy={y(p.videos)}
-            r={i === points.length - 1 ? 3.4 : 2.2}
-            fill="var(--chart-1)"
-            stroke="var(--tile)"
-            strokeWidth={i === points.length - 1 ? 1.5 : 1}
-          >
-            <title>{`${fmtInt(p.videos)} videos · the ${p.days} days to ${shortDate(p.window.to)}`}</title>
-          </circle>
+        {segments.map((seg, i) => (
+          <polyline key={i} points={seg} fill="none" stroke="var(--chart-1)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
         ))}
+        {points.map((p, i) => {
+          const last = i === points.length - 1
+          const quiet = p.videos === 0
+          return (
+            <circle
+              key={p.runId}
+              cx={x(i)}
+              cy={y(p.videos)}
+              r={quiet ? 2.6 : last ? 3.4 : 2.2}
+              // AN OPEN RING FOR AN UPDATE THAT FOUND NOTHING: a different
+              // mark, which is what it is — not the same dot at a low value.
+              fill={quiet ? 'var(--tile)' : 'var(--chart-1)'}
+              stroke={quiet ? 'var(--chart-1)' : 'var(--tile)'}
+              strokeWidth={quiet ? 1.2 : last ? 1.5 : 1}
+            >
+              <title>
+                {quiet
+                  ? `found nothing · the ${p.days} days to ${shortDate(p.window.to)}`
+                  : `${fmtInt(p.videos)} videos · the ${p.days} days to ${shortDate(p.window.to)}`}
+              </title>
+            </circle>
+          )
+        })}
         {/* THE NEWEST POINT, NAMED — it is the one the whole page is about. */}
         <text x={RIGHT + 8} y={y(newest.videos) - 2} className="fill-foreground font-mono text-[11px] font-semibold">
           {fmtInt(newest.videos)}
@@ -143,8 +183,10 @@ export function UpdateSeriesChart({ series }: { series: UpdateSeries }) {
           </Key>
         )}
         {quiet > 0 ? (
-          <Key swatch={<span className="size-2 rounded-full" style={{ background: 'var(--chart-1)' }} />}>
-            {fmtInt(quiet)} of them found nothing at all, drawn and left out of the range
+          // THE SWATCH IS THE MARK THE CHART DRAWS. It was the same filled dot
+          // as every other point, so it mapped to nothing a reader could find.
+          <Key swatch={<span className="size-2 rounded-full border" style={{ borderColor: 'var(--chart-1)', background: 'var(--tile)' }} />}>
+            {fmtInt(quiet)} of them found nothing at all, drawn off the line and left out of the range
           </Key>
         ) : null}
       </div>
