@@ -111,6 +111,18 @@ describe('WR1 · the week in one sentence', () => {
     }
   })
 
+  // GREEN IS "YOU, GAINING, SUPPORTED CLAIMS" (DESIGN.md). The badge coloured
+  // strictly by sign, so a RISE IN OBJECTIONS came out green on mint inside a
+  // card headed "Unusual this week · Objections"; the artboard's own pill is
+  // amber because amber is valence-free.
+  it('never paints the flag’s movement as good news', () => {
+    const markup = render(block.render(weeklyFixture(), 'email', ctx))
+    expect(markup).toContain(EMAIL.mixedTint)
+    expect(markup).not.toContain(EMAIL.greenTint)
+    // And on the screen arm the same axis prints muted, never positive.
+    expect(render(block.render(weeklyFixture(), 'app', ctx))).not.toContain('text-positive')
+  })
+
   it('carries the "of N" on both sides of the comparison, in a level node', () => {
     const markup = render(block.render(weeklyFixture(), 'app', ctx))
     expect(copyViolations(markup)).toEqual([])

@@ -32,7 +32,12 @@ import { flagFigures, inPeriod, nothingElseUnusual, updateMeta, type PeriodNoun,
 //   · the amber "▲ 3.1× usual" pill is a ratio, and the product's badge
 //     vocabulary is fixed at a signed magnitude with the band it cleared
 //     (`components/delta-badge.tsx` MOVEMENT_WORDS). `BlockMovement` prints
-//     "+10.7 pts · band 5.0" in that slot — the same claim, checkable;
+//     "+10.7 pts · band 5.0" in that slot — the same claim, checkable — and
+//     it prints it `good="neutral"`. THE SLOT IS ALWAYS ADVERSE, AND THE
+//     BADGE COLOURED IT BY SIGN: a rise in objections came out green on mint
+//     inside a card headed "Unusual this week · Objections". The artboard's
+//     own pill is amber for exactly this reason, and DESIGN.md reserves green
+//     for "you, gaining, supported claims";
 //   · the two bar rows carry `38` and `12` as bare counts under a caption
 //     ("videos naming it") that is not a denominator. Rule (b) requires the
 //     "of N", so each row's figure is a `FigureCell` — the share on top, the
@@ -173,7 +178,7 @@ function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: numb
           <tbody>
             <tr>
               <td style={{ fontFamily: FONT.sans, fontSize: 13, fontWeight: 600, color: EMAIL.ink }}>{title}</td>
-              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 10 }}><BlockMovement verdict={verdict} unit="pts" mode={mode} /></td>
+              <td align="right" style={{ whiteSpace: 'nowrap', paddingLeft: 10 }}><BlockMovement verdict={verdict} unit="pts" mode={mode} good="neutral" /></td>
             </tr>
           </tbody>
         </table>
@@ -189,7 +194,7 @@ function Flag({ flag, index, mode, appUrl, noun }: { flag: WeekFlag; index: numb
     <div className="mt-3 rounded-md bg-inner p-4">
       <div className="flex items-center justify-between gap-2.5">
         <span className="text-[13px] font-semibold">{title}</span>
-        <span className="flex-none"><BlockMovement verdict={verdict} unit="pts" mode={mode} /></span>
+        <span className="flex-none"><BlockMovement verdict={verdict} unit="pts" mode={mode} good="neutral" /></span>
       </div>
       {bars}
       <p className="m-0 mt-2 font-mono text-[11px] leading-snug text-muted-foreground">{caption}</p>

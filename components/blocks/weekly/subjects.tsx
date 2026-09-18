@@ -134,9 +134,14 @@ function Row({ row, contribution, rivalLabel, share, mode, appUrl }: {
           you <Side side={row.you} mode={mode} /> · {rivalLabel ?? 'rival'} <Side side={row.rival} mode={mode} />
         </>
       )
+  // `good="neutral"` — A SHARE OF THE CATEGORY HAS NO FAVOURABLE DIRECTION.
+  // The badge coloured by sign, so Price at "−3.1 pts" was painted red and a
+  // rise in anything was painted green; fewer people arguing about price is
+  // not self-evidently bad news, and this product does not decide that for a
+  // reader (components/delta-badge.tsx, "THE COLOUR IS THE JUDGEMENT").
   const movement = (
     <>
-      <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} /> <DirectionWord direction={row.direction} mode={mode} />
+      <BlockMovement verdict={row.category.verdict} unit="pts" mode={mode} good="neutral" /> <DirectionWord direction={row.direction} mode={mode} />
     </>
   )
   if (mode === 'email') {

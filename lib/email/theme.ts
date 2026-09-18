@@ -29,6 +29,12 @@ export const EMAIL = {
   comp: '#F0742B',
   cat: '#9AA1A9',
   mixed: '#E6B03C',
+  /** `mixed` at 20% over the card, FLATTENED — the artboards' attention tint
+   *  (`rgba(230,176,60,.20)`), which a mail client laying out with Word will
+   *  not composite. It completes the tint set beside `greenTint` and
+   *  `downTint`, and it is the one a movement carries when the caller has said
+   *  the direction is not a judgement (`BlockMovement`, good="neutral"). */
+  mixedTint: '#FAEFD8',
   neutralSeg: '#CDD2D7',
 } as const
 
