@@ -7,10 +7,14 @@ import {
   FALLBACK_NOTE,
   INTERPRETATION_CAVEAT,
   NOT_ANSWERED_HREF,
+  POINT_REMOVED_NOTE,
+  POINT_REPLACED_NOTE,
   TOO_FEW,
   answerFallback,
   loadNotAnswered,
+  magnitudeWords,
   measureAnswer,
+  groundedFallback,
   notAnsweredFrom,
   scrubAnswer,
   scrubThreadAnswer,
@@ -214,7 +218,49 @@ describe('scrubThreadAnswer', () => {
     // The commenter's own words are a sibling node and are never handed to the
     // scrubber: the digit in them survives.
     expect(out.grounded[0].quotes[0].text).toContain('2 of them')
-    expect(out.scrub).toEqual({ dropped: 2, droppedDigits: 2, droppedDirection: 0, leaked: true })
+    expect(out.scrub).toEqual({ dropped: 2, droppedDigits: 2, droppedDirection: 0, magnitude: 0, leaked: true })
+  })
+
+  it('never leaves an evidence card blank: an emptied point gets the reading', () => {
+    // "3D printing" is the production case — FIGURE_RE matches the 3, the
+    // allow-list's ordinal rule drops that shape, and the sentence goes.
+    const answer = {
+      answer: 'Durability leads.',
+      grounded: [{ text: 'There is clear openness to innovation through 3D printing.', quotes: [] }],
+    }
+    const out = scrubThreadAnswer(answer, measure, () => 'G1')
+    expect(out.grounded[0].text).not.toBe('')
+    expect(out.grounded[0].text.startsWith(POINT_REPLACED_NOTE)).toBe(true)
+    // The reading itself, with its own denominator.
+    expect(out.grounded[0].text).toContain('320 of 1,388 videos')
+    expect(out.grounded[0].replaced).toBe(true)
+    // A point that survived is not marked.
+    expect(scrubThreadAnswer({ answer: 'x', grounded: [{ text: 'Nothing numeric here.' }] }, measure).grounded[0].replaced)
+      .toBeUndefined()
+  })
+
+  it('says the sentence went where there is no reading to put in its place', () => {
+    const nothing = measureAnswer({ findings: [], series: [], month: MONTH, directionWords: true })
+    const out = scrubThreadAnswer(
+      { answer: 'x', grounded: [{ text: 'It came up in 305 of 1,388 videos.' }] },
+      nothing,
+      () => '0:G1',
+    )
+    expect(out.grounded[0].text).toBe(POINT_REMOVED_NOTE)
+    expect(groundedFallback(null, '0:G1')).toBe(POINT_REMOVED_NOTE)
+  })
+
+  it('keeps a magnitude word and counts it, rather than word-deleting it', () => {
+    // A word-delete would print "The of commenters mention fit." — broken
+    // English with the leak buried in ai_call_log.
+    const out = scrubThreadAnswer(
+      { answer: 'The majority of commenters mention fit.', grounded: [] },
+      measure,
+    )
+    expect(out.answer).toBe('The majority of commenters mention fit.')
+    expect(out.scrub.magnitude).toBe(1)
+    // And never a word inside somebody else's sentence.
+    expect(magnitudeWords('They said \u201cthe vast majority of it held up\u201d.')).toBe(0)
   })
 })
 

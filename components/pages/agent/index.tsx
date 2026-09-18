@@ -51,7 +51,10 @@ function AnswerBody({ a, from, to }: { a: ThreadAnswer; from: number; to: number
   return (
     <div className="space-y-4">
       {from === 0 && a.notice && <p className="rounded-lg border border-dashed border-border/60 px-4 py-3 text-[12.5px] text-muted-foreground">{a.notice}</p>}
-      {from === 0 && <p className="text-[15px] leading-relaxed text-foreground">{a.answer}</p>}
+      {/* Instead of, never beside — see AgentAnswerView. A deck that leaves the
+          building may not carry a blank where the answer was. */}
+      {from === 0 && a.answer.trim() !== '' && <p className="text-[15px] leading-relaxed text-foreground">{a.answer}</p>}
+      {from === 0 && a.answer.trim() === '' && a.fallback && <p className="text-[15px] leading-relaxed text-muted-foreground">{a.fallback}</p>}
       {points.length > 0 && (
         <section className="space-y-3">
           {/* The heading FOLLOWS THE EVIDENCE, as it does on screen. It was

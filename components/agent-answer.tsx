@@ -73,7 +73,18 @@ export function AgentAnswerView({ answer, citations = [] }: { answer: ThreadAnsw
         </p>
       )}
 
-      <p className="text-[17px] leading-relaxed text-foreground">{answer.answer}</p>
+      {/* THE FALLBACK IS PRINTED INSTEAD OF THE ANSWER, never beside it.
+          `answer.answer` is the scrubbed prose, and a scrub that removes every
+          sentence used to render as an empty paragraph over a page of evidence.
+          `fallback` is the product's own reading of the same verdicts and says
+          in its first sentence that it is — which is the half a reader needs to
+          calibrate (lib/prose/interpret.ts's rule). Neither present is nothing
+          at all, not a blank line. */}
+      {answer.answer.trim() !== '' ? (
+        <p className="text-[17px] leading-relaxed text-foreground">{answer.answer}</p>
+      ) : answer.fallback ? (
+        <p className="text-[17px] leading-relaxed text-muted-foreground">{answer.fallback}</p>
+      ) : null}
 
       {hasGrounded && (
         <section className="space-y-4">
@@ -88,7 +99,11 @@ export function AgentAnswerView({ answer, citations = [] }: { answer: ThreadAnsw
                   its count onto a third, where it read as a stray number
                   rather than as the measure of the line above it. */}
               <div className="flex items-baseline justify-between gap-3">
-                <p className="min-w-0 flex-1 text-[15px] leading-snug text-foreground">
+                {/* A REPLACED POINT IS MUTED, not hidden. Its own sentence
+                    named a figure nothing measured; the text here is the
+                    product's reading (or the plain statement that the sentence
+                    went), and the quotes under it are untouched. */}
+                <p className={`min-w-0 flex-1 text-[15px] leading-snug ${point.replaced ? 'text-muted-foreground' : 'text-foreground'}`}>
                   <span className="mr-2 text-xs font-semibold text-muted-foreground tabular-nums">{i + 1}</span>
                   {point.text}
                 </p>

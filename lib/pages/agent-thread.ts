@@ -46,7 +46,9 @@ export interface ThreadQuote extends Quote {
 }
 
 export interface ThreadAnswer extends Omit<AgentAnswer, 'grounded'> {
-  grounded: (Omit<AgentAnswer['grounded'][number], 'quotes'> & { quotes: ThreadQuote[] })[]
+  /** `replaced` is a point whose own sentence the scrubbers emptied: `text` is
+   *  the product's reading in its place and says so in words, never a blank. */
+  grounded: (Omit<AgentAnswer['grounded'][number], 'quotes'> & { quotes: ThreadQuote[]; replaced?: boolean })[]
   /**
    * What the scrubbers removed from THIS answer's prose (D8, mock-gap D13).
    *
@@ -60,7 +62,7 @@ export interface ThreadAnswer extends Omit<AgentAnswer, 'grounded'> {
    * prompt that starts leaking should be visible on the surface it leaks onto.
    * Absent on an answer measured against nothing at all.
    */
-  scrub?: { dropped: number; droppedDigits: number; droppedDirection: number; leaked: boolean }
+  scrub?: { dropped: number; droppedDigits: number; droppedDirection: number; magnitude: number; leaked: boolean }
   /** What the product says in place of an answer the scrubbers emptied —
    *  composed from the same verdicts, and saying that it was. Null whenever
    *  `answer` survived. */
@@ -459,9 +461,11 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
     hasJudgement: turns.some((t) => (t.answer?.judgement.length ?? 0) > 0),
   })
   const fallback = answerFallback(measure)
-  for (const t of turns) {
-    if (!t.answer) continue
-    const scrubbed = scrubThreadAnswer(t.answer, measure)
+  turns.forEach((t, i) => {
+    if (!t.answer) return
+    // `findingKey` on both ends: a point that loses its sentence finds its own
+    // measurement, never the neighbouring turn's.
+    const scrubbed = scrubThreadAnswer(t.answer, measure, (g) => findingKey(i, g.id))
     t.answer = {
       ...t.answer,
       answer: scrubbed.answer,
@@ -469,10 +473,12 @@ export async function loadAgentThread(scope: Scope): Promise<AgentThreadData | n
       scrub: scrubbed.scrub,
       // Only where the model's own sentences are gone: an answer that survived
       // needs no substitute, and printing one beside it would read as a second
-      // opinion rather than as a replacement.
+      // opinion rather than as a replacement. Both renderers print this INSTEAD
+      // OF `answer` — an emptied head used to render as a blank paragraph,
+      // which is a worse artefact than the prose it replaced.
       fallback: scrubbed.answer.trim() === '' ? fallback : null,
     }
-  }
+  })
 
   const plan = row<{ id: string; title: string | null; source_filename: string | null }>(await planP, 'agentThread.plan')
   let planChip: AgentThreadData['planChip'] = null

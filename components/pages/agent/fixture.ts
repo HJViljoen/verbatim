@@ -114,7 +114,7 @@ function turn(answerText: string, groundedText: string): AgentThreadData['turns'
       judgement: [{ text: 'Lead with durability and let the recycled sails carry the proof underneath it.', basedOn: ['G1'] }],
       runId: 'run-1',
       costUsd: 0.04,
-      scrub: { dropped: 1, droppedDigits: 1, droppedDirection: 0, leaked: true },
+      scrub: { dropped: 1, droppedDigits: 1, droppedDirection: 0, magnitude: 0, leaked: true },
       fallback: null,
       grounded: [
         {

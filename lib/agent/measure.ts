@@ -4,7 +4,7 @@ import { ASK_MONTHLY_CAP } from '../config'
 import { fmtInt, longMonth } from '../format'
 import { capLine, monthStartIso } from '../ask/quota'
 import { proseFigures } from '../prose/figures'
-import { scrubProse, type ProseScrub } from '../prose/scrub'
+import { MAGNITUDE_RE, replaceOutsideQuotes, scrubProse, type ProseScrub } from '../prose/scrub'
 import { rows as readRows } from '../pages/read'
 import { audienceLabel } from '../readiness/types'
 import { clearsFloor, monthChange, type Direction } from '../reading/bands'
@@ -331,14 +331,47 @@ export function scrubAnswer(raw: string, measure: AnswerMeasure): ProseScrub {
   return scrubProse('agent_answer', raw, {
     figures: proseFigures(measure.figures),
     verdicts: measure.verdicts,
+    // THE MAGNITUDE STRIP IS OFF HERE, and it is the one rule this slot turns
+    // down. It is a WORD-delete, and a word-delete is the failure mode the
+    // sentence rules exist to avoid: "The majority of commenters mention fit"
+    // renders as "The of commenters mention fit" — broken English on the page
+    // with the leak buried in `ai_call_log`, which is exactly what
+    // lib/prose/scrub.ts's own header says a word-delete does. On the slots
+    // where it runs, the words it removes ("many buyers said so") leave a
+    // sentence standing; Ask answers in conversational analyst prose, where
+    // `most` and `majority` are the subject of the sentence rather than a
+    // decoration on it. Nothing is silently kept: `magnitudeWords` counts the
+    // breach into `ScrubbedAnswer.scrub`, the `flaggedDirection` precedent, so
+    // the trade can be revisited on numbers rather than on taste.
+    magnitude: false,
   })
+}
+
+/**
+ * Magnitude words the model typed outside a quotation — counted, not deleted.
+ *
+ * The count is the whole point: `scrubAnswer` turns the strip off, so without
+ * this a prompt that starts free-styling "the vast majority" would be invisible
+ * until a reader found it.
+ */
+export function magnitudeWords(raw: string): number {
+  const marked = replaceOutsideQuotes(raw ?? '', MAGNITUDE_RE, ' ')
+  return (marked.match(/ /g) ?? []).length
 }
 
 /** An answer's prose, as the page gets it. */
 export interface ScrubbedAnswer<T> {
   answer: string
-  grounded: T[]
-  scrub: { dropped: number; droppedDigits: number; droppedDirection: number; leaked: boolean }
+  grounded: (T & { replaced?: boolean })[]
+  scrub: {
+    dropped: number
+    droppedDigits: number
+    droppedDirection: number
+    /** Magnitude words kept and counted rather than word-deleted — see
+     *  `scrubAnswer`. */
+    magnitude: number
+    leaked: boolean
+  }
 }
 
 /**
@@ -352,25 +385,39 @@ export interface ScrubbedAnswer<T> {
  * handed to the scrubber (AGENTS.md, `data-copy="quote"`). What the rule still
  * refuses is a number the MODEL typed inside quotation marks in its own
  * sentence — that is `dropDigitSentences`' job and it does it here.
+ *
+ * AND NO PROSE NODE IS LEFT EMPTY. A scrub that empties a grounded point used
+ * to hand the page a numbered evidence card carrying a conversation count, a
+ * quote and NO SENTENCE — a worse artefact than the unchecked prose this set
+ * out to fix, and not hypothetical: one stored answer in production loses its
+ * only grounded sentence to "3D printing", where the `3` is a name and the
+ * allow-list cannot rescue it either (`allowTokens`' ordinal rule drops that
+ * shape deliberately). An emptied point is given the READING in place of the
+ * sentence, and says that it was. `keyOf` is how a point finds its own
+ * measurement — `findingKey` in lib/pages/agent-thread.ts, so both ends agree.
  */
 export function scrubThreadAnswer<T extends { text: string }>(
   answer: { answer: string; grounded: T[] },
   measure: AnswerMeasure,
+  keyOf?: (node: T, index: number) => string,
 ): ScrubbedAnswer<T> {
   const head = scrubAnswer(answer.answer, measure)
   let dropped = head.dropped
   let droppedDigits = head.droppedDigits
   let droppedDirection = head.droppedDirection
+  let magnitude = magnitudeWords(answer.answer)
   let leaked = head.leaked
-  const grounded = answer.grounded.map((g) => {
+  const grounded = answer.grounded.map((g, i) => {
     const s = scrubAnswer(g.text, measure)
     dropped += s.dropped
     droppedDigits += s.droppedDigits
     droppedDirection += s.droppedDirection
+    magnitude += magnitudeWords(g.text)
     leaked = leaked || s.leaked
-    return { ...g, text: s.text }
+    if (s.text.trim() !== '') return { ...g, text: s.text }
+    return { ...g, text: groundedFallback(measure, keyOf ? keyOf(g, i) : ''), replaced: true }
   })
-  return { answer: head.text, grounded, scrub: { dropped, droppedDigits, droppedDirection, leaked } }
+  return { answer: head.text, grounded, scrub: { dropped, droppedDigits, droppedDirection, magnitude, leaked } }
 }
 
 /** What the page says when the scrubbers empty an answer's own sentences. The
@@ -378,6 +425,27 @@ export function scrubThreadAnswer<T extends { text: string }>(
  *  model's cannot calibrate either (lib/prose/interpret.ts's rule, one surface
  *  over). */
 export const FALLBACK_NOTE = 'The answer’s own sentences named figures we did not measure, so this is the reading itself.'
+
+/** The same sentence for ONE evidence card, where the card's own sentence is
+ *  gone and the reading takes its place. */
+export const POINT_REPLACED_NOTE = 'The sentence here named a figure we did not measure, so this is the reading instead:'
+
+/** And where there is no reading either — the answer's sentence is gone, the
+ *  quotes under it are not, and the card says which. It is deliberately not an
+ *  apology: the voices below are still the evidence the point rested on, and
+ *  they are a commenter's own words either way. */
+export const POINT_REMOVED_NOTE =
+  'The sentence here named a figure we did not measure and was removed. The voices below are what the point rested on.'
+
+/** One finding, as the product states it for itself: the level with its own
+ *  denominator, then the banded comparison beside it. */
+function findingLine(f: FindingMeasure): string {
+  const v = f.verdict
+  const level = `${f.label}: ${fmtInt(f.value.k)} of ${fmtInt(f.value.n)} videos in ${f.audienceLabel.toLowerCase()}`
+  if (!v || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
+  const sign = v.changePts > 0 ? '+' : ''
+  return `${level}, ${v.state === 'moved' ? 'moved' : 'no clear change'} (${sign}${v.changePts} pts, band ${v.bandPts} pts).`
+}
 
 /**
  * The answer the product writes for itself when nothing of the model's
@@ -390,14 +458,20 @@ export const FALLBACK_NOTE = 'The answer’s own sentences named figures we did 
  */
 export function answerFallback(measure: AnswerMeasure): string | null {
   if (measure.findings.length === 0) return null
-  const lines = measure.findings.slice(0, 3).map((f) => {
-    const v = f.verdict
-    const level = `${f.label}: ${fmtInt(f.value.k)} of ${fmtInt(f.value.n)} videos in ${f.audienceLabel.toLowerCase()}`
-    if (!v || v.changePts == null || v.bandPts == null) return `${level}, ${TOO_FEW} with the month before.`
-    const sign = v.changePts > 0 ? '+' : ''
-    return `${level}, ${v.state === 'moved' ? 'moved' : 'no clear change'} (${sign}${v.changePts} pts, band ${v.bandPts} pts).`
-  })
-  return [FALLBACK_NOTE, ...lines].join(' ')
+  return [FALLBACK_NOTE, ...measure.findings.slice(0, 3).map(findingLine)].join(' ')
+}
+
+/**
+ * What ONE evidence card says when the scrubbers empty its sentence.
+ *
+ * Never empty, which is the whole reason it exists. Where the card's own
+ * finding was measured the reading stands in its place; where it was not, the
+ * card says the sentence was removed and leaves the quotes to speak, which they
+ * can — they are the commenter's own words and were never scrubbed.
+ */
+export function groundedFallback(measure: AnswerMeasure | null, findingId: string): string {
+  const f = measure?.findings.find((x) => x.findingId === findingId)
+  return f ? `${POINT_REPLACED_NOTE} ${findingLine(f)}` : POINT_REMOVED_NOTE
 }
 
 // ── What was not answered, and what the workspace may still spend ───────────

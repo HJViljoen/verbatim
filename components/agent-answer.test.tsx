@@ -128,3 +128,29 @@ describe('citationWhere', () => {
     expect(citationWhere(undefined)).toBe('')
   })
 })
+
+// D8's scrub reaches this render: `answer` and every `grounded[].text` arrive
+// SCRUBBED. What a reader must never get is the blank that leaves behind.
+describe('an answer the scrubbers emptied', () => {
+  it('prints the reading in place of the answer, never a blank paragraph', () => {
+    const a = answer({ answer: '', fallback: 'The reading itself: durability, 130 of 1,388 videos in the category.' })
+    const text = renderText(<AgentAnswerView answer={a} citations={citations} />)
+    expect(text).toContain('130 of 1,388 videos in the category')
+    // And only once — instead of the answer, never beside it.
+    expect(text.split('The reading itself').length - 1).toBe(1)
+  })
+
+  it('prints nothing at all where there is no reading either', () => {
+    const text = renderText(<AgentAnswerView answer={answer({ answer: '', fallback: null })} citations={citations} />)
+    expect(text).not.toContain('Comfort and fit come up before price')
+    // The evidence under it still renders: the quotes are the commenter's own
+    // words and were never scrubbed.
+    expect(text).toContain('my skin gets so irritated')
+  })
+
+  it('still prints a replaced point’s substitute sentence', () => {
+    const a = answer()
+    a.grounded[0] = { ...a.grounded[0], text: 'The sentence here named a figure we did not measure and was removed.', replaced: true }
+    expect(renderText(<AgentAnswerView answer={a} citations={citations} />)).toContain('was removed')
+  })
+})
