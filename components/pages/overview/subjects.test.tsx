@@ -4,6 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
+import { gapLine, type Gap } from '@/lib/reading/gap'
 import { overviewSubjects } from './subjects'
 import { overviewFixture, refusedFixture } from './fixture'
 
@@ -96,5 +97,32 @@ describe('OV2 · your subjects', () => {
       const text = renderText(overviewSubjects.render(overviewFixture(), mode, ctx))
       expect(text, mode).toContain('at this point last month 20.5% 264 of 1,290')
     }
+  })
+})
+
+// ---- D1 · the gap beside the row ----------------------------------------------
+
+describe('the two-audience gap OV2 carries', () => {
+  it('reads the two levels the ROW prints, so the difference can never disagree with them', () => {
+    const s = overviewFixture().subjects
+    expect(Object.keys(s.gaps).length).toBeGreaterThan(0)
+    for (const row of s.rows) {
+      const gap = s.gaps[row.id]
+      if (!gap) continue
+      expect(gap.a.pct, row.id).toBe(row.you.pct)
+      expect(gap.a.value, row.id).toEqual({ k: row.you.k, n: row.you.n })
+      expect(gap.b.pct, row.id).toBe(row.rival?.pct ?? null)
+      expect(gap.b.value, row.id).toEqual({ k: row.rival?.k, n: row.rival?.n })
+    }
+  })
+
+  it('prints the same figures in the gapline as the row prints in the table', () => {
+    const data = overviewFixture()
+    const text = renderText(overviewSubjects.render(data, 'app', ctx))
+    const line = gapLine(data.subjects.gaps.s1 as Gap)
+    // The row prints "44% 62 of 142"; the gapline prints "Freitag 44% of 142".
+    expect(text).toContain('44% 62 of 142')
+    expect(line).toContain('Freitag 44% of 142')
+    expect(line).toContain('you 31% of 84')
   })
 })

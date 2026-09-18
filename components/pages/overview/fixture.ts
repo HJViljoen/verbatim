@@ -1,9 +1,9 @@
 import { INTERPRETATION_LABEL } from '@/lib/prose/interpret'
 import { horizonWindow } from '@/lib/reading/horizon'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '@/lib/rivals'
-import type { Verdict } from '@/lib/reading/verdicts'
+import type { RefusedReason, Verdict } from '@/lib/reading/verdicts'
 import { gapBetween, type Gap, type GapSide } from '@/lib/reading/gap'
-import type { OverviewData } from '@/lib/pages/overview'
+import type { OverviewData, SideReading, SubjectRow } from '@/lib/pages/overview'
 import { MOVES_MASTHEAD, MOVES_EMPTY, MOVES_UNLOCK, RIVALS_CAVEAT, fillingLine, readingsCounter } from '@/lib/pages/overview'
 
 // The Overview's block fixtures (Phase 1 WP11).
@@ -36,8 +36,15 @@ export const verdict = (over: Partial<Verdict> = {}): Verdict => ({
 
 /**
  * The two-audience gap the mock puts at the top of OV2 (D1), built by
- * `gapBetween` from the row's own numbers rather than typed, so the fixture is
- * the reading and not a picture of one.
+ * `gapBetween` FROM THE ROW ITSELF rather than from a second set of numbers
+ * typed beside it.
+ *
+ * IT TAKES THE ROW, NOT A TUPLE, AND THAT IS THE WHOLE POINT. The first cut
+ * hand-typed the two shares (43.7 where the row prints 44, 23.8 where the row
+ * prints 24), so the one artefact wave 2 renders carried a gap that disagreed
+ * with the two levels printed beside it — exactly the drift `GapSide.pct`
+ * exists to prevent (lib/reading/gap.ts). A fixture that reads its own row
+ * cannot drift from it.
  *
  * AND IT READS "too few to compare", WHICH IS THE POINT. The mock's headline
  * is "gap 13 points"; on its own numbers your audience carries 84 videos
@@ -50,21 +57,44 @@ const gapSide = (audience: string, label: string, k: number, n: number, pct: num
   audience, label, value: { k, n }, pct, observed: true,
 })
 
-const subjectGap = (id: string, label: string, you: [number, number, number], them: [number, number, number], base: { you: [number, number, number]; them: [number, number, number] }): Gap =>
-  gapBetween({
+const rowSide = (audience: string, label: string, side: SideReading): GapSide =>
+  gapSide(audience, label, side.k ?? 0, side.n ?? 0, side.pct)
+
+const subjectGap = (
+  row: SubjectRow,
+  base: { you: [number, number, number]; them: [number, number, number] },
+  refused?: RefusedReason,
+): Gap | null => {
+  if (!row.rival) return null
+  return gapBetween({
     objectKind: 'subject',
-    objectId: id,
-    objectLabel: label,
-    a: gapSide(CLIENT_AUDIENCE, 'you', you[0], you[1], you[2]),
-    b: gapSide(rivalKey('Freitag'), 'Freitag', them[0], them[1], them[2]),
+    objectId: row.id,
+    objectLabel: row.label,
+    a: rowSide(CLIENT_AUDIENCE, 'you', row.you),
+    b: rowSide(rivalKey('Freitag'), 'Freitag', row.rival),
     window: { kind: 'month', from: REAL_MONTH, to: '2026-10-01' },
     basis: {
       a: gapSide(CLIENT_AUDIENCE, 'you', base.you[0], base.you[1], base.you[2]),
       b: gapSide(rivalKey('Freitag'), 'Freitag', base.them[0], base.them[1], base.them[2]),
       window: { kind: 'month', from: '2026-08-01', to: REAL_MONTH },
     },
+    ...(refused ? { refused } : {}),
     regime: 'n/a',
   })
+}
+
+/** The earlier month behind each row's gap — August, the month every other
+ *  comparison on this page compares against. Not printed as a level anywhere,
+ *  so it carries its own counts rather than a row's. */
+const GAP_BASIS: Record<string, { you: [number, number, number]; them: [number, number, number] }> = {
+  s1: { you: [23, 84, 27.4], them: [60, 140, 42.9] },
+  s2: { you: [22, 84, 26.2], them: [57, 140, 40.7] },
+}
+
+/** One gap per row, keyed by the row's own id — the shape `SubjectsBlock.gaps`
+ *  has, built from the rows the block prints. */
+const gapsFor = (rows: SubjectRow[], refused?: RefusedReason): Record<string, Gap | null> =>
+  Object.fromEntries(rows.map((row) => [row.id, subjectGap(row, GAP_BASIS[row.id], refused)]))
 
 export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData {
   const window = horizonWindow('this_month', NOW, '2026-06-01')
@@ -85,6 +115,36 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     counter: readingsCounter(3),
   }
   bar.line = fillingLine(bar)
+
+  // D1 · the rows are hoisted so the gaps below are built FROM them. A gap
+  // that disagrees with the two levels printed beside it is the one error
+  // `GapSide.pct` exists to prevent, and a fixture is where it hides.
+  const subjectRows: SubjectRow[] = [
+    {
+      id: 's1',
+      label: 'Durability',
+      you: { k: 26, n: 84, pct: 31, verdict: verdict({ objectKind: 'subject', objectId: 's1', objectLabel: 'Durability', audience: CLIENT_AUDIENCE, state: 'too_little_data', changePts: null, bandPts: null, value: { k: 26, n: 84 } }), observed: true },
+      rival: { k: 62, n: 142, pct: 44, verdict: null, observed: true },
+      category: { k: 305, n: 1388, pct: 22, verdict: verdict({ objectKind: 'subject', objectId: 's1', objectLabel: 'Durability', value: { k: 305, n: 1388 }, changePts: 3.2, bandPts: 2.1 }), observed: true },
+      direction: 'growing',
+      spark: [null, 18, 19, 20, 21, 22],
+      sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
+      categoryAtLastMonth: { k: 264, n: 1290, pct: 20.5 },
+      href: '/dashboard/subjects?item=s1',
+    },
+    {
+      id: 's2',
+      label: 'Price',
+      you: { k: 20, n: 84, pct: 24, verdict: null, observed: true },
+      rival: { k: 58, n: 142, pct: 41, verdict: null, observed: true },
+      category: { k: 375, n: 1388, pct: 27, verdict: verdict({ objectKind: 'subject', objectId: 's2', objectLabel: 'Price', value: { k: 375, n: 1388 }, changePts: -3.1, bandPts: 2.1 }), observed: true },
+      direction: 'fading',
+      spark: [30, 29, 29, 28, 28, 27],
+      sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
+      categoryAtLastMonth: null,
+      href: '/dashboard/subjects?item=s2',
+    },
+  ]
 
   return {
     brand: 'Sealand',
@@ -153,40 +213,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
     },
     subjects: {
       state: 'ready',
-      rows: [
-        {
-          id: 's1',
-          label: 'Durability',
-          you: { k: 26, n: 84, pct: 31, verdict: verdict({ objectKind: 'subject', objectId: 's1', objectLabel: 'Durability', audience: CLIENT_AUDIENCE, state: 'too_little_data', changePts: null, bandPts: null, value: { k: 26, n: 84 } }), observed: true },
-          rival: { k: 62, n: 142, pct: 44, verdict: null, observed: true },
-          category: { k: 305, n: 1388, pct: 22, verdict: verdict({ objectKind: 'subject', objectId: 's1', objectLabel: 'Durability', value: { k: 305, n: 1388 }, changePts: 3.2, bandPts: 2.1 }), observed: true },
-          direction: 'growing',
-          spark: [null, 18, 19, 20, 21, 22],
-          sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
-          categoryAtLastMonth: { k: 264, n: 1290, pct: 20.5 },
-          href: '/dashboard/subjects?item=s1',
-        },
-        {
-          id: 's2',
-          label: 'Price',
-          you: { k: 20, n: 84, pct: 24, verdict: null, observed: true },
-          rival: { k: 58, n: 142, pct: 41, verdict: null, observed: true },
-          category: { k: 375, n: 1388, pct: 27, verdict: verdict({ objectKind: 'subject', objectId: 's2', objectLabel: 'Price', value: { k: 375, n: 1388 }, changePts: -3.1, bandPts: 2.1 }), observed: true },
-          direction: 'fading',
-          spark: [30, 29, 29, 28, 28, 27],
-          sparkMonths: ['2026-04-01', '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', REAL_MONTH],
-          categoryAtLastMonth: null,
-          href: '/dashboard/subjects?item=s2',
-        },
-      ],
+      rows: subjectRows,
       candidates: [],
       rivalLabel: 'Freitag',
       categoryLabel: 'The category',
       note: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
-      gaps: {
-        s1: subjectGap('s1', 'Durability', [26, 84, 31], [62, 142, 43.7], { you: [23, 84, 27.4], them: [60, 140, 42.9] }),
-        s2: subjectGap('s2', 'Price', [20, 84, 23.8], [58, 142, 40.8], { you: [22, 84, 26.2], them: [57, 140, 40.7] }),
-      },
+      gaps: gapsFor(subjectRows),
     },
     category: {
       audience: INDUSTRY_AUDIENCE,
