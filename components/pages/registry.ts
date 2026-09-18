@@ -6,6 +6,7 @@ import { competitivePage } from './competitive'
 import { marketPage } from './market'
 import { contentPage } from './content'
 import { agentPage } from './agent'
+import { subjectsPage } from './subjects'
 
 // The catalogue of renderables (plan D1): every page module, keyed. A tile is
 // addressed as `<page>.<tile>` — the export route, the render page and, later,
@@ -24,6 +25,10 @@ export const PAGES: Partial<Record<PageKey, PageModule<any>>> = {
   market: marketPage,
   content: contentPage,
   agent: agentPage,
+  // Phase 1's first block-composed surface to join the registry (Block D wave
+  // 2, `subjects.shell`): the Export control is the page bar's, and it needs a
+  // scope. Its renderables ARE its blocks — see components/pages/subjects.
+  subjects: subjectsPage,
 }
 
 export function pageModule(key: string): PageModule<unknown> | null {

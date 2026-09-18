@@ -1,11 +1,18 @@
 import type { Block, BlockContext } from '@/lib/blocks/types'
+import type { PageModule, Renderable, Slide } from '@/lib/renderables/types'
 import { blockContext } from '@/lib/blocks/types'
+import type { GlossaryKey } from '@/lib/calibration'
+import { fullDate } from '@/lib/format'
 import { EMAIL } from '@/lib/email/theme'
+import { ExportMenu, ExportScope } from '@/components/export-menu'
+import { HowToRead } from '@/components/how-to-read'
 import { PageFrame, PageGrid } from '@/components/shell/page-grid'
 import { SurfacePageBar } from '@/components/shell/page-bar'
 import { Tile, TileEmpty } from '@/components/shell/tile'
-import type { SubjectsData } from '@/lib/pages/subjects'
+import { loadSubjectsPage, type SubjectsData } from '@/lib/pages/subjects'
 import { subjectsList } from './list'
+import { subjectsOwnPosts } from './own-posts'
+import { subjectsSayHear } from './say-hear'
 import { subjectsSubject } from './subject'
 import { subjectsLine } from './line'
 import { subjectsKinds } from './kinds'
@@ -15,13 +22,30 @@ import { subjectsUnanswered } from './unanswered'
 // Subjects — the page (Phase 1 WP12, design §3 SU1–SU3, the mock's
 // Subjects.dc.html).
 //
-// A RAIL AND A COLUMN, as the mock draws it: the subjects on the left, the
-// selected one in full on the right. The selection is in the URL (`?item=`),
-// which is how OV2's rows link here and how a reader can send a colleague the
-// subject rather than the page.
+// A RAIL AND A COLUMN, as the mock draws it: three narrow tiles on the left —
+// the subject set, what you published, what you claimed — and the selected
+// subject in full on the right. The selection is in the URL (`?item=`), which
+// is how OV2's rows link here and how a reader can send a colleague the subject
+// rather than the page.
+//
+// THE RAIL IS 240px, NOT THREE OF TWELVE COLUMNS (wave 2). The twelve-column
+// PageGrid is the right frame for a page of equal tiles and the wrong one for
+// this page: the mock's rail is a fixed 240 and its main column takes whatever
+// is left, and the nearest span (3 of 12 = 280px at 1440) makes the chart 40px
+// narrower than it was drawn. So the app arm composes the mock's own grid and
+// `PageGrid` stays for the state where there is nothing to lay out. Every tile
+// is still a `Tile`, so `data-col` / `data-row` still address it in print mode
+// and `layoutFor` still decides what an export puts on a slide.
+
+/** The words this page is measured against — the subject, the level under every
+ *  figure, the band behind every change, and the two nouns the denominators are
+ *  counted in. From `THIRTEEN_WORDS`, never invented here. */
+const GLOSSARY_ITEMS: GlossaryKey[] = ['subject', 'level', 'change', 'audience', 'video', 'month']
 
 export const SUBJECT_BLOCKS: readonly Block<SubjectsData>[] = [
   subjectsList,
+  subjectsOwnPosts,
+  subjectsSayHear,
   subjectsSubject,
   subjectsLine,
   subjectsKinds,
@@ -29,17 +53,32 @@ export const SUBJECT_BLOCKS: readonly Block<SubjectsData>[] = [
   subjectsUnanswered,
 ]
 
-/** Column span and row height per block, in the grid's 12 columns and 116px
- *  row units. The rail is narrow and tall; the reading fills the rest. */
+/** Column span and row height per block, in the grid's 12 columns and 116px row
+ *  units — the print/export geometry, and the stacked geometry below `xl`. */
 const LAYOUT: Record<string, { col: number; row: number }> = {
-  'subjects.list': { col: 3, row: 6 },
+  'subjects.list': { col: 3, row: 4 },
+  'subjects.ownposts': { col: 3, row: 3 },
+  'subjects.sayhear': { col: 3, row: 2 },
   'subjects.subject': { col: 9, row: 2 },
   // FOUR ROWS, NOT THREE. A tile clips what does not fit (overflow-hidden), and
   // at three the chart's own footer link was cut in half.
   'subjects.line': { col: 9, row: 4 },
-  'subjects.kinds': { col: 6, row: 4 },
-  'subjects.voices': { col: 6, row: 4 },
-  'subjects.unanswered': { col: 12, row: 2 },
+  'subjects.kinds': { col: 6, row: 3 },
+  'subjects.unanswered': { col: 6, row: 3 },
+  'subjects.voices': { col: 12, row: 3 },
+}
+
+/** The mock's own minimum heights, so a tile spreads to the shape it was drawn
+ *  at instead of collapsing onto its shortest reading. */
+const MIN_H: Record<string, string> = {
+  'subjects.list': 'xl:min-h-[380px]',
+  'subjects.ownposts': 'xl:min-h-[265px]',
+  'subjects.sayhear': 'xl:min-h-[183px]',
+  'subjects.subject': 'xl:min-h-[216px]',
+  'subjects.line': 'xl:min-h-[340px]',
+  'subjects.kinds': 'xl:min-h-[280px]',
+  'subjects.unanswered': 'xl:min-h-[280px]',
+  'subjects.voices': 'xl:min-h-[300px]',
 }
 
 /**
@@ -47,11 +86,11 @@ const LAYOUT: Record<string, { col: number; row: number }> = {
  *
  * THE PAGE DECIDES WHAT TO DROP — that is the block contract's own division of
  * labour ("a tile keeps its size; a report drops a slide; an email drops a
- * section"). With no subject selected, four of the six blocks are about a
- * subject that is not there, and drawing all six printed the SAME sentence six
- * times down two screens of empty tiles. Honest, and unreadable. The two that
- * are about the workspace rather than about a subject stay, at the height of
- * what they have to say.
+ * section"). With no subject selected, five of the eight blocks are about a
+ * subject that is not there, and drawing all eight printed the SAME sentence
+ * eight times down two screens of empty tiles. Honest, and unreadable. The
+ * three that are about the workspace rather than about a subject stay, at the
+ * height of what they have to say.
  */
 export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col: number; row: number }[] {
   if (data.selected) {
@@ -60,6 +99,8 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
   return [
     { block: subjectsList, col: 4, row: 3 },
     { block: subjectsSubject, col: 8, row: 3 },
+    { block: subjectsOwnPosts, col: 4, row: 3 },
+    { block: subjectsSayHear, col: 4, row: 2 },
   ]
 }
 
@@ -67,6 +108,27 @@ export function layoutFor(data: SubjectsData): { block: Block<SubjectsData>; col
  *  instead of reloading the application to reach its own next page. */
 export function subjectsContext(params: Record<string, string | undefined> = {}): BlockContext {
   return blockContext('', EMAIL, params)
+}
+
+/** One tile, at the mock's height, spreading its content (MASTER rule 8). */
+function BlockTile({ block, data, ctx, className }: {
+  block: Block<SubjectsData>
+  data: SubjectsData
+  ctx: BlockContext
+  className?: string
+}) {
+  const { col, row } = LAYOUT[block.key] ?? { col: 12, row: 2 }
+  return (
+    <Tile
+      col={col}
+      row={row}
+      distribute="between"
+      exportKey={block.key}
+      className={[MIN_H[block.key] ?? '', className ?? ''].filter(Boolean).join(' ')}
+    >
+      {block.render(data, 'app', ctx)}
+    </Tile>
+  )
 }
 
 export function SubjectsPage({
@@ -79,7 +141,9 @@ export function SubjectsPage({
   if (!data) {
     return (
       <PageFrame>
-        <SurfacePageBar nav="subjects" params={params} />
+        <SurfacePageBar nav="subjects" params={params}>
+          <HowToRead items={GLOSSARY_ITEMS} basePath="/dashboard/subjects" anchor="subjects" />
+        </SurfacePageBar>
         <PageGrid>
           <Tile col={12} row={2}>
             <TileEmpty>
@@ -93,29 +157,131 @@ export function SubjectsPage({
   }
 
   const ctx = subjectsContext(params)
+  const drawn = new Set(layoutFor(data).map((l) => l.block.key))
+  const tile = (block: Block<SubjectsData>, className?: string) =>
+    drawn.has(block.key) ? <BlockTile block={block} data={data} ctx={ctx} className={className} /> : null
+
   return (
-    <PageFrame>
-      <SurfacePageBar
-        nav="subjects"
-        params={params}
-        context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
-        record={{ line: data.record.line, lines: data.record.lines }}
-      />
-      <PageGrid>
-        {layoutFor(data).map(({ block, col, row }) => (
-          <Tile key={block.key} col={col} row={row}>
-            {block.render(data, 'app', ctx)}
-          </Tile>
-        ))}
-      </PageGrid>
-      {data.notes.length > 0 ? (
-        <p className="m-0 text-[11px] text-muted-foreground">
-          {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
-              layer merges the series' notes by the union of their months
-              (lib/reading/series.ts mergeSeriesNotes). */}
-          {data.notes.map((n) => n.text).join(' ')}
-        </p>
-      ) : null}
-    </PageFrame>
+    <ExportScope
+      page="subjects"
+      params={params}
+      tiles={layoutFor(data).map((l) => ({ key: l.block.key, title: l.block.title }))}
+    >
+      <PageFrame>
+        <SurfacePageBar
+          nav="subjects"
+          params={params}
+          context={{ brand: data.brand, month: data.month, status: data.monthStatus, readingAt: data.readingAt }}
+          record={{ line: data.record.line, lines: data.record.lines }}
+        >
+          <HowToRead items={GLOSSARY_ITEMS} basePath="/dashboard/subjects" anchor="subjects" />
+          <ExportMenu />
+        </SurfacePageBar>
+
+        <div className="flex flex-col gap-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[240px_minmax(0,1fr)] xl:items-start">
+            <div className="flex flex-col gap-4">
+              {tile(subjectsList)}
+              {tile(subjectsOwnPosts)}
+              {tile(subjectsSayHear)}
+            </div>
+            <div className="flex min-w-0 flex-col gap-4">
+              {tile(subjectsSubject)}
+              {tile(subjectsLine)}
+              {/* The mock's 1.35 : 1 pair — the kind mix reads as three rows of
+                  bars and needs the width; the questions list is a list.
+                  FLEX, NOT A GRID, and that is not a preference: `Tile` carries
+                  `xl:col-span-N` for the PAGE's twelve columns, and a Tile
+                  dropped into a two-column grid spans six of two and takes the
+                  whole row. Flex ignores the span, so the two tiles sit side by
+                  side and the same Tile still addresses itself correctly on a
+                  printed slide. */}
+              {drawn.has(subjectsKinds.key) ? (
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-stretch">
+                  {tile(subjectsKinds, 'h-full min-w-0 xl:basis-0 xl:grow-[1.35]')}
+                  {tile(subjectsUnanswered, 'h-full min-w-0 xl:basis-0 xl:grow')}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          {tile(subjectsVoices)}
+        </div>
+
+        {data.notes.length > 0 ? (
+          <p className="m-0 text-[11px] text-muted-foreground">
+            {/* ONE CAVEAT FOR A RUN OF MONTHS, never one per bar: the reading
+                layer merges the series' notes by the union of their months
+                (lib/reading/series.ts mergeSeriesNotes). */}
+            {data.notes.map((n) => n.text).join(' ')}
+          </p>
+        ) : null}
+
+        {/* THE METHOD FOOTNOTE (`subjects.method.footer`, D15). The mock ends
+            the page on the mono line that says which clock each figure is on,
+            what was read and what changed about our own tracking; the build had
+            those facts only in the record drawer at the TOP of the page, where
+            a reader who has just finished reading a figure is not looking.
+            `methodLines` composes them once for every surface, so this page and
+            the next cannot word the language share differently. */}
+        {data.method ? (
+          <p data-copy="figure" className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+            {data.method.lines.map((line, i) => (
+              <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
+            ))}
+          </p>
+        ) : null}
+      </PageFrame>
+    </ExportScope>
   )
+}
+
+// ---- the renderable module (`subjects.shell`, the Export control) ------------
+
+/**
+ * Subjects, in the renderables registry.
+ *
+ * WHY IT WAS NOT THERE. Every Phase 1 surface renders through blocks and none
+ * of them had a `PageModule`, so `/api/export` had no scope for this page and
+ * the page bar had no Export — the one control the mock draws at the top right
+ * of every artboard. A block already answers `render(data, mode, ctx)` for all
+ * three modes, so a renderable is that call with the page's own context bound;
+ * nothing here re-decides what a tile says.
+ *
+ * THE KEY IS THE BLOCK'S KEY. `report_snapshots.tile_key` and every stored PNG
+ * are addressed by it, so `subjects.line` is `subjects.line` on paper, in an
+ * email and in the app for as long as this page exists.
+ */
+const renderables: Record<string, Renderable<SubjectsData>> = Object.fromEntries(
+  SUBJECT_BLOCKS.map((block) => [
+    block.key,
+    {
+      key: block.key,
+      title: block.title,
+      render: (data: SubjectsData, mode) => block.render(data, mode, subjectsContext()),
+      email: (data: SubjectsData) => block.render(data, 'email', subjectsContext()),
+    } satisfies Renderable<SubjectsData>,
+  ]),
+)
+
+export const subjectsPage: PageModule<SubjectsData> = {
+  key: 'subjects',
+  title: 'Subjects',
+  async load(scope) {
+    return loadSubjectsPage(scope)
+  },
+  slides(data): Slide[] {
+    // TWO SLIDES, IN THE PAGE'S OWN ORDER. The set and what you published are
+    // about the workspace; everything after the rule is about the one subject
+    // the export was taken of, and a subject that is not selected takes no
+    // slide about itself.
+    const first: Slide = { title: 'Your subjects', keys: ['subjects.list', 'subjects.ownposts', 'subjects.sayhear'], layout: 'grid' }
+    if (!data.selected) return [first]
+    return [
+      first,
+      { title: data.selected.name, keys: ['subjects.subject', 'subjects.line'], layout: 'grid' },
+      { title: `${data.selected.name} · what is being said`, keys: ['subjects.kinds', 'subjects.unanswered', 'subjects.voices'], layout: 'grid' },
+    ]
+  },
+  renderables,
+  snapshotTitle: (data) => `Subjects · ${data.brand} · ${fullDate(data.readingAt)}`,
 }
