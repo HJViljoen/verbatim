@@ -71,7 +71,7 @@ describe('the monthly email', () => {
   it('heads the masthead with the product and the reading, not the tenant', () => {
     const data = snapshot()
     const text = words(data)
-    expect(text).toContain(monthlyEyebrow(data.month, data.monthStatus, data.readingAt))
+    expect(text).toContain(monthlyEyebrow(data.period))
     expect(text).not.toContain('consumer intelligence')
     // The green rule beside it — the artboard's 30 x 3 mark, and the only green
     // on the artefact above the button.

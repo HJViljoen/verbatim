@@ -78,25 +78,26 @@ export function MonthlyEmail({ data, shareUrl, appUrl, attached, ctx, preheader 
                     <tr>
                       <td style={{ padding: '28px 30px 22px' }}>
                         {/* THE GREEN RULE, then the product and the reading.
-                            Drawn as a one-cell table because an email has no
-                            flex: a 30 × 3 green cell, a spacer, then the words.
                             It is the only green on the artefact above the
                             button, and it is what makes the masthead read as a
-                            masthead rather than as a first paragraph. */}
-                        {/* AND THE RULE IS INSIDE THE SENTENCE'S OWN BOX (the
-                            fix pass, review finding [Important]). As three
-                            cells of a bare shrink-to-fit table — a 30px rule,
-                            a 10px spacer and the words — the masthead sized
-                            itself to the eyebrow's max-content plus 40px of
-                            fixed lead and held the WHOLE artefact at a 398px
-                            floor in all three arms, so even with section 2
-                            fixed the email was wider than an iPhone. The rule
-                            is now an inline-block at the head of the line, as
-                            the artboard draws it, and the sentence wraps
-                            under itself like any other sentence. */}
+                            masthead rather than as a first paragraph.
+                            THE RULE IS INSIDE THE SENTENCE'S OWN BOX (the fix
+                            pass, review finding [Important]). As three cells of
+                            a bare shrink-to-fit table — a 30px rule, a 10px
+                            spacer and the words — the masthead sized itself to
+                            the eyebrow's max-content plus 40px of fixed lead
+                            and held the WHOLE artefact at a 398px floor in all
+                            three arms, so even with section 2 fixed the email
+                            was wider than an iPhone. The rule is an
+                            inline-block at the head of the line, as the
+                            artboard draws it, and the sentence wraps under
+                            itself like any other sentence.
+                            AND THE WORDS ARE THE SNAPSHOT'S OWN STAMP, never
+                            recomposed here: `data.period` is what the deck and
+                            the share page print. */}
                         <div style={{ ...text.eyebrow, lineHeight: '1.45' }}>
                           <span style={{ display: 'inline-block', width: 30, height: 3, borderRadius: 2, background: EMAIL.green, verticalAlign: 'middle', marginRight: 10, fontSize: 0, lineHeight: 0 }} />
-                          {monthlyEyebrow(data.month, data.monthStatus, data.readingAt)}
+                          {monthlyEyebrow(data.period)}
                         </div>
                         <div style={{ fontFamily: FONT.serif, fontSize: 20, fontWeight: 500, lineHeight: '1.25', letterSpacing: '-.01em', color: EMAIL.ink2, marginTop: 11 }}>{data.subject}</div>
                         {/* THE CONTEXT ROW: the month's own days and the updates

@@ -217,16 +217,25 @@ export function freezesOn(month: string): string {
  * the two had swapped jobs. The artboard puts the tenant on the context row,
  * right-aligned beside the dates, where a reader looks for "whose is this".
  *
- * IT IS `monthlyPeriod` WITH THE PRODUCT IN FRONT, and deliberately not a
- * second composer: the mock's eyebrow stops at "still filling" and the built
- * stamp says which day it stops filling ON, which is the fact nobody else on
- * the artefact carries (the brief: "keep the freeze date"). One composer means
- * the email, the deck and the share page cannot word one reading three ways.
+ * IT IS THE STAMP WITH THE PRODUCT IN FRONT, and deliberately not a second
+ * composer: the mock's eyebrow stops at "still filling" and the stamp says
+ * which day it stops filling ON, which is the fact nobody else on the artefact
+ * carries (the brief: "keep the freeze date"). One composer means the email,
+ * the deck and the share page cannot word one reading three ways.
+ *
+ * AND IT TAKES THE STAMP RATHER THAN RE-DERIVING IT (the fix pass, review
+ * finding [Important]). `MonthlySnapshotData.period` is `monthlyPeriod` FROZEN
+ * AT BUILD (`monthly-build.ts`), and it is what the print deck, the share
+ * shell and the snapshot's own title print. Recomposing it at render read the
+ * same today and meant that a re-render of an archived snapshot would take
+ * today's `FREEZE_AFTER_DAYS` while the deck beside it kept the words it was
+ * built with — three surfaces wording one reading two ways, which is the one
+ * thing this composer exists to prevent.
  */
 export const MONTHLY_PRODUCT = 'Verbatim'
 
-export function monthlyEyebrow(month: string, status: MonthlyStatus, readingAt: string): string {
-  return `${MONTHLY_PRODUCT} · ${monthlyPeriod(month, status, readingAt)}`
+export function monthlyEyebrow(period: string): string {
+  return `${MONTHLY_PRODUCT} · ${period}`
 }
 
 /** What the masthead's context row needs: the month's shape and the updates
