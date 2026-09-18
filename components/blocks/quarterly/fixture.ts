@@ -149,6 +149,43 @@ export function quarterlyFixture(over: Partial<QuarterlyData> = {}): QuarterlyDa
   }
 }
 
+/**
+ * The same quarter, read in a month whose LEAD is a subject rather than a
+ * theme — so page 3 claims the month's voices and page 4 declines them.
+ *
+ * WHY A SECOND STATE EXISTS AT ALL. `sentence.voices` are the supporting
+ * insights of the month's lead object, so they are evidence for ONE thing.
+ * Handed to both pages they made a printed artefact carry the same two quotes
+ * on pages 2, 3 and 4, and put a theme's evidence under a subject heading.
+ * Each page now claims them only where the lead is its own kind, and a fixture
+ * has to show both sides of that or only one arm is ever drawn.
+ */
+export function subjectLeadFixture(): QuarterlyData {
+  const overview = overviewFixture()
+  return composeQuarterly({
+    overview: {
+      ...overview,
+      bar: { ...overview.bar, readings: 8 },
+      sentence: {
+        ...overview.sentence,
+        lead: { ...overview.sentence.lead!, objectKind: 'subject', objectId: 's1', objectLabel: 'Durability' },
+      },
+    },
+    market: marketFixture(),
+    competitive: competitiveFixture(),
+    quarter: QUARTER,
+    prior: PRIOR,
+    readingAt: NOW,
+    thisQuarter: windowRead(4147, 33000),
+    lastQuarter: windowRead(3810, 29000),
+    subjectsNow: subjectWindow(4147, 0.22),
+    subjectsBefore: subjectWindow(3810, 0.18),
+    checks: checksRan,
+    record: record(13),
+    quiet: QUIET,
+  })
+}
+
 /** Production today: three readings, M3–M7 unapplied. */
 export function formingFixture(): QuarterlyData {
   const overview = refusedFixture()

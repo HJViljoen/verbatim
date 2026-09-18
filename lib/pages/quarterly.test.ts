@@ -12,7 +12,7 @@ import {
 } from './quarterly'
 import type { Mover } from './overview'
 import { READER_FLAGS } from '../calibration'
-import { quarterlyFixture, formingFixture, thinMonthFixture } from '../../components/blocks/quarterly/fixture'
+import { quarterlyFixture, formingFixture, subjectLeadFixture, thinMonthFixture } from '../../components/blocks/quarterly/fixture'
 
 const verdict = (over: Partial<Verdict> = {}): Verdict => ({
   objectKind: 'theme',
@@ -425,10 +425,19 @@ describe('what the quarterly pages now carry (package D7)', () => {
     expect(once).toEqual(['Theme 0', 'Theme 1', 'Theme 2', 'Theme 3', 'Theme 4'])
   })
 
-  it('carries the same voices to both pages, as refs, and never two sets of words', () => {
+  it('gives the month’s voices to the page the thing they were cited for belongs to', () => {
     const q = quarterlyFixture()
-    expect(q.subjects.quotes.map((x) => x.quote.ref)).toEqual(q.category.quotes.map((x) => x.quote.ref))
-    expect(q.subjects.quotes.map((x) => x.quote.ref)).toEqual(q.read.quotes.map((x) => x.quote.ref))
+    // The fixture's lead is a THEME of the category, so page 4 claims them and
+    // page 3 declines: a theme's supporting insights are not a subject's
+    // evidence, and three pages carrying one pair of quotes is what an
+    // unfiltered hand-off printed.
+    expect(q.category.quotes.map((x) => x.quote.ref)).toEqual(q.read.quotes.map((x) => x.quote.ref))
+    expect(q.subjects.quotes).toEqual([])
+    const s = subjectLeadFixture()
+    expect(s.subjects.quotes.map((x) => x.quote.ref)).toEqual(s.read.quotes.map((x) => x.quote.ref))
+    expect(s.category.quotes).toEqual([])
+    // Whichever page claims them, they are the SAME words — never a second read.
+    expect(q.category.quotes.map((x) => x.quote.ref)).toEqual(s.subjects.quotes.map((x) => x.quote.ref))
   })
 })
 

@@ -949,11 +949,14 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // quote read, so no two pages of one artefact can show the same theme with
   // two different people's words.
   const quotes = overview.sentence.voices.map((v: Voice) => ({ quote: v.quote, cite: v.cite }))
-  const subjects = buildSubjects({ overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead, quotes })
+  const subjects = buildSubjects({
+    overview, quarterVerdicts, unlocked, gate, monthLabel, monthNote, subjectsRead,
+    quotes: voicesFor(overview, 'subject', quotes),
+  })
   const category = buildCategory({
     overview,
     quiet: a.quiet ?? null,
-    quotes,
+    quotes: voicesFor(overview, 'theme', quotes),
     quarterVerdicts,
     monthLabel,
     unlocked,
@@ -1402,6 +1405,35 @@ function buildSubjects(a: {
 }
 
 // ---- page 4 · what the category talked about ----------------------------------
+
+/**
+ * The month's voices, claimed by the page the thing they were cited for
+ * belongs to.
+ *
+ * THE OVERVIEW BLOCK'S RULE, MIRRORED. `sentence.voices` is loaded from the
+ * supporting insights of the month's LEAD object (`loadVoices`), so it is
+ * evidence for one thing — a subject or a theme — and not for the artefact at
+ * large. `components/pages/overview/category.tsx` already refuses them where
+ * the lead is not a theme of the category, on the principle that a quote is
+ * about the category only when the thing it was cited for is one. Handed
+ * unfiltered to both pages, page 3 cited a THEME's evidence as a subject quote
+ * — the exact case that guard exists to refuse — and the printed artefact
+ * carried the same two quotes on pages 2, 3 and 4.
+ *
+ * A theme's voices are further held to the category's own audience, which is
+ * the audience page 4 prints. The read page keeps all of them: it is the page
+ * the sentence itself is on, and they are that sentence's evidence.
+ */
+export function voicesFor<T>(
+  overview: OverviewData,
+  kind: 'subject' | 'theme',
+  quotes: readonly T[],
+): T[] {
+  const lead = overview.sentence.lead
+  if (!lead || lead.objectKind !== kind) return []
+  if (kind === 'theme' && lead.audience !== overview.category.audience) return []
+  return [...quotes]
+}
 
 /** The two READER_FLAGS on a mover, and nothing else. `isNew` is the row's own
  *  answer to "first heard this month"; the rest come off the verdict, which is
