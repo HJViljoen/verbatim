@@ -776,6 +776,20 @@ describe('the artboard port (Block D wave 2)', () => {
     expect(t).toContain('what we track changed inside this window')
   })
 
+  it('qr.p5 · declares the comparisons it draws, and not the one it stopped drawing', () => {
+    // The ported table has one badge column (`Change · attention`); the
+    // content badge the old aside printed is gone, and `verdicts()` went on
+    // declaring `contentVerdict` to `blockAnswers` — a comparison this
+    // artefact does not print, counted as one it did.
+    const drawn = QUARTERLY_BLOCKS['quarterly.rivals'].verdicts?.(data) ?? []
+    const content = data.rivals.rows.map((r) => r.contentVerdict).filter((v) => v != null)
+    expect(content.length).toBeGreaterThan(0)
+    for (const v of content) expect(drawn).not.toContain(v)
+    for (const v of data.rivals.rows.map((r) => r.attentionVerdict).filter((v) => v != null)) {
+      expect(drawn).toContain(v)
+    }
+  })
+
   it('qr.p5.h2h · five measures, and three of them say why no band was drawn', () => {
     const t = text('quarterly.rivals')
     expect(t).toContain('Head to head, then and now')

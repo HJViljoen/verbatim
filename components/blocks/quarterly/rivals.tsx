@@ -467,9 +467,17 @@ export const quarterlyRivals: Block<QuarterlyData> = {
     )
   },
 
+  // WHAT THIS PAGE DRAWS, AND ONLY THAT. The ported table has one badge column
+  // — `Change · attention` — where the build's old aside printed a content
+  // badge too, and `contentVerdict` stayed in this list after the badge it
+  // named came off the page. `blockAnswers` feeds the digest and the summary
+  // composition (lib/schedules/deliver.ts, lib/schedules/run.ts), so a
+  // comparison this artefact does not print was being declared as one it did.
+  // The content shares are still on the table as levels with their counts;
+  // what is not on it is a banded claim about how they moved.
   verdicts(data) {
     return [
-      ...data.rivals.rows.flatMap((r) => [r.attentionVerdict, r.contentVerdict]),
+      ...data.rivals.rows.map((r) => r.attentionVerdict),
       ...(data.rivals.headToHead?.measures.flatMap((m) => [m.verdict, m.rivalVerdict]) ?? []),
     ].filter((v): v is NonNullable<typeof v> => v != null)
   },
