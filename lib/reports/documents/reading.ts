@@ -182,12 +182,26 @@ export function monthAndYear(month: string): string {
   return /^\d{4}$/.test(year) && name !== month.slice(0, 10) ? `${name} ${year}` : name
 }
 
+/**
+ * The comments a reading read, across its audiences — the ONE place this sum
+ * is taken.
+ *
+ * It was taken in four: the composer freezing `figures.conversations`, this
+ * line, the method card and the confidence rail. They agreed, because all four
+ * walked the same frozen array — and that is exactly the shape the repo's
+ * "ONE conversion" rule is about (`proseFigures`, verbatim): three hand-rolled
+ * ones is how "2,359", "2,395" and "2.4k" reach one document. It is a `reduce`
+ * and it is four lines long; being cheap is not a reason to have four of it.
+ */
+export const commentsRead = (denominators: readonly BriefDenominator[]): number =>
+  denominators.reduce((n, d) => n + d.comments, 0)
+
 /** "388 videos in the category · 158 of your own · 1,406 comments" — the
  *  denominator every figure on the brief is a share of, printed once. */
 export function denominatorLine(denominators: readonly BriefDenominator[]): string {
   if (denominators.length === 0) return 'No denominator recorded for this month.'
   const videos = denominators.map((d) => `${fmtInt(d.videos)} ${d.videos === 1 ? 'video' : 'videos'} in ${d.label}`)
-  const comments = denominators.reduce((n, d) => n + d.comments, 0)
+  const comments = commentsRead(denominators)
   return `${videos.join(' · ')} · ${fmtInt(comments)} ${comments === 1 ? 'comment' : 'comments'} read.`
 }
 

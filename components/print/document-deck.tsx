@@ -13,7 +13,7 @@ import type { DeltaVerdict } from '@/lib/report-bands'
 import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
-import { briefStampShort } from '@/lib/reports/documents/reading'
+import { briefStampShort, commentsRead } from '@/lib/reports/documents/reading'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
 import type { BriefSurface } from '@/lib/reports/documents/sections'
 import { blockContext } from '@/lib/blocks/types'
@@ -1246,7 +1246,7 @@ function ScriptedPage({ data }: { data: DocumentSnapshotData }) {
 function NumbersCard({ data }: { data: DocumentSnapshotData }) {
   const m = data.method
   const r = data.reading ?? null
-  const comments = r ? r.denominators.reduce((n, d) => n + d.comments, 0) : m.conversations
+  const comments = r ? commentsRead(r.denominators) : m.conversations
   const refusals = data.slideFigures?.cannotTell.refusals ?? []
   const findings = data.pages.filter((p) => p.kind === 'finding').length
   const dropped = m.dropped ?? null
@@ -1513,7 +1513,7 @@ function SectionPane({ section, data }: { section: DocBriefSection; data: Docume
               <span className="text-foreground">{fmtCount(d.videos)}</span> {d.label}{' · '}
             </Fragment>
           ))}
-          <span className="text-foreground">{fmtCount(data.reading.denominators.reduce((n, d) => n + d.comments, 0))}</span> comments read
+          <span className="text-foreground">{fmtCount(commentsRead(data.reading.denominators))}</span> comments read
         </p>
       )}
       {/* `sales.p4.untracked` — what is NOT tracked, beside the section rather

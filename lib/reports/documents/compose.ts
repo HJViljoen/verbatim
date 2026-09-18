@@ -4,7 +4,7 @@ import { readsAsHeroQuote } from '../../quotes'
 import type { Quote, Slide } from '../../renderables/types'
 import type { FigureTable } from '../types'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../../rivals'
-import { CLUSTERING_CAVEAT, briefStamp, denominatorLine, platformLine, type BriefReading } from './reading'
+import { CLUSTERING_CAVEAT, briefStamp, commentsRead, denominatorLine, platformLine, type BriefReading } from './reading'
 import { SECTION_SLIDE_PREFIX, type DocBriefSection, type DocLayoutEntry, type DocumentReading } from './types'
 import type { BriefEntry } from './sections'
 import { missingSentence, missingSummary, pageKindsOf } from './sections'
@@ -97,7 +97,7 @@ export function documentFigures(s: Signals, answers: ResearchAnswer[]): FigureTa
     const of = (audience: string) => r.denominators.find((d) => d.audience === audience) ?? null
     const category = of(INDUSTRY_AUDIENCE)
     const client = of(CLIENT_AUDIENCE)
-    const comments = r.denominators.reduce((n, d) => n + d.comments, 0)
+    const comments = commentsRead(r.denominators)
     f.reading_month = { label: 'the month this reading is of', value: r.monthLabel, kind: 'name' }
     f.conversations = { label: `comments read in ${r.monthLabel}`, value: fmtCount(comments), kind: 'count' }
     if (category) f.videos = { label: `videos read for the category in ${r.monthLabel}`, value: fmtCount(category.videos), kind: 'count' }
