@@ -99,7 +99,7 @@ describe('the weekly email', () => {
 
   it('leads with the frozen subject, so the inbox line and the artefact agree', () => {
     const data = snapshot()
-    expect(data.subject).toBe('Sealand: Objections is unusual this week')
+    expect(data.subject).toBe('Sealand: Objections is unusual this week — 29 of 205 videos')
     expect(words(data)).toContain(data.subject)
   })
 

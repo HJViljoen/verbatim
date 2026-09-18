@@ -292,12 +292,25 @@ describe('the masthead', () => {
     expect(weeklyPeriod(null, '2026-09-01')).toBe('September so far')
   })
 
-  it('names the flagged object in the subject line, and no direction word', () => {
+  // A k OF n MAY BE IN A SUBJECT LINE, a multiple may not (weekly.headline).
+  // The mock's is "Zip failures 3× usual this week, under Freitag content" — a
+  // ratio read before any of the apparatus that makes it mean something, over
+  // a "where" clause no field supplies. A count with its own denominator is
+  // the opposite case: it is checkable from the inbox.
+  it('names the flagged object in the subject line, with its count, and no direction word', () => {
     const one = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag()] }))
-    expect(one).toBe('Össur: Objections is unusual this week')
+    expect(one).toBe('Össur: Objections is unusual this week — 29 of 205 videos')
     const two = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag(), flag({ label: 'Praise' })] }))
     expect(two).toContain('and 1 more')
-    for (const s of [one, two]) expect(s).not.toMatch(/growing|fading|up |down /i)
+    for (const s of [one, two]) {
+      expect(s).not.toMatch(/growing|fading|up |down /i)
+      expect(s).not.toMatch(/×/)
+    }
+  })
+
+  it('states no count where the flag records no n to state it against', () => {
+    const bare = weeklySubject('Össur', weekCheck({ state: 'flagged', flags: [flag({ weekK: 0, weekN: 0 })] }))
+    expect(bare).toBe('Össur: Objections is unusual this week')
   })
 
   it('says nothing unusual when nothing fired, and that the check is forming when it is', () => {
@@ -363,6 +376,6 @@ describe('what to call the window', () => {
     const quiet = weekCheck({ state: 'nothing_unusual', flags: [], noun: 'update' })
     expect(weeklySubject('Sealand', quiet)).toBe('Sealand: your update — nothing unusual in this update')
     const fired = weekCheck({ state: 'flagged', flags: [flag()], noun: 'update' })
-    expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update')
+    expect(weeklySubject('Sealand', fired)).toBe('Sealand: Objections is unusual in this update — 29 of 205 videos')
   })
 })

@@ -664,10 +664,18 @@ export function weeklySubject(company: string, check: WeekCheck): string {
       // A flagged check with nothing printable is not "nothing unusual": the
       // check fired and the detail did not survive the read. Say that much.
       if (check.flags.length === 0) return `${head} — something ${inPeriod(check.noun)} is unusual`
-      const first = check.flags[0].label
+      const flag = check.flags[0]
+      // THE OBJECT, AND THE COUNT IT RESTS ON (weekly.headline, block D wave 2).
+      // The mock's subject is "Zip failures 3× usual this week, under Freitag
+      // content": a multiple with no denominator, read before any of the
+      // apparatus that makes a number mean something, and a "where" clause no
+      // field supplies. A k OF n is the opposite case — it carries its own
+      // denominator, which is the whole of what rule (b) asks — so the subject
+      // may state it, and a reader can weigh the claim from the inbox.
+      const level = flag.weekN > 0 ? ` — ${fmtInt(flag.weekK)} of ${fmtInt(flag.weekN)} videos` : ''
       return check.flags.length === 1
-        ? `${company}: ${first} is unusual ${inPeriod(check.noun)}`
-        : `${company}: ${first} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}`
+        ? `${company}: ${flag.label} is unusual ${inPeriod(check.noun)}${level}`
+        : `${company}: ${flag.label} and ${fmtInt(check.flags.length - 1)} more are unusual ${inPeriod(check.noun)}${level}`
     }
     case 'nothing_unusual':
       return `${head} — nothing unusual ${inPeriod(check.noun)}`
