@@ -281,8 +281,12 @@ export function SubjectsPage({
             a reader who has just finished reading a figure is not looking.
             `methodLines` composes them once for every surface, so this page and
             the next cannot word the language share differently. */}
+        {/* 10.5px, THE PAGE'S SMALLEST TYPE AND NOT SMALLER. At 9.5px this was
+            a full point under the eyebrows and the smallest thing on the page
+            — for the paragraph that says which clock each figure is on, which
+            is the paragraph the page asks a client to trust most. */}
         {data.method ? (
-          <p data-copy="figure" className="m-0 flex flex-col gap-0.5 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
+          <p data-copy="figure" className="m-0 flex flex-col gap-0.5 font-mono text-[10.5px] leading-[1.4] text-muted-foreground">
             {data.method.lines.map((line, i) => (
               <span key={i} className={i === 0 ? 'text-secondary-foreground' : undefined}>{line}</span>
             ))}

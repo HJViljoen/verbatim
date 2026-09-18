@@ -231,6 +231,15 @@ describe('SU2 · the subject in full', () => {
     expect(renderText(subjectsSubject.render(subjectsFixture(), 'app', ctx))).toContain('the 26 videos behind your figure')
   })
 
+  // The three columns carry different numbers of lines, so centring them lifted
+  // the category's eyebrow ~12px above the row the other two establish. The
+  // artboard's three eyebrows share one baseline.
+  it('starts all three side columns at the same height', () => {
+    const markup = render(subjectsSubject.render(subjectsFixture(), 'app', ctx))
+    expect(markup).not.toContain('flex-col justify-center')
+    expect(markup).toContain('flex-col justify-start')
+  })
+
   it('declares a share and a count per side, and no verdict a side did not earn', () => {
     const { figures, verdicts } = blockAnswers(subjectsSubject, subjectsFixture())
     expect(Object.keys(figures)).toHaveLength(6)

@@ -71,7 +71,16 @@ export function DirectionWord({ direction, mode = 'app' }: { direction: Directio
   )
 }
 
-/** One side's column: the level, its count, the change where one was drawn. */
+/**
+ * One side's column: the level, its count, the change where one was drawn.
+ *
+ * TOP-ALIGNED, NOT CENTRED (fix pass). The three columns carry different
+ * numbers of lines — the category's badge row wraps and it also has a previous
+ * month — so `justify-center` lifted its eyebrow about 12px above the row the
+ * other two establish, and the artboard's three eyebrows share one baseline.
+ * A column of figures that starts at three different heights is read as three
+ * unrelated readings.
+ */
 function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: RenderMode }): ReactNode {
   const email = mode === 'email'
   const eyebrow = sideEyebrow(side, brand)
@@ -85,14 +94,14 @@ function Side({ side, brand, mode }: { side: SubjectSide; brand: string; mode: R
   )
   if (!side.observed || side.pct == null) {
     return (
-      <div className={email ? undefined : 'flex min-w-0 flex-col justify-center gap-1'} style={email ? { padding: '4px 0' } : undefined}>
+      <div className={email ? undefined : 'flex min-w-0 flex-col justify-start gap-1'} style={email ? { padding: '4px 0' } : undefined}>
         {label}
         <span className={email ? undefined : 'text-[12px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted } : undefined}>{side.silence === 'no_reading' ? '— no reading yet' : '— not tracked'}</span>
       </div>
     )
   }
   return (
-    <div className={email ? undefined : 'flex min-w-0 flex-col justify-center gap-1'} style={email ? { padding: '4px 0' } : undefined}>
+    <div className={email ? undefined : 'flex min-w-0 flex-col justify-start gap-1'} style={email ? { padding: '4px 0' } : undefined}>
       {label}
       {/* THE FIGURE AND THE POPULATION IT IS A SHARE OF, ON ONE LINE. The
           artboard's stat is ~24px mono against the build's 20px, and the unit
