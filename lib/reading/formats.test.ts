@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
 import {
+  ENGAGEMENT_MIN_VIDEOS,
   EXCLUDED_NOTE,
   belowMedian,
   formatMatrix,
@@ -100,15 +101,17 @@ describe('formatReading · the published clock', () => {
   it('excludes Reddit from engagement and names it with the reason', () => {
     const withReddit = [
       ...OWN,
+      vid({ id: 'own-head-2', classified_type: 'talking-head', engagement_rate: 2.2 }),
       vid({ id: 'r1', platform: 'reddit', classified_type: 'talking-head', engagement_rate: 99 }),
       vid({ id: 'r2', platform: 'reddit', classified_type: 'talking-head', engagement_rate: 98 }),
     ]
     const r = reading(withReddit)
     const head = r.rows.find((x) => x.key === 'talking-head')!
-    // Four talking-head videos are counted; only the two non-Reddit ones carry
-    // a rate, so the median is theirs.
-    expect(head.value).toEqual({ k: 4, n: 11 })
-    expect(head.engagement).toEqual({ median: 2.1, n: 2 })
+    // Five talking-head videos are counted; only the three non-Reddit ones
+    // carry a rate, so the median is theirs — 2.1, not the 98 the two capped
+    // Reddit threads would have dragged it to.
+    expect(head.value).toEqual({ k: 5, n: 12 })
+    expect(head.engagement).toEqual({ median: 2.1, n: 3 })
     expect(r.excluded).toContain('Reddit')
     expect(r.excludedNote).toBe(EXCLUDED_NOTE)
     expect(r.excludedNote).toContain('40')
@@ -118,9 +121,25 @@ describe('formatReading · the published clock', () => {
     const r = reading(OWN)
     expect(r.median.value).toBe(3.4)
     expect(r.median.n).toBe(9)
-    const pov = r.rows.find((x) => x.key === 'commute-pov')!
-    expect(pov.engagement.median).toBe(6.2)
-    expect(pov.multiple).toBe(1.8)
+    const desk = r.rows.find((x) => x.key === 'product-on-desk')!
+    expect(desk.engagement).toEqual({ median: 3.4, n: 5 })
+    expect(desk.multiple).toBe(1)
+  })
+
+  it('withholds the median and the multiple from a group under the floor, and still counts it', () => {
+    // `perfVsMedian` has held this floor at three since the product shipped:
+    // a singleton at 40% would print 12×. The row is still a row — its k of n
+    // and the videos it had a rate for are all reported.
+    expect(ENGAGEMENT_MIN_VIDEOS).toBe(3)
+    const pov = reading(OWN).rows.find((x) => x.key === 'commute-pov')!
+    expect(pov.value).toEqual({ k: 2, n: 9 })
+    expect(pov.engagement).toEqual({ median: null, n: 2 })
+    expect(pov.multiple).toBeNull()
+
+    const third = reading([...OWN, vid({ id: 'own-pov-2', classified_type: 'commute-pov', engagement_rate: 6.8 })])
+    const atFloor = third.rows.find((x) => x.key === 'commute-pov')!
+    expect(atFloor.engagement).toEqual({ median: 6.4, n: 3 })
+    expect(atFloor.multiple).toBe(1.8)
   })
 
   it('says so when an audience published nothing in the month', () => {
@@ -226,11 +245,36 @@ describe('formatMatrix · three audiences, one table', () => {
 })
 
 describe('belowMedian · the honest inverse of the playbook', () => {
+  /** Four videos of one format well over the median and three well under it —
+   *  both groups at or over `ENGAGEMENT_MIN_VIDEOS`, because a format read off
+   *  two videos has no median to be under anything. */
+  const BELOW: FormatVideo[] = [
+    ...Array.from({ length: 4 }, (_, i) =>
+      vid({ id: `b-pov-${i}`, classified_type: 'commute-pov', engagement_rate: 6 + i * 0.2 }),
+    ),
+    ...Array.from({ length: 3 }, (_, i) =>
+      vid({ id: `b-head-${i}`, classified_type: 'talking-head', engagement_rate: 2 + i * 0.1 }),
+    ),
+  ]
+
   it('returns the formats running under the audience’s own median, worst first', () => {
-    const rows = belowMedian(reading(OWN))
+    const rows = belowMedian(reading(BELOW))
     expect(rows.map((r) => r.key)).toEqual(['talking-head'])
-    expect(rows[0].engagement).toEqual({ median: 2.1, n: 2 })
-    expect(rows[0].value).toEqual({ k: 2, n: 9 })
+    expect(rows[0].engagement).toEqual({ median: 2.1, n: 3 })
+    expect(rows[0].value).toEqual({ k: 3, n: 7 })
+  })
+
+  it('never lists a format under the floor, however low its two videos ran', () => {
+    // "What not to make" is the one list on the page a client may act on, and
+    // a format on it off two videos reads identically to one off fourteen.
+    const rows = belowMedian(
+      reading([
+        ...BELOW,
+        vid({ id: 'thin-1', classified_type: 'unboxing', engagement_rate: 0.2 }),
+        vid({ id: 'thin-2', classified_type: 'unboxing', engagement_rate: 0.3 }),
+      ]),
+    )
+    expect(rows.map((r) => r.key)).toEqual(['talking-head'])
   })
 
   it('is empty when nothing is below, and when there is no median at all', () => {

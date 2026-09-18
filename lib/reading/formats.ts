@@ -48,6 +48,25 @@ export type FormatBasis = 'published'
  *  before the rate is computed, so a Reddit rate is a rate against a ceiling. */
 export const ENGAGEMENT_EXCLUDED: readonly string[] = ['reddit']
 
+/**
+ * Videos carrying a rate below which a GROUP's median is not read at all.
+ *
+ * `lib/content-tiles.ts:perfVsMedian` has set this at three since the product
+ * shipped, in its own words: "Three videos is the floor for a multiple — two
+ * can be one fluke twice… a singleton at 40% would print 12×." A format median
+ * read off one video is not a property of the format, and "what not to make"
+ * printing a format off two videos beside one read off fourteen, in the same
+ * type, tells a client the two claims are worth the same.
+ *
+ * The floor is on the GROUP, exactly as `perfVsMedian` puts it — not on the
+ * audience's own median, which is the median of every rated video on the side
+ * and is reported with its own n (`FormatReading.median.n`) for a surface to
+ * qualify. `engagement.n` is always the real count, so a row below the floor
+ * still says how many videos it had; only the median and the multiple are
+ * withheld.
+ */
+export const ENGAGEMENT_MIN_VIDEOS = 3
+
 export const EXCLUDED_NOTE =
   'Reddit is excluded from every engagement figure: its comments are capped at 40 a thread before a rate is computed, so a Reddit rate is measured against a ceiling and the others are not.'
 
@@ -62,7 +81,8 @@ export interface FormatRow {
   value: Counted
   pct: number | null
   /** Median engagement rate of this group, as the column stores it (3.8 = 3.8%),
-   *  with the videos it was measured over. Null below the floor. */
+   *  with the videos it was measured over. Null below
+   *  `ENGAGEMENT_MIN_VIDEOS`, where `n` still carries the real count. */
   engagement: { median: number | null; n: number }
   /** That median against the audience's own median video. Null where either is. */
   multiple: number | null
@@ -107,6 +127,8 @@ export interface FormatInput {
   videos: readonly FormatVideo[]
   /** Platforms whose engagement is not comparable — Reddit, by the cap. */
   excludePlatforms?: readonly string[]
+  /** Videos a group needs before its median is read. `ENGAGEMENT_MIN_VIDEOS`. */
+  minRated?: number
   /** `workedLabel`, passed in rather than imported: the humaniser lives beside
    *  This week's own block (`lib/pages/week.ts`) and importing a page module
    *  from the reading layer would invert the dependency. A caller that passes
@@ -145,6 +167,7 @@ export function basisLineFor(month: string): string {
 export function formatReading(input: FormatInput): FormatReading {
   const { month, audience, audienceLabel, key } = input
   const excludePlatforms = input.excludePlatforms ?? ENGAGEMENT_EXCLUDED
+  const minRated = input.minRated ?? ENGAGEMENT_MIN_VIDEOS
   const label = input.label ?? ((k: string) => k)
   const basisLine = basisLineFor(month)
 
@@ -175,7 +198,11 @@ export function formatReading(input: FormatInput): FormatReading {
 
   const rows: FormatRow[] = [...groups.entries()]
     .map(([value, g]) => {
-      const groupMedian = median(g.rates)
+      // THE FLOOR IS THE GROUP'S, AND IT WITHHOLDS THE MEDIAN, NOT THE ROW. A
+      // format read off two videos is still counted, still carries its k of n
+      // and still says it had two rates; what it does not get is a median or a
+      // multiple, because neither is a property of the format at that n.
+      const groupMedian = g.rates.length >= minRated ? median(g.rates) : null
       return {
         key: value,
         label: label(value),
