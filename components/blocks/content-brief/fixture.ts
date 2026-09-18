@@ -261,6 +261,33 @@ export function ledgerWithDismissal(): MarketSurfaceData {
   }
 }
 
+/**
+ * The same ledger with the model's strings at their worst — the fit case.
+ *
+ * THE HEIGHT OF A CARD IS DRIVEN BY THREE UNBOUNDED STRINGS: the advice's
+ * title, the commenter's quote and Pass D-b's argument, all model-written and
+ * none of them length-checked anywhere in the product. The slide body is a
+ * fixed 563px with `overflow: hidden` and no overflow signal reaches the export
+ * (design review 10), so the tenant whose title wraps to three lines loses the
+ * bottom of a card in the PDF silently. This fixture is what "worst case" means
+ * for this block, and the fix-pass screenshot is taken against it as well as
+ * against the populated one.
+ */
+export function longContentLedger(): MarketSurfaceData {
+  const base = ledgerWithDismissal()
+  const long = (r: AdviceRow, n: number): AdviceRow => ({
+    ...r,
+    title: n === 0
+      ? 'Answer the seam-and-warranty question in a clip of its own, on the account that already carries the audience asking it'
+      : r.title,
+    why: `${r.why ?? ''} ${r.why ?? ''}`.trim() || null,
+    quote: r.quote
+      ? { ...r.quote, text: `${r.quote.text} ${r.quote.text} ${r.quote.text}`, english: `${r.quote.english} ${r.quote.english} ${r.quote.english}` }
+      : null,
+  })
+  return { ...base, advice: { ...base.advice, rows: base.advice.rows.map(long) } }
+}
+
 /** The ledger with nothing on it — the block's own empty state. */
 export function emptyLedger(): MarketSurfaceData {
   const base = marketFixture()

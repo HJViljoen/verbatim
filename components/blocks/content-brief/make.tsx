@@ -167,13 +167,35 @@ function Reading({ verdict, mode }: { verdict: Verdict | null; mode: RenderMode 
 const STOP_HEAD = 'What not to make'
 const STOP_LABEL = 'The advice you dismissed'
 
+/**
+ * A CARD IS A FIXED BOX, SO ITS VARIABLE PROSE IS BOUNDED (design review 10).
+ *
+ * The slide body is 563px with `overflow: hidden` (app/globals.css
+ * `.vb-slide-body`) and `data-overflow` is only ever toggled inside the
+ * document editor — never on the export path — so nothing signals a clip in a
+ * PDF. Three of a card's strings are model-written and length-checked nowhere
+ * in the product: the advice's title, the commenter's quote and Pass D-b's
+ * argument. Measured on the fix pass's own stress fixture (`longContentLedger`,
+ * every one of them at its worst), the row ran 179px past the sheet and the
+ * bottom of a card went with it.
+ *
+ * Clamped, each to the lines the artboard's own card gives it — except the
+ * `afterwards` sentence, which is clamped at three because it is the one that
+ * says why a comparison was REFUSED, and half of "we compare from 2" is a worse
+ * sentence than none. A clamp is
+ * VISIBLE — the ellipsis is on the page and the full string is in the element's
+ * title — where a clip is not, and every clamped string is also printed in full
+ * on the ledger section two slides earlier. The quote is clamped last and least
+ * for the reason the file already gives: a commenter's own words are on this
+ * page or nowhere.
+ */
 function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: RenderMode }) {
   const stop = n == null
   return (
     <div className={`flex min-w-0 flex-col gap-1 rounded-md border px-4 py-3 ${stop ? 'border-negative/40 bg-tile' : 'border-border bg-tile'}`}>
       <div className="flex items-center justify-between gap-2">
         {stop
-          ? <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-negative">Stop</span>
+          ? <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</span>
           : <span className="font-mono text-[13px] font-medium tabular-nums text-primary">{String(n).padStart(2, '0')}</span>}
         <Chip tone={toneOf(row)}>{chipWord(row)}</Chip>
       </div>
@@ -184,11 +206,11 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
       {stop ? (
         <>
           <h3 className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-negative">{STOP_HEAD}</h3>
-          <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">{STOP_LABEL}</p>
           <p
             data-copy="stored"
             data-slot="pass_d_b_recommendation"
-            className="m-0 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
+            title={row.title}
+            className="m-0 line-clamp-3 text-[13px] font-normal leading-[1.3] text-secondary-foreground"
           >
             {row.title}
           </p>
@@ -197,26 +219,31 @@ function Card({ row, n, mode }: { row: AdviceRow; n: number | null; mode: Render
         <h3
           data-copy="stored"
           data-slot="pass_d_b_recommendation"
-          className="m-0 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
+          title={row.title}
+          className="m-0 line-clamp-2 text-[17px] font-semibold leading-[1.2] tracking-[-0.01em] text-foreground"
         >
           {row.title}
         </h3>
       )}
       <p className="m-0 font-mono text-[10.5px] leading-[1.35] text-muted-foreground">{provenance(row)}</p>
-      {row.grounded?.pruned ? <p className="m-0 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
+      {row.grounded?.pruned ? <p className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-muted-foreground">{row.grounded.line}</p> : null}
       <div className="flex flex-col gap-1 rounded-md bg-inner px-3 py-2.5">
         <p className="m-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">What the conversation did after</p>
         <Reading verdict={row.afterwards.verdict} mode={mode} />
-        <p className="m-0 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
+        <p className="m-0 line-clamp-3 text-[11.5px] leading-[1.4] text-secondary-foreground">{row.afterwards.line}</p>
       </div>
       {/* THE QUOTE BEFORE THE ARGUMENT, WHICH IS THE ARTBOARD'S ORDER AND THE
           SAFER ONE. A card is a fixed box on a 1123 × 631 sheet and the last
           thing in it is what a long row clips; the model's argument is also on
           the ledger section two slides earlier, and a commenter's own words are
           on this page or nowhere. */}
-      {row.quote ? <BlockQuote quote={row.quote} mode={mode} /> : null}
+      {row.quote ? (
+        <div className="[&_p]:line-clamp-2">
+          <BlockQuote quote={row.quote} mode={mode} />
+        </div>
+      ) : null}
       {row.why ? (
-        <p data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[12px] leading-[1.4] text-secondary-foreground">
+        <p data-copy="stored" data-slot="pass_d_b_recommendation" title={row.why} className="m-0 line-clamp-2 text-[12px] leading-[1.4] text-secondary-foreground">
           {row.why}
         </p>
       ) : null}
