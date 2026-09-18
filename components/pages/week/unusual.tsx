@@ -334,14 +334,20 @@ function Interpretation({
     return (
       <div style={{ background: EMAIL.inner, borderRadius: 4, padding: '10px 12px', marginTop: 8 }}>
         <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.6px', color: EMAIL.muted }}>{label}</div>
-        <TokenProse body={body} figures={figures} mode={mode} model />
+        <TokenProse body={body} figures={figures} mode={mode} model figureFace="inherit" />
       </div>
     )
   }
   return (
     <div className="flex flex-col gap-1.5 rounded bg-muted/50 px-3 py-2.5">
       <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
-      <TokenProse body={body} figures={figures} mode={mode} model className="m-0 text-[12.5px] leading-relaxed" />
+      {/* THE FIGURES IN THE SENTENCE'S OWN FACE (design review F6). A mono
+          glyph is one advance wide whatever it is, so the decimal points in
+          "13.7%" and "3.5%" got a digit's worth of air on both sides — six
+          lines under a claim line that sets the same two numbers in sans and
+          reads correctly, one page printing one figure two ways. Weight marks
+          them instead; the contract's marker is unchanged. */}
+      <TokenProse body={body} figures={figures} mode={mode} model figureFace="inherit" className="m-0 text-[12.5px] leading-relaxed" />
     </div>
   )
 }

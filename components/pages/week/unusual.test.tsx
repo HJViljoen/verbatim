@@ -49,6 +49,18 @@ describe('WK1 · unusual this week', () => {
     expect(text).not.toContain('×')
   })
 
+  it('sets the interpretation’s figures in the sentence’s own face', () => {
+    // Design review F6. A mono glyph is one advance wide whatever it is, so
+    // "13.7%" and "3.5%" inside a sans paragraph read "13 . 7%" and "3 . 5%" —
+    // six lines under a claim line setting the same two numbers in sans. The
+    // marker is unchanged, so the contract still tells code's number from the
+    // model's words; only the face moves.
+    const markup = render(weekUnusual.render(weekFixture(), 'app', ctx))
+    expect(markup).toContain('data-copy="figure" class="font-semibold tabular-nums"')
+    expect(markup).not.toContain('data-copy="figure" class="font-mono tabular-nums"')
+    assertCopyContract(markup)
+  })
+
   it('joins the header’s two counts without claiming one denominator', () => {
     // Code review C10. The meta read "3 of 42 tested cleared its band · of 205
     // videos this update": two "of"s joined by a dot, over two different

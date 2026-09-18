@@ -22,7 +22,7 @@ import { EMAIL, FONT } from '@/lib/email/theme'
 // missing figure can never reach a reader as an empty gap.
 
 export function TokenProse({
-  body, figures, mode = 'app', model = false, className,
+  body, figures, mode = 'app', model = false, figureFace = 'mono', className,
 }: {
   /** The sentence(s), with `[[key]]` placeholders. */
   body: string
@@ -34,6 +34,24 @@ export function TokenProse({
    *  sentences are not marked: they are allowed their numbers, and marking them
    *  would claim a provenance they do not have. */
   model?: boolean
+  /**
+   * The face a substituted figure is set in (Block D wave 2, design review F6).
+   *
+   * MONO IS THE DEFAULT AND IT IS A SIGNAL: a figure in a model's paragraph is
+   * code's number, and setting it in the mono face says so at a glance. But a
+   * mono glyph is one advance wide whatever it is, so a DECIMAL POINT inside a
+   * sans sentence gets a digit's worth of air on both sides: This week's §1
+   * interpretation read "Objections ran at 13 . 7% of this update against
+   * 3 . 5%", six lines under a claim line that sets the same two numbers in
+   * sans and reads correctly — one page printing one figure two ways.
+   *
+   * `inherit` keeps the sentence's own face and marks the figure by WEIGHT
+   * instead, which survives a decimal point. The marker (`data-copy="figure"`)
+   * is unchanged either way, so the contract reads the two identically; this
+   * is only what a reader sees. Opt-in, because every other surface's prose
+   * was laid out against the mono face.
+   */
+  figureFace?: 'mono' | 'inherit'
   className?: string
 }) {
   const parts = substituteFigures(body, proseFigures(figures))
@@ -41,7 +59,18 @@ export function TokenProse({
   const children: ReactNode[] = parts.map((p, i) =>
     'text' in p
       ? <span key={i}>{p.text}</span>
-      : <span key={i} data-copy="figure" style={mode === 'email' ? { fontFamily: FONT.mono, color: EMAIL.ink } : undefined} className={mode === 'email' ? undefined : 'font-mono tabular-nums'}>{p.figure}</span>,
+      : (
+        <span
+          key={i}
+          data-copy="figure"
+          style={mode === 'email'
+            ? (figureFace === 'mono' ? { fontFamily: FONT.mono, color: EMAIL.ink } : { fontWeight: 600, color: EMAIL.ink })
+            : undefined}
+          className={mode === 'email' ? undefined : (figureFace === 'mono' ? 'font-mono tabular-nums' : 'font-semibold tabular-nums')}
+        >
+          {p.figure}
+        </span>
+      ),
   )
   if (mode === 'email') {
     return (
