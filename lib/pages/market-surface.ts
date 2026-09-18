@@ -497,7 +497,12 @@ export function waysOfMoving(acceptable: WaysBlock['acceptable']): WayRow[] {
       how: 'Everything you published this month, with the claims you made in it, confirmed in one press as a move dated to the first of the month.',
       href: null,
       live: false,
-      unlock: 'This month’s card is not built yet.',
+      // THE CARD IS BUILT AND THE PRESS IS NOT, so the unlock names the press.
+      // `MovesBlock.card` carries this month's counted card on this very page
+      // (Phase 1 D2), and a row saying the card is not built would be a copy
+      // claim the code beside it contradicts — the defect AGENTS.md names.
+      // `live` stays false, because what this row offers is the one press.
+      unlock: 'The card is filled in and can be read; confirming it in one press is not built yet.',
     },
     {
       key: 'track',
@@ -556,9 +561,12 @@ export const CLAIMS_CAVEAT =
 export function unlockRows(): UnlockRow[] {
   return [
     {
+      // WHAT IS NOT BUILT IS THE PRESS. The card itself is read on this page
+      // now (Phase 1 D2) and the renderer prints "— not built yet" under every
+      // row here, so this row names the confirming rather than the card.
       section: 'MK3',
-      title: 'This month’s card',
-      line: 'Everything you published this month that drew enough comment to read, the claims you made in it, and what those subjects did in each audience — confirmed in one press as a move.',
+      title: 'Confirming this month’s card',
+      line: 'The card is read above — everything you published this month, how much of it drew enough comment to read, and the claims you made in it. Turning it into a move in one press is what is missing.',
       owner: 'Verbatim engineering',
     },
     {

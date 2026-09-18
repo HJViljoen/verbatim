@@ -170,6 +170,16 @@ describe('the five ways', () => {
     expect(ways.find((w) => w.key === 'advice')?.unlock).toBe('Advice lands with your next update.')
   })
 
+  it('says the card is read and the press is not, because the card is built', () => {
+    // `MovesBlock.card` is composed on this page (Phase 1 D2), so a row
+    // claiming the card is not built would be copy the code contradicts —
+    // while `live` stays false, because the one press really is missing.
+    const card = waysOfMoving(null).find((w) => w.key === 'card')
+    expect(card?.live).toBe(false)
+    expect(card?.unlock).not.toMatch(/card is not built/i)
+    expect(card?.unlock).toMatch(/confirming it in one press is not built yet/i)
+  })
+
   it('never promises a month for a way that is not built', () => {
     for (const w of waysOfMoving(null)) {
       if (w.unlock) expect(w.unlock).not.toMatch(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+20\d\d/)
