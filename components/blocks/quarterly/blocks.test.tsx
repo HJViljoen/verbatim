@@ -622,6 +622,16 @@ describe('the artboard port (Block D wave 2)', () => {
     // The gap, with both sides and the band — never "narrowed".
     expect(t).toContain('8.1 points apart (band 6)')
     expect(t).toContain('7.8 points apart in the quarter from April')
+    // THE TWO DIFFERENCES DO NOT RUN TOGETHER, and the label is not joined to
+    // the caption with a full stop it does not have. D1 is the whole reason
+    // this card carries two readings instead of the word "narrowed"; they have
+    // to read as two.
+    expect(t).not.toContain('(band 6) · 7.8 points apart')
+    // And "The category" does not carry its capital into mid-sentence.
+    expect(t).toContain('you against the category')
+    for (const mode of MODES) {
+      expect(renderText(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx))).not.toMatch(/\. [a-z]/)
+    }
     expect(t.match(directionRe())).toBeNull()
     // The panel's level and the size of the panel, never "−18% since June".
     expect(t).toContain('a fixed panel of 214 accounts')

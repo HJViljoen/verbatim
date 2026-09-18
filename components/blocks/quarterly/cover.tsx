@@ -57,9 +57,13 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
                 <div style={{ fontFamily: FONT.sans, fontSize: 14, fontWeight: 600, color: EMAIL.ink2 }}>{stat.value}</div>
               )}
               {stat.verdict ? <div style={{ marginTop: 6 }}><BlockMovement verdict={stat.verdict} unit="pts" mode={mode} /></div> : null}
-              <div style={{ marginTop: 8, fontFamily: FONT.sans, fontSize: 12, lineHeight: 1.35, color: EMAIL.muted }}>
-                {stat.label}. {stat.caption}
-              </div>
+              {/* THREE LINES, NOT ONE JOINED STRING. `{label}. {caption}`
+                  put a full stop in front of a caption that opens lower case
+                  on two of the three cards, and ran two banded differences
+                  together on the third. */}
+              <div style={{ marginTop: 8, fontFamily: FONT.sans, fontSize: 12, lineHeight: 1.35, color: EMAIL.ink2 }}>{stat.label}</div>
+              <div style={{ marginTop: 3, fontFamily: FONT.sans, fontSize: 11.5, lineHeight: 1.35, color: EMAIL.muted }}>{stat.caption}</div>
+              {stat.basis ? <div style={{ marginTop: 2, fontFamily: FONT.sans, fontSize: 11.5, lineHeight: 1.35, color: EMAIL.muted }}>{stat.basis}</div> : null}
             </td>
           </tr>
         </tbody>
@@ -74,7 +78,9 @@ function StatCard({ stat, mode }: { stat: CoverStat; mode: RenderMode }) {
         <span className="text-[15px] font-semibold leading-tight text-secondary-foreground">{stat.value}</span>
       )}
       {stat.verdict ? <span className="mt-1.5"><BlockMovement verdict={stat.verdict} unit="pts" mode={mode} /></span> : null}
-      <span className="mt-2 text-[12.5px] leading-[1.35] text-muted-foreground">{stat.label}. {stat.caption}</span>
+      <span className="mt-2 text-[12.5px] leading-[1.35] text-secondary-foreground">{stat.label}</span>
+      <span className="mt-1 text-[11.5px] leading-[1.35] text-muted-foreground">{stat.caption}</span>
+      {stat.basis ? <span className="mt-0.5 text-[11.5px] leading-[1.35] text-muted-foreground">{stat.basis}</span> : null}
     </div>
   )
 }

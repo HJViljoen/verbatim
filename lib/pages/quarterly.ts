@@ -131,6 +131,19 @@ export interface CoverStat {
   /** The evidence under it — the denominator, the band, the panel. */
   caption: string
   /**
+   * A SECOND DATED READING, on its own line where the card carries one.
+   *
+   * The gap card's evidence is two banded differences — this quarter's and the
+   * one before it — and they were joined into one dot-chain with the label,
+   * so the card read "… · 8.1 points apart (band 6) · 7.8 points apart in the
+   * quarter from April (band 5.9)". Two "points apart" figures running
+   * together with nothing between them is the one comparison on this cover a
+   * reader most needs to keep apart; it is also the whole of D1 (the mock
+   * writes the pair as "narrowed from 19 in June" and we refuse that word), so
+   * the second reading has to read as a second reading.
+   */
+  basis?: string
+  /**
    * The banded step this card carries, where it carries one.
    *
    * A `Verdict` and never a magnitude of our own: `MovementBadge` prints
@@ -1436,6 +1449,11 @@ function buildCover(a: {
   // so the month's own lead, the month's videos and the reading counter fill
   // the remaining slots, in that order, and the cover always carries three
   // real figures. Trimmed to three at the end, which is the mock's grid.
+  // MID-SENTENCE, THE CATEGORY IS "the category". `label` is the operator's
+  // own word from Settings and is written for the head of a line ("The
+  // category"), so dropped into "you against …" it carried a capital into the
+  // middle of a sentence that the rest of the deck does not.
+  const midSentence = (label: string): string => label.replace(/^The /, 'the ')
   const stats: CoverStat[] = []
   const gap = leadGap(a.gaps)
   if (gap) {
@@ -1444,8 +1462,9 @@ function buildCover(a: {
       token: `gap_${gap.objectId}`,
       kind: apart ? 'figure' : 'word',
       value: apart ? `${Math.round(Math.abs(gap.gapPts as number) * 10) / 10} pts` : GAP_WORDS[gap.state],
-      label: `${gap.objectLabel} — you against ${gap.b.label}, ${quarterLabel(a.quarter, false)}`,
-      caption: [gapLine(gap, { period: true }), gapBasisLine(gap)].filter(Boolean).join(' · '),
+      label: `${gap.objectLabel} — you against ${midSentence(gap.b.label)}, ${quarterLabel(a.quarter, false)}`,
+      caption: gapLine(gap, { period: true }),
+      basis: gapBasisLine(gap) ?? undefined,
     })
   }
   const attention = overview.category.attention
