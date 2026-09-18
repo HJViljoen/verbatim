@@ -12,6 +12,7 @@ import {
   recordLines,
   refusals,
   refusedSentence,
+  totalPlatformMix,
   type RecordInputs,
   type RecordWindow,
   type Refusal,
@@ -1184,6 +1185,10 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
     overview, quarter, prior, readingAt, readings, thisQuarter: a.thisQuarter,
     gaps: subjects.rows.map((r) => r.gap).filter((g): g is Gap => g != null),
     quarterVerdicts,
+    // ONE COMPOSITION OF THE MIX, SHARED. Page 7's `Sources` row is
+    // `platformShareLine` over the same record, so the cover and the method
+    // page cannot name two different corpora.
+    platforms: a.record?.coverage ? platformShareLine(totalPlatformMix(a.record.coverage)) : '',
   })
   const rivals = buildRivals({ overview, competitive: a.competitive, monthLabel, monthNote })
   const moves = buildMoves({ overview, market: a.market, quarter })
@@ -1347,11 +1352,21 @@ function themeLabel(id: string, overview: OverviewData): string | null {
  * from months: where the window read could not be taken there is no quarter
  * count to print, and the line says the month instead of guessing one.
  */
-function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null): string {
+function corpusLine(overview: OverviewData, quarter: Quarter, quarterVideos: number | null, platforms: string): string {
   const parts: string[] = []
+  // THE PLATFORMS THE CORPUS WAS READ ON, which the artboard puts first in
+  // this line and which page 7 was the only page to carry (`qr.p1.footer`).
+  // Empty where no platform mix was recorded — never a guessed list.
+  if (platforms) parts.push(platforms)
   if (quarterVideos != null) parts.push(`${fmtInt(quarterVideos)} category videos read in ${quarterLabel(quarter, false)}`)
   else if (overview.bar.videos != null) parts.push(`${fmtInt(overview.bar.videos)} videos in ${longMonth(overview.month)}`)
   if (overview.bar.updates > 0) parts.push(`${fmtInt(overview.bar.updates)} ${overview.bar.updates === 1 ? 'update' : 'updates'} in ${longMonth(overview.month)}`)
+  // AND NOT THE ARTBOARD'S PER-MONTH SPLIT ("Jul 2,295 · Aug 2,405 · Sep
+  // 2,359"). The figure beside it is the WINDOWED count of distinct videos
+  // over three months, and three month counts printed next to it invite
+  // exactly the addition D8 exists to refuse — the three do not add to it,
+  // because a video read in two months is one video here. This composer holds
+  // no per-month split either; it holds one window read and one month.
   return parts.length ? parts.join(' · ') : 'Nothing has been read for this workspace yet.'
 }
 
@@ -1410,6 +1425,9 @@ function buildCover(a: {
   gaps: readonly Gap[]
   /** The quarter's own banded steps — the cover's third card is the largest. */
   quarterVerdicts: readonly Verdict[]
+  /** The platform mix the corpus was read on, for the footer line. Page 7's
+   *  own `Sources` row composes the same string from the same record. */
+  platforms: string
 }): CoverPage {
   const { overview } = a
   const lead = overview.sentence.lead
@@ -1564,7 +1582,7 @@ function buildCover(a: {
     ]
       .filter(Boolean)
       .join(' · '),
-    corpus: corpusLine(overview, a.quarter, quarterVideos),
+    corpus: corpusLine(overview, a.quarter, quarterVideos, a.platforms),
   }
 }
 
