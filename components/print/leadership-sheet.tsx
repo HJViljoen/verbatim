@@ -80,12 +80,17 @@ const BODY = 'm-0 text-[12.5px] leading-[1.35] text-foreground'
  * the marketing package's file and this is additive.
  */
 function Eyebrow({ children, meta }: { children: ReactNode; meta?: ReactNode }) {
+  // A HEADING, NOT A PARAGRAPH. Four sections share this sheet where the deck
+  // gives each one a slide of its own with the slide's `h1` over it, so a
+  // `<p>` here left the page with one heading and four unlabelled regions. The
+  // slide's title is the `h1`; each section's eyebrow is an `h2`; the
+  // recommendation, which is the body of one of those sections, is an `h3`.
   return (
-    <p className="m-0 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+    <h2 className="m-0 flex items-center gap-2 font-mono text-[11px] font-normal uppercase tracking-[0.08em] text-muted-foreground">
       <span className="inline-block h-[2px] w-4 shrink-0 rounded-full bg-primary" aria-hidden />
       <span>{children}</span>
       {meta ? <span className="ml-auto min-w-0 truncate text-[9.5px] normal-case tracking-normal">{meta}</span> : null}
-    </p>
+    </h2>
   )
 }
 
@@ -167,7 +172,7 @@ function Hero({ value, unit }: { value: string; unit: string }) {
 /** The artboard's muted pill. */
 function Chip({ tone = 'plain', children }: { tone?: 'plain' | 'good'; children: ReactNode }) {
   return (
-    <span className={`inline-block shrink-0 rounded-full px-2 py-[2px] text-[12px] font-medium ${tone === 'good' ? 'bg-accent text-accent-foreground' : 'bg-inner text-muted-foreground'}`}>
+    <span className={`inline-block shrink-0 rounded-full px-2 py-[2px] text-[12px] font-medium ${tone === 'good' ? 'bg-accent text-accent-foreground' : 'bg-inner text-secondary-foreground'}`}>
       {children}
     </span>
   )
@@ -457,7 +462,12 @@ function SubjectCard({ row, categoryLabel }: { row: SubjectRow | null; categoryL
             client's bad news, nor its good news. */}
         <span className="shrink-0"><BlockMovement verdict={row.category.verdict} unit="pts" good="neutral" /></span>
       </div>
-      {row.direction ? <span className="flex"><Chip><DirectionWord direction={row.direction} /></Chip></span> : null}
+      {/* PLAIN, NOT IN THE ARTBOARD'S PILL. `DirectionWord` sets its own
+          `text-muted-foreground`, which on the pill's `bg-inner` ground is
+          4.46:1 at 11px — under AA on a document read on paper. On the card's
+          own white it is 4.79:1, which is where the subjects table already
+          prints it. The pill is the artboard's; legible ink is the product's. */}
+      {row.direction ? <span className="flex"><DirectionWord direction={row.direction} /></span> : null}
       <p data-copy="level" className={TRAIL}>
         {fmtInt(row.category.k ?? 0)} of {fmtInt(row.category.n ?? 0)} category videos
         {trail ? ` · ${trail}` : ''}
@@ -503,7 +513,7 @@ function Decide({ ledger, company }: { ledger: LedgerRow | null; company: string
   return (
     <div className="flex shrink-0 flex-col gap-1.5">
       <Eyebrow>The one thing to decide</Eyebrow>
-      <h2 data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[17px] font-semibold leading-[1.25] tracking-[-0.01em] text-foreground">{ledger.title}</h2>
+      <h3 data-copy="stored" data-slot="pass_d_b_recommendation" className="m-0 text-[17px] font-semibold leading-[1.25] tracking-[-0.01em] text-foreground">{ledger.title}</h3>
       <p className={BODY}>{age} How many videos it is grounded in is not recorded on this reading.</p>
       <div className="flex items-center gap-2.5">
         <Chip tone={ledger.decidedAt ? 'good' : 'plain'}>
@@ -647,6 +657,13 @@ function Moves({ data }: { data: OverviewData }) {
   )
 }
 
+/** The mono trail, ON THE GREY CARD. `text-muted-foreground` (#6E7378) on
+ *  `bg-inner` (#F6F7F8) is 4.46:1 — under AA, at 9.5px, on a document a
+ *  director reads on paper. The same token on white is 4.79:1 and is fine,
+ *  which is why every other trail on this sheet keeps it. `secondary-foreground`
+ *  is 8.46:1 on the same ground and the same ink the card's own body uses. */
+const TRAIL_ON_INNER = 'm-0 font-mono text-[9.5px] leading-[1.35] text-secondary-foreground'
+
 function MoveCard({ reading }: { reading: MoveReading }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg bg-inner px-3 py-2.5">
@@ -665,7 +682,7 @@ function MoveCard({ reading }: { reading: MoveReading }) {
           ))}
         </p>
       ) : null}
-      <p className={TRAIL}>{reading.line} · {reading.on}{reading.chartNote ? ` · ${reading.chartNote}` : ''}</p>
+      <p className={TRAIL_ON_INNER}>{reading.line} · {reading.on}{reading.chartNote ? ` · ${reading.chartNote}` : ''}</p>
     </div>
   )
 }
@@ -708,11 +725,19 @@ function SheetFooter({ data, company, date }: { data: OverviewData; company: str
     .join(' · ')
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
-      {/* TWO LINES RATHER THAN AN ELLIPSIS. The artboard's coverage line runs
-          to five clauses and the last of them is "2 comparisons refused" — the
-          one clause a reader most needs and the first a `truncate` eats. */}
+      {/* THE CLAMP IS A BACKSTOP AND IS NOT WHAT KEEPS THE RECORD HONEST.
+          `.vb-slide` is `overflow: hidden` and the body's height is calculated
+          against a fixed footer, so a third line does not push the footer down,
+          it pushes it off the sheet — which is why the clamp stays. What was
+          wrong was relying on it: a long record lost its tail to CSS with no
+          trace on the page and nowhere named to look. `record.lines` — every
+          clause, the refusals and their reasons among them — is what the method
+          page prints, so the note says so FIRST, where the clamp can never
+          reach it. */}
       <p className="line-clamp-2 font-mono text-[9.5px] leading-[1.35] text-muted-foreground">
         <span className="text-secondary-foreground">Coverage</span>
+        <span aria-hidden> · </span>
+        <span>in full on “How this was read”</span>
         <span aria-hidden> · </span>
         <span>{coverage}</span>
       </p>
@@ -818,7 +843,7 @@ export function LeadershipSheet({
       pages={pages}
       layout="single"
     >
-      <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex h-full min-h-0 flex-col gap-2.5">
         <div className="grid shrink-0 grid-cols-[5fr_3.5fr_3.5fr] gap-4">
           <GapCard gap={gap} row={gapRow} categoryLabel={overview.subjects.categoryLabel} />
           <AttentionCard attention={overview.category.attention} note={overview.category.attentionNote} />
@@ -839,11 +864,11 @@ export function LeadershipSheet({
             at the foot of the column where a reader reads it as the end of the
             sheet. */}
         <div className="grid min-h-0 flex-1 grid-cols-[7fr_5fr] gap-x-6">
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-3.5">
             <Decide ledger={overview.sentence.ledger} company={data.company} />
             <SubjectsTable data={overview} />
           </div>
-          <div className="flex min-w-0 flex-col gap-4">
+          <div className="flex min-w-0 flex-col gap-3.5">
             <Moves data={overview} />
             <OurRead data={overview} />
           </div>

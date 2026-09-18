@@ -248,6 +248,40 @@ describe('the leadership one-pager', () => {
     expect(words).toContain('monthly reading')
   })
 
+  // Four sections share this sheet where the deck gives each one a slide with
+  // an `h1` over it, so a `<p>` eyebrow left the page with one heading and four
+  // unlabelled regions. The slide title is the h1, each eyebrow an h2, and the
+  // recommendation — the body of one of those sections — an h3.
+  it('gives each of its four sections a heading', () => {
+    const markup = render(sheet())
+    expect((markup.match(/<h2/g) ?? []).length).toBe(4)
+    expect(markup).toContain('<h3')
+  })
+
+  // `text-muted-foreground` (#6E7378) on `bg-inner` (#F6F7F8) is 4.46:1 — under
+  // AA, at 9.5px, on a document a director reads on paper. The same token on
+  // white is 4.79:1, which is why every other trail on the sheet keeps it.
+  it('sets none of its own ink muted on the grey ground', () => {
+    const markup = render(sheet())
+    // The move card's 9.5px mono trail, and every chip's own words. (The
+    // non-answer badge inside the card is `MovementBadge`'s `NonAnswer`, whose
+    // colour is set in the shared primitive for every surface in the product;
+    // see status/E-leadership.md, NOT done.)
+    expect(markup).not.toMatch(/font-mono text-\[9\.5px\] leading-\[1\.35\] text-muted-foreground">declared/)
+    expect(markup).not.toMatch(/bg-inner text-muted-foreground/)
+  })
+
+  // The clamp is a backstop: `.vb-slide` is `overflow: hidden` and the body's
+  // height is calculated against a fixed footer, so a third line pushes the
+  // footer off the sheet rather than down. What was wrong was relying on it —
+  // a long record lost its tail to CSS with no trace and nowhere named to
+  // look. `record.lines` is what the method page prints, and the note says so
+  // first, where the clamp can never reach it.
+  it('names where the whole record is, before anything a clamp could eat', () => {
+    const words = renderText(sheet())
+    expect(words).toMatch(/Coverage · in full on “How this was read” ·/)
+  })
+
   it('names the recommendation as stored model prose, with its slot', () => {
     const markup = render(sheet())
     expect(markup).toContain('data-copy="stored"')
