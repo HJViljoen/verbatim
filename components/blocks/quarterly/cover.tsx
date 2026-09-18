@@ -102,18 +102,27 @@ export const quarterlyCover: Block<QuarterlyData> = {
         </BlockFrame>
       )
     }
+    // THE HERO WAS DESIGNED FOR THE SHEET, AND THE SHEET IS NOT THE ONLY
+    // SURFACE. On paper the cover owns its slide inside the artboard's 6%
+    // gutter. On the share page the same markup sits inside a card that
+    // already has its own `px-6 md:px-8` and under the shell's own 30px
+    // `<h1>` — so it drew a second gutter inside a gutter and a SECOND h1,
+    // larger than the outer one, on one document. The heading is an `h2`
+    // everywhere (the print deck's `Slide` carries the artefact's own h1 too)
+    // and the hero's scale and gutter are the print arm's.
+    const hero = mode === 'print'
     return (
-      <section className="flex min-h-0 flex-1 flex-col justify-center gap-6 px-[6%]">
+      <section className={`flex min-h-0 flex-1 flex-col justify-center ${hero ? 'gap-6 px-[6%]' : 'gap-4'}`}>
         <span aria-hidden className="inline-block h-[3px] w-14 flex-none rounded-full bg-primary" />
-        <h1 className="m-0 max-w-[16ch] text-[44px] font-semibold leading-[1.05] tracking-[-0.025em] [text-wrap:balance]">
+        <h2 className={`m-0 max-w-[16ch] font-semibold leading-[1.05] tracking-[-0.025em] [text-wrap:balance] ${hero ? 'text-[44px]' : 'text-[26px]'}`}>
           {quarterlyCover.title}
-        </h1>
+        </h2>
         <p className="m-0 font-mono text-[12.5px] leading-[1.5] text-muted-foreground">
           {quarterLabel(data.quarter)} against {quarterLabel(data.prior, false)} · {data.brand}
           <br />
           {c.stamp}
         </p>
-        <div className="max-w-[66ch] text-[16px] leading-[1.55]">
+        <div className={`max-w-[66ch] leading-[1.55] ${hero ? 'text-[16px]' : 'text-[14px]'}`}>
           <TokenProse body={c.body} figures={c.figures} mode={mode} />
         </div>
         <div className="grid max-w-[860px] grid-cols-1 gap-4 lg:grid-cols-3">

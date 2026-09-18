@@ -606,6 +606,17 @@ describe('the artboard port (Block D wave 2)', () => {
   const thinQuarter = thinQuarterFixture()
   const text = (key: keyof typeof QUARTERLY_BLOCKS, d = data) => renderText(QUARTERLY_BLOCKS[key].render(d, 'print', ctx))
 
+  it('qr.p1.cover · one h1 per document, and one gutter', () => {
+    // The share shell puts each block inside a card with its own padding and
+    // under its own 30px `<h1>`; the print deck's `Slide` carries an `<h1>`
+    // too. The hero's own heading is subordinate to both.
+    for (const mode of MODES) {
+      expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, mode, ctx))).not.toContain('<h1')
+    }
+    expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'app', ctx))).not.toContain('px-[6%]')
+    expect(render(QUARTERLY_BLOCKS['quarterly.cover'].render(data, 'print', ctx))).toContain('px-[6%]')
+  })
+
   it('qr.p1.stats · the cover carries the quarter gap, the panel and a banded quarter step', () => {
     const t = text('quarterly.cover')
     // The gap, with both sides and the band — never "narrowed".
