@@ -343,22 +343,76 @@ export async function loadOwnPublishedVideos(
 const PLAYBOOK_COLUMNS =
   'id, upload_date, platform, classified_type, hook_style, engagement_rate, is_client, is_competitor, competitor_name, source, sentiment, sentiment_source, analyzed_lane'
 
+/**
+ * THE PREVIOUS MONTH IS READ NARROW, AND THE REASON IS WHAT IT IS USED FOR.
+ *
+ * This was ONE read of two whole months of `videos` for the whole tenant, on
+ * every load of `/dashboard/competitive` — the class of read AGENTS.md's outage
+ * section is about, left deliberately unpatched by wave 1 and flagged for this
+ * package. Measured read-only on 2026-09-18 (one query, grouped by tenant,
+ * month and audience):
+ *
+ *     Össur    Aug  112 own ·  247 rival · 1,681 category · 2,040
+ *              Sep  109 own ·  145 rival ·   757 category · 1,011
+ *     Sealand  Aug   26 own ·  234 rival · 1,253 category · 1,513
+ *              Sep   17 own ·  292 rival · 1,146 category · 1,455
+ *
+ * The CURRENT month is needed whole: `buildPlaybook`'s widest column IS the
+ * category, and it is the column that fixes the key order for every other one.
+ *
+ * The PREVIOUS month is not. Nothing reads it but `buildHeadToHead`, whose
+ * `sideOf` is called exactly twice — for `client` and for the selected rival's
+ * audience — and whose `readIn(previousMonth)` comes off `month_denominators`,
+ * not off these rows. So every category video of the previous month was
+ * fetched, paged and discarded: 1,681 of Össur's 2,040 and 1,253 of Sealand's
+ * 1,513, which is 82% and 83% of that month's read.
+ *
+ * Narrowing it to `is_client OR is_competitor` takes the two-month read from
+ * 3,051 rows to 1,370 on Össur and from 2,968 to 1,715 on Sealand — 55% and
+ * 42% fewer rows, and one `selectAll` page fewer on each tenant (a bare
+ * `.select()` caps at 1000, so Össur was four pages and is now two).
+ *
+ * IT IS NARROWED BY BRAND, NOT BY THE SELECTED RIVAL, and that is deliberate:
+ * every tracked rival's previous month comes back, so changing `?vs=` needs no
+ * different read, and no rival NAME is interpolated into a PostgREST `or`
+ * filter — a name is free text from Settings and quoting one into a filter
+ * string is a hazard for the sake of a few dozen rows.
+ *
+ * TWO ROUND TRIPS RATHER THAN ONE, issued together. They run in parallel, so
+ * the wall clock is the slower of the two rather than the sum, and the rows
+ * over the wire — which is what the outage was about — drop by half.
+ */
 export async function loadPlaybookVideos(
   supabase: SupabaseClient,
   clientId: string,
   month: string,
 ): Promise<PlaybookVideo[]> {
-  const from = prevMonth(monthStartOf(month))
-  const to = nextMonth(monthStartOf(month))
-  return selectAll<PlaybookVideo>(() =>
-    supabase
-      .from('videos')
-      .select(PLAYBOOK_COLUMNS)
-      .eq('client_id', clientId)
-      .gte('upload_date', from)
-      .lt('upload_date', to)
-      .order('upload_date', { ascending: true }),
-  )
+  const here = monthStartOf(month)
+  const before = prevMonth(here)
+  const after = nextMonth(here)
+
+  const [now, then] = await Promise.all([
+    selectAll<PlaybookVideo>(() =>
+      supabase
+        .from('videos')
+        .select(PLAYBOOK_COLUMNS)
+        .eq('client_id', clientId)
+        .gte('upload_date', here)
+        .lt('upload_date', after)
+        .order('upload_date', { ascending: true }),
+    ),
+    selectAll<PlaybookVideo>(() =>
+      supabase
+        .from('videos')
+        .select(PLAYBOOK_COLUMNS)
+        .eq('client_id', clientId)
+        .gte('upload_date', before)
+        .lt('upload_date', here)
+        .or('is_client.eq.true,is_competitor.eq.true')
+        .order('upload_date', { ascending: true }),
+    ),
+  ])
+  return [...then, ...now]
 }
 
 // ---- what a document may NAME ---------------------------------------------------
