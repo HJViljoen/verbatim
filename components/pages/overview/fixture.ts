@@ -65,7 +65,54 @@ const RIVAL_ROWS: RivalRow[] = [
     raisedMost: null,
     retiredAt: null,
   },
+  // THE CATEGORY ROW, WHICH `buildStandings` ALWAYS EMITS (it is the third
+  // entry of `wanted`, from `categoryLabel: audienceLabel(INDUSTRY_AUDIENCE)`).
+  // A fixture without it cannot show the coupling this package built: OV3's
+  // attention verdict is THIS row's `attentionVerdict`, handed across from OV4
+  // rather than computed a second time, and a wave-2 port reading a fixture
+  // with no category row would have no way to see that the panel card and the
+  // standings table are one computation.
+  //
+  // Its `n` is 41,200 on every row, because one `buildStandings` call gives
+  // every row the SAME panel total (lib/reading/standings.ts): the k's differ,
+  // the denominator does not. The fixture stated two panel totals on one page
+  // before this, and a port binding "share of the panel's comments" off it got
+  // Freitag at 15% of 41,200 beside the category at 67% of 61,300.
+  {
+    audience: INDUSTRY_AUDIENCE,
+    label: 'The category',
+    role: 'category',
+    observed: true,
+    attention: { k: 32600, n: 41200, pct: 79.1 },
+    content: { k: 780, n: 1000, pct: 78 },
+    // THE REFUSAL, NOT THE MOCK'S "−18% since June". The panel re-froze on
+    // 3 September, so the two months either side of it were read over two
+    // different sets of accounts — `tracking_change` is the reason
+    // `buildStandings` gives, and it is the honest answer in place of a delta
+    // over a raw comment count that has no denominator to band.
+    attentionVerdict: verdict({
+      objectKind: 'audience',
+      objectId: INDUSTRY_AUDIENCE,
+      objectLabel: 'The category',
+      audience: INDUSTRY_AUDIENCE,
+      value: { k: 32600, n: 41200 },
+      baseline: { k: 36400, n: 46000 },
+      countedOver: { measure: 'comments', population: 'the panel’s comments this month' },
+      changePts: null,
+      bandPts: null,
+      state: 'refused',
+      refusedReason: 'tracking_change',
+    }),
+    contentVerdict: verdict({ objectKind: 'audience', objectId: INDUSTRY_AUDIENCE, objectLabel: 'The category', audience: INDUSTRY_AUDIENCE, state: 'no_clear_change', changePts: 0.4, bandPts: 1.8, value: { k: 780, n: 1000 }, countedOver: { measure: 'videos', population: 'the panel’s videos this month' } }),
+    ownPosts: null,
+    raisedMost: null,
+    retiredAt: null,
+  },
 ]
+
+/** OV3's attention verdict is OV4's category row — the same object, handed
+ *  across in `loadOverview`, never computed twice. */
+const CATEGORY_ROW = RIVAL_ROWS.find((r) => r.audience === INDUSTRY_AUDIENCE)!
 
 export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData {
   const window = horizonWindow('this_month', NOW, '2026-06-01')
@@ -240,24 +287,12 @@ export function overviewFixture(over: Partial<OverviewData> = {}): OverviewData 
           reason: 'tracking_change',
         } as unknown as NonNullable<OverviewData['category']['attention']>['panel'],
         accountCount: 214,
-        // THE REFUSAL, NOT THE MOCK'S "\u221218% since June". The panel
-        // re-froze on 3 September, so the two months either side of it were
-        // read over two different sets of accounts — `tracking_change` is the
-        // reason `buildStandings` gives, and it is the honest answer in place
-        // of a delta over a raw comment count that has no denominator to band.
-        verdict: verdict({
-          objectKind: 'audience',
-          objectId: INDUSTRY_AUDIENCE,
-          objectLabel: 'The category',
-          audience: INDUSTRY_AUDIENCE,
-          value: { k: 41200, n: 61300 },
-          baseline: { k: 46000, n: 66800 },
-          countedOver: { measure: 'comments', population: 'the panel\u2019s comments this month' },
-          changePts: null,
-          bandPts: null,
-          state: 'refused',
-          refusedReason: 'tracking_change',
-        }),
+        // NOT A SECOND VERDICT — the category row's own, exactly as
+        // `loadOverview` hands it across from OV4 (`buildRivals` → OV3). Two
+        // computations of one panel on one page is the defect
+        // lib/reading/standings.ts exists to prevent, and a fixture that built
+        // its own would let a port bind to a number the loader cannot produce.
+        verdict: CATEGORY_ROW.attentionVerdict,
       },
       attentionNote: null,
       quiet: [
