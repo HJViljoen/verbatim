@@ -4,9 +4,10 @@ import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
 import {
-  acceptableRow, actedLine, adviceAnchor, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
-  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, registryIdsByInsight, repeatLine,
-  unlockRows, waysOfMoving, type AdviceRow, type RecCopy,
+  acceptableRow, actedLine, adviceAnchor, ageInMonths, buildAdviceRows, ledgerRowsShown, lineageKey, madeInMonth,
+  marketSurfaceHref, monthsMadeIn, moveLedgerLine, moveTargetLabel, orderedTargets, recurrenceForTarget,
+  registryIdsByInsight, repeatCell, repeatLine, unlockRows, waysOfMoving,
+  type AdviceRow, type RecCopy, type TargetPoint,
 } from './market-surface'
 
 const copy = (over: Partial<RecCopy> = {}): RecCopy => ({
@@ -483,5 +484,67 @@ describe('the ledger’s hero quote burns nothing it does not print', () => {
     expect(pick(['ai-1'], 1, 'the zip broke after a month', 'a sentence nobody said').length).toBe(1)
     // …and that candidate is now unavailable to the row whose hero it is.
     expect(pick(['ai-1'], 0, 'another title', 'The zip broke after a month of commuting.')).toEqual([])
+  })
+})
+
+
+describe('the ledger’s two new cells (the artboard port)', () => {
+  it('ages a piece of advice in CALENDAR months, and says nothing at zero', () => {
+    // The unit is the ledger's own: the column beside it counts the months an
+    // identity was repeated in, so an age counted in days over thirty would put
+    // two clocks in two adjacent cells.
+    expect(ageInMonths('2026-06-28', '2026-09-18T09:00:00.000Z')).toBe('3 months')
+    expect(ageInMonths('2026-08-04', '2026-09-18T09:00:00.000Z')).toBe('1 month')
+    // Raised this month: "0 months" under "September" is a reader doing
+    // arithmetic to learn what the cell above already says.
+    expect(ageInMonths('2026-09-10', '2026-09-18T09:00:00.000Z')).toBeNull()
+    expect(ageInMonths('', '2026-09-18T09:00:00.000Z')).toBeNull()
+  })
+
+  it('counts repeats in UPDATES, with the months only where there is more than one', () => {
+    // D9. `timesMade` is the update count and the word goes on it; the column
+    // used to print `monthsRepeated` with nothing saying which it was.
+    expect(repeatCell({ timesMade: 3, monthsRepeated: 3 })).toEqual({ updates: '3 updates running', months: 'in 3 months' })
+    expect(repeatCell({ timesMade: 1, monthsRepeated: 1 })).toEqual({ updates: '1 update', months: null })
+    // Production's only repeat: twice inside one calendar month.
+    expect(repeatCell({ timesMade: 2, monthsRepeated: 1 })).toEqual({ updates: '2 updates running', months: null })
+  })
+})
+
+describe('a conclusion’s recurrence — the artboard’s "New" chip', () => {
+  const point = (month: string, k: number): TargetPoint =>
+    ({ month, k, n: 100, clusteringKey: null, audience: null })
+  const points = (entries: [string, TargetPoint[]][]) => new Map(entries)
+
+  it('is new where the record holds no earlier month for the theme', () => {
+    const r = recurrenceForTarget('reg-1', points([['client|reg-1', [point('2026-09-01', 4)]]]), '2026-09-01')
+    expect(r?.isNew).toBe(true)
+  })
+
+  it('is not new where an earlier month carried a reading, in EITHER audience', () => {
+    // A conclusion is not scoped to one bucket — "Durability is the category's
+    // rising subject" is about the category and the ledger reads the client's.
+    const r = recurrenceForTarget('reg-1', points([
+      ['industry-other|reg-1', [point('2026-07-01', 9), point('2026-09-01', 12)]],
+    ]), '2026-09-01')
+    expect(r?.isNew).toBe(false)
+    expect(r?.seenIn).toEqual(['2026-07-01', '2026-09-01'])
+  })
+
+  it('does NOT count a month the theme was not heard in', () => {
+    // A month whose denominator we read and whose theme nobody mentioned is not
+    // a month it was heard in.
+    const r = recurrenceForTarget('reg-1', points([
+      ['client|reg-1', [point('2026-07-01', 0), point('2026-09-01', 5)]],
+    ]), '2026-09-01')
+    expect(r?.isNew).toBe(true)
+  })
+
+  it('is NULL, never new, where the month tables hold nothing for it', () => {
+    // An absent record is not a new theme — `recurrenceOf` would otherwise call
+    // it first-heard-this-month, a claim about the conversation made out of a
+    // gap in our own bookkeeping. This is the state production is in.
+    expect(recurrenceForTarget('reg-1', points([]), '2026-09-01')).toBeNull()
+    expect(recurrenceForTarget(null, points([['client|reg-1', [point('2026-09-01', 4)]]]), '2026-09-01')).toBeNull()
   })
 })
