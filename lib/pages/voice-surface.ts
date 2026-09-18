@@ -1113,8 +1113,10 @@ export async function loadVoiceSurface(scope: Scope): Promise<VoiceSurfaceData |
   // do not belong under this block's heading: opened, Össur's own-brand page
   // drew "Price and availability questions · 0% · too little data · Early
   // signal · 0 of 19 videos", six quotes from the run, a "Said on camera" line
-  // and a link to "The 0 videos behind it". A calibrated level over a zero
-  // numerator is the score-without-evidence the contract exists to stop.
+  // and a link to "The 0 videos behind it" (the badge reads "too few to
+  // compare" since 2026-09-18; the quotation is the page as it was read). A
+  // calibrated level over a zero numerator is the score-without-evidence the
+  // contract exists to stop.
   const askedId = params.theme ?? null
   const askedRow = askedId ? pool.find((m) => m.id === askedId) ?? null : null
   const asked = askedId

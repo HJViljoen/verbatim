@@ -3,6 +3,11 @@ import { QuoteBlock } from '@/components/quote-block'
 import { BlockSlot } from './block-slot'
 import { DeckFooter } from '@/components/print/report-deck'
 import { Slide } from '@/components/print/slide'
+import { Sparkline } from '@/components/charts/sparkline'
+import { CountBadge, MovementBadge } from '@/components/delta-badge'
+import type { Good } from '@/components/charts/stat'
+import type { DeltaVerdict } from '@/lib/report-bands'
+import type { ShareSide } from '@/lib/report-delta'
 import { substituteFigures } from '@/lib/reports/cover'
 import { documentSlides, sectionOfSlide } from '@/lib/reports/documents/compose'
 import { blocksFor } from '@/lib/reports/documents/load-reading'
@@ -33,8 +38,26 @@ const fmtCount = (n: number) => new Intl.NumberFormat('en-US').format(n)
 const PLATFORM: Record<string, string> = { tiktok: 'TikTok', instagram: 'Instagram', youtube: 'YouTube', reddit: 'Reddit' }
 
 const CARD = 'rounded-lg border border-border bg-tile'
-const BODY = 'text-[15.5px] leading-[1.55] text-foreground'
-const BODY_SM = 'text-[14px] leading-[1.5] text-foreground'
+// THE DECK'S BODY TYPE (Block D wave 1, P0 item 7; mock-gap §8 P0). 15.5px on
+// a 1168px body zoomed to .902 is about 12pt on a 297mm sheet — a large-print
+// research report. Measured across the four brief artboards, the body runs
+// 12.5–13px, and it is why the mock fits a finding, its quote, its card and
+// its practice list on one slide where the build clips at twenty rows.
+//
+// §5 AND ITS OWN ARTBOARDS DISAGREE, AND THE ARTBOARDS WON. The spec's prose
+// names this size explicitly — "prose at 15.5px/1.55 (BODY; small variant
+// 14px/1.5)", design-system.md §5 — which is exactly what stood here. Its
+// four brief artboards then draw the body at 12–13px throughout (SalesBrief
+// 12.5px ×32 and 13px ×27; MarketingBrief 13px ×37 and 12.5px ×35;
+// ContentBrief 12px ×43 and 13px ×17; LeadershipBrief 12px ×18 and 12.5px
+// ×12). A drawing is a measurement and a sentence about it is not, so the
+// drawings were followed. The page LEADS are untouched (the "In short"
+// summary at 17px, the section intros at 15–16px) — §5 names those too, and
+// the 15–17px nodes those artboards do carry are few and are the leads
+// themselves (SalesBrief: 11 at 15.5px, 9 at 15px, 3 at 17px, against 59 at
+// 12.5–13px). Only the body moved.
+const BODY = 'text-[13px] leading-[1.5] text-foreground'
+const BODY_SM = 'text-[12.5px] leading-[1.45] text-foreground'
 
 export function Figured({ text, figures }: { text: string; figures: FigureTable }) {
   return (
@@ -51,6 +74,72 @@ function Paragraphs({ text, figures, className }: { text: string; figures: Figur
     <>
       {text.split(/\n\n+/).filter(Boolean).map((p, i) => <p key={i} className={className}><Figured text={p} figures={figures} /></p>)}
     </>
+  )
+}
+
+/**
+ * A series on paper (Block D wave 1, P0 item 7).
+ *
+ * The deck could not draw one. `components/charts/sparkline.tsx` has drawn
+ * every in-app series since the redesign — gaps kept as gaps, one polyline per
+ * unbroken run, no fill under a broken line — and the deck reached for a bar
+ * or a sentence instead, so a printed brief said "up from June" where the page
+ * showed the shape. This is that component at the deck's scale, with the
+ * animation off: a slide is printed once by a headless browser and a draw-in
+ * that has not finished is a line that is not there.
+ *
+ * `months` is the axis in words, and it is REQUIRED because it is the only
+ * honest thing a printed sparkline has instead of a hover: a reader with a
+ * sheet of paper cannot ask what a point was. Under three readings nothing is
+ * drawn at all and the months that CARRIED a reading are named instead — the
+ * rule `monthlyLineLabel` already applies on screen (mock-gap §6 D3: a chart
+ * is a direction claim too, and two points are not a direction), in the words
+ * that rule already prints: "Aug → Sep only", "Sep only", "no month reads".
+ * The label named every month it was handed until 2026-09-18, so two readings
+ * over a four-month axis printed four month names — the opposite of what the
+ * refusal is for, and a fourth phrase for a state the product already had
+ * words for.
+ *
+ * No document in the snapshot carries a series yet, so nothing on the four
+ * fixed templates calls this today. It is the seam D-brief (P13–P17) binds
+ * when the quarterly's and the leadership one-pager's charts land.
+ */
+export function DeckSpark({ values, months, color = 'var(--primary)' }: {
+  values: (number | null)[]
+  /** The months these points are, in order — the printed page's only axis. */
+  months: string[]
+  color?: string
+}) {
+  // The months that carried a reading, in order. A slot with no reading is not
+  // a month this line can name.
+  const read = months.filter((_, i) => values[i] != null)
+  if (read.length < 3) {
+    return (
+      <p className="font-mono text-[10.5px] text-muted-foreground">
+        {read.length === 0 ? 'no month reads'
+          : read.length === 1 ? `${read[0]} only`
+          : `${read[0]} → ${read[read.length - 1]} only`}
+      </p>
+    )
+  }
+  // THE DRAWN PATH DEFENDS ITS AXIS. The labels are `months[0]` and the last
+  // month, so one month per slot is what makes them the ends of the line that
+  // was actually plotted; a list of a different length labels the wrong end,
+  // silently, on a sheet of paper with no hover to check it against. The
+  // comment above says a printed line without its axis cannot happen, and this
+  // is what makes that true rather than intended. Unreachable from a caller
+  // that hands over a series and its own months — which is the point.
+  if (months.length !== values.length) {
+    return <p className="font-mono text-[10.5px] text-muted-foreground">the months and the readings do not line up</p>
+  }
+  return (
+    <span className="flex flex-col gap-1">
+      <Sparkline values={values} color={color} width={104} height={22} animate={false} endDot />
+      <span className="flex justify-between font-mono text-[9.5px] text-muted-foreground">
+        <span>{months[0]}</span>
+        <span>{months[months.length - 1]}</span>
+      </span>
+    </span>
   )
 }
 
@@ -370,33 +459,129 @@ function StandingBars({ data, parties }: { data: DocumentSnapshotData; parties: 
   )
 }
 
+/** A share with the count it was measured on — "23.4% of 380". Null where the
+ *  count is not on the delta at all, which a snapshot frozen before the field
+ *  existed is: that is a fact about our own bookkeeping, and `UNCOUNTED` says
+ *  it rather than printing the percentage anyway. */
+const judgedLevel = (pct: number, n: number | null | undefined): string | null =>
+  typeof pct === 'number' && Number.isFinite(pct) && typeof n === 'number' && Number.isFinite(n) && n > 0
+    ? `${Math.round(pct * 10) / 10}% of ${fmtCount(n)}`
+    : null
+
+/** The same for a share side, which carries its numerator too — the videos in
+ *  the client's own bucket out of every tracked video, the pair `SHARE_BAND`
+ *  floors on. */
+const shareLevel = (s: ShareSide | null | undefined): string | null =>
+  s && typeof s.client === 'number' && Number.isFinite(s.client)
+    && typeof s.totalVideos === 'number' && s.totalVideos > 0
+    && typeof s.clientVideos === 'number' && Number.isFinite(s.clientVideos)
+    ? `${Math.round(s.client * 10) / 10}% (${fmtCount(s.clientVideos)} of ${fmtCount(s.totalVideos)} videos)`
+    : null
+
+/** What a level says when the count behind it was never stored. It is not a
+ *  fifth refusal word for a thin comparison — the badge beside it still says
+ *  what the comparison was — it is the sentence for a figure we cannot
+ *  evidence, and it prints no percentage at all. */
+const UNCOUNTED = 'The counts behind these levels were not recorded'
+
 /** What moved, in the delta's own verdicts. A metric the update could not
- *  judge says so rather than showing a number that means nothing. */
-function movementLines(data: DocumentSnapshotData): { label: string; value: string }[] {
+ *  judge says so rather than showing a number that means nothing.
+ *
+ *  THE LINE STATES THE LEVELS; THE BADGE STATES THE MOVEMENT (P0 item 7).
+ *  These sentences used to write their own — "Moved up, 23.4% to 27.1%
+ *  positive" — which is a direction word earned from ONE banded comparison,
+ *  mock-gap §6 D5's exact error, hand-rolled on paper where no badge could
+ *  contradict it. `MovementBadge` is what the rest of the product prints for
+ *  this: the arrow is the sign, the band travels beside it, and a non-answer
+ *  reads as a non-answer in the same words the app and the email use. So the
+ *  sentence keeps the two levels, which are real and measured, and hands the
+ *  claim about the difference to the one component allowed to make it.
+ *
+ *  `good` is the favourability axis: tone and share rising is good for the
+ *  client, and volume is our own gather cadence rather than anything about
+ *  them, so it is neutral.
+ *
+ *  EVERY LEVEL CARRIES THE COUNT IT WAS MEASURED ON (copy contract rule (b)).
+ *  Both figures used to print bare — "23.4% to 27.1% positive" — in every
+ *  state INCLUDING `too_little_data`, which is the one state that says those
+ *  levels are thin, and where the sentence this replaced printed no number at
+ *  all. Two percentages to one decimal, a badge that only qualifies the
+ *  DIFFERENCE, and no n anywhere on the sheet is a score, and the
+ *  denominators were sitting unused on the delta the whole time
+ *  (`nowJudged` / `prevJudged`, `ShareSide.clientVideos` / `totalVideos` —
+ *  the same counts `SHARE_BAND` floors on). `copy: 'level'` is what carries
+ *  that into the markup, so rule (b) reads these two lines on paper the way
+ *  it reads every level on screen. */
+export function movementLines(data: DocumentSnapshotData): {
+  label: string
+  value: string
+  /** The `data-copy` kind the line's value is rendered under. `level` is a
+   *  calibrated share and rule (b) will demand its "of N"; the lines that are
+   *  a plain count or a list of labels claim no level and mark nothing. */
+  copy?: 'level'
+  verdict?: DeltaVerdict | null
+  count?: number | null
+  good?: Good
+}[] {
   const d = data.delta
   if (!d) return [{ label: 'Movement', value: 'No earlier update to compare with.' }]
-  const out: { label: string; value: string }[] = []
+  const out: { label: string; value: string; copy?: 'level'; verdict?: DeltaVerdict | null; count?: number | null; good?: Good }[] = []
   if (d.sentiment) {
-    const dir = d.sentiment.now > d.sentiment.prev ? 'up' : d.sentiment.now < d.sentiment.prev ? 'down' : 'level'
+    const prev = judgedLevel(d.sentiment.prev, d.sentiment.prevJudged)
+    const now = judgedLevel(d.sentiment.now, d.sentiment.nowJudged)
     out.push({
       label: 'Tone',
-      value: d.sentiment.verdict.state === 'moved' ? `Moved ${dir}, ${Math.round(d.sentiment.prev * 10) / 10}% to ${Math.round(d.sentiment.now * 10) / 10}% positive`
-        : d.sentiment.verdict.state === 'too_little_data' ? 'Too few judged conversations to say'
-        : 'About where it was',
+      value: prev && now ? `${prev} judged to ${now} positive` : UNCOUNTED,
+      ...(prev && now ? { copy: 'level' as const } : {}),
+      verdict: d.sentiment.verdict,
+      good: 'up',
     })
   }
   if (d.share) {
-    const dir = d.share.now.client > d.share.prev.client ? 'up' : d.share.now.client < d.share.prev.client ? 'down' : 'level'
+    const prev = shareLevel(d.share.prev)
+    const now = shareLevel(d.share.now)
     out.push({
       label: 'Share',
-      value: d.share.verdict.state === 'moved' ? `Moved ${dir}, ${Math.round(d.share.prev.client * 10) / 10}% to ${Math.round(d.share.now.client * 10) / 10}%`
-        : d.share.verdict.state === 'too_little_data' ? 'Too few videos to say'
-        : 'About where it was',
+      value: prev && now ? `${prev} to ${now}` : UNCOUNTED,
+      ...(prev && now ? { copy: 'level' as const } : {}),
+      verdict: d.share.verdict,
+      good: 'up',
     })
   }
   if (d.newThemes) out.push({ label: 'New', value: d.newThemes.count ? `${fmtCount(d.newThemes.count)} new: ${d.newThemes.labels.slice(0, 3).join(', ')}` : 'Nothing confirmed new this update' })
-  if (d.conversations) out.push({ label: 'Volume', value: `${fmtCount(d.conversations.now)} conversations, against ${fmtCount(d.conversations.prev)} last update` })
+  if (d.conversations) {
+    out.push({
+      label: 'Volume',
+      value: `${fmtCount(d.conversations.now)} conversations, against ${fmtCount(d.conversations.prev)} last update`,
+      count: d.conversations.now - d.conversations.prev,
+      good: 'neutral',
+    })
+  }
   return out
+}
+
+/**
+ * One row of "what moved": the levels, then the badge that judges the
+ * difference between them.
+ *
+ * IT IS A COMPONENT SO THE MARKER IS TESTABLE. The row used to be written
+ * inline in `StandingPage`, which is not exported, so the only check anywhere
+ * near it ran the copy contract over a hand-built `<span>{value}</span>` — an
+ * unmarked node, which produces no copy node at all, so the assertion passed
+ * on "99%" and on the empty string alike. The value of a calibrated share now
+ * renders under `data-copy="level"`, which is what makes rule (b) — a level
+ * prints its "of N" — actually read these two figures, on the real markup the
+ * page prints. The lines that are a plain count or a list of theme labels
+ * claim no level and mark nothing, exactly as before.
+ */
+export function MovementLine({ line }: { line: ReturnType<typeof movementLines>[number] }) {
+  return (
+    <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[13.5px] leading-[1.4] text-foreground">
+      <span {...(line.copy ? { 'data-copy': line.copy } : {})}>{line.value}</span>
+      {line.verdict ? <MovementBadge verdict={line.verdict} unit="pts" good={line.good} /> : null}
+      {line.count != null ? <CountBadge delta={line.count} good={line.good} /> : null}
+    </dd>
+  )
 }
 
 /** What the conversation was about this update: the merged concerns with the
@@ -449,7 +634,7 @@ function StandingPage({ page, data }: { page: DocPage; data: DocumentSnapshotDat
             {moved.map((m) => (
               <Fragment key={m.label}>
                 <dt className="pt-[2px] font-mono text-[11px] uppercase tracking-[0.06em] text-muted-foreground">{m.label}</dt>
-                <dd className="text-[13.5px] leading-[1.4] text-foreground">{m.value}</dd>
+                <MovementLine line={m} />
               </Fragment>
             ))}
           </dl>

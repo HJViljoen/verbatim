@@ -2,6 +2,7 @@ import type { RunDelta } from '../../lib/report-delta'
 import type { DeltaVerdict } from '../../lib/report-bands'
 import type { DashboardData } from '../../lib/pages/dashboard'
 import { fmtInt, shortDate } from '../../lib/format'
+import { MOVEMENT_WORDS } from '../delta-badge'
 import { Chip, Row, Section } from './primitives'
 
 /**
@@ -12,9 +13,14 @@ import { Chip, Row, Section } from './primitives'
  * says where you stand.
  */
 
+// THE WORDS COME FROM THE ONE TABLE (P0 item 6, mock-gap §6 D11). This chip
+// used to spell its two non-answers out, so the day the app badge started
+// saying "too few to compare" the email would still have said "too little
+// data" about the same verdict — one vocabulary, changed once, is the whole
+// point of MOVEMENT_WORDS. Only the markup is the email's.
 function verdictChip(v: DeltaVerdict, unit: string) {
-  if (v.state === 'too_little_data') return <Chip tone="neutral">too little data</Chip>
-  if (v.state === 'no_clear_change') return <Chip tone="neutral">no clear change</Chip>
+  if (v.state === 'too_little_data') return <Chip tone="neutral">{MOVEMENT_WORDS.too_little_data}</Chip>
+  if (v.state === 'no_clear_change') return <Chip tone="neutral">{MOVEMENT_WORDS.no_clear_change}</Chip>
   const up = v.change > 0
   return <Chip tone={up ? 'up' : 'down'}>{up ? '▲' : '▼'} {Math.abs(Math.round(v.change * 10) / 10)}{unit}</Chip>
 }

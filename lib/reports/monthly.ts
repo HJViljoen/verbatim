@@ -220,10 +220,11 @@ const round1 = (n: number): number => Math.round(n * 10) / 10
  * and what section 1 is about.
  *
  * `moved` ONLY, and the size is the absolute change. A verdict that refused to
- * compare, or that had too little data, has no change to be the largest; a
- * `no_clear_change` has one and it did not clear its band, which is precisely
- * the claim the subject line must not make. Ties break on the band — the
- * narrower band is the better-evidenced reading of two equal movements.
+ * compare, or that had too few on either side to compare, has no change to be
+ * the largest; a `no_clear_change` has one and it did not clear its band,
+ * which is precisely the claim the subject line must not make. Ties break on
+ * the band — the narrower band is the better-evidenced reading of two equal
+ * movements.
  */
 export function leadVerdict(verdicts: readonly Verdict[]): Verdict | null {
   const moved = verdicts.filter((v) => v.state === 'moved' && v.changePts != null)

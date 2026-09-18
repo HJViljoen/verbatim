@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BlockEmpty, BlockFrame } from './frame'
+import { BlockEmpty, BlockFrame, FigureCell } from './frame'
 import { BlockStat } from './stat'
 import { BlockCount, BlockMovement } from './movement'
 import { BlockProportion, BlockRanked } from './bars'
@@ -53,6 +53,48 @@ describe('BlockFrame', () => {
     assertEmailSafe(render(<BlockFrame mode="email" title="Rivals"><span>x</span></BlockFrame>))
   })
 
+  // P0 item 1: the footer is a LINE with two ends — a link deeper on the left,
+  // the basis in mono on the right. Before this slot a block with a basis to
+  // state either dropped it or put it in the body, where a method note reads
+  // as a finding.
+  it('prints a right-hand footer note beside the link, in all three modes', () => {
+    for (const mode of MODES) {
+      const markup = render(
+        <BlockFrame mode={mode} title="Your subjects" footer="Open Subjects" footerNote="of 1,388 videos">
+          <p>body</p>
+        </BlockFrame>,
+      )
+      const words = markupText(markup)
+      expect(words).toContain('Open Subjects')
+      expect(words).toContain('of 1,388 videos')
+      // The link leads; the note follows. A note read first is a heading.
+      expect(words.indexOf('Open Subjects')).toBeLessThan(words.indexOf('of 1,388 videos'))
+    }
+  })
+
+  it('draws the footer for a note with no link, rather than dropping it', () => {
+    for (const mode of MODES) {
+      expect(markupText(render(<BlockFrame mode={mode} title="Rivals" footerNote="all-time"><p>body</p></BlockFrame>))).toContain('all-time')
+    }
+  })
+
+  it('keeps the email footer a table — two ends of a line, no flex', () => {
+    assertEmailSafe(render(<BlockFrame mode="email" title="Rivals" footer="Open" footerNote="all-time"><span>x</span></BlockFrame>))
+  })
+
+  it('sets the printed block heading and its question below the app, not above', () => {
+    const paper = render(<BlockFrame mode="print" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
+    const screen = render(<BlockFrame mode="app" title="Rivals" question="Who holds the conversation?"><span>x</span></BlockFrame>)
+    // A slide already carries a 15px section heading and a green-ruled
+    // eyebrow above this one, at .902 zoom. It used to be 12px against the
+    // app's 10.5px.
+    expect(paper).toContain('text-[11px]')
+    expect(paper).toContain('text-[11.5px]')
+    expect(paper).not.toContain('text-[12px]')
+    expect(screen).toContain('text-[10.5px]')
+    expect(screen).toContain('text-[12.5px]')
+  })
+
   it('prints the empty state as a line rather than leaving a hole', () => {
     for (const mode of MODES) {
       expect(renderText(<BlockEmpty mode={mode}>Counted with the first update.</BlockEmpty>))
@@ -96,6 +138,57 @@ describe('BlockStat', () => {
     const markup = render(<BlockStat mode="email" value="412" aside={<span>SPARKLINE</span>} />)
     expect(markup).not.toContain('SPARKLINE')
     expect(render(<BlockStat mode="app" value="412" aside={<span>SPARKLINE</span>} />)).toContain('SPARKLINE')
+  })
+})
+
+describe('FigureCell', () => {
+  it('stacks the figure over its "of N" and marks both, in all three modes', () => {
+    for (const mode of MODES) {
+      const markup = render(<FigureCell mode={mode} value="31%" of="26 of 84" />)
+      expect(markup).toContain('data-copy="figure"')
+      expect(markup).toContain('data-copy="level"')
+      const words = markupText(markup)
+      expect(words).toContain('31%')
+      expect(words).toContain('26 of 84')
+      expect(words.indexOf('31%')).toBeLessThan(words.indexOf('26 of 84'))
+      expect(copyViolations(markup)).toEqual([])
+    }
+  })
+
+  // The whole reason the cell stamps its own markers: a block cannot put the
+  // level somewhere rule (b) will not find it.
+  it('cannot be given a denominator that is not one', () => {
+    const bad = render(<FigureCell value="31%" of="of the category" />)
+    expect(copyViolations(bad).map((v) => v.rule)).toContain('level-denominator')
+  })
+
+  it('is a bare figure, and no level at all, when there is no denominator', () => {
+    for (const mode of MODES) {
+      const markup = render(<FigureCell mode={mode} value="6" />)
+      expect(markup).toContain('data-copy="figure"')
+      expect(markup).not.toContain('data-copy="level"')
+      expect(copyViolations(markup)).toEqual([])
+    }
+  })
+
+  // 79 of the artboards' 101 "N of M" cells sit left; the 22 that are set
+  // text-align:right are Competitive's standings.
+  it('right-aligns on request and sits left by default', () => {
+    expect(render(<FigureCell value="31%" of="26 of 84" align="right" />)).toContain('text-right')
+    expect(render(<FigureCell value="31%" of="26 of 84" />)).not.toContain('text-right')
+    expect(render(<FigureCell mode="email" value="31%" of="26 of 84" align="right" />)).toContain('right')
+  })
+
+  it('renders an email-safe cell', () => {
+    assertEmailSafe(render(<FigureCell mode="email" value="31%" of="26 of 84" />))
+  })
+
+  it('keeps its number out of a block prose node', () => {
+    assertCopyContract(render(
+      <p data-copy="prose">
+        Repairability is what your buyers keep asking about — <FigureCell value="26" of="26 of 84" /> carried it.
+      </p>,
+    ))
   })
 })
 

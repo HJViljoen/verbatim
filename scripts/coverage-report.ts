@@ -37,7 +37,7 @@ import { kindLabel } from '../lib/reading/kinds'
 //      calendar month dated by when the COMMENT was written: how many months
 //      carried at least 100 videos, and how many carried at least 100 comments.
 //      The product's floor is videos (SHARE_BAND.minN, 100 a side); comments are
-//      printed beside them because the same month reads "too little data" or
+//      printed beside them because the same month reads "too few to compare" or
 //      "plenty" depending only on which noun you count, and nobody should
 //      discover that later.
 //

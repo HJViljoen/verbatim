@@ -44,10 +44,22 @@ import type { Verdict, VerdictState } from '@/lib/reading/verdicts'
  *  week; `baseline_forming` resolves on the calendar; `refused` is a break in
  *  our own bookkeeping, not a property of the conversation (lib/reading/
  *  verdicts.ts). `unchanged` is the count arm's non-answer and is the one
- *  wording DeltaBadge brought with it. */
+ *  wording DeltaBadge brought with it.
+ *
+ *  `too_little_data` READS "too few to compare" (Block D wave 1, P0 item 6;
+ *  mock-gap §6 D11, Heinrich's ruling of 2026-09-18 that the mock's word
+ *  wins). It is not a re-wording for the mock's sake: the phrase was already
+ *  the product's everywhere the rule is EXPLAINED rather than stamped —
+ *  `GLOSSARY.change` ("under 100 videos a side, or 10 of the object's own,
+ *  'too few to compare'"), `lib/agent/movement.ts`, `lib/pages/quarterly.ts`,
+ *  `lib/pages/overview.ts` — so the badge was the one place disagreeing with
+ *  the glossary a reader is measured against. The state TOKEN is unchanged;
+ *  only the copy moved, which is the whole reason `state` is a token and this
+ *  table is the one place it becomes words. The email's chip reads this table
+ *  rather than carrying its own copy (components/email/delta-block.tsx). */
 export const MOVEMENT_WORDS: Record<Exclude<VerdictState, 'moved'> | 'unchanged', string> = {
   no_clear_change: 'no clear change',
-  too_little_data: 'too little data',
+  too_little_data: 'too few to compare',
   baseline_forming: 'not enough months yet',
   refused: 'comparison refused',
   unchanged: 'unchanged',
