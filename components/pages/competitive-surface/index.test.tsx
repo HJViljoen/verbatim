@@ -128,6 +128,54 @@ describe('CO2 · the standings', () => {
       .not.toContain('A line needs more than one month')
   })
 
+  it('runs one order for the whole tile, and it is the charts’', () => {
+    // The chart pair is attention then content (the brief's "attention
+    // FIRST"); the table ran content then attention and both change columns
+    // followed IT, so a reader who took the left chart and dropped to the first
+    // share column compared the wrong pair.
+    const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    const chart = markup.indexOf('Attention share')
+    const comments = markup.indexOf('Share of comments')
+    const videos = markup.indexOf('Share of videos')
+    expect(chart).toBeLessThan(comments)
+    expect(comments).toBeLessThan(videos)
+    expect(markup.indexOf('Comments, on last month')).toBeLessThan(markup.indexOf('Videos, on last month'))
+  })
+
+  it('draws each bar against its own column, and says so', () => {
+    // A track filled to the ABSOLUTE percentage drew 2.7px for 4.2% and floored
+    // 1.3% to the same 2% several other rows got, because on a real tenant the
+    // shares are 1–9% beside one remainder at 93%. The figure beside the bar
+    // is the absolute one and carries its own "k of N".
+    const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    const rows = competitiveFixture().standings.rows
+    const top = Math.max(...rows.map((r) => r.content?.pct ?? 0))
+    const you = rows.find((r) => r.role === 'client')!.content!.pct!
+    expect(markup).toContain(`width:${(you / top) * 100}%`)
+    expect(renderText(markup)).toContain('drawn against the largest share in its own column')
+  })
+
+  it('counts a brand’s months read by ONE rule, in both cells that print it', () => {
+    // The legend counted `content != null || attention != null`; the table's
+    // own column counted `content != null` alone, so a month with videos read
+    // and no comments kept made one tile print "2 of 3 months" beside "3 of 3".
+    const base = competitiveFixture()
+    const data = {
+      ...base,
+      standings: {
+        ...base.standings,
+        series: base.standings.series.map((x) =>
+          x.audience === 'competitor:Ottobock'
+            ? { ...x, points: x.points.map((p, i) => (i === 0 ? { ...p, content: null } : p)) }
+            : x),
+      },
+    }
+    const text = renderText(competitiveStandings.render(data, 'app', ctx))
+    // Ottobock was read in all three; one of them kept no video count.
+    expect(text).not.toContain('2 of 3 months')
+    expect(text.match(/3 of 3/g)?.length).toBe(3)
+  })
+
   it('prints both changes, and never a blank cell on anybody’s row', () => {
     // Rendered live for Sealand, the CLIENT'S OWN row printed 0.6% (3 of 475),
     // 0.3% (27 of 9,704), "1 of 1" and then nothing under "Change on last

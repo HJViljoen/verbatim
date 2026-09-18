@@ -109,10 +109,24 @@ function Change({ verdict, observed, prevMonthLabel, mode }: {
  * per cell, filled to that cell's own percentage, in the ENTITY's colour and
  * never the rank's (`components/charts/ranked-bar.tsx`'s own rule).
  *
+ * AND IT IS DRAWN AGAINST THE COLUMN'S LARGEST ROW, NOT AGAINST 100%. The
+ * artboard's bar fills its column because the mock's shares are 6–39%; on a
+ * real tenant they are 1–9% beside one remainder at 93%, so a track filled to
+ * the absolute percentage drew 2.7px for 4.2% and floored 1.3% to the same 2%
+ * several other rows got — a line of specks costing ~72px of table width,
+ * twice. The number beside it is the absolute one and carries its own "k of N";
+ * the bar is the comparison BETWEEN the rows of its column, which is the only
+ * thing a 64px track can actually show, and `BAR_BASIS` says so under the
+ * table. `Medians` in the playbook has drawn its bars this way since it
+ * landed.
+ *
  * No bar where there is no reading. `NOT_OBSERVED` is a brand absent from the
  * month, and an empty track beside it reads as a measured zero.
  */
-function Share({ share, role, mode }: { share: StandingShare | null; role: StandingRow['role']; mode: RenderMode }) {
+export const BAR_BASIS =
+  'Each bar is drawn against the largest share in its own column, never against 100% — the percentage beside it is the share itself.'
+
+function Share({ share, role, top, mode }: { share: StandingShare | null; role: StandingRow['role']; top: number; mode: RenderMode }) {
   if (share == null || share.pct == null) {
     return mode === 'email'
       ? <span style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.muted }}>{NOT_OBSERVED}</span>
@@ -126,7 +140,7 @@ function Share({ share, role, mode }: { share: StandingShare | null; role: Stand
   return (
     <span className="flex items-center gap-2">
       <span className="h-1.5 w-[64px] shrink-0 overflow-hidden rounded-full bg-inner" aria-hidden>
-        <span className="block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, share.pct))}%`, background: COLOR[role] }} />
+        <span className="block h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, top > 0 ? (share.pct / top) * 100 : 0))}%`, background: COLOR[role] }} />
       </span>
       <span className="font-mono text-[12px] tabular-nums">{body}</span>
     </span>
@@ -228,13 +242,20 @@ export const CATEGORY_NOT_DRAWN =
  * its own highest month, and a reader comparing the two by eye has to be told
  * that before they do it.
  */
+/** The months a series was READ in — either side counts, because a month with
+ *  videos read and no comments kept is a month we read. ONE rule, used by the
+ *  legend and by the table's own column: they disagreed, and one tile printed
+ *  "2 of 3 months" beside "3 of 3" for the same brand. */
+export const monthsRead = (series: StandingsSeries | null): number =>
+  series ? series.points.filter((p) => p.content != null || p.attention != null).length : 0
+
 function SharedLegend({ series, axis, drops }: { series: readonly StandingsSeries[]; axis: readonly string[]; drops: boolean }) {
   if (series.length === 0) return null
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {series.map((x) => {
-          const read = x.points.filter((p) => p.content != null || p.attention != null).length
+          const read = monthsRead(x)
           return (
             <span key={x.audience} className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className="size-2 shrink-0 rounded-full" style={{ background: COLOR[x.role] }} aria-hidden />
@@ -281,6 +302,11 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
     const empty = competitiveStandings.emptyState(data)
     const rules: CalendarRule[] = s.rules.map((r) => ({ month: r.month, label: r.label, kind: 'tracking_change' as const }))
     const latest = s.denominators[s.denominators.length - 1] ?? null
+    // The largest share in each column — what its bars are drawn against.
+    const topOf = (pick: (r: StandingRow) => StandingShare | null): number =>
+      s.rows.reduce((m, r) => Math.max(m, pick(r)?.pct ?? 0), 0)
+    const topContent = topOf((r) => r.content)
+    const topAttention = topOf((r) => r.attention)
 
     const notes = (
       <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
@@ -444,8 +470,8 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
                 <div key={row.audience} style={{ fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '4px 0', borderTop: `1px solid ${EMAIL.hairline}` }}>
                   <strong>{row.label}</strong>
                   <div style={{ marginTop: 2 }}>
-                    videos <Share share={row.content} role={row.role} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
-                    {' · '}comments <Share share={row.attention} role={row.role} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    comments <Share share={row.attention} role={row.role} top={topAttention} mode={mode} /> <Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
+                    {' · '}videos <Share share={row.content} role={row.role} top={topContent} mode={mode} /> <Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} />
                   </div>
                 </div>
               ))}
@@ -455,30 +481,42 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               <table className="w-full border-collapse text-left">
                 <thead>
                   <tr className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                    {/* ONE ORDER FOR THE WHOLE TILE, AND IT IS THE CHARTS'.
+                        The pair above runs attention then content (the brief's
+                        "attention FIRST"); this table ran content then
+                        attention and both change columns followed it, so a
+                        reader who took the left chart and dropped to the first
+                        share column compared the wrong pair. */}
                     <th className="py-1 pr-3 font-semibold">Brand</th>
-                    <th className="py-1 pr-3 font-semibold">Share of videos</th>
                     <th className="py-1 pr-3 font-semibold">Share of comments</th>
+                    <th className="py-1 pr-3 font-semibold">Share of videos</th>
                     <th className="py-1 pr-3 font-semibold">Months in the set</th>
-                    <th className="py-1 pr-3 font-semibold">Videos, on last month</th>
-                    <th className="py-1 font-semibold">Comments, on last month</th>
+                    <th className="py-1 pr-3 font-semibold">Comments, on last month</th>
+                    <th className="py-1 font-semibold">Videos, on last month</th>
                   </tr>
                 </thead>
                 <tbody className="align-top">
                   {s.rows.map((row) => {
-                    const months = s.series.find((x) => x.audience === row.audience)?.points.filter((p) => p.content != null).length ?? 0
+                    // ONE RULE FOR "MONTHS READ", AND IT IS `monthsRead`'s.
+                    // This cell counted `p.content != null` alone while the
+                    // legend counted either side, so a month with videos read
+                    // and no comments kept (the loader can produce exactly
+                    // that) made one tile print "2 of 3 months" beside "3 of 3".
+                    const months = monthsRead(s.series.find((x) => x.audience === row.audience) ?? null)
                     return (
                       <tr key={row.audience}>
                         <td className="py-1.5 pr-3 text-[12.5px] font-medium">{row.label}</td>
-                        <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} mode={mode} /></td>
-                        <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Share share={row.attention} role={row.role} top={topAttention} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Share share={row.content} role={row.role} top={topContent} mode={mode} /></td>
                         <td className="py-1.5 pr-3 font-mono text-[11.5px] tabular-nums text-muted-foreground">{fmtInt(months)} of {fmtInt(s.months.length)}</td>
-                        <td className="py-1.5 pr-3"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
-                        <td className="py-1.5"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
+                        <td className="py-1.5 pr-3"><Change verdict={row.attentionVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
+                        <td className="py-1.5"><Change verdict={row.contentVerdict} observed={row.observed} prevMonthLabel={s.prevMonthLabel} mode={mode} /></td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
+              <p className="m-0 pt-1.5 font-mono text-[10px] text-muted-foreground">{BAR_BASIS}</p>
             </div>
           )
         ) : null}
