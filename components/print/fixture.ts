@@ -7,7 +7,7 @@ import { SUBJECT_BLOCKS } from '@/components/pages/subjects'
 import { MARKET_BLOCKS } from '@/components/pages/market-surface'
 import { MARKETING_MAP, sectionsOf } from '@/lib/reports/documents/sections'
 import type { Gap } from '@/lib/reading/gap'
-import type { DocBriefSection, DocumentSnapshotData } from '@/lib/reports/documents/types'
+import type { DocBriefSection, DocLayoutEntry, DocumentSnapshotData } from '@/lib/reports/documents/types'
 import type { Block } from '@/lib/blocks/types'
 
 // THE MARKETING BRIEF AS A DECK (package E-marketing, wave 2).
@@ -174,10 +174,10 @@ function deck(surfaces: Record<string, unknown>, over: Partial<DocumentSnapshotD
     // pages and borrowed blocks interleaved, a `finding` entry expanding to
     // every finding page. A fixture that listed the sections first and the
     // pages after would agree with no brief this product builds.
-    layout: MARKETING_MAP.flatMap((e) =>
+    layout: MARKETING_MAP.flatMap<DocLayoutEntry>((e) =>
       e.kind === 'block'
-        ? [{ kind: 'section' as const, id: e.section.id }]
-        : PAGES.filter((p) => p.kind === e.page).map((p) => ({ kind: 'page' as const, id: p.id })),
+        ? [{ kind: 'section', id: e.section.id }]
+        : PAGES.filter((p) => p.kind === e.page).map((p) => ({ kind: 'page', id: p.id })),
     ),
     pages: PAGES,
     lens: { means: 'What it means for the message', short: 'for the message' },
