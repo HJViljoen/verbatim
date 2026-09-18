@@ -607,11 +607,33 @@ describe('the page, as the artboard composes it', () => {
   it('draws the charts on a one-month horizon too, with the attention share first', () => {
     const markup = render(competitiveStandings.render(oneMonthFixture(), 'app', ctx))
     expect(markup).toContain('<svg')
-    const comments = markup.indexOf('Share of the month’s comments')
-    const videos = markup.indexOf('Share of the month’s videos')
-    expect(comments).toBeGreaterThan(-1)
-    expect(comments).toBeLessThan(videos)
+    const attention = markup.indexOf('Attention share')
+    const content = markup.indexOf('Content share')
+    expect(attention).toBeGreaterThan(-1)
+    expect(attention).toBeLessThan(content)
     expect(markupOf(markup)).toContain('A line needs more than one month')
+  })
+
+  it('leaves the remainder out of the lines, and says so', () => {
+    // "The rest of the category" runs at 86–93% of the corpus, so drawn beside
+    // the two brands the block is about it put a series at the ceiling and left
+    // both brands on the baseline three pixels apart. It is the REMAINDER of
+    // the month, not a brand. No row is dropped and no denominator changes —
+    // it is out of the lines and still in the table, with the omission named.
+    const markup = render(competitiveStandings.render(competitiveFixture(), 'app', ctx))
+    const text = renderText(markup)
+    expect(text).toContain('The rest of the category is not drawn')
+    // Not in the legend under the charts …
+    const chips = markup.slice(markup.lastIndexOf('</svg>'), markup.indexOf('Each chart is scaled'))
+    expect(chips).toContain('Ottobock')
+    expect(chips).not.toContain('category')
+    // and nowhere in the drawing itself
+    expect(markup.slice(0, markup.lastIndexOf('</svg>'))).not.toContain('86.4%')
+    // … and still a row of the table, with its share and its denominator.
+    expect(text).toContain('The rest of the category')
+    expect(text).toContain('86.4%')
+    const category = competitiveFixture().standings.rows.find((r) => r.role === 'category')!
+    expect(text).toContain(`of ${category.content!.n.toLocaleString('en-US')}`)
   })
 
   it('draws ONE legend under both charts, and says the scale is not shared', () => {
@@ -619,8 +641,8 @@ describe('the page, as the artboard composes it', () => {
     // ONE legend: the note under it is printed once, and each chart's own
     // title appears once — two legends would have duplicated both.
     expect(text.match(/Each chart is scaled to its own highest month/g)?.length).toBe(1)
-    expect(text.match(/Share of the month’s comments, by brand/g)?.length).toBe(1)
-    expect(text.match(/Share of the month’s videos, by brand/g)?.length).toBe(1)
+    expect(text.match(/Attention share/g)?.length).toBe(1)
+    expect(text.match(/Content share/g)?.length).toBe(1)
   })
 
   it('annotates a series read in fewer months than the axis, and only that one', () => {

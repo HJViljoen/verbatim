@@ -47,6 +47,15 @@ import { changeNote, mixLine, type CompetitiveSurfaceData, type StandingsBlock, 
 // it directly with the legend off and draw one beneath; the email arm keeps
 // `BlockCalendar`, which is where the PNG-or-table fallback lives.
 //
+// THE CHARTS ARE THE BRANDS, AND THE REMAINDER IS THE TABLE'S. The pair drew
+// every standings row, so on a real tenant a series at 86–93% ("the rest of
+// the category") sat at the ceiling and left the two brands the block is about
+// three pixels apart on the baseline with their end labels colliding — at half
+// the artboard's chart height, because `CalendarLine`'s `height` is the
+// viewBox's and sets an aspect ratio rather than pixels. Both are fixed here:
+// `chartSeries` keeps the lines to the brands and names the omission,
+// `height` is the number that actually renders the artboard's 196px.
+//
 // BOTH CHANGES ARE PRINTED, AND NEITHER CELL IS EVER BLANK. There was one
 // change column, unlabelled as to which of the two shares it was (the content
 // one), while `attentionVerdict` was computed, declared in `verdicts()` and
@@ -139,9 +148,11 @@ function Share({ share, role, mode }: { share: StandingShare | null; role: Stand
  * tenth of the plot and clip the category off the top of both charts.
  */
 function ChartPane({
-  label, axis, series, rules, chartKey,
+  label, meta, axis, series, rules, chartKey,
 }: {
   label: string
+  /** The artboard's mono note at the right of the chart's own title row. */
+  meta: string
   axis: readonly string[]
   series: readonly CalendarSeries[]
   rules: readonly CalendarRule[]
@@ -149,17 +160,28 @@ function ChartPane({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground">{label}</span>
+      {/* THE ARTBOARD'S REGISTER, NOT A THIRD ALL-CAPS ONE. The pane title was
+          mono 10px uppercase — the same face as the table's column heads and
+          the legend note — which gave one tile three shouting registers. The
+          mock sets a chart's own title in sans 12.5/500 with its mono meta at
+          the right, and that is what this is. */}
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 text-[12.5px] font-medium">{label}</span>
+        <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground">{meta}</span>
+      </div>
       <CalendarLine
         axis={axis}
         series={series}
         rules={rules}
         legend={false}
-        // 168, NOT THE 210 DEFAULT. Two charts abreast in a tile that also
-        // carries a table and four notes; the artboard's own pair is about this
-        // tall, and the 42px buys the block its footer inside a four-row tile
-        // instead of clipping it.
-        height={168}
+        // `height` IS THE viewBox'S, NOT A PIXEL HEIGHT — the SVG is emitted
+        // `width:100%` with `height:auto`, so this prop sets an ASPECT RATIO of
+        // `height / 880`. The previous comment here claimed 168 "buys the block
+        // 42px", which is not a mechanism the code has: in the ~562px pane this
+        // tile gives each chart at 1440, 168/880 rendered the chart 107px tall
+        // against the artboard's 196, and dropping from 210 saved 27px rather
+        // than 42. 307/880 of 562 is ~196px, which is the artboard's chart.
+        height={307}
         format={(v) => fmtPct(v)}
         label={label}
         id={chartId([chartKey, ...series.map((x) => x.label), axis[0], axis[axis.length - 1]])}
@@ -167,6 +189,30 @@ function ChartPane({
     </div>
   )
 }
+
+/**
+ * THE CATEGORY IS NOT DRAWN AS A LINE, AND THE TILE SAYS SO AND WHY.
+ *
+ * "The rest of the category" is the REMAINDER of the month, not a brand: on
+ * Össur it runs at 86–93% of the corpus, so plotting it beside the two brands
+ * the block is actually about put a series at the ceiling and left Össur at
+ * 1.3% and Ottobock at 5.7% three pixels apart on the baseline, their end
+ * labels colliding. The chart's biggest element then carried one fact — the
+ * category is nearly all of it — that the table below states better, with its
+ * own "k of N" beside it.
+ *
+ * SO IT COMES OUT OF THE LINES AND STAYS IN THE TABLE, with a sentence naming
+ * the omission and pointing at where its figure is. That is a drawing decision,
+ * not a reading one: no row is dropped, no denominator changes, and nothing is
+ * hidden — the thing a reader must not be allowed to do is read two brand lines
+ * against an axis that has been silently rescaled, which is why the note is not
+ * optional.
+ */
+const chartSeries = (series: readonly StandingsSeries[]): StandingsSeries[] =>
+  series.filter((x) => x.role !== 'category')
+
+export const CATEGORY_NOT_DRAWN =
+  'The rest of the category is not drawn: it is the remainder of the month, not a brand, and at its size every other line sits on the baseline beside it. Its share is in the table below, with its own denominator.'
 
 /**
  * ONE legend under BOTH charts (the artboard's own device), with each series
@@ -182,7 +228,7 @@ function ChartPane({
  * its own highest month, and a reader comparing the two by eye has to be told
  * that before they do it.
  */
-function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; axis: readonly string[] }) {
+function SharedLegend({ series, axis, drops }: { series: readonly StandingsSeries[]; axis: readonly string[]; drops: boolean }) {
   if (series.length === 0) return null
   return (
     <div className="flex min-w-0 flex-col gap-1">
@@ -202,8 +248,9 @@ function SharedLegend({ series, axis }: { series: readonly StandingsSeries[]; ax
           )
         })}
       </div>
-      <p className="m-0 font-mono text-[10px] text-muted-foreground">
+      <p className="m-0 font-mono text-[10px] leading-[1.4] text-muted-foreground">
         Each chart is scaled to its own highest month, so the two are read separately and never against each other.
+        {drops ? <> {CATEGORY_NOT_DRAWN}</> : null}
       </p>
     </div>
   )
@@ -333,7 +380,7 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               <BlockCalendar
                 blockKey={`${competitiveStandings.key}.attention`}
                 axis={s.months}
-                series={seriesFor(s.series, s.months, 'attention')}
+                series={seriesFor(chartSeries(s.series), s.months, 'attention')}
                 rules={rules}
                 mode={mode}
                 ctx={ctx}
@@ -343,33 +390,38 @@ export const competitiveStandings: Block<CompetitiveSurfaceData> = {
               <BlockCalendar
                 blockKey={`${competitiveStandings.key}.content`}
                 axis={s.months}
-                series={seriesFor(s.series, s.months, 'content')}
+                series={seriesFor(chartSeries(s.series), s.months, 'content')}
                 rules={rules}
                 mode={mode}
                 ctx={ctx}
                 format={(v) => fmtPct(v)}
                 label="Share of the month’s videos, by brand"
               />
+              {s.series.length !== chartSeries(s.series).length ? (
+                <div style={{ fontFamily: FONT.sans, fontSize: 11, color: EMAIL.muted, marginTop: 4 }}>{CATEGORY_NOT_DRAWN}</div>
+              ) : null}
             </div>
           ) : (
             <div className="flex min-w-0 flex-col gap-2">
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 <ChartPane
-                  label="Share of the month’s comments, by brand"
+                  label="Attention share"
+                  meta="share of the month’s comments"
                   axis={s.months}
-                  series={seriesFor(s.series, s.months, 'attention')}
+                  series={seriesFor(chartSeries(s.series), s.months, 'attention')}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.attention`}
                 />
                 <ChartPane
-                  label="Share of the month’s videos, by brand"
+                  label="Content share"
+                  meta="share of the month’s videos"
                   axis={s.months}
-                  series={seriesFor(s.series, s.months, 'content')}
+                  series={seriesFor(chartSeries(s.series), s.months, 'content')}
                   rules={rules}
                   chartKey={`${competitiveStandings.key}.content`}
                 />
               </div>
-              <SharedLegend series={s.series} axis={s.months} />
+              <SharedLegend series={chartSeries(s.series)} axis={s.months} drops={s.series.length !== chartSeries(s.series).length} />
             </div>
           )
         ) : null}
