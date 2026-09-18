@@ -1189,6 +1189,20 @@ async function readAfterwards(
 }
 
 /**
+ * Ask the cited-quote picker for the hero quote AND NOTHING ELSE.
+ *
+ * The picker takes its lead quote before it checks how many were asked for, so
+ * zero means "return the hero if the evidence can vouch for it, and take
+ * nothing from the pool if it cannot". Any other number lets the heuristic path
+ * consume a candidate for a row that will not print it — and the picker's
+ * `used` set is shared across every row on the page, so the candidate it burns
+ * is one another row could have been vouched by. Pinned in
+ * `market-surface.test.ts` against the picker itself, because it rests on the
+ * picker's order and not on a comment.
+ */
+const HERO_ONLY = 0
+
+/**
  * Each drawn row's one real comment, as its own node with its own ref.
  *
  * A HERO QUOTE IS ONLY SHOWN WHERE THE EVIDENCE CAN VOUCH FOR IT.
@@ -1225,11 +1239,12 @@ async function attachQuotes(
   return rows.map((r) => {
     const hero = heroOf(r)
     if (!hero) return r
-    // n = 1 with the hero as the lead: the picker returns the hero when an
-    // evidence row carries the same words, and a heuristic pick otherwise —
-    // which is somebody else's sentence, not this advice's quote — so only the
-    // vouched one is kept.
-    const picked = pick(audienceIdsFor(r), 1, r.title, hero)[0]
+    // THE HERO AND NOTHING ELSE — see `HERO_ONLY`. Asking for one quote made
+    // the picker fall through to its heuristic path whenever the hero could
+    // not be vouched, and `take` marks what it picks as used: the row threw the
+    // result away, and a later row whose own hero was that same sentence could
+    // no longer be vouched for it and lost a quote it had earned.
+    const picked = pick(audienceIdsFor(r), HERO_ONLY, r.title, hero)[0]
     const vouched = picked != null && cleanQuote(picked.text).toLowerCase() === cleanQuote(hero).toLowerCase()
     return { ...r, quote: vouched ? picked : null }
   })

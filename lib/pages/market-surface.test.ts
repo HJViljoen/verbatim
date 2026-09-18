@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 
+import { createCitedQuotePicker } from '../quotes'
 import type { RecDecision } from '../rec-decisions'
 import { afterwardsFor } from '../reading/afterwards'
 import {
@@ -434,5 +435,43 @@ describe('orderedTargets — one ledger row, one identity', () => {
     // read — and the answer is that, not B's January.
     expect(out.state).toBe('too_soon')
     expect(out.line).not.toContain('January')
+  })
+})
+
+describe('the ledger’s hero quote burns nothing it does not print', () => {
+  // The contract `HERO_ONLY` rests on: the picker takes its lead quote before
+  // it checks n, so asking for zero returns a vouched hero and consumes
+  // nothing otherwise. Asserted against the picker itself — this is about the
+  // picker's order, not about a comment in the loader.
+  const rows = [
+    { quote: 'Wat gebeur as ’n naat gee?', rank: 1, evidenceId: 'e1' },
+    { quote: 'Die rits het na ’n maand gebreek.', rank: 2, evidenceId: 'e2' },
+  ]
+  const byAudience = new Map([['ai-1', rows]])
+
+  it('returns the hero when the evidence carries the same words', () => {
+    const pick = createCitedQuotePicker(byAudience, new Map())
+    const out = pick(['ai-1'], 0, 'a title', 'Wat gebeur as ’n naat gee?')
+    expect(out).toHaveLength(1)
+    expect(out[0].ref).toBe('e:e1')
+  })
+
+  it('takes NOTHING from the pool when the hero cannot be vouched, so a later row keeps its own', () => {
+    const pick = createCitedQuotePicker(byAudience, new Map())
+    expect(pick(['ai-1'], 0, 'a title', 'a sentence nobody in the evidence said')).toEqual([])
+    // The row that really owns e2 can still be vouched for it.
+    expect(pick(['ai-1'], 0, 'another title', 'Die rits het na ’n maand gebreek.')[0]?.ref).toBe('e:e2')
+  })
+
+  it('is exactly what asking for ONE would have broken', () => {
+    const english = new Map([['ai-1', [
+      { quote: 'What happens when a seam goes? Nobody says.', rank: 1, evidenceId: 'e1' },
+      { quote: 'The zip broke after a month of commuting.', rank: 2, evidenceId: 'e2' },
+    ]]])
+    const pick = createCitedQuotePicker(english, new Map())
+    // n = 1 falls through to the heuristic path and marks a candidate used…
+    expect(pick(['ai-1'], 1, 'the zip broke after a month', 'a sentence nobody said').length).toBe(1)
+    // …and that candidate is now unavailable to the row whose hero it is.
+    expect(pick(['ai-1'], 0, 'another title', 'The zip broke after a month of commuting.')).toEqual([])
   })
 })
