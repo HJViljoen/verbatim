@@ -86,6 +86,9 @@ export const competitiveQuestions: Block<CompetitiveSurfaceData> = {
     return (
       <BlockFrame
         title={competitiveQuestions.title}
+        // The block fills its tile so its footer lands on the floor — see
+        // head-to-head.tsx for why `distribute="between"` could not.
+        className={mode === 'app' ? 'h-full' : undefined}
         question={competitiveQuestions.question}
         mode={mode}
         meta={q.rival ?? undefined}

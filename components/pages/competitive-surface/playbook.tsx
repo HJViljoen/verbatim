@@ -289,6 +289,13 @@ export const competitivePlaybook: Block<CompetitiveSurfaceData> = {
     return (
       <BlockFrame
         title={competitivePlaybook.title}
+        // THE BLOCK FILLS ITS TILE, WHICH IS WHAT PUTS ITS FOOTER ON THE
+        // FLOOR. `Tile`'s body is `flex-1 flex-col`, but the block renders as
+        // its ONE child and was never stretched, so `BlockFrame`'s `mt-auto`
+        // footer had no spare height to push against and floated mid-card with
+        // up to 431px of empty tile beneath it. `distribute="between"` could
+        // not help either: `justify-between` needs two children to spread.
+        className={mode === 'app' ? 'h-full' : undefined}
         question={competitivePlaybook.question}
         mode={mode}
         meta={p ? p.basisLine : undefined}

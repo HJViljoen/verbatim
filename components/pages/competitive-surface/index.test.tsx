@@ -4,7 +4,9 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, directionRe } from '@/lib/test/copy-contract'
 import { markupText as markupOf, render, renderText } from '@/lib/test/render'
-import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES } from './index'
+import { COMPETITIVE_BLOCKS, COMPETITIVE_TILES, GRID_ROWS, STACKED } from './index'
+import { PageGrid } from '@/components/shell/page-grid'
+import { Tile } from '@/components/shell/tile'
 import { H2H_NO_RIVAL, competitiveHeadToHead } from './head-to-head'
 import { OWN_CLAIMS_OWNER, competitiveOwnClaims, trackedLine } from './own-claims'
 import { competitiveSaidAbout } from './said-about'
@@ -645,6 +647,45 @@ describe('the page, as the artboard composes it', () => {
     const markup = render(competitiveQuestions.render(competitiveFixture(), 'app', ctx))
     expect(markup).toContain('https://www.tiktok.com/@x/video/1')
     expect(markupOf(markup)).toContain('under the video →')
+  })
+
+  it('lets a tile grow rather than cutting its own footer off', () => {
+    // THE TIER CANNOT MEASURE PIXELS, SO IT PINS THE DECISION. `PageGrid` is
+    // `xl:auto-rows-[116px]` and a `Tile` is `overflow-hidden`, so an integer
+    // row span was a hard ceiling: measured at the previous head, the
+    // head-to-head overflowed its four rows by 94px at 1440 and 128px at 1280
+    // and lost its footer and two verdict reasons, and own-claims lost its
+    // footer in the claims arm. The artboard's own grid declares no
+    // `grid-auto-rows`; this page asks for the same through the className
+    // `PageGrid` already takes.
+    // The page itself cannot render here (its bar uses `useSearchParams`), so
+    // this is the grid the page composes, with the same two overrides — and
+    // the thing worth pinning is that `cn`'s tailwind-merge lets them WIN over
+    // the primitive's own classes rather than being dropped as duplicates.
+    const markup = render(
+      <PageGrid className={GRID_ROWS}>
+        <Tile col={7} row={4} className={STACKED}>x</Tile>
+      </PageGrid>,
+    )
+    expect(markup).toContain('xl:auto-rows-[minmax(116px,auto)]')
+    expect(markup).not.toContain('xl:auto-rows-[116px]')
+    // Below xl the grid is one column, so a tile takes its own height instead
+    // of a min-height derived from a span it no longer shares.
+    expect(markup).toContain('min-h-0')
+    expect(markup).not.toContain('min-h-[512px]')
+    // `distribute="between"` is gone from the page: a tile has ONE child, so
+    // `justify-between` had nothing to spread. What puts a footer on the floor
+    // is the block filling the tile.
+    expect(markup).not.toContain('justify-between')
+  })
+
+  it('makes every block fill its tile, so its footer lands on the floor', () => {
+    for (const block of COMPETITIVE_TILES) {
+      const markup = render(block.render(competitiveFixture(), 'app', ctx))
+      expect(markup.slice(0, 200)).toContain('h-full')
+    }
+    // Paper and email are not tiles and do not ask for it.
+    expect(render(competitiveStandings.render(competitiveFixture(), 'print', ctx)).slice(0, 200)).not.toContain('h-full')
   })
 
   it('spans the artboard’s grid, and every tile is exportable', () => {

@@ -67,20 +67,46 @@ export const COMPETITIVE_TILES: readonly Block<CompetitiveSurfaceData>[] = [
 ]
 
 /** The artboard's twelve-column grid: `span 12` · `span 7` + `span 5` ·
- *  `span 3` + `span 4` + `span 5` · `span 12`. Rows are 116px units. */
+ *  `span 3` + `span 4` + `span 5` · `span 12`. Rows are 116px MINIMUMS. */
 const SPAN: Record<string, { col: number; row: number }> = {
   'competitive.months': { col: 12, row: 4 },
   'competitive.h2h': { col: 7, row: 4 },
   'competitive.ownclaims': { col: 5, row: 4 },
-  // THE THREE IN ONE GRID ROW SHARE ITS HEIGHT, so the row is sized to the
-  // tallest of them (the asked block, which carries four notes under its rows)
-  // and not to the average. A `Tile` is `overflow-hidden`: a row too short
-  // does not scroll, it clips.
-  'competitive.saidabout': { col: 3, row: 6 },
-  'competitive.questions': { col: 4, row: 6 },
-  'competitive.unlocks': { col: 5, row: 6 },
+  // The three in one grid row share its height, so the band is as tall as the
+  // tallest of them.
+  'competitive.saidabout': { col: 3, row: 5 },
+  'competitive.questions': { col: 4, row: 5 },
+  'competitive.unlocks': { col: 5, row: 5 },
   'competitive.playbook': { col: 12, row: 5 },
 }
+
+/**
+ * THE ROWS ARE CONTENT-SIZED, WHICH IS WHAT THE ARTBOARD'S OWN GRID DOES.
+ *
+ * `PageGrid` is `xl:auto-rows-[116px]` and a `Tile` is `overflow-hidden`, so a
+ * hard-coded integer row span is a hard ceiling: any block taller than its span
+ * is CUT, with no scroll and no indication. The numbers above were fitted to
+ * one fixture by eye and four of the six states fell outside them — measured at
+ * head, the head-to-head overflowed by 94px at 1440 and 128px at 1280 and lost
+ * its footer and two of its five verdict reasons, and the own-claims tile lost
+ * Patagonia's row and its "2 of 3 tracked" footer in the claims arm. The render
+ * tier asserts what a block PRINTS, not where its pixels land, so 122 green
+ * tests passed through both.
+ *
+ * The artboard's grid declares no `grid-auto-rows` at all — its rows are sized
+ * by their content — so this page asks for the same thing through the className
+ * `PageGrid` already takes: `minmax(116px, auto)`. The spans above keep their
+ * meaning as the MINIMUM height a tile claims (which is what holds the
+ * artboard's rhythm when a state is short); they stop being a ceiling. Nothing
+ * outside this page changes.
+ */
+export const GRID_ROWS = 'xl:auto-rows-[minmax(116px,auto)]'
+
+/** Below `xl` the grid is one stacked column and `Tile`'s `MIN_H` still applies
+ *  a height derived from the row span — at 1024 that is 776px of tile under a
+ *  245px block, and the page ran 5,579px of mostly air. Stacked, a tile has no
+ *  neighbour to match, so it takes its own height. */
+export const STACKED = 'min-h-0'
 
 /** The app's context: RELATIVE links. */
 export function competitiveContext(params: Record<string, string | undefined> = {}): BlockContext {
@@ -154,11 +180,16 @@ export function CompetitiveSurfacePage({
         {/* CO1, inline: the artboard's RIVAL pill row, under the band and
             outside any card. */}
         {competitiveRivals.render(data, 'app', ctx)}
-        <PageGrid>
+        <PageGrid className={GRID_ROWS}>
           {COMPETITIVE_TILES.map((block) => {
             const span = SPAN[block.key] ?? { col: 12, row: 2 }
+            // NO `distribute`: every tile has exactly ONE child — the block's
+            // own `<section>` — so `justify-between` had nothing to spread and
+            // the prop read as a fix that was never applied. What actually puts
+            // a footer on the floor is the block filling the tile (`h-full` on
+            // its own `BlockFrame`), which is where each block now does it.
             return (
-              <Tile key={block.key} col={span.col} row={span.row} exportKey={block.key} distribute="between">
+              <Tile key={block.key} col={span.col} row={span.row} exportKey={block.key} className={STACKED}>
                 {block.render(data, 'app', ctx)}
               </Tile>
             )
