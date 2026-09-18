@@ -44,6 +44,9 @@ const REGISTRY_ID_2 = 'reg-recycled'
 const BASIS: AskBasis = {
   updateAt: '2026-09-27T04:00:00.000Z',
   monthlyReadings: 3,
+  // The months the count IS — `readableMonths` off the same rows, so the draws
+  // tile's "3 monthly · Jul, Aug, Sep" and the chart above it name one set.
+  readingMonths: ['2026-07-01', '2026-08-01', MONTH],
   embedded: 2872,
   total: 2872,
   lastEmbeddedAt: '2026-09-15T07:31:49.323Z',
@@ -294,7 +297,17 @@ export function agentFixture(over: Partial<AgentThreadData> = {}): AgentThreadDa
     turns: [
       turn(
         'Durability — it is the question underneath the category, and it is asked rather than praised.',
-        `The wet-commute question is growing, and no tracked brand answers it on camera.`,
+        // NO DIRECTION WORD IN THE PROSE, and that is a rendering decision the
+        // fixture has to hold. `scrubAnswer` LICENSES a direction sentence that
+        // names the object whose verdict earned one (`dropUnverdictedDirection`),
+        // so a model sentence reading "Will it survive a wet commute is growing"
+        // survives the scrub — and the copy contract's rule (c) refuses a
+        // direction word outside a `verdict` node whoever wrote it. The surface
+        // resolves that the way D5 asks: the word is printed by the product, in
+        // its own verdict node, from `directionWord`. The seam between the two
+        // rules is written up in the status note; the fixture pins the shape the
+        // page actually renders.
+        'The wet-commute question is the one no tracked brand answers on camera.',
       ),
     ],
     citations: CITATIONS,

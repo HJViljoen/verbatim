@@ -1,82 +1,91 @@
 import { getSessionContext } from '@/lib/auth'
-import { AgentComposer } from '@/components/agent-composer'
-import { AgentCrowdRing } from '@/components/agent-stage'
-import { AgentHistory, type ThreadRow } from '@/components/agent-history'
+import { readingHandle } from '@/lib/reading/read'
 import { canAsk } from '@/lib/agent/access'
 import { askBasisLine, loadAskBasis, nothingSearchable } from '@/lib/agent/basis'
+import { loadNotAnswered } from '@/lib/agent/measure'
+import { loadPlanChecks } from '@/lib/ask/plan-cards'
+import { askDraws, askPlanChip, askRecordHref, askRecordLines, loadAskHistory } from '@/lib/pages/agent-thread'
+import { AgentComposer } from '@/components/agent-composer'
+import { AskBoxTile } from '@/components/pages/agent/ask-box'
+import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from '@/components/pages/agent/rail'
+import { AskColumns, AskShell } from '@/components/pages/agent/surface'
 
-// The Verbatim Agent — arrive with a question from your own work, get an answer
-// built from what your customers actually said.
+// Ask — "what does the conversation say about this?" (Block D wave 2, E-ask).
 //
-// This page does not scroll. The composer and the figure hold the centre of the
-// frame and the crowd stands around them; that composition IS the page, and a
-// scrollbar would let it drift off the top. Earlier questions therefore live in
-// a sheet parked off the bottom edge rather than in a column underneath.
+// THE STAGE IS GONE. This page was a non-scrolling composition: a crowd
+// backdrop, a standing figure over one centred rounded-full composer, one
+// sentence under it, and earlier questions in a drawer parked off the bottom
+// edge. It had no page bar, no tiles and no rail — so the surface's own
+// question, the legend, Export, the plan a reader had already checked, what an
+// answer draws on and what could not be answered this month were all either
+// absent or hidden behind a hover. The artboard draws the ask box as a tile
+// with three tiles beside it, which is the same composition the thread page
+// wears; this page is that page without an answer in it yet.
 //
-// No subheading either. The profile page lost its tagline in the July pass for
-// the same reason: a description is read once and then it is furniture.
+// SIX READS, ONE WAVE. Round trips are the cost on this database — it pays a
+// ~0.5s wake-up on the first request after idle and every sequential wave pays
+// it again — so the role check, the basis, the history, the plans, the month's
+// questions and the delivered count leave together.
 
 /** `?ask=` is a question another page sent the reader here with — Subjects'
  *  "Ask about this" is the first. It fills the box and nothing else: the
- *  reader reads it, edits it, and presses send. */
-export default async function AgentPage({ searchParams }: { searchParams?: Promise<{ ask?: string }> }) {
+ *  reader reads it, edits it, and presses Ask. */
+export default async function AgentPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | undefined>>
+}) {
   const { supabase, clientId, userId, role } = await getSessionContext()
-  const ask = (await searchParams)?.ask?.slice(0, 300)
-  // The admin check and the thread list are independent — one wave (round
-  // trips, not rows, are the cost: the DB pays a ~0.5s wake-up on the first
-  // requests after idle, and every sequential wave pays it again).
-  const [canSend, { data: rows }, basis] = await Promise.all([
+  const sp = (await searchParams) ?? {}
+  const ask = sp.ask?.slice(0, 300)
+  const scope = { supabase, clientId, reading: readingHandle(clientId), params: sp }
+
+  const [canSend, basis, history, plans, notAnswered, deliveredRes] = await Promise.all([
     // Computed server-side and passed down — never a client-side check.
     canAsk(role, userId),
-    supabase
-      .from('agent_threads')
-      .select('id, title, created_at')
-      .eq('client_id', clientId)
-      .order('created_at', { ascending: false })
-      .limit(50),
     // What a question asked from this box will be answered against (AS3).
     loadAskBasis(supabase, clientId),
+    loadAskHistory(scope).catch(() => null),
+    loadPlanChecks(scope).catch(() => []),
+    loadNotAnswered(scope).catch(() => null),
+    supabase.from('pipeline_runs').select('id', { count: 'exact', head: true }).eq('client_id', clientId),
   ])
-  const threads = (rows ?? []) as ThreadRow[]
+
   // THE ONE STATE WHERE ASKING CANNOT WORK. `match_insights` filters
   // `embedding is not null`, so a corpus with nothing embedded returns zero
   // rows for every question and `answerQuestion` throws — after the question
   // has been stored, which means after it has taken one of the month's forty
-  // slots. The basis line below already says "none of N findings searchable";
-  // this is the same fact reaching the control, so the reader is told before
-  // they spend the turn rather than after.
+  // slots. The basis in the bar already says "none of N findings searchable";
+  // this is that fact reaching the control, so the reader is told before they
+  // spend the turn rather than after.
   const blocked = nothingSearchable(basis)
+  const delivered = deliveredRes.error ? null : deliveredRes.count ?? null
+  const recordLines = askRecordLines(basis, delivered)
 
   return (
-    // .agent-fixed is the hook a CSS rule uses to stop <main> scrolling and
-    // make it a column (see globals.css). flex-1 + min-h-0 then takes exactly
-    // the height left over — which is the whole pane normally, and the pane
-    // minus the billing banner when a tenant has one, instead of assuming.
-    //
-    // NOT overflow-hidden here: that would clip the history sheet, which
-    // reaches past the dashboard's padding to sit flush with the bottom edge.
-    // The clipping happens at <main> instead, one level up.
-    <div className="agent-fixed relative flex-1 min-h-0">
-      <AgentCrowdRing />
-      <div className="agent-centre-in relative z-10 grid h-full place-items-center">
-        <div className="w-full pb-24">  {/* clears the taller peek below */}
-          <AgentComposer
-            canSend={canSend && !blocked}
-            disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
-            showFigure
-            ask={ask}
-          />
-          {/* AS3, under the box rather than over it: the reader came here to
-              ask, and what the answer will be drawn from is the second thing
-              they need, not the first. Said before a question is spent, because
-              "none of 2,872 findings searchable" is the difference between a
-              silent answer and a broken index. */}
-          <p className="mx-auto mt-4 max-w-2xl text-center text-[11.5px] text-muted-foreground">
-            {askBasisLine(basis)}
-          </p>
-        </div>
-      </div>
-      <AgentHistory threads={threads} />
-    </div>
+    <AskShell context={askBasisLine(basis)} record={{ line: recordLines[0], lines: recordLines }} params={sp}>
+      <AskColumns
+        rail={
+          <>
+            <EarlierQuestionsTile history={history} row={3} />
+            <DrawsTile draws={askDraws(basis, delivered)} recordHref={askRecordHref()} delivered={delivered} row={2} />
+            <NotAnsweredTile notAnswered={notAnswered} row={2} />
+          </>
+        }
+      >
+        <AskBoxTile
+          basis={basis}
+          plan={askPlanChip(plans)}
+          row={2}
+          composer={
+            <AgentComposer
+              canSend={canSend && !blocked}
+              disabledNote={blocked && canSend ? 'Nothing is searchable yet, so there is nothing to answer from' : undefined}
+              ask={ask}
+            />
+          }
+        />
+      </AskColumns>
+    </AskShell>
   )
 }

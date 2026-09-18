@@ -1,0 +1,157 @@
+import { describe, expect, it } from 'vitest'
+import { DrawsTile, EarlierQuestionsTile, NotAnsweredTile } from './rail'
+import { AskBoxTile, readingsMeta } from './ask-box'
+import { agentFixture, refusedFixture } from './fixture'
+import { assertCopyContract } from '@/lib/test/copy-contract'
+import { render, renderText } from '@/lib/test/render'
+
+// The rail's three tiles and the ask box (Block D wave 2, E-ask).
+//
+// One static render per tile per state. Both states are real and the second one
+// is the one a reviewer sees: a fresh database has the code and no rows, and
+// every tile here has to survive it without printing a zero.
+
+const measured = agentFixture()
+const refused = refusedFixture()
+
+describe('earlier questions', () => {
+  const text = renderText(<EarlierQuestionsTile history={measured.history} />)
+
+  it('keeps the copy contract in both states', () => {
+    assertCopyContract(<EarlierQuestionsTile history={measured.history} />)
+    assertCopyContract(<EarlierQuestionsTile history={refused.history} />)
+    assertCopyContract(<EarlierQuestionsTile history={null} />)
+  })
+
+  it('draws the newest three and counts the month', () => {
+    expect(text).toContain('3 this month')
+    expect(text).toContain('Should our summer campaign lead')
+    expect(text).toContain('Is price fading, or just quieter?')
+    // The fourth is August's and is neither drawn nor counted.
+    expect(text).not.toContain('What do people complain about with Freitag?')
+  })
+
+  it('carries no per-row figure, because nothing stores one', () => {
+    // The artboard writes "smell 41 videos · zips 71" under each row.
+    // `agent_messages.result` holds a count per grounded point and nothing that
+    // summarises a thread, so a figure here would be re-derived from a stored
+    // answer's prose — the re-derivation the reading layer exists to stop.
+    expect(text).toContain('answered 13 Sep')
+    expect(text).not.toMatch(/answered 13 Sep · \d/)
+  })
+
+  it('flags only the thread whose plan claim crossed', () => {
+    expect(text).toContain('1 claim crossed')
+    expect(text.split('1 claim crossed').length - 1).toBe(1)
+  })
+
+  it('dates its footer by the earliest question it holds', () => {
+    // D14: earliest EVIDENCE, never a start date.
+    expect(text).toContain('earliest 20 Aug')
+  })
+
+  it('says so when it could not be read, and never draws an empty list', () => {
+    expect(renderText(<EarlierQuestionsTile history={null} />)).toContain('could not be read')
+  })
+
+  it('marks a model-written thread title as the model’s words', () => {
+    // `ask_extract_title` is a PROSE_POLICY slot whose policy is `digits`, so
+    // the exemption from rule (c) is one the policy table actually grants.
+    expect(render(<EarlierQuestionsTile history={measured.history} />)).toContain('data-slot="ask_extract_title"')
+  })
+})
+
+describe('what an answer draws on', () => {
+  const tile = (d: ReturnType<typeof agentFixture>, delivered: number | null) => (
+    <DrawsTile draws={d.draws} recordHref={d.record!.href} delivered={delivered} />
+  )
+
+  it('keeps the copy contract in both states', () => {
+    assertCopyContract(tile(measured, 23))
+    assertCopyContract(tile(refused, null))
+  })
+
+  it('names the months behind the readings count', () => {
+    const text = renderText(tile(measured, 23))
+    expect(text).toContain('3 monthly · Jul, Aug, Sep')
+    expect(text).toContain('2,872 of 2,872 findings')
+    expect(text).toContain('as at 15 Sep')
+  })
+
+  it('opens the record, which is where the rows it does not print live', () => {
+    // Four rows, not the mock's five: updates-this-month, videos, languages and
+    // tracking changes need `loadRecordInputs`' eight tenant-wide reads on every
+    // page load. `hasRecord` admits Ask so the drawer can be opened from here.
+    const markup = render(tile(measured, 23))
+    expect(markup).toContain('detail=record')
+    expect(renderText(tile(measured, 23))).toContain('The record →')
+    expect(renderText(tile(measured, 23))).toContain('23 updates delivered')
+  })
+
+  it('says what is not recorded rather than printing a zero', () => {
+    const text = renderText(tile(refused, null))
+    expect(text).toContain('not recorded for this workspace yet')
+    expect(text).not.toContain('0 monthly')
+  })
+})
+
+describe('not answered this month', () => {
+  it('keeps the copy contract in both states', () => {
+    assertCopyContract(<NotAnsweredTile notAnswered={measured.notAnswered} />)
+    assertCopyContract(<NotAnsweredTile notAnswered={refused.notAnswered} />)
+    assertCopyContract(<NotAnsweredTile notAnswered={null} />)
+  })
+
+  it('prints the reader’s own question and the reason in the reader’s words', () => {
+    const text = renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)
+    expect(text).toContain('Anything compared against Poler?')
+    expect(text).toContain('nothing in the conversation we read speaks to this')
+    expect(text).toContain('this asks about your own numbers, which we do not read')
+  })
+
+  it('prints the budget with its own denominator', () => {
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('3 of 40 questions asked this month')
+  })
+
+  it('says every question was answered rather than drawing an empty list', () => {
+    expect(renderText(<NotAnsweredTile notAnswered={refused.notAnswered} />)).toContain('Every question asked this month was answered')
+  })
+
+  it('points at what we track', () => {
+    expect(renderText(<NotAnsweredTile notAnswered={measured.notAnswered} />)).toContain('What we track →')
+  })
+})
+
+describe('the ask box', () => {
+  const box = (d: ReturnType<typeof agentFixture>) => (
+    <AskBoxTile basis={d.basis} plan={d.planChip} composer={<p>the control</p>} />
+  )
+
+  it('keeps the copy contract in both states', () => {
+    assertCopyContract(box(measured))
+    assertCopyContract(box(refused))
+  })
+
+  it('moves the readings count into the tile’s meta', () => {
+    expect(renderText(box(measured))).toContain('3 monthly readings searchable')
+    expect(readingsMeta({ ...measured.basis, monthlyReadings: 1 })).toBe('1 monthly reading searchable')
+    expect(readingsMeta({ ...measured.basis, monthlyReadings: 0 })).toBe('no month yet carries enough videos')
+    expect(readingsMeta({ ...measured.basis, monthlyReadings: null })).toBe('monthly readings not recorded here')
+  })
+
+  it('shows the plan a reader already checked, with how its claims read now', () => {
+    // The chip is Ask's first sight of a feature that has shipped since August:
+    // `plan_checks` was written, re-checked against every update, and no
+    // surface ever told a reader they had one.
+    const text = renderText(box(measured))
+    expect(text).toContain('Summer 2026/27 campaign brief.pdf')
+    expect(text).toContain('uploaded 20 Aug · 9 claims')
+    expect(text).toContain('6 supported')
+    expect(text).toContain('1 contradicted')
+    expect(text).toContain('2 untested')
+  })
+
+  it('says what checking a plan does, rather than drawing a blank rail', () => {
+    expect(renderText(box(refused))).toContain('No plan has been checked yet')
+  })
+})

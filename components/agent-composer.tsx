@@ -2,16 +2,31 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowUp, Loader2, Paperclip } from 'lucide-react'
-import { CrowdFigure } from '@/components/crowd-figure'
+import { Loader2, MessageSquare, Paperclip, Search } from 'lucide-react'
 
 // The ask box. Client state because an answer takes tens of seconds and a form
 // post that just hangs reads as broken.
 //
+// THE MOCK'S SHAPE, NOT THE STAGE'S (Block D wave 2, E-ask). This was a 56px
+// rounded-full pill in a centred `max-w-2xl` column, with a paperclip hidden
+// inside its left edge and a 40px circular arrow on its right — an ask box that
+// looked like a search field on a landing page. The artboard draws a control
+// INSIDE a tile: a 44px `--inner` block at radius 4 with a search glyph, a
+// labelled "Check a plan" secondary button beside it, and a labelled green
+// "Ask" pill. Three changes, and each of them is a word where there was a
+// glyph:
+//
+//   · the attach control says "Check a plan" instead of being a paperclip with
+//     a `title` — and it is present in BOTH composers, where before it was
+//     suppressed inside a thread. Checking a plan from a follow-up is the same
+//     action as checking one from the box.
+//   · the submit says "Ask".
+//   · the placeholder names the four things that can be asked about rather
+//     than "your customers", which is only one of them.
+//
 // No instructions around it. A hint is useful for about a week and then it is
-// furniture — the shape of the control says "type here and press the arrow"
-// without being told, and someone who has used this for months should not have
-// to read past a sentence they learned the first day.
+// furniture — the shape of the control says "type here and press Ask" without
+// being told.
 //
 // `canSend` is computed on the SERVER and passed in. When it is false the box
 // is visible and disabled rather than hidden: a reader should be able to see
@@ -23,16 +38,12 @@ import { CrowdFigure } from '@/components/crowd-figure'
 export function AgentComposer({
   canSend,
   threadId,
-  showFigure = false,
-  placeholder = 'Ask about your customers',
+  placeholder = 'Ask about a subject, a rival, a claim or a plan',
   disabledNote = 'Only an owner or admin can ask here',
   ask,
 }: {
   canSend: boolean
   threadId?: string
-  /** The standing figure above the box — the landing state only. Inside a
-   *  thread the conversation is the subject and the art would be in the way. */
-  showFigure?: boolean
   placeholder?: string
   /** What the box says while it is disabled. The default is the role gate,
    *  which is the usual reason; a page that disables it for a different reason
@@ -117,66 +128,64 @@ export function AgentComposer({
   }
 
   const ready = canSend && !busy && question.trim().length >= 8
+  const live = canSend && !busy
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
-      {showFigure && (
-        // Standing on top of the box, the way the profile figure stands on the
-        // bottom of its column. Same silhouette family as the crowd backdrop,
-        // so the page reads as one world.
-        <div className="flex justify-center">
-          <CrowdFigure personaKey="verbatim-agent" variant="c" className="h-20 w-auto text-primary" />
+    <div className="flex min-w-0 flex-col gap-2">
+      <form onSubmit={onSubmit} className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-[4px] bg-inner px-3.5">
+          {/* The glyph the artboard puts inside the block: a search mark on the
+              box, a speech mark on the follow-up — the one thing that
+              distinguishes the two controls at a glance. */}
+          {threadId
+            ? <MessageSquare className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+            : <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />}
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            disabled={busy || !canSend}
+            placeholder={canSend ? placeholder : disabledNote}
+            aria-label="Ask about a subject, a rival, a claim or a plan"
+            className="h-full w-full min-w-0 bg-transparent text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
+          />
         </div>
-      )}
 
-      <form onSubmit={onSubmit} className="relative">
-        <input
-          type="text"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          disabled={busy || !canSend}
-          placeholder={canSend ? placeholder : disabledNote}
-          aria-label="Ask about your customers"
-          className={`h-14 w-full rounded-full border border-border bg-card ${threadId ? 'pl-6' : 'pl-14'} pr-16 text-[15px] text-foreground shadow-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none disabled:opacity-60`}
-        />
-        {/* Inside the pill on the left, mirroring the arrow — a campaign or a
-            plan is the other thing you arrive with, so it belongs in the same
-            box rather than on a separate page. */}
-        {!threadId && (
-          <label
-            className={`absolute left-3 top-3 grid size-8 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground ${canSend && !busy ? '' : 'pointer-events-none opacity-40'}`}
-            title="Check a document"
-          >
-            <Paperclip className="size-4" aria-hidden />
-            <span className="sr-only">Check a document</span>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/pdf"
-              onChange={onFile}
-              disabled={busy || !canSend}
-              className="sr-only"
-            />
-          </label>
-        )}
+        {/* LABELLED, AND IN BOTH COMPOSERS. A paperclip with a `title` is a
+            control only a reader who hovers it knows about, and inside a thread
+            there was no control at all. */}
+        <label
+          className={`inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-[6px] bg-tile px-3.5 text-[12px] font-medium text-secondary-foreground ring-1 ring-border transition-colors hover:bg-inner ${live ? '' : 'pointer-events-none opacity-40'}`}
+        >
+          <Paperclip className="size-4" aria-hidden />
+          <span>Check a plan</span>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf"
+            onChange={onFile}
+            disabled={busy || !canSend}
+            className="sr-only"
+          />
+        </label>
 
         <button
           type="submit"
           disabled={!ready}
-          aria-label="Ask"
-          className="absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
+          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[6px] bg-primary px-5 text-[13px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-30"
         >
-          {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <ArrowUp className="size-4" aria-hidden />}
+          {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+          Ask
         </button>
       </form>
 
       {busy && (
-        <p className="mt-3 text-center text-xs text-muted-foreground tabular-nums" aria-live="polite">
+        <p className="font-mono text-[11px] text-muted-foreground tabular-nums" aria-live="polite">
           Reading the conversation · {elapsed}s
         </p>
       )}
 
-      {error && <p className="mt-3 text-center text-sm text-negative">{error}</p>}
+      {error && <p className="text-[12px] text-negative">{error}</p>}
     </div>
   )
 }

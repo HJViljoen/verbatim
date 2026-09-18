@@ -13,6 +13,8 @@ import { prevMonth, monthStartOf } from '../reading/month-key'
 import type { Counted, FigureTable, Verdict, VerdictFlag } from '../reading/verdicts'
 import type { Scope } from '../renderables/types'
 import { isThin, movementDirection } from './movement'
+import { seriesToCalendar } from '../charts/from-series'
+import type { CalendarSeries } from '../charts/calendar'
 
 // Ask's MEASUREMENT half (Phase 1 Block D, package D8).
 //
@@ -87,6 +89,32 @@ export interface FindingMeasure {
   label: string
   /** Its monthly series with denominators — the chart. */
   series: MeasuredPoint[]
+  /**
+   * The same months AS A DRAWN LINE (Block D wave 2, E-ask).
+   *
+   * `series` above says whether a month could be read; it cannot say WHY not,
+   * and a chart that draws "below the floor" and "nothing was said" as the same
+   * blank is a chart that hides the difference the reading layer exists to
+   * keep. So the line comes through `seriesToCalendar` — the one adapter from
+   * the reading layer to the chart (lib/charts/from-series.ts), whose state
+   * mapping is argued in its own docstring — rather than being re-derived in a
+   * component. `axis` is the months it is drawn over, ending at the month being
+   * measured: a figure beside an answer is a figure about the month the answer
+   * was measured against.
+   */
+  chart: { axis: string[]; line: CalendarSeries }
+  /**
+   * The client's OWN side of this finding, where they have one and it is not
+   * the side drawn.
+   *
+   * The counted pair, not the sentence: `caveats` carries the sentence (with
+   * the theme's model-written label inside it) and a surface that wants to
+   * print the figures beside a level needs them as numbers. `thin` is whether
+   * that side clears the floor — which on a client's own audience it usually
+   * does not, and which is the whole reason the side is a caveat rather than a
+   * second line on the chart.
+   */
+  own?: { value: Counted; thin: boolean }
   /** The banded comparison, where one was drawn. */
   verdict: Verdict | null
   /** Only where `directionWordsFor('agent.movement')` is true AND three
@@ -356,27 +384,23 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
     const base = tokenBase(index)
     const own = findingFigures(base, label, series.audience, month, value, verdict)
     figures = { ...figures, ...own }
-    findings.push({
-      findingId: finding.findingId,
-      value,
-      audience: series.audience,
-      audienceLabel: audienceLabel(series.audience),
-      label,
-      series: measuredPoints(series, month),
-      verdict,
-      direction,
-      figures: own,
-    })
 
     // THE OWN SIDE, where the tenant has one and it cannot carry a comparison.
     // This is the mock's sentence and the product owed it anyway: a reader shown
     // the category's 22% is owed the fact that their own audience is 26 videos
     // and that 26 videos compare to nothing.
+    //
+    // The COUNTS travel on the finding and the SENTENCE stays in `caveats`,
+    // because a surface that prints the pair beside a level needs numbers and a
+    // register that prints one line under a paragraph needs a sentence. Both
+    // are read off the same point, so they cannot disagree.
+    let ownSide: FindingMeasure['own']
     if (input.ownAudience && series.audience !== input.ownAudience) {
       const ownSeries = mine.find((s) => s.audience === input.ownAudience)
       const ownCurr = ownSeries ? pointsByMonth(ownSeries).get(month) : undefined
       if (ownSeries && ownCurr && ownCurr.videos != null && ownCurr.k != null) {
         const thinSide = !clearsFloor({ month: ownCurr.month, videos: ownCurr.videos, k: ownCurr.k })
+        ownSide = { value: { k: ownCurr.k, n: ownCurr.videos }, thin: thinSide }
         if (thinSide) {
           caveats.push(
             `Your own side of ${label} is ${fmtInt(ownCurr.k)} of ${fmtInt(ownCurr.videos)} videos in ${longMonth(month)} — ${TOO_FEW}.`,
@@ -384,6 +408,30 @@ export function measureAnswer(input: MeasureAnswerInput): AnswerMeasure {
         }
       }
     }
+
+    // THE LINE, THROUGH THE ONE ADAPTER. Trimmed to the month being measured
+    // first, for the reason the direction word is: a chart beside an answer is
+    // a chart of the months the answer was measured against.
+    const upToSeries: MonthSeries = { ...series, points: upTo }
+    const line = seriesToCalendar(upToSeries, {
+      color: series.audience === input.ownAudience ? 'var(--you)' : 'var(--cat)',
+      label: audienceLabel(series.audience),
+      measure: 'share',
+    })
+
+    findings.push({
+      findingId: finding.findingId,
+      value,
+      audience: series.audience,
+      audienceLabel: audienceLabel(series.audience),
+      label,
+      series: measuredPoints(series, month),
+      chart: { axis: upTo.map((p) => monthStartOf(p.month)), line },
+      ...(ownSide ? { own: ownSide } : {}),
+      verdict,
+      direction,
+      figures: own,
+    })
   })
 
   if (input.hasJudgement) caveats.unshift(INTERPRETATION_CAVEAT)

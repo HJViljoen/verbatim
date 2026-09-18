@@ -1,0 +1,158 @@
+import { describe, expect, it } from 'vitest'
+import { AnswerTile } from './answer'
+import { agentFixture, refusedFixture } from './fixture'
+import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
+import { render, renderText } from '@/lib/test/render'
+import { MOVEMENT_WORDS } from '@/components/delta-badge'
+import { citationWhere, saidHeading } from '@/lib/agent/types'
+
+// The answer tile's render tier (Block D wave 2, E-ask).
+//
+// One static render per state, asserted against what the block PRINTS. The
+// two states are the fixture's two and they are both real: a workspace whose
+// months are seeded, and a fresh database where `measure` is null — which is
+// what a reviewer actually sees, and what every new field has to survive.
+
+const measured = agentFixture()
+const refused = refusedFixture()
+
+const tile = (d: ReturnType<typeof agentFixture>, i = 0) => (
+  <AnswerTile
+    turn={d.turns[i]}
+    turnIndex={i}
+    measure={d.measure}
+    citations={d.citations}
+    basis={d.basis}
+    composer={<p>Check a plan</p>}
+  />
+)
+
+describe('the answer keeps the copy contract', () => {
+  it('prints no digit the model typed, every level with its "of N", and no unearned direction word', () => {
+    assertCopyContract(tile(measured))
+  })
+
+  it('keeps it with no measurement at all', () => {
+    // The state a fresh database is in. Nothing here may become a zero: the
+    // levels are absent because there is no reading, not because nothing moved.
+    assertCopyContract(tile(refused))
+  })
+
+  it('marks a commenter’s own words as theirs', () => {
+    // Rule (c) is about what the PRODUCT claims. 41% of stored quotes are
+    // non-ASCII and one of Össur's says "double"; the marker is what keeps the
+    // sweep off a speaker's sentence.
+    expect(render(tile(measured))).toContain('data-copy="quote"')
+  })
+})
+
+describe('the measurement half', () => {
+  const text = renderText(tile(measured))
+
+  it('prints the level with its own denominator, never a bare count', () => {
+    // 130 of 1,388 — the month table's k and n, not
+    // `GroundedPoint.conversationCount`, which has no denominator at all.
+    expect(text).toContain('130 of 1,388 videos')
+    expect(text).not.toContain('130 conversations')
+  })
+
+  it('prints the month before as its own counted pair', () => {
+    expect(text).toContain('the month before: 99 of 1,455 videos in August')
+  })
+
+  it('prints the change and the band together', () => {
+    // D2: a Verdict carries both or neither. The badge prints points only in
+    // the `moved` state.
+    expect(text).toMatch(/▲ 2\.6 pts · band 2/)
+  })
+
+  it('prints the direction word only where three readings earned one', () => {
+    // Ask is the one reader whose flag is true, and the word still has to be
+    // earned — `directionWord` over three consecutive months in one regime.
+    expect(text).toContain('growing over 3 readings')
+    // Finding 2's months are flat, so it earns the non-answer and no word.
+    expect(text).toContain(MOVEMENT_WORDS.no_clear_change)
+    expect(text).not.toContain('fading over 3 readings')
+  })
+
+  it('states the client’s own thin side rather than comparing it', () => {
+    expect(text).toContain('In your own audience: 26 of 84 videos')
+    expect(text).toContain(MOVEMENT_WORDS.too_little_data)
+  })
+
+  it('draws one line, and never a rival’s', () => {
+    // Retrieval drops every rival voice before an answer is written, so a rival
+    // series behind a claim about this client's own audience does not exist to
+    // be drawn. The mock draws Freitag here; this is the deviation.
+    const markup = render(tile(measured))
+    expect(markup).toContain('<svg')
+    expect(markup).not.toContain('Freitag')
+  })
+})
+
+describe('with no reading behind it', () => {
+  const text = renderText(tile(refused))
+
+  it('says so rather than printing a level of nothing', () => {
+    expect(text).toContain('no month reading stands behind this one')
+    expect(text).not.toContain('0 of 0')
+  })
+
+  it('still prints the answer, the quotes and the judgement', () => {
+    expect(text).toContain('Durability')
+    expect(text).toContain('Three winters on the bike')
+    expect(text).toContain('this one is inference')
+  })
+})
+
+describe('the registers', () => {
+  it('heads the evidence by whose audience spoke', () => {
+    expect(renderText(tile(measured))).toContain(saidHeading(measured.turns[0].answer!.grounded))
+  })
+
+  it('marks the whole judgement as inference, not only the points that cite nothing', () => {
+    // The build marked an uncited point and left a well-cited judgement
+    // unmarked, so the register that is our opinion read as a finding.
+    const text = renderText(tile(measured))
+    expect(text).toContain('this one is inference')
+    expect(text).toContain('Reasoning from finding 1 above.')
+    expect(text).toContain('Interpretation, not counted.')
+  })
+
+  it('dates every quoted voice and links to it', () => {
+    const text = renderText(tile(measured))
+    expect(text).toContain(citationWhere(measured.citations[0]))
+    expect(render(tile(measured))).toContain(measured.citations[0].href!)
+  })
+
+  it('says what the answer was answered against', () => {
+    expect(renderText(tile(measured))).toContain('Answered against the update of 27 Sep')
+  })
+})
+
+describe('the tile’s chrome', () => {
+  it('wears the artboard’s eyebrow, meta and footer rail', () => {
+    const text = renderText(tile(measured))
+    expect(text).toContain('The answer')
+    expect(text).toContain('answered 28 Sep')
+    expect(text).toContain('You asked · 28 Sep')
+    expect(text).toContain('Open the 130 videos behind this')
+    // The footer note names the population and the month every figure above is
+    // a figure of — the basis travelling with the figure (D15).
+    expect(text).toContain('the category · September')
+  })
+
+  it('gives the follow-up control its own rail above the footer', () => {
+    // The control is a SLOT (see `AnswerTile.composer`): the route mounts the
+    // client component, this block owns where it sits. The stand-in proves the
+    // slot renders inside the tile and above the footer rail.
+    const markup = render(tile(measured))
+    expect(markup).toContain('Check a plan')
+    expect(markup.indexOf('Check a plan')).toBeLessThan(markup.indexOf('Open the'))
+  })
+
+  it('reports no contract violation for either state', () => {
+    expect(copyViolations(tile(measured))).toEqual([])
+    expect(copyViolations(tile(refused))).toEqual([])
+  })
+})
