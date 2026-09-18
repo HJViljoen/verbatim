@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, figureConflicts, type RenderMode } from '@/
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { markupText, render, renderText } from '@/lib/test/render'
-import { FIRST_SCREEN_BUDGET, LATER_LINE, type WeekData } from '@/lib/pages/week'
+import { FIRST_SCREEN_BUDGET, LATER_LINE, RIVAL_POSTS_CONSIDERED, RIVAL_POSTS_SHOWN, type WeekData } from '@/lib/pages/week'
 import { FIRST_SCREEN, WEEK_BLOCKS, WeekPage, weekContext, weekFigureCount } from '.'
 import { weekSubjects } from './subjects'
 import { weekRising } from './rising'
@@ -337,8 +337,23 @@ describe('WK §4 · what came in', () => {
       // 2.2M-view TikToks: zero). And the rival's comment figure is the sum
       // over the posts NAMED; a bare total would be a claim about their week
       // that nothing here counted.
-      expect(text, mode).toContain('2 shown: the most commented on in these days of the 6 widest-reaching of 92')
+      expect(text, mode).toContain('2 shown: the most commented on in these days of the 2 widest-reaching of 92')
       expect(text, mode).toContain('998 comments under them in these days')
+    }
+  })
+
+  it('shows a count of weighed posts the loader could actually have produced', () => {
+    // `buildCameIn` weighs at most `RIVAL_POSTS_CONSIDERED` and shows
+    // `slice(0, RIVAL_POSTS_SHOWN)` of them, so what is shown is exactly
+    // `min(weighed, 3)`. A fixture saying "2 shown of the 6 widest-reaching"
+    // describes a pick no run makes, and a port would print that sentence.
+    for (const fixture of FIXTURES) {
+      for (const rival of fixture().cameIn.rivals) {
+        expect(rival.posts.length, rival.label)
+          .toBe(Math.min(rival.postsConsidered, RIVAL_POSTS_SHOWN))
+        expect(rival.postsConsidered, rival.label).toBeLessThanOrEqual(RIVAL_POSTS_CONSIDERED)
+        expect(rival.postsConsidered, rival.label).toBeLessThanOrEqual(rival.postsTotal)
+      }
     }
   })
 
