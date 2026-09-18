@@ -40,7 +40,13 @@ describe('the nine surfaces', () => {
   })
 
   it('states a basis on every reading and on nothing else', () => {
-    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive', 'week'])
+    // Ask is the seventh, and it is here because it became a reading: it is
+    // the one reader whose direction-word flag is true (`agent.movement`), and
+    // a surface that may print a direction word and states no basis for it is
+    // the worst of both. Reports and Settings make no reading and are still out.
+    expect(SURFACES.filter(hasRecord).map((s) => s.key)).toEqual(['overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'ask'])
+    expect(SURFACES.filter(hasRecord).map((s) => s.key)).not.toContain('reports')
+    expect(SURFACES.filter(hasRecord).map((s) => s.key)).not.toContain('settings')
   })
 
   it('splits into the two groups the artboards draw', () => {
