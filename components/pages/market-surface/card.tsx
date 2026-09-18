@@ -1,5 +1,5 @@
 import type { Block, RenderMode } from '@/lib/blocks/types'
-import { BlockEmpty, BlockFrame, FigureCell } from '@/components/blocks/frame'
+import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { MovementBadge } from '@/components/delta-badge'
 import { TileBlock } from '@/components/shell/tile'
 import { fmtInt, longMonth } from '@/lib/format'
@@ -42,6 +42,10 @@ import type { MarketSurfaceData } from '@/lib/pages/market-surface'
 // false, sitting next to the honest form of the same comparison. Both sides are
 // `Verdict`s here and both go through `MovementBadge`, which prints a magnitude
 // only where the state is `moved` (D2) and the band beside it when it does.
+
+/** How many claim rows the card draws. Sealand published nine in September,
+ *  several of them 200-character sentences; the card is a tile, not a list. */
+export const CARD_CLAIMS_SHOWN = 3
 
 /** One counted row of the card: the label, and the figure with its "of N". */
 function Count({ count, mode, hero = false }: { count: CardCount; mode: RenderMode; hero?: boolean }) {
@@ -123,6 +127,12 @@ export const marketCard: Block<MarketSurfaceData> = {
       )
     }
     const hooks = card.hooks.filter((h) => h.value.k > 0)
+    // THE ARTBOARD SHOWS TWO CLAIMS AND SEALAND PUBLISHED NINE, several of them
+    // 200-character sentences. The card is a tile, not a list: the top few by
+    // posts carried (`claimRows` is already sorted that way), and the rest are
+    // counted in a line under them rather than dropped.
+    const claims = card.claimRows.slice(0, CARD_CLAIMS_SHOWN)
+    const moreClaims = card.claimRows.length - claims.length
     const posts = card.posts.value.n
     const movements = [card.movement.yours, card.movement.category].filter((v): v is Verdict => v != null)
 
@@ -144,11 +154,11 @@ export const marketCard: Block<MarketSurfaceData> = {
             <Count count={card.overFloor} mode={mode} />
           </div>
 
-          {card.claimRows.length > 0 ? (
+          {claims.length > 0 ? (
             email ? (
               <div style={{ marginTop: 6 }}>
                 <div style={{ fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: EMAIL.ink2 }}>Claims you made</div>
-                {card.claimRows.map((c) => (
+                {claims.map((c) => (
                   <div key={c.claim} style={{ fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink, marginTop: 2 }}>
                     {/* THE CLIENT'S OWN WORDS, so a quote node: several real
                         claims carry a digit ("Made from 100% recycled sails")
@@ -161,12 +171,19 @@ export const marketCard: Block<MarketSurfaceData> = {
             ) : (
               <TileBlock className="flex min-w-0 flex-col gap-2">
                 <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Claims you made</span>
-                {card.claimRows.map((c) => (
+                {claims.map((c) => (
                   <span key={c.claim} className="flex items-baseline justify-between gap-3">
                     <span data-copy="quote" className="min-w-0 truncate text-[12.5px]">“{c.claim}”</span>
-                    <FigureCell mode={mode} align="right" value={fmtInt(c.posts.k)} of={`of ${fmtInt(c.posts.n)} posts`} />
+                    <span data-copy="level" className="shrink-0 whitespace-nowrap font-mono text-[11.5px] tabular-nums text-secondary-foreground">
+                      {fmtInt(c.posts.k)} of {fmtInt(c.posts.n)} posts
+                    </span>
                   </span>
                 ))}
+                {moreClaims > 0 ? (
+                  <span className="text-[11px] text-muted-foreground">
+                    {fmtInt(moreClaims)} more {moreClaims === 1 ? 'claim was' : 'claims were'} made on these posts.
+                  </span>
+                ) : null}
               </TileBlock>
             )
           ) : null}
@@ -182,7 +199,7 @@ export const marketCard: Block<MarketSurfaceData> = {
                   video and not where its hook was. */}
               <span
                 data-copy="level"
-                className={email ? undefined : 'shrink-0 font-mono text-[11.5px] tabular-nums text-secondary-foreground'}
+                className={email ? undefined : 'min-w-0 text-right font-mono text-[11.5px] leading-[1.35] tabular-nums text-secondary-foreground'}
                 style={email ? { fontFamily: FONT.mono, fontSize: 11.5, color: EMAIL.ink2 } : undefined}
               >
                 of {fmtInt(posts)} posts: {hooks.map((h) => `${h.label} ${fmtInt(h.value.k)}`).join(' · ')}

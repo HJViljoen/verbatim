@@ -166,14 +166,17 @@ export const marketPlans: Block<MarketSurfaceData> = {
 
           {card.moved.length > 0 ? (
             <div className={email ? undefined : 'flex min-w-0 flex-col gap-1'}>
+              <span className={email ? undefined : 'text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 10.5, fontWeight: 600, color: EMAIL.ink2 } : undefined}>
+                Moved since upload
+              </span>
               {card.moved.map((m) => (
-                <span key={`${m.claim}:${m.to}`} className={email ? undefined : 'flex items-baseline justify-between gap-2.5'} style={email ? { display: 'block', fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 } : undefined}>
+                <span key={`${m.claim}:${m.to}`} className={email ? undefined : 'flex min-w-0 flex-col gap-px'} style={email ? { display: 'block', fontFamily: FONT.sans, fontSize: 12, color: EMAIL.ink2 } : undefined}>
                   <span className={email ? undefined : 'min-w-0 text-[12px] text-secondary-foreground'}>
-                    Moved since upload: <span data-copy="quote">“{m.claim}”</span> {m.from} → {m.to}
+                    <span data-copy="quote">“{m.claim}”</span> {m.from} → {m.to}
                   </span>
                   {/* THE DATE IT MOVED, never "held N updates" — see the
                       header. `PlanMovedRow.on` is that dated sentence. */}
-                  <span className={email ? undefined : 'shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}>{m.on}</span>
+                  <span className={email ? undefined : 'font-mono text-[11px] text-muted-foreground'} style={email ? { fontFamily: FONT.mono, fontSize: 11, color: EMAIL.muted } : undefined}>{m.on}</span>
                 </span>
               ))}
             </div>

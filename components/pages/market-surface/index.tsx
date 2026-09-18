@@ -26,11 +26,15 @@ import { marketUnlocks } from './unlocks'
 // on one page and the decisions on another and the only thing connecting them
 // was the reader's memory.
 //
-// TWO GRIDS AND A HEADING BETWEEN THEM, which is the artboard's own structure:
-// the two full-width readings, then "Your moves" as a bare heading row, then
-// the moves grid — the card beside the first move's chart, and under them the
-// three narrow cards. The page was five stacked full-width tiles, one block
-// each, at about half the artboard's density.
+// TWO GRIDS, WHICH IS THE ARTBOARD'S OWN STRUCTURE: the two full-width
+// readings, then the moves grid — the card beside the first move's chart, and
+// under them the three narrow cards. The page was five stacked full-width
+// tiles, one block each, at about half the artboard's density.
+//
+// THE ARTBOARD'S BARE "YOUR MOVES" HEADING ROW IS NOT DRAWN, because the block
+// beneath it wears the same words and the same meta: the page printed "Your
+// moves · 1 declared · 1 card waiting" twice, eight pixels apart. The heading
+// is `market.moves`'s own, where a reader can also see which tile it names.
 //
 // THE MASTHEAD IS ONE CODE-WRITTEN LINE, printed once under the page bar and
 // never inside a block: it is the sentence that keeps every line under it from
@@ -60,7 +64,7 @@ export const MARKET_BLOCKS: readonly Block<MarketSurfaceData>[] = [
   marketWays,
 ]
 
-/** The two full-width readings, above the moves heading. */
+/** The two full-width readings, at the top of the page. */
 const READINGS: readonly Block<MarketSurfaceData>[] = [marketConclusions, marketAdvice]
 /** The artboard's moves grid, in its rendered order. */
 const MOVES: readonly Block<MarketSurfaceData>[] = [
@@ -83,13 +87,13 @@ const COLS: Record<string, number> = {
  *  grows past its box scrolls with the page (MASTER rule 7). */
 const ROWS: Record<string, number> = {
   'market.conclusions': 3,
-  'market.advice': 4,
-  'market.card': 4,
-  'market.moves': 4,
+  'market.advice': 5,
+  'market.card': 5,
+  'market.moves': 5,
   'market.sayhear': 3,
-  'market.plans': 3,
+  'market.plans': 5,
   'market.unlocks': 3,
-  'market.ways': 1,
+  'market.ways': 2,
 }
 
 /** The words this page is measured against, for "How to read this page". Every
@@ -157,13 +161,6 @@ export function MarketSurfacePage({
         </p>
 
         <PageGrid>{READINGS.map(tile)}</PageGrid>
-
-        <div className="flex items-baseline justify-between gap-3 px-0.5">
-          <h2 className="m-0 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-secondary-foreground">Your moves</h2>
-          <span className="shrink-0 whitespace-nowrap font-mono text-[11px] text-muted-foreground">
-            {data.moves.rows.length} declared · {data.moves.card ? '1 card waiting' : 'no card'}
-          </span>
-        </div>
 
         <PageGrid>{MOVES.map(tile)}</PageGrid>
 
