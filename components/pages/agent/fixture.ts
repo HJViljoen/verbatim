@@ -75,7 +75,7 @@ export function askMeasure(over: Partial<AnswerMeasure> = {}): AnswerMeasure {
   return {
     findings: [
       {
-        findingId: 'G1',
+        findingId: '0:G1',
         value: { k: 130, n: 1388 },
         audience: INDUSTRY_AUDIENCE,
         audienceLabel: 'The category',

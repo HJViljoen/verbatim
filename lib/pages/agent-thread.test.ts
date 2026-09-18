@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { freezeQuotes, resolveQuotes } from '../renderables/quotes-freeze'
 import { agentFixture, refusedFixture } from '../../components/pages/agent/fixture'
 import type { AskBasis } from '../agent/basis'
-import { ASK_RECORD_HREF, agentThreadSlides, answerFindings, askRecordLines, documentPages, type AgentThreadData } from './agent-thread'
+import { ASK_RECORD_HREF, agentThreadSlides, answerFindings, askRecordLines, documentPages, findingKey, type AgentThreadData } from './agent-thread'
 
 const base: AgentThreadData = {
   threadId: 't1', kind: 'question', title: 'Why do people hesitate before buying a liner?', brand: 'Sealand', createdAt: '2026-08-22T10:00:00Z',
@@ -60,12 +60,26 @@ describe('agent thread data', () => {
 
   it('names a finding by the registry id it rests on, and never by a label', () => {
     const measured = agentFixture()
-    expect(answerFindings(measured.turns)).toEqual([{ findingId: 'G1', registryIds: ['reg-wet-commute'] }])
+    expect(answerFindings(measured.turns)).toEqual([{ findingId: '0:G1', registryIds: ['reg-wet-commute'] }])
     // A point written before its themes were registered measures nothing rather
     // than being joined by a label that churns ~88% run to run.
     const unregistered = agentFixture()
     unregistered.turns[0].answer!.grounded[0].themeRefs = [{ themeId: 't1', registryId: null, label: 'Durability' }]
-    expect(answerFindings(unregistered.turns)).toEqual([{ findingId: 'G1', registryIds: [] }])
+    expect(answerFindings(unregistered.turns)).toEqual([{ findingId: '0:G1', registryIds: [] }])
+  })
+
+  it('keys a follow-up\u2019s findings by its own turn, so turn 2\u2019s G1 is not turn 1\u2019s', () => {
+    // The model's ref restarts at G1 on every answer. Two turns, both calling
+    // their first point G1 and resting on DIFFERENT themes: both have to be
+    // measured, or turn 2's prose is scrubbed against turn 1's figures.
+    const d = agentFixture()
+    const second = JSON.parse(JSON.stringify(d.turns[0])) as AgentThreadData['turns'][number]
+    second.answer!.grounded[0].themeRefs = [{ themeId: 't2', registryId: 'reg-zip', label: 'The zip' }]
+    expect(answerFindings([d.turns[0], second])).toEqual([
+      { findingId: '0:G1', registryIds: ['reg-wet-commute'] },
+      { findingId: '1:G1', registryIds: ['reg-zip'] },
+    ])
+    expect(findingKey(1, 'G1')).toBe('1:G1')
   })
 
   it('says what is not recorded rather than printing a zero for it', () => {

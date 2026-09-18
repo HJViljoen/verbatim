@@ -155,21 +155,40 @@ export interface AgentThreadData {
  *  mounts it is `lib/nav.ts:hasRecord`'s answer and not this file's. */
 export const ASK_RECORD_HREF = detailHref(surface('ask').href, {}, 'record')
 
+/**
+ * A finding's key on this page: the TURN it was written in, then the model's
+ * own ref inside that turn.
+ *
+ * `GroundedPoint.id` is the model's ref and is stable WITHIN ONE ANSWER only
+ * (lib/agent/types.ts; `enforce.ts` assigns `id: ref`) — every answer starts
+ * again at "G1". Keyed on the ref alone a follow-up's first finding is dropped
+ * as a duplicate of the first answer's, and the follow-up's prose is then
+ * scrubbed against the FIRST answer's figure table and the FIRST answer's
+ * verdicts. Two of the seven production threads that carry an answer are
+ * multi-turn, so that is the normal case rather than an edge.
+ *
+ * The key is composed here and nowhere else, because a rendered point has to be
+ * matched back to its `FindingMeasure` with the same string — by this file when
+ * the scrubbers empty a point, and by wave 2 when it draws the chart.
+ */
+export const findingKey = (turnIndex: number, ref: string): string => `${turnIndex}:${ref}`
+
 /** One finding per grounded point, in the answer's own order, carrying the
- *  registry ids that point rests on. */
+ *  registry ids that point rests on and keyed by the turn it was written in. */
 export function answerFindings(turns: readonly Turn[]): { findingId: string; registryIds: string[] }[] {
   const out: { findingId: string; registryIds: string[] }[] = []
   const seen = new Set<string>()
-  for (const t of turns) {
+  turns.forEach((t, i) => {
     for (const g of t.answer?.grounded ?? []) {
-      if (seen.has(g.id)) continue
-      seen.add(g.id)
+      const key = findingKey(i, g.id)
+      if (seen.has(key)) continue
+      seen.add(key)
       out.push({
-        findingId: g.id,
+        findingId: key,
         registryIds: (g.themeRefs ?? []).map((r) => r.registryId).filter((r): r is string => Boolean(r)),
       })
     }
-  }
+  })
   return out
 }
 
