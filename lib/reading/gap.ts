@@ -314,7 +314,7 @@ export function gapBasisLine(gap: Gap): string | null {
  *  the whole record rather than a month. */
 function periodOf(window: VerdictWindow): string {
   if (window.kind === 'since') return 'the record before this'
-  return `the ${window.kind} to ${longMonth(window.from)}`
+  return `the ${window.kind} from ${longMonth(window.from)}`
 }
 
 /**
