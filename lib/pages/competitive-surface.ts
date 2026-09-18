@@ -882,28 +882,57 @@ export async function loadRivalOwnPosts(
   return rivalOwnClaims(inputs)
 }
 
+/** Nobody read them, and the page says which silence that is. */
+export const SAID_ABOUT_WITHHELD = (label: string): string =>
+  `What others say about ${label} is read from those videos’ own transcripts, which are not open to this page — so this is not a silence we measured.`
+
+/** Claims in hand and no month row to be a share of. */
+export const SAID_ABOUT_NO_DENOMINATOR = (label: string): string =>
+  `No month has been read for ${label}, so what was said about them has nothing to be a share of.`
+
 /**
  * CO5, as the honest absence it is today.
  *
  * `saidAbout` is a claims reading and the claims are `video_claims` rows in a
  * rival's bucket — which M8 does not open to a tenant session and deliberately
- * will not: they are whole sentences out of a third party's transcript. So
- * every row comes back with its `empty` sentence, and the block exists and says
- * why, which is more than the page does today: mock-gap records that "Said
- * about them, by others" is not even named in `competitiveUnlockRows()`.
+ * will not: they are whole sentences out of a third party's transcript.
  *
- * The function itself is the real one, over an empty list, rather than a
- * hand-built shape — so the day a service-role surface feeds it rows, this
- * page's shape is already the one they arrive in.
+ * SO THE APP PAGE PASSES NO READER AT ALL, AND THAT IS THE POINT. `claimsFor`
+ * used to DEFAULT to `() => []`, so the caller that had no way to read claims
+ * and the caller that read them and found none handed `saidAbout` the same
+ * argument — and every rival on every real page load printed "Nothing was said
+ * about Ottobock in what we read this month." Nothing was read. A null reader
+ * is now a distinct third state with its own sentence, which is the rule CO4
+ * has kept since it landed (`RIVAL_CLAIMS_WITHHELD`) and the rule this block's
+ * own header states: "we read them and heard nothing" and "we did not look"
+ * are two answers and a block that prints neither is making the reader guess
+ * which.
+ *
+ * The function itself is the real one rather than a hand-built shape — so the
+ * day a service-role surface feeds it rows, this page's shape is already the
+ * one they arrive in.
  */
 export function buildSaidAbout(
   rivals: readonly { name: string }[],
   denominatorFor: (audience: string) => number,
-  claimsFor: (audience: string) => readonly { claim: string; quote: string; videoId: string }[] = () => [],
+  claimsFor: ((audience: string) => readonly { claim: string; quote: string; videoId: string }[]) | null = null,
 ): SaidAbout[] {
   return rivals.map((r) => {
     const audience = rivalKey(r.name)
-    return saidAbout({ audience, label: r.name, claims: claimsFor(audience), of: denominatorFor(audience) })
+    // NO READER IS NOT AN EMPTY READER. `saidAbout` over an empty list returns
+    // `SAID_ABOUT_EMPTY` — "Nothing was said about Ottobock in what we read
+    // this month." — which is a measurement, and on the app page nothing was
+    // measured. So the absence of a reader is answered before the reading runs.
+    if (!claimsFor) return { audience, label: r.name, rows: [], empty: SAID_ABOUT_WITHHELD(r.name) }
+    const of = denominatorFor(audience)
+    const group = saidAbout({ audience, label: r.name, claims: claimsFor(audience), of })
+    // A SHARE OF NOTHING IS NOT A SHARE. `of` is a sum over `month_denominators`
+    // rows that may not exist for this audience-month; with claims in hand and
+    // no row, every line would read "3 of 0".
+    if (group.rows.length > 0 && of <= 0) {
+      return { audience, label: r.name, rows: [], empty: SAID_ABOUT_NO_DENOMINATOR(r.name) }
+    }
+    return group
   })
 }
 

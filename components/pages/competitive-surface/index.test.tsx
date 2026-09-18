@@ -12,7 +12,7 @@ import { PLAYBOOK_NO_READING, competitivePlaybook } from './playbook'
 import { competitiveRivals } from './rivals'
 import { competitiveStandings } from './standings'
 import { competitiveQuestions } from './questions'
-import { competitiveUnlockRows } from '@/lib/pages/competitive-surface'
+import { buildSaidAbout, competitiveUnlockRows } from '@/lib/pages/competitive-surface'
 import { competitiveUnlocks } from './unlocks'
 import { claimsReadFixture, competitiveFixture, oneMonthFixture, quietRivalFixture, unreadMonthsFixture, unreadRivalFixture } from './fixture'
 
@@ -430,9 +430,29 @@ describe('CO4 · what they say about themselves', () => {
 })
 
 describe('CO5 · said about them, by others', () => {
-  it('names the silence per rival rather than leaving the block out', () => {
+  it('says which silence it is \u2014 and on the app page nothing was read', () => {
+    // THE SENTENCE THIS TEST USED TO PIN WAS FALSE. It asserted "Nothing was
+    // said about Ottobock in what we read this month." on the surface reading,
+    // where no claim reader is passed at all: `video_claims` is closed to a
+    // tenant session, so the block was reporting a measured silence nobody
+    // measured. The withheld sentence is the honest one, and the measured one
+    // is only reachable where a reader WAS passed and came back empty.
     const text = renderText(competitiveSaidAbout.render(competitiveFixture(), 'app', ctx))
-    expect(text).toContain('Nothing was said about Ottobock in what we read this month.')
+    expect(text).toContain('which are not open to this page')
+    expect(text).not.toContain('Nothing was said about Ottobock')
+    // Rareform in the claims-read arm: a reader ran and found nothing.
+    const read = renderText(competitiveSaidAbout.render(claimsReadFixture(), 'app', ctx))
+    expect(read).toContain('Nothing was said about Rareform in what we read this month.')
+  })
+
+  it('refuses a share of a month it has no denominator for', () => {
+    const rows = buildSaidAbout(
+      [{ name: 'Ottobock' }],
+      () => 0,
+      () => [{ claim: 'The knee is quiet', quote: 'You cannot hear it.', videoId: 'v1' }],
+    )
+    expect(rows[0].rows).toHaveLength(0)
+    expect(rows[0].empty).toContain('nothing to be a share of')
   })
 
   it('keeps each numerator over its own audience’s denominator (D5)', () => {

@@ -440,12 +440,28 @@ describe('buildSaidAbout', () => {
   it('gives every rival a row and its own denominator', () => {
     const rows = buildSaidAbout([{ name: 'Ottobock' }, { name: 'Rareform' }], (a) => (a === 'competitor:Ottobock' ? 42 : 0))
     expect(rows.map((r) => r.audience)).toEqual(['competitor:Ottobock', 'competitor:Rareform'])
-    // Nothing is readable today, so every row is the block's own empty
-    // sentence — a named absence, not a missing block.
+    // NO READER WAS PASSED, SO THE SENTENCE IS THE WITHHELD ONE. It used to
+    // assert "Nothing was said about …", which is a MEASURED silence — and
+    // nothing had been measured: `claimsFor` defaulted to `() => []`, so the
+    // app page and a reader that came back empty were indistinguishable.
     for (const r of rows) {
       expect(r.rows).toEqual([])
-      expect(r.empty).toContain('Nothing was said about')
+      expect(r.empty).toContain('which are not open to this page')
+      expect(r.empty).not.toContain('Nothing was said about')
     }
+  })
+
+  it('tells a reader that found nothing from no reader at all', () => {
+    const [looked] = buildSaidAbout([{ name: 'Ottobock' }], () => 42, () => [])
+    expect(looked.empty).toBe('Nothing was said about Ottobock in what we read this month.')
+  })
+
+  it('refuses a share of a month with no denominator', () => {
+    const [row0] = buildSaidAbout([{ name: 'Ottobock' }], () => 0, () => [
+      { claim: 'They repair for free', quote: 'Fixed mine for nothing.', videoId: 'a' },
+    ])
+    expect(row0.rows).toEqual([])
+    expect(row0.empty).toContain('nothing to be a share of')
   })
 
   it('counts distinct videos over the audience’s month when the claims arrive', () => {

@@ -34,10 +34,15 @@ import type { CompetitiveSurfaceData } from '@/lib/pages/competitive-surface'
 // quotation frozen into a snapshot is the wrong-attribution failure the rule
 // exists to stop.
 //
-// A SILENCE IS NAMED, NOT OMITTED. Every tracked rival gets a row; a rival
-// nothing was said about carries `SAID_ABOUT_EMPTY` in its own words, because
-// "we read them and heard nothing" and "we did not look" are two answers and a
-// block that prints neither is making the reader guess which.
+// A SILENCE IS NAMED, NOT OMITTED, AND THERE ARE THREE OF THEM. Every tracked
+// rival gets a row: `SAID_ABOUT_EMPTY` where the claims were read and held
+// nothing, `SAID_ABOUT_WITHHELD` where no reader was passed at all (which is
+// every load of the app page today — `video_claims` is closed to a tenant
+// session), and `SAID_ABOUT_NO_DENOMINATOR` where the claims are in hand and
+// the month has no row for them to be a share of. "We read them and heard
+// nothing" and "we did not look" are two answers and a block that prints
+// neither is making the reader guess which — which is what this block did
+// until the loader stopped defaulting its reader to an empty list.
 
 export const SAID_ABOUT_NONE =
   'No rival is tracked for this workspace yet, so there is nobody for the category to talk about. Name one in Settings and this starts reading.'
