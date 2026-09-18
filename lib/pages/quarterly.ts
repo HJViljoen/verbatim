@@ -48,6 +48,7 @@ import { fetchThemedRunId } from './themed-run'
 import { readSubjectWindow } from '../subjects/read'
 import { isMissingSubjects, type SubjectWindowReading } from '../subjects/types'
 import { CLIENT_AUDIENCE } from '../rivals'
+import type { PlanCheckCard } from '../ask/plan-cards'
 import { loadCompetitiveSurface, type CompetitiveSurfaceData, type QuestionRow, type StandingsBlock } from './competitive-surface'
 import { loadMarketSurface, type AdviceRow, type ClaimRow, type MarketSurfaceData, type MoveRow } from './market-surface'
 
@@ -249,6 +250,17 @@ export interface MovesPage {
   claimsCaveat: string
   /** The rule the whole page is read under. */
   rule: string
+  /**
+   * `qr.p6.plan` — the newest re-checked plan, or null where the workspace has
+   * uploaded none (D4, added by D-ledger; this file's owner is D-brief).
+   *
+   * ONE, NOT ALL. Market lists every stored plan; a quarterly review page is a
+   * page, and the plan a reader is steering by is the most recent one. Its
+   * claims carry their own counts with the population named, and its `moved`
+   * rows carry the date a verdict last changed and how many readings have
+   * carried it — never "held N updates".
+   */
+  plan: PlanCheckCard | null
 }
 
 // WHAT THE METHOD PAGE PRINTS, AND NOTHING ELSE. `changePts`, `bandPts` and
@@ -1309,6 +1321,9 @@ function buildMoves(a: { overview: OverviewData; market: MarketSurfaceData | nul
     // the page's second sentence is build status about an unshipped feature and
     // this artefact goes to people outside the workspace.
     claimsCaveat: m ? QUARTERLY_CLAIMS_CAVEAT : '',
+    // The newest plan Market read, carried through unchanged — one reading of
+    // one plan, not two computations of it.
+    plan: m?.plans[0] ?? null,
     // THE RULE OF THIS PAGE, printed on it. It is the one page that puts a
     // move and a reading side by side, and a reader will draw the arrow if we
     // do not say we are not drawing it.
