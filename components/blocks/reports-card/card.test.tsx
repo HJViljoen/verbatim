@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { render, renderText } from '@/lib/test/render'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { MOVEMENT_WORDS } from '@/components/delta-badge'
-import { QuarterlyCardTile, monthSpan, readingWord } from './card'
+import { QuarterlyCardTile, monthSpan, pillWord, readingWord } from './card'
 import { formingCardFixture, quarterlyCardFixture, unreadCardFixture } from './fixture'
 
 // The render tier for the quarterly card (Block D wave 2, package E-reports).
@@ -58,6 +58,39 @@ describe('the quarterly card', () => {
       .toContain('Quarter against quarter needs six months — you have 3.')
   })
 
+  // ONE NUMBER, THREE PLACES, AND THEY AGREE. The pill was the gate CONSTANT
+  // hand-typed ("Six readings stand behind it") on a card whose meta said "9
+  // monthly readings" and whose footer said "you have 9" — the one numeric
+  // claim on the card with no test, and wrong for every count except six.
+  it('counts the readings that actually stand behind the quarter', () => {
+    const text = renderText(<QuarterlyCardTile card={quarterlyCardFixture()} />)
+    expect(text).toContain('9 monthly readings stand behind it')
+    expect(text).not.toContain('Six readings stand behind it')
+    // and the count it states is the count its own meta states
+    expect(text.match(/9 monthly readings/g)?.length).toBeGreaterThanOrEqual(2)
+  })
+
+  // A card that has cleared the gate does not footer with the gate: "needs six
+  // months — you have 9" under nine readings is a refusal printed on a card
+  // that is not refusing.
+  it('drops the gate sentence once the gate is open', () => {
+    expect(renderText(<QuarterlyCardTile card={quarterlyCardFixture()} />))
+      .not.toContain('Quarter against quarter needs six months')
+  })
+
+  // THE REFUSED STATE NAMES ITS OWN CAUSE. M3/M4 unapplied is not a shortage
+  // of months: the pill said "not enough months yet" and the footer added "you
+  // have 3" over a body correctly saying the reading is not recorded, so two
+  // of three statements sent a reader off to wait for months that will not, on
+  // their own, change anything.
+  it('does not blame the reading count for an absent reading', () => {
+    const text = renderText(<QuarterlyCardTile card={unreadCardFixture()} />)
+    expect(text).toContain('not recorded for this workspace yet')
+    expect(text).not.toContain(MOVEMENT_WORDS.baseline_forming)
+    expect(text).not.toContain('you have 3')
+    expect(text).toContain('nothing to compare yet')
+  })
+
   // M3/M4 unapplied is not an empty quarter. The card says the reading is not
   // recorded and draws no bar, rather than adding three month rows together.
   it('says the reading is not recorded rather than drawing a zero', () => {
@@ -95,5 +128,19 @@ describe('readingWord', () => {
   it('counts the readings the gate is about', () => {
     expect(readingWord(1)).toBe('1 monthly reading')
     expect(readingWord(3)).toBe('3 monthly readings')
+  })
+})
+
+describe('pillWord', () => {
+  it('states the count it has, never the count the gate asks for', () => {
+    expect(pillWord(9, true)).toBe('9 monthly readings stand behind it')
+    expect(pillWord(6, true)).toBe('6 monthly readings stand behind it')
+    expect(pillWord(12, true)).toBe('12 monthly readings stand behind it')
+  })
+
+  it('is the gate word below the gate, and the cause where nothing was drawn', () => {
+    expect(pillWord(3, true)).toBe(MOVEMENT_WORDS.baseline_forming)
+    expect(pillWord(3, false)).toBe('nothing to compare yet')
+    expect(pillWord(9, false)).toBe('nothing to compare yet')
   })
 })
