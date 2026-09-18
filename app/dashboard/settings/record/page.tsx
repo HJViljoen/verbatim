@@ -1,24 +1,39 @@
-import { SettingsCard, SettingsFrame, SettingsRow, SettingsTable } from '@/components/settings-frame'
+import { SettingsFrame } from '@/components/settings-frame'
+import { ChangeLogBlock } from '@/components/settings/record/change-log'
+import { CoverageBlock } from '@/components/settings/record/coverage'
+import { DeliveryBlock } from '@/components/settings/record/delivery'
+import { RecordFooter, RecordSection } from '@/components/settings/record/frame'
+import { RecordHeader, SaveStrip, ScopeStatement } from '@/components/settings/record/header'
+import { RejectLogBlock } from '@/components/settings/record/rejects'
 import { canManageTenant, getSessionContext } from '@/lib/auth'
 import { changeLogBoundary } from '@/lib/config-log'
-import { fullDate, monthName } from '@/lib/format'
-import { recordWindow } from '@/lib/pages/overview'
+import { fmtInt, fullDate, longMonth, monthName, shortDate } from '@/lib/format'
+import { readingsCounter, recordWindow } from '@/lib/pages/overview'
 import { readingHandle } from '@/lib/reading/read'
-import { recordLines } from '@/lib/reading/record'
-import { CHANGE_LOG_ROWS, readChangeLog, showingLine } from '@/lib/settings/change-log'
-import { deliveryRecord, updatesInMonth } from '@/lib/settings/delivery'
-import { loadRecordPage } from '@/lib/settings/record-load'
+import { howSoundLine, recordLines, recordRows } from '@/lib/reading/record'
+import { CHANGE_LOG_ROWS, changeLogMeta, changeNote, readChangeLog, showingLine } from '@/lib/settings/change-log'
+import { deliveryRecord, deliveryStats, gapFigure, updatesInMonth } from '@/lib/settings/delivery'
+import { loadReadings } from '@/lib/settings/readings'
+import { loadRailCounts, loadRecordPage } from '@/lib/settings/record-load'
 import { gateSummary, keptByPlatform, keptByTerm, sampleNote } from '@/lib/settings/reject-log'
+import { saveState } from '@/lib/settings/save-state'
 import { createAdminClient } from '@/lib/supabase-admin'
 import { AppealButton } from './appeal-button'
 
-// Settings › The record (Phase 1 WP16, design ST5 · ST7 · ST8 and ST6's
-// delivery half) — everything the product can say about how it read this
+// Settings › The record (Phase 1 WP16, ported to the SettingsRecord artboard in
+// block E wave 2) — everything the product can say about how it read this
 // workspace, in one place, so that no other page has to carry more than one
 // sentence of method.
 //
-// Five blocks, in the mock's order: Delivery · The change log · The reject log
-// · The scope statement · Coverage.
+// FIVE SECTIONS IN THE ARTBOARD'S ORDER, plus the scope statement and the
+// footer rule: Delivery (with the monthly-readings strip) · The change log ·
+// The reject log · Coverage · What this covers · the rule.
+//
+// THE ARTBOARD IS ONE DOCUMENT. The sections are hairline-divided on white with
+// an uppercase eyebrow and a mono meta on one baseline, not five filled cards
+// with explanatory micro-copy — see components/settings/record/frame.tsx for
+// why this sub-page has its own vocabulary and every other one keeps
+// SettingsCard.
 //
 // OPEN TO EVERY MEMBER, EXCEPT THE EXCERPT. The delivery record, the change log
 // and the coverage block are the tenant's own facts about their own workspace.
@@ -28,27 +43,31 @@ import { AppealButton } from './appeal-button'
 // client is passed to the loader only after canManageTenant, and a member sees
 // the rates without the text and is told that is what is happening.
 //
-// NOTHING DEGRADES INTO A ZERO. The change log's table and the gate's tenant
-// policy each arrive in their own migration window, and until they do the
-// blocks that read them say the record has not started rather than printing a
-// confident nothing.
+// NOTHING DEGRADES INTO A ZERO. The change log's table, the gate's tenant
+// policy and the month tables each arrive in their own migration window, and
+// until they do the blocks that read them say the record has not started rather
+// than printing a confident nothing. On both live tenants today three of the
+// five sections are in that state, so it is the common arm and not the edge.
 
 export default async function SettingsRecordPage() {
   const { supabase, clientId, role, userId } = await getSessionContext()
   const canSeeExcerpt = canManageTenant(role)
 
   const now = new Date()
-  const month = now.toISOString().slice(0, 7)
+  const nowIso = now.toISOString()
+  const month = nowIso.slice(0, 7)
   const { data: client } = await supabase.from('clients').select('company_name').eq('id', clientId).maybeSingle()
   const tenant = (client?.company_name as string | undefined) ?? 'Your workspace'
+  const window = recordWindow(`${month}-01`, nowIso)
+  const reading = readingHandle(clientId)
 
   const inputs = await loadRecordPage({
     client: supabase,
     admin: canSeeExcerpt ? createAdminClient() : null,
     clientId,
     tenant,
-    window: recordWindow(`${month}-01`, now.toISOString()),
-    now: now.toISOString(),
+    window,
+    now: nowIso,
     // THE SAME READ THE RECORD DRAWER MAKES, so this page and the drawer behind
     // "the record →" on the five reading surfaces cannot tell one workspace two
     // different things about its own discard. The reading handle is the
@@ -56,243 +75,132 @@ export default async function SettingsRecordPage() {
     // every reading surface already holds — so the gate regime is 'service'.
     // The discarded candidates with their caption excerpt are unaffected: they
     // are still read on `admin`, still only after canManageTenant.
-    reading: { client: readingHandle(clientId).client, gate: 'service' },
+    reading: { client: reading.client, gate: 'service' },
   })
 
   const delivery = deliveryRecord({ updates: inputs.updates, slotsRecorded: inputs.slotsRecorded })
+  // The denominator history and the rail's two counts. Both wait on the load
+  // above — the readings strip is handed the updates it already read, so
+  // `pipeline_runs` is not read twice — and neither is on anything's critical
+  // path, so they go out together.
+  const [readings, counts] = await Promise.all([
+    loadReadings(reading.client, clientId, { updates: inputs.updates, month: `${month}-01`, now: nowIso }),
+    loadRailCounts(supabase, clientId, delivery.total),
+  ])
+
+  const stats = deliveryStats(delivery, inputs.updates)
   const thisMonth = updatesInMonth(inputs.updates, month)
   const log = readChangeLog({ rows: inputs.changes.rows, viewerUserId: userId, emails: inputs.emails })
+  const save = saveState({
+    lastChange: inputs.changes.rows[0] ?? null,
+    affectsRecorded: inputs.changes.affectsRecorded,
+  })
   // The totals are exact (head counts); the rates are over the most recent
-  // sample of judgements, and the card says so when the two differ.
+  // sample of judgements, and the block says so when the two differ.
   const totals = inputs.gate.totals
-  const byTerm = keptByTerm(inputs.gate.verdicts).slice(0, 10)
-  const byPlatform = keptByPlatform(inputs.gate.verdicts)
-  const basis = sampleNote(inputs.gate.verdicts.length, totals.found)
   const lines = recordLines(inputs.coverage)
+  const floor = readings.belowFloor[0] ?? null
+  const rows = recordRows(inputs.coverage, {
+    trailingMedian: readings.trailingMedian,
+    changeNote: inputs.changes.available ? changeNote(log, { from: window.from, to: window.to }) : null,
+    belowFloor: floor
+      ? { label: floor.label, who: floor.who, videos: floor.videos, floor: readings.floor, more: readings.belowFloor.length - 1 }
+      : null,
+  })
+
+  const gap = gapFigure(delivery.longestGapDays)
+  const headerMeta = [
+    `${fmtInt(delivery.total)} update${delivery.total === 1 ? '' : 's'} delivered`,
+    gap ? `longest gap ${gap.figure} ${gap.unit}` : null,
+    delivery.lastOn ? `last on ${shortDate(delivery.lastOn)}` : null,
+  ].filter(Boolean).join(' · ')
 
   return (
     <SettingsFrame
       active="record"
       title="Settings"
-      context={tenant}
-      contentTitle="The record"
-      contentMeta={`${delivery.total} update${delivery.total === 1 ? '' : 's'}`}
+      // D14: the first half is EARLIEST EVIDENCE, not a start date — the same
+      // caveat Settings › Tracking already prints about its rival rows.
+      context={[
+        tenant,
+        delivery.since ? `first update ${shortDate(delivery.since)}` : null,
+        save.lastSavedAt ? `last saved ${shortDate(save.lastSavedAt)}` : null,
+      ].filter(Boolean).join(' · ')}
+      counts={counts}
+      railFooter={<SaveStrip state={save} note={inputs.changes.rows[0]?.note ?? null} />}
     >
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col">
+        <RecordHeader meta={headerMeta}>
+          What was delivered, what changed, what was thrown away, and how much was read. Written as the work
+          happens; it is added to, never edited.
+        </RecordHeader>
 
-        {/* ---- Delivery ---------------------------------------------------- */}
-        <SettingsCard
-          title="Delivery"
-          description="Every update this workspace has had, on the clock the updates themselves ran on — never a month key for anything else."
-        >
-          <p className="text-[12.5px]">{delivery.line}</p>
-          {delivery.total > 0 && (
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              {delivery.recentSettled} of the last {delivery.recent} finished.
-              {delivery.scheduledServed && ` ${delivery.scheduledServed.scheduled} served a scheduled slot, ${delivery.scheduledServed.byHand} were run by hand.`}
-            </p>
-          )}
-          <div className="mt-3">
-            <p className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
-              {monthName(month)}
-            </p>
-            {thisMonth.length === 0 ? (
-              <p className="text-[12px] text-muted-foreground">No update has run this month yet.</p>
-            ) : (
-              <ul className="flex flex-wrap gap-1.5">
-                {thisMonth.map((u) => (
-                  <li key={u.id} className="rounded-full bg-tile px-2 py-px font-mono text-[11px] text-secondary-foreground ring-1 ring-border">
-                    {u.startedAt.slice(0, 10)} · {u.status}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          {delivery.caveats.map((c) => (
-            <p key={c} className="mt-2 text-[11.5px] text-muted-foreground">{c}</p>
-          ))}
-        </SettingsCard>
+        <DeliveryBlock
+          record={delivery}
+          stats={stats}
+          updates={thisMonth}
+          month={monthName(`${month}-01`)}
+          readings={readings}
+        />
 
-        {/* ---- The change log ---------------------------------------------- */}
-        <SettingsCard
-          title="The change log"
-          description="Every change to what we track for you — yours and ours — with what each one broke."
-        >
-          {!inputs.changes.available ? (
-            <p className="text-[12px] text-muted-foreground">
-              Nothing in the product can record a configuration change yet. When that ships, every change from
-              that day on is written down here as it happens.
-            </p>
-          ) : (
-            <>
-              <SettingsTable
-                head={['Date', 'What changed', 'What it breaks', 'Made by']}
-                empty="No change has been recorded yet."
-              >
-                {log.recorded.slice(0, CHANGE_LOG_ROWS).map((c) => (
-                  <SettingsRow
-                    key={c.id}
-                    cells={[
-                      <span key="d" className="font-mono text-[11.5px] text-muted-foreground">{c.date}</span>,
-                      <span key="w" className="block text-left">
-                        <span className="font-medium">{c.what}</span>
-                        <span className="block text-[11.5px] text-muted-foreground">{c.said}</span>
-                        {(c.before || c.after) && (
-                          <span className="block font-mono text-[11px] text-muted-foreground">
-                            {c.before ?? 'nothing'} → {c.after ?? 'nothing'}
-                          </span>
-                        )}
-                      </span>,
-                      <span key="b" className="text-[11.5px] text-muted-foreground">{c.breaks}</span>,
-                      <span key="m" className="text-[11.5px]">{c.who}</span>,
-                    ]}
-                  />
-                ))}
-              </SettingsTable>
-              {showingLine(CHANGE_LOG_ROWS, log.recorded.length) && (
-                <p className="mt-2 text-[11.5px] text-muted-foreground">
-                  {showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
-                </p>
-              )}
-              <p className="mt-2 text-[11.5px] text-muted-foreground">{changeLogBoundary(log.firstLoggedAt)}</p>
-              {log.prehistory.length > 0 && (
-                <div className="mt-3">
-                  <p className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
-                    Before the record began
-                  </p>
-                  <p className="mb-2 text-[11.5px] text-muted-foreground">
-                    {log.prehistory.length} earlier entr{log.prehistory.length === 1 ? 'y was' : 'ies were'} worked
-                    out afterwards from what each update searched, the oldest dated{' '}
-                    {log.prehistory[log.prehistory.length - 1].date}. They are a label, not a record, and are not
-                    counted above.
-                  </p>
-                  <SettingsTable head={['Date', 'What changed', 'Worked out from']}>
-                    {log.prehistory.slice(0, CHANGE_LOG_ROWS).map((c) => (
-                      <SettingsRow
-                        key={c.id}
-                        cells={[
-                          <span key="d" className="font-mono text-[11.5px] text-muted-foreground">{c.date}</span>,
-                          <span key="w" className="block text-left">
-                            <span className="font-medium">{c.what}</span>
-                            <span className="block text-[11.5px] text-muted-foreground">{c.said}</span>
-                          </span>,
-                          <span key="s" className="text-[11.5px] text-muted-foreground">what an update searched</span>,
-                        ]}
-                      />
-                    ))}
-                  </SettingsTable>
-                  {showingLine(CHANGE_LOG_ROWS, log.prehistory.length) && (
-                    <p className="mt-2 text-[11.5px] text-muted-foreground">
-                      {showingLine(CHANGE_LOG_ROWS, log.prehistory.length)}
-                    </p>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </SettingsCard>
+        <ChangeLogBlock
+          log={log}
+          rows={CHANGE_LOG_ROWS}
+          meta={changeLogMeta(log, { since: delivery.since, now: nowIso })}
+          boundary={changeLogBoundary(log.firstLoggedAt)}
+          showing={showingLine(CHANGE_LOG_ROWS, log.recorded.length)}
+          now={nowIso}
+          unavailable={
+            inputs.changes.available
+              ? null
+              : 'Nothing in the product can record a configuration change yet. When that ships, every change from that day on is written down here as it happens.'
+          }
+        />
 
-        {/* ---- The reject log ---------------------------------------------- */}
-        <SettingsCard
-          title="The reject log"
-          description="What we looked at and set aside, on which term — the one part of our method you can check yourself."
-        >
-          {!inputs.gate.available ? (
-            <p className="text-[12px] text-muted-foreground">
-              We do not yet show you what was set aside. The record exists; opening it to you is a change we have
-              not shipped.
-            </p>
-          ) : (
-            <>
-              <p className="text-[12.5px]">{gateSummary(totals, delivery.since)}</p>
-              {totals.unjudged > 0 && (
-                <p className="mt-1 text-[11.5px] text-muted-foreground">
-                  {totals.unjudged.toLocaleString('en-GB')} of them were never actually judged — the quick check
-                  found no reason to drop them and nothing looked closer.
-                </p>
-              )}
+        <RejectLogBlock
+          rows={inputs.gate.rows}
+          summary={inputs.gate.available ? gateSummary(totals, delivery.since) : ''}
+          unavailable={
+            inputs.gate.available
+              ? null
+              : 'We do not yet show you what was set aside. The record exists; opening it to you is a change we have not shipped.'
+          }
+          unjudged={
+            totals.unjudged > 0
+              ? `${fmtInt(totals.unjudged)} of them were never actually judged — the quick check found no reason to drop them and nothing looked closer.`
+              : null
+          }
+          byTerm={keptByTerm(inputs.gate.verdicts).slice(0, 10)}
+          byPlatform={keptByPlatform(inputs.gate.verdicts)}
+          basis={sampleNote(inputs.gate.verdicts.length, totals.found)}
+          withheld={
+            canSeeExcerpt
+              ? null
+              : 'The posts themselves are shown to owners and admins only. They are other people’s public posts, and the fewer copies of them we hand around the better.'
+          }
+          control={(r) => <AppealButton runId={r.runId} platform={r.platform} videoId={r.videoId} filed={r.appealed} />}
+        />
 
-              {byTerm.length > 0 && (
-                <div className="mt-3">
-                  <SettingsTable head={['Term', 'Looked at', 'Kept', 'Kept rate']}>
-                    {byTerm.map((t) => (
-                      <SettingsRow
-                        key={t.key}
-                        cells={[t.label, t.found.toLocaleString('en-GB'), t.kept.toLocaleString('en-GB'), `${t.keptPct.toFixed(1)}%`]}
-                      />
-                    ))}
-                  </SettingsTable>
-                </div>
-              )}
+        <CoverageBlock
+          title={`Coverage · ${longMonth(`${month}-01`)}`}
+          meta={[
+            inputs.coverage.frozenAt ? `newest month frozen ${shortDate(inputs.coverage.frozenAt)}` : 'still filling',
+            `as at ${shortDate(inputs.coverage.readingAt)}`,
+          ].join(' · ')}
+          rows={rows}
+          // The line every reading surface prints in its page bar and this page
+          // — the page those surfaces link to — did not print at all.
+          oneLine={`${readingsCounter(readings.readings)} · ${howSoundLine(inputs.coverage)}`}
+        />
 
-              {byPlatform.length > 0 && (
-                <p className="mt-2 text-[11.5px] text-muted-foreground">
-                  By platform: {byPlatform.map((p) => `${p.label} ${p.keptPct.toFixed(1)}%`).join(' · ')}.
-                </p>
-              )}
+        <RecordSection title="What this covers, and what it does not" meta="select it and paste">
+          <ScopeStatement
+            text={scopeStatement(tenant, lines, nowIso)}
+            why="Export renders a registered page, and Settings has no page module — so the record is exported as text you can select and paste rather than as a file a button would fail to produce."
+          />
+        </RecordSection>
 
-              {basis && <p className="mt-1 text-[11.5px] text-muted-foreground">{basis}</p>}
-
-              {canSeeExcerpt ? (
-                <div className="mt-4">
-                  <p className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
-                    The last {inputs.gate.rows.length} we set aside
-                  </p>
-                  {inputs.gate.rows.length === 0 ? (
-                    <p className="text-[12px] text-muted-foreground">Nothing has been set aside yet.</p>
-                  ) : (
-                    <ul className="flex flex-col gap-2">
-                      {inputs.gate.rows.map((r) => (
-                        <li key={`${r.runId}-${r.platform}-${r.videoId}`} className="border-t border-border/70 pt-2 first:border-t-0 first:pt-0">
-                          <p className="font-mono text-[11px] text-muted-foreground">
-                            {r.createdAt.slice(0, 10)} · {r.platform}
-                            {r.accountName ? ` · ${r.accountName}` : ''}
-                            {r.keyword ? ` · found on “${r.keyword}”` : ''}
-                          </p>
-                          <p className="mt-0.5 text-[12.5px]">{r.captionExcerpt ?? 'No caption was stored for this one.'}</p>
-                          <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-2">
-                            <p className="text-[11.5px] text-muted-foreground">
-                              {r.reason ?? (r.source === 'default' ? 'Nobody judged this one.' : 'No reason was recorded.')}
-                            </p>
-                            <AppealButton runId={r.runId} platform={r.platform} videoId={r.videoId} filed={r.appealed} />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ) : (
-                <p className="mt-3 text-[11.5px] text-muted-foreground">
-                  The posts themselves are shown to owners and admins only. They are other people’s public posts,
-                  and the fewer copies of them we hand around the better.
-                </p>
-              )}
-            </>
-          )}
-        </SettingsCard>
-
-        {/* ---- The scope statement ------------------------------------------ */}
-        <SettingsCard
-          title="What this covers, and what it does not"
-          description="The scope statement. Written to be copied into a document that needs it — select it and paste."
-        >
-          <div className="whitespace-pre-wrap rounded-[4px] bg-tile px-3 py-2.5 font-mono text-[11.5px] leading-[1.6] text-secondary-foreground ring-1 ring-border">
-            {scopeStatement(tenant, lines, now.toISOString())}
-          </div>
-        </SettingsCard>
-
-        {/* ---- Coverage ------------------------------------------------------ */}
-        <SettingsCard
-          title={`Coverage · ${monthName(month)}`}
-          description="What the reading of this month rests on. Each line is one fact with its basis; a fact nothing has recorded says so."
-        >
-          <ul className="flex flex-col gap-1.5">
-            {lines.map((l) => (
-              <li key={l} className="text-[12.5px] leading-[1.5] text-secondary-foreground">{l}</li>
-            ))}
-          </ul>
-        </SettingsCard>
-
+        <RecordFooter rule="The record is written as the work happens. It is added to, never edited — a correction here is a new line, dated." />
       </div>
     </SettingsFrame>
   )
@@ -301,10 +209,18 @@ export default async function SettingsRecordPage() {
 /**
  * The scope statement, as text.
  *
- * "Exportable" here means a block a reader can select and paste, not a PDF:
- * the export route renders a REGISTERED PAGE KEY through headless Chrome, and
- * Settings has no page key and never will (`lib/nav.ts`). A button that
- * produced nothing would be worse than a block that can be copied.
+ * "Exportable" here means a block a reader can select and paste, not a PDF: the
+ * export route renders a REGISTERED PAGE KEY through headless Chrome, and
+ * `components/pages/registry.ts` has no `settings` module — `pageModule
+ * ('settings')` is null although `lib/nav.ts` names the key. Registering one
+ * would mean building a renderable module whose tiles are a settings FORM,
+ * where the export pipeline's tiles are readings; a button that produced
+ * nothing would be worse than a block that can be copied. The decision is
+ * stated on the page, in one sentence, rather than left as a silence.
+ *
+ * It is `recordLines` and not `recordRows`: pasted into a document, a record
+ * wants sentences with their bases inside them, and the grid's labels are
+ * furniture that does not survive a paste.
  */
 function scopeStatement(tenant: string, lines: readonly string[], readingAt: string): string {
   return [

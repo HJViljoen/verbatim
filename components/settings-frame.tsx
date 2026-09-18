@@ -22,7 +22,7 @@ import { SETTINGS_SUBPAGES, type RailCounts, type SettingsSection } from '@/lib/
 export type { SettingsSection }
 
 export function SettingsFrame({
-  active, title, context, contentTitle, contentMeta, children, controls, counts,
+  active, title, context, contentTitle, contentMeta, children, controls, counts, railFooter,
 }: {
   /** Which rail entry is lit. `null` lights none — the parked Initiatives
    *  page is inside this frame and is not one of the seven, and lighting
@@ -36,6 +36,14 @@ export function SettingsFrame({
   /** Rail counts, where the page that drew the rail happens to know them. A
    *  key that is absent prints nothing rather than a zero. */
   counts?: RailCounts
+  /** Under the rail, below the seven links: the mock's save-state strip
+   *  (`SettingsRecord.dc.html`, and the same block on the Tracking artboard).
+   *  It belongs to the AREA rather than to a sub-page — the thing it says is
+   *  "you have unsaved edits somewhere in Settings, and the last save broke
+   *  this" — and a sub-page that drew it inside its own pane would be saying it
+   *  about itself. Optional, so a page that has not composed one draws no
+   *  empty box. */
+  railFooter?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -52,6 +60,7 @@ export function SettingsFrame({
                 </RailLink>
               ))}
             </RailGroup>
+            {railFooter ? <div className="px-2 pb-3">{railFooter}</div> : null}
           </PaneBody>
         </section>
         <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-tile shadow-tile">
