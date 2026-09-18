@@ -79,13 +79,14 @@ export function parseSubreddits(raw: unknown): SubredditEntry[] {
     const r = item as Record<string, unknown>
     const name = subredditKey(String(r.name ?? ''))
     if (!name || seen.has(name)) continue
-    const status = r.status === 'active' || r.status === 'rejected' ? r.status : 'candidate'
+    const status = r.status === 'active' || r.status === 'rejected' || r.status === 'stopped' ? r.status : 'candidate'
     seen.add(name)
     out.push({
       name,
       status,
       discovered_at: typeof r.discovered_at === 'string' ? r.discovered_at : '',
       ...(r.probe && typeof r.probe === 'object' ? { probe: r.probe as SubredditEntry['probe'] } : {}),
+      ...(status === 'stopped' && typeof r.stopped_at === 'string' ? { stopped_at: r.stopped_at } : {}),
       ...(typeof r.strikes === 'number' && r.strikes > 0 ? { strikes: r.strikes } : {}),
     })
   }

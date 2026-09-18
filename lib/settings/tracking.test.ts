@@ -50,6 +50,7 @@ describe('communityRows', () => {
       entry({ name: 'bionics', status: 'candidate' }),
       entry({ name: 'onebag' }),
       entry({ name: 'sekiro', status: 'rejected' }),
+      entry({ name: 'buyitforlife', status: 'stopped', stopped_at: '2026-09-18', probe: { sampled: 40, kept: 31, at: '2026-05-02' } }),
     ],
     roi: [
       { subreddit: 'prosthetics', posts: 26, eligible: 20, comments: 300, insights: 40, yield: 1.5 },
@@ -78,6 +79,10 @@ describe('communityRows', () => {
     expect(communityWords(rows.find((r) => r.key === 'prosthetics')!)).toBe('watched')
     expect(communityWords(rows.find((r) => r.key === 'bionics')!)).toBe('proposed, not yet sampled')
     expect(communityWords(rows.find((r) => r.key === 'sekiro')!)).toBe('ruled out')
+    // AND THE ONE THE CLIENT STOPPED IS NOT "RULED OUT". Its own probe line on
+    // the same row reads 31 of 40 on topic; the probe kept it, the client did
+    // not want it, and only one of those is a judgment we made.
+    expect(communityWords(rows.find((r) => r.key === 'buyitforlife')!)).toBe('you stopped watching it')
   })
 
   it('leaves the kept-rate null rather than zero when the record is closed', () => {
@@ -86,8 +91,8 @@ describe('communityRows', () => {
     expect(closed[0].found).toBeNull()
   })
 
-  it('orders watched, then proposed, then ruled out, then the uninvited', () => {
-    expect(rows.map((r) => r.key)).toEqual(['prosthetics', 'onebag', 'bionics', 'sekiro', 'amputee'])
+  it('orders watched, then proposed, then stopped, then ruled out, then the uninvited', () => {
+    expect(rows.map((r) => r.key)).toEqual(['prosthetics', 'onebag', 'bionics', 'buyitforlife', 'sekiro', 'amputee'])
   })
 
   it('draws every configured community and only the biggest of the uninvited', () => {

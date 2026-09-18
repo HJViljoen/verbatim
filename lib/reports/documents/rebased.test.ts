@@ -5,6 +5,7 @@ import { briefPeriod } from './steps'
 import type { BriefReading } from './reading'
 import type { Signals } from './signals'
 import type { ResearchAnswer } from './research'
+import { methodFixture } from '../../test/method-fixture'
 
 // Item 43 on one fixture: the same signals with and without a monthly reading,
 // so what actually changed is visible rather than asserted.
@@ -29,6 +30,10 @@ const reading = (over: Partial<BriefReading> = {}): BriefReading => ({
   platformMix: { tiktok: 161, youtube: 135 },
   notes: [],
   crossesClustering: false,
+  method: methodFixture('Ossur'),
+  delivery: '23 updates since 6 April 2026 · longest gap 35 days · last on 27 September 2026',
+  counter: 'your 3rd monthly reading · the quarter view needs 6',
+  hollow: 'Your side reads "too few to compare" on 84 videos — the category column carries the month.',
   ...over,
 })
 
@@ -130,6 +135,37 @@ describe('the method page', () => {
     const items = methodItems(signals(), 'Update of 30 Aug 2026', false, 5, kinds)
     expect(items.join(' ')).toContain('The month-by-month reading is not recorded for this workspace yet')
     expect(items.join(' ')).not.toContain('reading as at')
+  })
+
+  it('carries the method footnote, each half with its own basis', () => {
+    const items = methodItems(signals({ reading: reading() }), 'x', false, 5, kinds)
+    const joined = items.join('\n')
+    // sales.p7.footnote — the read-depth and language shares, which reach a
+    // client on the app surfaces and have never reached a document.
+    expect(joined).toContain('Of everything we have ever read for you, not just this window, speech was read on')
+    expect(joined).toContain('of what was said on camera was not in English')
+    expect(joined).toContain('Reddit comments are capped at 40 per thread')
+    expect(joined).toContain('Commenters are never identified; quotes carry platform and date only.')
+    // content.p5.delivery — run-dated, and it names the updates.
+    expect(joined).toContain('23 updates since 6 April 2026 · longest gap 35 days')
+    expect(joined).toContain('your 3rd monthly reading · the quarter view needs 6')
+    // content.p5.caveat — this month's, about the client's own side.
+    expect(joined).toContain('the category column carries the month')
+  })
+
+  it('prints no footnote at all where there is no reading behind it', () => {
+    const items = methodItems(signals(), 'Update of 30 Aug 2026', false, 5, kinds)
+    const joined = items.join('\n')
+    expect(joined).not.toContain('Commenters are never identified')
+    expect(joined).not.toContain('updates since')
+  })
+
+  it('keeps the all-time basis out of the month paragraph', () => {
+    const items = methodItems(signals({ reading: reading() }), 'x', false, 5, kinds)
+    const monthPara = items.find((i) => i.includes('reading of September 2026')) as string
+    // The read-depth share is a corpus fact, not September's; printing it in
+    // the sentence that names the month is the D15 defect.
+    expect(monthPara).not.toContain('speech was read on')
   })
 
   it('carries decision L\'s label where the window crosses a boundary', () => {

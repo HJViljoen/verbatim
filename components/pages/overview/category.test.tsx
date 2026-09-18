@@ -4,7 +4,7 @@ import { blockAnswers, blockContext, type RenderMode } from '@/lib/blocks/types'
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract, copyViolations } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { overviewCategory } from './category'
+import { overviewCategory, panelRule } from './category'
 import { overviewFixture, refusedFixture } from './fixture'
 
 const MODES: RenderMode[] = ['app', 'print', 'email']
@@ -85,8 +85,77 @@ describe('OV3 · what the category is saying', () => {
   it('declares the block’s own figures and hands back every verdict behind them', () => {
     const { figures, verdicts } = blockAnswers(overviewCategory, overviewFixture())
     expect(Object.keys(figures).sort()).toEqual([
-      'attention_comments', 'category_videos', 'kind_pain_point_share', 'kind_praise_share', 'kind_question_share', 'mood_negative_share',
+      'attention_comments', 'attention_videos', 'category_videos',
+      'kind_pain_point_share', 'kind_praise_share', 'kind_question_share', 'mood_negative_share',
     ])
     expect(verdicts.length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('does not publish the panel’s size as a figure — there is no unit for a count of accounts', () => {
+    const { figures } = blockAnswers(overviewCategory, overviewFixture())
+    // `sent-figures.ts` files anything that is not 'comments' as 'videos', and
+    // `sent_figures` has no UPDATE grant, so a count of accounts published here
+    // would be written down as a count of videos permanently. It is rendered
+    // beside the line instead, where the reader can see what it counts.
+    expect(figures.attention_panel_accounts).toBeUndefined()
+    for (const f of Object.values(figures)) {
+      expect(['videos', 'comments', 'pts', 'pct']).toContain(f.unit)
+    }
+    expect(renderText(overviewCategory.render(overviewFixture(), 'app', ctx))).toContain('214 accounts in the panel')
+  })
+
+  it('carries the attention verdict — declared since WP11, and null in the loader until now', () => {
+    const { verdicts } = blockAnswers(overviewCategory, overviewFixture())
+    const attention = verdicts.find((v) => v.objectKind === 'audience' && v.countedOver?.measure === 'comments')
+    expect(attention).toBeDefined()
+    // The panel re-froze inside the window, so the two sides were read over two
+    // different sets of accounts. That is the honest answer in place of the
+    // mock's "−18% since June", and it is a refusal with a reason, not a silence.
+    expect(attention?.state).toBe('refused')
+    expect(attention?.refusedReason).toBe('tracking_change')
+  })
+
+  it('publishes no change figure for a comparison that refused', () => {
+    const { figures } = blockAnswers(overviewCategory, overviewFixture())
+    expect(figures.attention_change).toBeUndefined()
+    expect(figures.attention_band).toBeUndefined()
+  })
+
+  it('names the panel’s size, which is the only denominator a comment count has', () => {
+    const text = renderText(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(text).toContain('214 accounts in the panel')
+  })
+
+  it('draws the axis rule where the panel re-froze, and nowhere else', () => {
+    const data = overviewFixture()
+    // ONE WORD FOR ONE EVENT: the rule's kind is the refusal reason the verdict
+    // on the same card carries, not a second vocabulary for the same re-freeze.
+    expect(panelRule(data.category)).toEqual([
+      { month: '2026-09-01', kind: 'tracking_change', label: 'panel re-frozen', at: '2026-09-03' },
+    ])
+    expect(panelRule(data.category)[0].kind).toBe(data.category.attention?.verdict?.refusedReason)
+    // A rule on the first month of the axis marks a break with nothing on the
+    // other side of it, so it is not drawn.
+    const first = overviewFixture({
+      category: {
+        ...data.category,
+        attention: { ...data.category.attention!, axis: ['2026-09-01'], months: data.category.attention!.months.slice(-1) },
+      },
+    })
+    expect(panelRule(first.category)).toEqual([])
+  })
+
+  it('prints the gone-quiet flag as a flag, with no direction word outside it', () => {
+    const markup = render(overviewCategory.render(overviewFixture(), 'app', ctx))
+    expect(markup).toContain('No longer being said')
+    // The heading carries no direction word; the flag lives inside a verdict
+    // node, which is what makes it sayable at all (copy contract rule (c)).
+    expect(markup).toMatch(/data-copy="verdict"[^>]*>gone quiet · last heard Jun 2026/)
+    assertCopyContract(markup)
+  })
+
+  it('tells "we do not record dormancy" from "nothing has stopped"', () => {
+    const text = renderText(overviewCategory.render(refusedFixture(), 'app', ctx))
+    expect(text).toContain('Which themes have stopped being said is not recorded for this workspace yet.')
   })
 })

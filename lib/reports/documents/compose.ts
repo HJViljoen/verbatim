@@ -600,6 +600,22 @@ export function methodItems(s: Signals, period: string, thin: boolean, updatesCo
     updatesCount > 1
       ? `This is update ${updatesCount} for ${s.company}. Where a finding carries from the previous brief it says so; "new this update" means the theme was first seen now. Movement is called only after three updates.`
       : `This is the first update for ${s.company}; there is nothing yet to compare with.`,
+    // ── the method footnote, at last on a document (block D, D9) ──────────
+    //
+    // `sales.p7.footnote`, `content.p5.delivery` and `content.p5.caveat`, all
+    // three of them sentences the product already composes and no brief has
+    // ever printed. They go LAST, after the basis and the ordering rules,
+    // because they are the fine print rather than the argument — and each one
+    // carries its own basis, which is the whole reason they are separate
+    // sentences rather than one paragraph:
+    //
+    //   · the delivery line is RUN-dated, and names the updates;
+    //   · the read-depth and language shares are ALL-TIME, and say so;
+    //   · the caveat is this month's, about the client's own side.
+    r?.delivery ? `${r.delivery}${r.counter ? ` — ${r.counter}.` : '.'}` : '',
+    r?.method ? `${r.method.basis} ${r.method.language ?? ''}`.trim() : '',
+    r?.method ? `${r.method.redditCap} ${r.method.privacy}` : '',
+    r?.hollow ?? '',
   ].filter(Boolean)
 }
 

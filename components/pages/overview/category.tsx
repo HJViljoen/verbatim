@@ -5,7 +5,7 @@ import { openLink } from '@/components/blocks/open-link'
 import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockMovement } from '@/components/blocks/movement'
 import { BlockProportion } from '@/components/blocks/bars'
-import type { CalendarSeries } from '@/lib/charts/calendar'
+import type { CalendarRule, CalendarSeries } from '@/lib/charts/calendar'
 import { fmtInt, fmtPct, monthName } from '@/lib/format'
 import { EMAIL, FONT } from '@/lib/email/theme'
 import { PANEL_EXCLUDES_NOTE } from '@/lib/reading/attention'
@@ -106,6 +106,34 @@ function attentionSeries(c: CategoryBlock, month: string): CalendarSeries | null
   }
 }
 
+/**
+ * The axis rule at the panel's re-freeze.
+ *
+ * THE MOCK'S "−18% since June" IS THE CLAIM THIS REPLACES. June and September
+ * were read over two different sets of accounts — the panel re-froze on
+ * 3 September — so a percentage across that line compares two populations and
+ * calls it a change in attention. The rule DRAWS the break instead: the reader
+ * sees where the basis moved and can weigh the two stretches themselves, which
+ * is the same answer decision U gives for a tracking change.
+ *
+ * Drawn only where the freeze falls inside the drawn axis and something is
+ * drawn before it. A rule on the first month of the axis marks a break with
+ * nothing on the other side of it.
+ */
+export function panelRule(c: CategoryBlock): CalendarRule[] {
+  const at = c.attention?.panel?.frozen_at
+  if (!at || !c.attention) return []
+  const month = `${at.slice(0, 7)}-01`
+  const i = c.attention.axis.indexOf(month)
+  if (i <= 0) return []
+  // `tracking_change`, WHICH IS THE WORD THE VERDICT BESIDE IT CARRIES. A panel
+  // re-freeze is what `buildStandings` calls a tracking change, and the refusal
+  // printed on the same card says `tracking_change` — so the rule drawing the
+  // same event must not call it something else. `RULE_STROKE` draws the two
+  // identically today, which is exactly why the drift would have gone unseen.
+  return [{ month, kind: 'tracking_change', label: 'panel re-frozen', at: at.slice(0, 10) }]
+}
+
 export const overviewCategory: Block<OverviewData> = {
   key: 'overview.category',
   title: 'What the category is saying',
@@ -173,9 +201,29 @@ export const overviewCategory: Block<OverviewData> = {
       <BlockEmpty mode={mode}>{c.moodNote ?? 'Nothing in this month has been judged yet.'}</BlockEmpty>
     )
 
+    // GONE QUIET IS A FLAG, NOT A DIRECTION. One of the two READER_FLAGS
+    // (lib/calibration.ts), off the register's own dormancy rule — so it
+    // carries no verdict, no change and no word for which way anything went.
+    // "Last heard" is a month, which is a fact about the record.
+    const quiet = c.quiet.length > 0 ? (
+      <div className={email ? undefined : 'flex flex-col gap-1'}>
+        {c.quiet.map((q) => (
+          <div key={q.id} className={email ? undefined : 'flex items-center gap-2 text-[12.5px]'} style={email ? { fontFamily: FONT.sans, fontSize: 12.5, color: EMAIL.ink, padding: '2px 0' } : undefined}>
+            <span data-copy="subject" data-slot="pass_b_theme" className={email ? undefined : 'min-w-0 flex-1 truncate'}>{q.label}</span>
+            <span data-copy="verdict" className={email ? undefined : 'text-[11px] text-muted-foreground'}>
+              gone quiet{q.lastHeard ? ` · last heard ${monthName(q.lastHeard)}` : ''}
+            </span>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <BlockEmpty mode={mode}>{c.quietNote ?? 'Nothing this page has drawn has stopped being said.'}</BlockEmpty>
+    )
+
     const attention = series ? (
       <>
         <BlockCalendar
+          rules={panelRule(c)}
           blockKey={overviewCategory.key}
           // THE ATTENTION LINE KEEPS ITS OWN AXIS, generated as a calendar
           // (lib/pages/overview.ts): the panel is read month by month whatever
@@ -193,6 +241,20 @@ export const overviewCategory: Block<OverviewData> = {
           label={`${c.label}, comments under a fixed panel’s videos, by month`}
           caption={c.attention?.panel ? `a fixed panel, frozen ${c.attention.panel.frozen_at.slice(0, 10)}` : undefined}
         />
+        {/* THE PANEL'S SIZE AND THE BANDED STEP, which are the two things the
+            line has never said. A comment count is a number about a SET, and a
+            set with no size is not a measurement — `AttentionPanel
+            .account_count` has been built since the panel shipped and drawn
+            nowhere. The step beside it is the verdict `verdicts()` has
+            declared since WP11 and the loader hard-coded null; where the two
+            months sit either side of the re-freeze it prints the refusal, which
+            is the honest form of the mock's "−18% since June". */}
+        <p className={email ? undefined : 'm-0 flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground'} style={email ? { fontFamily: FONT.sans, fontSize: 11.5, color: EMAIL.muted, marginTop: 4 } : undefined}>
+          {c.attention?.accountCount != null ? (
+            <span><span data-copy="figure">{fmtInt(c.attention.accountCount)}</span> accounts in the panel</span>
+          ) : null}
+          <BlockMovement verdict={c.attention?.verdict ?? null} unit="pts" mode={mode} />
+        </p>
       </>
     ) : (
       <BlockEmpty mode={mode}>{c.attentionNote ?? 'Attention is not read for this workspace yet.'}</BlockEmpty>
@@ -225,6 +287,13 @@ export const overviewCategory: Block<OverviewData> = {
           <Line label={`What moved most${moversBasis(c) ? ` · ${moversBasis(c)}` : ''}`} mode={mode}>{movers}</Line>
           <Line label="Mood" mode={mode}>{mood}</Line>
           <Line label="Attention" mode={mode}>{attention}</Line>
+          {/* "No longer being said", not "Gone quiet" — VO2's and the
+              monthly movers' own heading, for the reason they both give: the
+              FLAG is a direction word and rule (c) lets it appear only inside
+              a verdict node, which is right, because it is earned by the
+              register's own dormancy rule. A heading has no reading behind
+              it, so it carries no direction word at all. */}
+          <Line label="No longer being said" mode={mode}>{quiet}</Line>
         </div>
       </BlockFrame>
     )
@@ -247,6 +316,31 @@ export const overviewCategory: Block<OverviewData> = {
     if (c.attention && c.attention.months.length > 0) {
       const last = c.attention.months[c.attention.months.length - 1]
       out.attention_comments = { value: last.comments, unit: 'comments', label: 'comments under the panel’s videos this month' }
+      out.attention_videos = { value: last.videos, unit: 'videos', label: 'videos the panel posted this month' }
+    }
+    // THE PANEL'S SIZE IS NOT PUBLISHED AS A FIGURE, and that is deliberate.
+    // It is a count of ACCOUNTS, and `FigureTable.unit` has four values, none
+    // of which is that (lib/reading/verdicts.ts). `sent-figures.ts` derives the
+    // permanent record's `measure` straight off the unit — anything that is not
+    // 'comments' is filed as 'videos' — and `sent_figures` has no UPDATE grant,
+    // so the moment this block joins an artefact's set, "214 videos" would be
+    // written down forever. The unit cannot simply be widened either: the
+    // column carries `check (measure in ('videos','comments'))`
+    // (20260918098000_sent_figures.sql), so a fifth unit is a migration, not an
+    // edit. The panel's size is RENDERED — it is the denominator the comment
+    // count needs and the reader sees it beside the line — and prose that wants
+    // to name it can take it from the verdict's own `n`, which carries its
+    // population in words.
+    //
+    // The banded step, where one was drawn. `verdicts()` already declares the
+    // verdict itself; this is the magnitude a sentence may substitute, and it
+    // exists only where the comparison MOVED — `no_clear_change` answers too,
+    // and it answers with no magnitude to publish.
+    if (c.attention?.verdict?.state === 'moved' && c.attention.verdict.changePts != null) {
+      out.attention_change = { value: c.attention.verdict.changePts, unit: 'pts', label: 'the panel’s share of attention, against the month before' }
+      if (c.attention.verdict.bandPts != null) {
+        out.attention_band = { value: c.attention.verdict.bandPts, unit: 'pts', label: 'the band that step cleared' }
+      }
     }
     return out
   },

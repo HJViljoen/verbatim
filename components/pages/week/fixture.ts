@@ -236,6 +236,9 @@ export function weekFixture(): WeekData {
     // layer has no caveat to make about them.
     notes: [],
     laterLine: LATER_LINE,
+    // NULL, and always null on this page: This week is dated by the delivery
+    // and its `coverage` block is its own footnote (lib/pages/week.ts).
+    method: null,
   }
 }
 
@@ -355,5 +358,8 @@ export function thinFixture(): WeekData {
       months: ['2026-06-01', '2026-07-01', '2026-08-01'],
     }],
     laterLine: LATER_LINE,
+    // NULL, and always null on this page: This week is dated by the delivery
+    // and its `coverage` block is its own footnote (lib/pages/week.ts).
+    method: null,
   }
 }

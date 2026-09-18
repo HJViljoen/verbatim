@@ -67,7 +67,7 @@ export const SURFACES: readonly Surface[] = [
   { key: 'week', href: '/dashboard/week', label: 'This week', question: 'What needs attention this week?', group: 'Intelligence', bar: 'week', page: 'week' },
   { key: 'ask', href: '/dashboard/agent', label: 'Ask', question: 'What does the conversation say about this?', group: 'Intelligence', bar: 'title', page: 'agent' },
   { key: 'reports', href: '/dashboard/reports', label: 'Reports', question: 'Which document do I need?', group: 'Intelligence', bar: 'title' },
-  { key: 'settings', href: '/dashboard/settings', label: 'Settings', question: null, group: 'Account', bar: 'title' },
+  { key: 'settings', href: '/dashboard/settings', label: 'Settings', question: null, group: 'Account', bar: 'title', page: 'settings' },
 ]
 
 /**
@@ -87,11 +87,27 @@ export const SURFACES: readonly Surface[] = [
  */
 export const hasHorizon = (s: Surface): boolean => s.bar === 'reading' && s.horizon !== false
 
-/** The "how sound is this" band appears wherever the page IS a reading — the
- *  five month surfaces and This week, which reads an update. Ask, Reports and
- *  Settings state no basis because they make no reading; a band on Settings
- *  counting updates is furniture, and furniture that looks like a fact. */
-export const hasRecord = (s: Surface): boolean => s.bar !== 'title'
+/**
+ * The "how sound is this" band appears wherever the page IS a reading — the
+ * five month surfaces, This week (which reads an update), and Ask.
+ *
+ * ASK JOINED, AND IT JOINED BECAUSE IT BECAME A READING. Its bar is still
+ * `title` — it has no month context line and no horizon — but it is no longer
+ * true that it makes no reading: `agent.movement` is the ONE reader whose
+ * direction-word flag is true today (`lib/config.ts`), flipped when Ask's
+ * movement block stopped reading `theme_observations` and started reading the
+ * comment-dated months through `lib/agent/movement.ts`. A surface that may
+ * print a direction word and states no basis for it is the worst of both.
+ *
+ * Reports and Settings still state no basis, for the original reason: they make
+ * no reading, and a band on Settings counting updates is furniture, and
+ * furniture that looks like a fact.
+ *
+ * The band still draws only where a caller HANDS the bar a record
+ * (components/shell/page-bar.tsx), so this opens a door rather than printing
+ * anything.
+ */
+export const hasRecord = (s: Surface): boolean => s.bar !== 'title' || s.key === 'ask'
 
 export function surface(key: NavKey): Surface {
   const s = SURFACES.find((x) => x.key === key)

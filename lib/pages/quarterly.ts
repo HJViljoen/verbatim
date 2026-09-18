@@ -15,6 +15,8 @@ import {
   type RecordWindow,
   type Refusal,
 } from '../reading/record'
+import { methodLines, type MethodLines } from '../reading/method'
+import { loadDeckChangeLog, loadSearchPlan, type DeckChangeLog, type SearchPlan } from '../settings/deck-record'
 import { loadWindowReading, readingClient, type WindowReading } from '../reading/read'
 import { isAnswer, type FigureTable as ReadingFigures, type Verdict } from '../reading/verdicts'
 import { gapBetween, inheritRefusal, type Gap, type GapSide } from '../reading/gap'
@@ -311,6 +313,20 @@ export interface MethodPage {
   /** The comparisons this artefact asked for and did not draw, and why —
    *  printed, not promised (lib/reading/record.ts `refusedSentence`). */
   refusedLine: string | null
+  /** The method footnote, composed once for every surface and every artefact
+   *  (block D, D9 — lib/reading/method.ts). Null where the quarter's record
+   *  could not be read. */
+  method: MethodLines | null
+  /** What each search term brought back inside this quarter, and the sentence
+   *  that has to travel with it — the table is dated by the GATHER, which is
+   *  the one figure in the product honestly on that clock. Null where nothing
+   *  was recorded (`qr.p8.searchplan`). */
+  searchPlan: SearchPlan | null
+  /** Every change to what we track that was logged inside this quarter, dated
+   *  and with what it broke. Page 7 prints the COUNT; this is the log behind
+   *  it. Null where the log is not applied here, which is not the same
+   *  sentence as "nothing changed" (`qr.p8.changelog`). */
+  changeLog: DeckChangeLog | null
 }
 
 export interface UnsettledItem {
@@ -643,12 +659,18 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
   const themeOptions = themeIds.length
     ? { runId: themedRunId, objectIds: themeIds }
     : { runId: null }
-  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, record] = await Promise.all([
+  const [thisQuarter, lastQuarter, subjectsNow, subjectsBefore, checks, searchPlan, changeLog, record] = await Promise.all([
     quarterWindowFor(reading, clientId, quarter, themeOptions),
     quarterWindowFor(reading, clientId, prior, themeOptions),
     subjectWindowFor(reading, clientId, quarter),
     subjectWindowFor(reading, clientId, prior),
     loadQuarterChecks(supabase, clientId, quarter),
+    // The search plan and the change log for THIS QUARTER, both bounded by it
+    // and both null rather than empty where the table cannot be read — the
+    // deck's page 7 has only ever printed a count of the second, and page 8
+    // has never had the first at all (block D, D9).
+    loadSearchPlan(supabase, clientId, quarter),
+    loadDeckChangeLog(supabase, clientId, quarter),
     // NAMED, NOT SWALLOWED. A record that cannot be read is printed as "could
     // not be recovered" on the method page; an operator still needs to know
     // why, and a bare `.catch(() => null)` left no trace anywhere.
@@ -674,6 +696,8 @@ export async function loadQuarterly(scope: Scope, options: QuarterlyOptions = {}
     subjectsBefore,
     checks,
     record,
+    searchPlan,
+    changeLog,
     draft: options.draft ?? null,
   })
 }
@@ -730,6 +754,11 @@ export interface ComposeQuarterlyInput {
   subjectsBefore: SubjectWindowReading[] | null
   checks: QuarterChecks
   record: RecordInputs | null
+  /** What each search term brought back inside the quarter, and the changes
+   *  logged inside it. Optional so a caller that predates block D still
+   *  composes — both arrive as null and the method page says so. */
+  searchPlan?: SearchPlan | null
+  changeLog?: DeckChangeLog | null
   draft?: string | null
 }
 
@@ -797,7 +826,11 @@ export function composeQuarterly(a: ComposeQuarterlyInput): QuarterlyData {
   // argues from it, the last page lists what it could not settle, and the
   // method page counts what it refused. One source, three readers.
   const verdicts = [...overview.sentence.verdicts, ...quarterVerdicts]
-  const method = buildMethod({ quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt })
+  const method = buildMethod({
+    quarter, verdicts, overview, record: a.record, checks: a.checks, readingAt,
+    searchPlan: a.searchPlan ?? null,
+    changeLog: a.changeLog ?? null,
+  })
   const read = buildRead({ overview, market: a.market, verdicts, quarterVerdicts, unlocked, cover, draft: a.draft ?? null })
   const unsettled = buildUnsettled({ verdicts, readings, overview, method, windowApplied, subjectsRead })
 
@@ -1424,6 +1457,8 @@ function buildMethod(a: {
   record: RecordInputs | null
   checks: QuarterChecks
   readingAt: string
+  searchPlan: SearchPlan | null
+  changeLog: DeckChangeLog | null
 }): MethodPage {
   const window: RecordWindow = { kind: 'quarter', from: a.quarter.from, to: a.quarter.to }
   const refused: Refusal[] = refusals(a.verdicts)
@@ -1472,6 +1507,12 @@ function buildMethod(a: {
     numbers: methodNumbers(inputs, a.quarter, a.overview, a.readingAt),
     unit: 'A video with an analysed comment written in the month.',
     refusedLine: refused.length ? refusedSentence(refused) : null,
+    // THE FOOTNOTE IS THE PAGE'S, NOT THE MONTH'S — composed over the quarter
+    // window this method page already holds, so its coverage clause is the
+    // quarter's and its read-depth clause still says it is all-time.
+    method: inputs ? methodLines(inputs, { brand: a.overview.brand, readingAt: a.readingAt }) : null,
+    searchPlan: a.searchPlan,
+    changeLog: a.changeLog,
   }
 }
 

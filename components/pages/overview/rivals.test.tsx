@@ -80,13 +80,27 @@ describe('OV4 · rivals', () => {
 
   it('declares one attention figure per observed brand, and every verdict a row drew', () => {
     const { figures, verdicts } = blockAnswers(overviewRivals, overviewFixture())
-    expect(Object.keys(figures).sort()).toEqual(['dual_mention_videos', 'rival_client_attention', 'rival_competitor_freitag_attention'])
-    // Three: Freitag's two — its share of the panel's comments and its share of
-    // the panel's videos, which are two readings of one object — and the
-    // client's one. A row's verdicts are what the record keeps, and each says
-    // what it was read over.
-    expect(verdicts).toHaveLength(3)
-    expect(verdicts.map((v) => v.countedOver?.measure)).toEqual(['comments', 'videos', 'comments'])
+    expect(Object.keys(figures).sort()).toEqual([
+      'dual_mention_videos', 'rival_client_attention', 'rival_competitor_freitag_attention',
+      // The category is a row of this table too — `buildStandings` always emits
+      // it, and OV3's attention card is that row's verdict handed across.
+      'rival_industry_other_attention',
+    ])
+    // Five: Freitag's two — its share of the panel's comments and its share of
+    // the panel's videos, which are two readings of one object — the client's
+    // one, and the category's two. A row's verdicts are what the record keeps,
+    // and each says what it was read over.
+    expect(verdicts).toHaveLength(5)
+    expect(verdicts.map((v) => v.countedOver?.measure)).toEqual(['comments', 'videos', 'comments', 'comments', 'videos'])
+  })
+
+  it('draws the category’s attention on the same denominator as every rival’s', () => {
+    // One `buildStandings` call gives every row the SAME panel total — the k's
+    // differ, the n does not. A fixture stating two panel totals on one page is
+    // a page a port can bind two incompatible shares off.
+    const rows = overviewFixture().rivals.rows
+    expect(new Set(rows.map((r) => r.attention?.n))).toEqual(new Set([41200]))
+    expect(new Set(rows.map((r) => r.attentionVerdict?.value.n))).toEqual(new Set([41200]))
   })
 
   it('is email-safe', () => {

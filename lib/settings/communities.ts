@@ -92,9 +92,11 @@ export function communityRows(args: {
     row.found = g.found
   }
 
-  const order: Record<string, number> = { active: 0, candidate: 1, rejected: 2 }
+  const order: Record<string, number> = { active: 0, candidate: 1, stopped: 2, rejected: 3 }
   return [...byKey.values()].sort((a, b) => {
-    const rank = (r: CommunityRow) => (r.status ? order[r.status] : 3)
+    // A community nobody configured has no status at all, and it sorts after
+    // every configured one — the fallback has to stay past the end of `order`.
+    const rank = (r: CommunityRow) => (r.status ? order[r.status] : 4)
     return rank(a) - rank(b) || b.posts - a.posts || a.key.localeCompare(b.key)
   })
 }
@@ -139,6 +141,12 @@ export function unconfiguredShare(rows: readonly CommunityRow[]): { posts: numbe
  *  probe has ever measured it. */
 export function communityWords(row: CommunityRow): string {
   if (row.unconfigured) return 'not on your list — the search found it'
+  // "YOU STOPPED IT" AND "WE RULED IT OUT" ARE DIFFERENT SENTENCES, and the
+  // second is a judgment of the community that a client who took it off the
+  // list themselves never asked us to make. A stopped community often PASSED
+  // the probe — the probe line beside this one may read "31 of 40 on topic" —
+  // so printing "ruled out" over it contradicts the row it sits in.
+  if (row.status === 'stopped') return 'you stopped watching it'
   if (row.status === 'rejected') return 'ruled out'
   if (row.status === 'candidate') return row.probe ? 'proposed, and measured' : 'proposed, not yet sampled'
   return row.probe ? 'watched' : 'watched by hand, never sampled'

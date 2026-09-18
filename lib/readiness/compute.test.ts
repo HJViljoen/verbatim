@@ -335,6 +335,18 @@ describe('watched communities', () => {
     ])
   })
 
+  it('counts a community the client stopped apart from one the probe ruled out', () => {
+    const inputs = ossur({
+      communities: [...ossur().communities, community('onebag', 'stopped', true, 31)],
+    })
+    const row = find(computeReadiness(inputs), 'communities')
+    // Not folded into "ruled out" — that is the probe's verdict, and this one
+    // is the client's. And not dropped: it is on the list and the row accounts
+    // for the list.
+    expect(row.detail).toContain('9 ruled out, 1 you stopped watching')
+    expect(row.notes).not.toContain('r/onebag — 31 posts')
+  })
+
   it('is missing when nothing is watched', () => {
     const inputs = ossur({ communities: [community('amputee', 'candidate', false, 0)] })
     expect(find(computeReadiness(inputs), 'communities').status).toBe('missing')

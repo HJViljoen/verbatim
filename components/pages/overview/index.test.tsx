@@ -4,7 +4,6 @@ import { blockAnswers, blockContext, figureConflicts, figureCount, mergeFigures,
 import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
-import { INDUSTRY_AUDIENCE } from '@/lib/rivals'
 import { NUMBER_BUDGET, RIVAL_FIGURES_MAX, type OverviewData, type RivalRow, type SubjectRow } from '@/lib/pages/overview'
 import { OVERVIEW_BLOCKS, OverviewPage } from './index'
 import { overviewFixture, refusedFixture } from './fixture'
@@ -33,17 +32,15 @@ function fullHouse(): OverviewData {
     label: `Rival ${i}`,
     attention: { k: 1000 + i, n: 41200, pct: 2 + i },
   })
-  const category: RivalRow = {
-    ...base.rivals.rows[1],
-    audience: INDUSTRY_AUDIENCE,
-    label: 'The category',
-    role: 'category',
-    attention: { k: 30000, n: 41200, pct: 72.8 },
-  }
+  // THE CATEGORY ROW IS THE FIXTURE'S OWN. It used to be synthesised here,
+  // because the fixture carried none; now that it does, building a second one
+  // put two rows under `industry-other` on one table, and the figures they
+  // declare are keyed by audience — so the two collided and the cap silently
+  // declared one fewer figure than it was asked for.
   return {
     ...base,
     subjects: { ...base.subjects, rows: Array.from({ length: 8 }, (_, i) => subject(i)) },
-    rivals: { ...base.rivals, rows: [...Array.from({ length: 9 }, (_, i) => rival(i)), ...base.rivals.rows, category] },
+    rivals: { ...base.rivals, rows: [...Array.from({ length: 9 }, (_, i) => rival(i)), ...base.rivals.rows] },
   }
 }
 

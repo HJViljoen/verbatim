@@ -7,6 +7,7 @@ import { distinctVideos, groundedTier, insightTiers, labelsBySlug, ledgerRows, t
 import type { SayVsHearEntry } from '../pipeline/schemas'
 import { fetchInsightsByIds, type ThemeBucketRow } from '../quotes'
 import { inheritedStatus, isMissingRecDecisions, REC_DECISIONS_TABLE, type RecDecision } from '../rec-decisions'
+import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, recordLines, refusals, type RecordInputs } from '../reading/record'
 import type { ReadingHandle } from '../reading/read'
 import { freezeStateFor, monthStartOf } from '../reading/monthly'
@@ -237,6 +238,15 @@ export interface MarketSurfaceData {
   ways: WaysBlock
   unlocks: UnlocksBlock
   record: MarketRecord
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * ONE FIELD, ONE CALL LINE, ON EVERY PAGE, from the `RecordInputs` this page
+   * already loads — so the language share and the read-depth basis cannot come
+   * to be worded differently here and on the next surface. Null only where the
+   * record behind it could not be read. See lib/reading/method.ts.
+   */
+  method: MethodLines | null
 }
 
 // ---- the pure half ------------------------------------------------------------
@@ -828,6 +838,7 @@ export async function loadMarketSurface(scope: Scope): Promise<MarketSurfaceData
     ways,
     unlocks: { rows: unlockRows() },
     record: { line: howSoundLine(recordInputs), lines: recordLines(recordInputs), href: '/dashboard/settings' },
+    method: methodLines(recordInputs, { brand }),
   }
 }
 

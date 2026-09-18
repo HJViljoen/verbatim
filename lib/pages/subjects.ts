@@ -17,6 +17,7 @@ import { freezeStateFor, isMissingMonthTable } from '../reading/monthly'
 import { monthStartOf, nextMonth } from '../reading/month-key'
 import { gapBetween, type Gap, type GapSide } from '../reading/gap'
 import { loadMonthSeries, type ReadingHandle } from '../reading/read'
+import { methodLines, type MethodLines } from '../reading/method'
 import { countRefused, howSoundLine, loadRecordInputs, monthRecordWindow, recordLines, refusals, type RecordInputs } from '../reading/record'
 import { pointsByMonth, type MonthLabel, type MonthSeries, type Substrate } from '../reading/series'
 import type { MonthStatus } from '../reading/types'
@@ -313,6 +314,15 @@ export interface SubjectsData {
   list: SubjectListBlock
   selected: SubjectPane | null
   record: SubjectsRecordBlock
+  /**
+   * The method footnote, composed once for every surface (block D, D9).
+   *
+   * ONE FIELD, ONE CALL LINE, ON EVERY PAGE, from the `RecordInputs` this page
+   * already loads — so the language share and the read-depth basis cannot come
+   * to be worded differently here and on the next surface. Null only where the
+   * record behind it could not be read. See lib/reading/method.ts.
+   */
+  method: MethodLines | null
 }
 
 // ---- pure ---------------------------------------------------------------------
@@ -1053,6 +1063,7 @@ export async function loadSubjectsPage(scope: Scope): Promise<SubjectsData | nul
       line: howSoundLine(recordInputs),
       lines: recordLines(recordInputs),
     },
+    method: methodLines(recordInputs, { brand }),
   }
 }
 

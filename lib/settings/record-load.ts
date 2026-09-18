@@ -73,7 +73,12 @@ export interface RecordPageInputs {
   window: RecordWindow
   updates: UpdateInput[]
   slotsRecorded: boolean
-  changes: { available: boolean; rows: ConfigChange[] }
+  /** `available` is about the TABLE; `affectsRecorded` is about M1's two
+   *  columns, which the read below falls back without. The save-state strip
+   *  needs the second to tell "this save broke nothing" from "we did not write
+   *  down what it broke" (lib/settings/save-state.ts `recorded`), and the
+   *  fallback used to map the columns to null and say nothing about why. */
+  changes: { available: boolean; affectsRecorded: boolean; rows: ConfigChange[] }
   emails: Record<string, string>
   gate: GateHalf
   coverage: RecordInputs
@@ -91,7 +96,12 @@ const headCount = async (q: PromiseLike<{ count: number | null; error: unknown }
   return count ?? 0
 }
 
-async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ updates: UpdateInput[]; slotsRecorded: boolean }> {
+/** Exported since block D (D9): the brief's method page carries the same
+ *  delivery line Settings › The record prints ("23 updates since 6 Apr 2026
+ *  · longest gap 35 days · last on 27 Sep 2026"), and a second reader of
+ *  `pipeline_runs` would be a second answer to "how many updates have you had"
+ *  — which is exactly what `deliveryRecord`'s own header forbids. */
+export async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ updates: UpdateInput[]; slotsRecorded: boolean }> {
   // The bookkeeping columns land in their own migration; probe once rather
   // than letting a wide read fail on a column nobody asked about.
   const probe = await client.from('pipeline_runs').select('scheduled_for, stalled').limit(1)
@@ -115,9 +125,9 @@ async function loadUpdates(client: SupabaseClient, clientId: string): Promise<{ 
   }
 }
 
-async function loadChanges(client: SupabaseClient, clientId: string): Promise<{ available: boolean; rows: ConfigChange[] }> {
+async function loadChanges(client: SupabaseClient, clientId: string): Promise<{ available: boolean; affectsRecorded: boolean; rows: ConfigChange[] }> {
   const probe = await client.from(CONFIG_CHANGES_TABLE).select('id').limit(1)
-  if (isMissingConfigLog(probe.error)) return { available: false, rows: [] }
+  if (isMissingConfigLog(probe.error)) return { available: false, affectsRecorded: false, rows: [] }
   if (probe.error) throw probe.error
   // Both column lists are written out, not built: the client's own types read
   // the select string, and a variable there types every row as a parser error
@@ -125,6 +135,7 @@ async function loadChanges(client: SupabaseClient, clientId: string): Promise<{ 
   try {
     return {
       available: true,
+      affectsRecorded: true,
       rows: await selectAll<ConfigChange>(() =>
         client.from(CONFIG_CHANGES_TABLE)
           .select('id, client_id, changed_at, surface, field, before, after, actor_kind, actor_user_id, actor_label, run_id, source, rows_affected, note, affects_audiences, affects_months')
@@ -144,6 +155,11 @@ async function loadChanges(client: SupabaseClient, clientId: string): Promise<{ 
     )
     return {
       available: true,
+      // THE COLUMNS ARE ABSENT, NOT EMPTY, and the difference is a sentence the
+      // save-state strip prints. Mapping them to null and saying nothing about
+      // why is how "this save broke nothing" comes to be printed over a save
+      // whose breakage we simply never recorded.
+      affectsRecorded: false,
       rows: rows.map((r) => ({ ...r, affects_audiences: null, affects_months: null })),
     }
   }

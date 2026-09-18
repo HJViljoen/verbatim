@@ -111,7 +111,9 @@ export interface TermsInput {
  *  status rather than by this flag alone. */
 export interface CommunityInput {
   name: string
-  status: 'active' | 'candidate' | 'rejected'
+  /** `stopped` is the client's own decision and is counted apart from
+   *  `rejected`, which is the probe's — see lib/gather/types.ts. */
+  status: 'active' | 'candidate' | 'rejected' | 'stopped'
   probed: boolean
   /** Posts stored from this community, all time. */
   postsStored: number

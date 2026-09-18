@@ -6,6 +6,7 @@ import {
 } from '@/lib/pages/market-surface'
 import { MOVES_MASTHEAD, MOVES_UNLOCK } from '@/lib/pages/overview'
 import { cardFixture, moveReadingFixture } from '@/components/pages/overview/fixture'
+import { methodFixture, methodRefusedFixture } from '@/lib/test/method-fixture'
 
 // Market's block fixtures (Phase 1 WP14).
 //
@@ -146,6 +147,7 @@ export function marketFixture(over: Partial<MarketSurfaceData> = {}): MarketSurf
       lines: ['3 updates delivered in this month.', 'Nothing was refused this reading.'],
       href: '/dashboard/settings',
     },
+    method: methodFixture(),
     ...over,
   }
 }
@@ -156,6 +158,7 @@ export function unrecordedFixture(): MarketSurfaceData {
   const base = marketFixture()
   return {
     ...base,
+    method: methodRefusedFixture(),
     moves: { rows: [], masthead: MOVES_MASTHEAD, unlock: MOVES_UNLOCK, recorded: false, empty: MOVES_UNRECORDED, card: cardFixture(), readings: [] },
     ways: { ...base.ways, ways: waysOfMoving(null), acceptable: null, claims: [], claimsLine: 'Nothing you have said in your own posts has been read against the conversation this update.' },
   }

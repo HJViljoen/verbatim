@@ -49,6 +49,22 @@ describe('parseSubreddits', () => {
     ])
   })
 
+  it('keeps a client stop apart from a probe rejection, with the date it happened', () => {
+    const out = parseSubreddits([
+      { name: 'r/Prosthetics', status: 'stopped', discovered_at: '2026-04-06', stopped_at: '2026-09-18', probe: { sampled: 40, kept: 31, at: '2026-04-06' } },
+      // A stop date on anything else is noise from an older shape.
+      { name: 'onebag', status: 'rejected', discovered_at: '2026-05-02', stopped_at: '2026-09-18' },
+    ])
+    expect(out[0]).toEqual({
+      name: 'prosthetics', status: 'stopped', discovered_at: '2026-04-06',
+      probe: { sampled: 40, kept: 31, at: '2026-04-06' }, stopped_at: '2026-09-18',
+    })
+    expect(out[1]).toEqual({ name: 'onebag', status: 'rejected', discovered_at: '2026-05-02' })
+    // Out of the gather, and out of discovery's proposals, exactly like a reject.
+    expect(activeSubreddits(out)).toEqual([])
+    expect(knownSubreddits(out).has('prosthetics')).toBe(true)
+  })
+
   it('drops malformed entries and de-dupes on the canonical key', () => {
     const out = parseSubreddits([
       { name: 'amputee', status: 'active', discovered_at: '' },

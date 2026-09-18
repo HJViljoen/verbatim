@@ -44,6 +44,17 @@ export type { RenderMode } from '../blocks/types'
  * `SECTION_PAGES` (lib/reports/types.ts) saying which of them a NEW report may
  * name and `components/pages/registry.ts` saying which still render.
  *
+ * `settings` is the tenth, and it is here for one reason: the export route
+ * renders a REGISTERED PAGE KEY through headless Chrome, so Settings having no
+ * key is why "Export the record" cannot exist (`status/mock-gap/SettingsRecord
+ * .md` element 21 — the page says so in its own copy). A key with no module in
+ * `components/pages/registry.ts` is exactly the state `overview`, `subjects`
+ * and `week` are already in: `pageModule` returns null and the route answers
+ * "That page cannot be exported yet." So this is the contract landing before
+ * the module, not a dead key — and the copy-pasteable scope-statement card
+ * stays as the fallback either way. It is NOT in `SECTION_PAGES`: the record
+ * is not a section a report may name.
+ *
  * `overview`, `subjects` and `week` are the three new ones. `dashboard`,
  * `content` and `profile` are the retiring ones: `dashboard` keeps its module
  * with no route of its own, because one sent snapshot, one live share link and
@@ -52,6 +63,7 @@ export type { RenderMode } from '../blocks/types'
  */
 export const PAGE_KEYS = [
   'overview', 'subjects', 'voice', 'market', 'competitive', 'week', 'agent',
+  'settings',
   'dashboard', 'content', 'profile',
 ] as const
 
