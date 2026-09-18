@@ -4,8 +4,10 @@ import {
   answeredBy,
   axisNote,
   buildSides,
+  gapSideOf,
   matchWords,
   originLine,
+  paneGap,
   periodPhrase,
   railNote,
   selectSubject,
@@ -24,7 +26,8 @@ import {
   type SubjectSide,
 } from './subjects'
 import { buildSeries, type DenominatorPoint, type NumeratorPoint } from '../reading/series'
-import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '../rivals'
+import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE, rivalKey } from '../rivals'
+import { gapLine, type GapSide } from '../reading/gap'
 import type { Subject } from '../subjects/types'
 
 // The pure half of the Subjects page (Phase 1 WP12).
@@ -411,5 +414,90 @@ describe('railNote, on a subject nobody has confirmed', () => {
       .toBe('not counted yet — confirm it and counting starts with the next update')
     // and it outranks both other silences: nothing has ever looked at it.
     expect(railNote('ready', true, 'proposed')).toContain('not counted yet')
+  })
+})
+
+// ---- D1 · the pane's two-audience gap -----------------------------------------
+
+describe('paneGap', () => {
+  const you = (over: Partial<SubjectSide> = {}): SubjectSide =>
+    ({
+      audience: CLIENT_AUDIENCE, label: 'You', kind: 'you', color: 'var(--you)',
+      k: 26, n: 84, pct: 31, observed: true, silence: null, verdict: null,
+      direction: null, previous: null, kinds: [], reddit: null, ...over,
+    }) as SubjectSide
+  const rival = (over: Partial<SubjectSide> = {}): SubjectSide =>
+    you({ audience: rivalKey('Freitag'), label: 'Freitag', kind: 'rival', k: 62, n: 142, pct: 43.7, ...over })
+
+  const args = (over: Partial<Parameters<typeof paneGap>[0]> = {}) => ({
+    subject: { id: 's1', name: 'Durability' },
+    a: gapSideOf(you()),
+    b: gapSideOf(rival()),
+    basis: null,
+    month: '2026-09-01',
+    prevMonth: '2026-08-01',
+    thin: false,
+    ...over,
+  })
+
+  it('takes both sides at the share the PANE prints, so the gap cannot contradict the two stats', () => {
+    const gap = paneGap(args())!
+    expect(gap.a.pct).toBe(31)
+    expect(gap.b.pct).toBe(43.7)
+    expect(gap.a.value).toEqual({ k: 26, n: 84 })
+  })
+
+  it('refuses the difference on the mock’s own month — 84 videos is under the floor', () => {
+    expect(paneGap(args())!.state).toBe('too_little_data')
+  })
+
+  it('clears once both sides carry a quarter’s worth of videos', () => {
+    const gap = paneGap(args({
+      a: gapSideOf(you({ k: 78, n: 252 })),
+      b: gapSideOf(rival({ k: 186, n: 426 })),
+    }))!
+    expect(gap.state).toBe('apart')
+    expect(gapLine(gap)).toContain('12.7 points apart')
+  })
+
+  it('refuses the gap outright where the rival has been retired — the tracked set moved', () => {
+    const gap = paneGap(args({
+      a: gapSideOf(you({ k: 78, n: 252 })),
+      b: gapSideOf(rival({ k: 186, n: 426, label: 'Freitag — stopped' })),
+      refused: 'tracking_change',
+    }))!
+    expect(gap.state).toBe('refused')
+    expect(gap.refusedReason).toBe('tracking_change')
+    expect(gap.gapPts).toBeNull()
+    // the levels survive; only the difference is withheld
+    expect(gapLine(gap)).toContain('of 252')
+    expect(gapLine(gap)).toContain('comparison refused')
+  })
+
+  it('prints the earlier gap as its own dated reading, never as "narrowed"', () => {
+    const basisSide = (audience: string, label: string, k: number, n: number, pct: number): GapSide =>
+      ({ audience, label, value: { k, n }, pct, observed: true })
+    const gap = paneGap(args({
+      a: gapSideOf(you({ k: 78, n: 252 })),
+      b: gapSideOf(rival({ k: 186, n: 426 })),
+      basis: {
+        a: basisSide(CLIENT_AUDIENCE, 'You', 60, 273, 22),
+        b: basisSide(rivalKey('Freitag'), 'Freitag', 175, 427, 41),
+      },
+    }))!
+    expect(gap.basis?.window.from).toBe('2026-08-01')
+    expect(gap.basis?.gapPts).toBe(-19)
+    expect(gap.direction).toBeNull()
+  })
+
+  it('draws no gap without a rival, and none in a thin month', () => {
+    expect(paneGap(args({ b: null }))).toBeNull()
+    expect(paneGap(args({ thin: true }))).toBeNull()
+  })
+
+  it('says "not tracked" rather than nothing where the rival audience was never read', () => {
+    const gap = paneGap(args({ b: gapSideOf(rival({ k: null, n: null, pct: null, observed: false })) }))!
+    expect(gap.state).toBe('too_little_data')
+    expect(gapLine(gap)).toContain('Freitag — not tracked')
   })
 })

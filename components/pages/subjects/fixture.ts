@@ -12,6 +12,8 @@ import {
   unansweredLead,
   periodPhrase,
   buildSides,
+  gapSideOf,
+  paneGap,
   type StoredKindRow,
   type SubjectsData,
 } from '@/lib/pages/subjects'
@@ -101,6 +103,28 @@ function sidesAndSeries() {
 
 export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData {
   const { sides, series } = sidesAndSeries()
+  // D1 · the gap, built rather than typed. On the mock's own numbers — 26 of
+  // your 84 videos against 62 of Freitag's 142 — it reads "too few to compare":
+  // 84 is under the 100-video floor, which is the same refusal the mock prints
+  // one cell away in its own change column. Both levels, both denominators and
+  // the earlier month still print.
+  const gapYou = sides.find((s) => s.kind === 'you') ?? null
+  const gapRival = sides.find((s) => s.kind === 'rival') ?? null
+  const gap = paneGap({
+    subject: { id: 's1', name: 'Durability' },
+    a: gapYou ? gapSideOf(gapYou) : null,
+    b: gapRival ? gapSideOf(gapRival) : null,
+    basis:
+      gapYou && gapRival
+        ? {
+            a: { audience: gapYou.audience, label: gapYou.label, value: { k: 26, n: 84 }, pct: 31, observed: true },
+            b: { audience: gapRival.audience, label: gapRival.label, value: { k: 62, n: 142 }, pct: 43.7, observed: true },
+          }
+        : null,
+    month: MONTH,
+    prevMonth: '2026-08-01',
+    thin: false,
+  })
   const rows = [
     { id: 's1', name: 'Durability', pct: 31, k: 26 },
     { id: 's2', name: 'Recycled materials', pct: 46, k: 39 },
@@ -179,6 +203,7 @@ export function subjectsFixture(over: Partial<SubjectsData> = {}): SubjectsData 
       },
       move: null,
       behind: { videos: 26, href: '/dashboard/videos?subject=s1' },
+      gap,
       axisNote: axisNote(sides, 100),
       notRecorded: null,
     },
