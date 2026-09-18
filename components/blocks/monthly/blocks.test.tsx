@@ -469,6 +469,32 @@ describe('the five sections that are Overview’s', () => {
     expect(text).not.toMatch(/narrowed/i)
   })
 
+  // THE METER MAY NOT SAY MORE THAN THE FIGURE BESIDE IT (review finding
+  // [Important]). It drew min(of, 12) segments and filled max(1, round(…)), so
+  // "1 of 64" — 1.6% — drew as 1 of 12, or 8.3%: a picture five times its own
+  // subject, directly beside the number it annotates.
+  it('draws the acted meter at the ratio it prints, at both scales', () => {
+    const at = (decided: number, of: number) => {
+      const data = monthlyFixture()
+      const acted = { decided, of, line: data.overview.moves.acted?.line ?? '' }
+      return render(MONTHLY_BLOCKS['monthly.moves'].render(
+        { ...data, overview: { ...data.overview, moves: { ...data.overview.moves, acted } } },
+        'email',
+        ctx,
+      ))
+    }
+    // Twelve or fewer: one segment each, `decided` of them filled, nothing
+    // rounded — the artboard's own meter at the artboard's own scale.
+    const five = at(2, 5)
+    expect((five.match(/width:14px/g) ?? []).length).toBe(5)
+    expect((five.match(new RegExp(`width:14px[^"]*background:${EMAIL.green}`, 'g')) ?? []).length).toBe(2)
+    // Past that, a bar drawn to scale: 1 of 64 is 1.5625% of its track and is
+    // allowed to be a sliver, because that is what 1 of 64 looks like.
+    const many = at(1, 64)
+    expect(many).toContain('width:1.5625%')
+    expect(many).not.toMatch(/width:14px/)
+  })
+
   // THE SECTION'S ONE GRAPHIC (review finding [High]). The artboard's rival row
   // is dot · name · BAR · share · verdict; the build drew every part but the
   // bar, so the one section whose argument is that shares can be compared by

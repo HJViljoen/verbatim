@@ -7,6 +7,9 @@ import { fmtInt } from '@/lib/format'
 import type { MoveRow, OverviewData } from '@/lib/pages/overview'
 import { presentation, T } from './email-table'
 
+/** One segment per piece of advice up to here; past it, a bar drawn to scale. */
+const MAX_SEGMENTS = 12
+
 /**
  * MR5 · Your moves, in the EMAIL (Block D wave 2, E-monthly; the artboard's
  * section 5).
@@ -21,10 +24,10 @@ import { presentation, T } from './email-table'
  * "1 of 64", with `actedTally`'s sentence under it saying what the 64 is.
  *
  * THE METER IS THE TALLY AND NOT A DECORATION. Five fixed segments would be a
- * picture of the artboard's number; this draws `decided` of `of`, capped at the
- * width of the row, so it can never disagree with the figure beside it. Where
- * nothing has been recommended, `actedTally` says so and no meter is drawn — a
- * bar of zero segments reads as a score of zero.
+ * picture of the artboard's number; this draws the ratio itself — one segment
+ * per piece of advice while there are twelve or fewer of them, and a bar at
+ * `decided / of` of its track past that, with nothing rounded either way. See
+ * `Acted` below, and the finding that made it two shapes rather than one.
  *
  * THE ROWS ARE THE PAGE'S, said the artefact's way (`artefactMoves`, the
  * projection this arm is handed). D14 stands: no per-move "next reading 4 Oct",
@@ -77,15 +80,32 @@ function Row({ row }: { row: MoveRow }) {
   )
 }
 
-/** The artboard's tallied panel: the figure, the sentence, and a meter that is
- *  the figure rather than a picture of one. */
+/**
+ * The artboard's tallied panel: the figure, the sentence, and a meter that is
+ * the ratio rather than a picture of one.
+ *
+ * WHAT WAS WRONG WITH THE FIRST ONE (the fix pass, review finding
+ * [Important], found by both reviewers). It drew `min(of, 12)` segments and
+ * filled `max(1, round(decided / of × segments))`, so the tally this section
+ * exists to print — 1 of 64 — drew as 1 filled of 12: a picture saying 8.3%
+ * beside a figure saying 1.6%, five times over. The `max(1, …)` argument was
+ * sound (a decision that happened must not draw as none) and the conclusion
+ * was wrong: twelve blocks cannot express one in sixty-four, so the drawing
+ * must change shape, not round through its own subject.
+ *
+ * SO THERE ARE TWO SHAPES AND EACH IS EXACT.
+ *   · Twelve or fewer pieces of advice: ONE SEGMENT EACH, `decided` of them
+ *     filled. Nothing is rounded because nothing is divided — this is the
+ *     artboard's own meter, and at its own scale ("2 of 5" is five segments).
+ *   · More than twelve: a bar filled to `decided / of` of the track, drawn to
+ *     scale with no floor under it. One of sixty-four is a sliver, which is
+ *     what one of sixty-four looks like.
+ * Where nothing has been recommended, `actedTally` says so and no meter is
+ * drawn — a bar of zero segments reads as a score of zero.
+ */
 function Acted({ acted }: { acted: { decided: number; of: number; line: string } }) {
-  const segments = acted.of > 0 ? Math.min(acted.of, 12) : 0
-  // A DECISION THAT HAPPENED IS NEVER DRAWN AS NONE. 1 of 64 rounds to zero
-  // segments of twelve, and twelve grey blocks beside the figure "1" say the
-  // opposite of the figure. The meter is a reading of the ratio and it is
-  // coarse; it may round down, but not through the only thing it is about.
-  const filled = acted.decided > 0 ? Math.max(1, Math.round((acted.decided / acted.of) * segments)) : 0
+  const segmented = acted.of > 0 && acted.of <= MAX_SEGMENTS
+  const share = acted.of > 0 ? Math.max(0, Math.min(100, (acted.decided / acted.of) * 100)) : 0
   return (
     <div style={{ background: EMAIL.inner, borderRadius: 6, padding: '15px 18px', marginTop: 12 }}>
       <table width="100%" {...presentation} style={T}>
@@ -99,14 +119,32 @@ function Acted({ acted }: { acted: { decided: number; of: number; line: string }
                 of={`of ${fmtInt(acted.of)} acted on`}
               />
             </td>
-            {segments > 0 ? (
-              <td align="right" style={{ verticalAlign: 'middle', paddingLeft: 18, whiteSpace: 'nowrap' }}>
-                {Array.from({ length: segments }, (_, i) => (
-                  <span
-                    key={i}
-                    style={{ display: 'inline-block', width: 14, height: 10, borderRadius: 2, marginLeft: i === 0 ? 0 : 3, background: i < filled ? EMAIL.green : EMAIL.neutralSeg }}
-                  />
-                ))}
+            {acted.of > 0 ? (
+              <td align="right" style={{ verticalAlign: 'middle', paddingLeft: 18, width: '45%' }}>
+                {segmented ? (
+                  // AND THE SEGMENT ROW MAY WRAP. Held on one line, twelve
+                  // segments were 204 unbreakable pixels inside a 273px card
+                  // on a phone — which is the artefact's whole width. They are
+                  // equal blocks, so a second line of them reads the same.
+                  <span>
+                    {Array.from({ length: acted.of }, (_, i) => (
+                      <span
+                        key={i}
+                        style={{ display: 'inline-block', width: 14, height: 10, borderRadius: 2, marginLeft: i === 0 ? 0 : 3, background: i < acted.decided ? EMAIL.green : EMAIL.neutralSeg }}
+                      />
+                    ))}
+                  </span>
+                ) : (
+                  <table width="100%" {...presentation} style={{ ...T, background: EMAIL.neutralSeg, borderRadius: 8 }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ height: 10, lineHeight: '10px', fontSize: 0 }}>
+                          <span style={{ display: 'block', height: 10, width: `${share}%`, borderRadius: 8, background: EMAIL.green, fontSize: 0, lineHeight: 0 }} />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
               </td>
             ) : null}
           </tr>
