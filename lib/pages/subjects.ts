@@ -2060,7 +2060,14 @@ async function loadVoicesMany(
         : source === 'video'
           ? `creator video, transcript${from.startsWith('under a post of yours') ? ' · yours' : ''}`
           : 'on-screen text'
-      const cite = [m?.platform ?? null, m?.comment_date ? shortDate(m.comment_date) : null, where]
+      // THE PLATFORM IS NOT IN THE WORDS (fix pass). It is carried by the
+      // glyph the block draws in front of this line, so leading the cite with
+      // `m.platform` printed it twice — once as a mark and once as a raw
+      // column value, a proper noun lower-cased on a client page ("⟨glyph⟩
+      // tiktok · 14 Sep"). The `platform` field below is what the glyph reads;
+      // the email arm, which has no glyph, prints `platformLabel(platform)` in
+      // front of this string itself.
+      const cite = [m?.comment_date ? shortDate(m.comment_date) : null, where]
         .filter(Boolean).join(' · ')
       const url = key ? urlByKey.get(key) ?? null : null
       const videoId = c.videoId ?? m?.video_id ?? null

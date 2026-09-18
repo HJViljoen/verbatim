@@ -218,7 +218,7 @@ function railVerdict(id: string, label: string, k: number) {
 const VOICES: SubjectVoice[] = [
   {
     quote: { ref: 'e:1', text: 'Three winters on the bike and the seams are still perfect. The zip, less so.' },
-    cite: 'tiktok · 14 Sep · under a category video',
+    cite: '14 Sep · under a category video',
     href: 'https://www.tiktok.com/@maker/video/7312345678901234567',
     from: 'under a category video',
     platform: 'tiktok',
@@ -227,7 +227,7 @@ const VOICES: SubjectVoice[] = [
   },
   {
     quote: { ref: 'e:6', text: "I've had this bag through two Cape Town winters and it's the only one that never leaked" },
-    cite: 'tiktok · 11 Sep · creator video, transcript',
+    cite: '11 Sep · creator video, transcript',
     href: null,
     from: 'under a category video',
     platform: 'tiktok',
@@ -239,7 +239,7 @@ const VOICES: SubjectVoice[] = [
   },
   {
     quote: { ref: 'e:8', text: "If the strap buckle breaks in two months I'm not paying R4,000 again" },
-    cite: 'tiktok · 24 Sep · under a post of yours',
+    cite: '24 Sep · under a post of yours',
     href: null,
     from: 'under a post of yours',
     platform: 'tiktok',
@@ -248,7 +248,7 @@ const VOICES: SubjectVoice[] = [
   },
   {
     quote: { ref: 'e:2', text: 'Nach 14 Monaten ist der Reißverschluss hin', lang: 'de', english: 'After 14 months the zip is done' },
-    cite: 'youtube · 22 Sep · under a Freitag video',
+    cite: '22 Sep · under a Freitag video',
     href: null,
     from: 'under a Freitag video',
     platform: 'youtube',
@@ -257,7 +257,7 @@ const VOICES: SubjectVoice[] = [
   },
   {
     quote: { ref: 'e:3', text: 'Does it fit a 16 inch MacBook or am I dreaming' },
-    cite: 'youtube · 21 Sep · under a category video',
+    cite: '21 Sep · under a category video',
     href: null,
     from: 'under a category video',
     platform: 'youtube',
@@ -266,7 +266,7 @@ const VOICES: SubjectVoice[] = [
   },
   {
     quote: { ref: 'e:7', text: "Die sak hou vir ewig, maar die prys is 'n grap", lang: 'af', english: 'The bag lasts forever, but the price is a joke' },
-    cite: 'instagram · 7 Sep · under a post of yours',
+    cite: '7 Sep · under a post of yours',
     href: null,
     from: 'under a post of yours',
     platform: 'instagram',

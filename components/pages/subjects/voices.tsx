@@ -5,7 +5,7 @@ import { BlockEmpty, BlockFrame } from '@/components/blocks/frame'
 import { BlockQuote, BlockQuotes } from '@/components/blocks/quote'
 import { PlatformIcon } from '@/components/charts/platform-icon'
 import { EMAIL, FONT } from '@/lib/email/theme'
-import { fmtInt } from '@/lib/format'
+import { fmtInt, platformLabel } from '@/lib/format'
 import { voicesMeta, VOICES_SHOWN, type SubjectsData, type SubjectVoice } from '@/lib/pages/subjects'
 
 // SU2 · six voices on the subject (design §3 SU2, the mock's (c)).
@@ -131,12 +131,18 @@ export const subjectsVoices: Block<SubjectsData> = {
         {mode === 'email' ? (
           <BlockQuotes
             mode={mode}
-            quotes={pane.voices.map((v) => ({
-              quote: v.quote,
-              cite: v.href
-                ? <a href={v.href} rel="noreferrer" target="_blank" style={{ color: EMAIL.muted, fontFamily: FONT.mono }}>{v.cite}</a>
-                : v.cite,
-            }))}
+            quotes={pane.voices.map((v) => {
+              // NO GLYPH IN AN EMAIL — an inline SVG is the one thing Outlook
+              // will not draw — so the platform is a WORD here, properly cased
+              // (`platformLabel`), never the raw stored value.
+              const cite = v.platform ? `${platformLabel(v.platform)} · ${v.cite}` : v.cite
+              return {
+                quote: v.quote,
+                cite: v.href
+                  ? <a href={v.href} rel="noreferrer" target="_blank" style={{ color: EMAIL.muted, fontFamily: FONT.mono }}>{cite}</a>
+                  : cite,
+              }
+            })}
           />
         ) : (
           <div className="grid min-w-0 grid-cols-1 items-start gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">

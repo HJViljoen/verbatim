@@ -390,7 +390,7 @@ describe('SU2 · the voices', () => {
   it('sends the reader to the comment where there is a link, and prints the words where there is not', () => {
     const markup = render(subjectsVoices.render(subjectsFixture(), 'app', ctx))
     expect(markup).toContain('https://www.tiktok.com/@maker/video/7312345678901234567')
-    expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('youtube · 22 Sep · under a Freitag video')
+    expect(renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))).toContain('22 Sep · under a Freitag video')
   })
 
   // BOTH REFS PER VOICE, the paired frame included. `subjects` is a registered
@@ -649,6 +649,18 @@ describe('the mock’s own shape, where the data allows it', () => {
     // all-time; "27% of this month's videos" would restate a different
     // denominator.
     expect(text).toContain('said on camera was not in English')
+  })
+
+  // THE PLATFORM IS DRAWN ONCE. The cite led with `m.platform` — the raw stored
+  // value, a proper noun lower-cased — while the glyph in front of it already
+  // said the same thing. An email has no glyph, so there it is a WORD, cased.
+  it('prints the platform as a glyph on screen and as a cased word in an email', () => {
+    const screen = renderText(subjectsVoices.render(subjectsFixture(), 'app', ctx))
+    expect(screen).not.toContain('tiktok')
+    expect(screen).toContain('14 Sep · under a category video')
+    const email = renderText(subjectsVoices.render(subjectsFixture(), 'email', ctx))
+    expect(email).toContain('TikTok · 14 Sep')
+    expect(email).not.toContain('tiktok ·')
   })
 
   it('flags a creator speaking on camera, and pairs the frame’s own words with it', () => {
