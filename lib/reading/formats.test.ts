@@ -237,6 +237,46 @@ describe('formatMatrix · three audiences, one table', () => {
     expect(directionRe().test(m.conclusion ?? '')).toBe(false)
   })
 
+  it('shortens the TABLE and never the reading, so the sentence still sees every row', () => {
+    // The live shape this was found on: the category's highest median in
+    // September was `review` at 3.7% off four videos — ninth by COUNT. Six
+    // display rows dropped it before `matrixConclusion` ever saw it, and the
+    // sentence then named the best of the six most common formats while saying
+    // it had measured all 687.
+    const group = (key: string, k: number, rate: number) =>
+      Array.from({ length: k }, (_, i) => vid({ id: `w-${key}-${i}`, classified_type: key, engagement_rate: rate }))
+    const wide = formatReading({
+      month: '2026-09-01',
+      audience: 'industry-other',
+      audienceLabel: 'The category',
+      key: 'classified_type',
+      videos: [
+        ...group('story', 40, 3.4),
+        ...group('educational', 30, 2.9),
+        ...group('promotional', 25, 1.3),
+        ...group('testimonial', 20, 2.9),
+        ...group('entertainment', 15, 3.1),
+        ...group('tutorial', 10, 2.1),
+        ...group('review', 4, 9.7),
+      ],
+    })
+    expect(wide.rows).toHaveLength(7)
+
+    const m = formatMatrix([wide], { top: 2 })
+    expect(m.keys.map((k) => k.key)).toEqual(['story', 'educational'])
+    expect(m.sides[0].of).toBe(144)
+    // The two highest MEDIANS, not the two biggest columns — and `review` is
+    // named although the table never prints its row.
+    expect(m.conclusion).toBe(
+      'review ran at 9.7% against story at 3.4% — measured over 4 and 40 of The category’s 144 classified videos published in September.',
+    )
+    // …and "what not to make" reaches past the table too. The category's own
+    // median video runs at 2.9%; promotional is third by count and tutorial
+    // sixth, and neither is a row the two-row table prints.
+    expect(wide.median.value).toBe(2.9)
+    expect(belowMedian(wide).map((r) => r.key)).toEqual(['promotional', 'tutorial'])
+  })
+
   it('says nothing at all where fewer than two rows carry a median', () => {
     const thin = reading([vid({ id: 'x', classified_type: 'unboxing', engagement_rate: 2 })])
     expect(matrixConclusion([thin])).toBeNull()

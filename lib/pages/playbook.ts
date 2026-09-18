@@ -104,14 +104,17 @@ export function buildPlaybook(input: {
         videos: published.filter((v) => audienceOf(v) === side.audience),
         excludePlatforms: ENGAGEMENT_EXCLUDED,
         label: workedLabel,
-        top: PLAYBOOK_ROWS,
       }),
     )
 
+  // THE READINGS ARE WHOLE AND ONLY THE TABLE IS SHORT. `PLAYBOOK_ROWS` is
+  // handed to `formatMatrix`, which shortens the key list a column PRINTS;
+  // `engagement` and `below` below read the readings themselves, because the
+  // highest median of the month is regularly a format nobody makes much of.
   const formatReadings = readingsFor('classified_type')
   const hookReadings = readingsFor('hook_style')
-  const formats = formatMatrix(formatReadings)
-  const hooks = formatMatrix(hookReadings)
+  const formats = formatMatrix(formatReadings, { top: PLAYBOOK_ROWS })
+  const hooks = formatMatrix(hookReadings, { top: PLAYBOOK_ROWS })
 
   const category = formatReadings[0]
   const own = formatReadings.find((r) => r.audience === CLIENT_AUDIENCE) ?? null

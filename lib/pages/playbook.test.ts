@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 
 import { directionRe } from '../test/copy-contract'
 import {
+  PLAYBOOK_ROWS,
   buildHeadToHead, buildPlaybook, coverageLine, headToHeadFigures, ownSides, playbookFigures,
   type PlaybookVideo,
 } from './playbook'
@@ -115,6 +116,27 @@ describe('buildPlaybook · CO7', () => {
     // Your own median video runs at 2.4% here, so promotional (1.1%) is the
     // one below it — stated with both numbers and its n, never as an order.
     expect(p.below.map((r) => [r.key, r.engagement.median, r.value])).toEqual([['promotional', 1.1, { k: 3, n: 9 }]])
+  })
+
+  it('cuts the TABLE at six rows and leaves the reading whole underneath it', () => {
+    // Össur's category in September: the highest median of the month was
+    // `review`, off four videos — ninth by count, so a six-row table drops it.
+    // The table may drop a row; the sentence and the engagement column may not.
+    const wide = [
+      ...run('category', 40, { classified_type: 'story', engagement_rate: 3.4 }),
+      ...run('category', 30, { classified_type: 'educational', engagement_rate: 2.9 }),
+      ...run('category', 25, { classified_type: 'promotional', engagement_rate: 1.3 }),
+      ...run('category', 20, { classified_type: 'testimonial', engagement_rate: 2.9 }),
+      ...run('category', 15, { classified_type: 'entertainment', engagement_rate: 3.1 }),
+      ...run('category', 10, { classified_type: 'tutorial', engagement_rate: 2.1 }),
+      ...run('category', 4, { classified_type: 'review', engagement_rate: 9.7 }),
+    ]
+    const p = buildPlaybook({ month: '2026-09-01', brand: 'Össur', rival: null, videos: wide })
+    expect(p.formats.keys).toHaveLength(PLAYBOOK_ROWS)
+    expect(p.formats.keys.map((k) => k.key)).not.toContain('review')
+    expect(p.formats.sides[0].of).toBe(144)
+    expect(p.engagement.map((r) => r.key)).toContain('review')
+    expect(p.formats.conclusion).toContain('9.7%')
   })
 
   it('excludes Reddit from every engagement figure and names the reason', () => {

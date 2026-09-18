@@ -135,9 +135,6 @@ export interface FormatInput {
    *  none gets the stored value through unchanged, which is a slug on the page
    *  and therefore a bug a test catches, not a silent prettification. */
   label?: (key: string) => string
-  /** How many rows to keep, best-counted first. Every row that is dropped is
-   *  still counted in `of`, so the shares stay shares of the same thing. */
-  top?: number
 }
 
 const round1 = (n: number): number => Math.round(n * 10) / 10
@@ -163,6 +160,15 @@ export function basisLineFor(month: string): string {
  * They do not sum and are not meant to: a row is a share of the audience's
  * classified videos, and a video can be counted in a format row and a hook row
  * at once.
+ *
+ * EVERY ROW COMES BACK. `rows` is the WHOLE reading, count-ordered, and the
+ * reading is never truncated here: `matrixConclusion` compares the two highest
+ * MEDIANS and `belowMedian` lists every format under the audience's own, and
+ * both took the truncated list until they were caught naming the wrong formats
+ * (the category's highest median in September was `review`, ninth by count, so
+ * it was dropped before either of them saw it). Truncation is a DISPLAY
+ * decision and it lives in `formatMatrix`, which keeps the whole row on every
+ * side it draws and only shortens the key list.
  */
 export function formatReading(input: FormatInput): FormatReading {
   const { month, audience, audienceLabel, key } = input
@@ -225,7 +231,7 @@ export function formatReading(input: FormatInput): FormatReading {
     basisLine,
     of,
     published: published.length,
-    rows: input.top != null ? rows.slice(0, input.top) : rows,
+    rows,
     median: { value: audienceMedian === null ? null : round1(audienceMedian), n: rates.length },
     excluded: excludePlatforms.map(platformLabel),
     excludedNote: EXCLUDED_NOTE,
@@ -285,12 +291,25 @@ export interface FormatMatrix {
  * reading there is and is passed first, so the table reads down the order the
  * category actually makes content in, and a rival's one-off format lands at the
  * bottom rather than re-ordering the table around it.
+ *
+ * `top` IS THE ONLY TRUNCATION IN THIS MODULE, AND IT IS A DISPLAY ONE. It
+ * shortens the KEY list — how many rows the table prints, best-counted first
+ * per side — and touches neither the readings it was handed nor the sentence
+ * `matrixConclusion` composes from them. Every key a column drops is still
+ * counted in that column's `of`, so the shares stay shares of the same thing,
+ * and every consumer that asks a question ABOUT the reading rather than about
+ * the table (`belowMedian`, `matrixConclusion`, a document's figure table) sees
+ * every row.
  */
-export function formatMatrix(readings: readonly FormatReading[]): FormatMatrix {
+export function formatMatrix(
+  readings: readonly FormatReading[],
+  options: { top?: number } = {},
+): FormatMatrix {
   const keys: { key: string; label: string }[] = []
   const seen = new Set<string>()
   for (const reading of readings) {
-    for (const row of reading.rows) {
+    const shown = options.top != null ? reading.rows.slice(0, options.top) : reading.rows
+    for (const row of shown) {
       if (seen.has(row.key)) continue
       seen.add(row.key)
       keys.push({ key: row.key, label: row.label })
@@ -318,6 +337,11 @@ export function formatMatrix(readings: readonly FormatReading[]): FormatMatrix {
 /**
  * The two-format sentence, composed from the numbers rather than written about
  * them.
+ *
+ * It reads the WIDEST reading's whole row set, never a table's visible rows:
+ * the highest median in a month is routinely a format nobody makes much of, and
+ * a sentence that names the best of the six most COMMON formats while saying it
+ * measured all 687 is naming the wrong thing.
  *
  * It states two medians with the videos each was measured over and says nothing
  * about direction: a comparison between two formats at one moment is not a
