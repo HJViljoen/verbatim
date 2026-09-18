@@ -8,10 +8,10 @@ import { EMAIL } from '@/lib/email/theme'
 import { assertCopyContract } from '@/lib/test/copy-contract'
 import { render, renderText } from '@/lib/test/render'
 import { PRIVACY_LINE, REDDIT_CAP_LINE } from '@/lib/reading/method'
-import { BRIEF_UNIT, LABEL_RULE, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
+import { BRIEF_UNIT, LABEL_RULE, LEAD_MIN_RATED, PLAYBOOK_EMPTY, PLAYBOOK_GONE, RECORD_GONE } from '@/lib/pages/content-brief'
 import { CONTENT_BRIEF_BLOCKS, contentMake, contentPlaybook, contentRecord } from './index'
 import { toMake } from './make'
-import { cellFigure } from './playbook'
+import { cellFigure, engagementOrder } from './playbook'
 import {
   contentBriefFixture,
   emptyContentBriefFixture,
@@ -140,12 +140,27 @@ describe('content.playbook — the mock’s page 3', () => {
   // ONE FORMATTER (code review 5). `${median}%` was hand-written in three places
   // in a file that imports `fmtPct` for the matrix cells.
   it('prints every percentage through the product’s one formatter', () => {
-    for (const r of data.playbook.playbook!.engagement.slice(0, 3)) {
+    for (const r of engagementOrder(data.playbook.playbook!.engagement, LEAD_MIN_RATED).slice(0, 3)) {
       expect(text).toContain(fmtPct(r.engagement.median ?? 0))
     }
     // A median of a whole number prints as "3%", never as "3.0%" — the
     // formatter's own rule, and the reason to have exactly one.
     expect(fmtPct(3)).toBe('3%')
+  })
+
+  // THE TAKEAWAY MAY NOT REST ON FOUR VIDEOS (design review 5). The slide's one
+  // bulleted sentence read "Review ran at 3.7% against Story at 3.4% — measured
+  // over 4 and 206", a 0.3-point gap between n=4 and n=206 printed as the
+  // conclusion of the page.
+  it('rests its takeaway, its top row and its published figure on a comparable n', () => {
+    const p = data.playbook.playbook!
+    const thin = p.engagement.find((r) => r.engagement.n < LEAD_MIN_RATED)
+    expect(thin).toBeTruthy()
+    // The thin row exists, is still readable in the reading, and leads nothing.
+    expect(p.formats.conclusion).not.toContain(thin!.label)
+    expect(engagementOrder(p.engagement, LEAD_MIN_RATED)[0].engagement.n).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
+    const figures = blockAnswers(contentPlaybook, data).figures
+    expect(figures.content_best_format_videos?.value ?? 0).toBeGreaterThanOrEqual(LEAD_MIN_RATED)
   })
 
   it('publishes its figures by token, prefixed so nothing collides', () => {

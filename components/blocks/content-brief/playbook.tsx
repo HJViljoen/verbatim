@@ -6,7 +6,7 @@ import { fmtInt, fmtPct } from '@/lib/format'
 import type { FormatMatrix, FormatMatrixSide, FormatRow } from '@/lib/reading/formats'
 import type { FigureTable } from '@/lib/reading/verdicts'
 import { CLIENT_AUDIENCE, INDUSTRY_AUDIENCE } from '@/lib/rivals'
-import { PLAYBOOK_GONE, type ContentBriefData } from '@/lib/pages/content-brief'
+import { LEAD_MIN_RATED, PLAYBOOK_GONE, type ContentBriefData } from '@/lib/pages/content-brief'
 
 // The content brief's page 3 — "Hooks and formats that worked" (Block D wave 2,
 // package E-content; artboard ContentBrief.dc.html slide 3).
@@ -217,8 +217,22 @@ const ENGAGEMENT_SHOWN = 3
 // NOT do is pad a whole number to one decimal, so "21%" still sits beside
 // "21.8%" down the category column; that is the product's one rounding rule and
 // a second one here to make a column look even would be the defect over again.
+/**
+ * The card's rows, with the ones a finding may rest on first.
+ *
+ * `PlaybookBlock.engagement` is ordered by median alone, so the top row of the
+ * card was regularly a format with four rated videos in it — the same row the
+ * slide's takeaway used to promote (design review 5). A row under the floor is
+ * still SHOWN, with its own "of N"; it just does not take the top slot from a
+ * row measured over two hundred videos.
+ */
+export function engagementOrder(rows: readonly FormatRow[], floor: number): FormatRow[] {
+  const clears = (r: FormatRow) => r.engagement.n >= floor
+  return [...rows].sort((a, b) => Number(clears(b)) - Number(clears(a)) || (b.engagement.median ?? 0) - (a.engagement.median ?? 0))
+}
+
 function Engagement({ rows: all, mode, of, basisLine }: { rows: readonly FormatRow[]; mode: RenderMode; of: number; basisLine: string }) {
-  const rows = all.slice(0, ENGAGEMENT_SHOWN)
+  const rows = engagementOrder(all, LEAD_MIN_RATED).slice(0, ENGAGEMENT_SHOWN)
   if (rows.length === 0) return null
   const max = Math.max(...rows.map((r) => r.engagement.median ?? 0), 1)
   return (
@@ -353,7 +367,10 @@ export const contentPlaybook: Block<ContentBriefData> = {
       out.content_formats_read_from = { value: category.of, unit: 'videos', label: `${fmtInt(category.of)} classified videos` }
       out.content_formats_published = { value: category.published, unit: 'videos', label: `${fmtInt(category.published)} videos published` }
     }
-    const best = p.engagement[0]
+    // THE BEST FORMAT A MODEL MAY NAME CLEARS THE SAME FLOOR THE TAKEAWAY DOES
+    // (design review 5): a token labelled "median engagement" that was measured
+    // over four videos is a finding rested on four videos wherever it lands.
+    const best = engagementOrder(p.engagement, LEAD_MIN_RATED).filter((r) => r.engagement.n >= LEAD_MIN_RATED)[0]
     if (best?.engagement.median != null) {
       out.content_best_format_engagement = { value: best.engagement.median, unit: 'pct', label: `${fmtPct(best.engagement.median)} median engagement` }
       out.content_best_format_videos = { value: best.engagement.n, unit: 'videos', label: `${fmtInt(best.engagement.n)} rated videos` }

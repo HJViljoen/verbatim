@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+import { COMPETITIVE_MIN_VIDEOS } from '../config'
 import { QUARTER_UNLOCKS_AT } from '../reading/bands'
 import { monthStartOf } from '../reading/month-key'
 import { belowMedian, type FormatRow } from '../reading/formats'
@@ -314,6 +315,15 @@ export interface PlaybookSlide {
  *                                 posted in)
  *   · read, published, none classified → the count, and what is missing
  */
+/**
+ * Rated videos a format needs before the slide's ONE takeaway may name it.
+ *
+ * The product's own floor for resting a finding on a bucket — Pass C is told
+ * "never rest a finding on one" below it — reused rather than chosen, because a
+ * second number here would be a second answer to one question.
+ */
+export const LEAD_MIN_RATED = COMPETITIVE_MIN_VIDEOS
+
 export const PLAYBOOK_EMPTY =
   'Nothing published in this month has been read for you, your rival or the category, so there is no format to read.'
 
@@ -433,7 +443,15 @@ export async function loadContentBrief(scope: Scope): Promise<ContentBriefData |
 
   if (videos == null && record == null && updates == null) return null
 
-  const playbook = videos ? buildPlaybook({ month, brand, rival, videos }) : null
+  // THE TAKEAWAY MAY NOT REST ON FOUR VIDEOS (design review 5). The brief
+  // promotes `formats.conclusion` into the slide's one bulleted sentence, so it
+  // passes the floor the product already refuses to rest a finding on
+  // (`COMPETITIVE_MIN_VIDEOS`, lib/pipeline/pass-c.ts: "never rest a finding on
+  // one"). Every row stays in the table with its own n — the floor is on what
+  // may LEAD.
+  const playbook = videos
+    ? buildPlaybook({ month, brand, rival, videos, conclusionMinRated: LEAD_MIN_RATED })
+    : null
 
   return {
     brand,

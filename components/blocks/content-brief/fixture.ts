@@ -1,7 +1,7 @@
 import { PLAYBOOK_VIDEOS } from '@/components/pages/competitive-surface/fixture'
 import { marketFixture } from '@/components/pages/market-surface/fixture'
 import { buildPlaybook } from '@/lib/pages/playbook'
-import { buildPlaybookSlide, buildRecordSlide, type ContentBriefData } from '@/lib/pages/content-brief'
+import { buildPlaybookSlide, buildRecordSlide, LEAD_MIN_RATED, type ContentBriefData } from '@/lib/pages/content-brief'
 import { methodRecordFixture } from '@/lib/test/method-fixture'
 import { deliveryRecord } from '@/lib/settings/delivery'
 import { afterwardsFor, groundingFor } from '@/lib/reading/afterwards'
@@ -32,7 +32,8 @@ const UPDATES = [
 ]
 
 export function contentBriefFixture(over: Partial<ContentBriefData> = {}): ContentBriefData {
-  const playbook = buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: PLAYBOOK_VIDEOS })
+  // The same floor the surface passes, so the fixture prints what a tenant does.
+  const playbook = buildPlaybook({ month: MONTH, brand: 'Össur', rival: 'Ottobock', videos: PLAYBOOK_VIDEOS, conclusionMinRated: LEAD_MIN_RATED })
   return {
     brand: 'Össur',
     month: MONTH,
@@ -65,7 +66,7 @@ export function contentBriefFixture(over: Partial<ContentBriefData> = {}): Conte
  *  month: the arm where a column is "0 of N" and a side says it was not read. */
 export function thinContentBriefFixture(): ContentBriefData {
   const own = PLAYBOOK_VIDEOS.filter((v) => !v.is_client)
-  const playbook = buildPlaybook({ month: MONTH, brand: 'Össur', rival: null, videos: own })
+  const playbook = buildPlaybook({ month: MONTH, brand: 'Össur', rival: null, videos: own, conclusionMinRated: LEAD_MIN_RATED })
   return contentBriefFixture({
     playbook: buildPlaybookSlide({ playbook, read: true, brand: 'Össur', monthLabel: 'September', rival: null }),
   })
