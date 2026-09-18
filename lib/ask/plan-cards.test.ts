@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 import {
-  PLAN_CLAIM_BASIS, PLAN_FLOOR_LINE, PLAN_VERDICT_FLOOR, PLAN_VERDICT_LABEL,
+  PLAN_CLAIM_BASIS, PLAN_CLAIM_BASIS_UNCOUNTED, PLAN_FLOOR_LINE, PLAN_VERDICT_FLOOR, PLAN_VERDICT_LABEL,
   currentReading, movedSinceUpload, planCard, type PlanEvaluation,
 } from './plan-cards'
 import type { ClaimResult } from './types'
@@ -176,16 +176,24 @@ describe('planCard', () => {
     href: '/dashboard/agent/t1',
   }
 
-  it('gives every claim count its denominator and names the basis', () => {
+  it('gives every claim count its denominator and names the basis, floor and all', () => {
     const card = planCard({ ...base, claims: [claim('C1', 'echoes', 14, ['i1'])], summary: null })
     expect(card.claims[0].value).toEqual({ k: 14, n: 2359 })
     expect(card.basis).toBe(PLAN_CLAIM_BASIS)
-    expect(card.basis).toContain('not over one month')
+    expect(card.basis).toContain('not out of one month')
+    // The numerator is bounded by what the agent retrieved for the claim, not
+    // by the conversation, so the share is a floor and the basis says so —
+    // D8's rule, the one `groundingFor` keeps two files over.
+    expect(card.basis).toContain('floor')
   })
 
-  it('keeps k as its own n rather than inventing one when the corpus is unreadable', () => {
+  it('carries NO denominator rather than an invented one when the corpus is unreadable', () => {
     const card = planCard({ ...base, corpusVideos: null, claims: [claim('C1', 'echoes', 14)], summary: null })
-    expect(card.claims[0].value).toEqual({ k: 14, n: 14 })
+    // Never { k: 14, n: 14 }: a failed head count printed as "14 of 14" is a
+    // 100% share of everything read, which is worse than the bare count.
+    expect(card.claims[0].value).toEqual({ k: 14, n: 0 })
+    expect(card.basis).toBe(PLAN_CLAIM_BASIS_UNCOUNTED)
+    expect(card.basis).toContain('without its share')
   })
 
   it('uses the three words Ask and the mock both use', () => {

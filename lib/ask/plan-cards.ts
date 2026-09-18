@@ -66,10 +66,30 @@ export const PLAN_HOLD_CAVEAT =
   'Each claim is read fresh against every update. A verdict that moved last time can move back, and nothing here is held ' +
   'across two updates before it is printed.'
 
-/** What the claims are counted over. A claim’s count is cumulative over the
- *  corpus and is NOT month-scoped (`ClaimResult.conversationCount` says so in
- *  its own docstring), so the basis travels with the figure — D15. */
-export const PLAN_CLAIM_BASIS = 'counted over everything we have read for you, not over one month'
+/**
+ * What the claims are counted over, and what the count is NOT.
+ *
+ * TWO FACTS, BECAUSE THE FIRST ONE ALONE IS FALSE. A claim's count is
+ * cumulative over the corpus and is not month-scoped
+ * (`ClaimResult.conversationCount` says so in its own docstring), so the basis
+ * travels with the figure — D15. But the numerator is not a measurement over
+ * that corpus either: `validateVerdicts` counts the distinct videos behind the
+ * QUOTABLE insights of at most `ASK_THEMES_PER_CLAIM` shortlisted themes, so
+ * what bounds it is the agent's retrieval and not the conversation. "41 of
+ * 2,359" read as a measured share is wrong in the same way "412 videos in the
+ * category, September" was two files over — D8, and `CONCLUSIONS_CORPUS_LINE`
+ * on this very page. It is a FLOOR over a named population, and the sentence
+ * says both.
+ */
+export const PLAN_CLAIM_BASIS =
+  'A claim’s count is the videos we can show you a comment from, out of everything we have read for you — not out of one month. ' +
+  'Each claim is read against the themes closest to it, so the count is a floor and not a full sweep.'
+
+/** The same, where the corpus could not be counted — the denominator is absent
+ *  rather than invented, and the count stands alone. See `planCard`. */
+export const PLAN_CLAIM_BASIS_UNCOUNTED =
+  'A claim’s count is the videos we can show you a comment from, read against the themes closest to that claim. ' +
+  'We could not count how many videos we have read for you, so this count stands without its share.'
 
 export const PLAN_EMPTY =
   'No plan has been checked for this workspace yet. Upload a campaign brief on Ask and it is re-read against every update.'
@@ -88,6 +108,13 @@ export interface PlanClaimRow {
   /** echoed | contradicted | silent — from plan_checks.claims. */
   verdict: string
   verdictLabel: string
+  /**
+   * The claim's count, with the corpus as its denominator.
+   *
+   * `n === 0` MEANS THERE IS NO DENOMINATOR, not a share of nothing: the
+   * corpus head count failed, and a surface prints `k` alone there and never
+   * "of 0". The card's `basis` says which of the two it is holding.
+   */
   value: Counted
   quote: Quote | null
 }
@@ -225,8 +252,8 @@ export interface PlanCardInput {
   summary: AskSummary | null
   evaluations: readonly PlanEvaluation[]
   /** Every video this workspace has analysed — the population a claim's count
-   *  is a count of. Null where it could not be read, in which case the count
-   *  keeps its own k as its n rather than inventing a denominator. */
+   *  is drawn from. Null where it could not be read, in which case the row
+   *  carries no denominator at all (`value.n === 0`). */
   corpusVideos: number | null
   quoteFor?: (claim: ClaimResult) => Quote | null
   href: string
@@ -235,16 +262,19 @@ export interface PlanCardInput {
 /**
  * One card, from rows the loader fetched.
  *
- * THE COUNT CARRIES ITS DENOMINATOR. `ClaimResult.conversationCount` is a bare
- * number on Ask today ("9 conversations"), and a level with no "of N" is a
- * score, which this product does not show. The denominator is the whole
- * analysed corpus, because that is genuinely what the count is drawn from — and
- * `basis` says so on the card rather than leaving a reader to assume the month
- * the page bar names.
+ * THE COUNT CARRIES ITS DENOMINATOR AND ITS BOUND. `ClaimResult
+ * .conversationCount` is a bare number on Ask today ("9 conversations"), and a
+ * level with no "of N" is a score, which this product does not show. The
+ * denominator is the whole analysed corpus, because every video the count
+ * names is in it — but the numerator is bounded by the agent's retrieval, not
+ * by the conversation, so the share is a FLOOR and `basis` says so. See
+ * `PLAN_CLAIM_BASIS`.
  *
- * WHERE THE CORPUS COULD NOT BE READ the claim's own k is used as its n, so the
- * cell reads "9 of 9" rather than "9 of 0" — a fraction of a denominator we
- * could not count is worse than none.
+ * WHERE THE CORPUS COULD NOT BE READ there is no denominator: `value.n` is 0,
+ * the basis line says the corpus could not be counted, and the surface prints
+ * the count alone. The previous fallback used the claim's own k as its n,
+ * which printed "14 of 14" — a 100% share of everything read, invented out of
+ * a failed head count and worse than the bare number it replaced.
  */
 export function planCard(input: PlanCardInput): PlanCheckCard {
   // THE NEWEST RE-READING, NOT THE UPLOAD'S ANSWER. See `currentReading`.
@@ -255,7 +285,7 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
     verdictLabel: PLAN_VERDICT_LABEL[c.verdict] ?? c.verdict,
     value: {
       k: c.conversationCount,
-      n: input.corpusVideos != null && input.corpusVideos >= c.conversationCount ? input.corpusVideos : c.conversationCount,
+      n: input.corpusVideos != null && input.corpusVideos >= c.conversationCount ? input.corpusVideos : 0,
     } satisfies Counted,
     quote: c.verdict === 'silent' ? null : input.quoteFor?.(c) ?? null,
   }))
@@ -276,7 +306,7 @@ export function planCard(input: PlanCardInput): PlanCheckCard {
     claims,
     summary,
     moved: movedSinceUpload(input.evaluations),
-    basis: PLAN_CLAIM_BASIS,
+    basis: input.corpusVideos != null ? PLAN_CLAIM_BASIS : PLAN_CLAIM_BASIS_UNCOUNTED,
     floorLine: PLAN_FLOOR_LINE,
     caveat: PLAN_HOLD_CAVEAT,
     notice: input.notice,
