@@ -117,6 +117,31 @@ describe('WK §2 · this week in your subjects', () => {
     expect(text).toContain('No subjects are recorded for this workspace yet')
   })
 
+  it('draws the mock’s strip with the typical bar it can actually measure', () => {
+    // The artboard's column is `31 this week` over a bar pair against "typical
+    // week 22". D6 refuses the leading week figure and there is no per-week
+    // history to be typical of, so the column leads with the MONTH and its
+    // "of N", and the pair beneath is this update's contribution against
+    // `typicalContribution` — both sides counted, neither modelled.
+    const text = renderText(weekSubjects.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('31 this month')
+    expect(text).toContain('31 of 96 videos')
+    expect(text).toContain('+8 this update · usually 5')
+    expect(text).toContain('above typical')
+    expect(text).not.toContain('typical week')
+    // And the legend says what the second bar IS, rather than naming a week.
+    expect(text).toContain('what an update of its size usually adds')
+  })
+
+  it('names when the subjects were named, and calls it naming', () => {
+    // D14: `named_at` is the day somebody typed the subject into Settings —
+    // not the day the conversation about it began, which is what "tracking
+    // since" would claim.
+    const text = renderText(weekSubjects.render(weekFixture(), 'app', ctx))
+    expect(text).toContain('3 subjects named 19 Aug')
+    expect(text).not.toContain('since 19 Aug')
+  })
+
   it('says subjects are not recorded rather than drawing an empty table', () => {
     const text = renderText(weekSubjects.render(thinFixture(), 'app', ctx))
     expect(text).toContain('No subjects are recorded for this workspace yet')

@@ -358,6 +358,17 @@ export interface WeekSubjectsBlock {
    * the score this product does not print. Null where no row carries a tag.
    */
   lead: string | null
+  /**
+   * "six subjects named 19 Aug" — the mock's §3 footer note, off
+   * `subjects.named_at`.
+   *
+   * ONE DATE ONLY WHERE THERE IS ONE DATE. Six subjects named in one sitting is
+   * the common case and the mock's; subjects named on different days have no
+   * single naming date, and the line then says the first rather than picking
+   * one. Null where nothing is named, because a footer counting zero subjects
+   * on a block that has already said none are recorded says it twice.
+   */
+  namedLine: string | null
 }
 
 /** One theme rising in the month's reading. */
@@ -895,6 +906,25 @@ function namesOf(labels: readonly string[]): string {
 
 /** A caption standing in for the title `videos` has no column for. One line,
  *  whitespace collapsed, cut on a word. */
+/**
+ * "six subjects named 19 Aug" — how long this page's subject rows have been
+ * measured at all.
+ *
+ * IT IS A NAMING DATE, NOT A START OF EVIDENCE (D14). `subjects.named_at` is
+ * the day somebody typed the subject into Settings, which is exactly what the
+ * mock claims; what it is NOT is the day the conversation about it started, and
+ * the line says "named" rather than "since" so the two cannot be read as one.
+ */
+export function subjectsNamedLine(namedAt: readonly (string | null)[]): string | null {
+  const dates = namedAt.filter((d): d is string => typeof d === 'string' && d.length > 0).sort()
+  if (dates.length === 0) return null
+  const noun = dates.length === 1 ? 'subject' : 'subjects'
+  const day = (iso: string) => iso.slice(0, 10)
+  return day(dates[0]) === day(dates[dates.length - 1])
+    ? `${fmtInt(dates.length)} ${noun} named ${shortDate(dates[0])}`
+    : `${fmtInt(dates.length)} ${noun}, the first named ${shortDate(dates[0])}`
+}
+
 export function postCaption(caption: string | null, chars: number = RIVAL_CAPTION_CHARS): string {
   const flat = (caption ?? '').replace(/\s+/g, ' ').trim()
   if (flat.length <= chars) return flat
@@ -1472,7 +1502,7 @@ async function buildSubjects(input: {
   clientUpdateVideos: number | null
 }): Promise<WeekSubjectsBlock> {
   const { reading, clientId, subjects, month, window } = input
-  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null }
+  const nothing = { rows: [], unread: SUBJECTS_UNREAD, month, lead: null, namedLine: null }
   if (subjects == null) return nothing
   if (subjects.length === 0) return nothing
 
@@ -1506,11 +1536,16 @@ async function buildSubjects(input: {
     })
     .sort((a, b) => b.monthVideos - a.monthVideos)
 
+  const active = subjects.filter((s) => s.status === 'active')
   return {
     rows: rowsOut,
     unread: rowsOut.length > 0 ? null : SUBJECTS_UNREAD,
     month,
     lead: subjectLead(rowsOut, month),
+    // The rows are the ACTIVE subjects — a proposed subject measures nothing
+    // (`loadActiveSubjects`' own filter) — so the count in the footer is a
+    // count of the rows above it and not of the table.
+    namedLine: subjectsNamedLine(active.map((s) => s.named_at)),
   }
 }
 

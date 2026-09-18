@@ -1,4 +1,4 @@
-import { LATER_LINE, PRIVACY_LINE, coverageLine, subjectLead, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
+import { LATER_LINE, PRIVACY_LINE, coverageLine, subjectLead, subjectsNamedLine, typicalContribution, typicalTag, type RepliesBlock, type ReplyRow, type SubjectWeekRow, type WeekData, type WeekWindow } from '@/lib/pages/week'
 import { intentCounts } from '@/lib/content-tiles'
 import { ownSides, type PlaybookVideo } from '@/lib/pages/playbook'
 import { bandVerdict } from '@/lib/reading/verdicts'
@@ -313,7 +313,15 @@ function ossurSubjects(): WeekData['subjects'] {
     subjectRow({ id: 's2', label: 'Price and cover', monthVideos: 27, monthOf: 96, addedVideos: 6, clientUpdateVideos: 14 }),
     subjectRow({ id: 's3', label: 'Durability', monthVideos: 19, monthOf: 96, addedVideos: 1, clientUpdateVideos: 14 }),
   ]
-  return { month: '2026-09-01', unread: null, rows, lead: subjectLead(rows, '2026-09-01') }
+  return {
+    month: '2026-09-01',
+    unread: null,
+    rows,
+    lead: subjectLead(rows, '2026-09-01'),
+    // Three subjects, named in one sitting — which is how they are named on
+    // both live tenants, and the arm the mock's own footer draws.
+    namedLine: subjectsNamedLine(['2026-08-19T09:12:00.000Z', '2026-08-19T09:14:00.000Z', '2026-08-19T09:15:00.000Z']),
+  }
 }
 
 export function weekFixture(): WeekData {
@@ -633,8 +641,10 @@ export function thinFixture(): WeekData {
       rows: [],
       // NO ROWS MEANS NO LEAD, never "0 of 0 ran above typical": a sentence
       // counting comparisons nobody drew is the exact failure `unread` exists
-      // to keep this block out of.
+      // to keep this block out of. The naming line goes the same way: a footer
+      // counting zero subjects says "none recorded" twice.
       lead: null,
+      namedLine: null,
     },
     rising: {
       audience: 'industry-other',

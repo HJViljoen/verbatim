@@ -19,6 +19,7 @@ import {
   postCaption,
   refTargets,
   subjectLead,
+  subjectsNamedLine,
   typicalContribution,
   typicalTag,
   windowDays,
@@ -233,6 +234,31 @@ describe('the subjects lead', () => {
   it('speaks no direction word', () => {
     const lead = subjectLead([row('Comfort', 'above typical'), row('Price', 'below typical')], '2026-09-01')!
     expect(directionRe().test(lead)).toBe(false)
+  })
+})
+
+describe('when the subjects were named', () => {
+  it('names one date where they were named in one sitting', () => {
+    expect(subjectsNamedLine([
+      '2026-08-19T09:12:00.000Z', '2026-08-19T09:14:00.000Z', '2026-08-19T09:15:00.000Z',
+    ])).toBe('3 subjects named 19 Aug')
+  })
+
+  it('names the first where they were named on different days', () => {
+    // Six subjects named 19 Aug is the mock's line and the common case; a
+    // seventh named in September has no single naming date to share, and
+    // printing one would date three months of measurement to the wrong day.
+    expect(subjectsNamedLine(['2026-08-19T09:12:00.000Z', '2026-09-03T10:00:00.000Z']))
+      .toBe('2 subjects, the first named 19 Aug')
+  })
+
+  it('reads as one subject when there is one', () => {
+    expect(subjectsNamedLine(['2026-08-19T09:12:00.000Z'])).toBe('1 subject named 19 Aug')
+  })
+
+  it('is null where nothing carries a naming date', () => {
+    expect(subjectsNamedLine([])).toBeNull()
+    expect(subjectsNamedLine([null, null])).toBeNull()
   })
 })
 
