@@ -209,16 +209,26 @@ export const weeklyContent: Block<WeeklyData> = {
             mode={mode}
             title={c.runnerUp ? <>{c.format.label} outperformed {c.runnerUp.label}</> : <>{c.format.label}</>}
             value={multipleOf(c.format.multiple)}
+            /* THE WINNER'S OWN n COMES FIRST (block D wave 2, fix pass). The
+               row read "Talking head outperformed Commute POV · 2.4× ·
+               Commute POV 1.8× over 24 of 402 videos · against this update's
+               median video · 31 of 402 videos carry it" — the winner's n
+               arrived LAST, after the runner-up's, and the median clause sat
+               between two n's it does not belong to either of alone. The
+               sub-line now reads in the order the title does: the winner, the
+               runner-up, then the basis both multiples are against.
+
+               D9: the median is THIS UPDATE'S, and the clause is not
+               decoration. Unlike everything above it in this block the figure
+               is run-indexed — the Content loader filters videos to the latest
+               run before it measures — so under a masthead reading "every
+               number below is this month so far" an unlabelled multiple reads
+               as the month's. */
             note={
               <>
-                {c.runnerUp ? <>{c.runnerUp.label} <span data-copy="level">{multipleOf(c.runnerUp.multiple)} over {fmtInt(c.runnerUp.videos)} of {fmtInt(c.format.of)} videos</span> · </> : null}
-                {/* D9: the median is THIS UPDATE'S, and the clause is not
-                    decoration. Unlike everything above it in this block the
-                    figure is run-indexed — the Content loader filters videos to
-                    the latest run before it measures — so under a masthead
-                    reading "every number below is this month so far" an
-                    unlabelled multiple reads as the month's. */}
-                against this update’s median video · <span data-copy="level">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)} videos</span> carry it
+                <span data-copy="level">{fmtInt(c.format.videos)} of {fmtInt(c.format.of)} videos</span> carry it
+                {c.runnerUp ? <> · {c.runnerUp.label} <span data-copy="level">{multipleOf(c.runnerUp.multiple)} over {fmtInt(c.runnerUp.videos)} of {fmtInt(c.format.of)} videos</span></> : null}
+                {' · '}{c.runnerUp ? 'both against' : 'against'} this update’s median video
               </>
             }
           />

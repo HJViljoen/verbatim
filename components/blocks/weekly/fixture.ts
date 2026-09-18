@@ -97,7 +97,11 @@ function base(overview = overviewFixture()): WeeklyData {
       // block has to print honestly.
       quotes: [
         { subject: 'Durability', quote: { ref: quoteRef.evidence('ev-w1'), text: 'Third winter on mine and the strap has not given at all' }, cite: 'YouTube · 9 Sep', href: 'https://www.youtube.com/watch?v=w1' },
-        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Rode through an hour of rain and the laptop came out dry', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
+        // A REAL DUTCH QUOTE WITH A REAL TRANSLATION. The `english` was a copy of
+        // the `text`, so the render printed the same sentence twice under
+        // "Dutch · machine translation" and the evidence read as a duplication
+        // bug that is not one.
+        { subject: 'Waterproofing', quote: { ref: quoteRef.evidence('ev-w2'), text: 'Een uur door de regen gereden en de laptop kwam er droog uit', lang: 'nl', english: 'Rode through an hour of rain and the laptop came out dry' }, cite: 'Instagram · 10 Sep', href: 'https://www.instagram.com/p/w2' },
         { subject: 'Repair and warranty', quote: { ref: quoteRef.evidence('ev-w3'), text: 'They fixed the zip for free eighteen months in' }, cite: 'TikTok · 11 Sep', href: 'https://www.tiktok.com/@x/video/w3' },
       ],
       quotesTotal: 41,

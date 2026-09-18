@@ -400,6 +400,9 @@ describe('WR3 · what came in this week', () => {
       const text = renderText(block.render(weeklyFixture(), mode, ctx))
       expect(text, mode).toContain('41 comments on your subjects were written in these days')
       expect(text, mode).toContain('Third winter on mine and the strap has not given at all')
+      // The original and its English rendering are DIFFERENT sentences; the
+      // fixture used to carry the English twice and read as a render bug.
+      expect(text, mode).toContain('Een uur door de regen gereden')
       // The original leads and the English rendering follows — the order
       // QuoteBlock keeps, and the cite names the subject it was counted under.
       expect(text, mode).toContain('Durability · YouTube · 9 Sep')
@@ -565,10 +568,21 @@ describe('WR5 · for content', () => {
 
   // The mock's head-to-head, with an n on EACH side, and D9's label: the
   // median is this UPDATE'S, not the month's.
-  it('prints the format head-to-head with an n on each side', () => {
+  // AND IN THE ORDER THE TITLE READS: the winner's own n first, then the
+  // runner-up's, then the basis both are against. The winner's n used to
+  // arrive last, after the runner-up's, with the median clause between two n's
+  // it belongs to neither of alone.
+  it('prints the format head-to-head with an n on each side, winner first', () => {
     const text = renderText(block.render(weeklyFixture(), 'app', ctx))
-    expect(text).toContain('Commute POV 1.8× over 24 of 402 videos')
-    expect(text).toContain('against this update’s median video · 31 of 402 videos carry it')
+    expect(text).toContain('31 of 402 videos carry it · Commute POV 1.8× over 24 of 402 videos · both against this update’s median video')
+  })
+
+  it('says "against" rather than "both against" where there is no runner-up', () => {
+    const data = weeklyFixture()
+    const alone = { ...data, content: { ...data.content, runnerUp: null } }
+    const text = renderText(block.render(alone, 'app', ctx))
+    expect(text).toContain('31 of 402 videos carry it · against this update’s median video')
+    expect(text).not.toContain('both against')
   })
 
   it('keeps the inbox’s empty state verbatim rather than dropping the section', () => {
