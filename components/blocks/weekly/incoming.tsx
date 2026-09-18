@@ -170,11 +170,20 @@ export const weeklyIncoming: Block<WeeklyData> = {
           value={i.analysed != null ? fmtInt(i.analysed) : '—'}
           label={i.analysed != null ? 'analysed' : 'how many were analysed is not recorded for this update'}
         />
+        {/* THE COUNT IS `newThemesTotal`, NEVER `newThemes.length`. The array
+            is the few that get a card below — `NEW_THEMES_SHOWN` = 3 — and
+            counting it printed a display cap at mono 21/600: a workspace that
+            heard fourteen new themes printed 3. Same rule as `switchingTotal`
+            one section over (lib/blocks/for-sales.ts). */}
         <StatRow
           mode={mode}
-          value={fmtInt(i.newThemes.length)}
-          label={i.newThemes.length === 1 ? 'theme heard for the first time' : 'themes heard for the first time'}
-          note={i.newThemes.length === 0 ? i.newThemesNote : null}
+          value={fmtInt(i.newThemesTotal)}
+          label={i.newThemesTotal === 1 ? 'theme heard for the first time' : 'themes heard for the first time'}
+          note={i.newThemesTotal === 0
+            ? i.newThemesNote
+            : i.newThemesTotal > i.newThemes.length
+              ? `the ${fmtInt(i.newThemes.length)} largest ${i.newThemes.length === 1 ? 'is' : 'are'} below`
+              : null}
         />
         {/* NULL IS NOT ZERO. `quotesTotal` is null where subjects are not
             recorded — there is nothing for a comment to be new ON — and the

@@ -78,7 +78,15 @@ function base(overview = overviewFixture()): WeeklyData {
         { platform: 'reddit', videos: 7 },
       ],
       monthVideos: 2359,
-      newThemes: [{ label: 'Zips failing after a year', videos: 12 }],
+      // FIVE HEARD, THREE SHOWN — the shape the count printed off the slice
+      // made invisible. The stat row prints `newThemesTotal`; the cards below
+      // are the largest few.
+      newThemes: [
+        { label: 'Zips failing after a year', videos: 12 },
+        { label: 'Laptop sleeve sizing', videos: 6 },
+        { label: 'Strap hardware rattle', videos: 4 },
+      ],
+      newThemesTotal: 5,
       newThemesNote: null,
       rivalPosts: [
         { rival: 'Freitag', account: '@freitag', platform: 'instagram', views: 41000, commentsRead: 310, uploadDate: '2026-09-09', href: 'https://instagram.com/p/x' },
@@ -209,6 +217,7 @@ export function formingFixture(over: Partial<WeeklyData> = {}): WeeklyData {
       ...data.incoming,
       analysed: null,
       newThemes: [],
+      newThemesTotal: 0,
       newThemesNote: 'No theme was heard for the first time in this update.',
       rivalPosts: [],
       rivalPostsNote: 'No tracked rival posted in this update’s window.',

@@ -250,7 +250,7 @@ describe('WR3 · what came in this week', () => {
     const markup = render(block.render(weeklyFixture(), 'app', ctx))
     expect(markup).toContain('text-[21px]')
     const text = markupText(markup)
-    expect(text).toContain('1 theme heard for the first time')
+    expect(text).toContain('5 themes heard for the first time')
     expect(text).toContain('41 new comments on your subjects')
     // The mock's fourth stat is "2,960 comments" this week. No field on this
     // artefact holds one, and a number nobody counted is not printed — the
@@ -263,6 +263,17 @@ describe('WR3 · what came in this week', () => {
     const text = renderText(block.render(formingFixture(), 'app', ctx))
     expect(text).toContain('Quotes are counted against your subjects once subjects are recorded')
     expect(text).not.toContain('0 new comments on your subjects')
+  })
+
+  // THE COUNT IS COUNTED, THE CARDS ARE CAPPED. `newThemes` is the shown few
+  // (`NEW_THEMES_SHOWN` = 3) and the stat row prints `newThemesTotal`, so a
+  // workspace that heard fourteen does not print 3 at mono 21/600.
+  it('prints how many themes were heard, not how many it drew a card for', () => {
+    for (const mode of MODES) {
+      const text = renderText(block.render(weeklyFixture(), mode, ctx))
+      expect(text, mode).toContain('5 themes heard for the first time')
+      expect(text, mode).toContain('the 3 largest are below')
+    }
   })
 
   it('draws the new theme in the artboard’s pilled inner block', () => {

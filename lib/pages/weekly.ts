@@ -54,8 +54,13 @@ export interface IncomingBlock {
   platforms: { platform: string; videos: number }[]
   /** The month's videos so far, which the counts above are a contribution to. */
   monthVideos: number | null
-  /** Themes this update heard for the first time. */
+  /** Themes this update heard for the first time — the few that get a card.
+   *  `newThemesTotal` is how many there were, and the stat row prints THAT:
+   *  counting this array printed a display slice as a measurement. */
   newThemes: { label: string; videos: number }[]
+  /** How many themes this update heard for the first time, counted before the
+   *  slice above. Never null: the read either answers or the block is empty. */
+  newThemesTotal: number
   newThemesNote: string | null
   rivalPosts: RivalPost[]
   rivalPostsNote: string | null
@@ -699,6 +704,7 @@ async function loadIncoming(
     platforms: [],
     monthVideos: overview.bar.videos,
     newThemes: [],
+    newThemesTotal: 0,
     newThemesNote: 'No theme was heard for the first time in this update.',
     rivalPosts: [],
     rivalPostsNote: 'No tracked rival posted in this update’s window.',
@@ -708,7 +714,7 @@ async function loadIncoming(
   }
   if (!run) return { ...empty, newThemesNote: 'This workspace has no delivered update yet.', rivalPostsNote: null }
 
-  const [videoRes, themeRows, subjectQuotes] = await Promise.all([
+  const [videoRes, themes, subjectQuotes] = await Promise.all([
     selectAll<VideoRow>(() =>
       supabase
         .from('videos')
@@ -787,8 +793,9 @@ async function loadIncoming(
       .map(([platform, videos]) => ({ platform, videos }))
       .sort((a, b) => b.videos - a.videos),
     monthVideos: overview.bar.videos,
-    newThemes: themeRows,
-    newThemesNote: themeRows.length > 0 ? null : 'No theme was heard for the first time in this update.',
+    newThemes: themes.shown,
+    newThemesTotal: themes.total,
+    newThemesNote: themes.total > 0 ? null : 'No theme was heard for the first time in this update.',
     rivalPosts,
     rivalPostsNote: rivalPosts.length > 0 ? null : 'No tracked rival posted in this update’s window.',
     quotes: subjectQuotes.shown.slice(0, INCOMING_QUOTES),
@@ -854,34 +861,54 @@ async function commentsHeldFor(
  * the reading layer counts in videos. `theme_observations.evidence_count` is
  * evidence ROWS, a different unit, and printing it as videos is exactly the
  * mismatch the thirteen words exist to stop.
+ *
+ * COUNTED BEFORE IT IS CAPPED, and the two are returned separately. WR3 prints
+ * "N themes heard for the first time" at mono 21/600, and it printed
+ * `newThemes.length` — the DISPLAY slice, `.slice(0, NEW_THEMES_SHOWN)` on top
+ * of a `.limit(50)`. A workspace that heard fourteen new themes printed 3, in
+ * the artefact's largest type. `total` is the whole answer and `shown` is the
+ * few that get a card, exactly as `switchingTotal` / `switching` are one
+ * section over.
+ *
+ * NEITHER READ IS CAPPED ANY MORE. `theme_observations` for ONE RUN is a few
+ * dozen rows — the registry is two orders of magnitude smaller than
+ * `audience_insights` (AGENTS.md) — so the observations are read in full, and
+ * the membership is read as that run's `themes` rows rather than through an
+ * `.in()` over a list that now has no bound.
  */
-async function newThemesOf(supabase: SupabaseClient, clientId: string, runId: string): Promise<{ label: string; videos: number }[]> {
+const NEW_THEMES_SHOWN = 3
+
+async function newThemesOf(
+  supabase: SupabaseClient,
+  clientId: string,
+  runId: string,
+): Promise<{ shown: { label: string; videos: number }[]; total: number }> {
   const obsRes = await supabase
     .from('theme_observations')
     .select('theme_id, label')
     .eq('client_id', clientId)
     .eq('run_id', runId)
     .eq('match_kind', 'new')
-    .limit(50)
   const observed = rows<{ theme_id: string; label: string }>(obsRes, 'weekly.newThemes')
-  if (observed.length === 0) return []
+  if (observed.length === 0) return { shown: [], total: 0 }
   const videosRes = await supabase
     .from('themes')
     .select('registry_id, supporting_video_ids')
     .eq('client_id', clientId)
     .eq('run_id', runId)
-    .in('registry_id', observed.map((o) => o.theme_id))
   const byRegistry = new Map<string, number>()
   for (const t of rows<{ registry_id: string | null; supporting_video_ids: string[] | null }>(videosRes, 'weekly.newThemeVideos')) {
     if (t.registry_id) byRegistry.set(t.registry_id, (t.supporting_video_ids ?? []).length)
   }
-  return observed
+  const counted = observed
     .map((o) => ({ label: o.label, videos: byRegistry.get(o.theme_id) ?? 0 }))
     // A theme whose membership this run did not retain cannot be stated in
     // videos, and "heard for the first time, in 0 videos" is not a sentence.
+    // It is out of the TOTAL as well as out of the list, because the total is
+    // a count of the same things the cards are.
     .filter((t) => t.videos > 0)
     .sort((a, b) => b.videos - a.videos)
-    .slice(0, 3)
+  return { shown: counted.slice(0, NEW_THEMES_SHOWN), total: counted.length }
 }
 
 // ---- section 5 ----------------------------------------------------------------
