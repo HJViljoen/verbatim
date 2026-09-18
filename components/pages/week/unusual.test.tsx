@@ -170,8 +170,13 @@ describe('WK1 · unusual this week', () => {
       // THE COUNT BAND CARRIES ITS UNIT. This block's other band is in
       // percentage points ("a band of 4.9"); an unlabelled count band beside it
       // is how 4.9 points gets read as five videos.
-      expect(text, mode).toContain('508 videos this update')
-      expect(text, mode).toContain('videos, typical 476')
+      expect(text, mode).toContain('618 videos this update found')
+      expect(text, mode).toContain('ran 1–559 videos, typical 462')
+      // THREE OF THE TWELVE BEHIND IT FOUND NOTHING, and the legend counts 9
+      // rather than 12: a legend saying "the 12 before it" while the band was
+      // drawn on 9 would be the page and the picture disagreeing.
+      expect(text, mode).toContain('the 9 that found anything')
+      expect(text, mode).toContain('3 of the updates behind this one found nothing at all')
       // The axis's own words, which are the whole deviation: thirteen
       // deliveries, not thirteen weeks.
       expect(text, mode).toContain('the last 13 updates · what each one brought in')
@@ -188,10 +193,12 @@ describe('WK1 · unusual this week', () => {
     // with, and the honest half of "baseline forming".
     const text = renderText(weekUnusual.render(thinFixture(), 'app', ctx))
     expect(text).toContain('baseline forming — 1 of 3 months')
-    expect(text).toContain('253 videos this update')
-    expect(text).toContain('the last 4 updates')
-    // Four points, not thirteen, and the block says which.
-    expect(text).toContain('not 13')
+    expect(text).toContain('1,098 videos this update found')
+    expect(text).toContain('the last 13 updates · what each one brought in')
+    // SEVEN OF SEALAND'S TWELVE FOUND NOTHING. The band stands on five, and the
+    // seven are drawn rather than dropped.
+    expect(text).toContain('the 5 that found anything')
+    expect(text).toContain('7 of the updates behind this one found nothing at all')
   })
 
   it('says nothing about the series where no update carries a window', () => {

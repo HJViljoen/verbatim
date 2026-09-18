@@ -55,12 +55,14 @@ const DAY = 86_400_000
  * the windows, the analysed counts, the windowed spans and the month rows.
  */
 function seriesOf(input: {
-  /** Analysed videos per update, oldest first. */
+  /** Videos newly found per update, oldest first — `videos.run_id`. */
   counts: readonly number[]
   /** The day the newest window closes. */
   endsAt: string
-  /** How many days each window covers. */
-  days: number
+  /** How many days each window covers — one number, or one per point with the
+   *  newest last (Sealand's newest window is thirty days and the ones behind
+   *  it are seven). */
+  days: number | readonly number[]
   /** Each month's own denominator. */
   monthOf: Record<string, number>
   /** How much of an update's analysed set the windowed read answers for —
@@ -70,16 +72,24 @@ function seriesOf(input: {
   requested?: number
 }): UpdateSeries {
   const end = new Date(input.endsAt).getTime()
-  const span = input.days * DAY
+  const dayList = typeof input.days === 'number' ? input.counts.map(() => input.days as number) : input.days
   const runs: { runId: string; window: { from: string; to: string } }[] = []
   const videosByRun = new Map<string, number>()
   const spans = new Map<string, { videos: number; comments: number }>()
   const share = input.windowShare ?? 0.4
 
+  // Newest first, walking backwards: each window ends where the one after it
+  // began, which is `previousRunEnd`'s own rule.
+  const ends: number[] = []
+  let cursor = end
+  for (let i = input.counts.length - 1; i >= 0; i -= 1) {
+    ends[i] = cursor
+    cursor -= dayList[i] * DAY
+  }
+
   input.counts.forEach((videos, i) => {
-    const back = input.counts.length - 1 - i
-    const to = new Date(end - back * span).toISOString()
-    const from = new Date(end - (back + 1) * span).toISOString()
+    const to = new Date(ends[i]).toISOString()
+    const from = new Date(ends[i] - dayList[i] * DAY).toISOString()
     const runId = `run-${i + 1}`
     runs.push({ runId, window: { from, to } })
     videosByRun.set(runId, videos)
@@ -193,12 +203,17 @@ export function weekFixture(): WeekData {
       // reading of the newest one, taken when it ran. The series is read now.
       // They agree here because nothing was resumed; they are separate fields
       // because they are separate readings.
+      // ÖSSUR'S OWN THIRTEEN, MEASURED READ-ONLY ON PRODUCTION 2026-09-18,
+      // counted on `videos.run_id` — three of them found nothing at all, which
+      // is a fact about those deliveries and is drawn as one. The same counts
+      // on `analyzed_run_id` would have been 508, 205, 65, 796 and NINE
+      // ZEROES, which is why this field is not that column.
       series: seriesOf({
-        counts: [431, 448, 455, 462, 470, 474, 478, 486, 491, 498, 507, 521, 508],
+        counts: [0, 94, 0, 1, 462, 0, 488, 456, 473, 376, 466, 559, 618],
         endsAt: '2026-09-13T04:06:38.483Z',
         days: 7,
         monthOf: { '2026-06-01': 480, '2026-07-01': 505, '2026-08-01': 520, '2026-09-01': 449 },
-        windowShare: 205 / 508,
+        windowShare: 205 / 618,
       }),
       flags: [{
         objectKind: 'kind',
@@ -402,12 +417,17 @@ export function thinFixture(): WeekData {
       // is the minimum; the check itself still cannot speak, and the series is
       // drawn anyway, because "here is what we read" is the honest half of
       // "baseline forming".
+      // SEALAND'S OWN THIRTEEN, measured the same way and the same day: FIVE of
+      // the twelve behind the newest found nothing, so the band is drawn on
+      // five points and the legend says so. The newest window is thirty days —
+      // which is why nothing on this page may call it "a week" — and the
+      // twelve behind it are seven.
       series: seriesOf({
-        counts: [180, 210, 240, 253],
+        counts: [0, 288, 0, 0, 425, 0, 0, 197, 560, 0, 0, 176, 1098],
         endsAt: '2026-09-10T07:02:10.201Z',
-        days: 30,
+        days: [7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 30],
         monthOf: { '2026-06-01': 402, '2026-07-01': 466, '2026-08-01': 512, '2026-09-01': 475 },
-        windowShare: 655 / 253,
+        windowShare: 655 / 1098,
       }),
     },
     subjects: {

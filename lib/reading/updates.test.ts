@@ -100,9 +100,11 @@ describe('updateBand', () => {
     // The newest is 38 and is deliberately outside the band it is compared
     // with: a median that contained the number being compared would move with
     // it.
-    const { median, band } = updateBand(points([9, 10, 11, 12, 12, 13, 14, 15, 11, 12, 13, 12, 38]))
+    const { median, band, counted, quiet } = updateBand(points([9, 10, 11, 12, 12, 13, 14, 15, 11, 12, 13, 12, 38]))
     expect(band).toEqual({ low: 9, high: 15 })
     expect(median).toBe(12)
+    expect(counted).toBe(12)
+    expect(quiet).toBe(0)
   })
 
   it('takes the mean of the two middle values on an even count', () => {
@@ -110,10 +112,29 @@ describe('updateBand', () => {
     expect(median).toBe(11.5)
   })
 
+  it('leaves an update that found nothing OUT of the band and counts it', () => {
+    // Össur's real thirteen, oldest first: three of the twelve behind the
+    // newest found nothing at all (measured on production 2026-09-18). "What
+    // an update of this workspace usually brings in" is not a question about
+    // the updates that brought in nothing — but they are still drawn, so the
+    // count is named rather than the points quietly dropped.
+    const { median, band, counted, quiet } = updateBand(points([0, 94, 0, 1, 462, 0, 488, 456, 473, 376, 466, 559, 618]))
+    expect(quiet).toBe(3)
+    expect(counted).toBe(9)
+    expect(band).toEqual({ low: 1, high: 559 })
+    expect(median).toBe(462)
+  })
+
   it('refuses a band below three points', () => {
-    expect(updateBand(points([12, 38]))).toEqual({ median: null, band: null })
-    expect(updateBand(points([38]))).toEqual({ median: null, band: null })
-    expect(updateBand([])).toEqual({ median: null, band: null })
+    expect(updateBand(points([12, 38])).band).toBeNull()
+    expect(updateBand(points([38])).band).toBeNull()
+    expect(updateBand([]).band).toBeNull()
+  })
+
+  it('refuses a band where fewer than two of the points behind found anything', () => {
+    const { median, band } = updateBand(points([0, 0, 12, 38]))
+    expect(band).toBeNull()
+    expect(median).toBeNull()
   })
 })
 
@@ -199,7 +220,7 @@ describe('buildUpdateSeries', () => {
     })
     expect(series.band).toBeNull()
     expect(series.median).toBeNull()
-    expect(series.note).toContain('Fewer than three updates')
+    expect(series.note).toContain('Fewer than three updates found anything')
   })
 
   it('says the windowed reading is missing rather than printing a contribution of zero', () => {
@@ -236,11 +257,18 @@ describe('updateSeriesLine', () => {
 
   it('names the count band in videos, so it is never read as the points band', () => {
     const line = updateSeriesLine(seriesOf([9, 10, 11, 12, 12, 13, 14, 15, 11, 12, 13, 12, 38]))
-    expect(line).toBe('38 videos this update · the 12 updates before it ran 9–15 videos, typical 12')
+    expect(line).toBe('38 videos this update found · the 12 updates before it found 9–15 videos, typical 12')
+  })
+
+  it('says how many of the updates behind it the band was drawn on', () => {
+    // Össur's real thirteen. A legend saying "the 12 before it" while counting
+    // 9 would be the page and the picture disagreeing.
+    const line = updateSeriesLine(seriesOf([0, 94, 0, 1, 462, 0, 488, 456, 473, 376, 466, 559, 618]))
+    expect(line).toBe('618 videos this update found · of the 12 updates before it, the 9 that found anything ran 1–559 videos, typical 462')
   })
 
   it('says there is no typical yet rather than inventing one', () => {
-    expect(updateSeriesLine(seriesOf([12, 38]))).toBe('38 videos this update · too few updates behind it to say what is typical')
+    expect(updateSeriesLine(seriesOf([12, 38]))).toBe('38 videos this update found · too few updates behind it to say what is typical')
   })
 
   it('prints no direction word', () => {

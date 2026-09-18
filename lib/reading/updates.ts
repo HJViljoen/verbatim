@@ -76,7 +76,33 @@ export interface UpdatePoint {
   /** The run's OWN frozen window — never recomputed from the clock. */
   window: { from: string; to: string }
   days: number
-  /** Videos this update analysed. */
+  /**
+   * Videos this update NEWLY FOUND — `videos.run_id`, the run that discovered
+   * them, which is written once and never rewritten.
+   *
+   * NOT `analyzed_run_id`, AND THE DIFFERENCE IS THE WHOLE POINT OF THIS
+   * FIELD. That column names the run whose insights are a video's CURRENT
+   * analysis (AGENTS.md, incremental Pass A), so it MOVES: every time a newer
+   * update re-reads a video, the older update loses it. Measured read-only on
+   * production, 2026-09-18 — Össur's thirteen delivered updates, counted on
+   * `analyzed_run_id`: 508, 205, 65, 796, and then NINE ZEROES. Those nine
+   * updates each analysed several hundred videos at the time; every one of
+   * them has since been superseded. A chart of that column would tell a paying
+   * client we read nothing for nine weeks, which is false, and it would tell
+   * them so in the one section of the product whose printed question is what
+   * the update actually read.
+   *
+   * `run_id` does not move, and over the same thirteen updates it reads 618,
+   * 559, 466, 376, 473, 456, 488, 0, 462, 1, 0, 94, 0 — which is a record of
+   * our cadence, zeroes and all. It is also the number `CameInBlock.gathered`
+   * already prints for the newest update (618), so the chart's rightmost point
+   * and the block below it agree by construction.
+   *
+   * A ZERO HERE IS A REAL ZERO: an update that found nothing. It is drawn, and
+   * it is kept OUT of the band (see `updateBand`), because "what an update of
+   * this workspace usually brings in" is not a question about the updates that
+   * brought in nothing.
+   */
   videos: number
   /** Comments dated inside the window, where the window read answers. */
   comments: number | null
@@ -135,14 +161,21 @@ function emptySeries(note: string): UpdateSeries {
 export function updateBand(points: readonly UpdatePoint[]): {
   median: number | null
   band: { low: number; high: number } | null
+  /** How many of the points behind the newest the band was drawn on. */
+  counted: number
+  /** How many were left out because they found nothing. */
+  quiet: number
 } {
-  if (points.length < UPDATE_BAND_MINIMUM) return { median: null, band: null }
-  const behind = points.slice(0, -1).map((p) => p.videos)
-  if (behind.length === 0) return { median: null, band: null }
-  const sorted = [...behind].sort((a, b) => a - b)
+  const behind = points.slice(0, -1)
+  const found = behind.filter((p) => p.videos > 0).map((p) => p.videos)
+  const quiet = behind.length - found.length
+  if (points.length < UPDATE_BAND_MINIMUM || found.length < UPDATE_BAND_MINIMUM - 1) {
+    return { median: null, band: null, counted: found.length, quiet }
+  }
+  const sorted = [...found].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
   const median = sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
-  return { median, band: { low: sorted[0], high: sorted[sorted.length - 1] } }
+  return { median, band: { low: sorted[0], high: sorted[sorted.length - 1] }, counted: found.length, quiet }
 }
 
 /**
@@ -159,15 +192,23 @@ export function updateBand(points: readonly UpdatePoint[]): {
 export function updateSeriesLine(series: UpdateSeries): string {
   const newest = series.points[series.points.length - 1]
   if (!newest) return 'No delivered update of this workspace carries a window, so there is nothing to draw.'
-  const head = `${fmtInt(newest.videos)} ${newest.videos === 1 ? 'video' : 'videos'} this update`
+  const head = `${fmtInt(newest.videos)} ${newest.videos === 1 ? 'video' : 'videos'} this update found`
   const behind = series.points.length - 1
+  const { counted, quiet } = updateBand(series.points)
   if (series.median == null || series.band == null || behind < 1) {
     return `${head} · too few updates behind it to say what is typical`
   }
   const range = series.band.low === series.band.high
     ? `${fmtInt(series.band.low)} videos`
     : `${fmtInt(series.band.low)}–${fmtInt(series.band.high)} videos`
-  return `${head} · the ${fmtInt(behind)} ${behind === 1 ? 'update' : 'updates'} before it ran ${range}, typical ${fmtInt(Math.round(series.median))}`
+  const typical = `, typical ${fmtInt(Math.round(series.median))}`
+  // AN UPDATE THAT FOUND NOTHING IS NAMED RATHER THAN QUIETLY DROPPED. It is
+  // drawn on the chart and left out of the band, and a legend that said "the 12
+  // before it" while counting 9 would be the page and the picture disagreeing.
+  if (quiet > 0) {
+    return `${head} · of the ${fmtInt(behind)} updates before it, the ${fmtInt(counted)} that found anything ran ${range}${typical}`
+  }
+  return `${head} · the ${fmtInt(behind)} ${behind === 1 ? 'update' : 'updates'} before it found ${range}${typical}`
 }
 
 /**
@@ -264,8 +305,13 @@ export function buildUpdateSeries(input: {
     }
   })
 
-  const { median, band } = updateBand(points)
+  const { median, band, quiet } = updateBand(points)
   const notes: string[] = []
+  if (quiet > 0) {
+    notes.push(
+      `${fmtInt(quiet)} of the updates behind this one found nothing at all; ${quiet === 1 ? 'it is' : 'they are'} drawn and left out of the band.`,
+    )
+  }
   if (input.windowless > 0) {
     notes.push(
       `${fmtInt(input.windowless)} delivered ${input.windowless === 1 ? 'update carries' : 'updates carry'} no window and ${input.windowless === 1 ? 'is' : 'are'} not drawn.`,
@@ -277,7 +323,7 @@ export function buildUpdateSeries(input: {
     )
   }
   if (points.length > 0 && band == null) {
-    notes.push('Fewer than three updates carry a window, so there is no typical for this one to be read against.')
+    notes.push('Fewer than three updates found anything, so there is no typical for this one to be read against.')
   }
   if (!input.windowReadAvailable) {
     notes.push('The windowed reading is not installed for this workspace, so no update’s contribution to its month can be stated.')
@@ -321,10 +367,11 @@ interface RunRow {
  * under `mapWithLimit`.
  *
  * `videos` IS A HEAD COUNT AND NOT THE WINDOW READ'S. They answer different
- * questions and the difference is the point of the chart: `analyzed_run_id`
- * counts what THIS UPDATE analysed — our cadence — while `window_denominators`
- * counts videos of any update that carry a comment dated in these days. The
- * chart is of the first; the contribution restatement is of the second.
+ * questions and the difference is the point of the chart: `videos.run_id`
+ * counts what THIS UPDATE newly found — our cadence — while
+ * `window_denominators` counts videos of any update that carry a comment dated
+ * in these days. The chart is of the first; the contribution restatement is of
+ * the second, and neither is `analyzed_run_id` (see `UpdatePoint.videos`).
  */
 export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions = {}): Promise<UpdateSeries> {
   const supabase = scope.supabase as SupabaseClient
@@ -377,26 +424,7 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
   const [videosByRun, monthOf, spanReads] = await Promise.all([
     countVideosPerRun(supabase, clientId, withWindow.map((r) => r.runId)),
     readMonthDenominators(reading, clientId, months),
-    // ONE SPAN THAT FAILS LOSES ITS OWN POINT'S CONTRIBUTION AND NOBODY
-    // ELSE'S. A rejection here would take the whole chart down with it, and a
-    // chart of thirteen updates is worth drawing with twelve contributions on
-    // it — as long as the thirteenth prints no number rather than a zero.
-    mapWithLimit(spanKeys, READ_CONCURRENCY, async (s) => {
-      try {
-        const read = await loadWindowReading(reading.client, clientId, { from: s.span.from, to: s.span.to })
-        if (read.denominators == null) return null
-        return {
-          key: `${s.runId}::${s.month}`,
-          videos: read.denominators.reduce((t, d) => t + (d.videos ?? 0), 0),
-          comments: read.denominators.reduce((t, d) => t + (d.comments ?? 0), 0),
-        }
-      } catch (error) {
-        if (!isMissingMonthlyReading(error)) {
-          console.error(`[reading] updates.span: ${(error as { message?: string })?.message ?? String(error)}`)
-        }
-        return null
-      }
-    }),
+    readSpans(reading, clientId, spanKeys),
   ])
 
   const spans = new Map<string, { videos: number; comments: number }>()
@@ -418,13 +446,63 @@ export async function loadUpdateSeries(scope: Scope, opts: UpdateSeriesOptions =
 }
 
 /**
- * How many videos each of these updates ANALYSED.
+ * The windowed read of every (update, month) span.
+ *
+ * THE FIRST SPAN IS A PROBE AND THE OTHER TWENTY-FIVE ARE NOT SENT WHERE IT
+ * ANSWERS NOTHING. M3 is applied by hand and is not applied on production
+ * today, so `window_denominators` is a function PostgREST has never heard of:
+ * every one of these calls comes back a 404, `loadWindowReading` swallows it by
+ * name and answers `denominators: null`, and the page would have paid
+ * twenty-six round trips for twenty-six identical silences on every load. One
+ * serial call in the healthy case is the price of that; the rest go out
+ * together behind it.
+ *
+ * ONE SPAN THAT FAILS LOSES ITS OWN POINT'S CONTRIBUTION AND NOBODY ELSE'S. A
+ * rejection would take the whole chart down, and a chart of thirteen updates is
+ * worth drawing with twelve contributions on it — as long as the thirteenth
+ * prints no number rather than a zero.
+ */
+async function readSpans(
+  reading: ReadingHandle,
+  clientId: string,
+  spanKeys: readonly { runId: string; month: string; span: { from: string; to: string } }[],
+): Promise<({ key: string; videos: number; comments: number } | null)[]> {
+  if (spanKeys.length === 0) return []
+  const one = async (s: (typeof spanKeys)[number]) => {
+    try {
+      const read = await loadWindowReading(reading.client, clientId, { from: s.span.from, to: s.span.to })
+      if (read.denominators == null) return null
+      return {
+        key: `${s.runId}::${s.month}`,
+        videos: read.denominators.reduce((t, d) => t + (d.videos ?? 0), 0),
+        comments: read.denominators.reduce((t, d) => t + (d.comments ?? 0), 0),
+      }
+    } catch (error) {
+      if (!isMissingMonthlyReading(error)) {
+        console.error(`[reading] updates.span: ${(error as { message?: string })?.message ?? String(error)}`)
+      }
+      return null
+    }
+  }
+  const probe = await one(spanKeys[0])
+  if (probe == null) return []
+  return [probe, ...(await mapWithLimit(spanKeys.slice(1), READ_CONCURRENCY, one))]
+}
+
+/**
+ * How many videos each of these updates NEWLY FOUND.
+ *
+ * `run_id`, THE DISCOVERING RUN, which is written once. `analyzed_run_id` is
+ * the other column and it is not a record of anything historical — the note on
+ * `UpdatePoint.videos` has the production measurement and what it would have
+ * printed.
  *
  * A HEAD COUNT PER RUN, never a fetch: the only thing printed is the integer,
- * and one update's analysed set is five hundred rows on a live tenant. Thirteen
- * of them go out together. A count that fails is zero for that point and the
- * point still draws — the alternative is dropping an update out of a chart of
- * our own cadence because one read blinked.
+ * and one update's set is several hundred rows on a live tenant. Thirteen of
+ * them go out together. A count that fails is zero for that point and the point
+ * still draws — the alternative is dropping an update out of a chart of our own
+ * cadence because one read blinked, which is indistinguishable on the page from
+ * an update that found nothing.
  */
 async function countVideosPerRun(
   supabase: SupabaseClient,
@@ -437,7 +515,7 @@ async function countVideosPerRun(
       .from('videos')
       .select('id', { count: 'exact', head: true })
       .eq('client_id', clientId)
-      .eq('analyzed_run_id', runId)
+      .eq('run_id', runId)
     if (res.error) {
       console.error(`[reading] updates.videos: ${res.error.message}`)
       return { runId, videos: 0 }
