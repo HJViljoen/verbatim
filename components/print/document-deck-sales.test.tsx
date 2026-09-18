@@ -87,8 +87,20 @@ describe('sales.p1 — the cover', () => {
   // than the mock's hand-written "▼ 3 pts · fading, 3rd month" (D2, D5).
   it('hands the claim about a figure to the badge and writes no direction word', () => {
     const w = words(cover())
-    expect(w).toContain('too few to compare')
+    expect(w).toContain('not enough months yet')
     expect(w).not.toMatch(/\b(fading|growing|rising)\b/i)
+  })
+
+  // A POOL THAT CLEARED BOTH FLOORS IS NOT A THIN SAMPLE. 120 videos with 64
+  // toward clears `SHARE_BAND` on both arms, so `switchingFigure` built a
+  // verdict — with no baseline, which `bandVerdict` answers `too_little_data`
+  // and `MOVEMENT_WORDS` renders "too few to compare". Beside the number 120
+  // that is a sentence the page refutes. `ClaimBadge` says which non-answer it
+  // actually is.
+  it('does not call a pool that cleared both floors too few to compare', () => {
+    const w = words(cover())
+    expect(w).toContain('120 videos name a switch between brands')
+    expect(w).not.toContain('too few to compare')
   })
 
   // A refusal says which floor bit and how many it had — the mock's bare "too
@@ -162,8 +174,18 @@ describe('sales.p5 — the switching sheet', () => {
   // for this one" is a fifth refusal word that neither `MOVEMENT_WORDS` nor
   // `RefusedReason` has.
   it('refuses in the product’s own words', () => {
-    expect(words(sheet())).toContain('too few to compare')
+    // `baseline_forming` — the state whose docstring says it resolves on the
+    // calendar — because there is no PRIOR pool, not because this one is thin.
+    expect(words(sheet())).toContain('not enough months yet')
+    expect(words(sheet())).not.toContain('too few to compare')
     expect(words(sheet())).not.toContain('no earlier figure for this one')
+  })
+
+  // …and under the floor the figure names the floor, which is a different
+  // answer and keeps its own words.
+  it('names the floor where the pool is under it', () => {
+    const thin = words(sheetNamed(deck(salesBriefThinFixture()), 'Who is moving, and which way'))
+    expect(thin).toContain('Too few to compare: 35 videos where a banded reading needs 100.')
   })
 
   it('says what nothing measured, rather than labelling a voice', () => {

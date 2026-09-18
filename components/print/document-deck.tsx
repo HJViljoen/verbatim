@@ -295,6 +295,39 @@ function DocumentCover({ data, pages, contents, date }: {
 // ── overview ───────────────────────────────────────────────────────────────
 
 /**
+ * The badge over a figure this brief measured (`sales.p1.stats`, `sales.p5`).
+ *
+ * A VERDICT WITH NO BASELINE IS A LEVEL, NOT A THIN COMPARISON, and this seam
+ * is the one that knows the difference. `bandVerdict` with no `baseline`
+ * returns `too_little_data` with a null change (lib/reading/verdicts.ts) —
+ * deliberately, because it is "what this is running at" and never "flat" —
+ * and `MOVEMENT_WORDS` renders that token as "too few to compare". On the
+ * switching pool that is a sentence that refutes itself on the page:
+ * `switchingFigure` builds a verdict ONLY when the pool cleared both floors,
+ * so a cover tile reading "120 videos … too few to compare" tells a paying
+ * reader their sample is too small when it is not, beside the number that
+ * shows it is not (figures.ts warns against exactly this sentence).
+ *
+ * The reason the comparison was not drawn is that there is no PRIOR pool, and
+ * the closed vocabulary already has that word: `baseline_forming`, "not enough
+ * months yet", the state whose own docstring says it resolves on the calendar.
+ * So no fifth refusal word is invented and no badge is suppressed — the state
+ * is corrected where the baseline is known to be absent, and the badge stays
+ * the one component allowed to write the claim.
+ *
+ * `refused` and `no_clear_change` are untouched: a refusal is about our
+ * bookkeeping and a cleared band is an answer, and neither becomes this.
+ */
+function ClaimBadge({ verdict, unit }: { verdict?: Verdict | null; unit?: string }) {
+  if (!verdict) return null
+  const shown: Verdict =
+    !verdict.baseline && verdict.state === 'too_little_data'
+      ? { ...verdict, state: 'baseline_forming' }
+      : verdict
+  return <MovementBadge verdict={shown} unit={unit} />
+}
+
+/**
  * A cover tile: the figure, what it is of, and — where the reading earned one
  * — the claim about it (`sales.p1.stats`).
  *
@@ -303,9 +336,9 @@ function DocumentCover({ data, pages, contents, date }: {
  * and the band come from `MovementBadge` (which prints points only when the
  * state is `moved`, D2) and the direction word does not come at all, because
  * only `directionWord` may fill one and no reader on this artefact has its
- * flag true (D5). Where the comparison was refused the FIGURE's own words say
- * why and how many it had, which the mock's bare "too few to compare" does
- * not.
+ * flag true (D5). Which non-answer it is comes from `ClaimBadge`, and where a
+ * floor bit it is the FIGURE's own words that say which one and how many it
+ * had — which the mock's bare "too few to compare" does not.
  *
  * THE PAIR IS THE LEVEL. The number is code's figure and the label carries the
  * "of N", so the two together are what rule (b) reads — a tile whose label
@@ -329,7 +362,7 @@ function StatTile({ value, label, verdict, note }: {
       {level ? <div data-copy="level">{body}</div> : body}
       {(verdict || note) && (
         <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          {verdict ? <MovementBadge verdict={verdict} unit="pts" /> : null}
+          {verdict ? <ClaimBadge verdict={verdict} unit="pts" /> : null}
           {note ? <span className="text-[11.5px] leading-[1.35] text-muted-foreground">{note}</span> : null}
         </div>
       )}
@@ -997,9 +1030,12 @@ function SwitchingPage({ data }: { data: DocumentSnapshotData }) {
             <p className="text-[12.5px] text-muted-foreground">of {data.company}&rsquo;s own videos this month, and each of them also named a tracked rival</p>
           </div>
           {/* The badge, and nothing beside it. The mock writes "no earlier
-              figure for this one", which is a fifth refusal word the product's
-              closed vocabulary does not have (`MOVEMENT_WORDS`). */}
-          <span className="ml-auto shrink-0"><MovementBadge verdict={f.verdict} unit="pts" /></span>
+              figure for this one"; the closed vocabulary's own word for that
+              state is `baseline_forming`, "not enough months yet", and
+              `ClaimBadge` is what picks it — the pool cleared both floors, so
+              "too few to compare" would be a sentence the number beside it
+              refutes. */}
+          <span className="ml-auto shrink-0"><ClaimBadge verdict={f.verdict} unit="pts" /></span>
         </div>
 
         <div className="flex flex-col gap-2">
